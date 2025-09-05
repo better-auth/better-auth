@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
+import { PageTree } from "fumadocs-core/server";
 
 interface Content {
 	title: string;
@@ -32,6 +33,51 @@ interface Content {
 		group?: boolean;
 		isNew?: boolean;
 	}[];
+}
+
+export function getPageTree(): PageTree.Root {
+	return {
+		$id: "root",
+		name: "docs",
+		children: [
+			{
+				type: "folder",
+				root: true,
+				name: "Docs",
+				description: "get started, concepts, and plugins.",
+				children: contents.map(contentToPageTree),
+			},
+			{
+				type: "folder",
+				root: true,
+				name: "Examples",
+				description: "exmaples and guides.",
+				children: examples.map(contentToPageTree),
+			},
+		],
+	};
+}
+
+function contentToPageTree(content: Content): PageTree.Folder {
+	return {
+		type: "folder",
+		icon: <content.Icon />,
+		name: content.title,
+		index: content.href
+			? {
+					icon: <content.Icon />,
+					name: content.title,
+					type: "page",
+					url: content.href,
+				}
+			: undefined,
+		children: content.list.map((item) => ({
+			type: "page",
+			url: item.href,
+			name: item.title,
+			icon: <item.icon />,
+		})),
+	};
 }
 
 export const contents: Content[] = [
@@ -447,6 +493,43 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "Atlassian",
+				href: "/docs/authentication/atlassian",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 20 20"
+					>
+						<path
+							fill="currentColor"
+							d="M7.45 10.54c-.15-.26-.44-.26-.59 0L3.12 17.8c-.15.26-.02.47.29.47h3.68c.21 0 .4-.11.49-.29l1.77-3.07c.8-1.38.87-3.04.1-4.37m1.14-6.91c-.8 1.33-.73 2.98.1 4.37l4.84 8.41c.09.18.28.29.49.29h3.68c.31 0 .44-.21.29-.47L8.73 3.34c-.15-.26-.44-.26-.59 0l.45.29z"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "Cognito",
+				href: "/docs/authentication/cognito",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 48 48"
+					>
+						<path
+							fill="currentColor"
+							d="M24 4L6 14v20l18 10 18-10V14L24 4zm0 4.62l13.6 7.86v15.04L24 39.38 10.4 31.52V16.48L24 8.62z"
+						/>
+						<path fill="currentColor" d="M22 14h4v20h-4zM14 22h20v4H14z" />
+					</svg>
+				),
+			},
+			{
 				title: "Discord",
 				href: "/docs/authentication/discord",
 				icon: () => (
@@ -474,9 +557,30 @@ export const contents: Content[] = [
 						viewBox="0 0 64 64"
 					>
 						<path
-							fill="#888888"
+							fill="currentColor"
 							d="M59.5 1h-55C2.5 1 1 2.6 1 4.5v55c0 2 1.6 3.5 3.5 3.5h29.6V38.9h-8v-9.3h8v-6.9c0-8 4.8-12.4 12-12.4c2.4 0 4.8.1 7.2.4V19h-4.8c-3.8 0-4.6 1.8-4.6 4.5v5.9H53l-1.3 9.4h-8v23.8h15.8c2 0 3.5-1.5 3.5-3.5V4.5c-.1-2-1.7-3.5-3.5-3.5"
 						></path>
+					</svg>
+				),
+			},
+			{
+				title: "Figma",
+				href: "/docs/authentication/figma",
+				isNew: true,
+				icon: () => (
+					<svg
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 15 15"
+						fill="none"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<path
+							fillRule="evenodd"
+							clipRule="evenodd"
+							d="M7.00005 2.04999H5.52505C4.71043 2.04999 4.05005 2.71037 4.05005 3.52499C4.05005 4.33961 4.71043 4.99999 5.52505 4.99999H7.00005V2.04999ZM7.00005 1.04999H8.00005H9.47505C10.842 1.04999 11.95 2.15808 11.95 3.52499C11.95 4.33163 11.5642 5.04815 10.9669 5.49999C11.5642 5.95184 11.95 6.66836 11.95 7.475C11.95 8.8419 10.842 9.95 9.47505 9.95C8.92236 9.95 8.41198 9.76884 8.00005 9.46266V9.95L8.00005 11.425C8.00005 12.7919 6.89195 13.9 5.52505 13.9C4.15814 13.9 3.05005 12.7919 3.05005 11.425C3.05005 10.6183 3.43593 9.90184 4.03317 9.44999C3.43593 8.99814 3.05005 8.28163 3.05005 7.475C3.05005 6.66836 3.43594 5.95184 4.03319 5.5C3.43594 5.04815 3.05005 4.33163 3.05005 3.52499C3.05005 2.15808 4.15814 1.04999 5.52505 1.04999H7.00005ZM8.00005 2.04999V4.99999H9.47505C10.2897 4.99999 10.95 4.33961 10.95 3.52499C10.95 2.71037 10.2897 2.04999 9.47505 2.04999H8.00005ZM5.52505 8.94998H7.00005L7.00005 7.4788L7.00005 7.475L7.00005 7.4712V6H5.52505C4.71043 6 4.05005 6.66038 4.05005 7.475C4.05005 8.28767 4.70727 8.94684 5.5192 8.94999L5.52505 8.94998ZM4.05005 11.425C4.05005 10.6123 4.70727 9.95315 5.5192 9.94999L5.52505 9.95H7.00005L7.00005 11.425C7.00005 12.2396 6.33967 12.9 5.52505 12.9C4.71043 12.9 4.05005 12.2396 4.05005 11.425ZM8.00005 7.47206C8.00164 6.65879 8.66141 6 9.47505 6C10.2897 6 10.95 6.66038 10.95 7.475C10.95 8.28962 10.2897 8.95 9.47505 8.95C8.66141 8.95 8.00164 8.29121 8.00005 7.47794V7.47206Z"
+							fill="currentColor"
+						/>
 					</svg>
 				),
 			},
@@ -518,6 +622,24 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "LINE",
+				href: "/docs/authentication/line",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"
+						/>
+					</svg>
+				),
+			},
+			{
 				title: "Hugging Face",
 				href: "/docs/authentication/huggingface",
 				icon: () => (
@@ -535,6 +657,26 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "Kakao",
+				isNew: true,
+				href: "/docs/authentication/kakao",
+				icon: (props?: SVGProps<any>) => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 512 512"
+					>
+						<g>
+							<path
+								fill="currentColor"
+								d="M 511.5,203.5 C 511.5,215.5 511.5,227.5 511.5,239.5C 504.002,286.989 482.002,326.489 445.5,358C 390.216,402.375 326.882,424.209 255.5,423.5C 239.751,423.476 224.085,422.643 208.5,421C 174.34,444.581 140.006,467.914 105.5,491C 95.6667,493.167 91.8333,489.333 94,479.5C 101.833,450.667 109.667,421.833 117.5,393C 85.5639,376.077 58.0639,353.577 35,325.5C 15.8353,299.834 4.00193,271.167 -0.5,239.5C -0.5,227.5 -0.5,215.5 -0.5,203.5C 7.09119,155.407 29.4245,115.574 66.5,84C 121.53,39.9708 184.53,18.4708 255.5,19.5C 326.47,18.4708 389.47,39.9708 444.5,84C 481.575,115.574 503.909,155.407 511.5,203.5 Z"
+							/>
+						</g>
+					</svg>
+				),
+			},
+			{
 				title: "Kick",
 				href: "/docs/authentication/kick",
 				icon: () => (
@@ -545,7 +687,7 @@ export const contents: Content[] = [
 						viewBox="0 0 24 24"
 					>
 						<path
-							fill="#888888"
+							fill="currentColor"
 							d="M9 3a1 1 0 0 1 1 1v3h1V6a1 1 0 0 1 .883-.993L12 5h1V4a1 1 0 0 1 .883-.993L14 3h6a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1v1a1 1 0 0 1-.883.993L18 11h-1v2h1a1 1 0 0 1 .993.883L19 14v1h1a1 1 0 0 1 .993.883L21 16v4a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-1h-1a1 1 0 0 1-.993-.883L11 18v-1h-1v3a1 1 0 0 1-.883.993L9 21H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"
 						></path>
 					</svg>
@@ -568,6 +710,51 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
+			{
+				title: "PayPal",
+				href: "/docs/authentication/paypal",
+				isNew: true,
+				icon: () => (
+					<svg
+						fill="currentColor"
+						viewBox="-2 -2 24 24"
+						xmlns="http://www.w3.org/2000/svg"
+						preserveAspectRatio="xMinYMin"
+						width="1.4em"
+						height="1.4em"
+					>
+						<g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
+						<g
+							id="SVGRepo_tracerCarrier"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						></g>
+						<g id="SVGRepo_iconCarrier">
+							<path d="M4.328 16.127l-.011.07a.899.899 0 0 1-.887.744H.9a.892.892 0 0 1-.88-1.04L2.57.745A.892.892 0 0 1 3.45 0h6.92a4.141 4.141 0 0 1 4.142 4.141c0 .273-.017.54-.05.804a3.629 3.629 0 0 1 1.53 2.962 5.722 5.722 0 0 1-5.72 5.722h-.583c-.653 0-1.211.472-1.32 1.117l-.314 1.87.314-1.87a1.339 1.339 0 0 1 1.32-1.117h.582a5.722 5.722 0 0 0 5.722-5.722 3.629 3.629 0 0 0-1.53-2.962 6.52 6.52 0 0 1-6.47 5.716H6.06a.969.969 0 0 0-.93.701l-1.155 6.862c-.08.48.289.916.775.916h2.214a.786.786 0 0 0 .775-.655l.315-1.87-.315 1.87a.786.786 0 0 1-.775.655H4.751a.782.782 0 0 1-.6-.278.782.782 0 0 1-.175-.638l.352-2.097z"></path>
+							<path d="M15.45 5.995c.365.567.578 1.242.578 1.967a5.722 5.722 0 0 1-5.722 5.722h-.581c-.654 0-1.212.472-1.32 1.117l-.63 3.739a.786.786 0 0 1-.774.655H4.973l1.15-6.833c.118-.41.495-.7.93-.7h1.932a6.52 6.52 0 0 0 6.464-5.667zm-10.477 13.2h-.187a.786.786 0 0 1-.775-.916l.057-.338h.355a.899.899 0 0 0 .886-.743l.012-.07-.348 2.067z"></path>
+						</g>
+					</svg>
+				),
+			},
+			{
+				title: "Salesforce",
+				href: "/docs/authentication/salesforce",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 24 24"
+						width="1.2em"
+						height="1.2em"
+					>
+						<path
+							fill="currentColor"
+							d="M8.5 3.5c-1.4 0-2.5 1.1-2.5 2.5 0 .4.1.7.2 1-1.7.3-3 1.7-3 3.5 0 2 1.6 3.6 3.6 3.6h10.2c1.6 0 2.9-1.3 2.9-2.9 0-1.2-.7-2.2-1.7-2.6 0-.3 0-.5 0-.8-.3-2-1.9-3.5-4-3.3-.4 0-.7.1-1 .2-.5-.8-1.4-1.3-2.4-1.3-.9 0-1.7.4-2.2 1.1zm7.7 7.1c-.5-.3-1.1-.5-1.7-.5-.6 0-1.2.2-1.7.5-.1-2-1.7-3.6-3.8-3.6-1.3 0-2.4.6-3.1 1.6-.4-.2-.8-.3-1.3-.3-1.8 0-3.3 1.5-3.3 3.3 0 .2 0 .5.1.7-1.6.4-2.7 1.8-2.7 3.5 0 2 1.6 3.6 3.6 3.6h10.6c2 0 3.6-1.6 3.6-3.6 0-1.9-1.4-3.4-3.2-3.5z"
+						/>
+					</svg>
+				),
+			},
+
 			{
 				title: "Slack",
 				href: "/docs/authentication/slack",
@@ -602,6 +789,24 @@ export const contents: Content[] = [
 						<path
 							fill="currentColor"
 							d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.933zm14.337.28c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.186v6.952L12.21 19s0 .84-1.168.84l-3.222.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.822 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.279v-6.44l-1.215-.139c-.093-.514.28-.887.747-.933zM1.936 1.035l13.31-.98c1.634-.14 2.055-.047 3.082.7l4.249 2.986c.7.513.934.653.934 1.213v16.378c0 1.026-.373 1.634-1.68 1.726l-15.458.934c-.98.047-1.448-.093-1.962-.747l-3.129-4.06c-.56-.747-.793-1.306-.793-1.96V2.667c0-.839.374-1.54 1.447-1.632z"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "Naver",
+				href: "/docs/authentication/naver",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M16.273 12.845 7.376 0H0v24h7.726V11.156L16.624 24H24V0h-7.727v12.845Z"
 						/>
 					</svg>
 				),
@@ -680,6 +885,7 @@ export const contents: Content[] = [
 			{
 				title: "Linear",
 				href: "/docs/authentication/linear",
+				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1196,6 +1402,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				icon: Icons.expo,
 				href: "/docs/integrations/expo",
 			},
+			{
+				title: "Lynx",
+				icon: Icons.lynx,
+				href: "/docs/integrations/lynx",
+			},
 		],
 	},
 	{
@@ -1459,6 +1670,24 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/plugins/bearer",
 			},
 			{
+				title: "Device Authorization",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2zM4 6h16v10H4z"
+						/>
+					</svg>
+				),
+				href: "/docs/plugins/device-authorization",
+				isNew: true,
+			},
+			{
 				title: "Captcha",
 				href: "/docs/plugins/captcha",
 				icon: () => (
@@ -1479,6 +1708,24 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Have I Been Pwned",
 				href: "/docs/plugins/have-i-been-pwned",
 				icon: () => <p className="text-xs">';--</p>,
+			},
+			{
+				title: "Last Login Method",
+				href: "/docs/plugins/last-login-method",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 256 256"
+					>
+						<path
+							fill="currentColor"
+							d="m141.66 133.66l-40 40A8 8 0 0 1 88 168v-32H24a8 8 0 0 1 0-16h64V88a8 8 0 0 1 13.66-5.66l40 40a8 8 0 0 1 0 11.32M200 32h-64a8 8 0 0 0 0 16h56v160h-56a8 8 0 0 0 0 16h64a8 8 0 0 0 8-8V40a8 8 0 0 0-8-8"
+						/>
+					</svg>
+				),
+				isNew: true,
 			},
 			{
 				title: "Multi Session",

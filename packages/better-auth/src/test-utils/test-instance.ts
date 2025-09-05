@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import { generateRandomString } from "../crypto/random";
-import { afterAll, onTestFinished } from "vitest";
+import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
 import type { BetterAuthOptions, ClientOptions, Session, User } from "../types";

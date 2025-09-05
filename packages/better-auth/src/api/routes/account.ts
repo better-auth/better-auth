@@ -36,7 +36,7 @@ export const listUserAccounts = createAuthEndpoint(
 											id: {
 												type: "string",
 											},
-											provider: {
+											providerId: {
 												type: "string",
 											},
 											createdAt: {
@@ -47,25 +47,25 @@ export const listUserAccounts = createAuthEndpoint(
 												type: "string",
 												format: "date-time",
 											},
-										},
-										accountId: {
-											type: "string",
-										},
-										scopes: {
-											type: "array",
-											items: {
+											accountId: {
 												type: "string",
 											},
+											scopes: {
+												type: "array",
+												items: {
+													type: "string",
+												},
+											},
 										},
+										required: [
+											"id",
+											"providerId",
+											"createdAt",
+											"updatedAt",
+											"accountId",
+											"scopes",
+										],
 									},
-									required: [
-										"id",
-										"provider",
-										"createdAt",
-										"updatedAt",
-										"accountId",
-										"scopes",
-									],
 								},
 							},
 						},
@@ -82,7 +82,7 @@ export const listUserAccounts = createAuthEndpoint(
 		return c.json(
 			accounts.map((a) => ({
 				id: a.id,
-				provider: a.providerId,
+				providerId: a.providerId,
 				createdAt: a.createdAt,
 				updatedAt: a.updatedAt,
 				accountId: a.accountId,

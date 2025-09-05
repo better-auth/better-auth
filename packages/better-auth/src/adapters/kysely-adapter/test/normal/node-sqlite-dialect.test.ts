@@ -15,6 +15,9 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 	let kysely: Kysely<any>;
 
 	beforeAll(async () => {
+		if (!nodeSqliteSupported) {
+			return;
+		}
 		const { DatabaseSync } = await import("node:sqlite");
 
 		db = new DatabaseSync(":memory:");
@@ -27,8 +30,10 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 	});
 
 	afterAll(async () => {
+		if (!nodeSqliteSupported) {
+			return;
+		}
 		await kysely.destroy();
-		db.close();
 	});
 
 	describe("basic operations", () => {
@@ -180,7 +185,10 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 		});
 	});
 
-	it("better-auth adapter integration", async () => {
+	describe("better-auth adapter integration", async () => {
+		if (!nodeSqliteSupported) {
+			return;
+		}
 		const { DatabaseSync } = await import("node:sqlite");
 		const db = new DatabaseSync(":memory:");
 		const betterAuthKysely = new Kysely({
@@ -217,7 +225,6 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 
 		afterAll(async () => {
 			await betterAuthKysely.destroy();
-			db.close();
 		});
 
 		const adapter = kyselyAdapter(betterAuthKysely, {

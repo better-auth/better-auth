@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.3.8-beta.1",
+  "version": "1.3.9-beta.2",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -537,6 +537,16 @@
         "types": "./dist/plugins/siwe/index.d.cts",
         "default": "./dist/plugins/siwe/index.cjs"
       }
+    },
+    "./plugins/device-authorization": {
+      "import": {
+        "types": "./dist/plugins/device-authorization/index.d.ts",
+        "default": "./dist/plugins/device-authorization/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/device-authorization/index.d.cts",
+        "default": "./dist/plugins/device-authorization/index.cjs"
+      }
     }
   },
   "typesVersions": {
@@ -631,6 +641,9 @@
       "plugins/bearer": [
         "./dist/plugins/bearer/index.d.ts"
       ],
+      "plugins/custom-session": [
+        "./dist/plugins/custom-session/index.d.ts"
+      ],
       "plugins/email-otp": [
         "./dist/plugins/email-otp/index.d.ts"
       ],
@@ -678,28 +691,35 @@
       ],
       "plugins/siwe": [
         "./dist/plugins/siwe/index.d.ts"
+      ],
+      "plugins/device-authorization": [
+        "./dist/plugins/device-authorization/index.d.ts"
       ]
     }
   },
   "dependencies": {
     "@better-auth/utils": "0.2.6",
     "@better-fetch/fetch": "catalog:",
-    "@noble/ciphers": "^0.6.0",
-    "@noble/hashes": "^1.8.0",
+    "@noble/ciphers": "^2.0.0",
+    "@noble/hashes": "^2.0.0",
     "@simplewebauthn/browser": "^13.1.2",
     "@simplewebauthn/server": "^13.1.2",
     "better-call": "catalog:",
     "defu": "^6.1.4",
-    "jose": "^5.10.0",
+    "jose": "^6.1.0",
     "kysely": "^0.28.5",
-    "nanostores": "^0.11.4"
+    "nanostores": "^0.11.4",
+    "zod": "^4.1.5"
   },
   "peerDependencies": {
+    "@lynx-js/react": "*",
     "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0",
-    "zod": "^3.25.0 || ^4.0.0"
+    "react-dom": "^18.0.0 || ^19.0.0"
   },
   "peerDependenciesMeta": {
+    "@lynx-js/react": {
+      "optional": true
+    },
     "react": {
       "optional": true
     },
@@ -708,23 +728,25 @@
     }
   },
   "devDependencies": {
+    "@lynx-js/react": "^0.112.5",
     "@prisma/client": "^5.22.0",
-    "@types/bun": "^1.2.20",
     "@tanstack/react-start": "^1.131.3",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/bun": "^1.2.20",
     "@types/keccak": "^3.0.5",
     "@types/pg": "^8.15.5",
     "@types/prompts": "^2.4.9",
     "@types/react": "^18.3.23",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^12.2.0",
     "concurrently": "^9.2.0",
     "drizzle-orm": "^0.38.2",
     "happy-dom": "^15.11.7",
     "hono": "^4.9.0",
     "listhen": "^1.9.0",
     "mongodb": "^6.18.0",
-    "mysql2": "^3.14.3",
-    "next": "^15.4.6",
+    "ms": "4.0.0-nightly.202508271359",
+    "mysql2": "^3.14.4",
+    "next": "^15.5.2",
     "oauth2-mock-server": "^7.2.1",
     "pg": "^8.16.3",
     "prisma": "^5.22.0",
@@ -737,11 +759,7 @@
     "type-fest": "^4.41.0",
     "typescript": "catalog:",
     "unbuild": "catalog:",
-    "vue": "^3.5.18",
-    "zod": "^4.0.17"
-  },
-  "overrides": {
-    "whatwg-url": "^14.2.0"
+    "vue": "^3.5.18"
   },
   "files": [
     "dist"

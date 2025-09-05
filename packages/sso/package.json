@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.3.8-beta.1",
+  "version": "1.3.9-beta.2",
   "main": "dist/index.cjs",
   "license": "MIT",
   "keywords": [
@@ -49,21 +49,22 @@
       ]
     }
   },
-  "peerDependencies": {
-    "zod": "^3.25.0 || ^4.0.0"
-  },
   "dependencies": {
-    "@better-fetch/fetch": "^1.1.18",
-    "better-auth": "workspace:^",
+    "@better-fetch/fetch": "catalog:",
     "fast-xml-parser": "^5.2.5",
-    "jose": "^5.9.6",
-    "oauth2-mock-server": "^7.2.0",
-    "samlify": "^2.10.0"
+    "jose": "^5.10.0",
+    "oauth2-mock-server": "^7.2.1",
+    "samlify": "^2.10.1",
+    "zod": "^4.1.5"
   },
   "devDependencies": {
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.3",
+    "better-auth": "workspace:^",
     "better-call": "catalog:",
-    "zod": "^4.0.0"
+    "express": "^5.1.0"
+  },
+  "peerDependencies": {
+    "better-auth": "workspace:*"
   }
 }

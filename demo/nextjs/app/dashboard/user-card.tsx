@@ -208,8 +208,9 @@ export default function UserCard(props: {
 										) : (
 											<Laptop size={16} />
 										)}
-										{new UAParser(session.userAgent || "").getOS().name},{" "}
-										{new UAParser(session.userAgent || "").getBrowser().name}
+										{new UAParser(session.userAgent || "").getOS().name ||
+											session.userAgent}
+										, {new UAParser(session.userAgent || "").getBrowser().name}
 										<button
 											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline "
 											onClick={async () => {
@@ -392,7 +393,6 @@ export default function UserCard(props: {
 												setIsPendingTwoFa(true);
 												if (session?.user.twoFactorEnabled) {
 													const res = await client.twoFactor.disable({
-														//@ts-ignore
 														password: twoFaPassword,
 														fetchOptions: {
 															onError(context) {
