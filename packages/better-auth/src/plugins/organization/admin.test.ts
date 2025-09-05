@@ -9,7 +9,7 @@ import { organization } from "./organization";
 describe("super admin", async (it) => {
 	const { customFetchImpl, signInWithTestUser, db } = await getTestInstance(
 		{
-			plugins: [organization(), admin()],
+			plugins: [organization({allowSuperAdmin: true}), admin()],
 		},
 	);
 	const client = createAuthClient({

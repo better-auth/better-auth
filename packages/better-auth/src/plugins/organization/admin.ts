@@ -1,5 +1,6 @@
 import type { GenericEndpointContext, User } from "../../types";
 import { admin, type UserWithRole } from "../admin";
+import type {OrganizationOptions} from "./types";
 
 const getAdminPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -7,11 +8,11 @@ const getAdminPlugin = (ctx: GenericEndpointContext) => {
 	) as ReturnType<typeof admin>;
 };
 
-export const isSuperAdmin = (ctx: GenericEndpointContext): boolean => {
+export const isSuperAdmin = <O extends OrganizationOptions>(options?: O, ctx: GenericEndpointContext): boolean => {
 	const user = ctx.context.session?.user;
 	const adminPlugin = getAdminPlugin(ctx);
 	let adminRoles = adminPlugin.options?.adminRoles ?? ["admin"]
-	if (!adminPlugin || !user?.role) {
+	if (!options?.allowSuperAdmin || !adminPlugin || !user?.role) {
 		return false;
 	}
 	adminRoles = Array.isArray(adminRoles)

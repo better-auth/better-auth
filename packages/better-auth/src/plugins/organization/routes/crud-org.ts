@@ -232,7 +232,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 					teamId: defaultTeam.id,
 					userId: user.id,
 				});
-			} else if (!isSuperAdmin(ctx)) {
+			} else if (!isSuperAdmin(options, ctx)) {
 				member = await adapter.createMember({
 					userId: user.id,
 					organizationId: organization.id,
@@ -415,13 +415,13 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				userId: session.user.id,
 				organizationId: organizationId,
 			});
-			if (!member && !isSuperAdmin(ctx)) {
+			if (!member && !isSuperAdmin(options, ctx)) {
 				throw new APIError("BAD_REQUEST", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
-			const canUpdateOrg = isSuperAdmin(ctx) || member && await hasPermission(
+			const canUpdateOrg = isSuperAdmin(options, ctx) || member && await hasPermission(
 				{
 					permissions: {
 						organization: ["update"],
@@ -534,13 +534,13 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				userId: session.user.id,
 				organizationId: organizationId,
 			});
-			if (!member && !isSuperAdmin(ctx)) {
+			if (!member && !isSuperAdmin(options, ctx)) {
 				throw new APIError("BAD_REQUEST", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
-			if (member && !isSuperAdmin(ctx)) {
+			if (member && !isSuperAdmin(options, ctx)) {
 				const canDeleteOrg = await hasPermission(
 					{
 						role: member.role,
@@ -668,7 +668,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			const isMember = organization?.members.find(
 				(member) => member.userId === session.user.id,
 			);
-			if (!isMember && !isSuperAdmin(ctx)) {
+			if (!isMember && !isSuperAdmin(options, ctx)) {
 				await adapter.setActiveOrganization(session.session.token, null);
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -892,7 +892,7 @@ export const listAllOrganizations = <O extends OrganizationOptions>(options: O) 
 			},
 		},
 		async (ctx) => {
-			if (!isSuperAdmin(ctx)) {
+			if (!isSuperAdmin(options, ctx)) {
 				throw new APIError("UNAUTHORIZED", {message: "Only super admins may list all organizations."});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
