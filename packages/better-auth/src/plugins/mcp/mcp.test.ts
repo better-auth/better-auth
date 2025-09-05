@@ -354,6 +354,21 @@ describe("mcp", async () => {
 		});
 	});
 
+	it("should expose OAuth protected resource metadata", async ({ expect }) => {
+		const metadata = await serverClient.$fetch(
+			"/.well-known/oauth-protected-resource",
+		);
+
+		expect(metadata.data).toMatchObject({
+			resource: baseURL,
+			authorization_servers: [`${baseURL}/api/auth`],
+			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
+			scopes_supported: ["openid", "profile", "email", "offline_access"],
+			bearer_methods_supported: ["header"],
+			resource_signing_alg_values_supported: ["RS256", "none"],
+		});
+	});
+
 	it("should handle token refresh flow", async ({ expect }) => {
 		// Create a confidential client for easier testing (avoids PKCE complexity)
 		const createdClient = await serverClient.$fetch("/mcp/register", {

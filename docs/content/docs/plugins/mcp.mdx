@@ -187,6 +187,11 @@ The MCP plugin accepts the following configuration options:
         type: "string",
         required: true
     },
+    resource: {
+        description: "The resource that should be returned by the protected resource metadata endpoint",
+        type: "string",
+        required: false
+    },
     oidcConfig: {
         description: "Optional OIDC configuration options",
         type: "object",
