@@ -1,0 +1,188 @@
+---
+title: Steam
+description: Steam provider setup and usage.
+---
+
+<Callout>
+Steam authentication is setup differently from other providers, as Steam does not fully comply with OAuth or OIDC standards.
+</Callout>
+
+<Steps>
+<Step>
+    ### Get your Steam API Key
+    To get your Steam API key, you need to create a new application on the [Steam Developer Portal](https://steamcommunity.com/dev/apikey).
+
+    Set the domain name to `localhost` for development.
+
+    Note: You may need another API key for production, with the domain name set to the production origin of your application.
+
+    Once you have your API key, add that to your environment variables:
+
+    ```
+    STEAM_API_KEY=your-api-key
+    ```
+</Step>
+
+<Step>
+    ### Configure the provider
+    To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { steam } from "@better-auth/steam"
+
+    export const auth = betterAuth({
+        plugins: [
+            steam({
+                steamApiKey: process.env.STEAM_API_KEY, // Pass the env you defined previously
+            })
+        ]
+    });
+    ```
+</Step>
+
+<Step>
+    ### Sign in with Steam
+
+    To sign in with Steam, call the `signIn.steam` method.
+    
+    You will need to pass the email of the user to the `email` option, as Steam does not provide an email address.
+
+    <APIMethod path="/sign-in/steam" method="POST" isClientOnly>
+    ```ts
+    type signInSteam = {
+        /**
+         * The email of the user.
+         */
+        email: string = "user@example.com"
+        /**
+         * An optional URL to redirect to after the user is signed in.
+         */
+        callbackURL?: string = "/dashboard"
+        /**
+         * An optional URL to redirect to if an error occurs.
+         */
+        errorCallbackURL?: string = "/error"
+        /**
+         * An optional URL to redirect to if the user is signing up for the first time.
+        */
+        newUserCallbackURL?: string = "/onboarding"
+        /**
+         * Whether to disable redirect.
+         */
+        disableRedirect?: boolean = false
+        /**
+         * Whether to request sign up. Useful when disableImplicitSignUp is true for this provider.
+         */
+        requestSignUp?: boolean = true
+    }
+    ```
+    </APIMethod>
+</Step>
+</Steps>
+
+
+## Oauth provider configurations
+
+Unlike other providers, oauth configurations are defined under the plugin options.
+
+### steamApiKey
+
+The Steam API key, this is required to fetch the user's profile from the Steam API.
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        steam({
+            steamApiKey: process.env.STEAM_API_KEY!,
+        })
+    ]
+});
+```
+
+### disableImplicitSignUp
+
+If enabled, you must set `requestSignUp` to `true` when signing-in with the signIn.steam method.
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        steam({
+            disableImplicitSignUp: true,
+        })
+    ]
+});
+```
+
+### mapProfileToUser
+
+Configure how user information is mapped to the user object.
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        steam({
+            async mapProfileToUser(profile) {
+                return {
+                    createdAt: new Date(),
+                    email: profile.email,
+                    emailVerified: false,
+                    name: profile.realname,
+                    image: profile.avatar,
+                    username: profile.personaname
+                };
+            },
+        }),
+    ]
+});
+```
+
+### accountLinking
+
+Whether to enable account linking. By default it is disabled.
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        steam({
+            accountLinking: true,
+        })
+    ]
+});
+```
+
+To link an account with Steam, you can use the `linkAccountWithSteam` endpoint.
+
+<APIMethod path="/link-social/steam" method="POST" noResult requireSession>
+```ts
+type linkAccountWithSteam = {
+    /**
+     * The URL to redirect to after the user has linked their account.
+    */
+    callbackURL?: string = "/welcome"
+    /**
+     * The URL to redirect to if an error occurs.
+     */
+    errorCallbackURL?: string = "/error"
+    /**
+     * Disable automatic redirection to the provider.
+     * This is useful if you want to handle the redirection
+	 * yourself like in a popup or a different tab.
+     */
+    disableRedirect?: boolean = false
+}
+```
+</APIMethod>
+
+And unlinking uses the normal unlinkAccount endpoint.
+
+<APIMethod path="/unlink-account" method="POST" noResult requireSession>
+```ts
+type unlinkAccount = {
+    /**
+     * The provider ID to unlink. In this case it would be "steam"
+     */
+    providerId: string = "steam"
+}
+```
+</APIMethod>

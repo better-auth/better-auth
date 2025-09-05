@@ -23,6 +23,7 @@ export * from "./api-key";
 export * from "./haveibeenpwned";
 export * from "./one-time-token";
 export * from "./mcp";
+export * from "./steam";
 export * from "./siwe";
 export * from "./device-authorization";
 export * from "./last-login-method";
