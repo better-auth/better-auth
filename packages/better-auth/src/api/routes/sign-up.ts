@@ -134,6 +134,21 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 								},
 							},
 						},
+						"422": {
+							description: "Unprocessable Content. User already exists or failed to create user.",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											message: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
