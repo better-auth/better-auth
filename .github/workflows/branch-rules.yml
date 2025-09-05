@@ -16,31 +16,27 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Determine changed files
-        id: files
-        run: |
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} HEAD)
-          echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+      - name: Filter changed files
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          base: ${{ github.base_ref }}
+          filters: |
+            # 'src' filter matches any file NOT in the docs/ directory
+            src:
+              - '!docs/**'
+            # 'docs' filter matches any file in the docs/ directory
+            docs:
+              - 'docs/**'
 
-      - name: Enforce branch rules
+      - name: Enforce docs-only PRs target main
+        if: steps.filter.outputs.docs == 'true' && steps.filter.outputs.src == 'false' && github.base_ref != 'main'
         run: |
-          CHANGED_FILES="${{ steps.files.outputs.changed_files }}"
-          ONLY_DOCS=true
-          for f in $CHANGED_FILES; do
-            if [[ $f != docs/* ]]; then
-              ONLY_DOCS=false
-              break
-            fi
-          done
+          echo "Error: Pull requests that only change documentation must target the 'main' branch."
+          exit 1
 
-          if $ONLY_DOCS; then
-            if [[ "${GITHUB_BASE_REF}" != "main" ]]; then
-              echo "Docs-only PRs must target 'main'"
-              exit 1
-            fi
-          else
-            if [[ "${GITHUB_BASE_REF}" != "canary" ]] && ! [[ "${GITHUB_BASE_REF}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-staging$ ]]; then
-              echo "PRs affecting non-docs must target 'canary' or a versioned staging branch"
-              exit 1
-            fi
-          fi
+      - name: Enforce code change PRs target canary or staging
+        if: steps.filter.outputs.src == 'true' && github.base_ref != 'canary' && !startsWith(github.base_ref, 'v')
+        run: |
+          echo "Error: Pull requests with code changes must target 'canary' or a versioned staging branch (e.g., 'v1.2.3-staging')."
+          exit 1
