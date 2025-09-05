@@ -486,6 +486,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				teams,
 			};
 		},
+		listAllOrganizations: async () => {
+			/**
+			 * TODO: Add pagination
+			 */
+			return await adapter.findMany<InferOrganization<O>>({
+				model: "organization",
+				where: [],
+			});
+		},
 		listOrganizations: async (userId: string) => {
 			const members = await adapter.findMany<InferMember<O>>({
 				model: "member",
