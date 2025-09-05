@@ -31,6 +31,8 @@ const adapterTests = {
 	SHOULD_FIND_MANY_WITH_WHERE: "should find many with where",
 	SHOULD_FIND_MANY_WITH_OPERATORS: "should find many with operators",
 	SHOULD_WORK_WITH_REFERENCE_FIELDS: "should work with reference fields",
+	SHOULD_FIND_MANY_WITH_NOT_IN_OPERATOR:
+		"should find many with not in operator",
 	SHOULD_FIND_MANY_WITH_SORT_BY: "should find many with sortBy",
 	SHOULD_FIND_MANY_WITH_LIMIT: "should find many with limit",
 	SHOULD_FIND_MANY_WITH_OFFSET: "should find many with offset",
@@ -98,9 +100,9 @@ async function adapterTest(
 	test.skipIf(disabledTests?.CREATE_MODEL)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.CREATE_MODEL}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const res = await (await adapter()).create({
 				model: "user",
@@ -122,9 +124,9 @@ async function adapterTest(
 			adapterTests.CREATE_MODEL_SHOULD_ALWAYS_RETURN_AN_ID
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const res = await (await adapter()).create({
 				model: "user",
@@ -141,9 +143,9 @@ async function adapterTest(
 	test.skipIf(disabledTests?.FIND_MODEL)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.FIND_MODEL}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const res = await (await adapter()).findOne<User>({
 				model: "user",
@@ -169,9 +171,9 @@ async function adapterTest(
 			adapterTests.FIND_MODEL_WITHOUT_ID
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const res = await (await adapter()).findOne<User>({
 				model: "user",
@@ -197,9 +199,9 @@ async function adapterTest(
 			adapterTests.FIND_MODEL_WITH_MODIFIED_FIELD_NAME
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const email = "test-email-with-modified-field@email.com";
 			const adapter = await getAdapter(
@@ -244,9 +246,9 @@ async function adapterTest(
 			adapterTests.FIND_MODEL_WITH_SELECT
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const res = await (await adapter()).findOne({
 				model: "user",
@@ -265,9 +267,9 @@ async function adapterTest(
 	test.skipIf(disabledTests?.UPDATE_MODEL)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.UPDATE_MODEL}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const newEmail = "updated@email.com";
 
@@ -293,9 +295,9 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.SHOULD_FIND_MANY}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const res = await (await adapter()).findMany({
 				model: "user",
@@ -309,9 +311,9 @@ async function adapterTest(
 			adapterTests.SHOULD_FIND_MANY_WITH_WHERE
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const user = await (await adapter()).create<User>({
 				model: "user",
@@ -341,9 +343,9 @@ async function adapterTest(
 			adapterTests.SHOULD_FIND_MANY_WITH_OPERATORS
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const newUser = await (await adapter()).create<User>({
 				model: "user",
@@ -369,14 +371,62 @@ async function adapterTest(
 		},
 	);
 
+	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_NOT_IN_OPERATOR)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_FIND_MANY_WITH_NOT_IN_OPERATOR
+		}`,
+		async ({ onTestFailed }) => {
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
+			});
+
+			const newUser3 = await (await adapter()).create<User>({
+				model: "user",
+				data: {
+					name: "user",
+					email: "test-email3email.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			const allUsers = await (await adapter()).findMany<User>({
+				model: "user",
+			});
+			expect(allUsers.length).toBe(6);
+			const usersWithoutNotIn = await (await adapter()).findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						operator: "not_in",
+						value: [user.id, newUser3.id],
+					},
+				],
+			});
+			expect(usersWithoutNotIn.length).toBe(4);
+			//cleanup
+			await (await adapter()).delete({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: newUser3.id,
+					},
+				],
+			});
+		},
+	);
+
 	test.skipIf(disabledTests?.SHOULD_WORK_WITH_REFERENCE_FIELDS)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${
 			adapterTests.SHOULD_WORK_WITH_REFERENCE_FIELDS
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			let token = null;
 			const user = await (await adapter()).create<Record<string, any>>({
@@ -432,9 +482,9 @@ async function adapterTest(
 			adapterTests.SHOULD_FIND_MANY_WITH_SORT_BY
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			await (await adapter()).create({
 				model: "user",
@@ -472,9 +522,9 @@ async function adapterTest(
 			adapterTests.SHOULD_FIND_MANY_WITH_LIMIT
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const res = await (await adapter()).findMany({
 				model: "user",
@@ -489,9 +539,9 @@ async function adapterTest(
 			adapterTests.SHOULD_FIND_MANY_WITH_OFFSET
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const res = await (await adapter()).findMany({
 				model: "user",
@@ -506,9 +556,9 @@ async function adapterTest(
 			adapterTests.SHOULD_UPDATE_WITH_MULTIPLE_WHERE
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			await (await adapter()).updateMany({
 				model: "user",
@@ -545,9 +595,9 @@ async function adapterTest(
 	test.skipIf(disabledTests?.DELETE_MODEL)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.DELETE_MODEL}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			await (await adapter()).delete({
 				model: "user",
@@ -574,9 +624,9 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_DELETE_MANY)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.SHOULD_DELETE_MANY}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			for (const i of ["to-be-delete-1", "to-be-delete-2", "to-be-delete-3"]) {
 				await (await adapter()).create({
@@ -627,9 +677,9 @@ async function adapterTest(
 			adapterTests.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			await (await adapter()).delete({
 				model: "user",
@@ -648,9 +698,9 @@ async function adapterTest(
 			adapterTests.SHOULD_NOT_THROW_ON_RECORD_NOT_FOUND
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const res = await (await adapter()).findOne({
 				model: "user",
@@ -670,9 +720,9 @@ async function adapterTest(
 			adapterTests.SHOULD_FIND_MANY_WITH_CONTAINS_OPERATOR
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const res = await (await adapter()).findMany({
 				model: "user",
@@ -693,9 +743,9 @@ async function adapterTest(
 			adapterTests.SHOULD_SEARCH_USERS_WITH_STARTS_WITH
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const res = await (await adapter()).findMany({
 				model: "user",
@@ -716,9 +766,9 @@ async function adapterTest(
 			adapterTests.SHOULD_SEARCH_USERS_WITH_ENDS_WITH
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const res = await (await adapter()).findMany({
 				model: "user",
@@ -739,9 +789,9 @@ async function adapterTest(
 			adapterTests.SHOULD_PREFER_GENERATE_ID_IF_PROVIDED
 		}`,
 		async ({ onTestFailed }) => {
-			resetDebugLogs();
-			onTestFailed(() => {
-				printDebugLogs();
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
 			});
 			const customAdapter = await getAdapter(
 				Object.assign(
@@ -803,9 +853,9 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 				numberIdAdapterTests.SHOULD_RETURN_A_NUMBER_ID_AS_A_RESULT
 			}`,
 			async ({ onTestFailed }) => {
-				resetDebugLogs();
-				onTestFailed(() => {
-					printDebugLogs();
+				await resetDebugLogs();
+				onTestFailed(async () => {
+					await printDebugLogs();
 				});
 				const res = await (await adapter()).create({
 					model: "user",
@@ -825,10 +875,10 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 				numberIdAdapterTests.SHOULD_INCREMENT_THE_ID_BY_1
 			}`,
 			async ({ onTestFailed }) => {
-				resetDebugLogs();
-				onTestFailed(() => {
+				await resetDebugLogs();
+				onTestFailed(async () => {
 					console.log(`ID number from last create: ${idNumber}`);
-					printDebugLogs();
+					await printDebugLogs();
 				});
 				const res = await (await adapter()).create({
 					model: "user",

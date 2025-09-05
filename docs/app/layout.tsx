@@ -53,7 +53,9 @@ export default function Layout({ children }: { children: ReactNode }) {
 						}}
 						search={{
 							enabled: true,
-							SearchDialog: CustomSearchDialog,
+							SearchDialog: process.env.ORAMA_PRIVATE_API_KEY
+								? CustomSearchDialog
+								: undefined,
 						}}
 					>
 						<NavbarProvider>
