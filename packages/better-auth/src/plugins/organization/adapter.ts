@@ -487,6 +487,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			};
 		},
 		listAllOrganizations: async () => {
+			/**
+			 * TODO: Add pagination
+			 */
 			return await adapter.findMany<InferOrganization<O>>({
 				model: "organization",
 				where: [],
