@@ -23,7 +23,7 @@ export function handleMcpErrors(
 			status: 401,
 			headers: {
 				"Content-Type": "application/text",
-				"www-authenticate": wwwAuthenticateValue,
+				"WWW-Authenticate": wwwAuthenticateValue,
 			},
 		});
 	} else if (error instanceof APIError) {

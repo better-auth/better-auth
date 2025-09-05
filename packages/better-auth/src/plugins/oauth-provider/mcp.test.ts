@@ -230,7 +230,7 @@ describe("mcp - checkMcp", async () => {
 			const res = handleMcpErrors(error, {
 				baseUrl: authServerBaseUrl,
 			});
-			expect(res?.headers.get("www-authenticate")).toBe(
+			expect(res?.headers.get("WWW-Authenticate")).toBe(
 				`Bearer resource_metadata="${authServerBaseUrl}/.well-known/oauth-authorization-server"`,
 			);
 			const body = await res?.text();
@@ -278,7 +278,7 @@ describe("mcp - checkMcp", async () => {
 			const res = handleMcpErrors(error, {
 				baseUrl: authServerBaseUrl,
 			});
-			expect(res?.headers.get("www-authenticate")).toBe(
+			expect(res?.headers.get("WWW-Authenticate")).toBe(
 				`Bearer resource_metadata="${authServerBaseUrl}/.well-known/oauth-authorization-server"`,
 			);
 			const body = await res?.text();
