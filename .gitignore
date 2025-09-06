@@ -197,6 +197,3 @@ android/
 
 playwright-report/
 test-results/
-
-.pnpm-store
-.devcontainer
