@@ -58,25 +58,30 @@ describe("open-api", async (it) => {
 	it("should properly handle nested objects in request body schema", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, any>;
-		
+
 		const signInSocialPath = paths["/sign-in/social"];
 		expect(signInSocialPath).toBeDefined();
-		
+
 		const requestBody = signInSocialPath.post.requestBody;
 		expect(requestBody).toBeDefined();
-		
-		const schema_properties = requestBody.content["application/json"].schema.properties;
+
+		const schema_properties =
+			requestBody.content["application/json"].schema.properties;
 		expect(schema_properties.idToken).toBeDefined();
-		console.log({schema_properties})	
+		console.log({ schema_properties });
 		expect(schema_properties.idToken.type).toBe("object");
 		expect(schema_properties.idToken.properties).toBeDefined();
 		expect(schema_properties.idToken.properties.token).toBeDefined();
 		expect(schema_properties.idToken.properties.token.type).toBe("string");
 		expect(schema_properties.idToken.properties.accessToken).toBeDefined();
-		expect(schema_properties.idToken.properties.accessToken.type).toBe("string");
+		expect(schema_properties.idToken.properties.accessToken.type).toBe(
+			"string",
+		);
 		expect(schema_properties.idToken.properties.refreshToken).toBeDefined();
-		expect(schema_properties.idToken.properties.refreshToken.type).toBe("string");
-		
+		expect(schema_properties.idToken.properties.refreshToken.type).toBe(
+			"string",
+		);
+
 		expect(schema_properties.idToken.required).toContain("token");
 		expect(schema_properties.idToken.required).not.toContain("accessToken");
 		expect(schema_properties.idToken.required).not.toContain("refreshToken");

@@ -196,7 +196,7 @@ function processZodType(zodType: ZodType<any>): any {
 	if (zodType instanceof ZodOptional) {
 		const innerType = (zodType as any)._def.innerType;
 		if (innerType instanceof ZodObject) {
-			const properties = 	processZodType(innerType)
+			const properties = processZodType(innerType);
 			return {
 				...properties,
 				nullable: true,
