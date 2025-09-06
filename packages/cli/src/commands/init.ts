@@ -97,7 +97,7 @@ export const supportedPlugins = [
 		id: "passkey",
 		name: "passkey",
 		clientName: "passkeyClient",
-		path: `better-auth/plugins/passkey`,
+		path: `better-auth/plugins`,
 		clientPath: "better-auth/client/plugins",
 	},
 	{
