@@ -708,7 +708,7 @@ export type BetterAuthOptions = {
 		};
 		/**
 		 * Configure cookies for cross-origin scenarios
-		 * 
+		 *
 		 * This enables proper handling of SameSite=None cookies
 		 * when your API and frontend are on different domains.
 		 */
@@ -719,13 +719,13 @@ export type BetterAuthOptions = {
 			enabled: boolean;
 			/**
 			 * Automatically set Secure=true when SameSite=None is detected
-			 * 
+			 *
 			 * @default true
 			 */
 			autoSecure?: boolean;
 			/**
 			 * Allow localhost without secure cookies (for development)
-			 * 
+			 *
 			 * @default true
 			 */
 			allowLocalhostUnsecure?: boolean;

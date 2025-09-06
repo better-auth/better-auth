@@ -28,7 +28,8 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	// Cross-origin cookie configuration
 	const crossOriginConfig = {
 		autoSecure: options.advanced?.crossOriginCookies?.autoSecure ?? true,
-		allowLocalhostUnsecure: options.advanced?.crossOriginCookies?.allowLocalhostUnsecure ?? true,
+		allowLocalhostUnsecure:
+			options.advanced?.crossOriginCookies?.allowLocalhostUnsecure ?? true,
 		...options.advanced?.crossOriginCookies,
 	};
 
@@ -53,7 +54,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		const attributes =
 			options.advanced?.cookies?.[cookieName as "session_token"]?.attributes;
 
-			// Build base attributes
+		// Build base attributes
 		let baseAttributes: CookieOptions = {
 			secure: !!secureCookiePrefix,
 			sameSite: "lax",
@@ -72,7 +73,8 @@ export function createCookieGetter(options: BetterAuthOptions) {
 
 		// Enforce security constraints for SameSite=None cookies
 		if (mergedAttributes.sameSite === "none") {
-			const isLocalhost = options.baseURL?.startsWith("http://localhost") || 
+			const isLocalhost =
+				options.baseURL?.startsWith("http://localhost") ||
 				options.baseURL?.startsWith("http://127.0.0.1");
 
 			// SameSite=None requires Secure=true (except localhost in development)
@@ -81,7 +83,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 					// Allow unsecure cookies on localhost for development
 				} else {
 					throw new BetterAuthError(
-						"SameSite=None cookies require Secure=true. Set secure: true in your cookie attributes, use HTTPS, or disable crossOriginCookies.autoSecure for development."
+						"SameSite=None cookies require Secure=true. Set secure: true in your cookie attributes, use HTTPS, or disable crossOriginCookies.autoSecure for development.",
 					);
 				}
 			}
