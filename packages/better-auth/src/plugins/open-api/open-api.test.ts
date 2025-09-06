@@ -68,7 +68,6 @@ describe("open-api", async (it) => {
 		const schema_properties =
 			requestBody.content["application/json"].schema.properties;
 		expect(schema_properties.idToken).toBeDefined();
-		console.log({ schema_properties });
 		expect(schema_properties.idToken.type).toBe("object");
 		expect(schema_properties.idToken.properties).toBeDefined();
 		expect(schema_properties.idToken.properties.token).toBeDefined();

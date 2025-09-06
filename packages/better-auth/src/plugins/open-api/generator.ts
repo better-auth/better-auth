@@ -166,11 +166,16 @@ function getRequestBody(options: EndpointOptions): any {
 }
 
 function processZodType(zodType: ZodType<any>): any {
-	const baseSchema = {
-		type: getTypeFromZodType(zodType),
-		description: (zodType as any).description,
-	};
-
+	// optional unwrapping
+	if (zodType instanceof ZodOptional) {
+		const innerType = (zodType as any)._def.innerType;
+		const innerSchema = processZodType(innerType);
+		return {
+			...innerSchema,
+			nullable: true,
+		};
+	}
+	// object unwrapping
 	if (zodType instanceof ZodObject) {
 		const shape = (zodType as any).shape;
 		if (shape) {
@@ -193,16 +198,11 @@ function processZodType(zodType: ZodType<any>): any {
 		}
 	}
 
-	if (zodType instanceof ZodOptional) {
-		const innerType = (zodType as any)._def.innerType;
-		if (innerType instanceof ZodObject) {
-			const properties = processZodType(innerType);
-			return {
-				...properties,
-				nullable: true,
-			};
-		}
-	}
+	// For primitive types, get the correct type from the unwrapped ZodType
+	const baseSchema = {
+		type: getTypeFromZodType(zodType),
+		description: (zodType as any).description,
+	};
 
 	return baseSchema;
 }
