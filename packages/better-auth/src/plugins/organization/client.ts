@@ -205,7 +205,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				},
 			);
 
-			const activeMemberRole = useAuthQuery<Role>(
+			const activeMemberRole = useAuthQuery<{ role: string }>(
 				[$activeMemberRoleSignal],
 				"/organization/get-active-member-role",
 				$fetch,
@@ -256,6 +256,12 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 					return path.includes("/organization/update-member-role");
 				},
 				signal: "$activeMemberSignal",
+			},
+			{
+				matcher(path) {
+					return path.includes("/organization/update-member-role");
+				},
+				signal: "$activeMemberRoleSignal",
 			},
 		],
 	} satisfies BetterAuthClientPlugin;

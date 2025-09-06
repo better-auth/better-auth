@@ -56,4 +56,6 @@ export const {
 	organization,
 	useListOrganizations,
 	useActiveOrganization,
+	useActiveMember,
+	useActiveMemberRole,
 } = client;

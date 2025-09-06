@@ -905,51 +905,59 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 		},
 	);
 
-export const getActiveMemberRole = <O extends OrganizationOptions>(options: O) => 
+export const getActiveMemberRole = <O extends OrganizationOptions>(
+	options: O,
+) =>
 	createAuthEndpoint(
 		"/organization/get-active-member-role",
 		{
 			method: "GET",
-			query: z.object({
-				userId: z.string().meta({
-					description: 'The user ID to get the role for. If not provided, will default to the current user\'s',
-				}).optional(),
-				organizationId: z.string().meta({
-					description: 'The organization ID to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-id"',
-				}).optional(),
-			}).optional(),
+			query: z
+				.object({
+					userId: z
+						.string()
+						.meta({
+							description:
+								"The user ID to get the role for. If not provided, will default to the current user's",
+						})
+						.optional(),
+					organizationId: z
+						.string()
+						.meta({
+							description:
+								'The organization ID to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-id"',
+						})
+						.optional(),
+				})
+				.optional(),
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
-			const session = ctx.context.session
-			const organizationId = ctx.query?.organizationId || session.session.activeOrganizationId
+			const session = ctx.context.session;
+			const organizationId =
+				ctx.query?.organizationId || session.session.activeOrganizationId;
 			if (!organizationId) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
 			}
-			const userId = ctx.query?.userId || session.user.id
+			const userId = ctx.query?.userId || session.user.id;
 
-			const adapter = getOrgAdapter<O>(ctx.context, options)
-		
-			const isMember = await adapter.findMemberByOrgId({
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+
+			const member = await adapter.findMemberByOrgId({
 				userId,
 				organizationId,
 			});
-			if (!isMember) {
+			if (!member) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				});
 			}
 
-			const member = await adapter.findMemberByOrgId({
-				userId,
-				organizationId,
-			});
-
 			return ctx.json({
-				role: member?.role
-			})
-		}
-	)
+				role: member?.role,
+			});
+		},
+	);

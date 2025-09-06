@@ -370,7 +370,7 @@ describe("activeMemberRole", async () => {
 		},
 	});
 
-	let selectedUserId = ""
+	let selectedUserId = "";
 	for (let i = 0; i < 10; i++) {
 		const user = await ctx.adapter.create({
 			model: "user",
@@ -381,7 +381,7 @@ describe("activeMemberRole", async () => {
 		});
 
 		if (i == 0) {
-			selectedUserId = user.id
+			selectedUserId = user.id;
 		}
 
 		await auth.api.addMember({
@@ -429,4 +429,4 @@ describe("activeMemberRole", async () => {
 
 		expect(activeMember.data?.role).toBe("member");
 	});
-})
+});

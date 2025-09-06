@@ -408,9 +408,9 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		listMembers: listMembers(options as O),
 		/**
 		 * ### Endpoint
-		 * 
+		 *
 		 * GET `/organization/get-active-member-role`
-		 * 
+		 *
 		 * ### API Methods
 		 *
 		 * **server:**
