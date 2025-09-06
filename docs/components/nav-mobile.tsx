@@ -236,14 +236,14 @@ function MobileSearchButton() {
 
 	const handleSearchClick = () => {
 		setOpenSearch(true);
-		toggleNavbar(); 
+		toggleNavbar();
 	};
 
 	return (
 		<button
 			className={cn(
 				"flex w-full items-center gap-2 px-5 py-2.5 border-b text-muted-foreground dark:bg-zinc-950 dark:border-t-zinc-900/30 dark:border-t",
-				!isDocs && "text-xl py-4"
+				!isDocs && "text-xl py-4",
 			)}
 			onClick={handleSearchClick}
 		>
