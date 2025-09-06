@@ -676,6 +676,7 @@ export const createInternalAdapter = (
 					},
 				],
 			});
+
 			if (!user) return null;
 			if (options?.includeAccounts) {
 				const accounts = await adapter.findMany<Account>({
