@@ -1,0 +1,353 @@
+import * as z from "zod/v4";
+import { createHMAC } from "@better-auth/utils/hmac";
+
+import type { AuthContext } from "../../init";
+import type { TrustedDeviceStrategy, TrustedDeviceTable } from "./types";
+import type { GenericEndpointContext, Session, User } from "../../types";
+
+import { generateId } from "../../utils";
+import { sessionMiddleware } from "../../api";
+import { createAuthEndpoint } from "../../api/call";
+import { TRUST_DEVICE_COOKIE_NAME } from "./constant";
+
+const DAYS_30 = 30 * 24 * 60 * 60;
+const TRUSTED_DEVICE_TABLE = "trustedDevice";
+
+export async function getTrustedDeviceCookie(ctx: GenericEndpointContext) {
+	const trustDeviceCookieName = ctx.context.createAuthCookie(
+		TRUST_DEVICE_COOKIE_NAME,
+	);
+	const trustDeviceCookie = await ctx.getSignedCookie(
+		trustDeviceCookieName.name,
+		ctx.context.secret,
+	);
+
+	return trustDeviceCookie;
+}
+
+export async function isTrusted({
+	ctx,
+	newSession,
+	trustedDeviceStrategy,
+}: {
+	ctx: GenericEndpointContext;
+	newSession: NonNullable<AuthContext["newSession"]>;
+	trustedDeviceStrategy: TrustedDeviceStrategy;
+}): Promise<boolean> {
+	const trustedDeviceCookie = await getTrustedDeviceCookie(ctx);
+	if (trustedDeviceCookie === null) {
+		return false;
+	}
+
+	if (trustedDeviceStrategy === "in-cookie") {
+		return isTrustedInCookie(ctx, trustedDeviceCookie, newSession);
+	}
+
+	if (trustedDeviceStrategy === "in-db") {
+		return isTrustedInDb(ctx, trustedDeviceCookie);
+	}
+
+	return false;
+}
+
+async function isTrustedInDb(
+	ctx: GenericEndpointContext,
+	trustedDeviceCookie: string,
+): Promise<boolean> {
+	const device = await ctx.context.adapter.findOne<TrustedDeviceTable>({
+		model: "trustedDevice",
+		where: [
+			{
+				field: "deviceId",
+				value: trustedDeviceCookie,
+			},
+		],
+	});
+
+	if (device === null) {
+		return false;
+	}
+
+	if (Date.now() > device.expiresAt) {
+		return false;
+	}
+
+	await ctx.context.adapter.update({
+		model: TRUSTED_DEVICE_TABLE,
+		where: [
+			{
+				field: "id",
+				value: device.deviceId,
+			},
+		],
+		update: {
+			expiresAt: Date.now() + DAYS_30,
+		},
+	});
+
+	const trustDeviceCookieName = ctx.context.createAuthCookie(
+		TRUST_DEVICE_COOKIE_NAME,
+	);
+
+	await ctx.setSignedCookie(
+		trustDeviceCookieName.name,
+		device.deviceId,
+		ctx.context.secret,
+		trustDeviceCookieName.attributes,
+	);
+
+	return true;
+}
+
+async function isTrustedInCookie(
+	ctx: GenericEndpointContext,
+	trustedDeviceCookie: string,
+	newSession: NonNullable<AuthContext["newSession"]>,
+): Promise<boolean> {
+	const [token, sessionToken] = trustedDeviceCookie.split("!");
+	const expectedToken = await createHMAC("SHA-256", "base64urlnopad").sign(
+		ctx.context.secret,
+		`${newSession.user.id}!${sessionToken}`,
+	);
+
+	if (token !== expectedToken) {
+		return false;
+	}
+
+	const trustDeviceCookie = ctx.context.createAuthCookie(
+		TRUST_DEVICE_COOKIE_NAME,
+	);
+
+	const newToken = await createHMAC("SHA-256", "base64urlnopad").sign(
+		ctx.context.secret,
+		`${newSession.user.id}!${sessionToken}`,
+	);
+
+	await ctx.setSignedCookie(
+		trustDeviceCookie.name,
+		`${newToken}!${newSession.session.token}`,
+		ctx.context.secret,
+		trustDeviceCookie.attributes,
+	);
+
+	return true;
+}
+
+export async function trustDevice({
+	ctx,
+	user,
+	session,
+	trustedDeviceStrategy,
+}: {
+	ctx: GenericEndpointContext;
+	user: User;
+	session: Session;
+	trustedDeviceStrategy: TrustedDeviceStrategy;
+}) {
+	if (trustedDeviceStrategy === "in-db") {
+		await trustDeviceInDb(ctx, session);
+	}
+	if (trustedDeviceStrategy === "in-cookie") {
+		await trustDeviceInCookie(ctx, user, session);
+	}
+}
+
+async function trustDeviceInDb(ctx: GenericEndpointContext, session: Session) {
+	const deviceId = generateId(32);
+
+	const device = await ctx.context.adapter.create<TrustedDeviceTable>({
+		model: TRUSTED_DEVICE_TABLE,
+		data: {
+			deviceId,
+			userId: session.userId,
+			expiresAt: Date.now() + DAYS_30,
+			userAgent: session.userAgent,
+		},
+	});
+
+	const trustDeviceCookie = ctx.context.createAuthCookie(
+		TRUST_DEVICE_COOKIE_NAME,
+	);
+
+	await ctx.setSignedCookie(
+		trustDeviceCookie.name,
+		device.deviceId,
+		ctx.context.secret,
+		trustDeviceCookie.attributes,
+	);
+}
+
+async function trustDeviceInCookie(
+	ctx: GenericEndpointContext,
+	user: User,
+	session: Session,
+) {
+	const token = await createHMAC("SHA-256", "base64urlnopad").sign(
+		ctx.context.secret,
+		`${user.id}!${session.token}`,
+	);
+
+	const trustDeviceCookie = ctx.context.createAuthCookie(
+		TRUST_DEVICE_COOKIE_NAME,
+		{
+			maxAge: DAYS_30,
+		},
+	);
+
+	await ctx.setSignedCookie(
+		trustDeviceCookie.name,
+		`${token}!${session.token}`,
+		ctx.context.secret,
+		trustDeviceCookie.attributes,
+	);
+}
+
+export const trustedDeviceDbEndpoints = {
+	/**
+	 * ### Endpoint
+	 *
+	 * GET `/two-factor/trusted-devices/list`
+	 *
+	 * ### API Methods
+	 *
+	 * **server:**
+	 * `auth.api.listTrustedDevices`
+	 *
+	 * **client:**
+	 * `authClient.twoFactor.trustedDevices.list`
+	 */
+	listTrustedDevices: createAuthEndpoint(
+		"/two-factor/trusted-devices/list",
+		{
+			method: "GET",
+			use: [sessionMiddleware],
+			metadata: {
+				openapi: {
+					summary: "List Trusted Devices",
+					description:
+						"Use this endpoint to list all the trusted devices the current user has.",
+					responses: {
+						200: {
+							description: "Successful response",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											deviceId: {
+												type: "string",
+												description: "The device ID.",
+											},
+											userAgent: {
+												type: "string",
+												description: "The user agent of the device.",
+											},
+											expiresAt: {
+												type: "number",
+												description:
+													"The unix timestamp in seconds where this device will no longer be trusted.",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const userId = ctx.context.session.user.id;
+
+			const devices = await ctx.context.adapter.findMany<TrustedDeviceTable>({
+				model: TRUSTED_DEVICE_TABLE,
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+					{
+						field: "expiresAt",
+						operator: "gt",
+						value: Date.now(),
+					},
+				],
+			});
+
+			return devices.map((d) => ({
+				deviceId: d.deviceId,
+				userAgent: d.userAgent,
+				expiresAt: d.expiresAt,
+			}));
+		},
+	),
+	/**
+	 * ### Endpoint
+	 *
+	 * POST `/two-factor/trusted-devices/remove/`
+	 *
+	 * ### API Methods
+	 *
+	 * **server:**
+	 * `auth.api.removeTrustedDevices`
+	 *
+	 * **client:**
+	 * `authClient.twoFactor.trustedDevices.remove`
+	 */
+	removeTrustedDevice: createAuthEndpoint(
+		"/two-factor/trusted-devices/remove",
+		{
+			method: "POST",
+			use: [sessionMiddleware],
+			body: z.object({
+				deviceId: z.string().meta({
+					description: `The device we want to remove.`,
+				}),
+			}),
+			metadata: {
+				openapi: {
+					summary: "Remove a Trusted Devices",
+					description:
+						"Use this endpoint to disable the device with the give id from being trusted.",
+					responses: {
+						200: {
+							description: "Device removed",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: {
+												type: "boolean",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const deviceId = ctx.body.deviceId;
+			const userId = ctx.context.session.user.id;
+
+			await ctx.context.adapter.delete({
+				model: TRUSTED_DEVICE_TABLE,
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+					{
+						field: "deviceId",
+						value: deviceId,
+					},
+				],
+			});
+
+			return { success: true };
+		},
+	),
+};

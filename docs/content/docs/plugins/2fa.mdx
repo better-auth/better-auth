@@ -275,11 +275,11 @@ import { twoFactor } from "better-auth/plugins"
 export const auth = betterAuth({
     plugins: [
         twoFactor({
-          	otpOptions: {
-				async sendOTP({ user, otp }, request) {
+            otpOptions: {
+                async sendOTP({ user, otp }, request) {
                     // send otp to user
-				},
-			},
+                },
+            },
         })
     ]
 })
@@ -421,6 +421,81 @@ const verify2FA = async (code: string) => {
 
 When `trustDevice` is set to `true`, the current device will be remembered for 60 days. During this period, the user won't be prompted for 2FA on subsequent sign-ins from this device. The trust period is refreshed each time the user signs in successfully.
 
+There are two ways a device can be marked as trusted:
+
+1. **Signed cookie (default)** – A signed cookie is set and verified when the user attempts to sign in.
+2. **Database-stored device ID** – A `deviceId` cookie is set that corresponds to a record in your database.
+
+You can configure the method by setting the `trustedDeviceStrategy` option in the two factor plugin.
+
+
+1. Using signed cookies only (default)
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { twoFactor } from "better-auth/plugins"
+
+    export const auth = betterAuth({
+      plugins: [
+        twoFactor({
+          trustedDeviceStrategy: "in-cookie" // [!code highlight]
+        })
+      ]
+    })
+    ```
+
+2. Storing device IDs in the database
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { twoFactor } from "better-auth/plugins"
+
+    export const auth = betterAuth({
+      plugins: [
+        twoFactor({
+          trustedDeviceStrategy: "in-db" // [!code highlight]
+        })
+      ]
+    })
+    ```
+
+When using the `in-db` strategy, you have access to the following API methods.
+
+
+#### List Trusted Devices
+
+Lists all trusted devices for the current user.
+
+<APIMethod
+  path="/two-factor/trusted-devices/list"
+  method="GET"
+  requireSession
+>
+```ts
+type listTrustedDevices = {
+}
+```
+</APIMethod>
+
+#### Remove Trusted Device
+
+Removes a device from the trusted list by its device ID.
+
+<APIMethod
+  path="/two-factor/trusted-devices/remove/"
+  method="POST"
+  requireSession
+>
+```ts
+type removeTrustedDevice = {
+    /**
+     * The ID of the device we want to remove.
+     */
+    deviceId: string
+}
+```
+</APIMethod>
+
 ### Issuer
 
 By adding an `issuer` you can set your application name for the 2fa application.
@@ -462,6 +537,8 @@ Table: `twoFactor`
 **twoFactorTable**: The name of the table that stores the two factor authentication data. Default: `twoFactor`.
 
 **skipVerificationOnEnable**: Skip the verification process before enabling two factor for a user.
+
+**trustedDeviceStrategy**: Where to store that a given device was marked as trusted.
 
 **Issuer**: The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
 
