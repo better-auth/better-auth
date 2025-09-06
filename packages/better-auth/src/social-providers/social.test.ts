@@ -11,6 +11,7 @@ import Database from "better-sqlite3";
 import { getMigrations } from "../db";
 
 let server = new OAuth2Server();
+let port = 8005;
 
 vi.mock("../oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
@@ -75,7 +76,7 @@ vi.mock("../oauth2", async (importOriginal) => {
 			expect(refreshToken).toBeDefined();
 			expect(options.clientId).toBe("test-client-id");
 			expect(options.clientSecret).toBe("test-client-secret");
-			expect(tokenEndpoint).toBe("http://localhost:8080/token");
+			expect(tokenEndpoint).toBe(`http://localhost:${port}/token`);
 
 			const data: GoogleProfile = {
 				email: "user@email.com",
@@ -150,8 +151,8 @@ describe("Social Providers", async (c) => {
 	beforeAll(async () => {
 		await server.issuer.keys.generate("RS256");
 		server.issuer.on;
-		await server.start(8080, "localhost");
-		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8080
+		await server.start(port, "localhost");
+		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:${port}
 	});
 	afterAll(async () => {
 		await server.stop().catch(console.error);
@@ -206,7 +207,7 @@ describe("Social Providers", async (c) => {
 					clientKey: "test-client-key",
 					clientSecret: "test-client-secret",
 				},
-				tokenEndpoint: "http://localhost:8080/token",
+				tokenEndpoint: `http://localhost:${port}/token`,
 			});
 			return tokens;
 		}
@@ -382,7 +383,7 @@ describe("Social Providers", async (c) => {
 			if (!authUrl) throw new Error("No auth url found");
 			const mockEndpoint = authUrl.replace(
 				"https://accounts.google.com/o/oauth2/auth",
-				"http://localhost:8080/authorize",
+				`http://localhost:${port}/authorize`,
 			);
 			const result = await simulateOAuthFlowRefresh(mockEndpoint, headers);
 			const { accessToken, refreshToken } = result;

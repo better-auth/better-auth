@@ -142,6 +142,9 @@ import { getSessionCookie } from "better-auth/cookies";
 export async function middleware(request: NextRequest) {
 	const sessionCookie = getSessionCookie(request);
 
+    // THIS IS NOT SECURE!
+    // This is the recommended approach to optimistically redirect users
+    // We recommend handling auth checks in each page/route
 	if (!sessionCookie) {
 		return NextResponse.redirect(new URL("/", request.url));
 	}
@@ -153,6 +156,14 @@ export const config = {
 	matcher: ["/dashboard"], // Specify the routes the middleware applies to
 };
 ```
+
+<Callout type="warn">
+	**Security Warning:** The `getSessionCookie` function only checks for the
+	existence of a session cookie; it does **not** validate it. Relying solely
+	on this check for security is dangerous, as anyone can manually create a
+	cookie to bypass it. You must always validate the session on your server for
+	any protected actions or pages.
+</Callout>
 
 <Callout type="info">
 If you have a custom cookie name or prefix, you can pass it to the `getSessionCookie` function.
@@ -175,6 +186,33 @@ export async function middleware(request: NextRequest) {
 		return NextResponse.redirect(new URL("/sign-in", request.url));
 	}
 	return NextResponse.next();
+}
+```
+
+### How to handle auth checks in each page/route
+
+In this example, we are using the `auth.api.getSession` function within a server component to get the session object,
+then we are checking if the session is valid. If it's not, we are redirecting the user to the sign-in page.
+
+```tsx title="app/dashboard/page.tsx"
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+
+export default async function DashboardPage() {
+    const session = await auth.api.getSession({
+        headers: await headers()
+    })
+
+    if(!session) {
+        redirect("/sign-in")
+    }
+
+    return (
+        <div>
+            <h1>Welcome {session.user.name}</h1>
+        </div>
+    )
 }
 ```
 

@@ -66,6 +66,17 @@ import { auth } from "../../../lib/auth";
 export const GET = oAuthDiscoveryMetadata(auth);
 ```
 
+### OAuth Protected Resource Metadata
+
+Add a route to expose protected resource metadata for MCP clients:
+
+```ts title="/.well-known/oauth-protected-resource/route.ts"
+import { oAuthProtectedResourceMetadata } from "better-auth/plugins";
+import { auth } from "@/lib/auth";
+
+export const GET = oAuthProtectedResourceMetadata(auth);
+```
+
 ### MCP Session Handling
 
 You can use the helper function `withMcpAuth` to get the session and handle unauthenticated calls automatically.

@@ -1,5 +1,12 @@
 import { getDate } from "../utils/date";
 import { parseSessionOutput, parseUserOutput } from "./schema";
+import type {
+	Adapter,
+	AuthContext,
+	BetterAuthOptions,
+	GenericEndpointContext,
+	Where,
+} from "../types";
 import {
 	type Account,
 	type Session,
@@ -9,23 +16,18 @@ import {
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
-import { generateId } from "../utils";
-import type {
-	Adapter,
-	AuthContext,
-	BetterAuthOptions,
-	GenericEndpointContext,
-	Where,
-} from "../types";
+import { generateId, type InternalLogger } from "../utils";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
 	ctx: {
-		options: BetterAuthOptions;
+		options: Omit<BetterAuthOptions, "logger">;
+		logger: InternalLogger;
 		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
 		generateId: AuthContext["generateId"];
 	},
 ) => {
+	const logger = ctx.logger;
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
@@ -34,13 +36,14 @@ export const createInternalAdapter = (
 
 	return {
 		createOAuthUser: async (
-			user: Omit<User, "id" | "createdAt" | "updatedAt"> & Partial<User>,
+			user: Omit<User, "id" | "createdAt" | "updatedAt">,
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 			context?: GenericEndpointContext,
 		) => {
 			const createdUser = await createWithHooks(
 				{
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...user,
@@ -52,7 +55,8 @@ export const createInternalAdapter = (
 			const createdAccount = await createWithHooks(
 				{
 					...account,
-					userId: createdUser.id || user.id,
+					userId: createdUser!.id,
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
 				},
@@ -73,9 +77,9 @@ export const createInternalAdapter = (
 		) => {
 			const createdUser = await createWithHooks(
 				{
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
-					emailVerified: false,
 					...user,
 					email: user.email?.toLowerCase(),
 				},
@@ -85,14 +89,15 @@ export const createInternalAdapter = (
 			);
 			return createdUser as T & User;
 		},
-		createAccount: async <T>(
+		createAccount: async <T extends Record<string, any>>(
 			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 				Partial<Account> &
-				Record<string, any>,
+				T,
 			context?: GenericEndpointContext,
 		) => {
 			const createdAccount = await createWithHooks(
 				{
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...account,
@@ -120,7 +125,11 @@ export const createInternalAdapter = (
 				for (const session of validSessions) {
 					const sessionStringified = await secondaryStorage.get(session.token);
 					if (sessionStringified) {
-						const s = JSON.parse(sessionStringified);
+						const s = safeJSONParse<{
+							session: Session;
+							user: User;
+						}>(sessionStringified);
+						if (!s) return [];
 						const parsedSession = parseSessionOutput(ctx.options, {
 							...s.session,
 							expiresAt: new Date(s.session.expiresAt),
@@ -232,6 +241,7 @@ export const createInternalAdapter = (
 					: getDate(sessionExpiration, "sec"),
 				userId,
 				token: generateId(32),
+				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				...(overrideAll ? rest : {}),
@@ -290,7 +300,11 @@ export const createInternalAdapter = (
 					return null;
 				}
 				if (sessionStringified) {
-					const s = JSON.parse(sessionStringified);
+					const s = safeJSONParse<{
+						session: Session;
+						user: User;
+					}>(sessionStringified);
+					if (!s) return null;
 					const parsedSession = parseSessionOutput(ctx.options, {
 						...s.session,
 						expiresAt: new Date(s.session.expiresAt),
@@ -352,7 +366,11 @@ export const createInternalAdapter = (
 				for (const sessionToken of sessionTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
-						const s = JSON.parse(sessionStringified);
+						const s = safeJSONParse<{
+							session: Session;
+							user: User;
+						}>(sessionStringified);
+						if (!s) return [];
 						const session = {
 							session: {
 								...s.session,
@@ -424,10 +442,11 @@ export const createInternalAdapter = (
 								const currentSession = await secondaryStorage.get(sessionToken);
 								let updatedSession: Session | null = null;
 								if (currentSession) {
-									const parsedSession = JSON.parse(currentSession) as {
+									const parsedSession = safeJSONParse<{
 										session: Session;
 										user: User;
-									};
+									}>(currentSession);
+									if (!parsedSession) return null;
 									updatedSession = {
 										...parsedSession.session,
 										...data,
@@ -446,6 +465,42 @@ export const createInternalAdapter = (
 		},
 		deleteSession: async (token: string) => {
 			if (secondaryStorage) {
+				// remove the session from the active sessions list
+				const data = await secondaryStorage.get(token);
+				if (data) {
+					const { session } =
+						safeJSONParse<{
+							session: Session;
+							user: User;
+						}>(data) ?? {};
+					if (!session) {
+						logger.error("Session not found in secondary storage");
+						return;
+					}
+					const userId = session.userId;
+
+					const currentList = await secondaryStorage.get(
+						`active-sessions-${userId}`,
+					);
+					if (currentList) {
+						let list: { token: string; expiresAt: number }[] =
+							safeJSONParse(currentList) || [];
+						list = list.filter((s) => s.token !== token);
+
+						if (list.length > 0) {
+							await secondaryStorage.set(
+								`active-sessions-${userId}`,
+								JSON.stringify(list),
+								sessionExpiration,
+							);
+						} else {
+							await secondaryStorage.delete(`active-sessions-${userId}`);
+						}
+					} else {
+						logger.error("Active sessions list not found in secondary storage");
+					}
+				}
+
 				await secondaryStorage.delete(token);
 
 				if (
@@ -662,9 +717,10 @@ export const createInternalAdapter = (
 		) => {
 			const _account = await createWithHooks(
 				{
-					...account,
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
+					...account,
 				},
 				"account",
 				undefined,
@@ -842,6 +898,7 @@ export const createInternalAdapter = (
 		) => {
 			const verification = await createWithHooks(
 				{
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...data,
