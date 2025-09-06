@@ -32,6 +32,7 @@ import {
 	organization,
 	useListOrganizations,
 	useSession,
+	useActiveOrganization,
 } from "@/lib/auth-client";
 import { ActiveOrganization, Session } from "@/lib/auth-types";
 import { ChevronDownIcon, PlusIcon } from "@radix-ui/react-icons";
@@ -47,6 +48,7 @@ export function OrganizationCard(props: {
 	activeOrganization: ActiveOrganization | null;
 }) {
 	const organizations = useListOrganizations();
+	const activeOrganization = useActiveOrganization();
 	const [optimisticOrg, setOptimisticOrg] = useState<ActiveOrganization | null>(
 		props.activeOrganization,
 	);
@@ -63,6 +65,10 @@ export function OrganizationCard(props: {
 	const currentMember = optimisticOrg?.members.find(
 		(member) => member.userId === session?.user.id,
 	);
+
+	console.log("organizations", organizations);
+
+	console.log("activeMemberRole", activeOrganization);
 
 	return (
 		<Card>
