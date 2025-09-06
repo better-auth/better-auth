@@ -805,4 +805,10 @@ export interface OrganizationOptions {
 	 * @default false
 	 */
 	autoCreateOrganizationOnSignUp?: boolean;
+	/**
+	 * Stringify organization metadata before saving it to the database.
+	 *
+	 * @default true
+	 */
+	stringifyOrganizationMetadata?: boolean;
 }
