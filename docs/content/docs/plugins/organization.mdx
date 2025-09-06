@@ -1162,6 +1162,21 @@ To get the current member of the active organization you can use the `organizati
   ```
 </APIMethod>
 
+### Get Active Role Member
+To get the current role member of the active organization you can use the `organization.getActiveRoleMember` function. This function will return the user's member role in their active organization.
+
+<APIMethod
+  path="/organization/get-active-member-role"
+  method="GET"
+  requireSession
+  resultVariable="{ role }"
+>
+  ```ts
+  type getActiveMemberRole = {
+  }
+  ```
+</APIMethod>
+
 ### Add Member
 
 If you want to add a member directly to an organization without sending an invitation, you can use the `addMember` function which can only be invoked on the server.
