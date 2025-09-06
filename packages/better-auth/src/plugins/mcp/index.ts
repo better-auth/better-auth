@@ -28,6 +28,7 @@ import { logger } from "../../utils";
 
 interface MCPOptions {
 	loginPage: string;
+	resource?: string;
 	oidcConfig?: OIDCOptions;
 }
 
@@ -85,15 +86,15 @@ export const getMCPProviderMetadata = (
 
 export const getMCPProtectedResourceMetadata = (
 	ctx: GenericEndpointContext,
-	options?: OIDCOptions,
+	options?: MCPOptions,
 ) => {
 	const baseURL = ctx.context.baseURL;
 
 	return {
-		resource: baseURL,
+		resource: options?.resource ?? new URL(baseURL).origin,
 		authorization_servers: [baseURL],
-		jwks_uri: options?.metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
-		scopes_supported: options?.metadata?.scopes_supported ?? [
+		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
+		scopes_supported: options?.oidcConfig?.metadata?.scopes_supported ?? [
 			"openid",
 			"profile",
 			"email",
@@ -946,7 +947,7 @@ export const withMcpAuth = <
 		const session = await auth.api.getMcpSession({
 			headers: req.headers,
 		});
-		const wwwAuthenticateValue = `Bearer resource_metadata=${baseURL}/api/auth/.well-known/oauth-protected-resource`;
+		const wwwAuthenticateValue = `Bearer resource_metadata="${baseURL}/.well-known/oauth-protected-resource"`;
 		if (!session) {
 			return Response.json(
 				{
@@ -962,6 +963,8 @@ export const withMcpAuth = <
 					status: 401,
 					headers: {
 						"WWW-Authenticate": wwwAuthenticateValue,
+						// we also add this headers otherwise browser based clients will not be able to read the `www-authenticate` header
+						"Access-Control-Expose-Headers": "WWW-Authenticate",
 					},
 				},
 			);
