@@ -1,5 +1,5 @@
 "use client";
-import { ChevronRight, Menu } from "lucide-react";
+import { ChevronRight, Menu, Search } from "lucide-react";
 import Link from "next/link";
 import { Fragment, createContext, useContext, useState } from "react";
 import {
@@ -11,6 +11,7 @@ import {
 import { contents, examples } from "./sidebar-content";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useSearchContext } from "fumadocs-ui/provider";
 
 interface NavbarMobileContextProps {
 	isOpen: boolean;
@@ -136,6 +137,7 @@ export const NavbarMobile = () => {
 						)}
 					</Fragment>
 				))}
+				<MobileSearchButton />
 				<DocsNavBarContent />
 			</div>
 		</div>
@@ -225,3 +227,28 @@ export const navMenu: {
 		path: "/community",
 	},
 ];
+
+function MobileSearchButton() {
+	const { setOpenSearch } = useSearchContext();
+	const { toggleNavbar } = useNavbarMobile();
+	const pathname = usePathname();
+	const isDocs = pathname.startsWith("/docs");
+
+	const handleSearchClick = () => {
+		setOpenSearch(true);
+		toggleNavbar(); 
+	};
+
+	return (
+		<button
+			className={cn(
+				"flex w-full items-center gap-2 px-5 py-2.5 border-b text-muted-foreground dark:bg-zinc-950 dark:border-t-zinc-900/30 dark:border-t",
+				!isDocs && "text-xl py-4"
+			)}
+			onClick={handleSearchClick}
+		>
+			<Search className="size-4 mx-0.5" />
+			<p className="text-sm">Search documentation...</p>
+		</button>
+	);
+}
