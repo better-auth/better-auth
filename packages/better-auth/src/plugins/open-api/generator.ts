@@ -108,13 +108,12 @@ function getParameters(options: EndpointOptions) {
 					name: key,
 					in: "query",
 					schema: {
-						type: getTypeFromZodType(value as ZodType<any>),
+						...processZodType(value as ZodType<any>),
 						...("minLength" in value && (value as any).minLength
 							? {
 									minLength: (value as any).minLength as number,
 								}
 							: {}),
-						description: (value as any).description,
 					},
 				});
 			}
@@ -139,10 +138,7 @@ function getRequestBody(options: EndpointOptions): any {
 		const required: string[] = [];
 		Object.entries(shape).forEach(([key, value]) => {
 			if (value instanceof ZodType) {
-				properties[key] = {
-					type: getTypeFromZodType(value as ZodType<any>),
-					description: (value as any).description,
-				};
+				properties[key] = processZodType(value as ZodType<any>);
 				if (!(value instanceof z.ZodOptional)) {
 					required.push(key);
 				}
@@ -167,6 +163,48 @@ function getRequestBody(options: EndpointOptions): any {
 		};
 	}
 	return undefined;
+}
+
+function processZodType(zodType: ZodType<any>): any {
+	// optional unwrapping
+	if (zodType instanceof ZodOptional) {
+		const innerType = (zodType as any)._def.innerType;
+		const innerSchema = processZodType(innerType);
+		return {
+			...innerSchema,
+			nullable: true,
+		};
+	}
+	// object unwrapping
+	if (zodType instanceof ZodObject) {
+		const shape = (zodType as any).shape;
+		if (shape) {
+			const properties: Record<string, any> = {};
+			const required: string[] = [];
+			Object.entries(shape).forEach(([key, value]) => {
+				if (value instanceof ZodType) {
+					properties[key] = processZodType(value as ZodType<any>);
+					if (!(value instanceof z.ZodOptional)) {
+						required.push(key);
+					}
+				}
+			});
+			return {
+				type: "object",
+				properties,
+				...(required.length > 0 ? { required } : {}),
+				description: (zodType as any).description,
+			};
+		}
+	}
+
+	// For primitive types, get the correct type from the unwrapped ZodType
+	const baseSchema = {
+		type: getTypeFromZodType(zodType),
+		description: (zodType as any).description,
+	};
+
+	return baseSchema;
 }
 
 function getResponse(responses?: Record<string, any>) {
