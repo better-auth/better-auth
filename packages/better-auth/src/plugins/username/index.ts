@@ -201,6 +201,21 @@ export const username = (options?: UsernameOptions) => {
 										},
 									},
 								},
+								422: {
+									description: "Unprocessable Entity. Validation error",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													message: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
 							},
 						},
 					},
