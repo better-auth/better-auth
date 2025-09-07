@@ -66,9 +66,6 @@ export function OrganizationCard(props: {
 		(member) => member.userId === session?.user.id,
 	);
 
-	console.log("organizations", organizations);
-
-	console.log("activeMemberRole", activeOrganization);
 
 	return (
 		<Card>
