@@ -51,6 +51,12 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 							}
 							// @ts-expect-error
 							return value.includes(record[field]);
+						} else if (operator === "not_in") {
+							if (!Array.isArray(value)) {
+								throw new Error("Value must be an array");
+							}
+							// @ts-expect-error
+							return !value.includes(record[field]);
 						} else if (operator === "contains") {
 							return record[field].includes(value);
 						} else if (operator === "starts_with") {

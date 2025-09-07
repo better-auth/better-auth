@@ -13,6 +13,7 @@ export type Where = {
 		| "gt"
 		| "gte"
 		| "in"
+		| "not_in"
 		| "contains"
 		| "starts_with"
 		| "ends_with"; //eq by default

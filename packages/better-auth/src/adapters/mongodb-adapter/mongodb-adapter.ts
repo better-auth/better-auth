@@ -177,6 +177,15 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 								},
 							};
 							break;
+						case "not_in":
+							condition = {
+								[field]: {
+									$nin: Array.isArray(value)
+										? value.map((v) => serializeID({ field, value: v, model }))
+										: [serializeID({ field, value, model })],
+								},
+							};
+							break;
 						case "gt":
 							condition = { [field]: { $gt: value } };
 							break;
