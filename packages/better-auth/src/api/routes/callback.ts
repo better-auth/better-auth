@@ -136,7 +136,7 @@ export const callbackOAuth = createAuthEndpoint(
 				userInfo.email !== link.email &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
-				return redirectOnError("different_emails_not_allowed");
+				return redirectOnError("email_doesn't_match");
 			}
 
 			const existingAccount = await c.context.internalAdapter.findAccount(
