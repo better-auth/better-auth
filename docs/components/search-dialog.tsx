@@ -37,7 +37,7 @@ export function CustomSearchDialog(props: SharedProps) {
 			{...props}
 		>
 			<SearchDialogOverlay />
-			<SearchDialogContent className="md:top-[28.3%] top-[10%] md:translate-y-[-50%] translate-y-0">
+			<SearchDialogContent className="mt-12 md:mt-0">
 				<SearchDialogHeader>
 					<SearchDialogIcon />
 					<SearchDialogInput />
