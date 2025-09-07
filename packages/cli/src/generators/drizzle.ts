@@ -74,6 +74,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				| "number"
 				| "boolean"
 				| "date"
+				| "json"
 				| `${"string" | "number"}[]`;
 			const typeMap: Record<
 				typeof type,
@@ -120,6 +121,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					sqlite: `text('${name}').array()`,
 					pg: `text('${name}').array()`,
 					mysql: `text('${name}').array()`,
+				},
+				json: {
+					sqlite: `text('${name}')`,
+					pg: `jsonb('${name}')`,
+					mysql: `json('${name}')`,
 				},
 			} as const;
 			return typeMap[type][databaseType];
