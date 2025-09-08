@@ -46,9 +46,9 @@ body:
   - type: textarea
     attributes:
       label: System info
-      description: Output of `npx envinfo --system --browsers`
+      description: Output of `npx @better-auth/cli info --json`
       render: bash
-      placeholder: System and browsers
+      placeholder: System and Better Auth info
     validations:
       required: true
   - type: dropdown

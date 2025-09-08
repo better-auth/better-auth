@@ -265,7 +265,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 						})
-					: null;
+					: referenceId
+						? await ctx.context.adapter.findOne<Subscription>({
+								model: "subscription",
+								where: [{ field: "referenceId", value: referenceId }],
+							})
+						: null;
 
 				if (ctx.body.subscriptionId && !subscriptionToUpdate) {
 					throw new APIError("BAD_REQUEST", {
@@ -329,12 +334,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							(sub) => sub.status === "active" || sub.status === "trialing",
 						),
 					);
+
 				const activeSubscription = activeSubscriptions.find((sub) =>
 					subscriptionToUpdate?.stripeSubscriptionId || ctx.body.subscriptionId
 						? sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
 							sub.id === ctx.body.subscriptionId
-						: true,
+						: false,
 				);
+
 				const subscriptions = subscriptionToUpdate
 					? [subscriptionToUpdate]
 					: await ctx.context.adapter.findMany<Subscription>({
@@ -431,12 +438,16 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					ctx,
 				);
 
-				const alreadyHasTrial = subscription.status === "trialing";
+				const hasEverTrialed = subscriptions.some((s) => {
+					const samePlan = s.plan?.toLowerCase() === plan.name.toLowerCase();
+					const hadTrial =
+						!!(s.trialStart || s.trialEnd) || s.status === "trialing";
+					return samePlan && hadTrial;
+				});
+
 				const freeTrial =
-					!alreadyHasTrial && plan.freeTrial
-						? {
-								trial_period_days: plan.freeTrial.days,
-							}
+					!hasEverTrialed && plan.freeTrial
+						? { trial_period_days: plan.freeTrial.days }
 						: undefined;
 
 				let priceIdToUse: string | undefined = undefined;
