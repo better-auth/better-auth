@@ -334,6 +334,27 @@ export interface OAuthOptions {
 		token: string,
 	) => Awaitable<{ sessionId?: string; token: string }>;
 	/**
+	 * Confirmations that individually silences specific well-known endpoint
+	 * configuration warnings.
+	 *
+	 * Only set these specific values if you see the error as they
+	 * are configuration specific.
+	 */
+	silenceWarnings?: {
+		/**
+		 * Config warning for `/.well-known/oauth-authorization-server/[issuer-path]`
+		 *
+		 * @default false
+		 */
+		oauthAuthServerConfig?: boolean;
+		/**
+		 * Config warning for `[issuer-path]/.well-known/openid-configuration`
+		 *
+		 * @default false
+		 */
+		openidConfig?: boolean;
+	};
+	/**
 	 * By default, access and id tokens can be issued and verified
 	 * through the JWT plugin.
 	 *

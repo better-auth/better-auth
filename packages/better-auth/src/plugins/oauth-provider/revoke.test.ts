@@ -31,6 +31,10 @@ describe("oauth revoke", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					allowDynamicClientRegistration: true,
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
 				}),
 			],
 		});
@@ -304,6 +308,10 @@ describe("oauth revoke - config", async () => {
 					consentPage: "/consent",
 					scopes,
 					allowDynamicClientRegistration: true,
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
 					...opts?.oauthProviderConfig,
 				}),
 				...(opts?.oauthProviderConfig?.disableJWTPlugin

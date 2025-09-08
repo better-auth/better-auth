@@ -29,6 +29,10 @@ describe("oauth userinfo", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
 			}),
 		],
 	});

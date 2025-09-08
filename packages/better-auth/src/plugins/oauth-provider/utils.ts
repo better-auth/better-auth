@@ -2,11 +2,26 @@ import { APIError } from "../../api";
 import type { AuthContext, GenericEndpointContext } from "../../types";
 import { BetterAuthError } from "../../error";
 import type { jwt } from "../jwt";
+import type { oauthProvider } from "../oauth-provider";
 import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { OAuthOptions, SchemaClient } from "./types";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 
+/**
+ * Gets the oAuth Provider Plugin
+ * @internal
+ */
+export const getOAuthProviderPlugin = (ctx: AuthContext) => {
+	return ctx.options.plugins?.find(
+		(plugin) => plugin.id === "oauthProvider",
+	) as ReturnType<typeof oauthProvider>;
+};
+
+/**
+ * Gets the JWT Plugin
+ * @internal
+ */
 export const getJwtPlugin = (ctx: AuthContext) => {
 	const plugin = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
 	if (!plugin) {

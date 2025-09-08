@@ -5,10 +5,12 @@ import type {
 	ResourceServerMetadata,
 	TokenEndpointAuthMethod,
 } from "../../oauth-2.1/types";
-import type { GenericEndpointContext } from "../../types";
-import { getJwtPlugin } from "./utils";
+import type { AuthContext, GenericEndpointContext } from "../../types";
+import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
 import type { OAuthOptions } from "./types";
 import type { JWSAlgorithms, JwtOptions } from "../jwt";
+import { BetterAuthError } from "../../error";
+import { logger } from "../../utils";
 
 export function authServerMetadata(
 	ctx: GenericEndpointContext,
@@ -98,6 +100,7 @@ export function oidcServerMetadata(
 export function protectedResourceMetadata(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
+	overrides?: Partial<ResourceServerMetadata>,
 ) {
 	const baseURL = ctx.context.baseURL;
 	const jwtPluginOptions = opts.disableJWTPlugin
@@ -106,9 +109,9 @@ export function protectedResourceMetadata(
 
 	return {
 		resource: jwtPluginOptions?.jwt?.audience ?? baseURL,
-		authorization_servers: [baseURL],
-		jwks_uri: jwtPluginOptions?.jwks?.remoteUrl ?? `${baseURL}/jwks`,
-		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+		authorization_servers: [jwtPluginOptions?.jwt?.issuer ?? baseURL],
+		// Will allow all fields to be overwritten here since called via server endpoint (checking provided by oAuthProviderProtectedResourceMetadata)
+		...overrides,
 	} satisfies ResourceServerMetadata;
 }
 
@@ -117,6 +120,8 @@ export function protectedResourceMetadata(
  *
  * Useful when basePath prevents the endpoint from being located at the root
  * and must be provided manually.
+ *
+ * @external
  */
 export const oAuthProviderAuthServerMetadata = <
 	Auth extends {
@@ -126,9 +131,11 @@ export const oAuthProviderAuthServerMetadata = <
 	},
 >(
 	auth: Auth,
-	headers?: HeadersInit,
+	opts?: {
+		headers?: HeadersInit;
+	},
 ) => {
-	return async (request: Request) => {
+	return async (_request: Request) => {
 		const res = await auth.api.getOAuthServerConfig();
 		return new Response(JSON.stringify(res), {
 			status: 200,
@@ -138,7 +145,7 @@ export const oAuthProviderAuthServerMetadata = <
 				// for 15 seconds in a change period
 				"Cache-Control":
 					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
-				...headers,
+				...opts?.headers,
 				"Content-Type": "application/json",
 			},
 		});
@@ -150,6 +157,8 @@ export const oAuthProviderAuthServerMetadata = <
  *
  * Useful when basePath prevents the endpoint from being located at the root
  * and must be provided manually.
+ *
+ * @external
  */
 export const oAuthProviderOpenIdConfigMetadata = <
 	Auth extends {
@@ -159,9 +168,11 @@ export const oAuthProviderOpenIdConfigMetadata = <
 	},
 >(
 	auth: Auth,
-	headers: HeadersInit,
+	opts?: {
+		headers?: HeadersInit;
+	},
 ) => {
-	return async (request: Request) => {
+	return async (_request: Request) => {
 		const res = await auth.api.getOpenIdConfig();
 		return new Response(JSON.stringify(res), {
 			status: 200,
@@ -171,7 +182,7 @@ export const oAuthProviderOpenIdConfigMetadata = <
 				// for 15 seconds in a change period
 				"Cache-Control":
 					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
-				...headers,
+				...opts?.headers,
 				"Content-Type": "application/json",
 			},
 		});
@@ -181,21 +192,94 @@ export const oAuthProviderOpenIdConfigMetadata = <
 /**
  * Provides an exportable `/.well-known/oauth-protected-resource`.
  *
- * Useful when basePath prevents the endpoint from being located at the root
- * and must be provided manually.
+ * Additionally checks scopes and configuration settings.
+ *
+ * @external
  */
 export const oAuthProviderProtectedResourceMetadata = <
-	Auth extends {
+	Auth extends AuthContext & {
 		api: {
-			getMCPProtectedResource: (...args: any) => any;
+			customMCPProtectedResource: (...args: any) => any;
 		};
 	},
 >(
 	auth: Auth,
-	headers?: HeadersInit,
+	opts?: {
+		overrides?: Partial<ResourceServerMetadata>;
+		headers?: HeadersInit;
+		silenceWarnings?: {
+			oidcScopes?: boolean;
+		};
+		/** A list of scopes supported by other auth servers */
+		externalScopes?: string[];
+	},
 ) => {
-	return async (request: Request) => {
-		const res = await auth.api.getMCPProtectedResource();
+	const oauthProviderPlugin = getOAuthProviderPlugin(auth);
+
+	// Resource server should not mention support for openid, only the AS should
+	if (opts?.overrides?.scopes_supported?.includes("openid")) {
+		throw new BetterAuthError(
+			"Only the Auth Server should utilize the openid scope",
+		);
+	}
+
+	// Provide scope warnings
+	if (opts?.overrides?.scopes_supported && !opts.silenceWarnings?.oidcScopes) {
+		for (const sc of opts?.overrides.scopes_supported) {
+			if (["profile", "email", "phone", "address"].includes(sc)) {
+				logger.warn(
+					`"${sc}" is typically restricted for the authorization server, a resource server shouldn't handle this scope`,
+				);
+			}
+		}
+	}
+
+	if (opts?.overrides?.authorization_servers?.length) {
+		const jwtPluginOptions = oauthProviderPlugin.options.disableJWTPlugin
+			? undefined
+			: getJwtPlugin(auth).options;
+		if (
+			!opts.overrides.authorization_servers.includes(
+				jwtPluginOptions?.jwt?.issuer ?? auth.baseURL,
+			)
+		) {
+			throw new BetterAuthError(
+				`authorization_servers list must at least contain ${jwtPluginOptions?.jwt?.issuer ?? auth.baseURL}`,
+			);
+		}
+	}
+
+	if (
+		opts?.externalScopes &&
+		opts.overrides?.authorization_servers?.length &&
+		opts.overrides?.authorization_servers?.length > 2
+	) {
+		throw new BetterAuthError(
+			"external scopes should not be provided with one authorization server",
+		);
+	}
+
+	// Check supported_scopes
+	const scopes = new Set([
+		...(opts?.externalScopes ?? []),
+		...(oauthProviderPlugin.options.scopes ?? []),
+	]);
+	if (opts?.overrides?.scopes_supported) {
+		for (const sc of opts.overrides.scopes_supported) {
+			if (!scopes?.has(sc)) {
+				throw new BetterAuthError(`${sc} is not supported by this auth server`);
+			}
+		}
+	}
+
+	return async (_request: Request) => {
+		const res = await auth.api.customMCPProtectedResource({
+			body: opts?.overrides
+				? {
+						overrides: opts?.overrides,
+					}
+				: undefined,
+		});
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {
@@ -204,7 +288,7 @@ export const oAuthProviderProtectedResourceMetadata = <
 				// for 15 seconds in a change period
 				"Cache-Control":
 					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
-				...headers,
+				...opts?.headers,
 				"Content-Type": "application/json",
 			},
 		});
