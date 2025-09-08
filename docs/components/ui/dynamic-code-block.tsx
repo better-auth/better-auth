@@ -92,7 +92,9 @@ export function DynamicCodeBlock({
 			</Suspense>
 		);
 
-	return <PropsContext value={{ ...codeblock, allowCopy }}>{children}</PropsContext>;
+	return (
+		<PropsContext value={{ ...codeblock, allowCopy }}>{children}</PropsContext>
+	);
 }
 
 function Placeholder({
