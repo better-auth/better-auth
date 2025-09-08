@@ -4,7 +4,7 @@ const search = typeof window !== "undefined" ? new URLSearchParams(window.locati
 const port = search.get("port");
 
 export const client = createAuthClient({
-	baseURL: `http://localhost:${port ?? 3000}`,
+	baseURL: `http://localhost:${port || 3000}`,
 });
 
 export type Session = typeof client.$Infer.Session;
