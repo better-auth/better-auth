@@ -2,7 +2,11 @@ import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import { getSessionFromCtx, sensitiveSessionMiddleware, sessionMiddleware } from "./session";
+import {
+	getSessionFromCtx,
+	sensitiveSessionMiddleware,
+	sessionMiddleware,
+} from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
 import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";

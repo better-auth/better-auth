@@ -478,20 +478,23 @@ describe("delete user", async () => {
 
 	it("should ignore cookie cache for sensitive operations like changePassword", async () => {
 		const { client: cacheClient, sessionSetter: cacheSessionSetter } =
-			await getTestInstance({
-				session: {
-					cookieCache: {
-						enabled: true,
-						maxAge: 60,
+			await getTestInstance(
+				{
+					session: {
+						cookieCache: {
+							enabled: true,
+							maxAge: 60,
+						},
 					},
 				},
-			}, {
-				disableTestUser: true,
-			});
+				{
+					disableTestUser: true,
+				},
+			);
 
 		const uniqueEmail = `cache-test-${Date.now()}@test.com`;
 		const testPassword = "testPassword123";
-		
+
 		await cacheClient.signUp.email({
 			email: uniqueEmail,
 			password: testPassword,
