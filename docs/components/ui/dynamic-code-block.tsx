@@ -34,6 +34,12 @@ export interface DynamicCodeblockProps {
 	 * @defaultValue true
 	 */
 	wrapInSuspense?: boolean;
+	/**
+	 * Allow to copy code with copy button
+	 *
+	 * @defaultValue true
+	 */
+	allowCopy?: boolean;
 	options?: Omit<HighlightOptionsCommon, "lang"> & HighlightOptionsThemes;
 }
 
@@ -63,6 +69,7 @@ export function DynamicCodeBlock({
 	codeblock,
 	options,
 	wrapInSuspense = true,
+	allowCopy = true,
 }: DynamicCodeblockProps) {
 	const shikiOptions = {
 		lang,
@@ -85,7 +92,7 @@ export function DynamicCodeBlock({
 			</Suspense>
 		);
 
-	return <PropsContext value={codeblock}>{children}</PropsContext>;
+	return <PropsContext value={{ ...codeblock, allowCopy }}>{children}</PropsContext>;
 }
 
 function Placeholder({
