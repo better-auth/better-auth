@@ -17,10 +17,8 @@ export function setup() {
 	let clientChild: ChildProcessWithoutNullStreams;
 	const ref: {
 		clientPort: number;
-		serverPort: number;
 	} = {
 		clientPort: -1,
-		serverPort: -1,
 	};
 	return {
 		ref,

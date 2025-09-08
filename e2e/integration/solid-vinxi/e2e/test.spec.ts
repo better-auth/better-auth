@@ -10,7 +10,7 @@ test.describe("solid-vinxi", async () => {
 		page,
 	}) => {
 		await page.goto(
-			`http://localhost:${ref.clientPort}/?port=${ref.serverPort}`,
+			`http://localhost:${ref.clientPort}`,
 		);
 		await page.locator("text=Ready").waitFor();
 
