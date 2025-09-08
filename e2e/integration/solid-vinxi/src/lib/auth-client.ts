@@ -1,6 +1,6 @@
 import { createAuthClient } from "better-auth/solid";
 
-const search = new URLSearchParams(window.location.search);
+const search = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams("");
 const port = search.get("port");
 
 export const client = createAuthClient({
