@@ -552,9 +552,6 @@ importers:
       '@playwright/test':
         specifier: ^1.55.0
         version: 1.55.0
-      terminate:
-        specifier: ^2.8.0
-        version: 2.8.0
 
   e2e/integration/solid-vinxi:
     dependencies:
@@ -586,6 +583,12 @@ importers:
       vite:
         specifier: ^7.1.4
         version: 7.1.4(@types/node@24.3.0)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.43.1)(tsx@4.20.5)(yaml@2.8.1)
+
+  e2e/integration/test-utils:
+    devDependencies:
+      terminate:
+        specifier: ^2.8.0
+        version: 2.8.0
 
   e2e/integration/vanilla-node:
     dependencies:
@@ -16519,9 +16522,7 @@ snapshots:
       metro-runtime: 0.83.1
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.79.5': {}
 
