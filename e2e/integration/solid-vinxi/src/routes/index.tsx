@@ -1,5 +1,5 @@
 import { createEffect } from "solid-js";
-import { client } from "~/lib/auth-client";
+import { client } from "../lib/auth-client";
 
 export default function Home() {
 	createEffect(() => {
