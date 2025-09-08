@@ -34,7 +34,7 @@ export function setup() {
 			});
 			clientChild.stderr.on("data", (data) => {
 				const message = data.toString();
-				console.log(message);
+				console.error(message);
 			});
 			clientChild.stdout.on("data", (data) => {
 				const message = data.toString();

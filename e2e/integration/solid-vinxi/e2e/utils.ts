@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { terminate } from '@better-auth/test-utils/playwright'
+import { terminate } from "@better-auth/test-utils/playwright";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -26,10 +26,14 @@ export function setup() {
 			clientChild = spawn("pnpm", ["run", "dev"], {
 				cwd: root,
 				stdio: "pipe",
+				env: {
+					...process.env,
+					NO_COLOR: "1",
+				},
 			});
 			clientChild.stderr.on("data", (data) => {
 				const message = data.toString();
-				console.log(message);
+				console.error(message);
 			});
 			clientChild.stdout.on("data", (data) => {
 				const message = data.toString();
@@ -41,10 +45,7 @@ export function setup() {
 					clientChild.stdout.on("data", (data) => {
 						const message = data.toString();
 						// find: http://localhost:XXXX/ for vinxi dev server
-						if (
-							message.includes("Local:") &&
-							message.includes("http://localhost:")
-						) {
+						if (message.includes("http://localhost:")) {
 							const match = message.match(/http:\/\/localhost:(\d+)/);
 							if (match) {
 								ref.clientPort = Number(match[1]);
