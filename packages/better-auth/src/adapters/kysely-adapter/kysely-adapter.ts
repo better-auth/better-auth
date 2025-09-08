@@ -3,6 +3,7 @@ import {
 	type AdapterDebugLogs,
 	type AdapterConfig,
 	type CreateCustomAdapter,
+	type CreateAdapterOptions,
 } from "../create-adapter";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
@@ -303,10 +304,7 @@ export const kyselyAdapter = (
 			};
 		};
 	};
-	let adapterOptions: {
-		config: AdapterConfig;
-		adapter: CreateCustomAdapter;
-	} | null = null;
+	let adapterOptions: CreateAdapterOptions | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "kysely",

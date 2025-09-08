@@ -33,6 +33,11 @@ export type AdapterDebugLogs =
 			isRunningAdapterTests: boolean;
 	  };
 
+export type CreateAdapterOptions = {
+	config: AdapterConfig;
+	adapter: CreateCustomAdapter;
+};
+
 export interface AdapterConfig {
 	/**
 	 * Use plural table names.

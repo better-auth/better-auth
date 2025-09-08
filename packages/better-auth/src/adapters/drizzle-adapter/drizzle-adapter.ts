@@ -16,8 +16,13 @@ import {
 	SQL,
 } from "drizzle-orm";
 import { BetterAuthError } from "../../error";
-import type { Where } from "../../types";
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
+import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import {
+	createAdapter,
+	type AdapterDebugLogs,
+	type CreateAdapterOptions,
+	type CreateCustomAdapter,
+} from "../create-adapter";
 
 export interface DB {
 	[key: string]: any;
@@ -53,16 +58,11 @@ export interface DrizzleAdapterConfig {
 	camelCase?: boolean;
 }
 
-export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
-	createAdapter({
-		config: {
-			adapterId: "drizzle",
-			adapterName: "Drizzle Adapter",
-			usePlural: config.usePlural ?? false,
-			debugLogs: config.debugLogs ?? false,
-			transaction: (cb) => db.transaction(cb),
-		},
-		adapter: ({ getFieldName, debugLog }) => {
+export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
+	let lazyOptions: BetterAuthOptions | null = null;
+	const createCustomAdapter =
+		(db: DB): CreateCustomAdapter =>
+		({ getFieldName, debugLog }) => {
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
 				if (!schema) {
@@ -326,5 +326,28 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				},
 				options: config,
 			};
+		};
+	let adapterOptions: CreateAdapterOptions | null = null;
+	adapterOptions = {
+		config: {
+			adapterId: "drizzle",
+			adapterName: "Drizzle Adapter",
+			usePlural: config.usePlural ?? false,
+			debugLogs: config.debugLogs ?? false,
+			transaction: (cb) =>
+				db.transaction((tx: DB) => {
+					const adapter = createAdapter({
+						config: adapterOptions!.config,
+						adapter: createCustomAdapter(tx),
+					})(lazyOptions!);
+					return cb(adapter);
+				}),
 		},
-	});
+		adapter: createCustomAdapter(db),
+	};
+	const adapter = createAdapter(adapterOptions);
+	return (options: BetterAuthOptions): Adapter => {
+		lazyOptions = options;
+		return adapter(options);
+	};
+};

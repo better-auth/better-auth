@@ -5,6 +5,7 @@ import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
 	AdapterConfig,
+	CreateAdapterOptions,
 	AdapterTestDebugLogs,
 	CleanedWhere,
 	CreateCustomAdapter,
@@ -51,13 +52,7 @@ const createAsIsTransaction =
 		fn(adapter);
 
 export const createAdapter =
-	({
-		adapter: customAdapter,
-		config: cfg,
-	}: {
-		config: AdapterConfig;
-		adapter: CreateCustomAdapter;
-	}) =>
+	({ adapter: customAdapter, config: cfg }: CreateAdapterOptions) =>
 	(options: BetterAuthOptions): Adapter => {
 		const config = {
 			...cfg,
