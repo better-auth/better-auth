@@ -99,6 +99,7 @@ export async function getJwtToken(
 	return await signJWT(ctx, {
 		options,
 		payload: {
+			iat: Math.floor(Date.now() / 1000),
 			...payload,
 			sub:
 				(await options?.jwt?.getSubject?.(ctx.context.session!)) ??

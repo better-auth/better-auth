@@ -162,6 +162,10 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 				window = resolved.window;
 				max = resolved.max;
 			}
+
+			if (resolved === false) {
+				return;
+			}
 		}
 	}
 
