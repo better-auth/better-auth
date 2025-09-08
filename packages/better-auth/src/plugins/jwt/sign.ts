@@ -32,11 +32,14 @@ export async function signJWT(
 
 	// Iss
 	const iss = payload.iss;
-	const defaultIss = options?.jwt?.issuer ?? ctx.context.options.baseURL!;
-
+	const baseURL =
+		typeof ctx.context.options.baseURL === "function"
+			? await ctx.context.options.baseURL(ctx.request!, ctx.context)
+			: ctx.context.options.baseURL;
+	const defaultIss = options?.jwt?.issuer ?? baseURL!;
 	// Aud
 	const aud = payload.aud;
-	const defaultAud = options?.jwt?.audience ?? ctx.context.options.baseURL!;
+	const defaultAud = options?.jwt?.audience ?? baseURL!;
 
 	// Custom/remote signing function
 	if (options?.jwt?.sign) {
@@ -48,7 +51,7 @@ export async function signJWT(
 			iss: iss ?? defaultIss,
 			aud: aud ?? defaultAud,
 		};
-		return options.jwt.sign(jwtPayload);
+		return options.jwt.sign(jwtPayload as JWTPayload);
 	}
 
 	const adapter = getJwksAdapter(ctx.context.adapter);
