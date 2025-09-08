@@ -12,7 +12,6 @@
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.2.0",
     "solid-js": "^1.9.7",
-    "start-oauth": "^1.2.4",
     "vinxi": "^0.5.8"
   },
   "devDependencies": {
