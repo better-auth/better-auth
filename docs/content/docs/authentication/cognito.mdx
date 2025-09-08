@@ -25,20 +25,20 @@ description: Amazon Cognito provider setup and usage.
 
   <Step>
     ### Configure the provider
-    Import the Cognito provider and pass it to the `providers` option of your `auth` instance.
+    Configure the `cognito` key in `socialProviders` key of your `auth` instance.
 
     ```ts title="auth.ts"
-    import { betterAuth } from "better-auth"
+    import { betterAuth } from "better-auth";
 
     export const auth = betterAuth({
-      socialProvider: {
-        cognito({
+      socialProviders: {
+        cognito: {
           clientId: process.env.COGNITO_CLIENT_ID as string, // [!code highlight]
           clientSecret: process.env.COGNITO_CLIENT_SECRET as string, // [!code highlight]
           domain: process.env.COGNITO_DOMAIN as string, // e.g. "your-app.auth.us-east-1.amazoncognito.com" [!code highlight]
           region: process.env.COGNITO_REGION as string, // e.g. "us-east-1" [!code highlight]
           userPoolId: process.env.COGNITO_USERPOOL_ID as string, // [!code highlight]
-        }),
+        },
       },
     })
     ```
