@@ -1,5 +1,5 @@
 import { createAuthClient } from "better-auth/solid";
-console.log(111);
+
 const search = new URLSearchParams(window.location.search);
 const port = search.get("port");
 

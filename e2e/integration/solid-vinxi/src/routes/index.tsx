@@ -1,15 +1,13 @@
-import { client } from "../lib/auth-client";
+import { createEffect } from "solid-js";
+import { client } from "~/lib/auth-client";
 
 export default function Home() {
-	const session = client.useSession();
+	createEffect(() => {
+		window.client = client;
+	});
 	return (
-		<main data-testid="home">
-			<div>
-				<p>
-					Session status:{" "}
-					{session().data?.session.id ? "Logged in" : "Not logged in"}
-				</p>
-			</div>
+		<main>
+			<div>Ready</div>
 		</main>
 	);
 }

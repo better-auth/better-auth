@@ -1,31 +1,18 @@
 {
-  "name": "solidstart-better-auth-test",
-  "version": "1.0.0",
+  "name": "better-auth-solid-vinxi-e2e",
+  "type": "module",
   "scripts": {
     "dev": "vinxi dev",
     "build": "vinxi build",
     "start": "vinxi start"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
-  "devDependencies": {
-    "@solidjs/meta": "^0.29.4",
+  "dependencies": {
     "@solidjs/router": "^0.15.3",
     "@solidjs/start": "^1.1.7",
-    "solid-js": "^1.9.9",
-    "vinxi": "^0.5.8",
-    "vite": "^7.1.4",
-    "terminate": "^2.8.0"
-  },
-  "dependencies": {
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.2.0"
-  },
-  "browserslist": [
-    "chrome >= 107",
-    "firefox >= 105",
-    "edge >= 107"
-  ]
+    "better-sqlite3": "^12.2.0",
+    "solid-js": "^1.9.7",
+    "start-oauth": "^1.2.4",
+    "vinxi": "^0.5.8"
+  }
 }
