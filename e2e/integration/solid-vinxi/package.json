@@ -1,5 +1,6 @@
 {
   "name": "better-auth-solid-vinxi-e2e",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vinxi dev",
