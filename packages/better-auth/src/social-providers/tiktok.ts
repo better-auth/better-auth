@@ -130,7 +130,7 @@ export const tiktok = (options: TiktokOptions) => {
 		id: "tiktok",
 		name: "TikTok",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = options.disableDefaultScope ? [] : ["user.info.basic" , "user.info.profile"];
+			const _scopes = options.disableDefaultScope ? [] : ["user.info.profile"];
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
 			return new URL(
@@ -161,13 +161,10 @@ export const tiktok = (options: TiktokOptions) => {
 					return refreshAccessToken({
 						refreshToken,
 						options: {
+							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
 						tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
-						authentication: "post",
-						extraParams: {
-							client_key: options.clientKey,
-						},
 					});
 				},
 		async getUserInfo(token) {
