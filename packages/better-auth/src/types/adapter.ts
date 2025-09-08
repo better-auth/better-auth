@@ -73,9 +73,9 @@ export type Adapter = {
 	 * Execute multiple operations in a transaction.
 	 * If the adapter doesn't support transactions, operations will be executed sequentially.
 	 */
-	transaction: (
-		callback: (tx: Omit<Adapter, "transaction">) => Promise<void>,
-	) => Promise<void>;
+	transaction: <R>(
+		callback: (tx: Omit<Adapter, "transaction">) => Promise<R>,
+	) => Promise<R>;
 	/**
 	 *
 	 * @param options

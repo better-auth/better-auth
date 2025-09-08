@@ -103,9 +103,9 @@ export interface AdapterConfig {
 	 */
 	transaction?:
 		| false
-		| ((
-				callback: (trx: Omit<Adapter, "transaction">) => Promise<void>,
-		  ) => Promise<void>);
+		| (<R>(
+				callback: (trx: Omit<Adapter, "transaction">) => Promise<R>,
+		  ) => Promise<R>);
 	/**
 	 * Disable id generation for the `create` method.
 	 *

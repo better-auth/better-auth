@@ -48,7 +48,7 @@ const colors = {
 
 const createAsIsTransaction =
 	(adapter: Adapter) =>
-	(fn: (trx: Omit<Adapter, "transaction">) => Promise<void>) =>
+	<R>(fn: (trx: Omit<Adapter, "transaction">) => Promise<R>) =>
 		fn(adapter);
 
 export const createAdapter =
