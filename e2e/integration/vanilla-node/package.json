@@ -6,6 +6,7 @@
     "start:client": "vite"
   },
   "devDependencies": {
+    "@better-auth/test-utils": "workspace:*",
     "vite": "^7.1.4"
   },
   "dependencies": {
