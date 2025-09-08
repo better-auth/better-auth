@@ -24,13 +24,15 @@ import { getJwtPlugin } from "./utils";
 import { introspectEndpoint } from "./introspect";
 import { revokeEndpoint } from "./revoke";
 import { BetterAuthError } from "../../error";
+import { logger } from "../../utils";
+import type { ResourceServerMetadata } from "../../oauth-2.1/types";
 export { authServerMetadata, oidcServerMetadata } from "./metadata";
 export {
 	oAuthProviderAuthServerMetadata,
 	oAuthProviderOpenIdConfigMetadata,
 	oAuthProviderProtectedResourceMetadata,
 } from "./metadata";
-export { mcpHandler, checkMcp } from "./mcp";
+export { mcpHandler, checkMcp, handleMcpErrors } from "./mcp";
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -165,7 +167,33 @@ export const oauthProvider = (options: OAuthOptions) => {
 		init: (ctx) => {
 			// Check for jwt plugin registration
 			if (!opts.disableJWTPlugin) {
-				getJwtPlugin(ctx);
+				const jwtPlugin = getJwtPlugin(ctx);
+				const jwtPluginOptions = jwtPlugin.options;
+
+				// Issuer and well-known endpoint checks
+				const issuer = jwtPluginOptions?.jwt?.issuer;
+				if (issuer) {
+					const issuerPath = new URL(issuer).pathname;
+					// oAuth Server Config
+					if (
+						!opts.silenceWarnings?.oauthAuthServerConfig &&
+						!(ctx.options.basePath === "/" && issuerPath === "/")
+					) {
+						logger.warn(
+							`please ensure '/.well-known/oauth-authorization-server${issuerPath === "/" ? "" : issuerPath}' exists. Upon completion, clear with silenceWarnings.oauthAuthServerConfig.`,
+						);
+					}
+					// OpenId Config
+					if (
+						!opts.silenceWarnings?.openidConfig &&
+						ctx.options.basePath !== issuerPath &&
+						opts.scopes?.includes("openid")
+					) {
+						logger.warn(
+							`please ensure '${issuerPath}${issuerPath.endsWith("/") ? "" : "/"}.well-known/openid-configuration' exists. Upon completion, clear with silenceWarnings.openidConfig.`,
+						);
+					}
+				}
 			}
 		},
 		hooks: {
@@ -257,17 +285,41 @@ export const oauthProvider = (options: OAuthOptions) => {
 					return ctx.json(metadata);
 				},
 			),
-			getMCPProtectedResource: createAuthEndpoint(
-				"/.well-known/oauth-protected-resource",
+			/**
+			 * An authorization server does not typically publish
+			 * the `/.well-known/oauth-protected-resource` themselves.
+			 * Thus, we provide a server-only endpoint help set up
+			 * your protected resource metadata.
+			 *
+			 * If you have your APIs hosted on a different domain,
+			 * post the metadata yourself without the need of the full
+			 * better-auth library/configuration.
+			 *
+			 * @see https://datatracker.ietf.org/doc/html/rfc8414#section-2
+			 */
+			customMCPProtectedResource: createAuthEndpoint(
+				"/.well-known/oauth-protected-resource/custom",
 				{
-					method: "GET",
+					method: "POST",
 					metadata: {
-						isAction: false,
-						client: false,
+						SERVER_ONLY: true,
+						$Infer: {
+							body: {} as
+								| {
+										overrides?: Partial<ResourceServerMetadata>;
+								  }
+								| undefined,
+						},
 					},
+					body: z
+						.object({
+							overrides: z.record(z.string(), z.any()),
+						})
+						.optional(),
 				},
 				async (ctx) => {
-					const metadata = protectedResourceMetadata(ctx, opts);
+					const overrides = ctx.body?.overrides;
+					const metadata = protectedResourceMetadata(ctx, opts, overrides);
 					return ctx.json(metadata);
 				},
 			),

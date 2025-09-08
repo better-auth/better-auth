@@ -44,6 +44,10 @@ describe("oauth token - authorization_code", async () => {
 				loginPage: "/login",
 				consentPage: "/oauth2/authorize",
 				allowDynamicClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
 			}),
 		],
 	});
@@ -391,6 +395,10 @@ describe("oauth token - refresh_token", async () => {
 				loginPage: "/login",
 				consentPage: "/oauth2/authorize",
 				allowDynamicClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
 			}),
 		],
 	});
@@ -853,6 +861,10 @@ describe("oauth token - client_credentials", async () => {
 				consentPage: "/oauth2/authorize",
 				allowDynamicClientRegistration: true,
 				scopes: ["openid", "profile", "email", "read:posts"],
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
 			}),
 		],
 	});
@@ -1044,6 +1056,10 @@ describe("oauth token - config", async () => {
 					consentPage: "/consent",
 					scopes,
 					allowDynamicClientRegistration: true,
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
 					...opts?.oauthProviderConfig,
 				}),
 				...(opts?.oauthProviderConfig?.disableJWTPlugin

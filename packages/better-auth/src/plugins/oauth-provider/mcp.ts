@@ -1,8 +1,6 @@
-import type { oauthProvider } from "../oauth-provider";
-import { handleMcpErrors } from "../../oauth-2.1/errors";
 import type { AuthContext, GenericEndpointContext } from "../../types";
 import type { Awaitable } from "../../types/helper";
-import { getJwtPlugin } from "./utils";
+import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
 import {
 	createLocalJWKSet,
 	jwtVerify,
@@ -11,15 +9,11 @@ import {
 } from "jose";
 import { APIError } from "better-call";
 
-const getOAuthProviderPlugin = (ctx: AuthContext) => {
-	return ctx.options.plugins?.find(
-		(plugin) => plugin.id === "oauthProvider",
-	) as ReturnType<typeof oauthProvider>;
-};
-
 /**
  * A generalized function that checks for an access token's validity
  * and will work for most platforms.
+ *
+ * @external
  */
 export const checkMcp = async <
 	Auth extends AuthContext & {
@@ -149,6 +143,8 @@ export const checkMcp = async <
  *
  * Passes through authenticated tokens.
  * Provides valid Jwt payloads on `req.context.jwt`.
+ *
+ * @external
  */
 export const mcpHandler = <
 	Auth extends AuthContext,
@@ -157,7 +153,6 @@ export const mcpHandler = <
 		readonly headers: Headers;
 		context?: {
 			jwt?: JWTPayload;
-			jwt_raw?: string;
 		};
 	},
 >(
@@ -192,3 +187,43 @@ export const mcpHandler = <
 		return handler(req);
 	};
 };
+
+/**
+ * The following handles all MCP errors and API errors
+ *
+ * @external
+ */
+export function handleMcpErrors(
+	error: unknown,
+	opts: {
+		baseUrl: string;
+		path?: string;
+	},
+) {
+	if (error instanceof APIError && error.status === "UNAUTHORIZED") {
+		let { baseUrl, path } = opts;
+		if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
+		if (path?.length && !path.startsWith("/")) path = "/" + path;
+		if (path && path.endsWith("/")) path = path.slice(0, -1);
+
+		const wwwAuthenticateValue = `Bearer resource_metadata="${baseUrl}/.well-known/oauth-authorization-server${
+			path ? path : ""
+		}"`;
+		return new Response(error.message, {
+			status: 401,
+			headers: {
+				"Content-Type": "application/text",
+				"WWW-Authenticate": wwwAuthenticateValue,
+			},
+		});
+	} else if (error instanceof APIError) {
+		return new Response(error.message, {
+			status: error.statusCode,
+			headers: error.headers,
+		});
+	} else if (error instanceof Error) {
+		throw error;
+	} else {
+		throw new Error(error as unknown as string);
+	}
+}

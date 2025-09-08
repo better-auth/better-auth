@@ -912,19 +912,43 @@ You cannot disable the JWT Plugin if you are utilizing this plugin.
 
 <Steps>
   <Step>
+    ### Ensure Well Known Paths are correct
+
+    See [well-known endpoints](#well-known).
+  </Step>
+
+  <Step>
     ### Add oAuth Protected Resource Metadata to your API
-
-    Better Auth already handles the `/api/auth/.well-known/oauth-protected-resource` route automatically but some client may fail to parse the `WWW-Authenticate` header and default to `/.well-known/oauth-protected-resource` (this can happen, for example, if your CORS configuration doesn't expose the `WWW-Authenticate`). For this reason it's better to add a route to expose OAuth metadata for MCP clients:
-
-    Also perform this for the other [well-known endpoints](#well-known).
 
     NOTE: For issuers with paths, oAuth 2.1 Authorization Server utilizes path insertion, thus any path on the issuer should be appended after `/.well-known/oauth-protected-resource`.
 
+    - Automatic (if you have access to the better-auth configuration)
+
     ```ts title="/.well-known/oauth-protected-resource/[issuer-path]/route.ts"
-    import { oAuthProtectedResourceMetadata } from "better-auth/plugins";
+    import { oAuthProviderProtectedResourceMetadata } from "better-auth/plugins";
     import { auth } from "@/lib/auth";
 
-    export const GET = oAuthProtectedResourceMetadata(auth);
+    export const GET = oAuthProviderProtectedResourceMetadata(auth);
+    ```
+
+    - Manual (without access to your better-auth configuration)
+
+    Type support is recommended and may be downloaded into your API as a dev package.
+
+    ```ts title="/.well-known/oauth-protected-resource/[issuer-path]/route.ts"
+    import type { ResourceServerMetadata } from "better-auth";
+
+    export const GET = async () => {
+      const metadata: ResourceServerMetadata = {
+        resource: "https://api.example.com", // must match the `aud` claim
+      };
+
+      return new Response(JSON.stringify(metadata), {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    };
     ```
   </Step>
 
