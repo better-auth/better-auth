@@ -31,6 +31,8 @@ const adapterTests = {
 	SHOULD_FIND_MANY_WITH_WHERE: "should find many with where",
 	SHOULD_FIND_MANY_WITH_OPERATORS: "should find many with operators",
 	SHOULD_WORK_WITH_REFERENCE_FIELDS: "should work with reference fields",
+	SHOULD_FIND_MANY_WITH_NOT_IN_OPERATOR:
+		"should find many with not in operator",
 	SHOULD_FIND_MANY_WITH_SORT_BY: "should find many with sortBy",
 	SHOULD_FIND_MANY_WITH_LIMIT: "should find many with limit",
 	SHOULD_FIND_MANY_WITH_OFFSET: "should find many with offset",
@@ -366,6 +368,54 @@ async function adapterTest(
 				],
 			});
 			expect(res.length).toBe(2);
+		},
+	);
+
+	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_NOT_IN_OPERATOR)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_FIND_MANY_WITH_NOT_IN_OPERATOR
+		}`,
+		async ({ onTestFailed }) => {
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
+			});
+
+			const newUser3 = await (await adapter()).create<User>({
+				model: "user",
+				data: {
+					name: "user",
+					email: "test-email3email.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			const allUsers = await (await adapter()).findMany<User>({
+				model: "user",
+			});
+			expect(allUsers.length).toBe(6);
+			const usersWithoutNotIn = await (await adapter()).findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						operator: "not_in",
+						value: [user.id, newUser3.id],
+					},
+				],
+			});
+			expect(usersWithoutNotIn.length).toBe(4);
+			//cleanup
+			await (await adapter()).delete({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: newUser3.id,
+					},
+				],
+			});
 		},
 	);
 
