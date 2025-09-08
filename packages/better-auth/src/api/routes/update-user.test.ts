@@ -475,4 +475,63 @@ describe("delete user", async () => {
 		});
 		expect(nullSession.data).toBeNull();
 	});
+
+	it("should ignore cookie cache for sensitive operations like changePassword", async () => {
+		const { client: cacheClient, sessionSetter: cacheSessionSetter } =
+			await getTestInstance({
+				session: {
+					cookieCache: {
+						enabled: true,
+						maxAge: 60,
+					},
+				},
+			}, {
+				disableTestUser: true,
+			});
+
+		const uniqueEmail = `cache-test-${Date.now()}@test.com`;
+		const testPassword = "testPassword123";
+		
+		await cacheClient.signUp.email({
+			email: uniqueEmail,
+			password: testPassword,
+			name: "Cache Test User",
+		});
+
+		const cacheHeaders = new Headers();
+		await cacheClient.signIn.email({
+			email: uniqueEmail,
+			password: testPassword,
+			fetchOptions: {
+				onSuccess: cacheSessionSetter(cacheHeaders),
+			},
+		});
+
+		const initialSession = await cacheClient.getSession({
+			fetchOptions: {
+				headers: cacheHeaders,
+				throw: true,
+			},
+		});
+		expect(initialSession?.user).toBeDefined();
+
+		const changePasswordResult = await cacheClient.changePassword({
+			newPassword: "newSecurePassword123",
+			currentPassword: testPassword,
+			revokeOtherSessions: true,
+			fetchOptions: {
+				headers: cacheHeaders,
+			},
+		});
+
+		expect(changePasswordResult.data).toBeDefined();
+
+		const sessionAfterPasswordChange = await cacheClient.getSession({
+			fetchOptions: {
+				headers: cacheHeaders,
+			},
+		});
+
+		expect(sessionAfterPasswordChange.data).toBeNull();
+	});
 });
