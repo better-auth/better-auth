@@ -643,6 +643,9 @@ importers:
         specifier: ^4.1.5
         version: 4.1.5
     devDependencies:
+      '@lynx-js/react':
+        specifier: ^0.112.5
+        version: 0.112.5(@types/react@18.3.23)
       '@prisma/client':
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
@@ -2459,6 +2462,9 @@ packages:
   '@hexagon/base64@1.1.28':
     resolution: {integrity: sha512-lhqDEAvWixy3bZ+UOYbPwUbBkwBq5C1LAJ/xPC8Oi+lL54oyakv/npbA0aU2hgCsx/1NUd4IBvV03+aUBWxerw==}
 
+  '@hongzhiyuan/preact@10.24.0-00213bad':
+    resolution: {integrity: sha512-bHWp4ZDK5ZimcY+bTWw3S3xGiB8eROpZj0RK3FClNIaTOajb0b11CsT3K+pdeakgPgq1jWN3T2e2rfrPm40JsQ==}
+
   '@hookform/resolvers@5.2.1':
     resolution: {integrity: sha512-u0+6X58gkjMcxur1wRWokA7XsiiBJ6aK17aPZxhkoYiK5J+HcTx0Vhu9ovXe6H+dVpO6cjrn2FkJTryXEMlryQ==}
     peerDependencies:
@@ -2907,6 +2913,15 @@ packages:
     resolution: {integrity: sha512-3/G5/SZWXmOCaNwEwDdiXEpjeY7NGx1khPjON1yi3BViKrb2TJiiHHn6zpCN7+ZWNibQFZylkETSTURRlealNA==}
     cpu: [x64]
     os: [win32]
+
+  '@lynx-js/react@0.112.5':
+    resolution: {integrity: sha512-noFV05FjKsLtnTQLjEbjK4IPLPK+AEJ3r2klYjvLCPe9pQYXyHqoiN9bWwLFZDvcPGsXSdJ5TiahTTZuagGRjA==}
+    peerDependencies:
+      '@lynx-js/types': '*'
+      '@types/react': ^18
+    peerDependenciesMeta:
+      '@lynx-js/types':
+        optional: true
 
   '@mapbox/node-pre-gyp@2.0.0':
     resolution: {integrity: sha512-llMXd39jtP0HpQLVI37Bf1m2ADlEb35GYSh1SDSLsBhR+5iCxiNGlT31yqbNtVHygHAtMy6dWFERpU2JgufhPg==}
@@ -14144,6 +14159,8 @@ snapshots:
 
   '@hexagon/base64@1.1.28': {}
 
+  '@hongzhiyuan/preact@10.24.0-00213bad': {}
+
   '@hookform/resolvers@5.2.1(react-hook-form@7.62.0(react@19.1.1))':
     dependencies:
       '@standard-schema/utils': 0.3.0
@@ -14559,6 +14576,11 @@ snapshots:
 
   '@libsql/win32-x64-msvc@0.5.20':
     optional: true
+
+  '@lynx-js/react@0.112.5(@types/react@18.3.23)':
+    dependencies:
+      '@types/react': 18.3.23
+      preact: '@hongzhiyuan/preact@10.24.0-00213bad'
 
   '@mapbox/node-pre-gyp@2.0.0':
     dependencies:
