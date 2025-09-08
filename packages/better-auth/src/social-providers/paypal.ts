@@ -4,6 +4,7 @@ import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL } from "../oauth2";
 import { logger } from "../utils/logger";
 import { decodeJwt } from "jose";
+import { base64 } from "@better-auth/utils/base64";
 
 export interface PayPalProfile {
 	user_id: string;
@@ -108,9 +109,9 @@ export const paypal = (options: PayPalOptions) => {
 			 * PayPal requires Basic Auth for token exchange
 			 **/
 
-			const credentials = Buffer.from(
+			const credentials = base64.encode(
 				`${options.clientId}:${options.clientSecret}`,
-			).toString("base64");
+			);
 
 			try {
 				const response = await betterFetch(tokenEndpoint, {
@@ -153,9 +154,9 @@ export const paypal = (options: PayPalOptions) => {
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
 			: async (refreshToken) => {
-					const credentials = Buffer.from(
+					const credentials = base64.encode(
 						`${options.clientId}:${options.clientSecret}`,
-					).toString("base64");
+					);
 
 					try {
 						const response = await betterFetch(tokenEndpoint, {

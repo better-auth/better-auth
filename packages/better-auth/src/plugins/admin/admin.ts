@@ -493,6 +493,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.NO_DATA_TO_UPDATE,
 						});
 					}
+					if (ctx.body.data?.role) {
+						ctx.body.data.role = parseRoles(ctx.body.data.role);
+					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						ctx.body.data,
