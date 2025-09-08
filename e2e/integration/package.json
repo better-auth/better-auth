@@ -7,7 +7,6 @@
     "better-auth": "workspace:*"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
-    "terminate": "^2.8.0"
+    "@playwright/test": "^1.55.0"
   }
 }

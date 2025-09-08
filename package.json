@@ -32,6 +32,7 @@
   },
   "resolutions": {
     "zod": "^4.1.5",
-    "miniflare>zod": "^3.25.1"
+    "miniflare>zod": "^3.25.1",
+    "vinxi>zod": "^3.24.3"
   }
 }
