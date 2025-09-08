@@ -223,9 +223,16 @@ function generateImport({
 }) {
 	let imports: string[] = [];
 
-	const hasBigint = Object.values(tables).some((table) =>
-		Object.values(table.fields).some((field) => field.bigint),
-	);
+	let hasBigint = false;
+	let hasJson = false;
+
+	for (const table of Object.values(tables)) {
+		for (const field of Object.values(table.fields)) {
+			if (field.bigint) hasBigint = true;
+			if (field.type === "json") hasJson = true;
+		}
+		if (hasJson && hasBigint) break;
+	}
 
 	const useNumberId = options.advanced?.database?.useNumberId;
 
@@ -277,6 +284,13 @@ function generateImport({
 		imports.push("integer");
 	}
 	imports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
+
+	//handle json last on the import order
+	if (hasJson) {
+		if (databaseType === "pg") imports.push("jsonb");
+		if (databaseType === "mysql") imports.push("json");
+		// sqlite uses text for JSON, so there's no need to handle this case
+	}
 
 	return `import { ${imports
 		.map((x) => x.trim())
