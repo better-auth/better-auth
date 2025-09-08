@@ -1,15 +1,7 @@
 import type { Page } from "@playwright/test";
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { createAuthServer } from "./app";
-
-const terminate = createRequire(import.meta.url)(
-	// use terminate instead of cp.kill,
-	//  because cp.kill will not kill the child process of the child process
-	//  to avoid the zombie process
-	"terminate/promise",
-) as (pid: number) => Promise<void>;
+import { terminate } from '@better-auth/test-utils/playwright'
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -22,7 +14,6 @@ export async function runClient<R>(
 }
 
 export function setup() {
-	let server: Awaited<ReturnType<typeof createAuthServer>>;
 	let clientChild: ChildProcessWithoutNullStreams;
 	const ref: {
 		clientPort: number;
@@ -34,7 +25,6 @@ export function setup() {
 	return {
 		ref,
 		start: async () => {
-			server = await createAuthServer();
 			clientChild = spawn("pnpm", ["run", "dev"], {
 				cwd: root,
 				stdio: "pipe",
@@ -49,15 +39,6 @@ export function setup() {
 			});
 
 			await Promise.all([
-				new Promise<void>((resolve) => {
-					server.listen(0, "0.0.0.0", () => {
-						const address = server.address();
-						if (address && typeof address === "object") {
-							ref.serverPort = address.port;
-							resolve();
-						}
-					});
-				}),
 				new Promise<void>((resolve) => {
 					clientChild.stdout.on("data", (data) => {
 						const message = data.toString();
@@ -78,7 +59,6 @@ export function setup() {
 		},
 		clean: async () => {
 			await terminate(clientChild.pid!);
-			server.close();
 		},
 	};
 }
