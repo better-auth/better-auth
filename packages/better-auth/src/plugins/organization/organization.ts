@@ -171,7 +171,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		/**
 		 * ### Endpoint
 		 *
-		 * GET `/organization/listAll`
+		 * GET `/organization/list-all`
 		 *
 		 * ### API Methods
 		 *
