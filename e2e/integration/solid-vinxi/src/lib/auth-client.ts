@@ -1,18 +1,16 @@
 import { createAuthClient } from "better-auth/solid";
-import { inferAdditionalFields } from "better-auth/client/plugins";
+console.log(111);
+const search = new URLSearchParams(window.location.search);
+const port = search.get("port");
 
-export const authClient = createAuthClient({
-	baseURL: "http://localhost:3000",
-	plugins: [
-		inferAdditionalFields({
-			user: {
-				role: {
-					type: "string",
-					required: false,
-				},
-			},
-		}),
-	],
+export const client = createAuthClient({
+	baseURL: `http://localhost:${port ?? 3000}`,
 });
 
-export type Session = typeof authClient.$Infer.Session;
+export type Session = typeof client.$Infer.Session;
+
+declare global {
+	interface Window {
+		client: typeof client;
+	}
+}

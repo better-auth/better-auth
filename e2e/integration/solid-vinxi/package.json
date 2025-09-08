@@ -1,8 +1,6 @@
 {
   "name": "solidstart-better-auth-test",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
   "scripts": {
     "dev": "vinxi dev",
     "build": "vinxi build",
