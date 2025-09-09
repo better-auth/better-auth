@@ -9,6 +9,7 @@ import {
 } from "./utils";
 import type { OAuthAccessToken, OAuthOptions, OAuthSession } from "./types";
 import { getJwtPlugin } from "./utils";
+import { decodeRefreshToken } from "./token";
 
 /**
  * IMPORTANT NOTES:
@@ -88,8 +89,8 @@ async function revokeJwtAccessToken(
 async function revokeOpaqueAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
-	clientId: string,
 	token: string,
+	clientId: string,
 ) {
 	let tokenValue = token;
 	if (opts.opaqueAccessTokenPrefix) {
@@ -139,8 +140,8 @@ async function revokeOpaqueAccessToken(
 async function revokeRefreshToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
-	clientId: string,
 	token: string,
+	clientId: string,
 ) {
 	const userSession = await ctx.context.adapter.findOne<OAuthSession>({
 		model: "session",
@@ -197,7 +198,7 @@ async function revokeAccessToken(
 		}
 	}
 	try {
-		return await revokeOpaqueAccessToken(ctx, opts, clientId, token);
+		return await revokeOpaqueAccessToken(ctx, opts, token, clientId);
 	} catch (err) {
 		if (err instanceof APIError) {
 			// nothing
@@ -281,7 +282,13 @@ export async function revokeEndpoint(
 
 		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
 			try {
-				return await revokeRefreshToken(ctx, opts, client.clientId, token);
+				const refreshToken = await decodeRefreshToken(opts, token);
+				return await revokeRefreshToken(
+					ctx,
+					opts,
+					refreshToken.token,
+					client.clientId,
+				);
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "refresh_token") {

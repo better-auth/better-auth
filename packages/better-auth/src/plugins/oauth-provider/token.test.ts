@@ -1251,14 +1251,16 @@ describe("oauth token - config", async () => {
 			client_secret: oauthClient?.client_secret,
 			scope: testScopes.join(""),
 		});
-		expect(tokens.data?.access_token.startsWith(prefix)).toBeTruthy();
+		expect(tokens.data?.access_token?.startsWith(prefix)).toBeTruthy();
 	});
 
-	it("opaqueAccessTokenPrefix - code_authorization, refresh_token", async () => {
-		const prefix = "hello_";
+	it("opaqueAccessTokenPrefix, refreshTokenPrefix - code_authorization, refresh_token", async () => {
+		const accessTokenPrefix = "hello__ac_";
+		const refreshTokenPrefix = "hello_rt_";
 		const { client, oauthClient } = await createTestInstance({
 			oauthProviderConfig: {
-				opaqueAccessTokenPrefix: prefix,
+				opaqueAccessTokenPrefix: accessTokenPrefix,
+				refreshTokenPrefix: refreshTokenPrefix,
 			},
 		});
 		const { url: authUrl, codeVerifier } = await createAuthUrl({
@@ -1284,7 +1286,18 @@ describe("oauth token - config", async () => {
 			client_id: oauthClient?.client_id,
 			client_secret: oauthClient?.client_secret,
 		});
-		expect(tokens.data?.access_token.startsWith(prefix)).toBeTruthy();
+		expect(
+			tokens.data?.access_token?.startsWith(accessTokenPrefix),
+		).toBeTruthy();
+		if ("refresh_token" in (tokens.data ?? {})) {
+			expect(
+				(tokens.data as { refresh_token?: string }).refresh_token?.startsWith(
+					refreshTokenPrefix,
+				),
+			).toBeTruthy();
+		} else {
+			expect.unreachable();
+		}
 
 		// Refresh token
 		const refreshedTokens = await client.oauth2.token({
@@ -1294,6 +1307,17 @@ describe("oauth token - config", async () => {
 			client_id: oauthClient?.client_id,
 			client_secret: oauthClient?.client_secret,
 		});
-		expect(refreshedTokens.data?.access_token.startsWith(prefix)).toBeTruthy();
+		expect(
+			refreshedTokens.data?.access_token?.startsWith(accessTokenPrefix),
+		).toBeTruthy();
+		if ("refresh_token" in (refreshedTokens.data ?? {})) {
+			expect(
+				(
+					refreshedTokens.data as { refresh_token?: string }
+				).refresh_token?.startsWith(refreshTokenPrefix),
+			).toBeTruthy();
+		} else {
+			expect.unreachable();
+		}
 	});
 });

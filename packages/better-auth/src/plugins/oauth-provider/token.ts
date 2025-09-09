@@ -196,15 +196,31 @@ async function encodeRefreshToken(
 		});
 	}
 
-	return opts.encodeRefreshToken
-		? opts.encodeRefreshToken(token, session ?? undefined)
-		: token;
+	return (
+		(opts.refreshTokenPrefix ?? "") +
+		(opts.encodeRefreshToken
+			? opts.encodeRefreshToken(token, session ?? undefined)
+			: token)
+	);
 }
 
 /**
  * Decodes a refresh token for a client
+ *
+ * @internal
  */
-async function decodeRefreshToken(opts: OAuthOptions, token: string) {
+export async function decodeRefreshToken(opts: OAuthOptions, token: string) {
+	if (opts.refreshTokenPrefix) {
+		if (token.startsWith(opts.refreshTokenPrefix)) {
+			token = token.replace(opts.refreshTokenPrefix, "");
+		} else {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "refresh token not found",
+				error: "invalid_token",
+			});
+		}
+	}
+
 	if (opts.decodeRefreshToken && !opts.encodeRefreshToken) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			message: "encodeRefreshToken should be defined",
@@ -410,7 +426,7 @@ async function createUserTokens(
 
 	return ctx.json(
 		{
-			access_token: (opts.opaqueAccessTokenPrefix ?? "") + accessToken,
+			access_token: accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,
 			token_type: "Bearer",
