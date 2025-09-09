@@ -9,15 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "better-call": "1.0.16",
     "next": "catalog:nextjs",
     "react": "catalog:nextjs",
     "react-dom": "catalog:nextjs"
   },
   "devDependencies": {
-    "@types/node": "^24",
     "@types/react": "catalog:nextjs",
-    "@types/react-dom": "catalog:nextjs",
-    "typescript": "^5"
+    "@types/react-dom": "catalog:nextjs"
   }
 }
