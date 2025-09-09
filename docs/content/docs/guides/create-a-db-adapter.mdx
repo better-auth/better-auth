@@ -452,6 +452,10 @@ const adapter = myAdapter({
 });
 ```
 
+### `transaction`
+
+Whether the adapter supports transactions. If `false`, operations run sequentially; otherwise provide a function that executes a callback with a `TransactionAdapter`.
+
 ### `debugLogs`
 
 Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `count`.

@@ -1,13 +1,17 @@
 import { safeJSONParse } from "../../utils/json";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type {
+	Adapter,
+	BetterAuthOptions,
+	TransactionAdapter,
+	Where,
+} from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
-	AdapterConfig,
+	CreateAdapterOptions,
 	AdapterTestDebugLogs,
 	CleanedWhere,
-	CreateCustomAdapter,
 } from "./types";
 import type { FieldAttribute } from "../../db";
 export * from "./types";
@@ -47,17 +51,11 @@ const colors = {
 
 const createAsIsTransaction =
 	(adapter: Adapter) =>
-	(fn: (trx: Omit<Adapter, "transaction">) => Promise<void>) =>
+	<R>(fn: (trx: TransactionAdapter) => Promise<R>) =>
 		fn(adapter);
 
 export const createAdapter =
-	({
-		adapter: customAdapter,
-		config: cfg,
-	}: {
-		config: AdapterConfig;
-		adapter: CreateCustomAdapter;
-	}) =>
+	({ adapter: customAdapter, config: cfg }: CreateAdapterOptions) =>
 	(options: BetterAuthOptions): Adapter => {
 		const config = {
 			...cfg,
@@ -568,9 +566,19 @@ export const createAdapter =
 		let lazyLoadTransaction: Adapter["transaction"] | null = null;
 		const adapter: Adapter = {
 			transaction: async (cb) => {
-				lazyLoadTransaction ??= config.transaction
-					? config.transaction
-					: createAsIsTransaction(adapter);
+				if (!lazyLoadTransaction) {
+					if (!config.transaction) {
+						logger.warn(
+							`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
+						);
+						lazyLoadTransaction = createAsIsTransaction(adapter);
+					} else {
+						logger.debug(
+							`[${config.adapterName}] - Using provided transaction implementation.`,
+						);
+						lazyLoadTransaction = config.transaction;
+					}
+				}
 				return lazyLoadTransaction(cb);
 			},
 			create: async <T extends Record<string, any>, R = T>({

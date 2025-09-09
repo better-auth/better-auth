@@ -1,9 +1,9 @@
 import type { FieldAttribute } from "../../db";
 import type { BetterAuthDbSchema } from "../../db/get-tables";
 import type {
-	Adapter,
 	AdapterSchemaCreation,
 	BetterAuthOptions,
+	TransactionAdapter,
 	Where,
 } from "../../types";
 import type { Prettify } from "../../types/helper";
@@ -32,6 +32,11 @@ export type AdapterDebugLogs =
 			 */
 			isRunningAdapterTests: boolean;
 	  };
+
+export type CreateAdapterOptions = {
+	config: AdapterConfig;
+	adapter: CreateCustomAdapter;
+};
 
 export interface AdapterConfig {
 	/**
@@ -98,9 +103,7 @@ export interface AdapterConfig {
 	 */
 	transaction?:
 		| false
-		| ((
-				callback: (trx: Omit<Adapter, "transaction">) => Promise<void>,
-		  ) => Promise<void>);
+		| (<R>(callback: (trx: TransactionAdapter) => Promise<R>) => Promise<R>);
 	/**
 	 * Disable id generation for the `create` method.
 	 *

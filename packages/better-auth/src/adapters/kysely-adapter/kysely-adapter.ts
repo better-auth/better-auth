@@ -1,8 +1,8 @@
 import {
 	createAdapter,
 	type AdapterDebugLogs,
-	type AdapterConfig,
 	type CreateCustomAdapter,
+	type CreateAdapterOptions,
 } from "../create-adapter";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
@@ -25,6 +25,14 @@ interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+	/**
+	 * Whether to execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions,
+	 * set this to `false` and operations will be executed sequentially.
+	 * @default true
+	 */
+	transaction?: boolean;
 }
 
 export const kyselyAdapter = (
@@ -303,10 +311,7 @@ export const kyselyAdapter = (
 			};
 		};
 	};
-	let adapterOptions: {
-		config: AdapterConfig;
-		adapter: CreateCustomAdapter;
-	} | null = null;
+	let adapterOptions: CreateAdapterOptions | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "kysely",
@@ -322,14 +327,17 @@ export const kyselyAdapter = (
 					? false
 					: true,
 			supportsJSON: false,
-			transaction: (cb) =>
-				db.transaction().execute((trx) => {
-					const adapter = createAdapter({
-						config: adapterOptions!.config,
-						adapter: createCustomAdapter(trx),
-					})(lazyOptions!);
-					return cb(adapter);
-				}),
+			transaction:
+				(config?.transaction ?? true)
+					? (cb) =>
+							db.transaction().execute((trx) => {
+								const adapter = createAdapter({
+									config: adapterOptions!.config,
+									adapter: createCustomAdapter(trx),
+								})(lazyOptions!);
+								return cb(adapter);
+							})
+					: false,
 		},
 		adapter: createCustomAdapter(db),
 	};
