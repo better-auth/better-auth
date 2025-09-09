@@ -15,7 +15,7 @@ export async function createAuthServer(
 
 	const auth = betterAuth({
 		database,
-		baseURL: "https://auth.test.com",
+		baseURL,
 		emailAndPassword: {
 			enabled: true,
 		},
