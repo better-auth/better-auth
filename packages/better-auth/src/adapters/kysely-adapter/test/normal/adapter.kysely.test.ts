@@ -399,3 +399,148 @@ describe("postgres", async () => {
 		});
 	});
 });
+
+describe("mysql", async () => {
+	const pool = createPool("mysql://user:password@localhost:3306/better_auth");
+
+	pool.pool.config.connectionConfig.timezone = "Z";
+
+	const dialect = new MysqlDialect(pool);
+
+	const opts = {
+		database: dialect,
+		user: {
+			modelName: "users",
+		},
+	} satisfies BetterAuthOptions;
+
+	beforeAll(async () => {
+		await pool.query("DROP DATABASE IF EXISTS better_auth");
+		await pool.query("CREATE DATABASE better_auth");
+		await pool.query("USE better_auth");
+
+		const { runMigrations } = await getMigrations(opts);
+		await runMigrations();
+
+		return async () => {
+			await resetDB();
+			await pool.end();
+			setState("IDLE");
+		};
+	});
+
+	const mysql = new Kysely({ dialect });
+
+	const getAdapter = kyselyAdapter(mysql, {
+		type: "mysql",
+		debugLogs: {
+			isRunningAdapterTests: true,
+		},
+	});
+
+	async function resetDB() {
+		await sql`DROP TABLE session;`.execute(mysql);
+		await sql`DROP TABLE verification;`.execute(mysql);
+		await sql`DROP TABLE account;`.execute(mysql);
+		await sql`DROP TABLE users;`.execute(mysql);
+	}
+
+	await runAdapterTest({
+		getAdapter: async (customOptions = {}) => {
+			// const merged = merge( customOptions,opts);
+			// merged.database = opts.database;
+			return getAdapter(opts);
+		},
+		disableTests: {
+			SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: true,
+		},
+	});
+
+	describe("simple flow", async () => {
+		const { auth } = await getTestInstance(
+			{
+				database: dialect,
+				user: {
+					modelName: "users",
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		it("should sign-up", async () => {
+			const res = await auth.api.signUpEmail({
+				body: {
+					name: "test",
+					password: "password",
+					email: "test-2@email.com",
+				},
+			});
+			expect(res.user.name).toBe("test");
+			expect(res.token?.length).toBeTruthy();
+		});
+
+		let token = "";
+		it("should sign in", async () => {
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					password: "password",
+					email: "test-2@email.com",
+				},
+			});
+
+			expect(signInRes.token?.length).toBeTruthy();
+			expect(signInRes.user.name).toBe("test");
+			token = signInRes.token;
+		});
+
+		it("should return session", async () => {
+			const session = await auth.api.getSession({
+				headers: new Headers({
+					Authorization: `Bearer ${token}`,
+				}),
+			});
+			expect(session).toMatchObject({
+				session: {
+					token,
+					userId: expect.any(String),
+				},
+				user: {
+					name: "test",
+					email: "test-2@email.com",
+				},
+			});
+		});
+
+		it("stores and retrieves timestamps correctly across timezones", async () => {
+			const originalTZ = process.env.TZ;
+
+			try {
+				const sampleUser = {
+					name: "sample",
+					email: "sampler@test.com",
+					password: "samplerrrrr",
+				};
+
+				process.env.TZ = "Europe/London";
+				const userSignUp = await auth.api.signUpEmail({
+					body: {
+						name: sampleUser.name,
+						email: sampleUser.email,
+						password: sampleUser.password,
+					},
+				});
+				process.env.TZ = "America/Los_Angeles";
+				const userSignIn = await auth.api.signInEmail({
+					body: { email: sampleUser.email, password: sampleUser.password },
+				});
+
+				expect(userSignUp.user.createdAt).toStrictEqual(
+					userSignIn.user.createdAt,
+				);
+			} finally {
+				process.env.TZ = originalTZ;
+			}
+		});
+	});
+});
