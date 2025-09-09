@@ -34,6 +34,8 @@ const adapterTests = {
 	SHOULD_FIND_MANY_WITH_NOT_IN_OPERATOR:
 		"should find many with not in operator",
 	SHOULD_FIND_MANY_WITH_SORT_BY: "should find many with sortBy",
+	SHOULD_FIND_MANY_WITH_MULTIPLE_SORT_BY:
+		"should find many with multiple sortBy",
 	SHOULD_FIND_MANY_WITH_LIMIT: "should find many with limit",
 	SHOULD_FIND_MANY_WITH_OFFSET: "should find many with offset",
 	SHOULD_UPDATE_WITH_MULTIPLE_WHERE: "should update with multiple where",
@@ -517,6 +519,59 @@ async function adapterTest(
 		},
 	);
 
+	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_MULTIPLE_SORT_BY)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_FIND_MANY_WITH_MULTIPLE_SORT_BY
+		}`,
+		async ({ onTestFailed }) => {
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
+			});
+
+			const users = [
+				{ name: "a", email: "test-multi-sortby-a@email.com" },
+				{ name: "a", email: "test-multi-sortby-b@email.com" },
+				{ name: "b", email: "test-multi-sortby-c@email.com" },
+			];
+
+			for (const user of users) {
+				await (await adapter()).create({
+					model: "user",
+					data: {
+						...user,
+						emailVerified: true,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				});
+			}
+
+			const res = await (await adapter()).findMany<User>({
+				model: "user",
+				where: users.map(({ email }) => ({
+					field: "email",
+					value: email,
+					connector: "OR",
+				})),
+				sortBy: [
+					{
+						field: "name",
+						direction: "asc",
+					},
+					{
+						field: "email",
+						direction: "desc",
+					},
+				],
+			});
+			expect(res[0].name).toBe("a");
+			expect(res[0].email).toBe("test-multi-sortby-b@email.com");
+			expect(res[1].email).toBe("test-multi-sortby-a@email.com");
+			expect(res[res.length - 1].name).toBe("b");
+		},
+	);
+
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_LIMIT)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${
 			adapterTests.SHOULD_FIND_MANY_WITH_LIMIT
@@ -547,7 +602,7 @@ async function adapterTest(
 				model: "user",
 				offset: 2,
 			});
-			expect(res.length).toBe(5);
+			expect(res.length).toBe(8);
 		},
 	);
 

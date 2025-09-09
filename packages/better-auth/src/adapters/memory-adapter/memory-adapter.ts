@@ -92,13 +92,17 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 						table = convertWhereClause(where, model);
 					}
 					if (sortBy) {
+						const orderBy = Array.isArray(sortBy) ? sortBy : [sortBy];
 						table = table.sort((a, b) => {
-							const field = getFieldName({ model, field: sortBy.field });
-							if (sortBy.direction === "asc") {
-								return a[field] > b[field] ? 1 : -1;
-							} else {
-								return a[field] < b[field] ? 1 : -1;
+							for (const { field, direction } of orderBy) {
+								if (a[field] === b[field]) {
+									continue;
+								}
+
+								const res = a[field] < b[field] ? -1 : 1;
+								return direction === "asc" ? res : -res;
 							}
+							return 0;
 						});
 					}
 					if (offset !== undefined) {
