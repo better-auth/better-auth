@@ -62,7 +62,8 @@
     "@types/express": "^5.0.3",
     "better-auth": "workspace:^",
     "better-call": "catalog:",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "unbuild": "catalog:"
   },
   "peerDependencies": {
     "better-auth": "workspace:*"
