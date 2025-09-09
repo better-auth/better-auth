@@ -84,6 +84,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return "endsWith";
 					case "ne":
 						return "not";
+					case "not_in":
+						return "notIn";
 					default:
 						return operator;
 				}

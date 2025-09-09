@@ -138,6 +138,14 @@ export const kyselyAdapter = (
 							return eb(field, "in", Array.isArray(value) ? value : [value]);
 						}
 
+						if (operator.toLowerCase() === "not_in") {
+							return eb(
+								field,
+								"not in",
+								Array.isArray(value) ? value : [value],
+							);
+						}
+
 						if (operator === "contains") {
 							return eb(field, "like", `%${value}%`);
 						}

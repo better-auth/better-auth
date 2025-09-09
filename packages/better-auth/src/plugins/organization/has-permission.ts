@@ -105,9 +105,7 @@ export const hasPermission = async (
 /**
  * Using the same `hasPermissionFn` function, but without the need for a `ctx` perameter or the `organizationId` perameter.
  */
-export const clientSideHasPermission = async (
-	input: HasPermissionBaseInput,
-) => {
+export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
 	const acRoles: {
 		[x: string]: Role<any> | undefined;
 	} = input.options.roles || defaultRoles;
