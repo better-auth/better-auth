@@ -10,6 +10,7 @@ import {
 } from "./utils";
 import type { OAuthAccessToken, OAuthOptions, OAuthSession } from "./types";
 import { getJwtPlugin } from "./utils";
+import { decodeRefreshToken } from "./token";
 
 /**
  * IMPORTANT NOTES:
@@ -389,10 +390,11 @@ export async function introspectEndpoint(
 
 		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
 			try {
+				const refreshToken = await decodeRefreshToken(opts, token);
 				const payload = await validateRefreshToken(
 					ctx,
 					opts,
-					token,
+					refreshToken.token,
 					client.clientId,
 				);
 				return ctx.json(payload);
