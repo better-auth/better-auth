@@ -22,6 +22,11 @@ The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplew
 
         `origin`: The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do **NOT** include any trailing /
 
+        `attestationType`: Specifies the attestation type. Helpful for identifying the make and model of the device.
+            - `direct`: Requests attestation data from the authenticator
+            - `none`: No attestation is requested (most private)
+            - Default: `none`
+
         `authenticatorSelection`: Allows customization of WebAuthn authenticator selection criteria. Leave unspecified for default settings.
             - `authenticatorAttachment`: Specifies the type of authenticator
                 - `platform`: Authenticator is attached to the platform (e.g., fingerprint reader)
