@@ -90,6 +90,8 @@ export type Adapter = {
 	} & CustomAdapter["options"];
 };
 
+export type TransactionAdapter = Omit<Adapter, "transaction">;
+
 export type AdapterSchemaCreation = {
 	/**
 	 * Code to be inserted into the file

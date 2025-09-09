@@ -1,7 +1,12 @@
 import { safeJSONParse } from "../../utils/json";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type {
+	Adapter,
+	BetterAuthOptions,
+	TransactionAdapter,
+	Where,
+} from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
 	AdapterConfig,
@@ -48,7 +53,7 @@ const colors = {
 
 const createAsIsTransaction =
 	(adapter: Adapter) =>
-	<R>(fn: (trx: Omit<Adapter, "transaction">) => Promise<R>) =>
+	<R>(fn: (trx: TransactionAdapter) => Promise<R>) =>
 		fn(adapter);
 
 export const createAdapter =

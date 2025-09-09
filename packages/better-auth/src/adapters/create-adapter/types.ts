@@ -4,6 +4,7 @@ import type {
 	Adapter,
 	AdapterSchemaCreation,
 	BetterAuthOptions,
+	TransactionAdapter,
 	Where,
 } from "../../types";
 import type { Prettify } from "../../types/helper";
@@ -103,9 +104,7 @@ export interface AdapterConfig {
 	 */
 	transaction?:
 		| false
-		| (<R>(
-				callback: (trx: Omit<Adapter, "transaction">) => Promise<R>,
-		  ) => Promise<R>);
+		| (<R>(callback: (trx: TransactionAdapter) => Promise<R>) => Promise<R>);
 	/**
 	 * Disable id generation for the `create` method.
 	 *
