@@ -8,14 +8,19 @@ import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 
-async function setPgUtcDateParser() {
+// Override the builtin timestamp parser to use UTC
+async function overridePgDateParser() {
 	const { types: pgTypes } = await import("pg");
 
-	// Override the builtin timestamp parser to use UTC
+	const orginalParser = pgTypes.getTypeParser(pgTypes.builtins.TIMESTAMP);
 	pgTypes.setTypeParser(
 		pgTypes.builtins.TIMESTAMP,
 		(val) => new Date(val + "+0000"),
 	);
+
+	return () => {
+		pgTypes.setTypeParser(pgTypes.builtins.TIMESTAMP, orginalParser);
+	};
 }
 
 interface KyselyAdapterConfig {
@@ -207,13 +212,18 @@ export const kyselyAdapter = (
 					or: conditions.or.length ? conditions.or : null,
 				};
 			}
+
 			return {
 				async create({ data, model }) {
+					const reset = await overridePgDateParser();
 					const builder = db.insertInto(model).values(data);
 
-					return (await withReturning(data, builder, model, [])) as any;
+					const res = (await withReturning(data, builder, model, [])) as any;
+					reset();
+					return res;
 				},
 				async findOne({ model, where, select }) {
+					const reset = await overridePgDateParser();
 					const { and, or } = convertWhereClause(model, where);
 					let query = db.selectFrom(model).selectAll();
 					if (and) {
@@ -223,10 +233,12 @@ export const kyselyAdapter = (
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					const res = await query.executeTakeFirst();
+					reset();
 					if (!res) return null;
 					return res as any;
 				},
 				async findMany({ model, where, limit, offset, sortBy }) {
+					const reset = await overridePgDateParser();
 					const { and, or } = convertWhereClause(model, where);
 					let query = db.selectFrom(model);
 					if (and) {
@@ -260,10 +272,12 @@ export const kyselyAdapter = (
 					}
 
 					const res = await query.selectAll().execute();
+					reset();
 					if (!res) return [];
 					return res as any;
 				},
 				async update({ model, where, update: values }) {
+					const reset = await overridePgDateParser();
 					const { and, or } = convertWhereClause(model, where);
 
 					let query = db.updateTable(model).set(values as any);
@@ -273,9 +287,11 @@ export const kyselyAdapter = (
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
+					reset();
 					return await withReturning(values as any, query, model, where);
 				},
 				async updateMany({ model, where, update: values }) {
+					const reset = await overridePgDateParser();
 					const { and, or } = convertWhereClause(model, where);
 					let query = db.updateTable(model).set(values as any);
 					if (and) {
@@ -285,9 +301,11 @@ export const kyselyAdapter = (
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					const res = await query.execute();
+					reset();
 					return res.length;
 				},
 				async count({ model, where }) {
+					const reset = await overridePgDateParser();
 					const { and, or } = convertWhereClause(model, where);
 					let query = db
 						.selectFrom(model)
@@ -300,9 +318,11 @@ export const kyselyAdapter = (
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					const res = await query.execute();
+					reset();
 					return res[0].count as number;
 				},
 				async delete({ model, where }) {
+					const reset = await overridePgDateParser();
 					const { and, or } = convertWhereClause(model, where);
 					let query = db.deleteFrom(model);
 					if (and) {
@@ -313,8 +333,10 @@ export const kyselyAdapter = (
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					await query.execute();
+					reset();
 				},
 				async deleteMany({ model, where }) {
+					const reset = await overridePgDateParser();
 					const { and, or } = convertWhereClause(model, where);
 					let query = db.deleteFrom(model);
 					if (and) {
@@ -323,7 +345,9 @@ export const kyselyAdapter = (
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					return (await query.execute()).length;
+					const res = (await query.execute()).length;
+					reset();
+					return res;
 				},
 				options: config,
 			};
