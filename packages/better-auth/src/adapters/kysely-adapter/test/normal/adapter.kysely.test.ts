@@ -23,47 +23,48 @@ import { getTestInstance } from "../../../../test-utils/test-instance";
 import { setState } from "../state";
 import { Pool } from "pg";
 
-const sqlite = new Database(path.join(__dirname, "test.db"));
-const mysql = createPool("mysql://user:password@localhost:3306/better_auth");
-const sqliteKy = new Kysely({
-	dialect: new SqliteDialect({
-		database: sqlite,
-	}),
-});
-const mysqlKy = new Kysely({
-	dialect: new MysqlDialect(mysql),
-});
-export const opts = ({
-	database,
-	isNumberIdTest,
-}: {
-	database: BetterAuthOptions["database"];
-	isNumberIdTest: boolean;
-}) =>
-	({
-		database: database,
-		user: {
-			fields: {
-				email: "email_address",
-			},
-			additionalFields: {
-				test: {
-					type: "string",
-					defaultValue: "test",
+describe("adapter test", async () => {
+	const sqlite = new Database(path.join(__dirname, "test.db"));
+	const mysql = createPool("mysql://user:password@localhost:3306/better_auth");
+	const sqliteKy = new Kysely({
+		dialect: new SqliteDialect({
+			database: sqlite,
+		}),
+	});
+	const mysqlKy = new Kysely({
+		dialect: new MysqlDialect(mysql),
+	});
+
+	const opts = ({
+		database,
+		isNumberIdTest,
+	}: {
+		database: BetterAuthOptions["database"];
+		isNumberIdTest: boolean;
+	}) =>
+		({
+			database: database,
+			user: {
+				fields: {
+					email: "email_address",
+				},
+				additionalFields: {
+					test: {
+						type: "string",
+						defaultValue: "test",
+					},
 				},
 			},
-		},
-		session: {
-			modelName: "sessions",
-		},
-		advanced: {
-			database: {
-				useNumberId: isNumberIdTest,
+			session: {
+				modelName: "sessions",
 			},
-		},
-	}) satisfies BetterAuthOptions;
+			advanced: {
+				database: {
+					useNumberId: isNumberIdTest,
+				},
+			},
+		}) satisfies BetterAuthOptions;
 
-describe("adapter test", async () => {
 	const mysqlOptions = opts({
 		database: {
 			db: mysqlKy,

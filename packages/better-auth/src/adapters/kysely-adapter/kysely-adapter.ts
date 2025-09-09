@@ -3,7 +3,6 @@ import type { Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 
-// Override the builtin timestamp parser to use UTC
 async function overridePgDateParser(type?: string) {
 	if (type !== "postgres") return () => {};
 
@@ -12,6 +11,7 @@ async function overridePgDateParser(type?: string) {
 	const orginalParser = pgTypes.getTypeParser(pgTypes.builtins.TIMESTAMP);
 	pgTypes.setTypeParser(
 		pgTypes.builtins.TIMESTAMP,
+		// Override the builtin timestamp parser to use UTC
 		(val) => new Date(val + "+0000"),
 	);
 
