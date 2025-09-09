@@ -37,11 +37,11 @@ export function CustomSearchDialog(props: SharedProps) {
 			{...props}
 		>
 			<SearchDialogOverlay />
-			<SearchDialogContent>
+			<SearchDialogContent className="mt-12 md:mt-0">
 				<SearchDialogHeader>
 					<SearchDialogIcon />
 					<SearchDialogInput />
-					<SearchDialogClose />
+					<SearchDialogClose className="hidden md:block" />
 				</SearchDialogHeader>
 				<SearchDialogList items={query.data !== "empty" ? query.data : null} />
 				<SearchDialogFooter>
