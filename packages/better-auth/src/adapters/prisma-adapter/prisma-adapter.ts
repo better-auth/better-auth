@@ -49,6 +49,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 			adapterName: "Prisma Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			disableIdGeneration: false,
+			supportsJSON: false,
+			supportsJSONB: false,
+			supportsDates: true,
+			supportsNumbers: true,
+			supportsNumericIds: true,
+			supportsArrays: true,
+			supportsBooleans: true,
 		},
 		adapter: ({ getFieldName }) => {
 			const db = prisma as PrismaClientInternal;
