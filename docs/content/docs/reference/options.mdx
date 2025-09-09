@@ -497,7 +497,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	logger: {
 		disabled: false,
-		disableColors: false, // Default value is determined by the terminal's color support but it can be overridden
+		disableColors: false,
 		level: "error",
 		log: (level, message, ...args) => {
 			// Custom logging implementation
