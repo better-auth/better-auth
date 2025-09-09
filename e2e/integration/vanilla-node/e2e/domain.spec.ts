@@ -3,7 +3,12 @@ import { runClient, setup } from "./utils";
 
 const { ref, start, clean } = setup();
 test.describe("cross domain", async () => {
-	test.beforeEach(async () => start({ https: true }));
+	test.beforeEach(async () =>
+		start({
+			baseURL: "https://demo.com",
+			https: true,
+		}),
+	);
 	test.afterEach(async () => clean());
 
 	test("should work across domains", async () => {

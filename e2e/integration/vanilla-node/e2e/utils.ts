@@ -26,8 +26,8 @@ export function setup() {
 	};
 	return {
 		ref,
-		start: async (options?: { https?: boolean }) => {
-			server = await createAuthServer(undefined, options?.https);
+		start: async (options?: { baseURL?: string; https?: boolean }) => {
+			server = await createAuthServer(options?.baseURL, options?.https);
 			clientChild = spawn("pnpm", ["run", "start:client"], {
 				cwd: root,
 				stdio: "pipe",
