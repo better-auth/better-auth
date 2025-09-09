@@ -46,6 +46,10 @@ export interface PrismaConfig {
 interface PrismaClient {}
 
 type PrismaClientInternal = {
+	$transaction: (
+		callback: (db: PrismaClient) => Promise<any> | any,
+	) => Promise<any>;
+} & {
 	[model: string]: {
 		create: (data: any) => Promise<any>;
 		findFirst: (data: any) => Promise<any>;
@@ -54,10 +58,6 @@ type PrismaClientInternal = {
 		delete: (data: any) => Promise<any>;
 		[key: string]: any;
 	};
-} & {
-	$transaction: (
-		callback: (db: PrismaClient) => Promise<any> | any,
-	) => Promise<any>;
 };
 
 export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {

@@ -4,6 +4,7 @@ import {
 	type AdapterDebugLogs,
 	type CleanedWhere,
 } from "../create-adapter";
+import type { BetterAuthOptions } from "../../types";
 
 export interface MemoryDB {
 	[key: string]: any[];
@@ -13,8 +14,9 @@ export interface MemoryAdapterConfig {
 	debugLogs?: AdapterDebugLogs;
 }
 
-export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
-	createAdapter({
+export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
+	let lazyOptions: BetterAuthOptions | null = null;
+	let adapterCreator = createAdapter({
 		config: {
 			adapterId: "memory",
 			adapterName: "Memory Adapter",
@@ -30,7 +32,18 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 				}
 				return props.data;
 			},
-			transaction: false,
+			transaction: async (cb) => {
+				let clone = structuredClone(db);
+				try {
+					return cb(adapterCreator(lazyOptions!));
+				} catch {
+					// Rollback changes
+					Object.keys(db).forEach((key) => {
+						db[key] = clone[key];
+					});
+					throw new Error("Transaction failed, rolling back changes");
+				}
+			},
 		},
 		adapter: ({ getFieldName, options, debugLog }) => {
 			function convertWhereClause(where: CleanedWhere[], model: string) {
@@ -148,3 +161,8 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 			};
 		},
 	});
+	return (options: BetterAuthOptions) => {
+		lazyOptions = options;
+		return adapterCreator(options);
+	};
+};
