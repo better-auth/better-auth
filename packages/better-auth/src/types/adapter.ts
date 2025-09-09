@@ -25,7 +25,7 @@ export type Where = {
 export type SortBy = {
 	field: string;
 	direction: "asc" | "desc";
-}
+};
 
 /**
  * Adapter Interface
