@@ -566,9 +566,19 @@ export const createAdapter =
 		let lazyLoadTransaction: Adapter["transaction"] | null = null;
 		const adapter: Adapter = {
 			transaction: async (cb) => {
-				lazyLoadTransaction ??= config.transaction
-					? config.transaction
-					: createAsIsTransaction(adapter);
+				if (!lazyLoadTransaction) {
+					if (!config.transaction) {
+						logger.warn(
+							`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
+						);
+						lazyLoadTransaction = createAsIsTransaction(adapter);
+					} else {
+						logger.debug(
+							`[${config.adapterName}] - Using provided transaction implementation.`,
+						);
+						lazyLoadTransaction = config.transaction;
+					}
+				}
 				return lazyLoadTransaction(cb);
 			},
 			create: async <T extends Record<string, any>, R = T>({
