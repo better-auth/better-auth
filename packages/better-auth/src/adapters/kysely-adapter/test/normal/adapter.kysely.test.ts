@@ -274,9 +274,6 @@ describe("postgres", async () => {
 		await runMigrations();
 		return async () => {
 			await resetDB();
-			console.log(
-				`Normal Kysely adapter test finished. Now allowing number ID Kysely tests to run.`,
-			);
 			await pool.end();
 			setState("IDLE");
 		};
@@ -402,9 +399,6 @@ describe("postgres", async () => {
 
 describe("mysql", async () => {
 	const pool = createPool("mysql://user:password@localhost:3306/better_auth");
-
-	pool.pool.config.connectionConfig.timezone = "Z";
-
 	const dialect = new MysqlDialect(pool);
 
 	const opts = {
@@ -459,7 +453,7 @@ describe("mysql", async () => {
 	describe("simple flow", async () => {
 		const { auth } = await getTestInstance(
 			{
-				database: dialect,
+				database: pool,
 				user: {
 					modelName: "users",
 				},
