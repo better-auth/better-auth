@@ -41,33 +41,55 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 					);
 					throw new Error(`Model ${model} not found`);
 				}
-				return table.filter((record) => {
-					return where.every((clause) => {
-						let { field, value, operator } = clause;
 
-						if (operator === "in") {
+				const evalClause = (record: any, clause: CleanedWhere): boolean => {
+					const { field, value, operator } = clause;
+					const recordValue = record[field];
+
+					switch (operator) {
+						case "in":
 							if (!Array.isArray(value)) {
 								throw new Error("Value must be an array");
 							}
 							// @ts-expect-error
 							return value.includes(record[field]);
-						} else if (operator === "not_in") {
+						case "not_in":
 							if (!Array.isArray(value)) {
 								throw new Error("Value must be an array");
 							}
 							// @ts-expect-error
 							return !value.includes(record[field]);
-						} else if (operator === "contains") {
+						case "contains":
 							return record[field].includes(value);
-						} else if (operator === "starts_with") {
+						case "starts_with":
 							return record[field].startsWith(value);
-						} else if (operator === "ends_with") {
-							return record[field].endsWith(value);
+						case "ends_with":
+							return recordValue.endsWith(value);
+						default:
+							return recordValue === value;
+					}
+				};
+
+				const evalWhere = (record: any) => {
+					if (!where || !where.length) return true;
+
+					let result = evalClause(record, where[0]);
+
+					for (let i = 1; i < where.length; i++) {
+						const connector = (where[i].connector || "AND").toUpperCase();
+						const clauseResult = evalClause(record, where[i]);
+
+						if (connector === "OR") {
+							result = result || clauseResult;
 						} else {
-							return record[field] === value;
+							result = result && clauseResult;
 						}
-					});
-				});
+					}
+
+					return result;
+				};
+
+				return table.filter(evalWhere);
 			}
 			return {
 				create: async ({ model, data }) => {
