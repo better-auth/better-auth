@@ -346,6 +346,31 @@ describe("oauth revoke - config", async () => {
 		};
 	}
 
+	async function createAuthUrl(
+		oauthClient: OAuthClient,
+		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
+	) {
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient?.client_id,
+				clientSecret: oauthClient?.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes: ["openid", "profile", "email", "offline_access"],
+			codeVerifier,
+			...overrides,
+		});
+		return {
+			url,
+			codeVerifier,
+		};
+	}
+
 	it("should pass with the correct opaqueAccessTokenPrefix", async () => {
 		const prefix = "hello_";
 		const testScopes = ["read:profile"];
@@ -361,13 +386,63 @@ describe("oauth revoke - config", async () => {
 			client_secret: oauthClient?.client_secret,
 			scope: testScopes.join(" "),
 		});
-		expect(tokens.data?.access_token.startsWith(prefix)).toBeTruthy();
+		expect(tokens.data?.access_token?.startsWith(prefix)).toBeTruthy();
 
 		const revocation = await client.oauth2.revoke({
 			client_id: oauthClient?.client_id,
 			client_secret: oauthClient?.client_secret,
 			token: tokens.data?.access_token ?? "",
 			token_type_hint: "access_token",
+		});
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+	});
+
+	it("should pass with the correct refreshTokenPrefix", async () => {
+		const refreshTokenPrefix = "hello_rt_";
+		const testScopes = ["openid", "offline_access"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				refreshTokenPrefix: refreshTokenPrefix,
+				scopes: testScopes,
+			},
+		});
+		if (!oauthClient) expect.unreachable();
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl(oauthClient, {
+			scopes: testScopes,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+		const tokens = await client.oauth2.token({
+			grant_type: "authorization_code",
+			code: url.searchParams.get("code"),
+			code_verifier: codeVerifier,
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			scope: testScopes.join(" "),
+		});
+		if ("refresh_token" in (tokens.data ?? {})) {
+			expect(
+				(tokens.data as { refresh_token?: string }).refresh_token?.startsWith(
+					refreshTokenPrefix,
+				),
+			).toBeTruthy();
+		} else {
+			expect.unreachable();
+		}
+
+		const revocation = await client.oauth2.revoke({
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			// @ts-expect-error refresh token sent
+			token: tokens.data?.refresh_token,
+			token_type_hint: "refresh_token",
 		});
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);

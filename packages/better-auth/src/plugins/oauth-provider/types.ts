@@ -281,14 +281,28 @@ export interface OAuthOptions {
 	 * Adds a prefix to an opaque access token.
 	 * Note: the prefix is not stored in the database.
 	 *
-	 * Useful when also using the [API Key Plugin](../api-key/index.ts).
+	 * Useful when also using the [API Key Plugin](../api-key/index.ts)
+	 * or Secret Scanners (ie Github Secret Scanning, GitGuardian, Trufflehog).
 	 *
 	 * We recommend to append an underscore to make it more identifiable
 	 *
-	 * @example "hello_"
+	 * @example "domain_at_"
 	 * @default undefined
 	 */
 	opaqueAccessTokenPrefix?: string;
+	/**
+	 * Adds a prefix to an opaque refresh token.
+	 * Note: the prefix is not stored in the database.
+	 *
+	 * Useful when using Secret Scanners (ie Github Secret Scanning,
+	 * GitGuardian, Trufflehog).
+	 *
+	 * We recommend to append an underscore to make it more identifiable
+	 *
+	 * @example "domain_rt_"
+	 * @default undefined
+	 */
+	refreshTokenPrefix?: string;
 	/**
 	 * Generate a unique access token to save on the database.
 	 *
