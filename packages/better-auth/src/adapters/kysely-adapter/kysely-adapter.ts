@@ -51,7 +51,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 		},
 		adapter: ({ getFieldName, schema }) => {
 			if (config?.type === "postgres") {
-				setPgUtcDateParser();
+				void setPgUtcDateParser();
 			}
 
 			const withReturning = async (
