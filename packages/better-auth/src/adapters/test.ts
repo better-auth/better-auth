@@ -530,9 +530,9 @@ async function adapterTest(
 			});
 
 			const users = [
-				{ name: "a", email: "a@email.com" },
-				{ name: "a", email: "b@email.com" },
-				{ name: "b", email: "c@email.com" },
+				{ name: "a", email: "test-multi-sortby-a@email.com" },
+				{ name: "a", email: "test-multi-sortby-b@email.com" },
+				{ name: "b", email: "test-multi-sortby-c@email.com" },
 			];
 
 			for (const user of users) {
@@ -549,6 +549,11 @@ async function adapterTest(
 
 			const res = await (await adapter()).findMany<User>({
 				model: "user",
+				where: users.map(({ email }) => ({
+					field: "email",
+					value: email,
+					connector: "OR",
+				})),
 				sortBy: [
 					{
 						field: "name",
@@ -561,8 +566,8 @@ async function adapterTest(
 				],
 			});
 			expect(res[0].name).toBe("a");
-			expect(res[0].email).toBe("b@email.com");
-			expect(res[1].email).toBe("a@email.com");
+			expect(res[0].email).toBe("test-multi-sortby-b@email.com");
+			expect(res[1].email).toBe("test-multi-sortby-a@email.com");
 			expect(res[res.length - 1].name).toBe("b");
 		},
 	);
