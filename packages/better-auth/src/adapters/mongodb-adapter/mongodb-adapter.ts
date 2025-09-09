@@ -1,5 +1,5 @@
 import { ObjectId, type Db, type ClientSession } from "mongodb";
-import type { BetterAuthOptions, Where } from "../../types";
+import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 
 export interface MongoDBAdapterConfig {
@@ -23,6 +23,7 @@ export interface MongoDBAdapterConfig {
 }
 
 export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
+	let lazyOptions: BetterAuthOptions | null;
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
 		const generator =
 			options.advanced?.database?.generateId || options.advanced?.generateId;
@@ -31,7 +32,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 		}
 		return undefined;
 	};
-	return createAdapter({
+
+	let lazyAdapter: ((options: BetterAuthOptions) => Adapter) | null = null;
+	lazyAdapter = createAdapter({
 		config: {
 			adapterId: "mongodb-adapter",
 			adapterName: "MongoDB Adapter",
@@ -44,8 +47,17 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				_id: "id",
 			},
 			supportsNumericIds: false,
-			// todo: implement transactions
-			transaction: false,
+			transaction: config?.session
+				? (cb) => {
+						const adapter = lazyAdapter!(lazyOptions!);
+						if (!config.session) {
+							return cb(adapter);
+						}
+						return config.session.withTransaction(async () => {
+							return cb(adapter);
+						});
+					}
+				: false,
 			customTransformInput({
 				action,
 				data,
@@ -236,19 +248,25 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 
 			return {
 				async create({ model, data: values }) {
-					const res = await db.collection(model).insertOne(values);
+					const res = await db
+						.collection(model)
+						.insertOne(values, { session: config?.session });
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
 				async findOne({ model, where, select }) {
 					const clause = convertWhereClause({ where, model });
-					const res = await db.collection(model).findOne(clause);
+					const res = await db
+						.collection(model)
+						.findOne(clause, { session: config?.session });
 					if (!res) return null;
 					return res as any;
 				},
 				async findMany({ model, where, limit, offset, sortBy }) {
 					const clause = where ? convertWhereClause({ where, model }) : {};
-					const cursor = db.collection(model).find(clause);
+					const cursor = db
+						.collection(model)
+						.find(clause, { session: config?.session });
 					if (limit) cursor.limit(limit);
 					if (offset) cursor.skip(offset);
 					if (sortBy)
@@ -260,7 +278,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return res as any;
 				},
 				async count({ model }) {
-					const res = await db.collection(model).countDocuments();
+					const res = await db
+						.collection(model)
+						.countDocuments(undefined, { session: config?.session });
 					return res;
 				},
 				async update({ model, where, update: values }) {
@@ -270,6 +290,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 						clause,
 						{ $set: values as any },
 						{
+							session: config?.session,
 							returnDocument: "after",
 						},
 					);
@@ -279,21 +300,34 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				async updateMany({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
 
-					const res = await db.collection(model).updateMany(clause, {
-						$set: values as any,
-					});
+					const res = await db.collection(model).updateMany(
+						clause,
+						{
+							$set: values as any,
+						},
+						{ session: config?.session },
+					);
 					return res.modifiedCount;
 				},
 				async delete({ model, where }) {
 					const clause = convertWhereClause({ where, model });
-					await db.collection(model).deleteOne(clause);
+					await db
+						.collection(model)
+						.deleteOne(clause, { session: config?.session });
 				},
 				async deleteMany({ model, where }) {
 					const clause = convertWhereClause({ where, model });
-					const res = await db.collection(model).deleteMany(clause);
+					const res = await db
+						.collection(model)
+						.deleteMany(clause, { session: config?.session });
 					return res.deletedCount;
 				},
 			};
 		},
 	});
+
+	return (options: BetterAuthOptions): Adapter => {
+		lazyOptions = options;
+		return lazyAdapter(options);
+	};
 };
