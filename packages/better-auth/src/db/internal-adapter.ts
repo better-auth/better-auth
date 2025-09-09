@@ -42,7 +42,7 @@ export const createInternalAdapter = (
 				Partial<Account>,
 			context?: GenericEndpointContext,
 		) => {
-			return adapter.transaction(async (txAdapter) => {
+			return adapter.transaction(async (trxAdapter) => {
 				const createdUser = await createWithHooks(
 					{
 						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
@@ -53,7 +53,7 @@ export const createInternalAdapter = (
 					"user",
 					undefined,
 					context,
-					txAdapter,
+					trxAdapter,
 				);
 				const createdAccount = await createWithHooks(
 					{
@@ -66,7 +66,7 @@ export const createInternalAdapter = (
 					"account",
 					undefined,
 					context,
-					txAdapter,
+					trxAdapter,
 				);
 				return {
 					user: createdUser,
