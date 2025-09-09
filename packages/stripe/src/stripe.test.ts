@@ -1105,22 +1105,28 @@ describe("stripe", async () => {
 
 	it("should reuse incomplete subscription when upgrading again", async () => {
 		// Create a user
-		const userRes = await authClient.signUp.email({
-			email: "incomplete@example.com",
-			password: "password",
-			name: "Incomplete Test",
-		}, {
-			throw: true,
-		});
-		
+		const userRes = await authClient.signUp.email(
+			{
+				email: "incomplete@example.com",
+				password: "password",
+				name: "Incomplete Test",
+			},
+			{
+				throw: true,
+			},
+		);
+
 		const headers = new Headers();
-		await authClient.signIn.email({
-			email: "incomplete@example.com",
-			password: "password",
-		}, {
-			throw: true,
-			onSuccess: setCookieToHeader(headers),
-		});
+		await authClient.signIn.email(
+			{
+				email: "incomplete@example.com",
+				password: "password",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
 
 		// First upgrade attempt - creates incomplete subscription
 		const firstUpgrade = await authClient.subscription.upgrade({
