@@ -9,6 +9,7 @@ import {
 	oidcClient,
 	genericOAuthClient,
 	deviceAuthorizationClient,
+	lastLoginMethodClient,
 } from "better-auth/client/plugins";
 import { toast } from "sonner";
 import { stripeClient } from "@better-auth/stripe/client";
@@ -36,6 +37,7 @@ export const client = createAuthClient({
 			subscription: true,
 		}),
 		deviceAuthorizationClient(),
+		lastLoginMethodClient(),
 	],
 	fetchOptions: {
 		onError(e) {

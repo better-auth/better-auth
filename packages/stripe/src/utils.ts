@@ -6,14 +6,19 @@ export async function getPlans(options: StripeOptions) {
 		: options.subscription?.plans;
 }
 
-export async function getPlanByPriceId(
+export async function getPlanByPriceInfo(
 	options: StripeOptions,
 	priceId: string,
+	priceLookupKey: string | null,
 ) {
 	return await getPlans(options).then((res) =>
 		res?.find(
 			(plan) =>
-				plan.priceId === priceId || plan.annualDiscountPriceId === priceId,
+				plan.priceId === priceId ||
+				plan.annualDiscountPriceId === priceId ||
+				(priceLookupKey &&
+					(plan.lookupKey === priceLookupKey ||
+						plan.annualDiscountLookupKey === priceLookupKey)),
 		),
 	);
 }

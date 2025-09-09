@@ -472,7 +472,7 @@ export const contents: Content[] = [
 				title: "Social Sign-On",
 				group: true,
 				icon: LucideAArrowDown,
-				href: "/",
+				href: "",
 			},
 			{
 				title: "Apple",
@@ -1037,7 +1037,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Others",
 				group: true,
 				icon: () => null,
-				href: "/docs/authentication/others",
+				href: "",
 			},
 			{
 				title: "Other Social Providers",
@@ -1180,7 +1180,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				group: true,
 				title: "Adapters",
-				href: "/docs/adapters/drizzle",
+				href: "",
 				icon: () => <Database className="w-4 h-4 text-current" />,
 			},
 			{
@@ -1266,7 +1266,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				group: true,
 				title: "Others",
-				href: "/docs/adapters/community-adapters",
+				href: "",
 				icon: () => <Database className="w-4 h-4 text-current" />,
 			},
 			{
@@ -1316,7 +1316,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				group: true,
 				title: "Full Stack",
-				href: "/docs/integrations",
+				href: "",
 				icon: LucideAArrowDown,
 			},
 			{
@@ -1358,7 +1358,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				group: true,
 				title: "Backend",
-				href: "/docs/integrations",
+				href: "",
 				icon: LucideAArrowDown,
 			},
 			{
@@ -1394,13 +1394,18 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				group: true,
 				title: "Mobile & Desktop",
-				href: "/docs/integrations",
+				href: "",
 				icon: LucideAArrowDown,
 			},
 			{
 				title: "Expo",
 				icon: Icons.expo,
 				href: "/docs/integrations/expo",
+			},
+			{
+				title: "Lynx",
+				icon: Icons.lynx,
+				href: "/docs/integrations/lynx",
 			},
 		],
 	},
@@ -1426,7 +1431,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Authentication",
 				group: true,
-				href: "/docs/plugins/1st-party-plugins",
+				href: "",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 
@@ -1541,7 +1546,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Authorization",
 				group: true,
-				href: "/docs/plugins/1st-party-plugins",
+				href: "",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 			{
@@ -1611,7 +1616,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Enterprise",
 				group: true,
-				href: "/docs/plugins/1st-party-plugins",
+				href: "",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 			{
@@ -1656,7 +1661,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Utility",
 				group: true,
-				href: "/docs/plugins/1st-party-plugins",
+				href: "",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 			{
@@ -1703,6 +1708,24 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Have I Been Pwned",
 				href: "/docs/plugins/have-i-been-pwned",
 				icon: () => <p className="text-xs">';--</p>,
+			},
+			{
+				title: "Last Login Method",
+				href: "/docs/plugins/last-login-method",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 256 256"
+					>
+						<path
+							fill="currentColor"
+							d="m141.66 133.66l-40 40A8 8 0 0 1 88 168v-32H24a8 8 0 0 1 0-16h64V88a8 8 0 0 1 13.66-5.66l40 40a8 8 0 0 1 0 11.32M200 32h-64a8 8 0 0 0 0 16h56v160h-56a8 8 0 0 0 0 16h64a8 8 0 0 0 8-8V40a8 8 0 0 0-8-8"
+						/>
+					</svg>
+				),
+				isNew: true,
 			},
 			{
 				title: "Multi Session",
@@ -1816,7 +1839,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "3rd party",
 				group: true,
-				href: "/docs/plugins/1st-party-plugins",
+				href: "",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 			{
