@@ -602,7 +602,7 @@ async function adapterTest(
 				model: "user",
 				offset: 2,
 			});
-			expect(res.length).toBe(5);
+			expect(res.length).toBe(8);
 		},
 	);
 

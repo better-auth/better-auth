@@ -164,12 +164,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 						skip: offset || 0,
 						...(orderBy?.length && orderBy.length > 0
 							? {
-									orderBy: Object.fromEntries(
-										orderBy.map(({ field, direction }) => [
-											getFieldName({ model, field }),
-											direction,
-										]),
-									),
+									orderBy: orderBy.map(({ field, direction }) => ({
+										[getFieldName({ model, field })]: direction,
+									})),
 								}
 							: {}),
 					})) as any[];
