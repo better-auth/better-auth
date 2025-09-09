@@ -56,6 +56,14 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	camelCase?: boolean;
+	/**
+	 * Whether to execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions,
+	 * set this to `false` and operations will be executed sequentially.
+	 * @default true
+	 */
+	transaction?: boolean;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -334,14 +342,17 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
-			transaction: (cb) =>
-				db.transaction((tx: DB) => {
-					const adapter = createAdapter({
-						config: adapterOptions!.config,
-						adapter: createCustomAdapter(tx),
-					})(lazyOptions!);
-					return cb(adapter);
-				}),
+			transaction:
+				(config.transaction ?? true)
+					? (cb) =>
+							db.transaction((tx: DB) => {
+								const adapter = createAdapter({
+									config: adapterOptions!.config,
+									adapter: createCustomAdapter(tx),
+								})(lazyOptions!);
+								return cb(adapter);
+							})
+					: false,
 		},
 		adapter: createCustomAdapter(db),
 	};

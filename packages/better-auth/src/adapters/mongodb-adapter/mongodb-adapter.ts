@@ -20,6 +20,14 @@ export interface MongoDBAdapterConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+	/**
+	 * Whether to execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions,
+	 * set this to `false` and operations will be executed sequentially.
+	 * @default true
+	 */
+	transaction?: boolean;
 }
 
 export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
@@ -47,17 +55,18 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				_id: "id",
 			},
 			supportsNumericIds: false,
-			transaction: config?.session
-				? (cb) => {
-						const adapter = lazyAdapter!(lazyOptions!);
-						if (!config.session) {
-							return cb(adapter);
+			transaction:
+				config?.session && (config?.transaction ?? true)
+					? (cb) => {
+							const adapter = lazyAdapter!(lazyOptions!);
+							if (!config.session) {
+								return cb(adapter);
+							}
+							return config.session.withTransaction(async () => {
+								return cb(adapter);
+							});
 						}
-						return config.session.withTransaction(async () => {
-							return cb(adapter);
-						});
-					}
-				: false,
+					: false,
 			customTransformInput({
 				action,
 				data,

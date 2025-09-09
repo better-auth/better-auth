@@ -26,6 +26,14 @@ interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+	/**
+	 * Whether to execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions,
+	 * set this to `false` and operations will be executed sequentially.
+	 * @default true
+	 */
+	transaction?: boolean;
 }
 
 export const kyselyAdapter = (
@@ -320,14 +328,17 @@ export const kyselyAdapter = (
 					? false
 					: true,
 			supportsJSON: false,
-			transaction: (cb) =>
-				db.transaction().execute((trx) => {
-					const adapter = createAdapter({
-						config: adapterOptions!.config,
-						adapter: createCustomAdapter(trx),
-					})(lazyOptions!);
-					return cb(adapter);
-				}),
+			transaction:
+				(config?.transaction ?? true)
+					? (cb) =>
+							db.transaction().execute((trx) => {
+								const adapter = createAdapter({
+									config: adapterOptions!.config,
+									adapter: createCustomAdapter(trx),
+								})(lazyOptions!);
+								return cb(adapter);
+							})
+					: false,
 		},
 		adapter: createCustomAdapter(db),
 	};

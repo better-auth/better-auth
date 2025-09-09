@@ -32,6 +32,15 @@ export interface PrismaConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+
+	/**
+	 * Whether to execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions,
+	 * set this to `false` and operations will be executed sequentially.
+	 * @default true
+	 */
+	transaction?: boolean;
 }
 
 interface PrismaClient {}
@@ -229,14 +238,17 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			adapterName: "Prisma Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
-			transaction: (cb) =>
-				(prisma as PrismaClientInternal).$transaction((tx) => {
-					const adapter = createAdapter({
-						config: adapterOptions!.config,
-						adapter: createCustomAdapter(tx),
-					})(lazyOptions!);
-					return cb(adapter);
-				}),
+			transaction:
+				(config.transaction ?? true)
+					? (cb) =>
+							(prisma as PrismaClientInternal).$transaction((tx) => {
+								const adapter = createAdapter({
+									config: adapterOptions!.config,
+									adapter: createCustomAdapter(tx),
+								})(lazyOptions!);
+								return cb(adapter);
+							})
+					: false,
 		},
 		adapter: createCustomAdapter(prisma),
 	};
