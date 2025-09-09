@@ -253,10 +253,12 @@ describe("mssql", async () => {
 });
 
 describe("postgres", async () => {
+	const pool = new Pool({
+		connectionString: "postgres://user:password@localhost:5432/better_auth",
+	});
+
 	const dialect = new PostgresDialect({
-		pool: new Pool({
-			connectionString: "postgres://user:password@localhost:5432/better_auth",
-		}),
+		pool,
 	});
 
 	const opts = {
@@ -274,6 +276,7 @@ describe("postgres", async () => {
 			console.log(
 				`Normal Kysely adapter test finished. Now allowing number ID Kysely tests to run.`,
 			);
+			await pool.end();
 			setState("IDLE");
 		};
 	});
