@@ -29,6 +29,7 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
 - **Resource Endpoints**: Read and manage tokens.
   - **Introspection**: [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection.
   - **Revocation**: [RFC7009](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Revocation.
+- **Sessions**: Successful login attempts create a `Session` which through other plugins can trigger hooks, such as welcome emails.
 
 **Grants Supported**
 
@@ -1337,13 +1338,12 @@ Add a prefix to either or both opaque access tokens or refresh tokens. This is u
 
 To improve lookup performance, map the field `client_id` on the table `oauthApplication` to `id` through your database adapter.
 
-## Migration
+## Migrations
 
-If you are migrating from the [OIDC Provider](/docs/plugins/oidc-provider) to this oAuth2.1 provider, the following shall help with a full migration.
+### From [OIDC Provider](/docs/plugins/oidc-provider)
 
-### Configuration
+#### Configuration
 
-- **`accessTokenExpiresIn`** now defaults to `10 min` (previously `1 hour`)
 - **`idTokenExpiresIn`** now defaults to `10 hours` (previously `1 hour` through `accessTokenExpiresIn`)
 - **`refreshTokenExpiresIn`** now defaults to `30 days` (previously `7 days`)
 - **`advertisedMetadata`** (previously `metadata`) no longer supports changing metadata fields to prevent accidental misconfiguration.
@@ -1357,9 +1357,9 @@ If you are migrating from the [OIDC Provider](/docs/plugins/oidc-provider) to th
 - JWT plugin now is enabled by default. To disable the plugin, set `disableJWTPlugin: true`.
 - Authorization query `code_challenge_method` "S256" must be in caps as described by oAuth 2.1
 
-### Database
+#### Database
 
-#### Table: `oauthApplication`
+##### Table: `oauthApplication`
 
 - If `storeClientSecret` was unset or `plain`, you must hash all the stored `clientSecret` values into its "SHA-256" representation then convert it into base64Url format or use another storage method specified by `storeClientSecret`.
 - `type` field is no longer a required field. Instead, the schema requires `public` of type `boolean`. Migrate with the following rules:
@@ -1370,7 +1370,7 @@ If you are migrating from the [OIDC Provider](/docs/plugins/oidc-provider) to th
 - `redirectURLs` renamed to `redirectUris`
 - `metadata` is now stored in database as individual fields instead of a JSON object. Parse the metadata into their respective fields. The OIDC plugin did not utilize this field but this oAuth plugin may utilize them in the future.
 
-#### Table: `oauthAccessToken`
+##### Table: `oauthAccessToken`
 
 Option 1 (simple):
 
@@ -1403,10 +1403,12 @@ Option 2 (more complex):
 }
 ```
 
-## New Features
+### From [MCP Provider](/docs/plugins/oidc-provider) to this oAuth2.1 provider
 
-- Secure by default - no need to understand the definitions of configuration options.
-- Customization of schema and fields through configuration options.
-- Ability to register public clients through `allowUnauthenticatedClientRegistration`
-- **getAdditionalUserInfoClaim** applies on the `userinfo` endpoint and the `id_token`
-- Successful login attempts create a `Session` which through other plugins can trigger hooks, such as welcome emails.
+The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
+
+- `/oauth2/authorize` (previously `/mcp/authorize`)
+- `/oauth2/token` (previously `/mcp/token`)
+- `/oauth2/register` (previously `/mcp/register`)
+- `/mcp/get-session` removed as not oAuth2 compliant, use `/oauth2/introspect` instead
+- `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with `checkMcp` and `handleMcpErrors`)
