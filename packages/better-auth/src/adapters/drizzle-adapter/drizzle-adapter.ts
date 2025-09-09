@@ -287,17 +287,23 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
 
-					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 					const builder = db
 						.select()
 						.from(schemaModel)
 						.limit(limit || 100)
 						.offset(offset || 0);
-					if (sortBy?.field) {
+					const orderBy = sortBy
+						? Array.isArray(sortBy)
+							? sortBy
+							: [sortBy]
+						: undefined;
+					if (orderBy?.length && orderBy.length > 0) {
 						builder.orderBy(
-							sortFn(
-								schemaModel[getFieldName({ model, field: sortBy?.field })],
-							),
+							...orderBy.map(({ field, direction }) => {
+								const sortFn = direction === "desc" ? desc : asc;
+
+								return sortFn(schemaModel[getFieldName({ model, field })]);
+							}),
 						);
 					}
 					return (await builder.where(...clause)) as any[];

@@ -1,7 +1,7 @@
 import { safeJSONParse } from "../../utils/json";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type { Adapter, BetterAuthOptions, SortBy, Where } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
 	AdapterConfig,
@@ -782,7 +782,7 @@ export const createAdapter =
 				model: string;
 				where?: Where[];
 				limit?: number;
-				sortBy?: { field: string; direction: "asc" | "desc" };
+				sortBy?: SortBy | SortBy[];
 				offset?: number;
 			}) => {
 				transactionId++;

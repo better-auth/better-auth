@@ -22,6 +22,11 @@ export type Where = {
 	connector?: "AND" | "OR"; //AND by default
 };
 
+export type SortBy = {
+	field: string;
+	direction: "asc" | "desc";
+}
+
 /**
  * Adapter Interface
  */
@@ -47,10 +52,7 @@ export type Adapter = {
 		model: string;
 		where?: Where[];
 		limit?: number;
-		sortBy?: {
-			field: string;
-			direction: "asc" | "desc";
-		};
+		sortBy?: SortBy | SortBy[];
 		offset?: number;
 	}) => Promise<T[]>;
 	count: (data: { model: string; where?: Where[] }) => Promise<number>;

@@ -230,11 +230,15 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					} else {
 						query = query.limit(limit || 100);
 					}
-					if (sortBy) {
-						query = query.orderBy(
-							getFieldName({ model, field: sortBy.field }),
-							sortBy.direction,
-						);
+					const orderBy = sortBy
+						? Array.isArray(sortBy)
+							? sortBy
+							: [sortBy]
+						: undefined;
+					if (orderBy?.length && orderBy.length > 0) {
+						for (const { field, direction } of orderBy) {
+							query = query.orderBy(getFieldName({ model, field }), direction);
+						}
 					}
 					if (offset) {
 						if (config?.type === "mssql") {
