@@ -9,11 +9,14 @@ describe("adapter test", async () => {
 		const client = new MongoClient(connectionString);
 		await client.connect();
 		const db = client.db(dbName);
-		return db;
+		return { db, client };
 	};
 
 	const user = "user";
-	const db = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
+	const { db, client } = await dbClient(
+		"mongodb://127.0.0.1:27017",
+		"better-auth",
+	);
 	async function clearDb() {
 		await db.collection(user).deleteMany({});
 		await db.collection("session").deleteMany({});
@@ -23,7 +26,7 @@ describe("adapter test", async () => {
 		await clearDb();
 	});
 
-	const adapter = mongodbAdapter(db);
+	const adapter = mongodbAdapter(db, { client });
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return adapter({
