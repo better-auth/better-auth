@@ -96,8 +96,7 @@
     "@types/react-dom": "^19.1.9",
     "@types/three": "^0.180.0",
     "@types/ua-parser-js": "^0.7.39",
-    "eslint-config-next": "15.5.2",
     "postcss": "^8.5.6",
-    "tailwindcss": "4.1.13"
+    "tailwindcss": "3.4.17"
   }
 }
