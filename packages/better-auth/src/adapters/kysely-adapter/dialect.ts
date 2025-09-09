@@ -139,6 +139,6 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	return {
 		kysely: dialect ? new Kysely<any>({ dialect }) : null,
 		databaseType,
-		rawDb: db,
+		rawDb: db as any,
 	};
 };
