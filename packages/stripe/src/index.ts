@@ -354,15 +354,20 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							],
 						});
 
-				const existingSubscription = subscriptions.find(
+				const activeOrTrialingSubscription = subscriptions.find(
 					(sub) => sub.status === "active" || sub.status === "trialing",
 				);
 
+				// Also find any incomplete subscription that we can reuse
+				const incompleteSubscription = subscriptions.find(
+					(sub) => sub.status === "incomplete",
+				);
+
 				if (
-					existingSubscription &&
-					existingSubscription.status === "active" &&
-					existingSubscription.plan === ctx.body.plan &&
-					existingSubscription.seats === (ctx.body.seats || 1)
+					activeOrTrialingSubscription &&
+					activeOrTrialingSubscription.status === "active" &&
+					activeOrTrialingSubscription.plan === ctx.body.plan &&
+					activeOrTrialingSubscription.seats === (ctx.body.seats || 1)
 				) {
 					throw new APIError("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
@@ -408,9 +413,32 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					});
 				}
 
-				const subscription =
-					existingSubscription ||
-					(await ctx.context.adapter.create<InputSubscription, Subscription>({
+				// Use existing subscription (active, trialing, or incomplete) or create new one
+				let subscription: Subscription | undefined = activeOrTrialingSubscription || incompleteSubscription;
+				
+				// If we have an incomplete subscription, update it with the new plan/seats
+				if (incompleteSubscription && !activeOrTrialingSubscription) {
+					const updated = await ctx.context.adapter.update<InputSubscription>({
+						model: "subscription",
+						update: {
+							plan: plan.name.toLowerCase(),
+							seats: ctx.body.seats || 1,
+							updatedAt: new Date(),
+						},
+						where: [
+							{
+								field: "id",
+								value: incompleteSubscription.id,
+							},
+						],
+					});
+					// If update was successful, use the updated subscription, otherwise keep the original
+					subscription = (updated as Subscription) || incompleteSubscription;
+				}
+				
+				// If no existing subscription, create a new one
+				if (!subscription) {
+					subscription = await ctx.context.adapter.create<InputSubscription, Subscription>({
 						model: "subscription",
 						data: {
 							plan: plan.name.toLowerCase(),
@@ -419,7 +447,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							referenceId,
 							seats: ctx.body.seats || 1,
 						},
-					}));
+					});
+				}
 
 				if (!subscription) {
 					ctx.context.logger.error("Subscription ID not found");
