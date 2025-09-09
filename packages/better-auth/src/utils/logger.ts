@@ -70,7 +70,7 @@ const levelColors: Record<LogLevel, string> = {
 const formatMessage = (
 	level: LogLevel,
 	message: string,
-	colorsEnabled?: boolean,
+	colorsEnabled: boolean,
 ): string => {
 	const timestamp = new Date().toISOString();
 
@@ -96,10 +96,9 @@ export const createLogger = (options?: Logger): InternalLogger => {
 	const logLevel = options?.level ?? "error";
 
 	const isDisableColorsSpecified = options?.disableColors !== undefined;
-	const terminalSupportsColor = getColorDepth() !== 1;
 	const colorsEnabled = isDisableColorsSpecified
 		? !options.disableColors
-		: terminalSupportsColor;
+		: getColorDepth() !== 1;
 
 	const LogFunc = (
 		level: LogLevel,
