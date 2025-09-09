@@ -3,21 +3,37 @@ import type { Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 
-async function overridePgDateParser(type?: string) {
-	if (type !== "postgres") return () => {};
+async function overrideDateParser(type?: string, rawDb?: any) {
+	if (type === "postgres") {
+		const { types: pgTypes } = await import("pg");
 
-	const { types: pgTypes } = await import("pg");
+		const orginalParser = pgTypes.getTypeParser(pgTypes.builtins.TIMESTAMP);
+		pgTypes.setTypeParser(
+			pgTypes.builtins.TIMESTAMP,
+			// Override the builtin timestamp parser to use UTC
+			(val) => new Date(val + "+0000"),
+		);
 
-	const orginalParser = pgTypes.getTypeParser(pgTypes.builtins.TIMESTAMP);
-	pgTypes.setTypeParser(
-		pgTypes.builtins.TIMESTAMP,
-		// Override the builtin timestamp parser to use UTC
-		(val) => new Date(val + "+0000"),
-	);
+		return () => {
+			pgTypes.setTypeParser(pgTypes.builtins.TIMESTAMP, orginalParser);
+		};
+	}
 
-	return () => {
-		pgTypes.setTypeParser(pgTypes.builtins.TIMESTAMP, orginalParser);
-	};
+	if (type === "mysql") {
+		const orginalTimezone = rawDb?.pool?.config?.connectionConfig?.timezone;
+
+		if (orginalTimezone) {
+			rawDb.pool.config.connectionConfig.timezone = "Z";
+		}
+
+		return () => {
+			if (orginalTimezone) {
+				rawDb.pool.config.connectionConfig.timezone = orginalTimezone;
+			}
+		};
+	}
+
+	return () => {};
 }
 
 interface KyselyAdapterConfig {
@@ -39,7 +55,11 @@ interface KyselyAdapterConfig {
 	usePlural?: boolean;
 }
 
-export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
+export const kyselyAdapter = (
+	db: Kysely<any>,
+	config?: KyselyAdapterConfig,
+	rawDb?: any,
+) =>
 	createAdapter({
 		config: {
 			adapterId: "kysely",
@@ -215,7 +235,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 
 			return {
 				async create({ data, model }) {
-					const reset = await overridePgDateParser(config?.type);
+					const reset = await overrideDateParser(config?.type, rawDb);
 					const builder = db.insertInto(model).values(data);
 
 					const res = (await withReturning(data, builder, model, [])) as any;
@@ -223,7 +243,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					return res;
 				},
 				async findOne({ model, where, select }) {
-					const reset = await overridePgDateParser(config?.type);
+					const reset = await overrideDateParser(config?.type, rawDb);
 					const { and, or } = convertWhereClause(model, where);
 					let query = db.selectFrom(model).selectAll();
 					if (and) {
@@ -238,7 +258,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					return res as any;
 				},
 				async findMany({ model, where, limit, offset, sortBy }) {
-					const reset = await overridePgDateParser(config?.type);
+					const reset = await overrideDateParser(config?.type, rawDb);
 					const { and, or } = convertWhereClause(model, where);
 					let query = db.selectFrom(model);
 					if (and) {
@@ -277,7 +297,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					return res as any;
 				},
 				async update({ model, where, update: values }) {
-					const reset = await overridePgDateParser(config?.type);
+					const reset = await overrideDateParser(config?.type, rawDb);
 					const { and, or } = convertWhereClause(model, where);
 
 					let query = db.updateTable(model).set(values as any);
@@ -291,7 +311,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					return await withReturning(values as any, query, model, where);
 				},
 				async updateMany({ model, where, update: values }) {
-					const reset = await overridePgDateParser(config?.type);
+					const reset = await overrideDateParser(config?.type, rawDb);
 					const { and, or } = convertWhereClause(model, where);
 					let query = db.updateTable(model).set(values as any);
 					if (and) {
@@ -305,7 +325,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					return res.length;
 				},
 				async count({ model, where }) {
-					const reset = await overridePgDateParser(config?.type);
+					const reset = await overrideDateParser(config?.type, rawDb);
 					const { and, or } = convertWhereClause(model, where);
 					let query = db
 						.selectFrom(model)
@@ -322,7 +342,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					return res[0].count as number;
 				},
 				async delete({ model, where }) {
-					const reset = await overridePgDateParser(config?.type);
+					const reset = await overrideDateParser(config?.type, rawDb);
 					const { and, or } = convertWhereClause(model, where);
 					let query = db.deleteFrom(model);
 					if (and) {
@@ -336,7 +356,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					reset();
 				},
 				async deleteMany({ model, where }) {
-					const reset = await overridePgDateParser(config?.type);
+					const reset = await overrideDateParser(config?.type, rawDb);
 					const { and, or } = convertWhereClause(model, where);
 					let query = db.deleteFrom(model);
 					if (and) {

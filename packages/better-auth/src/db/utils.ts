@@ -24,15 +24,19 @@ export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 		return options.database(options);
 	}
 
-	const { kysely, databaseType } = await createKyselyAdapter(options);
+	const { kysely, databaseType, rawDb } = await createKyselyAdapter(options);
 	if (!kysely) {
 		throw new BetterAuthError("Failed to initialize database adapter");
 	}
-	return kyselyAdapter(kysely, {
-		type: databaseType || "sqlite",
-		debugLogs:
-			"debugLogs" in options.database ? options.database.debugLogs : false,
-	})(options);
+	return kyselyAdapter(
+		kysely,
+		{
+			type: databaseType || "sqlite",
+			debugLogs:
+				"debugLogs" in options.database ? options.database.debugLogs : false,
+		},
+		rawDb,
+	)(options);
 }
 
 export function convertToDB<T extends Record<string, any>>(
