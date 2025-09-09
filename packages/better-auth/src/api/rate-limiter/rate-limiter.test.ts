@@ -155,6 +155,7 @@ describe("should work with custom rules", async () => {
 					window: 10,
 					max: 3,
 				},
+				"/get-session": false,
 			},
 		},
 	});
@@ -195,5 +196,15 @@ describe("should work with custom rules", async () => {
 				expect(response.error).toBeNull();
 			}
 		}
+	});
+
+	it("should not rate limit if custom rule is false", async () => {
+		let i = 0;
+		let response = null;
+		for (; i < 110; i++) {
+			response = await client.getSession().then((res) => res.error);
+		}
+		expect(response).toBeNull();
+		expect(i).toBe(110);
 	});
 });

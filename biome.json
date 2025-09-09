@@ -26,7 +26,8 @@
         "noUnusedImports": "warn"
       },
       "nursery": {
-        "noMisusedPromises": "error"
+        "noMisusedPromises": "error",
+        "noFloatingPromises": "error"
       }
     }
   },
@@ -63,7 +64,8 @@
       "!**/.expo",
       "!**/.cache",
       "!**/dev/cloudflare/drizzle",
-      "!**/playwright-report"
+      "!**/playwright-report",
+      "!**/.output"
     ]
   }
 }

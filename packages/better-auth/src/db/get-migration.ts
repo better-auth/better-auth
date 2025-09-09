@@ -289,7 +289,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 							: "text",
 					(col) => {
 						if (config.advanced?.database?.useNumberId) {
-							if (dbType === "postgres") {
+							if (dbType === "postgres" || dbType === "sqlite") {
 								return col.primaryKey().notNull();
 							}
 							return col.autoIncrement().primaryKey().notNull();
