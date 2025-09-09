@@ -1,0 +1,21 @@
+{
+  "name": "better-auth-solid-vinxi-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vinxi dev",
+    "build": "vinxi build",
+    "start": "vinxi start"
+  },
+  "dependencies": {
+    "@solidjs/router": "^0.15.3",
+    "@solidjs/start": "^1.1.7",
+    "better-auth": "workspace:*",
+    "better-sqlite3": "^12.2.0",
+    "solid-js": "^1.9.7",
+    "vinxi": "^0.5.8"
+  },
+  "devDependencies": {
+    "@better-auth/test-utils": "workspace:*"
+  }
+}
