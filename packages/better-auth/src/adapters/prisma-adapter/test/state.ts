@@ -1,14 +1,3 @@
-import * as fs from "fs";
-import path from "path";
+import { makeTestState } from "../../../test-utils/state";
 
-export type State = "IDLE" | "RUNNING";
-
-export const stateFilePath = path.join(__dirname, "./state.txt");
-
-export function getState(): State {
-	return fs.readFileSync(stateFilePath, "utf-8").split("\n")[0].trim() as State;
-}
-
-export function setState(state: State) {
-	fs.writeFileSync(stateFilePath, state, "utf-8");
-}
+export const { stateFilePath, getState, setState } = makeTestState(__dirname);
