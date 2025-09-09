@@ -24,6 +24,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
+	const crossOriginEnabled = !!options.advanced?.crossOriginCookies?.enabled;
 
 	// Cross-origin cookie configuration
 	const crossOriginConfig = {
@@ -33,10 +34,12 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		...options.advanced?.crossOriginCookies,
 	};
 
-	const domain = crossSubdomainEnabled
-		? options.advanced?.crossSubDomainCookies?.domain ||
-			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
-		: undefined;
+	const domain = crossOriginEnabled
+		? undefined
+		: crossSubdomainEnabled
+			? options.advanced?.crossSubDomainCookies?.domain ||
+				(options.baseURL ? new URL(options.baseURL).hostname : undefined)
+			: undefined;
 	if (crossSubdomainEnabled && !domain) {
 		throw new BetterAuthError(
 			"baseURL is required when crossSubdomainCookies are enabled",
