@@ -413,11 +413,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					});
 				}
 
-				// Use existing subscription (active, trialing, or incomplete) or create new one
 				let subscription: Subscription | undefined =
 					activeOrTrialingSubscription || incompleteSubscription;
 
-				// If we have an incomplete subscription, update it with the new plan/seats
 				if (incompleteSubscription && !activeOrTrialingSubscription) {
 					const updated = await ctx.context.adapter.update<InputSubscription>({
 						model: "subscription",
@@ -433,11 +431,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							},
 						],
 					});
-					// If update was successful, use the updated subscription, otherwise keep the original
 					subscription = (updated as Subscription) || incompleteSubscription;
 				}
 
-				// If no existing subscription, create a new one
 				if (!subscription) {
 					subscription = await ctx.context.adapter.create<
 						InputSubscription,
