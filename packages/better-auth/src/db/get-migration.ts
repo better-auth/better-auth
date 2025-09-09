@@ -206,8 +206,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 			},
 			date: {
 				sqlite: "date",
-				postgres: "timestamp",
-				mysql: "datetime",
+				postgres: "timestamptz",
+				mysql: "timestamp",
 				mssql: "datetime",
 			},
 			json: {
