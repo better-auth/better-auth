@@ -19,15 +19,18 @@ export async function createAuthServer(
 		emailAndPassword: {
 			enabled: true,
 		},
-		advanced: {
-			crossOriginCookies: {
-				enabled: true,
-			},
-			defaultCookieAttributes: {
-				sameSite: "none",
-				partitioned: true,
-			},
-		},
+		advanced:
+			https === true
+				? {
+						crossOriginCookies: {
+							enabled: true,
+						},
+						defaultCookieAttributes: {
+							sameSite: "none",
+							partitioned: true,
+						},
+					}
+				: {},
 		trustedOrigins: ["https://test.com:3000"],
 	});
 
