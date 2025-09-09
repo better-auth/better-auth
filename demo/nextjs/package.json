@@ -96,8 +96,6 @@
     "@types/react-dom": "^19.1.9",
     "@types/three": "^0.180.0",
     "@types/ua-parser-js": "^0.7.39",
-    "dotenv": "^17.2.2",
-    "dotenv-cli": "^10.0.0",
     "eslint-config-next": "15.5.2",
     "postcss": "^8.5.6",
     "tailwindcss": "4.1.13"
