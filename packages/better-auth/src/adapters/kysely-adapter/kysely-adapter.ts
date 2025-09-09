@@ -8,13 +8,15 @@ import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 
-import { types as pgTypes } from "pg";
+async function setPgUtcDateParser() {
+	const { types: pgTypes } = await import("pg");
 
-// Override the builtin timestamp parser to use UTC
-pgTypes.setTypeParser(
-	pgTypes.builtins.TIMESTAMP,
-	(val) => new Date(val + "+0000"),
-);
+	// Override the builtin timestamp parser to use UTC
+	pgTypes.setTypeParser(
+		pgTypes.builtins.TIMESTAMP,
+		(val) => new Date(val + "+0000"),
+	);
+}
 
 interface KyselyAdapterConfig {
 	/**
