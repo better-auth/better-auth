@@ -194,10 +194,15 @@ export const createOrganization = <O extends OrganizationOptions>(
 					};
 				}
 			}
+			let {
+				keepCurrentActiveOrganization: ___,
+				userId: ____,
+				...orgData2
+			} = ctx.body;
 
 			const organization = await adapter.createOrganization({
 				organization: {
-					...orgData,
+					...orgData2,
 					createdAt: new Date(),
 				},
 			});
