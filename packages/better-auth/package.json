@@ -739,6 +739,7 @@
     "@types/react": "^18.3.23",
     "better-sqlite3": "^12.2.0",
     "concurrently": "^9.2.1",
+    "deepmerge": "^4.3.1",
     "drizzle-orm": "^0.38.2",
     "happy-dom": "^18.0.1",
     "hono": "^4.9.0",
