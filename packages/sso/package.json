@@ -62,6 +62,7 @@
     "@types/express": "^5.0.3",
     "better-auth": "workspace:^",
     "better-call": "catalog:",
+    "body-parser": "^2.2.0",
     "express": "^5.1.0",
     "unbuild": "catalog:"
   },

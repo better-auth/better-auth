@@ -912,6 +912,9 @@ importers:
       better-call:
         specifier: 'catalog:'
         version: 1.0.18
+      body-parser:
+        specifier: ^2.2.0
+        version: 2.2.0
       express:
         specifier: ^5.1.0
         version: 5.1.0
