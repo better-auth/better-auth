@@ -24,7 +24,7 @@ import type {
 	StripePlan,
 	Subscription,
 } from "./types";
-import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
+import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
 import { getSchema } from "./schema";
 
 const STRIPE_ERROR_CODES = {
@@ -994,9 +994,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							.then((res) => res.data[0]);
 
 						if (stripeSubscription) {
-							const plan = await getPlanByPriceId(
+							const plan = await getPlanByPriceInfo(
 								options,
-								stripeSubscription.items.data[0]?.plan.id,
+								stripeSubscription.items.data[0]?.price.id,
+								stripeSubscription.items.data[0]?.price.lookup_key,
 							);
 
 							if (plan && subscription) {
