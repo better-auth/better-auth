@@ -361,5 +361,30 @@ describe("postgres", async () => {
 				},
 			});
 		});
+
+		it("stores and retrieves timestamps correctly across timezones", async () => {
+			const sampleUser = {
+				name: "sample",
+				email: "sampler@test.com",
+				password: "samplerrrrr",
+			};
+
+			process.env.TZ = "Europe/London";
+			const userSignUp = await auth.api.signUpEmail({
+				body: {
+					name: sampleUser.name,
+					email: sampleUser.email,
+					password: sampleUser.password,
+				},
+			});
+			process.env.TZ = "America/Los_Angeles";
+			const userSignIn = await auth.api.signInEmail({
+				body: { email: sampleUser.email, password: sampleUser.password },
+			});
+
+			expect(userSignUp.user.createdAt).toStrictEqual(
+				userSignIn.user.createdAt,
+			);
+		});
 	});
 });
