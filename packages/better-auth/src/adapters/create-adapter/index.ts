@@ -9,11 +9,9 @@ import type {
 } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
-	AdapterConfig,
 	CreateAdapterOptions,
 	AdapterTestDebugLogs,
 	CleanedWhere,
-	CreateCustomAdapter,
 } from "./types";
 import type { FieldAttribute } from "../../db";
 export * from "./types";

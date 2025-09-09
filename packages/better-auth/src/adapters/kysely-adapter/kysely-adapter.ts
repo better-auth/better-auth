@@ -1,7 +1,6 @@
 import {
 	createAdapter,
 	type AdapterDebugLogs,
-	type AdapterConfig,
 	type CreateCustomAdapter,
 	type CreateAdapterOptions,
 } from "../create-adapter";
