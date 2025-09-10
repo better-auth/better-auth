@@ -12,11 +12,12 @@ import type {
 	OrganizationInput,
 	Team,
 	TeamInput,
+	TeamMember,
 } from "./schema";
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../init";
 import parseJSON from "../../client/parser";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
+import { type InferAdditionalFieldsFromPluginOptions } from "../../db";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
@@ -71,7 +72,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				where: [
 					{
 						field: "email",
-						value: data.email,
+						value: data.email.toLowerCase(),
 					},
 				],
 			});
@@ -105,19 +106,82 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			};
 		},
 		listMembers: async (data: {
-			organizationId: string;
+			organizationId?: string;
+			limit?: number;
+			offset?: number;
+			sortBy?: string;
+			sortOrder?: "asc" | "desc";
+			filter?: {
+				field: string;
+				operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
+				value: any;
+			};
 		}) => {
-			const members = await adapter.findMany<Member>({
-				model: "member",
+			const members = await Promise.all([
+				adapter.findMany<Member>({
+					model: "member",
+					where: [
+						{ field: "organizationId", value: data.organizationId },
+						...(data.filter?.field
+							? [
+									{
+										field: data.filter?.field,
+										value: data.filter?.value,
+									},
+								]
+							: []),
+					],
+					limit: data.limit || options?.membershipLimit || 100,
+					offset: data.offset || 0,
+					sortBy: data.sortBy
+						? { field: data.sortBy, direction: data.sortOrder || "asc" }
+						: undefined,
+				}),
+				adapter.count({
+					model: "member",
+					where: [
+						{ field: "organizationId", value: data.organizationId },
+						...(data.filter?.field
+							? [
+									{
+										field: data.filter?.field,
+										value: data.filter?.value,
+									},
+								]
+							: []),
+					],
+				}),
+			]);
+			const users = await adapter.findMany<User>({
+				model: "user",
 				where: [
 					{
-						field: "organizationId",
-						value: data.organizationId,
+						field: "id",
+						value: members[0].map((member) => member.userId),
+						operator: "in",
 					},
 				],
-				limit: options?.membershipLimit || 100,
 			});
-			return members;
+			return {
+				members: members[0].map((member) => {
+					const user = users.find((user) => user.id === member.userId);
+					if (!user) {
+						throw new BetterAuthError(
+							"Unexpected error: User not found for member",
+						);
+					}
+					return {
+						...member,
+						user: {
+							id: user.id,
+							name: user.name,
+							email: user.email,
+							image: user.image,
+						},
+					};
+				}),
+				total: members[1],
+			};
 		},
 		findMemberByOrgId: async (data: {
 			userId: string;
@@ -241,7 +305,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateOrganization: async (
 			organizationId: string,
-			data: Partial<InferOrganization<O>>,
+			data: Partial<OrganizationInput>,
 		) => {
 			const organization = await adapter.update<InferOrganization<O>>({
 				model: "organization",
@@ -323,6 +387,28 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return organization;
 		},
+		checkMembership: async ({
+			userId,
+			organizationId,
+		}: {
+			userId: string;
+			organizationId: string;
+		}) => {
+			const member = await adapter.findOne<InferMember<O>>({
+				model: "member",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+					{
+						field: "organizationId",
+						value: organizationId,
+					},
+				],
+			});
+			return member;
+		},
 		/**
 		 * @requires db
 		 */
@@ -330,10 +416,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId,
 			isSlug,
 			includeTeams,
+			membersLimit,
 		}: {
 			organizationId: string;
 			isSlug?: boolean;
 			includeTeams?: boolean;
+			membersLimit?: number;
 		}) => {
 			const org = await adapter.findOne<InferOrganization<O>>({
 				model: "organization",
@@ -350,7 +438,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				adapter.findMany<InferMember<O>>({
 					model: "member",
 					where: [{ field: "organizationId", value: org.id }],
-					limit: options?.membershipLimit || 100,
+					limit: membersLimit ?? options?.membershipLimit ?? 100,
 				}),
 				includeTeams
 					? adapter.findMany<InferTeam<O>>({
@@ -444,7 +532,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			includeTeamMembers?: IncludeMembers;
 		}): Promise<
 			| (InferTeam<O> &
-					(IncludeMembers extends true ? { members: InferMember<O>[] } : {}))
+					(IncludeMembers extends true ? { members: TeamMember[] } : {}))
 			| null
 		> => {
 			const team = await adapter.findOne<InferTeam<O>>({
@@ -467,10 +555,11 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			if (!team) {
 				return null;
 			}
-			let members: InferMember<O>[] = [];
+
+			let members: TeamMember[] = [];
 			if (includeTeamMembers) {
-				members = await adapter.findMany<InferMember<O>>({
-					model: "member",
+				members = await adapter.findMany<TeamMember>({
+					model: "teamMember",
 					where: [
 						{
 							field: "teamId",
@@ -484,8 +573,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					members,
 				};
 			}
+
 			return team as InferTeam<O> &
-				(IncludeMembers extends true ? { members: InferMember<O>[] } : {});
+				(IncludeMembers extends true ? { members: TeamMember[] } : {});
 		},
 		updateTeam: async (
 			teamId: string,
@@ -510,6 +600,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 
 		deleteTeam: async (teamId: string) => {
+			await adapter.deleteMany({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: teamId,
+					},
+				],
+			});
 			const team = await adapter.delete<Team>({
 				model: "team",
 				where: [
@@ -570,6 +669,133 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return invitation;
 		},
+
+		setActiveTeam: async (sessionToken: string, teamId: string | null) => {
+			const session = await context.internalAdapter.updateSession(
+				sessionToken,
+				{
+					activeTeamId: teamId,
+				},
+			);
+			return session as Session;
+		},
+
+		listTeamMembers: async (data: { teamId: string }) => {
+			const members = await adapter.findMany<TeamMember>({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: data.teamId,
+					},
+				],
+			});
+
+			return members;
+		},
+		countTeamMembers: async (data: { teamId: string }) => {
+			const count = await adapter.count({
+				model: "teamMember",
+				where: [{ field: "teamId", value: data.teamId }],
+			});
+			return count;
+		},
+		countMembers: async (data: { organizationId: string }) => {
+			const count = await adapter.count({
+				model: "member",
+				where: [{ field: "organizationId", value: data.organizationId }],
+			});
+			return count;
+		},
+		listTeamsByUser: async (data: { userId: string }) => {
+			const members = await adapter.findMany<TeamMember>({
+				model: "teamMember",
+				where: [
+					{
+						field: "userId",
+						value: data.userId,
+					},
+				],
+			});
+
+			const teams = await adapter.findMany<Team>({
+				model: "team",
+				where: [
+					{
+						field: "id",
+						operator: "in",
+						value: members.map((m) => m.teamId),
+					},
+				],
+			});
+
+			return teams;
+		},
+
+		findTeamMember: async (data: { teamId: string; userId: string }) => {
+			const member = await adapter.findOne<TeamMember>({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: data.teamId,
+					},
+					{
+						field: "userId",
+						value: data.userId,
+					},
+				],
+			});
+
+			return member;
+		},
+
+		findOrCreateTeamMember: async (data: {
+			teamId: string;
+			userId: string;
+		}) => {
+			const member = await adapter.findOne<TeamMember>({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: data.teamId,
+					},
+					{
+						field: "userId",
+						value: data.userId,
+					},
+				],
+			});
+
+			if (member) return member;
+
+			return await adapter.create<Omit<TeamMember, "id">, TeamMember>({
+				model: "teamMember",
+				data: {
+					teamId: data.teamId,
+					userId: data.userId,
+					createdAt: new Date(),
+				},
+			});
+		},
+
+		removeTeamMember: async (data: { teamId: string; userId: string }) => {
+			await adapter.delete({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: data.teamId,
+					},
+					{
+						field: "userId",
+						value: data.userId,
+					},
+				],
+			});
+		},
+
 		findInvitationsByTeamId: async (teamId: string) => {
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
@@ -585,7 +811,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		listUserInvitations: async (email: string) => {
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
-				where: [{ field: "email", value: email }],
+				where: [{ field: "email", value: email.toLowerCase() }],
 			});
 			return invitations;
 		},
@@ -597,7 +823,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				email: string;
 				role: string;
 				organizationId: string;
-				teamId?: string;
+				teamIds: string[];
 			} & Record<string, any>; // This represents the additionalFields for the invitation
 			user: User;
 		}) => {
@@ -616,6 +842,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					expiresAt,
 					inviterId: user.id,
 					...invitation,
+					teamId:
+						invitation.teamIds.length > 0 ? invitation.teamIds.join(",") : null,
 				},
 			});
 
@@ -642,7 +870,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				where: [
 					{
 						field: "email",
-						value: data.email,
+						value: data.email.toLowerCase(),
 					},
 					{
 						field: "organizationId",
@@ -658,9 +886,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				(invite) => new Date(invite.expiresAt) > new Date(),
 			);
 		},
-		findPendingInvitations: async (data: {
-			organizationId: string;
-		}) => {
+		findPendingInvitations: async (data: { organizationId: string }) => {
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
 				where: [
@@ -678,9 +904,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				(invite) => new Date(invite.expiresAt) > new Date(),
 			);
 		},
-		listInvitations: async (data: {
-			organizationId: string;
-		}) => {
+		listInvitations: async (data: { organizationId: string }) => {
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
 				where: [

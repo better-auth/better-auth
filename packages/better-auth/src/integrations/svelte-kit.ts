@@ -5,7 +5,7 @@ import { parseSetCookieHeader } from "../cookies";
 import type { RequestEvent } from "@sveltejs/kit";
 
 export const toSvelteKitHandler = (auth: {
-	handler: (request: Request) => any;
+	handler: (request: Request) => Response | Promise<Response>;
 	options: BetterAuthOptions;
 }) => {
 	return (event: { request: Request }) => auth.handler(event.request);
@@ -18,17 +18,16 @@ export const svelteKitHandler = async ({
 	building,
 }: {
 	auth: {
-		handler: (request: Request) => any;
+		handler: (request: Request) => Response | Promise<Response>;
 		options: BetterAuthOptions;
 	};
-	event: { request: Request; url: URL };
-	resolve: (event: any) => any;
+	event: RequestEvent;
+	resolve: (event: RequestEvent) => Response | Promise<Response>;
 	building: boolean;
 }) => {
 	if (building) {
 		return resolve(event);
 	}
-
 	const { request, url } = event;
 	if (isAuthPath(url.toString(), auth.options)) {
 		return auth.handler(request);
@@ -54,9 +53,7 @@ export function isAuthPath(url: string, options: BetterAuthOptions) {
 }
 
 export const sveltekitCookies = (
-	getRequestEvent: () => Promise<
-		RequestEvent<Partial<Record<string, string>>, string | null>
-	>,
+	getRequestEvent: () => RequestEvent<any, any>,
 ) => {
 	return {
 		id: "sveltekit-cookies",
@@ -74,19 +71,24 @@ export const sveltekitCookies = (
 						if (returned instanceof Headers) {
 							const setCookies = returned?.get("set-cookie");
 							if (!setCookies) return;
-							const event = await getRequestEvent();
+							const event = getRequestEvent();
 							if (!event) return;
 							const parsed = parseSetCookieHeader(setCookies);
+
 							for (const [name, { value, ...ops }] of parsed) {
-								event.cookies.set(name, decodeURIComponent(value), {
-									sameSite: ops.samesite,
-									path: ops.path || "/",
-									expires: ops.expires,
-									secure: ops.secure,
-									httpOnly: ops.httponly,
-									domain: ops.domain,
-									maxAge: ops["max-age"],
-								});
+								try {
+									event.cookies.set(name, decodeURIComponent(value), {
+										sameSite: ops.samesite,
+										path: ops.path || "/",
+										expires: ops.expires,
+										secure: ops.secure,
+										httpOnly: ops.httponly,
+										domain: ops.domain,
+										maxAge: ops["max-age"],
+									});
+								} catch (e) {
+									// this will avoid any issue related to already streamed response
+								}
 							}
 						}
 					}),

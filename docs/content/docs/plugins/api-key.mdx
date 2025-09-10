@@ -739,139 +739,6 @@ Storing API keys in plaintext makes them vulnerable to database breaches, potent
 
 ---
 
-## Schema
-
-Table: `apiKey`
-
-<DatabaseTable
-  fields={[
-    {
-      name: "id",
-      type: "string",
-      description: "The ID of the API key.",
-      isUnique: true,
-      isPrimaryKey: true,
-    },
-    {
-      name: "name",
-      type: "string",
-      description: "The name of the API key.",
-      isOptional: true,
-    },
-    {
-      name: "start",
-      type: "string",
-      description:
-        "The starting characters of the API key. Useful for showing the first few characters of the API key in the UI for the users to easily identify.",
-      isOptional: true,
-    },
-    {
-      name: "prefix",
-      type: "string",
-      description: "The API Key prefix. Stored as plain text.",
-      isOptional: true,
-    },
-    {
-      name: "key",
-      type: "string",
-      description: "The hashed API key itself.",
-    },
-    {
-      name: "userId",
-      type: "string",
-      description: "The ID of the user who created the API key.",
-      isForeignKey: true,
-    },
-    {
-      name: "refillInterval",
-      type: "number",
-      description: "The interval to refill the key in milliseconds.",
-      isOptional: true,
-    },
-    {
-      name: "refillAmount",
-      type: "number",
-      description: "The amount to refill the remaining count of the key.",
-      isOptional: true,
-    },
-    {
-      name: "lastRefillAt",
-      type: "Date",
-      description: "The date and time when the key was last refilled.",
-      isOptional: true,
-    },
-    {
-      name: "enabled",
-      type: "boolean",
-      description: "Whether the API key is enabled.",
-    },
-    {
-      name: "rateLimitEnabled",
-      type: "boolean",
-      description: "Whether the API key has rate limiting enabled.",
-    },
-    {
-      name: "rateLimitTimeWindow",
-      type: "number",
-      description: "The time window in milliseconds for the rate limit.",
-      isOptional: true,
-    },
-    {
-      name: "rateLimitMax",
-      type: "number",
-      description:
-        "The maximum number of requests allowed within the `rateLimitTimeWindow`.",
-      isOptional: true,
-    },
-    {
-      name: "requestCount",
-      type: "number",
-      description:
-        "The number of requests made within the rate limit time window.",
-    },
-    {
-      name: "remaining",
-      type: "number",
-      description: "The number of requests remaining.",
-      isOptional: true,
-    },
-    {
-      name: "lastRequest",
-      type: "Date",
-      description: "The date and time of the last request made to the key.",
-      isOptional: true,
-    },
-    {
-      name: "expiresAt",
-      type: "Date",
-      description: "The date and time when the key will expire.",
-      isOptional: true,
-    },
-    {
-      name: "createdAt",
-      type: "Date",
-      description: "The date and time the API key was created.",
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "The date and time the API key was updated.",
-    },
-    {
-      name: "permissions",
-      type: "string",
-      description: "The permissions of the key.",
-      isOptional: true,
-    },
-    {
-      name: "metadata",
-      type: "Object",
-      isOptional: true,
-      description: "Any additional metadata you want to store with the key.",
-    },
-  ]}
-/>
-
 ## Permissions
 
 API keys can have permissions associated with them, allowing you to control access at a granular level. Permissions are structured as a record of resource types to arrays of allowed actions.
@@ -988,3 +855,136 @@ const permissions = {
 ```
 
 When verifying an API key, all required permissions must be present in the API key's permissions for validation to succeed.
+
+## Schema
+
+Table: `apiKey`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "The ID of the API key.",
+      isUnique: true,
+      isPrimaryKey: true,
+    },
+    {
+      name: "name",
+      type: "string",
+      description: "The name of the API key.",
+      isOptional: true,
+    },
+    {
+      name: "start",
+      type: "string",
+      description:
+        "The starting characters of the API key. Useful for showing the first few characters of the API key in the UI for the users to easily identify.",
+      isOptional: true,
+    },
+    {
+      name: "prefix",
+      type: "string",
+      description: "The API Key prefix. Stored as plain text.",
+      isOptional: true,
+    },
+    {
+      name: "key",
+      type: "string",
+      description: "The hashed API key itself.",
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "The ID of the user associated with the API key.",
+      isForeignKey: true,
+    },
+    {
+      name: "refillInterval",
+      type: "number",
+      description: "The interval to refill the key in milliseconds.",
+      isOptional: true,
+    },
+    {
+      name: "refillAmount",
+      type: "number",
+      description: "The amount to refill the remaining count of the key.",
+      isOptional: true,
+    },
+    {
+      name: "lastRefillAt",
+      type: "Date",
+      description: "The date and time when the key was last refilled.",
+      isOptional: true,
+    },
+    {
+      name: "enabled",
+      type: "boolean",
+      description: "Whether the API key is enabled.",
+    },
+    {
+      name: "rateLimitEnabled",
+      type: "boolean",
+      description: "Whether the API key has rate limiting enabled.",
+    },
+    {
+      name: "rateLimitTimeWindow",
+      type: "number",
+      description: "The time window in milliseconds for the rate limit.",
+      isOptional: true,
+    },
+    {
+      name: "rateLimitMax",
+      type: "number",
+      description:
+        "The maximum number of requests allowed within the `rateLimitTimeWindow`.",
+      isOptional: true,
+    },
+    {
+      name: "requestCount",
+      type: "number",
+      description:
+        "The number of requests made within the rate limit time window.",
+    },
+    {
+      name: "remaining",
+      type: "number",
+      description: "The number of requests remaining.",
+      isOptional: true,
+    },
+    {
+      name: "lastRequest",
+      type: "Date",
+      description: "The date and time of the last request made to the key.",
+      isOptional: true,
+    },
+    {
+      name: "expiresAt",
+      type: "Date",
+      description: "The date and time when the key will expire.",
+      isOptional: true,
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "The date and time the API key was created.",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "The date and time the API key was updated.",
+    },
+    {
+      name: "permissions",
+      type: "string",
+      description: "The permissions of the key.",
+      isOptional: true,
+    },
+    {
+      name: "metadata",
+      type: "Object",
+      isOptional: true,
+      description: "Any additional metadata you want to store with the key.",
+    },
+  ]}
+/>

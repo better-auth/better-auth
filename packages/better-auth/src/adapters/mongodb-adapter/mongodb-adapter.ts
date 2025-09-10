@@ -96,7 +96,11 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				field,
 				value,
 				model,
-			}: { field: string; value: any; model: string }) {
+			}: {
+				field: string;
+				value: any;
+				model: string;
+			}) {
 				if (customIdGen) {
 					return value;
 				}
@@ -139,7 +143,10 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 			function convertWhereClause({
 				where,
 				model,
-			}: { where: Where[]; model: string }) {
+			}: {
+				where: Where[];
+				model: string;
+			}) {
 				if (!where.length) return {};
 				const conditions = where.map((w) => {
 					const {
@@ -165,6 +172,15 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 							condition = {
 								[field]: {
 									$in: Array.isArray(value)
+										? value.map((v) => serializeID({ field, value: v, model }))
+										: [serializeID({ field, value, model })],
+								},
+							};
+							break;
+						case "not_in":
+							condition = {
+								[field]: {
+									$nin: Array.isArray(value)
 										? value.map((v) => serializeID({ field, value: v, model }))
 										: [serializeID({ field, value, model })],
 								},

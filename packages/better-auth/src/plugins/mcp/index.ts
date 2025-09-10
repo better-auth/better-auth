@@ -28,6 +28,7 @@ import { logger } from "../../utils";
 
 interface MCPOptions {
 	loginPage: string;
+	resource?: string;
 	oidcConfig?: OIDCOptions;
 }
 
@@ -80,6 +81,27 @@ export const getMCPProviderMetadata = (
 			"name",
 		],
 		...options?.metadata,
+	};
+};
+
+export const getMCPProtectedResourceMetadata = (
+	ctx: GenericEndpointContext,
+	options?: MCPOptions,
+) => {
+	const baseURL = ctx.context.baseURL;
+
+	return {
+		resource: options?.resource ?? new URL(baseURL).origin,
+		authorization_servers: [baseURL],
+		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
+		scopes_supported: options?.oidcConfig?.metadata?.scopes_supported ?? [
+			"openid",
+			"profile",
+			"email",
+			"offline_access",
+		],
+		bearer_methods_supported: ["header"],
+		resource_signing_alg_values_supported: ["RS256", "none"],
 	};
 };
 
@@ -143,18 +165,7 @@ export const mcp = (options: MCPOptions) => {
 						ctx.query = JSON.parse(cookie);
 						ctx.query!.prompt = "consent";
 						ctx.context.session = session;
-						const response = await authorizeMCPOAuth(ctx, opts).catch((e) => {
-							if (e instanceof APIError) {
-								if (e.statusCode === 302) {
-									return ctx.json({
-										redirect: true,
-										//@ts-expect-error
-										url: e.headers.get("location"),
-									});
-								}
-							}
-							throw e;
-						});
+						const response = await authorizeMCPOAuth(ctx, opts);
 						return response;
 					}),
 				},
@@ -177,6 +188,19 @@ export const mcp = (options: MCPOptions) => {
 						console.log(e);
 						return c.json(null);
 					}
+				},
+			),
+			getMCPProtectedResource: createAuthEndpoint(
+				"/.well-known/oauth-protected-resource",
+				{
+					method: "GET",
+					metadata: {
+						client: false,
+					},
+				},
+				async (c) => {
+					const metadata = getMCPProtectedResourceMetadata(c, options);
+					return c.json(metadata);
 				},
 			),
 			mcpOAuthAuthroize: createAuthEndpoint(
@@ -570,14 +594,20 @@ export const mcp = (options: MCPOptions) => {
 					};
 
 					const additionalUserClaims = opts.getAdditionalUserInfoClaim
-						? opts.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await opts.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: {};
 
 					const idToken = await new SignJWT({
 						sub: user.id,
 						aud: client_id.toString(),
 						iat: Date.now(),
-						auth_time: ctx.context.session?.session.createdAt.getTime(),
+						auth_time: ctx.context.session
+							? new Date(ctx.context.session.session.createdAt).getTime()
+							: undefined,
 						nonce: value.nonce,
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,
@@ -851,7 +881,7 @@ export const mcp = (options: MCPOptions) => {
 							: {}),
 					};
 
-					return ctx.json(responseData, {
+					return new Response(JSON.stringify(responseData), {
 						status: 201,
 						headers: {
 							"Cache-Control": "no-store",
@@ -917,7 +947,7 @@ export const withMcpAuth = <
 		const session = await auth.api.getMcpSession({
 			headers: req.headers,
 		});
-		const wwwAuthenticateValue = `Bearer resource_metadata=${baseURL}/api/auth/.well-known/oauth-authorization-server`;
+		const wwwAuthenticateValue = `Bearer resource_metadata="${baseURL}/.well-known/oauth-protected-resource"`;
 		if (!session) {
 			return Response.json(
 				{
@@ -933,6 +963,8 @@ export const withMcpAuth = <
 					status: 401,
 					headers: {
 						"WWW-Authenticate": wwwAuthenticateValue,
+						// we also add this headers otherwise browser based clients will not be able to read the `www-authenticate` header
+						"Access-Control-Expose-Headers": "WWW-Authenticate",
 					},
 				},
 			);
@@ -952,6 +984,30 @@ export const oAuthDiscoveryMetadata = <
 ) => {
 	return async (request: Request) => {
 		const res = await auth.api.getMcpOAuthConfig();
+		return new Response(JSON.stringify(res), {
+			status: 200,
+			headers: {
+				"Content-Type": "application/json",
+				"Access-Control-Allow-Origin": "*",
+				"Access-Control-Allow-Methods": "POST, OPTIONS",
+				"Access-Control-Allow-Headers": "Content-Type, Authorization",
+				"Access-Control-Max-Age": "86400",
+			},
+		});
+	};
+};
+
+export const oAuthProtectedResourceMetadata = <
+	Auth extends {
+		api: {
+			getMCPProtectedResource: (...args: any) => any;
+		};
+	},
+>(
+	auth: Auth,
+) => {
+	return async (request: Request) => {
+		const res = await auth.api.getMCPProtectedResource();
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {

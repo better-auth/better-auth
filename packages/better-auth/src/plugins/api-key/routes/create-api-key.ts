@@ -15,15 +15,16 @@ export function createApiKey({
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	keyGenerator: (options: { length: number; prefix: string | undefined }) =>
-		| Promise<string>
-		| string;
+	keyGenerator: (options: {
+		length: number;
+		prefix: string | undefined;
+	}) => Promise<string> | string;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/create",
@@ -419,15 +420,16 @@ export function createApiKey({
 				rateLimitMax: rateLimitMax ?? opts.rateLimit.maxRequests ?? null,
 				rateLimitTimeWindow:
 					rateLimitTimeWindow ?? opts.rateLimit.timeWindow ?? null,
-				remaining: remaining || refillAmount || null,
+				remaining:
+					remaining === null ? remaining : (remaining ?? refillAmount ?? null),
 				refillAmount: refillAmount ?? null,
 				refillInterval: refillInterval ?? null,
 				rateLimitEnabled:
 					rateLimitEnabled === undefined
-						? opts.rateLimit.enabled ?? true
+						? (opts.rateLimit.enabled ?? true)
 						: rateLimitEnabled,
 				requestCount: 0,
-				//@ts-ignore - we intentionally save the permissions as string on DB.
+				//@ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 			};
 
@@ -449,10 +451,7 @@ export function createApiKey({
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
-					? safeJSONParse(
-							//@ts-ignore - from DB, this value is always a string
-							apiKey.permissions,
-						)
+					? safeJSONParse(apiKey.permissions)
 					: null,
 			});
 		},

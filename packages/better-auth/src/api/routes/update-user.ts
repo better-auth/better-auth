@@ -519,7 +519,7 @@ export const deleteUser = createAuthEndpoint(
 		}
 
 		if (!ctx.body.password && ctx.context.sessionConfig.freshAge !== 0) {
-			const currentAge = session.session.createdAt.getTime();
+			const currentAge = new Date(session.session.createdAt).getTime();
 			const freshAge = ctx.context.sessionConfig.freshAge * 1000;
 			const now = Date.now();
 			if (now - currentAge > freshAge * 1000) {
@@ -685,6 +685,21 @@ export const changeEmail = createAuthEndpoint(
 										},
 									},
 									required: ["status"],
+								},
+							},
+						},
+					},
+					"422": {
+						description: "Unprocessable Entity. Email already exists",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										message: {
+											type: "string",
+										},
+									},
 								},
 							},
 						},

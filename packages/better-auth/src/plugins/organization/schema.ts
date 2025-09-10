@@ -27,7 +27,6 @@ export const memberSchema = z.object({
 	userId: z.coerce.string(),
 	role,
 	createdAt: z.date().default(() => new Date()),
-	teamId: z.string().optional(),
 });
 
 export const invitationSchema = z.object({
@@ -36,7 +35,7 @@ export const invitationSchema = z.object({
 	email: z.string(),
 	role,
 	status: invitationStatus,
-	teamId: z.string().optional(),
+	teamId: z.string().nullish(),
 	inviterId: z.string(),
 	expiresAt: z.date(),
 });
@@ -49,14 +48,33 @@ export const teamSchema = z.object({
 	updatedAt: z.date().optional(),
 });
 
+export const teamMemberSchema = z.object({
+	id: z.string().default(generateId),
+	teamId: z.string(),
+	userId: z.string(),
+	createdAt: z.date().default(() => new Date()),
+});
+
+export const organizationRoleSchema = z.object({
+	id: z.string().default(generateId),
+	organizationId: z.string(),
+	role: z.string(),
+	permission: z.record(z.string(), z.array(z.string())),
+	createdAt: z.date().default(() => new Date()),
+	updatedAt: z.date().optional(),
+});
+
 export type Organization = z.infer<typeof organizationSchema>;
 export type Member = z.infer<typeof memberSchema>;
+export type TeamMember = z.infer<typeof teamMemberSchema>;
 export type Team = z.infer<typeof teamSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
 export type InvitationInput = z.input<typeof invitationSchema>;
 export type MemberInput = z.input<typeof memberSchema>;
+export type TeamMemberInput = z.input<typeof teamMemberSchema>;
 export type OrganizationInput = z.input<typeof organizationSchema>;
 export type TeamInput = z.infer<typeof teamSchema>;
+export type OrganizationRole = z.infer<typeof organizationRoleSchema>;
 
 const defaultRoles = ["admin", "member", "owner"] as const;
 export const defaultRolesSchema = z.union([

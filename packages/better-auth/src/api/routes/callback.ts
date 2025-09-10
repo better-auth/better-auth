@@ -132,8 +132,15 @@ export const callbackOAuth = createAuthEndpoint(
 				return redirectOnError("unable_to_link_account");
 			}
 
+			if (
+				userInfo.email !== link.email &&
+				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
+			) {
+				return redirectOnError("email_doesn't_match");
+			}
+
 			const existingAccount = await c.context.internalAdapter.findAccount(
-				userInfo.id,
+				String(userInfo.id),
 			);
 
 			if (existingAccount) {
@@ -159,7 +166,7 @@ export const callbackOAuth = createAuthEndpoint(
 					{
 						userId: link.userId,
 						providerId: provider.id,
-						accountId: userInfo.id,
+						accountId: String(userInfo.id),
 						...tokens,
 						accessToken: await setTokenUtil(tokens.accessToken, c.context),
 						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
@@ -191,12 +198,13 @@ export const callbackOAuth = createAuthEndpoint(
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
+				id: String(userInfo.id),
 				email: userInfo.email,
 				name: userInfo.name || userInfo.email,
 			},
 			account: {
 				providerId: provider.id,
-				accountId: userInfo.id,
+				accountId: String(userInfo.id),
 				...tokens,
 				scope: tokens.scopes?.join(","),
 			},

@@ -8,14 +8,14 @@ import {
 import type { BetterAuthOptions } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 
-function getDatabaseType(
+export function getKyselyDatabaseType(
 	db: BetterAuthOptions["database"],
 ): KyselyDatabaseType | null {
 	if (!db) {
 		return null;
 	}
 	if ("dialect" in db) {
-		return getDatabaseType(db.dialect as Dialect);
+		return getKyselyDatabaseType(db.dialect as Dialect);
 	}
 	if ("createDriver" in db) {
 		if (db instanceof SqliteDialect) {
@@ -42,6 +42,9 @@ function getDatabaseType(
 		return "postgres";
 	}
 	if ("fileControl" in db) {
+		return "sqlite";
+	}
+	if ("open" in db && "close" in db && "prepare" in db) {
 		return "sqlite";
 	}
 	return null;
@@ -73,20 +76,20 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 
 	let dialect: Dialect | undefined = undefined;
 
-	const databaseType = getDatabaseType(db);
+	const databaseType = getKyselyDatabaseType(db);
 
 	if ("createDriver" in db) {
 		dialect = db;
 	}
 
-	if ("aggregate" in db) {
+	if ("aggregate" in db && !("createSession" in db)) {
 		dialect = new SqliteDialect({
 			database: db,
 		});
 	}
 
 	if ("getConnection" in db) {
-		// @ts-ignore - mysql2/promise
+		// @ts-expect-error - mysql2/promise
 		dialect = new MysqlDialect(db);
 	}
 
@@ -101,6 +104,36 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		dialect = new BunSqliteDialect({
 			database: db,
 		});
+	}
+
+	if ("createSession" in db && typeof window === "undefined") {
+		let DatabaseSync: typeof import("node:sqlite").DatabaseSync | undefined =
+			undefined;
+		try {
+			let nodeSqlite: string = "node:sqlite";
+			// Ignore both Vite and Webpack for dynamic import as they both try to pre-bundle 'node:sqlite' which might fail
+			// It's okay because we are in a try-catch block
+			({ DatabaseSync } = await import(
+				/* @vite-ignore */
+				/* webpackIgnore: true */
+				nodeSqlite
+			));
+		} catch (error: unknown) {
+			if (
+				error !== null &&
+				typeof error === "object" &&
+				"code" in error &&
+				error.code !== "ERR_UNKNOWN_BUILTIN_MODULE"
+			) {
+				throw error;
+			}
+		}
+		if (DatabaseSync && db instanceof DatabaseSync) {
+			const { NodeSqliteDialect } = await import("./node-sqlite-dialect");
+			dialect = new NodeSqliteDialect({
+				database: db,
+			});
+		}
 	}
 
 	return {
