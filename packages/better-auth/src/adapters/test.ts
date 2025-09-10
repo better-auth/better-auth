@@ -47,6 +47,7 @@ const adapterTests = {
 	SHOULD_SEARCH_USERS_WITH_STARTS_WITH: "should search users with startsWith",
 	SHOULD_SEARCH_USERS_WITH_ENDS_WITH: "should search users with endsWith",
 	SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: "should prefer generateId if provided",
+	SHOULD_FIND_MANY_WITH_CONNECTORS: "should find many with connectors",
 } as const;
 
 const { ...numberIdAdapterTestsCopy } = adapterTests;
@@ -818,6 +819,74 @@ async function adapterTest(
 			});
 
 			expect(res.id).toBe("mocked-id");
+		},
+	);
+
+	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_CONNECTORS)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_FIND_MANY_WITH_CONNECTORS
+		}`,
+		async ({ onTestFailed }) => {
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
+			});
+
+			await (await adapter()).create({
+				model: "user",
+				data: {
+					name: "connector-user1",
+					email: "connector-user1@email.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			await (await adapter()).create({
+				model: "user",
+				data: {
+					name: "con-user2",
+					email: "connector-user2@email.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+
+			const andRes = await (await adapter()).findMany({
+				model: "user",
+				where: [
+					{
+						field: "name",
+						value: "con-user2",
+						connector: "AND"
+					},
+					{
+						field: "email",
+						value: "connector-user2@email.com",
+						connector: "AND"
+					},
+				],
+			});
+
+			expect(andRes.length).toBe(1);
+
+			const orRes = await (await adapter()).findMany({
+				model: "user",
+				where: [
+					{
+						field: "name",
+						value: "connector-user1",
+						connector: "OR",
+					},
+					{
+						field: "name",
+						value: "con-user2",
+						connector: "OR"
+					}
+				],
+			});
+			expect(orRes.length).toBe(2);
 		},
 	);
 }
