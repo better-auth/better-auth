@@ -116,7 +116,11 @@ export const shimLastParam = <
 		const fn = obj[key] as any;
 		out[key] = (...args: any[]) => {
 			if (args.length < fn.length) {
-				return fn(...args, shim);
+				return fn(
+					...args,
+					...Array(Math.max(0, fn.length - 1 - args.length)).fill(undefined),
+					shim,
+				);
 			}
 			return fn(...args);
 		};
