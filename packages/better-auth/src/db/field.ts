@@ -1,4 +1,4 @@
-import type { ZodSchema } from "zod";
+import type { ZodType } from "zod/v4";
 import type { BetterAuthOptions } from "../types";
 import type { LiteralString } from "../types/helper";
 
@@ -7,6 +7,7 @@ export type FieldType =
 	| "number"
 	| "boolean"
 	| "date"
+	| "json"
 	| `${"string" | "number"}[]`
 	| Array<LiteralString>;
 
@@ -43,6 +44,13 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * be used when creating a new record.
 	 */
 	defaultValue?: Primitive | (() => Primitive);
+	/**
+	 * Update value for the field
+	 *
+	 * Note: This will create an onUpdate trigger on the database level for supported adapters.
+	 * It will be called when updating a record.
+	 */
+	onUpdate?: () => Primitive;
 	/**
 	 * transform the value before storing it.
 	 */
@@ -82,8 +90,8 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * A zod schema to validate the value.
 	 */
 	validator?: {
-		input?: ZodSchema;
-		output?: ZodSchema;
+		input?: ZodType;
+		output?: ZodType;
 	};
 	/**
 	 * The name of the field on the database.
@@ -199,6 +207,61 @@ type InferFieldOutput<T extends FieldAttribute> = T["returned"] extends false
 	: T["required"] extends false
 		? InferValueType<T["type"]> | undefined | null
 		: InferValueType<T["type"]>;
+
+/**
+ * Converts a Record<string, FieldAttribute> to an object type
+ * with keys and value types inferred from FieldAttribute["type"].
+ */
+export type FieldAttributeToObject<
+	Fields extends Record<string, FieldAttribute>,
+> = AddOptionalFields<
+	{
+		[K in keyof Fields]: InferValueType<Fields[K]["type"]>;
+	},
+	Fields
+>;
+
+type AddOptionalFields<
+	T extends Record<string, any>,
+	Fields extends Record<keyof T, FieldAttribute>,
+> = {
+	// Required fields: required === true
+	[K in keyof T as Fields[K] extends { required: true } ? K : never]: T[K];
+} & {
+	// Optional fields: required !== true
+	[K in keyof T as Fields[K] extends { required: true } ? never : K]?: T[K];
+};
+
+/**
+ * Infer the additional fields from the plugin options.
+ * For example, you can infer the additional fields of the org plugin's organization schema like this:
+ * ```ts
+ * type AdditionalFields = InferAdditionalFieldsFromPluginOptions<"organization", OrganizationOptions>
+ * ```
+ */
+export type InferAdditionalFieldsFromPluginOptions<
+	SchemaName extends string,
+	Options extends {
+		schema?: {
+			[key in SchemaName]?: {
+				additionalFields?: Record<string, FieldAttribute>;
+			};
+		};
+	},
+	isClientSide extends boolean = true,
+> = Options["schema"] extends {
+	[key in SchemaName]?: {
+		additionalFields: infer Field extends Record<string, FieldAttribute>;
+	};
+}
+	? isClientSide extends true
+		? FieldAttributeToObject<RemoveFieldsWithInputFalse<Field>>
+		: FieldAttributeToObject<Field>
+	: {};
+
+type RemoveFieldsWithInputFalse<T extends Record<string, FieldAttribute>> = {
+	[K in keyof T as T[K]["input"] extends false ? never : K]: T[K];
+};
 
 type InferFieldInput<T extends FieldAttribute> = InferValueType<T["type"]>;
 

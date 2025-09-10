@@ -7,6 +7,7 @@ import {
 	gt,
 	gte,
 	inArray,
+	notInArray,
 	like,
 	lt,
 	lte,
@@ -44,6 +45,13 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	debugLogs?: AdapterDebugLogs;
+	/**
+	 * By default snake case is used for table and field names
+	 * when the CLI is used to generate the schema. If you want
+	 * to use camel case, set this to true.
+	 * @default false
+	 */
+	camelCase?: boolean;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
@@ -156,6 +164,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 						return [inArray(schemaModel[field], w.value)];
 					}
 
+					if (w.operator === "not_in") {
+						if (!Array.isArray(w.value)) {
+							throw new BetterAuthError(
+								`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
+							);
+						}
+						return [notInArray(schemaModel[field], w.value)];
+					}
+
 					if (w.operator === "contains") {
 						return [like(schemaModel[field], `%${w.value}%`)];
 					}
@@ -205,6 +222,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 								);
 							}
 							return inArray(schemaModel[field], w.value);
+						}
+						if (w.operator === "not_in") {
+							if (!Array.isArray(w.value)) {
+								throw new BetterAuthError(
+									`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
+								);
+							}
+							return notInArray(schemaModel[field], w.value);
 						}
 						return eq(schemaModel[field], w.value);
 					}),

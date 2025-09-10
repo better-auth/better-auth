@@ -33,6 +33,14 @@ export const subscriptions = {
 				type: "date",
 				required: false,
 			},
+			trialStart: {
+				type: "date",
+				required: false,
+			},
+			trialEnd: {
+				type: "date",
+				required: false,
+			},
 			cancelAtPeriodEnd: {
 				type: "boolean",
 				required: false,
@@ -69,19 +77,29 @@ export const organization = {
 } satisfies AuthPluginSchema;
 
 export const getSchema = (options: StripeOptions) => {
+	let baseSchema = {};
+
+	if (options.subscription?.enabled) {
+		baseSchema = {
+			...subscriptions,
+			...user,
+      ...organization
+		};
+	} else {
+		baseSchema = {
+			...user,
+      ...organization
+		};
+	}
+
 	if (
 		options.schema &&
 		!options.subscription?.enabled &&
 		"subscription" in options.schema
 	) {
-		options.schema.subscription = undefined;
+		const { subscription, ...restSchema } = options.schema;
+		return mergeSchema(baseSchema, restSchema);
 	}
-	return mergeSchema(
-		{
-			...(options.subscription?.enabled ? subscriptions : {}),
-			...user,
-			...organization,
-		},
-		options.schema,
-	);
+
+	return mergeSchema(baseSchema, options.schema);
 };

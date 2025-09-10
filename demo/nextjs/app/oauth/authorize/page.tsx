@@ -29,7 +29,7 @@ export default async function AuthorizePage({
 	const session = await auth.api.getSession({
 		headers: await headers(),
 	});
-	// @ts-ignore
+	// @ts-expect-error
 	const clientDetails = await auth.api.getOAuthClient({
 		params: {
 			id: client_id,

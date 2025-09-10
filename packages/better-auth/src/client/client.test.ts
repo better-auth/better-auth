@@ -4,16 +4,24 @@ import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createVueClient } from "./vue";
 import { createAuthClient as createSvelteClient } from "./svelte";
+import { createAuthClient as createVanillaClient } from "./vanilla";
 import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
 import type { Accessor } from "solid-js";
 import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
-import type { Session } from "../types";
+import type { Session, SessionQueryParams } from "../types";
 import { BetterFetchError } from "@better-fetch/fetch";
 import { twoFactorClient } from "../plugins";
 import { organizationClient, passkeyClient } from "./plugins";
+import { isProxy } from "node:util/types";
 
 describe("run time proxy", async () => {
+	it("atom in proxy should not be proxy", async () => {
+		const client = createVanillaClient();
+		const atom = client.$store.atoms.session;
+		expect(isProxy(atom)).toBe(false);
+	});
+
 	it("proxy api should be called", async () => {
 		let apiCalled = false;
 		const client = createSolidClient({
@@ -111,6 +119,20 @@ describe("run time proxy", async () => {
 			},
 		);
 		expect(called).toBe(true);
+	});
+
+	it("should not expose a 'then', 'catch', 'finally' property on the proxy", async () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+		const proxy = (client as any).test;
+		expect(proxy.then).toBeUndefined();
+		expect(proxy.catch).toBeUndefined();
+		expect(proxy.finally).toBeUndefined();
 	});
 });
 
@@ -305,5 +327,57 @@ describe("type", () => {
 				};
 			} | null>
 		>();
+	});
+
+	it("should infer `error` schema correctly", async () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+		const { error } = await client.test();
+		expectTypeOf(error!).toMatchObjectType<{
+			code: number;
+			message: string;
+			test: boolean;
+		}>();
+	});
+
+	it("should support refetch with query parameters", () => {
+		const client = createReactClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		type UseSessionReturn = ReturnType<typeof client.useSession>;
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined | null;
+					testField4: string;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
+				};
+				session: Session;
+			} | null;
+			isPending: boolean;
+			error: BetterFetchError | null;
+			refetch: (queryParams?: { query?: SessionQueryParams }) => void;
+		}>();
 	});
 });

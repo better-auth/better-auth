@@ -4,10 +4,11 @@ import type {
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
-import { ZodObject, ZodOptional, ZodSchema } from "zod";
+import { z, ZodObject, ZodOptional, ZodType } from "zod/v4";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 import type { AuthContext, BetterAuthOptions } from "../../types";
+import type { FieldAttribute } from "../../db";
 
 export interface Path {
 	get?: {
@@ -67,23 +68,31 @@ export interface Path {
 		};
 	};
 }
-const paths: Record<string, Path> = {};
 
-function getTypeFromZodType(zodType: ZodSchema) {
-	switch (zodType.constructor.name) {
-		case "ZodString":
-			return "string";
-		case "ZodNumber":
-			return "number";
-		case "ZodBoolean":
-			return "boolean";
-		case "ZodObject":
-			return "object";
-		case "ZodArray":
-			return "array";
-		default:
-			return "string";
+type AllowedType = "string" | "number" | "boolean" | "array" | "object";
+const allowedType = new Set(["string", "number", "boolean", "array", "object"]);
+function getTypeFromZodType(zodType: ZodType<any>) {
+	const type = zodType.type;
+	return allowedType.has(type) ? (type as AllowedType) : "string";
+}
+
+function getFieldSchema(field: FieldAttribute) {
+	const schema: any = {
+		type: field.type === "date" ? "string" : field.type,
+	};
+
+	if (field.defaultValue !== undefined) {
+		schema.default =
+			typeof field.defaultValue === "function"
+				? "Generated at runtime"
+				: field.defaultValue;
 	}
+
+	if (field.input === false) {
+		schema.readOnly = true;
+	}
+
+	return schema;
 }
 
 function getParameters(options: EndpointOptions) {
@@ -94,18 +103,17 @@ function getParameters(options: EndpointOptions) {
 	}
 	if (options.query instanceof ZodObject) {
 		Object.entries(options.query.shape).forEach(([key, value]) => {
-			if (value instanceof ZodSchema) {
+			if (value instanceof ZodType) {
 				parameters.push({
 					name: key,
 					in: "query",
 					schema: {
-						type: getTypeFromZodType(value),
-						...("minLength" in value && value.minLength
+						...processZodType(value as ZodType<any>),
+						...("minLength" in value && (value as any).minLength
 							? {
-									minLength: value.minLength as number,
+									minLength: (value as any).minLength as number,
 								}
 							: {}),
-						description: value.description,
 					},
 				});
 			}
@@ -123,18 +131,15 @@ function getRequestBody(options: EndpointOptions): any {
 		options.body instanceof ZodObject ||
 		options.body instanceof ZodOptional
 	) {
-		// @ts-ignore
+		// @ts-expect-error
 		const shape = options.body.shape;
 		if (!shape) return undefined;
 		const properties: Record<string, any> = {};
 		const required: string[] = [];
 		Object.entries(shape).forEach(([key, value]) => {
-			if (value instanceof ZodSchema) {
-				properties[key] = {
-					type: getTypeFromZodType(value),
-					description: value.description,
-				};
-				if (!(value instanceof ZodOptional)) {
+			if (value instanceof ZodType) {
+				properties[key] = processZodType(value as ZodType<any>);
+				if (!(value instanceof z.ZodOptional)) {
 					required.push(key);
 				}
 			}
@@ -158,6 +163,48 @@ function getRequestBody(options: EndpointOptions): any {
 		};
 	}
 	return undefined;
+}
+
+function processZodType(zodType: ZodType<any>): any {
+	// optional unwrapping
+	if (zodType instanceof ZodOptional) {
+		const innerType = (zodType as any)._def.innerType;
+		const innerSchema = processZodType(innerType);
+		return {
+			...innerSchema,
+			nullable: true,
+		};
+	}
+	// object unwrapping
+	if (zodType instanceof ZodObject) {
+		const shape = (zodType as any).shape;
+		if (shape) {
+			const properties: Record<string, any> = {};
+			const required: string[] = [];
+			Object.entries(shape).forEach(([key, value]) => {
+				if (value instanceof ZodType) {
+					properties[key] = processZodType(value as ZodType<any>);
+					if (!(value instanceof z.ZodOptional)) {
+						required.push(key);
+					}
+				}
+			});
+			return {
+				type: "object",
+				properties,
+				...(required.length > 0 ? { required } : {}),
+				description: (zodType as any).description,
+			};
+		}
+	}
+
+	// For primitive types, get the correct type from the unwrapped ZodType
+	const baseSchema = {
+		type: getTypeFromZodType(zodType),
+		description: (zodType as any).description,
+	};
+
+	return baseSchema;
 }
 
 function getResponse(responses?: Record<string, any>) {
@@ -280,18 +327,24 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	const tables = getAuthTables(options);
 	const models = Object.entries(tables).reduce((acc, [key, value]) => {
 		const modelName = key.charAt(0).toUpperCase() + key.slice(1);
-		// @ts-ignore
+		const fields = value.fields;
+		const required: string[] = [];
+		const properties: Record<string, any> = {
+			id: { type: "string" },
+		};
+		Object.entries(fields).forEach(([fieldKey, fieldValue]) => {
+			if (!fieldValue) return;
+			properties[fieldKey] = getFieldSchema(fieldValue);
+			if (fieldValue.required && fieldValue.input !== false) {
+				required.push(fieldKey);
+			}
+		});
+
+		// @ts-expect-error
 		acc[modelName] = {
 			type: "object",
-			properties: Object.entries(value.fields).reduce(
-				(acc, [key, value]) => {
-					acc[key] = {
-						type: value.type,
-					};
-					return acc;
-				},
-				{ id: { type: "string" } } as Record<string, any>,
-			),
+			properties,
+			...(required.length > 0 ? { required } : {}),
 		};
 		return acc;
 	}, {});
@@ -301,6 +354,8 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			...models,
 		},
 	};
+
+	const paths: Record<string, Path> = {};
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
 		if (ctx.options.disabledPaths?.includes(value.path)) return;
