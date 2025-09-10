@@ -174,7 +174,7 @@ export type BetterAuthSharedOptions = {
 	basePath?: string;
 };
 
-export type BetterAuthOptions = BetterAuthSharedOptions & {
+export interface BetterAuthOptions extends BetterAuthSharedOptions {
 	/**
 	 * The name of the application
 	 *
