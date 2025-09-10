@@ -72,7 +72,7 @@ The `api` object exported from the auth instance contains all the actions that y
 ```tsx title="server.ts"
 "use server" // Waku currently only supports file-level "use server"
 
-import { auth } from "../auth"
+import { auth } from "./auth"
 import { getContext } from "waku/middleware/context"
 
 export const someAuthenticatedAction = async () => {
@@ -156,7 +156,7 @@ Now, when you call functions that set cookies, they will be automatically set.
 
 ```ts
 "use server";
-import { auth } from "@/lib/auth"
+import { auth } from "../auth"
 
 const signIn = async () => {
     await auth.api.signInEmail({
