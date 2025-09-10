@@ -452,6 +452,16 @@ const adapter = myAdapter({
 });
 ```
 
+### `transaction`
+
+Whether the adapter supports transactions. If `false`, operations run sequentially; otherwise provide a function that executes a callback with a `TransactionAdapter`.
+
+<Callout type="warn">
+  If your database does not support transactions, the error handling and rollback
+  will not be as robust. We recommend using a database that supports transactions
+  for better data integrity.
+</Callout>
+
 ### `debugLogs`
 
 Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `count`.
