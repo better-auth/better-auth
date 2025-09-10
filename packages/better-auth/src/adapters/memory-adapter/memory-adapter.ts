@@ -94,7 +94,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 						if (clause.connector === "OR") {
 							result = result || clauseResult;
 						} else {
-							result = result || clauseResult;
+							result = result && clauseResult;
 						}
 					}
 
