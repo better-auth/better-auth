@@ -58,8 +58,6 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 
 				const evalClause = (record: any, clause: CleanedWhere): boolean => {
 					const { field, value, operator } = clause;
-					const recordValue = record[field];
-
 					switch (operator) {
 						case "in":
 							if (!Array.isArray(value)) {
@@ -78,32 +76,30 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 						case "starts_with":
 							return record[field].startsWith(value);
 						case "ends_with":
-							return recordValue.endsWith(value);
+							return record[field].endsWith(value);
 						default:
-							return recordValue === value;
+							return record[field] === value;
 					}
 				};
 
-				const evalWhere = (record: any) => {
-					if (!where || !where.length) return true;
+				return table.filter((record: any) => {
+					if (!where.length || where.length === 0) {
+						return true;
+					}
 
 					let result = evalClause(record, where[0]);
+					for (const clause of where) {
+						const clauseResult = evalClause(record, clause);
 
-					for (let i = 1; i < where.length; i++) {
-						const connector = (where[i].connector || "AND").toUpperCase();
-						const clauseResult = evalClause(record, where[i]);
-
-						if (connector === "OR") {
+						if (clause.connector === "OR") {
 							result = result || clauseResult;
 						} else {
-							result = result && clauseResult;
+							result = result || clauseResult;
 						}
 					}
 
 					return result;
-				};
-
-				return table.filter(evalWhere);
+				});
 			}
 			return {
 				create: async ({ model, data }) => {
