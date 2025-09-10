@@ -128,6 +128,14 @@ describe("Social Providers", async (c) => {
 				google: {
 					clientId: "test",
 					clientSecret: "test",
+					configs: [
+						{
+							clientId: "test",
+							clientSecret: "test",
+							scopes: ["email", "profile"],
+							redirectURI: "https://test.com/callback",
+						},
+					],
 					enabled: true,
 					mapProfileToUser(profile) {
 						return {
@@ -757,5 +765,80 @@ describe("updateAccountOnSignIn", async () => {
 			session2.data?.user.id!,
 		);
 		expect(userAccounts2[0].accessToken).toBe("new-access-token");
+	});
+	it("should support clientId parameter in signInSocial for multiple client configurations", async () => {
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "123-web.googleusercontent.com",
+					clientSecret: "test-web-secret",
+					configs: [
+						{
+							clientId: "456-ios.googleusercontent.com",
+							clientSecret: "test-ios-secret",
+							scopes: ["email", "profile"],
+							redirectURI: "com.yourapp://oauth/callback",
+						},
+						{
+							clientId: "789-android.googleusercontent.com",
+							clientSecret: "test-android-secret",
+							scopes: ["email", "profile", "openid"],
+							redirectURI: "com.yourapp://oauth/callback",
+						},
+					],
+				},
+			},
+		});
+
+		const iosResponse = await auth.api.signInSocial({
+			body: {
+				provider: "google",
+				clientId: "456-ios.googleusercontent.com",
+				callbackURL: "com.yourapp://oauth/callback",
+				disableRedirect: true,
+			},
+		});
+
+		expect(iosResponse.redirect).toBe(false);
+		expect(typeof iosResponse.url).toBe("string");
+		expect(iosResponse.url).toContain("456-ios.googleusercontent.com");
+
+		const androidResponse = await auth.api.signInSocial({
+			body: {
+				provider: "google",
+				clientId: "789-android.googleusercontent.com",
+				callbackURL: "com.yourapp://oauth/callback",
+				disableRedirect: true,
+			},
+		});
+
+		expect(androidResponse.redirect).toBe(false);
+		expect(typeof androidResponse.url).toBe("string");
+		expect(androidResponse.url).toContain("789-android.googleusercontent.com");
+
+		const webResponse = await auth.api.signInSocial({
+			body: {
+				provider: "google",
+				callbackURL: "https://yourapp.com/callback",
+				disableRedirect: true,
+			},
+		});
+
+		expect(webResponse.redirect).toBe(false);
+		expect(typeof webResponse.url).toBe("string");
+		expect(webResponse.url).toContain("123-web.googleusercontent.com");
+
+		const invalidResponse = await auth.api.signInSocial({
+			body: {
+				provider: "google",
+				clientId: "999-invalid.googleusercontent.com",
+				callbackURL: "https://yourapp.com/callback",
+				disableRedirect: true,
+			},
+		});
+
+		expect(invalidResponse.redirect).toBe(false);
+		expect(typeof invalidResponse.url).toBe("string");
+		expect(invalidResponse.url).toContain("123-web.googleusercontent.com");
 	});
 });

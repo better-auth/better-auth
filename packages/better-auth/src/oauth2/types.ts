@@ -30,6 +30,7 @@ export interface OAuthProvider<
 		redirectURI: string;
 		display?: string;
 		loginHint?: string;
+		clientId?: string;
 	}) => Promise<URL> | URL;
 	name: string;
 	validateAuthorizationCode: (data: {
@@ -37,6 +38,7 @@ export interface OAuthProvider<
 		redirectURI: string;
 		codeVerifier?: string;
 		deviceId?: string;
+		clientId?: string;
 	}) => Promise<OAuth2Tokens>;
 	getUserInfo: (
 		token: OAuth2Tokens & {

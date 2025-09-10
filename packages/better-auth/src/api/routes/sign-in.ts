@@ -47,6 +47,19 @@ export const signInSocial = createAuthEndpoint(
 			 */
 			provider: SocialProviderListEnum,
 			/**
+			 * Specific client ID to use for this request
+			 *
+			 * This allows you to select which client configuration to use
+			 * when multiple client IDs are configured for a provider.
+			 */
+			clientId: z
+				.string()
+				.meta({
+					description:
+						"Specific client ID to use for this request when multiple client IDs are configured",
+				})
+				.optional(),
+			/**
 			 * Disable automatic redirection to the provider
 			 *
 			 * This is useful if you want to handle the redirection
@@ -325,6 +338,7 @@ export const signInSocial = createAuthEndpoint(
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			scopes: c.body.scopes,
 			loginHint: c.body.loginHint,
+			clientId: c.body.clientId,
 		});
 
 		return c.json({

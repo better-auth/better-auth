@@ -60,6 +60,7 @@ export const callbackOAuth = createAuthEndpoint(
 			errorURL,
 			newUserURL,
 			requestSignUp,
+			clientId,
 		} = await parseState(c);
 
 		function redirectOnError(error: string) {
@@ -96,6 +97,7 @@ export const callbackOAuth = createAuthEndpoint(
 				codeVerifier,
 				deviceId: device_id,
 				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				clientId,
 			});
 		} catch (e) {
 			c.context.logger.error("", e);
