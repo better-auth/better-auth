@@ -97,13 +97,32 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const lastUsedLoginMethod = config.customResolveMethod(ctx);
-						lastUsedLoginMethod &&
-							ctx.setCookie(config.cookieName, lastUsedLoginMethod, {
+						if (lastUsedLoginMethod) {
+							// Create cookie with user's specified name and inherit cross-subdomain settings
+							const cookieAttributes = {
 								maxAge: config.maxAge,
 								secure: false,
 								httpOnly: false,
 								path: "/",
-							});
+								// Inherit cross-subdomain domain if enabled
+								...(ctx.context.options.advanced?.crossSubDomainCookies?.enabled
+									? {
+											domain:
+												ctx.context.options.advanced.crossSubDomainCookies
+													.domain ||
+												(ctx.context.options.baseURL
+													? new URL(ctx.context.options.baseURL).hostname
+													: undefined),
+										}
+									: {}),
+							};
+
+							ctx.setCookie(
+								config.cookieName,
+								lastUsedLoginMethod,
+								cookieAttributes,
+							);
+						}
 					}),
 				},
 			],

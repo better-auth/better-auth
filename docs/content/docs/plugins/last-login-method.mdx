@@ -314,6 +314,40 @@ The plugin automatically detects the method from these endpoints:
 - `/sign-in/email` - Email sign in
 - `/sign-up/email` - Email sign up
 
+## Cross-Subdomain Support
+
+The lastLoginMethod plugin automatically inherits cross-subdomain cookie settings from your Better Auth configuration. When cross-subdomain cookies are enabled, the plugin's cookies will work seamlessly across subdomains.
+
+### Configuration
+
+Enable cross-subdomain cookies in your Better Auth config:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { lastLoginMethod } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    baseURL: "https://auth.example.com",
+    advanced: {
+        crossSubDomainCookies: {
+            enabled: true,
+            domain: "example.com" // Optional - auto-detected from baseURL
+        }
+    },
+    plugins: [
+        lastLoginMethod() // Automatically inherits cross-subdomain settings
+    ]
+})
+```
+
+With this configuration, the lastLoginMethod cookie will be accessible across:
+- `auth.example.com` 
+- `app.example.com`
+- `dashboard.example.com`
+- Any subdomain of `example.com`
+
+This enables users to sign in on your auth subdomain and have their last login method remembered when they visit your application on a different subdomain.
+
 ## Advanced Examples
 
 ### Custom Provider Tracking
