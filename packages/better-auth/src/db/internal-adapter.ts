@@ -1005,17 +1005,16 @@ export const createInternalAdapter = (
 		withTransaction: async <R>(
 			cb: (trx: {
 				adapter: TransactionAdapter;
-				internalAdapter: InferShimLastParamResult<
-					typeof baseMethods,
-					TransactionAdapter,
-					true
-				>;
+				internalAdapter: typeof baseMethods;
 			}) => Promise<R>,
 		): Promise<R> => {
 			return adapter.transaction((trxAdapter) => {
 				return cb({
 					adapter: trxAdapter,
-					internalAdapter: shimLastParam(baseMethods, trxAdapter, true),
+					internalAdapter: shimLastParam(
+						baseMethods,
+						trxAdapter,
+					) as typeof baseMethods,
 				});
 			});
 		},
