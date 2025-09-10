@@ -146,7 +146,9 @@ export async function registerEndpoint(
 		schemaToOAuth(
 			{
 				...client,
-				clientSecret,
+				clientSecret: clientSecret
+					? (opts.clientSecretPrefix ?? "") + clientSecret
+					: undefined,
 			},
 			true,
 		),
