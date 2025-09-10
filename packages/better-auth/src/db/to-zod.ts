@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { ZodSchema } from "zod/v4";
+import type { ZodType } from "zod/v4";
 import type { FieldAttribute } from ".";
 
 export function toZodSchema<
@@ -23,19 +23,18 @@ export function toZodSchema<
 		if (isClientSide && field.input === false) {
 			return acc;
 		}
-		if (field.type === "string[]" || field.type === "number[]") {
-			return {
-				...acc,
-				[key]: z.array(field.type === "string[]" ? z.string() : z.number()),
-			};
+
+		let schema: ZodType;
+		if (field.type === "json") {
+			schema = (z as any).json ? (z as any).json() : z.any();
+		} else if (field.type === "string[]" || field.type === "number[]") {
+			schema = z.array(field.type === "string[]" ? z.string() : z.number());
+		} else if (Array.isArray(field.type)) {
+			schema = z.any();
+		} else {
+			schema = z[field.type]();
 		}
-		if (Array.isArray(field.type)) {
-			return {
-				...acc,
-				[key]: z.any(),
-			};
-		}
-		let schema: ZodSchema = z[field.type]();
+
 		if (field?.required === false) {
 			schema = schema.optional();
 		}

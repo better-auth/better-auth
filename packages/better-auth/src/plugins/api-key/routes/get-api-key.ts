@@ -17,7 +17,7 @@ export function getApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/get",
@@ -205,10 +205,7 @@ export function getApiKey({
 				permissions: returningApiKey.permissions
 					? safeJSONParse<{
 							[key: string]: string[];
-						}>(
-							//@ts-ignore - From DB this is always a string
-							returningApiKey.permissions,
-						)
+						}>(returningApiKey.permissions)
 					: null,
 			});
 		},

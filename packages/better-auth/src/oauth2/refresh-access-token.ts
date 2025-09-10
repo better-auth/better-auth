@@ -3,38 +3,37 @@ import type { OAuth2Tokens } from "./types";
 import type { ProviderOptions } from "./types";
 import { base64 } from "@better-auth/utils/base64";
 
-export async function refreshAccessToken({
+export function createRefreshAccessTokenRequest({
 	refreshToken,
 	options,
-	tokenEndpoint,
 	authentication,
 	extraParams,
-	grantType = "refresh_token",
+	resource,
 }: {
 	refreshToken: string;
 	options: Partial<ProviderOptions>;
-	tokenEndpoint: string;
 	authentication?: "basic" | "post";
 	extraParams?: Record<string, string>;
-	grantType?: string;
-}): Promise<OAuth2Tokens> {
+	resource?: string | string[];
+}) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 	};
 
-	body.set("grant_type", grantType);
+	body.set("grant_type", "refresh_token");
 	body.set("refresh_token", refreshToken);
 	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
 	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
 		if (options.clientId) {
-			headers["authorization"] = base64.encode(
-				`${options.clientId}:${options.clientSecret ?? ""}`,
-			);
+			headers["authorization"] =
+				"Basic " +
+				base64.encode(`${options.clientId}:${options.clientSecret ?? ""}`);
 		} else {
-			headers["authorization"] = base64.encode(`${options.clientSecret ?? ""}`);
+			headers["authorization"] =
+				"Basic " + base64.encode(`:${options.clientSecret ?? ""}`);
 		}
 	} else {
 		options.clientId && body.set("client_id", options.clientId);
@@ -43,11 +42,48 @@ export async function refreshAccessToken({
 		}
 	}
 
+	if (resource) {
+		if (typeof resource === "string") {
+			body.append("resource", resource);
+		} else {
+			for (const _resource of resource) {
+				body.append("resource", _resource);
+			}
+		}
+	}
 	if (extraParams) {
 		for (const [key, value] of Object.entries(extraParams)) {
 			body.set(key, value);
 		}
 	}
+
+	return {
+		body,
+		headers,
+	};
+}
+
+export async function refreshAccessToken({
+	refreshToken,
+	options,
+	tokenEndpoint,
+	authentication,
+	extraParams,
+}: {
+	refreshToken: string;
+	options: Partial<ProviderOptions>;
+	tokenEndpoint: string;
+	authentication?: "basic" | "post";
+	extraParams?: Record<string, string>;
+	/** @deprecated always "refresh_token" */
+	grantType?: string;
+}): Promise<OAuth2Tokens> {
+	const { body, headers } = createRefreshAccessTokenRequest({
+		refreshToken,
+		options,
+		authentication,
+		extraParams,
+	});
 
 	const { data, error } = await betterFetch<{
 		access_token: string;

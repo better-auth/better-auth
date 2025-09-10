@@ -180,7 +180,9 @@ describe("stripe", async () => {
 			stripeCustomerId: expect.any(String),
 			status: "incomplete",
 			periodStart: undefined,
-			cancelAtPeriodEnd: undefined,
+			cancelAtPeriodEnd: false,
+			trialStart: undefined,
+			trialEnd: undefined,
 		});
 	});
 
@@ -353,6 +355,117 @@ describe("stripe", async () => {
 			periodStart: expect.any(Date),
 			periodEnd: expect.any(Date),
 			plan: "starter",
+		});
+	});
+
+	it("should handle subscription webhook events with trial", async () => {
+		const { id: testReferenceId } = await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: "test@email.com",
+			},
+		});
+		const { id: testSubscriptionId } = await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: testReferenceId,
+				stripeCustomerId: "cus_mock123",
+				status: "incomplete",
+				plan: "starter",
+			},
+		});
+		const mockCheckoutSessionEvent = {
+			type: "checkout.session.completed",
+			data: {
+				object: {
+					mode: "subscription",
+					subscription: testSubscriptionId,
+					metadata: {
+						referenceId: testReferenceId,
+						subscriptionId: testSubscriptionId,
+					},
+				},
+			},
+		};
+
+		const mockSubscription = {
+			id: testSubscriptionId,
+			status: "active",
+			items: {
+				data: [
+					{
+						price: { id: process.env.STRIPE_PRICE_ID_1 },
+						quantity: 1,
+					},
+				],
+			},
+			current_period_start: Math.floor(Date.now() / 1000),
+			current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+			trial_start: Math.floor(Date.now() / 1000),
+			trial_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			subscriptions: {
+				...stripeOptions.stripeClient.subscriptions,
+				retrieve: vi.fn().mockResolvedValue(mockSubscription),
+			},
+			webhooks: {
+				constructEventAsync: vi
+					.fn()
+					.mockResolvedValue(mockCheckoutSessionEvent),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		};
+
+		const testAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memory,
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [stripe(testOptions)],
+		});
+
+		const testCtx = await testAuth.$context;
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(mockCheckoutSessionEvent),
+			},
+		);
+		const response = await testAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		const updatedSubscription = await testCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "id",
+					value: testSubscriptionId,
+				},
+			],
+		});
+
+		expect(updatedSubscription).toMatchObject({
+			id: testSubscriptionId,
+			status: "active",
+			periodStart: expect.any(Date),
+			periodEnd: expect.any(Date),
+			plan: "starter",
+			trialStart: expect.any(Date),
+			trialEnd: expect.any(Date),
 		});
 	});
 
@@ -880,5 +993,178 @@ describe("stripe", async () => {
 			customer: expect.any(String),
 			return_url: "http://localhost:3000/dashboard",
 		});
+	});
+
+	it("should not update personal subscription when upgrading with an org referenceId", async () => {
+		const orgId = "org_b67GF32Cljh7u588AuEblmLVobclDRcP";
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: _stripe,
+			subscription: {
+				...stripeOptions.subscription,
+				authorizeReference: async () => true,
+			},
+		} as unknown as StripeOptions;
+
+		const testAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memory,
+			emailAndPassword: { enabled: true },
+			plugins: [stripe(testOptions)],
+		});
+		const testCtx = await testAuth.$context;
+
+		const testAuthClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [bearer(), stripeClient({ subscription: true })],
+			fetchOptions: {
+				customFetchImpl: async (url, init) =>
+					testAuth.handler(new Request(url, init)),
+			},
+		});
+
+		// Sign up and sign in the user
+		const userRes = await testAuthClient.signUp.email(
+			{ ...testUser, email: "org-ref@email.com" },
+			{ throw: true },
+		);
+		const headers = new Headers();
+		await testAuthClient.signIn.email(
+			{ ...testUser, email: "org-ref@email.com" },
+			{ throw: true, onSuccess: setCookieToHeader(headers) },
+		);
+
+		// Create a personal subscription (referenceId = user id)
+		await testAuthClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		const personalSub = await testCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "referenceId", value: userRes.user.id }],
+		});
+		expect(personalSub).toBeTruthy();
+
+		await testCtx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				stripeSubscriptionId: "sub_personal_active_123",
+			},
+			where: [{ field: "id", value: personalSub!.id }],
+		});
+
+		mockStripe.subscriptions.list.mockResolvedValue({
+			data: [
+				{
+					id: "sub_personal_active_123",
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_1",
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		// Attempt to upgrade using an org referenceId
+		const upgradeRes = await testAuthClient.subscription.upgrade({
+			plan: "starter",
+			referenceId: orgId,
+			fetchOptions: { headers },
+		});
+		console.log(upgradeRes);
+
+		// // It should NOT go through billing portal (which would update the personal sub)
+		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+		expect(upgradeRes.data?.url).toBeDefined();
+
+		const orgSub = await testCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "referenceId", value: orgId }],
+		});
+		expect(orgSub).toMatchObject({
+			referenceId: orgId,
+			status: "incomplete",
+			plan: "starter",
+		});
+
+		const personalAfter = await testCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: personalSub!.id }],
+		});
+		expect(personalAfter?.status).toBe("active");
+	});
+
+	it("should reuse incomplete subscription when upgrading again", async () => {
+		// Create a user
+		const userRes = await authClient.signUp.email(
+			{
+				email: "incomplete@example.com",
+				password: "password",
+				name: "Incomplete Test",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				email: "incomplete@example.com",
+				password: "password",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		// First upgrade attempt - creates incomplete subscription
+		const firstUpgrade = await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(firstUpgrade.data?.url).toBe("https://checkout.stripe.com/mock");
+
+		// Check that an incomplete subscription was created
+		const subscriptions = await ctx.adapter.findMany<Subscription>({
+			model: "subscription",
+			where: [{ field: "referenceId", value: userRes.user.id }],
+		});
+		expect(subscriptions).toHaveLength(1);
+		expect(subscriptions[0].status).toBe("incomplete");
+		const firstSubId = subscriptions[0].id;
+
+		// Second upgrade attempt - should reuse the same subscription
+		const secondUpgrade = await authClient.subscription.upgrade({
+			plan: "premium",
+			seats: 2,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(secondUpgrade.data?.url).toBe("https://checkout.stripe.com/mock");
+
+		// Check that the same subscription was updated, not a new one created
+		const subscriptionsAfter = await ctx.adapter.findMany<Subscription>({
+			model: "subscription",
+			where: [{ field: "referenceId", value: userRes.user.id }],
+		});
+		expect(subscriptionsAfter).toHaveLength(1);
+		expect(subscriptionsAfter[0].id).toBe(firstSubId);
+		expect(subscriptionsAfter[0].status).toBe("incomplete");
+		expect(subscriptionsAfter[0].plan).toBe("premium");
+		expect(subscriptionsAfter[0].seats).toBe(2);
 	});
 });

@@ -4,6 +4,7 @@ import {
 	type AdapterDebugLogs,
 	type CleanedWhere,
 } from "../create-adapter";
+import type { BetterAuthOptions } from "../../types";
 
 export interface MemoryDB {
 	[key: string]: any[];
@@ -13,8 +14,9 @@ export interface MemoryAdapterConfig {
 	debugLogs?: AdapterDebugLogs;
 }
 
-export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
-	createAdapter({
+export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
+	let lazyOptions: BetterAuthOptions | null = null;
+	let adapterCreator = createAdapter({
 		config: {
 			adapterId: "memory",
 			adapterName: "Memory Adapter",
@@ -29,6 +31,18 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 					return db[props.model].length + 1;
 				}
 				return props.data;
+			},
+			transaction: async (cb) => {
+				let clone = structuredClone(db);
+				try {
+					return cb(adapterCreator(lazyOptions!));
+				} catch {
+					// Rollback changes
+					Object.keys(db).forEach((key) => {
+						db[key] = clone[key];
+					});
+					throw new Error("Transaction failed, rolling back changes");
+				}
 			},
 		},
 		adapter: ({ getFieldName, options, debugLog }) => {
@@ -49,8 +63,14 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 							if (!Array.isArray(value)) {
 								throw new Error("Value must be an array");
 							}
-							// @ts-ignore
+							// @ts-expect-error
 							return value.includes(record[field]);
+						} else if (operator === "not_in") {
+							if (!Array.isArray(value)) {
+								throw new Error("Value must be an array");
+							}
+							// @ts-expect-error
+							return !value.includes(record[field]);
 						} else if (operator === "contains") {
 							return record[field].includes(value);
 						} else if (operator === "starts_with") {
@@ -66,7 +86,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 			return {
 				create: async ({ model, data }) => {
 					if (options.advanced?.database?.useNumberId) {
-						// @ts-ignore
+						// @ts-expect-error
 						data.id = db[model].length + 1;
 					}
 					if (!db[model]) {
@@ -141,3 +161,8 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 			};
 		},
 	});
+	return (options: BetterAuthOptions) => {
+		lazyOptions = options;
+		return adapterCreator(options);
+	};
+};

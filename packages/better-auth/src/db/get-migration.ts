@@ -3,6 +3,7 @@ import type {
 	CreateTableBuilder,
 } from "kysely";
 import type { FieldAttribute, FieldType } from ".";
+import { sql } from "kysely";
 import { createLogger } from "../utils/logger";
 import type { BetterAuthOptions } from "../types";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
@@ -22,6 +23,7 @@ const postgresMap = {
 	],
 	boolean: ["bool", "boolean"],
 	date: ["timestamp", "date"],
+	json: ["json", "jsonb"],
 };
 const mysqlMap = {
 	string: ["varchar", "text"],
@@ -36,6 +38,7 @@ const mysqlMap = {
 	],
 	boolean: ["boolean", "tinyint"],
 	date: ["timestamp", "datetime", "date"],
+	json: ["json"],
 };
 
 const sqliteMap = {
@@ -43,6 +46,7 @@ const sqliteMap = {
 	number: ["INTEGER", "REAL"],
 	boolean: ["INTEGER", "BOOLEAN"], // 0 or 1
 	date: ["DATE", "INTEGER"],
+	json: ["TEXT"],
 };
 
 const mssqlMap = {
@@ -50,6 +54,7 @@ const mssqlMap = {
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
 	date: ["datetime", "date"],
+	json: ["varchar", "nvarchar"],
 };
 
 const map = {
@@ -205,6 +210,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 				mysql: "datetime",
 				mssql: "datetime",
 			},
+			json: {
+				sqlite: "text",
+				postgres: "json",
+				mysql: "json",
+				mssql: "varchar(8000)",
+			},
 			id: {
 				postgres: config.advanced?.database?.useNumberId ? "serial" : "text",
 				mysql: config.advanced?.database?.useNumberId
@@ -239,12 +250,23 @@ export async function getMigrations(config: BetterAuthOptions) {
 					.addColumn(fieldName, type, (col) => {
 						col = field.required !== false ? col.notNull() : col;
 						if (field.references) {
-							col = col.references(
-								`${field.references.model}.${field.references.field}`,
-							);
+							col = col
+								.references(
+									`${field.references.model}.${field.references.field}`,
+								)
+								.onDelete(field.references.onDelete || "cascade");
 						}
 						if (field.unique) {
 							col = col.unique();
+						}
+						if (
+							field.type === "date" &&
+							typeof field.defaultValue === "function" &&
+							(dbType === "postgres" ||
+								dbType === "mysql" ||
+								dbType === "mssql")
+						) {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
 						return col;
 					});
@@ -267,7 +289,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 							: "text",
 					(col) => {
 						if (config.advanced?.database?.useNumberId) {
-							if (dbType === "postgres") {
+							if (dbType === "postgres" || dbType === "sqlite") {
 								return col.primaryKey().notNull();
 							}
 							return col.autoIncrement().primaryKey().notNull();
@@ -276,17 +298,25 @@ export async function getMigrations(config: BetterAuthOptions) {
 					},
 				);
 
+			const indices: Array<{ table: string; field: string }> = [];
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
 				dbT = dbT.addColumn(fieldName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
-						col = col.references(
-							`${field.references.model}.${field.references.field}`,
-						);
+						col = col
+							.references(`${field.references.model}.${field.references.field}`)
+							.onDelete(field.references.onDelete || "cascade");
 					}
 					if (field.unique) {
 						col = col.unique();
+					}
+					if (
+						field.type === "date" &&
+						typeof field.defaultValue === "function" &&
+						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
+					) {
+						col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 					}
 					return col;
 				});

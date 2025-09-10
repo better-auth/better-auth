@@ -1,16 +1,16 @@
+import { base64Url } from "@better-auth/utils/base64";
+import { binary } from "@better-auth/utils/binary";
+import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
+import { ms } from "ms";
 import { BetterAuthError } from "../error";
 import type { Session, User } from "../types";
 import type { GenericEndpointContext } from "../types/context";
 import type { BetterAuthOptions } from "../types/options";
 import { getDate } from "../utils/date";
 import { env, isProduction } from "../utils/env";
-import { base64Url } from "@better-auth/utils/base64";
-import { createTime } from "../utils/time";
-import { createHMAC } from "@better-auth/utils/hmac";
 import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
-import { binary } from "@better-auth/utils/binary";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -24,10 +24,22 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
-	const domain = crossSubdomainEnabled
-		? options.advanced?.crossSubDomainCookies?.domain ||
-			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
-		: undefined;
+	const crossOriginEnabled = !!options.advanced?.crossOriginCookies?.enabled;
+
+	// Cross-origin cookie configuration
+	const crossOriginConfig = {
+		autoSecure: options.advanced?.crossOriginCookies?.autoSecure ?? true,
+		allowLocalhostUnsecure:
+			options.advanced?.crossOriginCookies?.allowLocalhostUnsecure ?? true,
+		...options.advanced?.crossOriginCookies,
+	};
+
+	const domain = crossOriginEnabled
+		? undefined
+		: crossSubdomainEnabled
+			? options.advanced?.crossSubDomainCookies?.domain ||
+				(options.baseURL ? new URL(options.baseURL).hostname : undefined)
+			: undefined;
 	if (crossSubdomainEnabled && !domain) {
 		throw new BetterAuthError(
 			"baseURL is required when crossSubdomainCookies are enabled",
@@ -45,18 +57,53 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		const attributes =
 			options.advanced?.cookies?.[cookieName as "session_token"]?.attributes;
 
+		// Build base attributes
+		let baseAttributes: CookieOptions = {
+			secure: !!secureCookiePrefix,
+			sameSite: "lax",
+			path: "/",
+			httpOnly: true,
+			...(crossSubdomainEnabled ? { domain } : {}),
+		};
+
+		// Merge with user-defined attributes
+		const mergedAttributes = {
+			...baseAttributes,
+			...options.advanced?.defaultCookieAttributes,
+			...overrideAttributes,
+			...attributes,
+		};
+
+		// Enforce security constraints for SameSite=None cookies
+		if (mergedAttributes.sameSite === "none") {
+			const isLocalhost =
+				options.baseURL?.startsWith("http://localhost") ||
+				options.baseURL?.startsWith("http://127.0.0.1");
+
+			// SameSite=None requires Secure=true (except localhost in development)
+			if (!mergedAttributes.secure) {
+				if (crossOriginConfig.allowLocalhostUnsecure && isLocalhost) {
+					// Allow unsecure cookies on localhost for development
+				} else {
+					throw new BetterAuthError(
+						"SameSite=None cookies require Secure=true. Set secure: true in your cookie attributes, use HTTPS, or disable crossOriginCookies.autoSecure for development.",
+					);
+				}
+			}
+
+			// Auto-set secure for SameSite=None (except localhost for development)
+			if (crossOriginConfig.autoSecure && !isLocalhost) {
+				mergedAttributes.secure = true;
+			}
+		}
+
+		// Apply secure cookie prefix if secure is enforced
+		const finalSecurePrefix = mergedAttributes.secure ? "__Secure-" : "";
+		const finalName = `${finalSecurePrefix}${name}`;
+
 		return {
-			name: `${secureCookiePrefix}${name}`,
-			attributes: {
-				secure: !!secureCookiePrefix,
-				sameSite: "lax",
-				path: "/",
-				httpOnly: true,
-				...(crossSubdomainEnabled ? { domain } : {}),
-				...options.advanced?.defaultCookieAttributes,
-				...overrideAttributes,
-				...attributes,
-			} as CookieOptions,
+			name: finalName,
+			attributes: mergedAttributes as CookieOptions,
 		};
 	}
 	return createCookie;
@@ -64,8 +111,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 
 export function getCookies(options: BetterAuthOptions) {
 	const createCookie = createCookieGetter(options);
-	const sessionMaxAge =
-		options.session?.expiresIn || createTime(7, "d").toSeconds();
+	const sessionMaxAge = options.session?.expiresIn || ms("7d") / 1000;
 	const sessionToken = createCookie("session_token", {
 		maxAge: sessionMaxAge,
 	});

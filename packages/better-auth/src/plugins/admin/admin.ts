@@ -485,6 +485,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.NO_DATA_TO_UPDATE,
 						});
 					}
+					if (ctx.body.data?.role) {
+						ctx.body.data.role = parseRoles(ctx.body.data.role);
+					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						ctx.body.data,
@@ -735,9 +738,8 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 
-					const sessions = await ctx.context.internalAdapter.listSessions(
-						ctx.body.userId,
-					);
+					const sessions: SessionWithImpersonatedBy[] =
+						await ctx.context.internalAdapter.listSessions(ctx.body.userId);
 					return {
 						sessions: sessions,
 					};
@@ -1345,6 +1347,13 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
 						});
 					}
+
+					if (ctx.body.userId === ctx.context.session.user.id) {
+						throw new APIError("BAD_REQUEST", {
+							message: ADMIN_ERROR_CODES.YOU_CANNOT_REMOVE_YOURSELF,
+						});
+					}
+
 					const user = await ctx.context.internalAdapter.findUserById(
 						ctx.body.userId,
 					);
