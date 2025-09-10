@@ -1168,7 +1168,7 @@ describe("stripe", async () => {
 		// Verify that the checkout session was created without trial_period_days
 		// We can't directly test the Stripe session, but we can verify the logic
 		// by checking that the user has trial history
-		const subscriptions = await ctx.adapter.findMany({
+		const subscriptions = (await ctx.adapter.findMany({
 			model: "subscription",
 			where: [
 				{
@@ -1176,13 +1176,15 @@ describe("stripe", async () => {
 					value: userRes.user.id,
 				},
 			],
-		}) as Subscription[];
+		})) as Subscription[];
 
 		// Should have 2 subscriptions (first canceled, second new)
 		expect(subscriptions).toHaveLength(2);
-		
+
 		// At least one should have trial data
-		const hasTrialData = subscriptions.some((s: Subscription) => s.trialStart || s.trialEnd);
+		const hasTrialData = subscriptions.some(
+			(s: Subscription) => s.trialStart || s.trialEnd,
+		);
 		expect(hasTrialData).toBe(true);
 	});
 
@@ -1249,7 +1251,7 @@ describe("stripe", async () => {
 		expect(secondUpgradeRes.data?.url).toBeDefined();
 
 		// Verify that the user has trial history from the first plan
-		const subscriptions = await ctx.adapter.findMany({
+		const subscriptions = (await ctx.adapter.findMany({
 			model: "subscription",
 			where: [
 				{
@@ -1257,20 +1259,23 @@ describe("stripe", async () => {
 					value: userRes.user.id,
 				},
 			],
-		}) as Subscription[];
+		})) as Subscription[];
 
 		// Should have at least 1 subscription (the starter with trial data)
 		expect(subscriptions.length).toBeGreaterThanOrEqual(1);
-		
+
 		// The starter subscription should have trial data
-		const starterSub = subscriptions.find((s: Subscription) => s.plan === "starter") as Subscription | undefined;
+		const starterSub = subscriptions.find(
+			(s: Subscription) => s.plan === "starter",
+		) as Subscription | undefined;
 		expect(starterSub?.trialStart).toBeDefined();
 		expect(starterSub?.trialEnd).toBeDefined();
-		
+
 		// Verify that the trial eligibility logic is working by checking
 		// that the user has ever had a trial (which should prevent future trials)
 		const hasEverTrialed = subscriptions.some((s: Subscription) => {
-			const hadTrial = !!(s.trialStart || s.trialEnd) || s.status === "trialing";
+			const hadTrial =
+				!!(s.trialStart || s.trialEnd) || s.status === "trialing";
 			return hadTrial;
 		});
 		expect(hasEverTrialed).toBe(true);
