@@ -8,6 +8,7 @@ import { createAuthClient } from "../../client";
 import type { OAuthOptions } from "./types";
 import type { ResourceServerMetadata } from "../../oauth-2.1/types";
 import { oauthProviderClient } from "./client";
+import { APIError } from "better-call";
 
 describe("oauth metadata", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -33,12 +34,16 @@ describe("oauth metadata", async () => {
 		oauthProviderConfig?: Omit<OAuthOptions, "loginPage" | "consentPage">;
 		jwtConfig?: JwtOptions;
 	}) {
-		const { customFetchImpl } = await getTestInstance({
+		const { auth, customFetchImpl } = await getTestInstance({
 			baseURL: authServerBaseUrl,
 			plugins: [
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
 					...opts?.oauthProviderConfig,
 				}),
 				...(opts?.oauthProviderConfig?.disableJWTPlugin
@@ -56,14 +61,15 @@ describe("oauth metadata", async () => {
 		});
 
 		return {
+			auth,
 			client: unauthenticatedClient,
 		};
 	}
 
 	it("should get openid, equivalent auth server", async () => {
-		const { client } = await createTestInstance();
-		const metadata = await client[".wellKnown"].openidConfiguration();
-		expect(metadata.data).toMatchObject({
+		const { auth } = await createTestInstance();
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata).toMatchObject({
 			scopes_supported: ["openid", "profile", "email", "offline_access"],
 			issuer: baseURL,
 			authorization_endpoint: `${baseURL}/oauth2/authorize`,
@@ -98,21 +104,22 @@ describe("oauth metadata", async () => {
 			id_token_signing_alg_values_supported: ["EdDSA"],
 			acr_values_supported: ["urn:mace:incommon:iap:bronze"],
 		});
-		const oauthMetadata = await client[".wellKnown"].oauthAuthorizationServer();
-		expect(oauthMetadata.data).toMatchObject(metadata.data ?? {});
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
+		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 
 	it("should not have an openid-configuration, has auth server configuration", async () => {
 		const scopes = ["create:test"];
-		const { client } = await createTestInstance({
+		const { auth } = await createTestInstance({
 			oauthProviderConfig: {
 				scopes,
 			},
 		});
-		const metadata = await client[".wellKnown"].openidConfiguration();
-		expect(metadata.error?.status).toBe(404);
-		const oauthMetadata = await client[".wellKnown"].oauthAuthorizationServer();
-		expect(oauthMetadata.data).toMatchObject({
+		await expect(auth.api.getOpenIdConfig()).rejects.toThrowError(
+			new APIError("NOT_FOUND"),
+		);
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
+		expect(oauthMetadata).toMatchObject({
 			scopes_supported: scopes,
 			issuer: baseURL,
 			authorization_endpoint: `${baseURL}/oauth2/authorize`,
@@ -147,7 +154,7 @@ describe("oauth metadata", async () => {
 	it("should utilize advertised metadata fields", async () => {
 		const advertisedScopes = ["email"];
 		const advertisedClaims = ["sub", "iss", "aud", "exp", "iat", "scope"];
-		const { client } = await createTestInstance({
+		const { auth } = await createTestInstance({
 			oauthProviderConfig: {
 				advertisedMetadata: {
 					scopes_supported: advertisedScopes,
@@ -155,13 +162,13 @@ describe("oauth metadata", async () => {
 				},
 			},
 		});
-		const metadata = await client[".wellKnown"].openidConfiguration();
-		expect(metadata.data).toMatchObject({
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata).toMatchObject({
 			scopes_supported: advertisedScopes,
 			claims_supported: advertisedClaims,
 		});
-		const oauthMetadata = await client[".wellKnown"].oauthAuthorizationServer();
-		expect(oauthMetadata.data).toMatchObject(metadata.data ?? {});
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
+		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 
 	it("should fail if advertised scope invalid", async () => {
@@ -175,6 +182,10 @@ describe("oauth metadata", async () => {
 						consentPage: "/consent",
 						advertisedMetadata: {
 							scopes_supported: advertisedScopes,
+						},
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
 						},
 					}),
 					jwt(),
@@ -208,23 +219,23 @@ describe("oauth metadata", async () => {
 
 	it("should advertise custom claims", async () => {
 		const customClaims = ["http://example.com/roles"];
-		const { client } = await createTestInstance({
+		const { auth } = await createTestInstance({
 			oauthProviderConfig: {
 				customClaims: customClaims,
 			},
 		});
-		const metadata = await client[".wellKnown"].openidConfiguration();
-		expect(metadata.data).toMatchObject({
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata).toMatchObject({
 			claims_supported: [...baseClaims, ...customClaims],
 		});
-		const oauthMetadata = await client[".wellKnown"].oauthAuthorizationServer();
-		expect(oauthMetadata.data).toMatchObject(metadata.data ?? {});
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
+		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 
 	it("should use the remoteJwks url", async () => {
 		const remoteUrl = "http://example.com/.well-known/openid-configuration";
 		const alg = "ES256";
-		const { client } = await createTestInstance({
+		const { auth } = await createTestInstance({
 			jwtConfig: {
 				jwks: {
 					remoteUrl,
@@ -234,27 +245,27 @@ describe("oauth metadata", async () => {
 				},
 			},
 		});
-		const metadata = await client[".wellKnown"].openidConfiguration();
-		expect(metadata.data).toMatchObject({
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata).toMatchObject({
 			jwks_uri: remoteUrl,
 			id_token_signing_alg_values_supported: [alg],
 		});
-		const oauthMetadata = await client[".wellKnown"].oauthAuthorizationServer();
-		expect(oauthMetadata.data).toMatchObject(metadata.data ?? {});
+		const oauthMetadata = await auth.api.getOpenIdConfig();
+		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 
 	it("should support disableJWTPlugin", async () => {
-		const { client } = await createTestInstance({
+		const { auth } = await createTestInstance({
 			oauthProviderConfig: {
 				disableJWTPlugin: true,
 			},
 		});
-		const metadata = await client[".wellKnown"].openidConfiguration();
-		expect(metadata.data).toMatchObject({
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata).toMatchObject({
 			id_token_signing_alg_values_supported: ["HS256"],
 		});
-		const oauthMetadata = await client[".wellKnown"].oauthAuthorizationServer();
-		expect(oauthMetadata.data).toMatchObject(metadata.data ?? {});
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
+		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 });
 
@@ -291,7 +302,7 @@ describe("metadata - resource discovery functions", async () => {
 	});
 
 	it("should provide resource discovery configuration", async () => {
-		const metadata = await auth.api.customMCPProtectedResource();
+		const metadata = await auth.api.getOAuthProtectedResourceConfig();
 		expect(metadata).toMatchObject({
 			resource: validAudience, // aud
 			authorization_servers: [authServerBaseUrl], // iss
@@ -301,7 +312,7 @@ describe("metadata - resource discovery functions", async () => {
 	it("should allow overwriting any field", async () => {
 		const anotherIssuer = "https://admin.example.com";
 		const anotherResource = "https://another-api.example.com";
-		const metadata = await auth.api.customMCPProtectedResource({
+		const metadata = await auth.api.getOAuthProtectedResourceConfig({
 			body: {
 				overrides: {
 					resource: anotherResource,

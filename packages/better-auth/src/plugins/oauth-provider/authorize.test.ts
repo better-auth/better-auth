@@ -18,6 +18,10 @@ describe("oauth authorize - unauthenticated", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
 			}),
 			jwt(),
 		],
@@ -106,6 +110,10 @@ describe("oauth authorize - authenticated", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
 			}),
 			jwt(),
 		],

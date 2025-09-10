@@ -16,6 +16,10 @@ describe("oauth register", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
 				scopes: [
 					"openid",
 					"profile",
@@ -233,6 +237,10 @@ describe("oauth register - unauthenticated", async () => {
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
 			}),
 		],
 	});
