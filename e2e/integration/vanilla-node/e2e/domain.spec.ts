@@ -3,18 +3,26 @@ import { runClient, setup } from "./utils";
 
 const { ref, start, clean } = setup();
 test.describe("cross domain", async () => {
-	test.beforeEach(async () => start());
+	test.beforeEach(async () =>
+		start({
+			baseURL: "https://demo.com",
+			https: true,
+		}),
+	);
 	test.afterEach(async () => clean());
 
 	test("should work across domains", async () => {
 		const browser = await chromium.launch({
-			args: [`--host-resolver-rules=MAP * localhost`],
+			args: [
+				"--host-resolver-rules=MAP * localhost",
+				"--ignore-certificate-errors",
+			],
 		});
 
 		const page = await browser.newPage();
 
 		await page.goto(
-			`http://test.com:${ref.clientPort}/?port=${ref.serverPort}`,
+			`https://test.com:${ref.clientPort}/?port=${ref.serverPort}&https=1`,
 		);
 		await page.locator("text=Ready").waitFor();
 
@@ -31,10 +39,25 @@ test.describe("cross domain", async () => {
 			}),
 		);
 
-		// Check that the session is not set because of we didn't set the cookie domain correctly
+		// Check that the session is set
 		const cookies = await page.context().cookies();
 		expect(
-			cookies.find((c) => c.name === "better-auth.session_token"),
-		).not.toBeDefined();
+			cookies.find((c) => c.name === "__Secure-better-auth.session_token"),
+		).toBeDefined();
+
+		// Check that we can get the session
+		await expect(
+			runClient(page, async ({ client }) => client.getSession()),
+		).resolves.toEqual(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					session: expect.objectContaining({}),
+					user: expect.objectContaining({
+						email: "test@test.com",
+					}),
+				}),
+				error: null,
+			}),
+		);
 	});
 });
