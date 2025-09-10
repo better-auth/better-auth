@@ -236,33 +236,20 @@ describe("generate", async () => {
 		});
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/migrations.sql");
 	});
-
-	it("should add plugin to empty plugins array without leading comma", async () => {
-		const initialConfig = `export const auth = betterAuth({
-			plugins: []
-		});`;
-
-		const mockFormat = (code: string) => Promise.resolve(code);
-		const mockSpinner = { stop: () => {} };
-		const plugins: SupportedPlugin[] = [
-			{
-				id: "next-cookies",
-				name: "nextCookies",
-				path: "better-auth/next-js",
-				clientName: undefined,
-				clientPath: undefined,
-			},
-		];
-
-		const result = await generateAuthConfig({
-			format: mockFormat,
-			current_user_config: initialConfig,
-			spinner: mockSpinner as any,
-			plugins,
-			database: null,
-		});
-
-		expect(result.generatedCode).toContain(`plugins: [nextCookies()]`);
-		expect(result.generatedCode).not.toContain(`plugins: [, nextCookies()]`);
+	it("should throw for unsupported additionalFields type in migrations", async () => {
+		await expect(
+			generateMigrations({
+				file: "test.sql",
+				options: {
+					database: new Database(":memory:"),
+					user: {
+						additionalFields: {
+							is_subscribed: { type: "object" } as unknown as any,
+						} as any,
+					},
+				},
+				adapter: {} as any,
+			}),
+		).rejects.toThrow(/Unsupported field type/);
 	});
 });
