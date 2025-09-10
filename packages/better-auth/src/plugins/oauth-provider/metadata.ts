@@ -199,7 +199,7 @@ export const oAuthProviderOpenIdConfigMetadata = <
 export const oAuthProviderProtectedResourceMetadata = <
 	Auth extends AuthContext & {
 		api: {
-			customMCPProtectedResource: (...args: any) => any;
+			getOAuthProtectedResourceConfig: (...args: any) => any;
 		};
 	},
 >(
@@ -273,7 +273,7 @@ export const oAuthProviderProtectedResourceMetadata = <
 	}
 
 	return async (_request: Request) => {
-		const res = await auth.api.customMCPProtectedResource({
+		const res = await auth.api.getOAuthProtectedResourceConfig({
 			body: opts?.overrides
 				? {
 						overrides: opts?.overrides,

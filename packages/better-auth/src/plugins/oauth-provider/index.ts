@@ -171,28 +171,26 @@ export const oauthProvider = (options: OAuthOptions) => {
 				const jwtPluginOptions = jwtPlugin.options;
 
 				// Issuer and well-known endpoint checks
-				const issuer = jwtPluginOptions?.jwt?.issuer;
-				if (issuer) {
-					const issuerPath = new URL(issuer).pathname;
-					// oAuth Server Config
-					if (
-						!opts.silenceWarnings?.oauthAuthServerConfig &&
-						!(ctx.options.basePath === "/" && issuerPath === "/")
-					) {
-						logger.warn(
-							`please ensure '/.well-known/oauth-authorization-server${issuerPath === "/" ? "" : issuerPath}' exists. Upon completion, clear with silenceWarnings.oauthAuthServerConfig.`,
-						);
-					}
-					// OpenId Config
-					if (
-						!opts.silenceWarnings?.openidConfig &&
-						ctx.options.basePath !== issuerPath &&
-						opts.scopes?.includes("openid")
-					) {
-						logger.warn(
-							`please ensure '${issuerPath}${issuerPath.endsWith("/") ? "" : "/"}.well-known/openid-configuration' exists. Upon completion, clear with silenceWarnings.openidConfig.`,
-						);
-					}
+				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
+				const issuerPath = new URL(issuer).pathname;
+				// oAuth Server Config
+				if (
+					!opts.silenceWarnings?.oauthAuthServerConfig &&
+					!(ctx.options.basePath === "/" && issuerPath === "/")
+				) {
+					logger.warn(
+						`Please ensure '/.well-known/oauth-authorization-server${issuerPath === "/" ? "" : issuerPath}' exists. Upon completion, clear with silenceWarnings.oauthAuthServerConfig.`,
+					);
+				}
+				// OpenId Config
+				if (
+					!opts.silenceWarnings?.openidConfig &&
+					ctx.options.basePath !== issuerPath &&
+					opts.scopes?.includes("openid")
+				) {
+					logger.warn(
+						`Please ensure '${issuerPath}${issuerPath.endsWith("/") ? "" : "/"}.well-known/openid-configuration' exists. Upon completion, clear with silenceWarnings.openidConfig.`,
+					);
 				}
 			}
 		},
@@ -245,12 +243,19 @@ export const oauthProvider = (options: OAuthOptions) => {
 			],
 		},
 		endpoints: {
+			/**
+			 * A server_only endpoint that helps provide the
+			 * oAuth Server configuration at the well-known endpoint.
+			 * 
+			 * Provided at /.well-known/oauth-authorization-server/[issuer-path]
+			 * (root if no issuer-path).
+			 */
 			getOAuthServerConfig: createAuthEndpoint(
-				"/.well-known/oauth-authorization-server",
+				"/.well-known/oauth-authorization-server/server",
 				{
 					method: "GET",
 					metadata: {
-						isAction: false,
+						SERVER_ONLY: true,
 					},
 				},
 				async (ctx) => {
@@ -269,12 +274,19 @@ export const oauthProvider = (options: OAuthOptions) => {
 					}
 				},
 			),
+			/**
+			 * A server_only endpoint that helps provide the
+			 * OpenId configuration at the well-known endpoint.
+			 * 
+			 * Provided at [issuer-path]/.well-known/openid-configuration
+			 * (root if no issuer-path).
+			 */
 			getOpenIdConfig: createAuthEndpoint(
-				"/.well-known/openid-configuration",
+				"/.well-known/openid-configuration/server",
 				{
 					method: "GET",
 					metadata: {
-						isAction: false,
+						SERVER_ONLY: true,
 					},
 				},
 				async (ctx) => {
@@ -297,8 +309,8 @@ export const oauthProvider = (options: OAuthOptions) => {
 			 *
 			 * @see https://datatracker.ietf.org/doc/html/rfc8414#section-2
 			 */
-			customMCPProtectedResource: createAuthEndpoint(
-				"/.well-known/oauth-protected-resource/custom",
+			getOAuthProtectedResourceConfig: createAuthEndpoint(
+				"/.well-known/oauth-protected-resource/server",
 				{
 					method: "POST",
 					metadata: {

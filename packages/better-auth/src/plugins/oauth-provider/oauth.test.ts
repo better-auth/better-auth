@@ -19,6 +19,10 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
 					}),
 				],
 			}),
@@ -35,6 +39,10 @@ describe("oauth - init", () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 						disableJWTPlugin: true,
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
 					}),
 				],
 			}),
@@ -49,6 +57,10 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
 					}),
 				],
 			}),
@@ -73,6 +85,10 @@ describe("oauth", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
 			}),
 		],
 	});
@@ -96,9 +112,21 @@ describe("oauth", async () => {
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
 		// Opens the authorization server for testing with genericOAuth
-		server = await listen(toNodeHandler(authorizationServer.handler), {
-			port,
-		});
+		server = await listen(
+			async (req, res) => {
+				// Adds openid-config as the endpoint manually since server-endpoint
+				if (req.url === "/.well-known/openid-configuration") {
+					const config = await authorizationServer.api.getOpenIdConfig();
+					res.setHeader("Content-Type", "application/json");
+					res.end(JSON.stringify(config));
+				} else {
+					toNodeHandler(authorizationServer.handler)(req, res);
+				}
+			},
+			{
+				port,
+			},
+		);
 
 		// This test is performed in register.test.ts
 		const application: Partial<OAuthClient> = {
@@ -173,6 +201,10 @@ describe("oauth", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
 					}),
 				],
 			}),
@@ -235,7 +267,7 @@ describe("oauth", async () => {
 
 		// The RP (Relying Party) - the client
 		const { customFetchImpl: customFetchImplRP } = await createTestInstance({
-			discoveryUrl: `${authServerBaseUrl}/api/auth/.well-known/openid-configuration`,
+			discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
 		});
 
 		const client = createAuthClient({
@@ -507,6 +539,10 @@ describe("oauth - config", () => {
 						consentPage: "/consent",
 						allowDynamicClientRegistration: true,
 						storeClientSecret,
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
 					}),
 					jwt(),
 				],
@@ -598,6 +634,10 @@ describe("oauth - config", () => {
 						allowDynamicClientRegistration: true,
 						storeClientSecret,
 						disableJWTPlugin: true,
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
 					}),
 				],
 			});
@@ -688,6 +728,10 @@ describe("oauth - config", () => {
 						consentPage: "/consent",
 						allowDynamicClientRegistration: true,
 						disableJWTPlugin,
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
 					}),
 					...(disableJWTPlugin ? [] : [jwt()]),
 				],
