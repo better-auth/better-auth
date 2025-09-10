@@ -222,16 +222,31 @@ export const createOrganization = <O extends OrganizationOptions>(
 						createdAt: new Date(),
 					}));
 
-				member = await adapter.createMember({
-					userId: user.id,
-					organizationId: organization.id,
-					role: ctx.context.orgOptions.creatorRole || "owner",
-				});
+				const trxRes = await ctx.context.adapter.transaction(
+					async (trxAdapter) => {
+						const member = await adapter.createMember(
+							{
+								userId: user.id,
+								organizationId: organization.id,
+								role: ctx.context.orgOptions.creatorRole || "owner",
+							},
+							trxAdapter,
+						);
 
-				teamMember = await adapter.findOrCreateTeamMember({
-					teamId: defaultTeam.id,
-					userId: user.id,
-				});
+						const teamMember = await adapter.findOrCreateTeamMember(
+							{
+								teamId: defaultTeam.id,
+								userId: user.id,
+							},
+							trxAdapter,
+						);
+
+						return { member, teamMember };
+					},
+				);
+
+				member = trxRes.member;
+				teamMember = trxRes.teamMember;
 			} else {
 				member = await adapter.createMember({
 					userId: user.id,
