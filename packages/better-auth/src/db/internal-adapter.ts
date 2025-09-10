@@ -18,6 +18,7 @@ import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId, type InternalLogger } from "../utils";
+import { shimLastParam } from "../utils/shim";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -35,45 +36,7 @@ export const createInternalAdapter = (
 	const { createWithHooks, updateWithHooks, updateManyWithHooks } =
 		getWithHooks(adapter, ctx);
 
-	return {
-		createOAuthUser: async (
-			user: Omit<User, "id" | "createdAt" | "updatedAt">,
-			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
-				Partial<Account>,
-			context?: GenericEndpointContext,
-		) => {
-			return adapter.transaction(async (trxAdapter) => {
-				const createdUser = await createWithHooks(
-					{
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						...user,
-					},
-					"user",
-					undefined,
-					context,
-					trxAdapter,
-				);
-				const createdAccount = await createWithHooks(
-					{
-						...account,
-						userId: createdUser!.id,
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
-					"account",
-					undefined,
-					context,
-					trxAdapter,
-				);
-				return {
-					user: createdUser,
-					account: createdAccount,
-				};
-			});
-		},
+	const baseMethods = {
 		createUser: async <T>(
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 				Partial<User> &
@@ -1034,6 +997,63 @@ export const createInternalAdapter = (
 				trxAdapter,
 			);
 			return verification;
+		},
+	};
+
+	return {
+		...baseMethods,
+		withTransaction: async <R>(
+			cb: (trx: {
+				adapter: TransactionAdapter;
+				internalAdapter: ReturnType<
+					typeof shimLastParam<typeof baseMethods, TransactionAdapter, true>
+				>;
+			}) => Promise<R>,
+		): Promise<R> => {
+			return adapter.transaction((trxAdapter) => {
+				return cb({
+					adapter: trxAdapter,
+					internalAdapter: shimLastParam(baseMethods, trxAdapter, true),
+				});
+			});
+		},
+		createOAuthUser: async (
+			user: Omit<User, "id" | "createdAt" | "updatedAt">,
+			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
+				Partial<Account>,
+			context?: GenericEndpointContext,
+		) => {
+			return adapter.transaction(async (trxAdapter) => {
+				const createdUser = await createWithHooks(
+					{
+						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						...user,
+					},
+					"user",
+					undefined,
+					context,
+					trxAdapter,
+				);
+				const createdAccount = await createWithHooks(
+					{
+						...account,
+						userId: createdUser!.id,
+						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+					"account",
+					undefined,
+					context,
+					trxAdapter,
+				);
+				return {
+					user: createdUser,
+					account: createdAccount,
+				};
+			});
 		},
 	};
 };

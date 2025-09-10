@@ -80,3 +80,46 @@ export const shimEndpoint = (ctx: AuthContext, value: any) => {
 		return response;
 	};
 };
+
+type Last<T extends any[]> = T extends [...infer I, infer L]
+	? L
+	: T extends [...infer I, (infer L)?]
+		? L | undefined
+		: never;
+type Rest<T extends any[]> = T extends [...infer I, infer L]
+	? I
+	: T extends [...infer I, (infer L)?]
+		? I
+		: never;
+type LastParameter<F extends (...args: any) => any> = Last<Parameters<F>>;
+type RestParameter<F extends (...args: any) => any> = Rest<Parameters<F>>;
+
+export const shimLastParam = <
+	T extends Record<string, (...args: any[]) => any>,
+	P extends LastParameter<T[keyof T]>,
+	Omit extends boolean = false,
+>(
+	obj: T,
+	shim: P,
+	shouldOmit: Omit = false as Omit,
+) => {
+	const out: Partial<Record<keyof T, any>> = {};
+
+	for (const key in obj) {
+		const fn = obj[key] as any;
+		out[key] = (...args: any[]) => {
+			if (args.length < fn.length) {
+				return fn(...args, shim);
+			}
+			return fn(...args);
+		};
+	}
+
+	return out as {
+		[K in keyof T]: (
+			...args: Omit extends true
+				? RestParameter<T[K]>
+				: [...RestParameter<T[K]>, LastParameter<T[K]>?]
+		) => ReturnType<T[K]>;
+	};
+};
