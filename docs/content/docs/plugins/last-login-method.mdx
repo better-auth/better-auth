@@ -272,8 +272,9 @@ export const auth = betterAuth({
 
 **customResolveMethod**: `(ctx: GenericEndpointContext) => string | null`
 - Custom function to determine the login method from the request context
-- Return `null` to use the default resolution logic
-- Useful for custom OAuth providers or authentication flows
+- **Fallback behavior**: Return `null` to use the default resolution logic for standard paths
+- The plugin will try your custom method first, then fall back to built-in detection
+- Useful for custom OAuth providers or authentication flows while preserving default functionality
 
 **schema**: `object`
 - Customize database field names when `storeInDatabase` is enabled
@@ -318,7 +319,7 @@ The plugin automatically detects the method from these endpoints:
 
 ### Custom Provider Tracking
 
-If you have custom OAuth providers or authentication methods, you can use the `customResolveMethod` option:
+You can use the `customResolveMethod` option to track custom authentication methods while preserving all built-in functionality. The plugin uses a **fallback pattern**: it tries your custom method first, and if that returns `null`, it falls back to the default logic.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -328,27 +329,34 @@ export const auth = betterAuth({
     plugins: [
         lastLoginMethod({
             customResolveMethod: (ctx) => {
-                // Track custom SAML provider
-                if (ctx.path === "/saml/callback") {
+                // Handle custom authentication methods
+                if (ctx.path === "/auth/saml/callback") {
                     return "saml"
                 }
                 
-                // Track magic link authentication
-                if (ctx.path === "/verify-magic-link") {
+                if (ctx.path === "/auth/magic-link/verify") {
                     return "magic-link"
                 }
                 
-                // Track phone authentication
-                if (ctx.path === "/sign-in/phone") {
+                if (ctx.path === "/auth/phone/verify") {
                     return "phone"
                 }
                 
-                // Return null to use default logic
+                // Return null to use default logic for standard paths:
+                // - /sign-in/email → "email" 
+                // - /callback/google → "google"
+                // - /oauth2/callback/github → "github"
                 return null
             }
         })
     ]
 })
 ```
+
+**Benefits of this approach:**
+- ✅ Custom paths get your custom method names
+- ✅ Standard paths (`/sign-in/email`, `/callback/google`, etc.) still work automatically  
+- ✅ No need to reimplement built-in detection logic
+- ✅ Easy to extend without breaking existing functionality
 
 
