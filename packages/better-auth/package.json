@@ -713,11 +713,22 @@
   },
   "peerDependencies": {
     "@lynx-js/react": "*",
+    "@sveltejs/kit": "^2.0.0",
+    "next": "^14.0.0 || ^15.0.0",
     "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0"
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "solid-js": "^1.0.0",
+    "svelte": "^4.0.0 || ^5.0.0",
+    "vue": "^3.0.0"
   },
   "peerDependenciesMeta": {
     "@lynx-js/react": {
+      "optional": true
+    },
+    "@sveltejs/kit": {
+      "optional": true
+    },
+    "next": {
       "optional": true
     },
     "react": {
@@ -725,12 +736,23 @@
     },
     "react-dom": {
       "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@lynx-js/react": "^0.112.5",
     "@prisma/client": "^5.22.0",
+    "@sveltejs/kit": "^2.37.1",
     "@tanstack/react-start": "^1.131.3",
+    "@tanstack/start-server-core": "^1.131.36",
     "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "^1.2.20",
     "@types/keccak": "^3.0.5",
@@ -739,6 +761,7 @@
     "@types/react": "^18.3.23",
     "better-sqlite3": "^12.2.0",
     "concurrently": "^9.2.1",
+    "deepmerge": "^4.3.1",
     "drizzle-orm": "^0.38.2",
     "happy-dom": "^18.0.1",
     "hono": "^4.9.0",
