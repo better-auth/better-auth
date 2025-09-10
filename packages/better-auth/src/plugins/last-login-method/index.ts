@@ -98,23 +98,12 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 					handler: createAuthMiddleware(async (ctx) => {
 						const lastUsedLoginMethod = config.customResolveMethod(ctx);
 						if (lastUsedLoginMethod) {
-							// Create cookie with user's specified name and inherit cross-subdomain settings
+							// Inherit cookie attributes from Better Auth's centralized cookie system
+							// This ensures consistency with cross-origin, cross-subdomain, and security settings
 							const cookieAttributes = {
+								...ctx.context.authCookies.sessionToken.options,
 								maxAge: config.maxAge,
-								secure: false,
-								httpOnly: false,
-								path: "/",
-								// Inherit cross-subdomain domain if enabled
-								...(ctx.context.options.advanced?.crossSubDomainCookies?.enabled
-									? {
-											domain:
-												ctx.context.options.advanced.crossSubDomainCookies
-													.domain ||
-												(ctx.context.options.baseURL
-													? new URL(ctx.context.options.baseURL).hostname
-													: undefined),
-										}
-									: {}),
+								httpOnly: false, // Override: plugin cookies are not httpOnly
 							};
 
 							ctx.setCookie(
