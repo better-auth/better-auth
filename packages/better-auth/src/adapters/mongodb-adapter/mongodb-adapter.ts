@@ -9,8 +9,8 @@ import {
 
 export interface MongoDBAdapterConfig {
 	/**
-	 * MongoDB Client used for transactions.
-	 * If not provided, operations will be executed without a session.
+	 * MongoDB client instance
+	 * If not provided, Database transactions won't be enabled.
 	 */
 	client?: MongoClient;
 	/**
