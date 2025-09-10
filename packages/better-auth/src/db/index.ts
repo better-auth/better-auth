@@ -1,3 +1,4 @@
+export * from "./adapter-bridge";
 export * from "./internal-adapter";
 export * from "./field";
 export * from "./get-tables";
