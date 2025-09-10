@@ -1403,6 +1403,7 @@ Option 2 (more complex):
 }
 ```
 
+
 ### From [MCP Provider](/docs/plugins/oidc-provider) to this oAuth2.1 provider
 
 The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
@@ -1412,3 +1413,65 @@ The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
 - `/oauth2/register` (previously `/mcp/register`)
 - `/mcp/get-session` removed as not oAuth2 compliant, use `/oauth2/introspect` instead
 - `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with `checkMcp` and `handleMcpErrors`)
+
+
+### From [API Key](/docs/plugins/api-key)
+
+This oAuth plugin provides additional security benefits over API Keys such as short-lived access tokens, key rotation, and centralized revocation.
+
+While we are currently unable to fully migrate the API Key schema and its functionality at this time, here are some implementation tips to assist in migration:
+
+#### Database
+  - API `permissions` should convert into `scopes`. However, you may wish to define `scopes` as a group of `permissions`, just depends on your implementation.
+    - NOTE: the following `scopes` are reserved: 'openid', 'profile', 'name', 'email', 'phone', 'address'.
+
+#### Setup
+  - Register an oAuth client with `scopes` (previously `permissions`).
+  - Store the `client_id` and `client_secret`(previously `api_key`) in your client's environment.
+
+#### Client
+For user-scoped data:
+  - Request authorization using the `authorization_code` with PKCE flow.
+    - Authorize first at `/oauth2/authorize`.
+    - At the callback, exchange the `code` for `tokens`
+  - Access token can be used to perform scoped actions
+  - If requested with a `offline_access` scope, you use the `refresh_token` to obtain new tokens. Save this in your database alongside the user that authorized it.
+    - Request a new token whenever the `access_token` expires using the `refresh_token` grant at the `/oauth2/token` endpoint
+    - To obtain a JWT-formatted token, you must request using the `resource` parameter again.
+
+For machine-to-machine communication:
+  - Request a token using the `client_credentials` grant at the `/oauth2/token` endpoint
+  - Store the token in memory
+    - Request a new token whenever token expires
+
+#### API Server
+
+##### JWT Access Tokens Only (Recommended)
+
+Simplify your API authentication by only accepting JWKS-verifiable JWT access tokens. Opaque tokens should be denied. JWT Tokens can be requested using the `resource` parameter at the `/oauth2/token` endpoint.
+
+**Benefits**:
+  - Fast: locally-verifiable
+  - Future-proof: fully independent from the authorization server (no better-auth config needed)
+  - API does not require `client_secret` or admin access to inspect the token's content
+
+**Verification Steps**:
+  - Verify token is valid. Check `iss` and `aud` fields against your `jwks`.
+  - Validate appropriate `scope` per endpoint
+
+##### JWT and Opaque Access Tokens
+
+Accept both JWT and Opaque Access Tokens via the `/oauth2/introspect` endpoint.
+
+**Benefits**
+  - Immediate token and client validation
+  - Client doesn't require `resource` parameter
+
+**Pitfalls**
+  - Secret Required: Requires a `client_secret` not available for public clients.
+    - NOTE: Introspection Bearer token and Private Key JWT methods are not yet implemented either
+  - Database Access: Every token received requires a database search.
+
+**Verification Steps**:
+  - Send received token to `/oauth2/introspect` and assert returned `active: true`.
+  - Validate appropriate `scope` per endpoint
