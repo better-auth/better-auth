@@ -938,12 +938,12 @@ async function adapterTest(
 					{
 						field: "name",
 						value: "con-user2",
-						connector: "AND"
+						connector: "AND",
 					},
 					{
 						field: "email",
 						value: "connector-user2@email.com",
-						connector: "AND"
+						connector: "AND",
 					},
 				],
 			});
@@ -961,7 +961,7 @@ async function adapterTest(
 					{
 						field: "name",
 						value: "con-user2",
-						connector: "OR"
+						connector: "OR",
 					}
 				],
 			});
