@@ -18,7 +18,7 @@ import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId, type InternalLogger } from "../utils";
-import { shimLastParam, type InferShimLastParamResult } from "../utils/shim";
+import { shimLastParam } from "../utils/shim";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
