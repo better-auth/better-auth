@@ -962,7 +962,7 @@ async function adapterTest(
 						field: "name",
 						value: "con-user2",
 						connector: "OR",
-					}
+					},
 				],
 			});
 			expect(orRes.length).toBe(2);
