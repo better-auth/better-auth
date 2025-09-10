@@ -20,7 +20,9 @@ import { safeJSONParse } from "../utils/json";
 import { generateId, type InternalLogger } from "../utils";
 import { createAdapterBridge } from "./adapter-bridge";
 
-export const createInternalAdapter = <OmitStaticMethods extends boolean = false>(
+export const createInternalAdapter = <
+	OmitStaticMethods extends boolean = false
+>(
 	adapter: OmitStaticMethods extends true ? TransactionAdapter : Adapter,
 	ctx: {
 		options: Omit<BetterAuthOptions, "logger">;
@@ -28,7 +30,7 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
 		generateId: AuthContext["generateId"];
 	},
-	omitStaticMethods?: OmitStaticMethods
+	omitStaticMethods?: OmitStaticMethods,
 ) => {
 	const logger = ctx.logger;
 	const options = ctx.options;
