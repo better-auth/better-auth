@@ -205,7 +205,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			trxAdapter?: TransactionAdapter,
 		) => {
 			const [member, user] = await Promise.all([
-				await (trxAdapter || adapter).findOne<Member>({
+				(trxAdapter || adapter).findOne<Member>({
 					model: "member",
 					where: [
 						{
@@ -218,7 +218,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						},
 					],
 				}),
-				await (trxAdapter || adapter).findOne<User>({
+				(trxAdapter || adapter).findOne<User>({
 					model: "user",
 					where: [
 						{
