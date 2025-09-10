@@ -285,6 +285,9 @@ export interface OAuthOptions {
 	 * or Secret Scanners (ie Github Secret Scanning, GitGuardian, Trufflehog).
 	 *
 	 * We recommend to append an underscore to make it more identifiable
+	 * Additionally, we recommend you add the prefix prior to the first deployment
+	 * otherwise you must utilize this with generateOpaqueAccessToken (storing the full
+	 * encoded value on the database).
 	 *
 	 * @example "domain_at_"
 	 * @default undefined
@@ -298,11 +301,30 @@ export interface OAuthOptions {
 	 * GitGuardian, Trufflehog).
 	 *
 	 * We recommend to append an underscore to make it more identifiable
+	 * Additionally, we recommend you add the prefix prior to the first deployment
+	 * otherwise you must utilize this with generateRefreshToken (storing the full
+	 * encoded value on the database).
 	 *
 	 * @example "domain_rt_"
 	 * @default undefined
 	 */
 	refreshTokenPrefix?: string;
+	/**
+	 * Adds a prefix to delivered client secrets.
+	 * Note: the prefix is not stored in the database.
+	 *
+	 * Useful when using Secret Scanners (ie Github Secret Scanning,
+	 * GitGuardian, Trufflehog).
+	 *
+	 * We recommend to append an underscore to make it more identifiable.
+	 * Additionally, we recommend you add the prefix prior to the first deployment
+	 * otherwise you must utilize this with generateClientSecret (storing the full
+	 * encoded value on the database).
+	 *
+	 * @example "domain_cs_"
+	 * @default undefined
+	 */
+	clientSecretPrefix?: string;
 	/**
 	 * Generate a unique access token to save on the database.
 	 *
