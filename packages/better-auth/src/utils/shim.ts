@@ -1,4 +1,5 @@
 import type { AuthContext } from "../init";
+import type { Prettify } from "../types/helper";
 
 export const shimContext = <T extends Record<string, any>>(
 	originalObject: T,
@@ -93,6 +94,12 @@ type Rest<T extends any[]> = T extends [...infer I, infer L]
 		: never;
 type LastParameter<F extends (...args: any) => any> = Last<Parameters<F>>;
 type RestParameter<F extends (...args: any) => any> = Rest<Parameters<F>>;
+
+export type InferShimLastParamResult<
+	T extends Record<string, (...args: any[]) => any>,
+	P extends LastParameter<T[keyof T]>,
+	Omit extends boolean = false,
+> = Prettify<ReturnType<typeof shimLastParam<T, P, Omit>>>;
 
 export const shimLastParam = <
 	T extends Record<string, (...args: any[]) => any>,

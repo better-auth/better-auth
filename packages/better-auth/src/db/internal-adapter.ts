@@ -18,7 +18,7 @@ import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId, type InternalLogger } from "../utils";
-import { shimLastParam } from "../utils/shim";
+import { shimLastParam, type InferShimLastParamResult } from "../utils/shim";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -1005,8 +1005,10 @@ export const createInternalAdapter = (
 		withTransaction: async <R>(
 			cb: (trx: {
 				adapter: TransactionAdapter;
-				internalAdapter: ReturnType<
-					typeof shimLastParam<typeof baseMethods, TransactionAdapter, true>
+				internalAdapter: InferShimLastParamResult<
+					typeof baseMethods,
+					TransactionAdapter,
+					true
 				>;
 			}) => Promise<R>,
 		): Promise<R> => {
