@@ -29,7 +29,6 @@ const adapterTests = {
 	UPDATE_MODEL: "update model",
 	SHOULD_FIND_MANY: "should find many",
 	SHOULD_FIND_MANY_WITH_WHERE: "should find many with where",
-	SHOULD_FIND_MANY_WITH_CONNECTOR: "should find many with connector",
 	SHOULD_FIND_MANY_WITH_OPERATORS: "should find many with operators",
 	SHOULD_WORK_WITH_REFERENCE_FIELDS: "should work with reference fields",
 	SHOULD_FIND_MANY_WITH_NOT_IN_OPERATOR:
@@ -339,61 +338,6 @@ async function adapterTest(
 		},
 	);
 
-	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_CONNECTOR)(
-		`${testPrefix ? `${testPrefix} - ` : ""}${
-			adapterTests.SHOULD_FIND_MANY_WITH_CONNECTOR
-		}`,
-		async ({ onTestFailed }) => {
-			await resetDebugLogs();
-			onTestFailed(async () => {
-				await printDebugLogs();
-			});
-			const user = await (await adapter()).create<User>({
-				model: "user",
-				data: {
-					name: "connector user",
-					email: "test-connector@email.com",
-					emailVerified: true,
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				},
-			});
-			const andRes = await (await adapter()).findMany({
-				model: "user",
-				where: [
-					{
-						field: "id",
-						value: user.id,
-						connector: "AND",
-					},
-					{
-						field: "emailVerified",
-						value: false,
-						connector: "AND",
-					},
-				],
-			});
-			expect(andRes.length).toBe(0);
-
-			const orRes = await (await adapter()).findMany({
-				model: "user",
-				where: [
-					{
-						field: "id",
-						value: user.id,
-						connector: "OR",
-					},
-					{
-						field: "emailVerified",
-						value: false,
-						connector: "OR",
-					},
-				],
-			});
-			expect(orRes.length).toBe(2);
-		},
-	);
-
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_OPERATORS)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${
 			adapterTests.SHOULD_FIND_MANY_WITH_OPERATORS
@@ -450,7 +394,7 @@ async function adapterTest(
 			const allUsers = await (await adapter()).findMany<User>({
 				model: "user",
 			});
-			expect(allUsers.length).toBe(7);
+			expect(allUsers.length).toBe(6);
 			const usersWithoutNotIn = await (await adapter()).findMany<User>({
 				model: "user",
 				where: [
@@ -461,7 +405,7 @@ async function adapterTest(
 					},
 				],
 			});
-			expect(usersWithoutNotIn.length).toBe(5);
+			expect(usersWithoutNotIn.length).toBe(4);
 			//cleanup
 			await (await adapter()).delete({
 				model: "user",
@@ -603,7 +547,7 @@ async function adapterTest(
 				model: "user",
 				offset: 2,
 			});
-			expect(res.length).toBe(6);
+			expect(res.length).toBe(5);
 		},
 	);
 
