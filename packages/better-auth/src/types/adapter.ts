@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "./options";
+import type { AdapterConfig, CustomAdapter } from "../adapters";
 
 /**
  * Adapter where clause
@@ -12,6 +13,7 @@ export type Where = {
 		| "gt"
 		| "gte"
 		| "in"
+		| "not_in"
 		| "contains"
 		| "starts_with"
 		| "ends_with"; //eq by default
@@ -77,7 +79,9 @@ export type Adapter = {
 		options: BetterAuthOptions,
 		file?: string,
 	) => Promise<AdapterSchemaCreation>;
-	options?: Record<string, any>;
+	options?: {
+		adapterConfig: AdapterConfig;
+	} & CustomAdapter["options"];
 };
 
 export type AdapterSchemaCreation = {

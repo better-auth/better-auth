@@ -37,7 +37,7 @@ BETTER_AUTH_SECRET=
 2. **Set Base URL**
 
 ```txt title=".env"
-BETTER_AUTH_URL=http://localhost:3000 #Base URL of your app
+BETTER_AUTH_URL=http://localhost:3000 # Base URL of your app
 ```
 
 </Step>
@@ -294,7 +294,7 @@ Create a new file or route in your framework's designated catch-all route handle
 
     const app = new Hono();
 
-    app.on(["POST", "GET"], "/api/auth/**", (c) => auth.handler(c.req.raw));
+    app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
     serve(app);
     ```

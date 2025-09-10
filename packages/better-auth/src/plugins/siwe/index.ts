@@ -1,7 +1,7 @@
 import { APIError, createAuthEndpoint } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
-import type { BetterAuthPlugin } from "../../types";
+import type { BetterAuthPlugin, InferOptionSchema } from "../../types";
 import type {
 	ENSLookupArgs,
 	ENSLookupResult,
@@ -12,6 +12,7 @@ import type { User } from "../../types";
 import { schema } from "./schema";
 import { getOrigin } from "../../utils/url";
 import { toChecksumAddress } from "../../utils/hashing";
+import { mergeSchema } from "../../db/schema";
 
 export interface SIWEPluginOptions {
 	domain: string;
@@ -20,12 +21,13 @@ export interface SIWEPluginOptions {
 	getNonce: () => Promise<string>;
 	verifyMessage: (args: SIWEVerifyMessageArgs) => Promise<boolean>;
 	ensLookup?: (args: ENSLookupArgs) => Promise<ENSLookupResult>;
+	schema?: InferOptionSchema<typeof schema>;
 }
 
 export const siwe = (options: SIWEPluginOptions) =>
 	({
 		id: "siwe",
-		schema,
+		schema: mergeSchema(schema, options?.schema),
 		endpoints: {
 			getSiweNonce: createAuthEndpoint(
 				"/siwe/nonce",
