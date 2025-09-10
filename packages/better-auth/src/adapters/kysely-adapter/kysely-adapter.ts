@@ -95,8 +95,20 @@ export const kyselyAdapter = (
 				const { type = "sqlite" } = config || {};
 				let f = schema[model]?.fields[field];
 				if (!f) {
-					//@ts-expect-error - The model name can be a sanitized, thus using the custom model name, not one of the default ones.
-					f = Object.values(schema).find((f) => f.modelName === model)!;
+					const schemaModel = Object.values(schema).find(
+						(f) => f.modelName === model,
+					);
+					if (schemaModel) {
+						f = schemaModel.fields[field];
+						if (!f) {
+							const foundField = Object.values(schemaModel.fields || {}).find(
+								(f) => f.fieldName === field,
+							);
+							if (foundField) {
+								f = foundField;
+							}
+						}
+					}
 				}
 				if (
 					f.type === "boolean" &&
