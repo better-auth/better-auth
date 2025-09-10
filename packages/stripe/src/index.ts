@@ -273,10 +273,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									...ctx.body.metadata,
 									organizationId: organization.id,
 								},
-							},
-							{
-								idempotencyKey: generateRandomString(32, "a-z", "0-9"),
-							},
+							}
 						);
 
 						organization = await ctx.context.adapter.update<
@@ -1326,29 +1323,34 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								);
 							}
 
-							if (
-								options.createOrganizationCustomer &&
-								organization.members?.[0]?.userId
-							) {
-								const user = await ctx.context.adapter.findOne<User>({
+							const owner = organization.members?.find((m) => m.role === "owner");
+							if (!owner) {
+								return logger.error(
+									"#BETTER_AUTH: Organization has no owner, cannot create Stripe customer",
+								);
+							}
+
+							const user = await ctx.context.adapter.findOne<User>({
 									model: "user",
 									where: [
 										{
 											field: "id",
-											value: organization.members?.[0]?.userId,
+											value: owner.userId,
 										},
 									],
 								});
 
+							if (options.createOrganizationCustomer && user) {
 								const stripeCustomer = await client.customers.create({
 									name: organization.name,
-									email: user?.email,
+									email: user.email,
 									metadata: {
 										organizationId: organization.id,
 									},
 								});
 
-								const customer = await ctx.context.adapter.update<Customer>({
+							
+								const customer = await ctx.context.adapter.update({
 									model: "organization",
 									update: {
 										stripeCustomerId: stripeCustomer.id,
@@ -1367,11 +1369,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									);
 								} else {
 									await options.onCustomerCreate?.({
-										customer,
+									
 										stripeCustomer,
-										type: "organization",
+										user,
 										organization,
-									});
+									},ctx);
 								}
 							}
 						}),

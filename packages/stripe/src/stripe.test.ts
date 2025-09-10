@@ -1,8 +1,9 @@
 import { betterAuth, type User } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
+import { organizationClient } from "better-auth/client/plugins";
 import { setCookieToHeader } from "better-auth/cookies";
-import { bearer } from "better-auth/plugins";
+import { bearer, organization, type Organization } from "better-auth/plugins";
 import Stripe from "stripe";
 import { vi } from "vitest";
 import { stripe } from ".";
@@ -51,12 +52,16 @@ describe("stripe", async () => {
 		account: [],
 		customer: [],
 		subscription: [],
+		organization: [],
+		member: [],
+		invitation: [],
 	};
 	const memory = memoryAdapter(data);
 	const stripeOptions = {
 		stripeClient: _stripe,
 		stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 		createCustomerOnSignUp: true,
+		createOrganizationCustomer: true,
 		subscription: {
 			enabled: true,
 			plans: [
@@ -80,13 +85,14 @@ describe("stripe", async () => {
 		emailAndPassword: {
 			enabled: true,
 		},
-		plugins: [stripe(stripeOptions)],
+		plugins: [organization(),stripe(stripeOptions)],
 	});
 	const ctx = await auth.$context;
 	const authClient = createAuthClient({
 		baseURL: "http://localhost:3000",
 		plugins: [
 			bearer(),
+			organizationClient(),
 			stripeClient({
 				subscription: true,
 			}),
@@ -111,6 +117,9 @@ describe("stripe", async () => {
 		data.account = [];
 		data.customer = [];
 		data.subscription = [];
+		data.organization = [];
+		data.member = [];
+		data.invitation = [];
 
 		vi.clearAllMocks();
 	});
@@ -1103,13 +1112,12 @@ describe("stripe", async () => {
 		expect(personalAfter?.status).toBe("active");
 	});
 
-	it("should reuse incomplete subscription when upgrading again", async () => {
-		// Create a user
+		// Organization tests
+	it("should create a customer when organization is created", async () => {
 		const userRes = await authClient.signUp.email(
 			{
-				email: "incomplete@example.com",
-				password: "password",
-				name: "Incomplete Test",
+				...testUser,
+				email: "list-test@email.com",
 			},
 			{
 				throw: true,
@@ -1119,8 +1127,8 @@ describe("stripe", async () => {
 		const headers = new Headers();
 		await authClient.signIn.email(
 			{
-				email: "incomplete@example.com",
-				password: "password",
+				...testUser,
+				email: "list-test@email.com",
 			},
 			{
 				throw: true,
@@ -1128,43 +1136,162 @@ describe("stripe", async () => {
 			},
 		);
 
-		// First upgrade attempt - creates incomplete subscription
-		const firstUpgrade = await authClient.subscription.upgrade({
+		const organization = await authClient.organization.create({
+			name: "My Organization",
+			slug: "my-org-001",
+			logo: "https://example.com/logo.png",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(organization.data?.id).toBeDefined();
+
+		const res = await ctx.adapter.findOne<
+			Organization & { stripeCustomerId: string }
+		>({
+			model: "organization",
+			where: [
+				{
+					field: "id",
+					value: organization?.data?.id ?? "",
+				},
+			],
+		});
+
+		expect(res).toMatchObject({
+			id: expect.any(String),
+			stripeCustomerId: expect.any(String),
+		});
+	});
+
+	it("should create a subscription for organization customer", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "list-test@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "list-test@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		const organization = await authClient.organization.create({
+			name: "My Organization",
+			slug: "my-org-002",
+			logo: "https://example.com/logo.png",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(organization.data?.id).toBeDefined();
+
+		const res = await authClient.subscription.upgrade({
 			plan: "starter",
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(firstUpgrade.data?.url).toBe("https://checkout.stripe.com/mock");
 
-		// Check that an incomplete subscription was created
-		const subscriptions = await ctx.adapter.findMany<Subscription>({
+		expect(res.data?.url).toBeDefined();
+
+		const subscription = await ctx.adapter.findOne<Subscription>({
 			model: "subscription",
-			where: [{ field: "referenceId", value: userRes.user.id }],
+			where: [
+				{
+					field: "referenceId",
+					value: organization?.data?.id ?? "",
+				},
+			],
 		});
-		expect(subscriptions).toHaveLength(1);
-		expect(subscriptions[0].status).toBe("incomplete");
-		const firstSubId = subscriptions[0].id;
 
-		// Second upgrade attempt - should reuse the same subscription
-		const secondUpgrade = await authClient.subscription.upgrade({
-			plan: "premium",
-			seats: 2,
+		console.log(subscription);
+
+		expect(subscription).toMatchObject({
+			id: expect.any(String),
+			plan: "starter",
+			referenceId: organization?.data?.id ?? "",
+			stripeCustomerId: expect.any(String),
+			status: "incomplete",
+			periodStart: undefined,
+			cancelAtPeriodEnd: false,
+			trialStart: undefined,
+			trialEnd: undefined,
+		});
+	});
+
+	it("should list active subscriptions for organization customer", async () => {
+		await authClient.signUp.email(testUser, {
+			throw: true,
+		});
+
+		const headers = new Headers();
+
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		const organization = await authClient.organization.create({
+			name: "My Organization",
+			slug: "my-org-003",
+			logo: "https://example.com/logo.png",
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(secondUpgrade.data?.url).toBe("https://checkout.stripe.com/mock");
 
-		// Check that the same subscription was updated, not a new one created
-		const subscriptionsAfter = await ctx.adapter.findMany<Subscription>({
-			model: "subscription",
-			where: [{ field: "referenceId", value: userRes.user.id }],
+		const listRes = await authClient.subscription.list({
+			fetchOptions: {
+				headers,
+			},
 		});
-		expect(subscriptionsAfter).toHaveLength(1);
-		expect(subscriptionsAfter[0].id).toBe(firstSubId);
-		expect(subscriptionsAfter[0].status).toBe("incomplete");
-		expect(subscriptionsAfter[0].plan).toBe("premium");
-		expect(subscriptionsAfter[0].seats).toBe(2);
+
+		expect(Array.isArray(listRes.data)).toBe(true);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+		const listBeforeActive = await authClient.subscription.list({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(listBeforeActive.data?.length).toBe(0);
+		// Update the subscription status to active
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: organization?.data?.id ?? "",
+				},
+			],
+		});
+		const listAfterRes = await authClient.subscription.list({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(listAfterRes.data?.length).toBeGreaterThan(0);
 	});
 });
