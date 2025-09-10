@@ -658,7 +658,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return team;
 		},
 
-		deleteTeam: async (teamId: string, trxAdapter?: TransactionAdapter) => {
+		deleteTeam: async (teamId: string) => {
 			return adapter.transaction(async (trxAdapter) => {
 				await trxAdapter.deleteMany({
 					model: "teamMember",
