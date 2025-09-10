@@ -1103,83 +1103,22 @@ describe("stripe", async () => {
 		expect(personalAfter?.status).toBe("active");
 	});
 
-<<<<<<< Updated upstream
-	it("should reuse incomplete subscription when upgrading again", async () => {
-		// Create a user
-		const userRes = await authClient.signUp.email(
-			{
-				email: "incomplete@example.com",
-				password: "password",
-				name: "Incomplete Test",
-			},
-			{
-				throw: true,
-			},
-=======
 	it("should prevent multiple free trials for the same user", async () => {
 		// Create a user
 		const userRes = await authClient.signUp.email(
 			{ ...testUser, email: "trial-prevention@email.com" },
 			{ throw: true },
->>>>>>> Stashed changes
 		);
 
 		const headers = new Headers();
 		await authClient.signIn.email(
-<<<<<<< Updated upstream
-			{
-				email: "incomplete@example.com",
-				password: "password",
-			},
-=======
 			{ ...testUser, email: "trial-prevention@email.com" },
->>>>>>> Stashed changes
 			{
 				throw: true,
 				onSuccess: setCookieToHeader(headers),
 			},
 		);
 
-<<<<<<< Updated upstream
-		// First upgrade attempt - creates incomplete subscription
-		const firstUpgrade = await authClient.subscription.upgrade({
-			plan: "starter",
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(firstUpgrade.data?.url).toBe("https://checkout.stripe.com/mock");
-
-		// Check that an incomplete subscription was created
-		const subscriptions = await ctx.adapter.findMany<Subscription>({
-			model: "subscription",
-			where: [{ field: "referenceId", value: userRes.user.id }],
-		});
-		expect(subscriptions).toHaveLength(1);
-		expect(subscriptions[0].status).toBe("incomplete");
-		const firstSubId = subscriptions[0].id;
-
-		// Second upgrade attempt - should reuse the same subscription
-		const secondUpgrade = await authClient.subscription.upgrade({
-			plan: "premium",
-			seats: 2,
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(secondUpgrade.data?.url).toBe("https://checkout.stripe.com/mock");
-
-		// Check that the same subscription was updated, not a new one created
-		const subscriptionsAfter = await ctx.adapter.findMany<Subscription>({
-			model: "subscription",
-			where: [{ field: "referenceId", value: userRes.user.id }],
-		});
-		expect(subscriptionsAfter).toHaveLength(1);
-		expect(subscriptionsAfter[0].id).toBe(firstSubId);
-		expect(subscriptionsAfter[0].status).toBe("incomplete");
-		expect(subscriptionsAfter[0].plan).toBe("premium");
-		expect(subscriptionsAfter[0].seats).toBe(2);
-=======
 		// First subscription with trial
 		const firstUpgradeRes = await authClient.subscription.upgrade({
 			plan: "starter",
@@ -1335,6 +1274,5 @@ describe("stripe", async () => {
 			return hadTrial;
 		});
 		expect(hasEverTrialed).toBe(true);
->>>>>>> Stashed changes
 	});
 });
