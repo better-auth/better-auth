@@ -136,6 +136,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		if (options.advanced?.database?.useNumberId) {
 			if (databaseType === "pg") {
 				id = `serial("id").primaryKey()`;
+			} else if (databaseType === "sqlite") {
+				id = `int("id").primaryKey()`;
 			} else {
 				id = `int("id").autoincrement().primaryKey()`;
 			}

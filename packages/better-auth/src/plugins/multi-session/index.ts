@@ -329,10 +329,14 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						const ids = Object.keys(cookies)
 							.map((key) => {
 								if (isMultiSessionCookie(key)) {
-									ctx.setCookie(key.toLowerCase(), "", {
-										...ctx.context.authCookies.sessionToken.options,
-										maxAge: 0,
-									});
+									ctx.setCookie(
+										key.toLowerCase().replace("__secure-", "__Secure-"),
+										"",
+										{
+											...ctx.context.authCookies.sessionToken.options,
+											maxAge: 0,
+										},
+									);
 									const token = cookies[key].split(".")[0];
 									return token;
 								}

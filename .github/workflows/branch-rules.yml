@@ -17,7 +17,7 @@ jobs:
           fetch-depth: 0
 
       - name: Filter changed files
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: filter
         with:
           base: ${{ github.base_ref }}
@@ -28,12 +28,6 @@ jobs:
             # 'docs' filter matches any file in the docs/ directory
             docs:
               - 'docs/**'
-
-      - name: Enforce docs-only PRs target main
-        if: steps.filter.outputs.docs == 'true' && steps.filter.outputs.src == 'false' && github.base_ref != 'main'
-        run: |
-          echo "Error: Pull requests that only change documentation must target the 'main' branch."
-          exit 1
 
       - name: Enforce code change PRs target canary or staging
         if: steps.filter.outputs.src == 'true' && github.base_ref != 'canary' && !startsWith(github.base_ref, 'v')
