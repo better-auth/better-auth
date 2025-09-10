@@ -225,7 +225,7 @@ export const getAuthTables = (
 					type: "date",
 					required: false,
 					fieldName:
-						options.account?.fields?.accessTokenExpiresAt ||
+						options.account?.fields?.refreshTokenExpiresAt ||
 						"refreshTokenExpiresAt",
 				},
 				scope: {
