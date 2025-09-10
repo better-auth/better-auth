@@ -47,6 +47,8 @@ const adapterTests = {
 	SHOULD_SEARCH_USERS_WITH_STARTS_WITH: "should search users with startsWith",
 	SHOULD_SEARCH_USERS_WITH_ENDS_WITH: "should search users with endsWith",
 	SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: "should prefer generateId if provided",
+	SHOULD_ROLLBACK_FAILING_TRANSACTION: "should rollback failing transaction",
+	SHOULD_RETURN_TRANSACTION_RESULT: "should return transaction result",
 	SHOULD_FIND_MANY_WITH_CONNECTORS: "should find many with connectors",
 } as const;
 
@@ -819,6 +821,83 @@ async function adapterTest(
 			});
 
 			expect(res.id).toBe("mocked-id");
+		},
+	);
+
+	test.skipIf(disabledTests?.SHOULD_ROLLBACK_FAILING_TRANSACTION)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.SHOULD_ROLLBACK_FAILING_TRANSACTION}`,
+		async ({ onTestFailed }) => {
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
+			});
+			const customAdapter = await adapter();
+			const user5 = {
+				name: "user5",
+				email: "user5@email.com",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			};
+			const user6 = {
+				name: "user6",
+				email: "user6@email.com",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			};
+			await expect(
+				customAdapter.transaction(async (tx) => {
+					await tx.create({ model: "user", data: user5 });
+					throw new Error("Simulated failure");
+					await tx.create({ model: "user", data: user6 });
+				}),
+			).rejects.toThrow("Simulated failure");
+
+			await expect(
+				customAdapter.findMany({
+					model: "user",
+					where: [
+						{
+							field: "email",
+							value: user5.email,
+							connector: "OR",
+						},
+						{
+							field: "email",
+							value: user6.email,
+							connector: "OR",
+						},
+					],
+				}),
+			).resolves.toEqual([]);
+		},
+	);
+
+	test.skipIf(disabledTests?.SHOULD_RETURN_TRANSACTION_RESULT)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.SHOULD_RETURN_TRANSACTION_RESULT}`,
+		async ({ onTestFailed }) => {
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
+			});
+			const customAdapter = await adapter();
+			const result = await customAdapter.transaction(async (tx) => {
+				const createdUser = await tx.create<User>({
+					model: "user",
+					data: {
+						name: "user6",
+						email: "user6@email.com",
+						emailVerified: true,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				});
+
+				return createdUser.email;
+			});
+
+			expect(result).toEqual("user6@email.com");
 		},
 	);
 

@@ -16,7 +16,7 @@ catalogs:
       specifier: ^5.9.2
       version: 5.9.2
     unbuild:
-      specifier: ^3.6.1
+      specifier: 3.6.1
       version: 3.6.1
     vitest:
       specifier: ^3.2.4
@@ -403,7 +403,7 @@ importers:
         version: 0.8.17(next@15.5.2(@babel/core@7.28.4)(@playwright/test@1.55.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.90.0))(react@19.1.1)
       '@vercel/analytics':
         specifier: ^1.5.0
-        version: 1.5.0(@remix-run/react@2.17.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(@sveltejs/kit@2.36.1(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(next@15.5.2(@babel/core@7.28.4)(@playwright/test@1.55.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.90.0))(react@19.1.1)(svelte@5.38.2)(vue-router@4.5.1(vue@3.5.19(typescript@5.9.2)))(vue@3.5.19(typescript@5.9.2))
+        version: 1.5.0(@remix-run/react@2.17.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(@sveltejs/kit@2.37.1(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(next@15.5.2(@babel/core@7.28.4)(@playwright/test@1.55.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.90.0))(react@19.1.1)(svelte@5.38.2)(vue-router@4.5.1(vue@3.5.19(typescript@5.9.2)))(vue@3.5.19(typescript@5.9.2))
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -662,6 +662,9 @@ importers:
       nanostores:
         specifier: ^0.11.4
         version: 0.11.4
+      svelte:
+        specifier: ^4.0.0 || ^5.0.0
+        version: 5.38.2
       zod:
         specifier: ^4.1.5
         version: 4.1.5
@@ -672,9 +675,15 @@ importers:
       '@prisma/client':
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
+      '@sveltejs/kit':
+        specifier: ^2.37.1
+        version: 2.37.1(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))
       '@tanstack/react-start':
         specifier: ^1.131.3
         version: 1.131.27(@libsql/client@0.15.14)(@tanstack/react-router@1.131.27(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(@vitejs/plugin-react@5.0.1(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(better-sqlite3@12.2.0)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@18.3.23)(better-sqlite3@12.2.0)(bun-types@1.2.21(@types/react@18.3.23))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(prisma@5.22.0)(react@19.1.1))(mysql2@3.14.4)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(vite-plugin-solid@2.11.8(solid-js@1.9.9)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))
+      '@tanstack/start-server-core':
+        specifier: ^1.131.36
+        version: 1.131.36
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -699,6 +708,9 @@ importers:
       concurrently:
         specifier: ^9.2.1
         version: 9.2.1
+      deepmerge:
+        specifier: ^4.3.1
+        version: 4.3.1
       drizzle-orm:
         specifier: ^0.38.2
         version: 0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@18.3.23)(better-sqlite3@12.2.0)(bun-types@1.2.21(@types/react@18.3.23))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(prisma@5.22.0)(react@19.1.1)
@@ -912,9 +924,15 @@ importers:
       better-call:
         specifier: 'catalog:'
         version: 1.0.18
+      body-parser:
+        specifier: ^2.2.0
+        version: 2.2.0
       express:
         specifier: ^5.1.0
         version: 5.1.0
+      unbuild:
+        specifier: 'catalog:'
+        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
 
   packages/stripe:
     dependencies:
@@ -931,6 +949,9 @@ importers:
       stripe:
         specifier: ^18.5.0
         version: 18.5.0(@types/node@24.3.1)
+      unbuild:
+        specifier: 'catalog:'
+        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
 
 packages:
 
@@ -4752,8 +4773,8 @@ packages:
     peerDependencies:
       acorn: ^8.9.0
 
-  '@sveltejs/kit@2.36.1':
-    resolution: {integrity: sha512-dldNCtSIpaGxQMEfHaUxSPH/k3uU28pTZwtKzfkn8fqpOjWufKlMBeIL7FJ/s93dOrhEq41zaQYkXh+XTgEgVw==}
+  '@sveltejs/kit@2.37.1':
+    resolution: {integrity: sha512-4T9rF2Roe7RGvHfcn6+n92Yc2NF88k7ljFz9+wE0jWxyencqRpadr2/CvlcQbbTXf1ozmFxgMO6af+qm+1mPFw==}
     engines: {node: '>=18.13'}
     hasBin: true
     peerDependencies:
@@ -4942,6 +4963,10 @@ packages:
     resolution: {integrity: sha512-NEBNxZ/LIBIh6kvQntr6bKq57tDe55zecyTtjAmzPkYFsMy1LXEpRm5H3BPiteBMRApAjuaq+bS1qA664hLH6Q==}
     engines: {node: '>=12'}
 
+  '@tanstack/router-core@1.131.36':
+    resolution: {integrity: sha512-faGrKwrJBjJDxbcyeaOXgQcyccmzIGkwk+tnFeJuMTnH5OMfArykYnTZ9BxIrlOY2Mori9DXmYKMlig6mVqmGA==}
+    engines: {node: '>=12'}
+
   '@tanstack/router-generator@1.131.27':
     resolution: {integrity: sha512-PXBIVl45q2bBq9g0DDXLBGeKjO9eExcZd2JotLjLdIJ0I/wdxPQOBJHLPZfnmbf3vispToedRvG3b1YDWjL48g==}
     engines: {node: '>=12'}
@@ -4983,6 +5008,10 @@ packages:
     resolution: {integrity: sha512-mS3nYiBbwtHIqrxP3ba9+17+4iAcAlgIPdr/ucyblU7y6QUbDA3JRZkF+1vXYy8A/t+h/QeA4SkxvmjjPPwEpw==}
     engines: {node: '>=12'}
 
+  '@tanstack/start-client-core@1.131.36':
+    resolution: {integrity: sha512-9n12FHyxn+1YtDqSLmQxq+adUkjKrlHBg9vbLFVerH1+XpXXXsbGvLIOMPhH9muf7YxCmuA6CRLfcXqUCdjzeg==}
+    engines: {node: '>=12'}
+
   '@tanstack/start-plugin-core@1.131.27':
     resolution: {integrity: sha512-b3tXyXPIJtX8nw5tNjMx7yb1XrGUOH+LmnZvckbcWqg2G0NCnYxdU3J+PknjSYjt/Pbvy3MwKldrFOr6mqUtQQ==}
     engines: {node: '>=12'}
@@ -4991,6 +5020,10 @@ packages:
 
   '@tanstack/start-server-core@1.131.27':
     resolution: {integrity: sha512-ImPru1ozUSywM8X4c7iEcZmHUEEdGgRSBnv1glCk6rJpIEwmTJ6htOzgm7b2ukCKFBs8ULoWSvMfDaRug4/rlA==}
+    engines: {node: '>=12'}
+
+  '@tanstack/start-server-core@1.131.36':
+    resolution: {integrity: sha512-qHejodoiPWZ4Jt3USIC/UwKLj5YKWaZGPAAr8xpgega80gO+AdokNmQOf6cXvbNVYcqaB2e1lBhlgX5UPoh+5g==}
     engines: {node: '>=12'}
 
   '@tanstack/start-server-functions-client@1.131.27':
@@ -5007,6 +5040,10 @@ packages:
 
   '@tanstack/start-storage-context@1.131.27':
     resolution: {integrity: sha512-SqheDZDBFeasl/1AtBWI6MCygi9+t5rnDeXPmWKvxaXQmbc3zjvDSgYZIxbUInFswcTHRq6V3NvntTBQh9JZ4Q==}
+    engines: {node: '>=12'}
+
+  '@tanstack/start-storage-context@1.131.36':
+    resolution: {integrity: sha512-ZzZQ9hZ1AUZhMSKgK3AWdrF44knvOmhBlZclL0xe8gM6kkLUHpp8/LWngAuPVBmdU9BQ528z3g4vLX8Wvea0KA==}
     engines: {node: '>=12'}
 
   '@tanstack/store@0.7.4':
@@ -14594,8 +14631,7 @@ snapshots:
     dependencies:
       playwright: 1.55.0
 
-  '@polka/url@1.0.0-next.29':
-    optional: true
+  '@polka/url@1.0.0-next.29': {}
 
   '@poppinss/colors@4.1.5':
     dependencies:
@@ -15840,9 +15876,7 @@ snapshots:
       metro-runtime: 0.83.1
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.79.5': {}
 
@@ -15939,6 +15973,10 @@ snapshots:
     optionalDependencies:
       rollup: 4.47.1
 
+  '@rollup/plugin-alias@5.1.1(rollup@4.50.1)':
+    optionalDependencies:
+      rollup: 4.50.1
+
   '@rollup/plugin-commonjs@28.0.6(rollup@4.47.1)':
     dependencies:
       '@rollup/pluginutils': 5.2.0(rollup@4.47.1)
@@ -15946,16 +15984,28 @@ snapshots:
       estree-walker: 2.0.2
       fdir: 6.5.0(picomatch@4.0.3)
       is-reference: 1.2.1
-      magic-string: 0.30.18
+      magic-string: 0.30.19
       picomatch: 4.0.3
     optionalDependencies:
       rollup: 4.47.1
+
+  '@rollup/plugin-commonjs@28.0.6(rollup@4.50.1)':
+    dependencies:
+      '@rollup/pluginutils': 5.2.0(rollup@4.50.1)
+      commondir: 1.0.1
+      estree-walker: 2.0.2
+      fdir: 6.5.0(picomatch@4.0.3)
+      is-reference: 1.2.1
+      magic-string: 0.30.19
+      picomatch: 4.0.3
+    optionalDependencies:
+      rollup: 4.50.1
 
   '@rollup/plugin-inject@5.0.5(rollup@4.47.1)':
     dependencies:
       '@rollup/pluginutils': 5.2.0(rollup@4.47.1)
       estree-walker: 2.0.2
-      magic-string: 0.30.18
+      magic-string: 0.30.19
     optionalDependencies:
       rollup: 4.47.1
 
@@ -15964,6 +16014,12 @@ snapshots:
       '@rollup/pluginutils': 5.2.0(rollup@4.47.1)
     optionalDependencies:
       rollup: 4.47.1
+
+  '@rollup/plugin-json@6.1.0(rollup@4.50.1)':
+    dependencies:
+      '@rollup/pluginutils': 5.2.0(rollup@4.50.1)
+    optionalDependencies:
+      rollup: 4.50.1
 
   '@rollup/plugin-node-resolve@16.0.1(rollup@4.47.1)':
     dependencies:
@@ -15975,12 +16031,29 @@ snapshots:
     optionalDependencies:
       rollup: 4.47.1
 
+  '@rollup/plugin-node-resolve@16.0.1(rollup@4.50.1)':
+    dependencies:
+      '@rollup/pluginutils': 5.2.0(rollup@4.50.1)
+      '@types/resolve': 1.20.2
+      deepmerge: 4.3.1
+      is-module: 1.0.0
+      resolve: 1.22.10
+    optionalDependencies:
+      rollup: 4.50.1
+
   '@rollup/plugin-replace@6.0.2(rollup@4.47.1)':
     dependencies:
       '@rollup/pluginutils': 5.2.0(rollup@4.47.1)
-      magic-string: 0.30.18
+      magic-string: 0.30.19
     optionalDependencies:
       rollup: 4.47.1
+
+  '@rollup/plugin-replace@6.0.2(rollup@4.50.1)':
+    dependencies:
+      '@rollup/pluginutils': 5.2.0(rollup@4.50.1)
+      magic-string: 0.30.19
+    optionalDependencies:
+      rollup: 4.50.1
 
   '@rollup/plugin-terser@0.4.4(rollup@4.47.1)':
     dependencies:
@@ -15997,6 +16070,14 @@ snapshots:
       picomatch: 4.0.3
     optionalDependencies:
       rollup: 4.47.1
+
+  '@rollup/pluginutils@5.2.0(rollup@4.50.1)':
+    dependencies:
+      '@types/estree': 1.0.8
+      estree-walker: 2.0.2
+      picomatch: 4.0.3
+    optionalDependencies:
+      rollup: 4.50.1
 
   '@rollup/rollup-android-arm-eabi@4.47.1':
     optional: true
@@ -16299,9 +16380,8 @@ snapshots:
   '@sveltejs/acorn-typescript@1.0.5(acorn@8.15.0)':
     dependencies:
       acorn: 8.15.0
-    optional: true
 
-  '@sveltejs/kit@2.36.1(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))':
+  '@sveltejs/kit@2.37.1(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))':
     dependencies:
       '@standard-schema/spec': 1.0.0
       '@sveltejs/acorn-typescript': 1.0.5(acorn@8.15.0)
@@ -16319,7 +16399,6 @@ snapshots:
       sirv: 3.0.2
       svelte: 5.38.2
       vite: 7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)
-    optional: true
 
   '@sveltejs/vite-plugin-svelte-inspector@5.0.1(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))':
     dependencies:
@@ -16329,7 +16408,6 @@ snapshots:
       vite: 7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))':
     dependencies:
@@ -16343,7 +16421,6 @@ snapshots:
       vitefu: 1.1.1(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@swc/helpers@0.5.15':
     dependencies:
@@ -16589,6 +16666,16 @@ snapshots:
       tiny-invariant: 1.3.3
       tiny-warning: 1.0.3
 
+  '@tanstack/router-core@1.131.36':
+    dependencies:
+      '@tanstack/history': 1.131.2
+      '@tanstack/store': 0.7.4
+      cookie-es: 1.2.2
+      seroval: 1.3.2
+      seroval-plugins: 1.3.2(seroval@1.3.2)
+      tiny-invariant: 1.3.3
+      tiny-warning: 1.0.3
+
   '@tanstack/router-generator@1.131.27':
     dependencies:
       '@tanstack/router-core': 1.131.27
@@ -16676,6 +16763,14 @@ snapshots:
       tiny-invariant: 1.3.3
       tiny-warning: 1.0.3
 
+  '@tanstack/start-client-core@1.131.36':
+    dependencies:
+      '@tanstack/router-core': 1.131.36
+      '@tanstack/start-storage-context': 1.131.36
+      cookie-es: 1.2.2
+      tiny-invariant: 1.3.3
+      tiny-warning: 1.0.3
+
   '@tanstack/start-plugin-core@1.131.27(@libsql/client@0.15.14)(@tanstack/react-router@1.131.27(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(better-sqlite3@12.2.0)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@18.3.23)(better-sqlite3@12.2.0)(bun-types@1.2.21(@types/react@18.3.23))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(prisma@5.22.0)(react@19.1.1))(mysql2@3.14.4)(vite-plugin-solid@2.11.8(solid-js@1.9.9)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))':
     dependencies:
       '@babel/code-frame': 7.26.2
@@ -16743,6 +16838,18 @@ snapshots:
       tiny-warning: 1.0.3
       unctx: 2.4.1
 
+  '@tanstack/start-server-core@1.131.36':
+    dependencies:
+      '@tanstack/history': 1.131.2
+      '@tanstack/router-core': 1.131.36
+      '@tanstack/start-client-core': 1.131.36
+      '@tanstack/start-storage-context': 1.131.36
+      h3: 1.13.0
+      isbot: 5.1.30
+      tiny-invariant: 1.3.3
+      tiny-warning: 1.0.3
+      unctx: 2.4.1
+
   '@tanstack/start-server-functions-client@1.131.27(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))':
     dependencies:
       '@tanstack/server-functions-plugin': 1.131.2(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))
@@ -16767,6 +16874,10 @@ snapshots:
   '@tanstack/start-storage-context@1.131.27':
     dependencies:
       '@tanstack/router-core': 1.131.27
+
+  '@tanstack/start-storage-context@1.131.36':
+    dependencies:
+      '@tanstack/router-core': 1.131.36
 
   '@tanstack/store@0.7.4': {}
 
@@ -16837,8 +16948,7 @@ snapshots:
     dependencies:
       '@types/node': 24.3.1
 
-  '@types/cookie@0.6.0':
-    optional: true
+  '@types/cookie@0.6.0': {}
 
   '@types/d3-array@3.2.1': {}
 
@@ -17110,10 +17220,10 @@ snapshots:
       '@urql/core': 5.2.0(graphql@16.11.0)
       wonka: 6.3.5
 
-  '@vercel/analytics@1.5.0(@remix-run/react@2.17.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(@sveltejs/kit@2.36.1(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(next@15.5.2(@babel/core@7.28.4)(@playwright/test@1.55.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.90.0))(react@19.1.1)(svelte@5.38.2)(vue-router@4.5.1(vue@3.5.19(typescript@5.9.2)))(vue@3.5.19(typescript@5.9.2))':
+  '@vercel/analytics@1.5.0(@remix-run/react@2.17.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(@sveltejs/kit@2.37.1(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(next@15.5.2(@babel/core@7.28.4)(@playwright/test@1.55.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.90.0))(react@19.1.1)(svelte@5.38.2)(vue-router@4.5.1(vue@3.5.19(typescript@5.9.2)))(vue@3.5.19(typescript@5.9.2))':
     optionalDependencies:
       '@remix-run/react': 2.17.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2)
-      '@sveltejs/kit': 2.36.1(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))
+      '@sveltejs/kit': 2.37.1(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)))(svelte@5.38.2)(vite@7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))
       next: 15.5.2(@babel/core@7.28.4)(@playwright/test@1.55.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.90.0)
       react: 19.1.1
       svelte: 5.38.2
@@ -17207,7 +17317,7 @@ snapshots:
     dependencies:
       '@vitest/spy': 3.2.4
       estree-walker: 3.0.3
-      magic-string: 0.30.18
+      magic-string: 0.30.19
     optionalDependencies:
       vite: 7.1.5(@types/node@24.3.1)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)
 
@@ -17224,7 +17334,7 @@ snapshots:
   '@vitest/snapshot@3.2.4':
     dependencies:
       '@vitest/pretty-format': 3.2.4
-      magic-string: 0.30.18
+      magic-string: 0.30.19
       pathe: 2.0.3
 
   '@vitest/spy@3.2.4':
@@ -17261,7 +17371,7 @@ snapshots:
       '@vue/compiler-ssr': 3.5.19
       '@vue/shared': 3.5.19
       estree-walker: 2.0.2
-      magic-string: 0.30.18
+      magic-string: 0.30.19
       postcss: 8.5.6
       source-map-js: 1.2.1
 
@@ -17484,8 +17594,7 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  aria-query@5.3.2:
-    optional: true
+  aria-query@5.3.2: {}
 
   array-flatten@1.1.1: {}
 
@@ -17529,7 +17638,7 @@ snapshots:
   autoprefixer@10.4.21(postcss@8.5.6):
     dependencies:
       browserslist: 4.25.4
-      caniuse-lite: 1.0.30001739
+      caniuse-lite: 1.0.30001741
       fraction.js: 4.3.7
       normalize-range: 0.1.2
       picocolors: 1.1.1
@@ -17538,8 +17647,7 @@ snapshots:
 
   aws-ssl-profiles@1.1.2: {}
 
-  axobject-query@4.1.0:
-    optional: true
+  axobject-query@4.1.0: {}
 
   b4a@1.6.7: {}
 
@@ -17945,7 +18053,7 @@ snapshots:
   caniuse-api@3.0.0:
     dependencies:
       browserslist: 4.25.4
-      caniuse-lite: 1.0.30001739
+      caniuse-lite: 1.0.30001741
       lodash.memoize: 4.1.2
       lodash.uniq: 4.5.0
 
@@ -18272,8 +18380,7 @@ snapshots:
 
   cookie-signature@1.2.2: {}
 
-  cookie@0.6.0:
-    optional: true
+  cookie@0.6.0: {}
 
   cookie@0.7.1: {}
 
@@ -18997,7 +19104,6 @@ snapshots:
   esrap@2.1.0:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
-    optional: true
 
   estraverse@5.3.0: {}
 
@@ -19398,9 +19504,9 @@ snapshots:
 
   fix-dts-default-cjs-exports@1.0.1:
     dependencies:
-      magic-string: 0.30.18
+      magic-string: 0.30.19
       mlly: 1.7.4
-      rollup: 4.47.1
+      rollup: 4.50.1
 
   flow-enums-runtime@0.0.6: {}
 
@@ -20112,7 +20218,6 @@ snapshots:
   is-reference@3.0.3:
     dependencies:
       '@types/estree': 1.0.8
-    optional: true
 
   is-standalone-pwa@0.1.1: {}
 
@@ -20574,8 +20679,7 @@ snapshots:
       pkg-types: 2.3.0
       quansync: 0.2.11
 
-  locate-character@3.0.0:
-    optional: true
+  locate-character@3.0.0: {}
 
   locate-path@5.0.0:
     dependencies:
@@ -21642,7 +21746,7 @@ snapshots:
       postcss: 8.5.6
       postcss-nested: 7.0.2(postcss@8.5.6)
       semver: 7.7.2
-      tinyglobby: 0.2.14
+      tinyglobby: 0.2.15
     optionalDependencies:
       sass: 1.90.0
       typescript: 5.9.2
@@ -21685,11 +21789,9 @@ snapshots:
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
 
-  mri@1.2.0:
-    optional: true
+  mri@1.2.0: {}
 
-  mrmime@2.0.1:
-    optional: true
+  mrmime@2.0.1: {}
 
   ms@2.0.0: {}
 
@@ -21822,7 +21924,7 @@ snapshots:
       klona: 2.0.6
       knitwork: 1.2.0
       listhen: 1.9.0
-      magic-string: 0.30.18
+      magic-string: 0.30.19
       magicast: 0.3.5
       mime: 4.0.7
       mlly: 1.7.4
@@ -21922,7 +22024,7 @@ snapshots:
       klona: 2.0.6
       knitwork: 1.2.0
       listhen: 1.9.0
-      magic-string: 0.30.18
+      magic-string: 0.30.19
       magicast: 0.3.5
       mime: 4.0.7
       mlly: 1.7.4
@@ -23387,10 +23489,10 @@ snapshots:
     dependencies:
       glob: 7.2.3
 
-  rollup-plugin-dts@6.2.1(rollup@4.47.1)(typescript@5.9.2):
+  rollup-plugin-dts@6.2.1(rollup@4.50.1)(typescript@5.9.2):
     dependencies:
-      magic-string: 0.30.18
-      rollup: 4.47.1
+      magic-string: 0.30.19
+      rollup: 4.50.1
       typescript: 5.9.2
     optionalDependencies:
       '@babel/code-frame': 7.27.1
@@ -23482,7 +23584,6 @@ snapshots:
   sade@1.8.1:
     dependencies:
       mri: 1.2.0
-    optional: true
 
   safe-buffer@5.1.2: {}
 
@@ -23785,7 +23886,6 @@ snapshots:
       '@polka/url': 1.0.0-next.29
       mrmime: 2.0.1
       totalist: 3.0.1
-    optional: true
 
   sisteransi@1.0.5: {}
 
@@ -24053,7 +24153,6 @@ snapshots:
       locate-character: 3.0.0
       magic-string: 0.30.19
       zimmerframe: 1.1.2
-    optional: true
 
   svgo@3.3.2:
     dependencies:
@@ -24253,8 +24352,7 @@ snapshots:
 
   toml@3.0.0: {}
 
-  totalist@3.0.1:
-    optional: true
+  totalist@3.0.1: {}
 
   tr46@0.0.3: {}
 
@@ -24363,12 +24461,12 @@ snapshots:
 
   unbuild@3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2)):
     dependencies:
-      '@rollup/plugin-alias': 5.1.1(rollup@4.47.1)
-      '@rollup/plugin-commonjs': 28.0.6(rollup@4.47.1)
-      '@rollup/plugin-json': 6.1.0(rollup@4.47.1)
-      '@rollup/plugin-node-resolve': 16.0.1(rollup@4.47.1)
-      '@rollup/plugin-replace': 6.0.2(rollup@4.47.1)
-      '@rollup/pluginutils': 5.2.0(rollup@4.47.1)
+      '@rollup/plugin-alias': 5.1.1(rollup@4.50.1)
+      '@rollup/plugin-commonjs': 28.0.6(rollup@4.50.1)
+      '@rollup/plugin-json': 6.1.0(rollup@4.50.1)
+      '@rollup/plugin-node-resolve': 16.0.1(rollup@4.50.1)
+      '@rollup/plugin-replace': 6.0.2(rollup@4.50.1)
+      '@rollup/pluginutils': 5.2.0(rollup@4.50.1)
       citty: 0.1.6
       consola: 3.4.2
       defu: 6.1.4
@@ -24376,16 +24474,16 @@ snapshots:
       fix-dts-default-cjs-exports: 1.0.1
       hookable: 5.5.3
       jiti: 2.5.1
-      magic-string: 0.30.18
+      magic-string: 0.30.19
       mkdist: 2.3.0(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
       mlly: 1.7.4
       pathe: 2.0.3
       pkg-types: 2.3.0
       pretty-bytes: 7.0.1
-      rollup: 4.47.1
-      rollup-plugin-dts: 6.2.1(rollup@4.47.1)(typescript@5.9.2)
+      rollup: 4.50.1
+      rollup-plugin-dts: 6.2.1(rollup@4.50.1)(typescript@5.9.2)
       scule: 1.3.0
-      tinyglobby: 0.2.14
+      tinyglobby: 0.2.15
       untyped: 2.0.0
     optionalDependencies:
       typescript: 5.9.2
@@ -24401,7 +24499,7 @@ snapshots:
     dependencies:
       acorn: 8.15.0
       estree-walker: 3.0.3
-      magic-string: 0.30.18
+      magic-string: 0.30.19
       unplugin: 2.3.8
 
   undici-types@5.28.4: {}
@@ -24461,14 +24559,14 @@ snapshots:
       escape-string-regexp: 5.0.0
       estree-walker: 3.0.3
       local-pkg: 1.1.2
-      magic-string: 0.30.18
+      magic-string: 0.30.19
       mlly: 1.7.4
       pathe: 2.0.3
       picomatch: 4.0.3
       pkg-types: 2.3.0
       scule: 1.3.0
       strip-literal: 3.0.0
-      tinyglobby: 0.2.14
+      tinyglobby: 0.2.15
       unplugin: 2.3.8
       unplugin-utils: 0.2.5
 
@@ -24576,7 +24674,7 @@ snapshots:
   unwasm@0.3.11:
     dependencies:
       knitwork: 1.2.0
-      magic-string: 0.30.18
+      magic-string: 0.30.19
       mlly: 1.7.4
       pathe: 2.0.3
       pkg-types: 2.3.0
@@ -25170,8 +25268,7 @@ snapshots:
       cookie: 1.0.2
       youch-core: 0.3.3
 
-  zimmerframe@1.1.2:
-    optional: true
+  zimmerframe@1.1.2: {}
 
   zip-stream@6.0.1:
     dependencies:
