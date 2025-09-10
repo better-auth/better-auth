@@ -540,6 +540,85 @@ export const GET = oAuthProviderAuthServerMetadata(auth);
 ```
 
 
+## API Server
+
+This section shows how your API should verify tokens received from your clients.
+
+### Verification
+
+#### JWT Verification
+
+- Verify the token is valid:
+  - Validate the _signature_ using the JWKS.
+  - Check the `iss` (issuer) and `aud` (audience) claims.
+  - Verify the `exp` (expiration) and (if sent) `nbf` claim.
+- Validate the appropriate `scope` for each endpoint.
+
+#### Opaque Access Tokens
+
+- Send the received token to `/oauth2/introspect` and assert that `active: true` is returned.
+- Validate the appropriate `scope` for each endpoint.
+
+#### Recommendations
+
+The simplest approach is to _only accept JWT-formatted access tokens_ for your API and deny opaque tokens.
+
+**Benefits**:
+- **Fast**: locally verifiable, no network call required.
+- **Future-proof**: independent of the authorization server after issuance.
+- **No client secret needed**: the API can validate tokens without confidential client credentials.
+
+Accepting _opaque access tokens in addition to JWT tokens_ is possible, but comes with trade-offs.
+
+**Benefits**:
+- Immediate token and client validation.
+- Client does not require a `resource` parameter (depending on authorization server configuration).
+
+**Drawbacks**:
+- **DOS**: If the client is external (ie external APIs, MCP agents), opaque `access_token` verifications can overload your authorization server.
+- **Performance**: Each token requires a network call to the introspection endpoint.
+- **Audience limitation**: The authorization server can only issue tokens with a single audience.
+- **Secret required**: Introspection typically requires a `client_secret`, which public clients cannot safely provide.
+  - NOTE: Introspection bearer token and Private Key JWT methods are not yet implemented.
+
+
+### Scopes vs. Permissions
+
+- **Scopes** define what a client application *requests* on behalf of a user. They are usually coarse-grained labels included in an access token.
+- **Permissions** define the fine-grained actions a user (or service) is actually allowed to perform on resources, typically enforced at the resource server.
+
+In practice, you may also combine approaches depending on system complexity and how your resource server handles authorization.
+
+**Scopes and Permissions are the Same**
+
+Each scope directly represents a permission.
+- Example: A scope `read:post` corresponds exactly to the permission `read:post`.
+
+_Pros_:
+- Simple to implement and reason about.
+- No extra mapping logic required.
+
+_Cons_:
+- Access tokens can become large if permissions are very detailed, especially with JWTs.
+- Limited flexibility for future, more granular permissions.
+
+**Scopes and Permissions are Different**
+
+Scopes represent high-level access categories, and each scope maps to one or more underlying permissions.
+
+- **Example:** A scope `view:post` could map to:
+  - `read:post:content`
+  - `read:post:metadata` (but only for posts the user owns)
+
+_Pros_:
+- Flexible and scalable for complex systems.
+- Tokens remain compact, since only scopes are included, not all permissions.
+
+_Cons_:
+- The resource server must resolve scopes into permissions for each request.
+- Adds complexity to implementation and authorization checks.
+
+
 ## Configuration
 
 
@@ -1425,11 +1504,11 @@ This oAuth plugin provides additional security benefits over API Keys such as sh
 While we are currently unable to fully migrate the API Key schema and its functionality at this time, here are some implementation tips to assist in migration:
 
 #### Database
-  - API `permissions` should convert into `scopes`. However, you may wish to define `scopes` as a group of `permissions`, just depends on your implementation.
+  - API `permissions` should convert into `scopes`. See [Scopes Vs Permissions](#scopes-vs-permissions) on how to implement this in more detail.
     - NOTE: the following `scopes` are reserved: 'openid', 'profile', 'name', 'email', 'phone', 'address'.
 
 #### Setup
-  - Register an oAuth client with `scopes` (previously `permissions`).
+  - Register an oAuth client with `scopes`.
   - Store the `client_id` and `client_secret`(previously `api_key`) in your client's environment.
 
 #### Client
@@ -1446,35 +1525,3 @@ For machine-to-machine communication:
   - Request a token using the `client_credentials` grant at the `/oauth2/token` endpoint
   - Store the token in memory
     - Request a new token whenever token expires
-
-#### API Server
-
-##### JWT Access Tokens Only (Recommended)
-
-Simplify your API authentication by only accepting JWKS-verifiable JWT access tokens. Opaque tokens should be denied. JWT Tokens can be requested using the `resource` parameter at the `/oauth2/token` endpoint.
-
-**Benefits**:
-  - Fast: locally-verifiable
-  - Future-proof: fully independent from the authorization server (no better-auth config needed)
-  - API does not require `client_secret` or admin access to inspect the token's content
-
-**Verification Steps**:
-  - Verify token is valid. Check `iss` and `aud` fields against your `jwks`.
-  - Validate appropriate `scope` per endpoint
-
-##### JWT and Opaque Access Tokens
-
-Accept both JWT and Opaque Access Tokens via the `/oauth2/introspect` endpoint.
-
-**Benefits**
-  - Immediate token and client validation
-  - Client doesn't require `resource` parameter
-
-**Pitfalls**
-  - Secret Required: Requires a `client_secret` not available for public clients.
-    - NOTE: Introspection Bearer token and Private Key JWT methods are not yet implemented either
-  - Database Access: Every token received requires a database search.
-
-**Verification Steps**:
-  - Send received token to `/oauth2/introspect` and assert returned `active: true`.
-  - Validate appropriate `scope` per endpoint
