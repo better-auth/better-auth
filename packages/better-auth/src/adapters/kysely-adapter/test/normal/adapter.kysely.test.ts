@@ -220,7 +220,6 @@ describe("mssql", async () => {
 
 		let token = "";
 		it("should sign in", async () => {
-			//sign in
 			const signInRes = await auth.api.signInEmail({
 				body: {
 					password: "password",
@@ -363,7 +362,6 @@ describe("postgres", async () => {
 
 		let token = "";
 		it("should sign in", async () => {
-			//sign in
 			const signInRes = await auth.api.signInEmail({
 				body: {
 					password: "password",
@@ -421,7 +419,6 @@ describe("postgres", async () => {
 					userSignIn.user.createdAt,
 				);
 			} finally {
-				// always restore TZ, then let any error continue
 				process.env.TZ = originalTZ;
 			}
 		});
