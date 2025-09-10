@@ -1331,8 +1331,11 @@ Table Name: `oauthConsent`
 
 Add a prefix to either or both opaque access tokens or refresh tokens. This is useful for Secret Scanners (ie. [GitHub Secret Scanners](https://docs.github.com/code-security/secret-scanning), [GitGuardian](https://www.gitguardian.com/solutions/secrets-scanning), [Trufflehog](https://github.com/trufflesecurity/trufflehog)) that may rely on the prefix to help determine the token format.
 
-**opaqueAccessTokenPrefix**: `string | undefined` - add a prefix onto opaque access tokens
-**refreshTokenPrefix**: `string | undefined` - add a prefix onto refresh tokens
+We recommend to add a prefix to each of the following prior to your first production deployment. Once deployed consider them immutable, otherwise the following generate functions as specified:
+
+**opaqueAccessTokenPrefix**: `string | undefined` - add a prefix onto opaque access tokens. If previously deployed, utilize `generateOpaqueAccessToken` to perform this functionality instead.
+**refreshTokenPrefix**: `string | undefined` - add a prefix onto refresh tokens.  If previously deployed, utilize `generateRefreshToken` to perform this functionality instead.
+**clientSecretPrefix**: `string | undefined` - add a prefix onto client secrets.  If previously deployed, utilize `generateClientSecret` to perform this functionality instead.
 
 ## Optimizations
 

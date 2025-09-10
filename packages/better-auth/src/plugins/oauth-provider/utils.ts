@@ -105,6 +105,17 @@ async function verifyStoredClientSecret(
 	const storageMethod =
 		opts.storeClientSecret ?? (opts.disableJWTPlugin ? "encrypted" : "hashed");
 
+	if (clientSecret && opts.clientSecretPrefix) {
+		if (clientSecret.startsWith(opts.clientSecretPrefix)) {
+			clientSecret = clientSecret.replace(opts.clientSecretPrefix, "");
+		} else {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: "invalid client_secret",
+				error: "invalid_client",
+			});
+		}
+	}
+
 	if (storageMethod === "hashed") {
 		const hashedClientSecret = clientSecret
 			? await defaultHasher(clientSecret)
@@ -239,6 +250,8 @@ export function basicToClientCredentials(authorization: string) {
 /**
  * Validates client credentials failing on mismatches
  * and incorrectly provided information
+ *
+ * @internal
  */
 export async function validateClientCredentials(
 	ctx: GenericEndpointContext,

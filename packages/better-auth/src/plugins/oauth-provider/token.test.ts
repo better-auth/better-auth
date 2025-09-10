@@ -1320,4 +1320,25 @@ describe("oauth token - config", async () => {
 			expect.unreachable();
 		}
 	});
+
+	it("clientSecretPrefix - client_credentials", async () => {
+		const prefix = "hello_cs_";
+		const testScopes = ["read:profile"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				clientSecretPrefix: prefix,
+			},
+		});
+		expect(oauthClient?.client_secret?.startsWith(prefix)).toBeTruthy();
+
+		// Test successful utilization of client_secret
+		const tokens = await client.oauth2.token({
+			grant_type: "client_credentials",
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			scope: testScopes.join(""),
+		});
+		expect(tokens.error?.status).toBeUndefined();
+		expect(tokens.data?.access_token).toBeDefined();
+	});
 });
