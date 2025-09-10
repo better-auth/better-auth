@@ -112,6 +112,9 @@ export const getClientConfig = (options?: ClientOptions) => {
 		}
 	}
 	return {
+		get baseURL() {
+			return baseURL;
+		},
 		pluginsActions,
 		pluginsAtoms,
 		pluginPathMethods,
