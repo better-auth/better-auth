@@ -390,36 +390,41 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS,
 						});
 					}
-					const user =
-						await ctx.context.internalAdapter.createUser<UserWithRole>(
-							{
-								email: ctx.body.email,
-								name: ctx.body.name,
-								role:
-									(ctx.body.role && parseRoles(ctx.body.role)) ??
-									options?.defaultRole ??
-									"user",
-								...ctx.body.data,
-							},
-							ctx,
-						);
+					const user = await ctx.context.internalAdapter.withTransaction(
+						async (trx) => {
+							const user = await trx.internalAdapter.createUser<UserWithRole>(
+								{
+									email: ctx.body.email,
+									name: ctx.body.name,
+									role:
+										(ctx.body.role && parseRoles(ctx.body.role)) ??
+										options?.defaultRole ??
+										"user",
+									...ctx.body.data,
+								},
+								ctx,
+							);
 
-					if (!user) {
-						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
-						});
-					}
-					const hashedPassword = await ctx.context.password.hash(
-						ctx.body.password,
-					);
-					await ctx.context.internalAdapter.linkAccount(
-						{
-							accountId: user.id,
-							providerId: "credential",
-							password: hashedPassword,
-							userId: user.id,
+							if (!user) {
+								throw new APIError("INTERNAL_SERVER_ERROR", {
+									message: ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
+								});
+							}
+							const hashedPassword = await ctx.context.password.hash(
+								ctx.body.password,
+							);
+							await trx.internalAdapter.linkAccount(
+								{
+									accountId: user.id,
+									providerId: "credential",
+									password: hashedPassword,
+									userId: user.id,
+								},
+								ctx,
+							);
+
+							return user;
 						},
-						ctx,
 					);
 					return ctx.json({
 						user: user as UserWithRole,
@@ -914,23 +919,31 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
 						});
 					}
-					const user = await ctx.context.internalAdapter.updateUser(
-						ctx.body.userId,
-						{
-							banned: true,
-							banReason:
-								ctx.body.banReason || options?.defaultBanReason || "No reason",
-							banExpires: ctx.body.banExpiresIn
-								? getDate(ctx.body.banExpiresIn, "sec")
-								: options?.defaultBanExpiresIn
-									? getDate(options.defaultBanExpiresIn, "sec")
-									: undefined,
-							updatedAt: new Date(),
+					const user = await ctx.context.internalAdapter.withTransaction(
+						async (trx) => {
+							const user = await trx.internalAdapter.updateUser(
+								ctx.body.userId,
+								{
+									banned: true,
+									banReason:
+										ctx.body.banReason ||
+										options?.defaultBanReason ||
+										"No reason",
+									banExpires: ctx.body.banExpiresIn
+										? getDate(ctx.body.banExpiresIn, "sec")
+										: options?.defaultBanExpiresIn
+											? getDate(options.defaultBanExpiresIn, "sec")
+											: undefined,
+									updatedAt: new Date(),
+								},
+								ctx,
+							);
+							//revoke all sessions
+							await trx.internalAdapter.deleteSessions(ctx.body.userId);
+
+							return user;
 						},
-						ctx,
 					);
-					//revoke all sessions
-					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
 					return ctx.json({
 						user: user,
 					});
