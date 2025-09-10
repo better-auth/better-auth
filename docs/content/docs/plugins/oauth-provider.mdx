@@ -117,7 +117,7 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
   <Step>
     ### Add `./well-known` endpoints
 
-    Recommended, please add all [Well Known endpoints](#well-known) to the root configuration of your project.
+    Please add all [Well-Known endpoints](#well-known) to your project. The locations are provided as warnings if you are unsure.
 
     - You **MUST** add the oAuth Authorization Server metadata endpoint at your issuer path (root if no path).
     - If you are using the `openid` scope, you **MUST** add the openid configuration at your issuer path (root if no path).
@@ -512,9 +512,10 @@ Provides [OpenID connect discovery metadata](https://openid.net/specs/openid-con
 
 This endpoint requires the scope `openid`.
 
-By default, Better Auth uses the base path `/api/auth`. It is recommended to additionally add the configuration at the root (specifically the issuer path).
+You **must** add the configuration at the issuer path. If an issuer is unset, this will be your basePath `/api/auth`.
+If this path is not at the root and you don't have an openid-configuration already at the root, we recommend you to add one in case a client incorrectly hard-coded `/.well-known/openid-configuration` (ignoring the issuer path in the spec).
 
-NOTE: For issuers with paths, OpenId utilizes path appending, thus any path on the issuer should be prepended before `/.well-known/openid-configuration`.
+NOTE: For issuers with paths, OpenId utilizes path appending, thus any path on the issuer should be prepended before `/.well-known/openid-configuration`. If no issuer path is specified, the path should start at the root.
 
 ```ts title="[issuer-path]/.well-known/openid-configuration/route.ts"
 import { oAuthProviderOpenIdConfigMetadata } from "better-auth/plugins";
@@ -528,9 +529,9 @@ export const GET = oAuthProviderOpenIdConfigMetadata(auth);
 
 Provides [RFC8414](https://datatracker.ietf.org/doc/html/rfc8414)-compliant metadata located at `/.well-known/oauth-authorization-server`.
 
-By default, Better Auth uses the base path `/api/auth`. It is recommended to additionally add the configuration at the root (specifically the issuer path).
+You **must** add the configuration at the issuer path. If an issuer is unset, this will be your basePath `/api/auth`.
 
-NOTE: For issuers with paths, oAuth 2.1 Authorization Server utilizes path insertion, thus any path on the issuer should be appended after `/.well-known/oauth-authorization-server`.
+NOTE: For issuers with paths, oAuth 2.1 Authorization Server utilizes path insertion, thus any path on the issuer should be appended after `/.well-known/oauth-authorization-server`. If no issuer path is specified, the path should start at the root.
 
 ```ts title="/.well-known/oauth-authorization-server/[issuer-path]/route.ts"
 import { oAuthProviderAuthServerMetadata } from "better-auth/plugins";
