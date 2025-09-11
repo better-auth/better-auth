@@ -7,6 +7,7 @@ import {
 	gt,
 	gte,
 	inArray,
+	notInArray,
 	like,
 	lt,
 	lte,
@@ -16,8 +17,13 @@ import {
 	SQL,
 } from "drizzle-orm";
 import { BetterAuthError } from "../../error";
-import type { Where } from "../../types";
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
+import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import {
+	createAdapter,
+	type AdapterDebugLogs,
+	type CreateAdapterOptions,
+	type CreateCustomAdapter,
+} from "../create-adapter";
 
 export interface DB {
 	[key: string]: any;
@@ -51,17 +57,21 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	camelCase?: boolean;
+	/**
+	 * Whether to execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions,
+	 * set this to `false` and operations will be executed sequentially.
+	 * @default true
+	 */
+	transaction?: boolean;
 }
 
-export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
-	createAdapter({
-		config: {
-			adapterId: "drizzle",
-			adapterName: "Drizzle Adapter",
-			usePlural: config.usePlural ?? false,
-			debugLogs: config.debugLogs ?? false,
-		},
-		adapter: ({ getFieldName, debugLog }) => {
+export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
+	let lazyOptions: BetterAuthOptions | null = null;
+	const createCustomAdapter =
+		(db: DB): CreateCustomAdapter =>
+		({ getFieldName, debugLog }) => {
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
 				if (!schema) {
@@ -163,6 +173,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 						return [inArray(schemaModel[field], w.value)];
 					}
 
+					if (w.operator === "not_in") {
+						if (!Array.isArray(w.value)) {
+							throw new BetterAuthError(
+								`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
+							);
+						}
+						return [notInArray(schemaModel[field], w.value)];
+					}
+
 					if (w.operator === "contains") {
 						return [like(schemaModel[field], `%${w.value}%`)];
 					}
@@ -212,6 +231,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 								);
 							}
 							return inArray(schemaModel[field], w.value);
+						}
+						if (w.operator === "not_in") {
+							if (!Array.isArray(w.value)) {
+								throw new BetterAuthError(
+									`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
+								);
+							}
+							return notInArray(schemaModel[field], w.value);
 						}
 						return eq(schemaModel[field], w.value);
 					}),
@@ -325,5 +352,31 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				},
 				options: config,
 			};
+		};
+	let adapterOptions: CreateAdapterOptions | null = null;
+	adapterOptions = {
+		config: {
+			adapterId: "drizzle",
+			adapterName: "Drizzle Adapter",
+			usePlural: config.usePlural ?? false,
+			debugLogs: config.debugLogs ?? false,
+			transaction:
+				(config.transaction ?? true)
+					? (cb) =>
+							db.transaction((tx: DB) => {
+								const adapter = createAdapter({
+									config: adapterOptions!.config,
+									adapter: createCustomAdapter(tx),
+								})(lazyOptions!);
+								return cb(adapter);
+							})
+					: false,
 		},
-	});
+		adapter: createCustomAdapter(db),
+	};
+	const adapter = createAdapter(adapterOptions);
+	return (options: BetterAuthOptions): Adapter => {
+		lazyOptions = options;
+		return adapter(options);
+	};
+};

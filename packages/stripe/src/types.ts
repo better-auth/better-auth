@@ -216,7 +216,7 @@ export interface StripeOptions {
 		/**
 		 * List of plan
 		 */
-		plans: StripePlan[] | (() => Promise<StripePlan[]>);
+		plans: StripePlan[] | (() => StripePlan[] | Promise<StripePlan[]>);
 		/**
 		 * Require email verification before a user is allowed to upgrade
 		 * their subscriptions
