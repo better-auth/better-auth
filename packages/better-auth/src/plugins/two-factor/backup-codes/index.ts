@@ -4,6 +4,7 @@ import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import type {
+	TrustedDeviceStrategy,
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
@@ -101,7 +102,10 @@ export async function getBackupCodes(backupCodes: string, key: string) {
 	return null;
 }
 
-export const backupCode2fa = (options?: BackupCodeOptions) => {
+export const backupCode2fa = (
+	options?: BackupCodeOptions,
+	trustedDeviceStrategy: TrustedDeviceStrategy = "in-cookie",
+) => {
 	const twoFactorTable = "twoFactor";
 
 	async function storeBackupCodes(
@@ -303,7 +307,10 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { session, valid } = await verifyTwoFactor(ctx);
+					const { session, valid } = await verifyTwoFactor(
+						ctx,
+						trustedDeviceStrategy,
+					);
 					const user = session.user as UserWithTwoFactor;
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,

@@ -1,13 +1,16 @@
 import { APIError } from "better-call";
-import { TRUST_DEVICE_COOKIE_NAME, TWO_FACTOR_COOKIE_NAME } from "./constant";
+import { TWO_FACTOR_COOKIE_NAME } from "./constant";
 import { setSessionCookie } from "../../cookies";
 import { getSessionFromCtx } from "../../api";
-import type { UserWithTwoFactor } from "./types";
-import { createHMAC } from "@better-auth/utils/hmac";
+import type { TrustedDeviceStrategy, UserWithTwoFactor } from "./types";
 import type { GenericEndpointContext } from "../../types";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+import { trustDevice } from "./trusted-device";
 
-export async function verifyTwoFactor(ctx: GenericEndpointContext) {
+export async function verifyTwoFactor(
+	ctx: GenericEndpointContext,
+	trustedDeviceStrategy: TrustedDeviceStrategy,
+) {
 	const session = await getSessionFromCtx(ctx);
 	if (!session) {
 		const cookieName = ctx.context.createAuthCookie(TWO_FACTOR_COOKIE_NAME);
@@ -56,26 +59,8 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					user,
 				});
 				if (ctx.body.trustDevice) {
-					const trustDeviceCookie = ctx.context.createAuthCookie(
-						TRUST_DEVICE_COOKIE_NAME,
-						{
-							maxAge: 30 * 24 * 60 * 60, // 30 days, it'll be refreshed on sign in requests
-						},
-					);
-					/**
-					 * create a token that will be used to
-					 * verify the device
-					 */
-					const token = await createHMAC("SHA-256", "base64urlnopad").sign(
-						ctx.context.secret,
-						`${user.id}!${session.token}`,
-					);
-					await ctx.setSignedCookie(
-						trustDeviceCookie.name,
-						`${token}!${session.token}`,
-						ctx.context.secret,
-						trustDeviceCookie.attributes,
-					);
+					await trustDevice({ ctx, user, session, trustedDeviceStrategy });
+
 					// delete the dont remember me cookie
 					ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
 						maxAge: 0,

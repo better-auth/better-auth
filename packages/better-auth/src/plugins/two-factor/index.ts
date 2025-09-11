@@ -1,32 +1,42 @@
-import { generateRandomString } from "../../crypto/random";
 import * as z from "zod/v4";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
-import { sessionMiddleware } from "../../api";
-import { symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "../../types/plugins";
-import { backupCode2fa, generateBackupCodes } from "./backup-codes";
+import { APIError } from "better-call";
+import { createOTP } from "@better-auth/utils/otp";
+
 import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
-import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
-import { mergeSchema } from "../../db/schema";
-import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
-import { validatePassword } from "../../utils/password";
-import { APIError } from "better-call";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { schema } from "./schema";
+import { mergeSchema } from "../../db/schema";
+import { sessionMiddleware } from "../../api";
+import { symmetricEncrypt } from "../../crypto";
+import { TWO_FACTOR_COOKIE_NAME } from "./constant";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { createOTP } from "@better-auth/utils/otp";
-import { createHMAC } from "@better-auth/utils/hmac";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+import { validatePassword } from "../../utils/password";
+import { generateRandomString } from "../../crypto/random";
+import { backupCode2fa, generateBackupCodes } from "./backup-codes";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { isTrusted, trustedDeviceDbEndpoints } from "./trusted-device";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
+
+import type { BetterAuthPlugin } from "../../types/plugins";
+import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
+
 export * from "./error-code";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
+		trustedDeviceTable: "trustedDevice",
 	};
-	const totp = totp2fa(options?.totpOptions);
-	const backupCode = backupCode2fa(options?.backupCodeOptions);
-	const otp = otp2fa(options?.otpOptions);
+
+	const trustedDeviceStrategy = options?.trustedDeviceStrategy ?? "in-cookie";
+
+	const totp = totp2fa(options?.totpOptions, trustedDeviceStrategy);
+	const backupCode = backupCode2fa(
+		options?.backupCodeOptions,
+		trustedDeviceStrategy,
+	);
+	const otp = otp2fa(options?.otpOptions, trustedDeviceStrategy);
 
 	return {
 		id: "two-factor",
@@ -34,6 +44,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 			...totp.endpoints,
 			...otp.endpoints,
 			...backupCode.endpoints,
+			...(trustedDeviceStrategy === "in-db" ? trustedDeviceDbEndpoints : {}),
 			/**
 			 * ### Endpoint
 			 *
@@ -291,35 +302,14 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						if (!data?.user.twoFactorEnabled) {
 							return;
 						}
-						// Check for trust device cookie
-						const trustDeviceCookieName = ctx.context.createAuthCookie(
-							TRUST_DEVICE_COOKIE_NAME,
-						);
-						const trustDeviceCookie = await ctx.getSignedCookie(
-							trustDeviceCookieName.name,
-							ctx.context.secret,
-						);
-						if (trustDeviceCookie) {
-							const [token, sessionToken] = trustDeviceCookie.split("!");
-							const expectedToken = await createHMAC(
-								"SHA-256",
-								"base64urlnopad",
-							).sign(ctx.context.secret, `${data.user.id}!${sessionToken}`);
 
-							if (token === expectedToken) {
-								// Trust device cookie is valid, refresh it and skip 2FA
-								const newToken = await createHMAC(
-									"SHA-256",
-									"base64urlnopad",
-								).sign(ctx.context.secret, `${data.user.id}!${sessionToken}`);
-								await ctx.setSignedCookie(
-									trustDeviceCookieName.name,
-									`${newToken}!${data.session.token}`,
-									ctx.context.secret,
-									trustDeviceCookieName.attributes,
-								);
-								return;
-							}
+						const trusted = await isTrusted({
+							ctx,
+							newSession: data,
+							trustedDeviceStrategy,
+						});
+						if (trusted) {
+							return;
 						}
 
 						/**
@@ -356,7 +346,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				},
 			],
 		},
-		schema: mergeSchema(schema, options?.schema),
+		schema: mergeSchema(schema(trustedDeviceStrategy), options?.schema),
 		rateLimit: [
 			{
 				pathMatcher(path) {

@@ -2,7 +2,11 @@ import { APIError } from "better-call";
 import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../../api/call";
 import { verifyTwoFactor } from "../verify-two-factor";
-import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
+import type {
+	TrustedDeviceStrategy,
+	TwoFactorProvider,
+	UserWithTwoFactor,
+} from "../types";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import {
 	generateRandomString,
@@ -71,7 +75,10 @@ export interface OTPOptions {
 /**
  * The otp adapter is created from the totp adapter.
  */
-export const otp2fa = (options?: OTPOptions) => {
+export const otp2fa = (
+	options?: OTPOptions,
+	trustedDeviceStrategy: TrustedDeviceStrategy = "in-cookie",
+) => {
 	const opts = {
 		storeOTP: "plain",
 		digits: 6,
@@ -170,7 +177,10 @@ export const otp2fa = (options?: OTPOptions) => {
 					message: "otp isn't configured",
 				});
 			}
-			const { session, key } = await verifyTwoFactor(ctx);
+			const { session, key } = await verifyTwoFactor(
+				ctx,
+				trustedDeviceStrategy,
+			);
 			if (!session.user.twoFactorEnabled) {
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
@@ -284,7 +294,10 @@ export const otp2fa = (options?: OTPOptions) => {
 			},
 		},
 		async (ctx) => {
-			const { session, key, valid, invalid } = await verifyTwoFactor(ctx);
+			const { session, key, valid, invalid } = await verifyTwoFactor(
+				ctx,
+				trustedDeviceStrategy,
+			);
 			const toCheckOtp =
 				await ctx.context.internalAdapter.findVerificationValue(
 					`2fa-otp-${key}`,

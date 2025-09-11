@@ -30,9 +30,14 @@ export interface TwoFactorOptions {
 	 */
 	skipVerificationOnEnable?: boolean;
 	/**
+	 * Where to store that a given device was marked as trusted.
+	 * @default "in-cookie"
+	 */
+	trustedDeviceStrategy?: TrustedDeviceStrategy;
+	/**
 	 * Custom schema for the two factor plugin
 	 */
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<ReturnType<typeof schema>>;
 }
 
 export interface UserWithTwoFactor extends User {
@@ -53,3 +58,12 @@ export interface TwoFactorTable {
 	backupCodes: string;
 	enabled: boolean;
 }
+
+export interface TrustedDeviceTable {
+	userId: string;
+	deviceId: string;
+	expiresAt: number;
+	userAgent: string | null | undefined;
+}
+
+export type TrustedDeviceStrategy = "in-cookie" | "in-db";
