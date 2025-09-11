@@ -2,9 +2,11 @@ import type { Providers } from "./constants";
 
 export type Provider = (typeof Providers)[keyof typeof Providers];
 
+export type EndpointMatcherFn = (url: string) => boolean;
+
 export interface BaseCaptchaOptions {
 	secretKey: string;
-	endpoints?: string[];
+	endpoints?: Array<string | EndpointMatcherFn>;
 	siteVerifyURLOverride?: string;
 }
 
