@@ -33,6 +33,7 @@ export {
 	oAuthProviderProtectedResourceMetadata,
 } from "./metadata";
 export { mcpHandler, checkMcp, handleMcpErrors } from "./mcp";
+export { verifyAccessToken, verifyOAuthProviderAccessToken } from "./verify";
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
