@@ -155,109 +155,116 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			},
 		},
 		async (ctx) => {
-			if (
-				!ctx.context.options.emailAndPassword?.enabled ||
-				ctx.context.options.emailAndPassword?.disableSignUp
-			) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Email and password sign up is not enabled",
-				});
-			}
-			const body = ctx.body as any as User & {
-				password: string;
-				callbackURL?: string;
-				rememberMe?: boolean;
-			} & {
-				[key: string]: any;
-			};
-			const {
-				name,
-				email,
-				password,
-				image,
-				callbackURL,
-				rememberMe,
-				...additionalFields
-			} = body;
-			const isValidEmail = z.email().safeParse(email);
-
-			if (!isValidEmail.success) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.INVALID_EMAIL,
-				});
-			}
-
-			const minPasswordLength = ctx.context.password.config.minPasswordLength;
-			if (password.length < minPasswordLength) {
-				ctx.context.logger.error("Password is too short");
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-				});
-			}
-
-			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-			if (password.length > maxPasswordLength) {
-				ctx.context.logger.error("Password is too long");
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-				});
-			}
-			const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
-			if (dbUser?.user) {
-				ctx.context.logger.info(`Sign-up attempt for existing email: ${email}`);
-				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
-				});
-			}
-
-			const additionalData = parseUserInput(
-				ctx.context.options,
-				additionalFields as any,
-			);
-			/**
-			 * Hash the password
-			 *
-			 * This is done prior to creating the user
-			 * to ensure that any plugin that
-			 * may break the hashing should break
-			 * before the user is created.
-			 */
-			const hash = await ctx.context.password.hash(password);
-			let createdUser: User;
-			try {
-				createdUser = await ctx.context.internalAdapter.createUser(
-					{
-						email: email.toLowerCase(),
-						name,
-						image,
-						...additionalData,
-						emailVerified: false,
-					},
-					ctx,
-				);
-				if (!createdUser) {
+			return ctx.context.adapter.transaction(async (trx) => {
+				const options = ctx.context.options;
+				if (
+					!options.emailAndPassword?.enabled ||
+					options.emailAndPassword?.disableSignUp
+				) {
 					throw new APIError("BAD_REQUEST", {
+						message: "Email and password sign up is not enabled",
+					});
+				}
+				const body = ctx.body as any as User & {
+					password: string;
+					callbackURL?: string;
+					rememberMe?: boolean;
+				} & {
+					[key: string]: any;
+				};
+				const {
+					name,
+					email,
+					password,
+					image,
+					callbackURL,
+					rememberMe,
+					...additionalFields
+				} = body;
+				const isValidEmail = z.email().safeParse(email);
+
+				if (!isValidEmail.success) {
+					throw new APIError("BAD_REQUEST", {
+						message: BASE_ERROR_CODES.INVALID_EMAIL,
+					});
+				}
+
+				const minPasswordLength = ctx.context.password.config.minPasswordLength;
+				if (password.length < minPasswordLength) {
+					ctx.context.logger.error("Password is too short");
+					throw new APIError("BAD_REQUEST", {
+						message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+					});
+				}
+
+				const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
+				if (password.length > maxPasswordLength) {
+					ctx.context.logger.error("Password is too long");
+					throw new APIError("BAD_REQUEST", {
+						message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+					});
+				}
+				const dbUser = await ctx.context.internalAdapter.findUserByEmail(
+					email,
+					{
+						includeAccounts: false,
+					},
+					trx,
+				);
+				if (dbUser?.user) {
+					ctx.context.logger.info(
+						`Sign-up attempt for existing email: ${email}`,
+					);
+					throw new APIError("UNPROCESSABLE_ENTITY", {
+						message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
+					});
+				}
+
+				const additionalData = parseUserInput(options, additionalFields as any);
+				/**
+				 * Hash the password
+				 *
+				 * This is done prior to creating the user
+				 * to ensure that any plugin that
+				 * may break the hashing should break
+				 * before the user is created.
+				 */
+				const hash = await ctx.context.password.hash(password);
+				let createdUser: User;
+				try {
+					createdUser = await ctx.context.internalAdapter.createUser(
+						{
+							email: email.toLowerCase(),
+							name,
+							image,
+							...additionalData,
+							emailVerified: false,
+						},
+						ctx,
+						trx,
+					);
+					if (!createdUser) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
+						});
+					}
+				} catch (e) {
+					if (isDevelopment) {
+						ctx.context.logger.error("Failed to create user", e);
+					}
+					if (e instanceof APIError) {
+						throw e;
+					}
+					throw new APIError("UNPROCESSABLE_ENTITY", {
+						message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
+						details: e,
+					});
+				}
+				if (!createdUser) {
+					throw new APIError("UNPROCESSABLE_ENTITY", {
 						message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 					});
 				}
-			} catch (e) {
-				if (isDevelopment) {
-					ctx.context.logger.error("Failed to create user", e);
-				}
-				if (e instanceof APIError) {
-					throw e;
-				}
-				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
-					details: e,
-				});
-			}
-			if (!createdUser) {
-				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
-				});
-			}
-			try {
 				await ctx.context.internalAdapter.linkAccount(
 					{
 						userId: createdUser.id,
@@ -266,21 +273,22 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						password: hash,
 					},
 					ctx,
+					trx,
 				);
 				if (
-					ctx.context.options.emailVerification?.sendOnSignUp ||
-					ctx.context.options.emailAndPassword.requireEmailVerification
+					options.emailVerification?.sendOnSignUp ||
+					options.emailAndPassword!.requireEmailVerification
 				) {
 					const token = await createEmailVerificationToken(
 						ctx.context.secret,
 						createdUser.email,
 						undefined,
-						ctx.context.options.emailVerification?.expiresIn,
+						options.emailVerification?.expiresIn,
 					);
 					const url = `${
 						ctx.context.baseURL
 					}/verify-email?token=${token}&callbackURL=${body.callbackURL || "/"}`;
-					await ctx.context.options.emailVerification?.sendVerificationEmail?.(
+					await options.emailVerification?.sendVerificationEmail?.(
 						{
 							user: createdUser,
 							url,
@@ -291,8 +299,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				}
 
 				if (
-					ctx.context.options.emailAndPassword.autoSignIn === false ||
-					ctx.context.options.emailAndPassword.requireEmailVerification
+					options.emailAndPassword!.autoSignIn === false ||
+					options.emailAndPassword!.requireEmailVerification
 				) {
 					return ctx.json({
 						token: null,
@@ -312,6 +320,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					createdUser.id,
 					ctx,
 					rememberMe === false,
+					trx,
 				);
 				if (!session) {
 					throw new APIError("BAD_REQUEST", {
@@ -338,81 +347,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						updatedAt: createdUser.updatedAt,
 					},
 				});
-			} catch (error) {
-				ctx.context.logger.error(
-					"Sign-up failed after user creation, attempting rollback",
-					{
-						userId: createdUser.id,
-						error: error instanceof APIError ? error.message : String(error),
-					},
-				);
-
-				try {
-					const existingUser = await ctx.context.internalAdapter.findUserById(
-						createdUser.id,
-					);
-					if (!existingUser) {
-						ctx.context.logger.error("User not found during rollback", {
-							userId: createdUser.id,
-						});
-						throw error;
-					}
-					if (ctx.context.internalAdapter.deleteUser) {
-						await ctx.context.internalAdapter.deleteUser(createdUser.id);
-					} else {
-						ctx.context.logger.warn(
-							"deleteUser not enabled, attempting manual cleanup",
-							{
-								userId: createdUser.id,
-							},
-						);
-						try {
-							const sessions = await ctx.context.internalAdapter.listSessions(
-								createdUser.id,
-							);
-							for (const session of sessions) {
-								await ctx.context.internalAdapter.deleteSession(session.token);
-							}
-						} catch (sessionError) {
-							ctx.context.logger.error(
-								"Failed to delete sessions during rollback",
-								{
-									userId: createdUser.id,
-									error: sessionError,
-								},
-							);
-						}
-						try {
-							await ctx.context.internalAdapter.deleteAccounts(createdUser.id);
-						} catch (accountError) {
-							ctx.context.logger.error(
-								"Failed to delete linked accounts during rollback",
-								{
-									userId: createdUser.id,
-									error: accountError,
-								},
-							);
-						}
-						ctx.context.logger.warn(
-							"Manual user deletion not implemented - user may remain in database",
-							{
-								userId: createdUser.id,
-								message:
-									"Consider enabling deleteUser in Better Auth configuration for complete cleanup",
-							},
-						);
-					}
-				} catch (rollbackError) {
-					ctx.context.logger.error("Failed to rollback user creation", {
-						userId: createdUser.id,
-						originalError: error instanceof APIError ? error.message : error,
-						rollbackError:
-							rollbackError instanceof APIError
-								? rollbackError.message
-								: rollbackError,
-					});
-				}
-				throw error;
-			}
+			});
 		},
 	);
