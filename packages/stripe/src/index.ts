@@ -468,10 +468,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				);
 
 				const hasEverTrialed = subscriptions.some((s) => {
-					const samePlan = s.plan?.toLowerCase() === plan.name.toLowerCase();
+					// Check if user has ever had a trial for any plan (not just the same plan)
+					// This prevents users from getting multiple trials by switching plans
 					const hadTrial =
 						!!(s.trialStart || s.trialEnd) || s.status === "trialing";
-					return samePlan && hadTrial;
+					return hadTrial;
 				});
 
 				const freeTrial =
