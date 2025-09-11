@@ -1,6 +1,6 @@
 import { afterAll, describe, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { mcp } from ".";
+import { mcp, withMcpAuth } from ".";
 import { genericOAuth } from "../generic-oauth";
 import type { Client } from "../oidc-provider/types";
 import { createAuthClient } from "../../client";
@@ -354,6 +354,21 @@ describe("mcp", async () => {
 		});
 	});
 
+	it("should expose OAuth protected resource metadata", async ({ expect }) => {
+		const metadata = await serverClient.$fetch(
+			"/.well-known/oauth-protected-resource",
+		);
+
+		expect(metadata.data).toMatchObject({
+			resource: baseURL,
+			authorization_servers: [`${baseURL}/api/auth`],
+			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
+			scopes_supported: ["openid", "profile", "email", "offline_access"],
+			bearer_methods_supported: ["header"],
+			resource_signing_alg_values_supported: ["RS256", "none"],
+		});
+	});
+
 	it("should handle token refresh flow", async ({ expect }) => {
 		// Create a confidential client for easier testing (avoids PKCE complexity)
 		const createdClient = await serverClient.$fetch("/mcp/register", {
@@ -510,5 +525,25 @@ describe("mcp", async () => {
 		expect((tokenRequest.error as any).error_description).toContain(
 			"code verifier is missing",
 		);
+	});
+
+	describe("withMCPAuth", () => {
+		it("should return 401 if the request is not authenticated returning the right WWW-Authenticate header", async ({
+			expect,
+		}) => {
+			// Test the handler using a newly instantiated Request instead of the server, since this route isn't handled by the server
+			const response = await withMcpAuth(auth, async () => {
+				// it will never be reached since the request is not authenticated
+				return new Response("unnecessary");
+			})(new Request(`${baseURL}/mcp`));
+
+			expect(response.status).toBe(401);
+			expect(response.headers.get("WWW-Authenticate")).toBe(
+				`Bearer resource_metadata="${baseURL}/api/auth/.well-known/oauth-protected-resource"`,
+			);
+			expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
+				"WWW-Authenticate",
+			);
+		});
 	});
 });

@@ -472,7 +472,7 @@ export const contents: Content[] = [
 				title: "Social Sign-On",
 				group: true,
 				icon: LucideAArrowDown,
-				href: "/",
+				href: "",
 			},
 			{
 				title: "Apple",
@@ -489,6 +489,43 @@ export const contents: Content[] = [
 							fillRule="evenodd"
 							d="M14.122 4.682c1.35 0 2.781.743 3.8 2.028c-3.34 1.851-2.797 6.674.578 7.963c-.465 1.04-.687 1.505-1.285 2.426c-.835 1.284-2.01 2.884-3.469 2.898c-1.295.012-1.628-.853-3.386-.843c-1.758.01-2.125.858-3.42.846c-1.458-.014-2.573-1.458-3.408-2.743C1.198 13.665.954 9.45 2.394 7.21C3.417 5.616 5.03 4.683 6.548 4.683c1.545 0 2.516.857 3.794.857c1.24 0 1.994-.858 3.78-.858M13.73 0c.18 1.215-.314 2.405-.963 3.247c-.695.902-1.892 1.601-3.05 1.565c-.21-1.163.332-2.36.99-3.167C11.43.755 12.67.074 13.73 0"
 						/>
+					</svg>
+				),
+			},
+			{
+				title: "Atlassian",
+				href: "/docs/authentication/atlassian",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 20 20"
+					>
+						<path
+							fill="currentColor"
+							d="M7.45 10.54c-.15-.26-.44-.26-.59 0L3.12 17.8c-.15.26-.02.47.29.47h3.68c.21 0 .4-.11.49-.29l1.77-3.07c.8-1.38.87-3.04.1-4.37m1.14-6.91c-.8 1.33-.73 2.98.1 4.37l4.84 8.41c.09.18.28.29.49.29h3.68c.31 0 .44-.21.29-.47L8.73 3.34c-.15-.26-.44-.26-.59 0l.45.29z"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "Cognito",
+				href: "/docs/authentication/cognito",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 48 48"
+					>
+						<path
+							fill="currentColor"
+							d="M24 4L6 14v20l18 10 18-10V14L24 4zm0 4.62l13.6 7.86v15.04L24 39.38 10.4 31.52V16.48L24 8.62z"
+						/>
+						<path fill="currentColor" d="M22 14h4v20h-4zM14 22h20v4H14z" />
 					</svg>
 				),
 			},
@@ -620,6 +657,26 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "Kakao",
+				isNew: true,
+				href: "/docs/authentication/kakao",
+				icon: (props?: SVGProps<any>) => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 512 512"
+					>
+						<g>
+							<path
+								fill="currentColor"
+								d="M 511.5,203.5 C 511.5,215.5 511.5,227.5 511.5,239.5C 504.002,286.989 482.002,326.489 445.5,358C 390.216,402.375 326.882,424.209 255.5,423.5C 239.751,423.476 224.085,422.643 208.5,421C 174.34,444.581 140.006,467.914 105.5,491C 95.6667,493.167 91.8333,489.333 94,479.5C 101.833,450.667 109.667,421.833 117.5,393C 85.5639,376.077 58.0639,353.577 35,325.5C 15.8353,299.834 4.00193,271.167 -0.5,239.5C -0.5,227.5 -0.5,215.5 -0.5,203.5C 7.09119,155.407 29.4245,115.574 66.5,84C 121.53,39.9708 184.53,18.4708 255.5,19.5C 326.47,18.4708 389.47,39.9708 444.5,84C 481.575,115.574 503.909,155.407 511.5,203.5 Z"
+							/>
+						</g>
+					</svg>
+				),
+			},
+			{
 				title: "Kick",
 				href: "/docs/authentication/kick",
 				icon: () => (
@@ -680,6 +737,25 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "Salesforce",
+				href: "/docs/authentication/salesforce",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 24 24"
+						width="1.2em"
+						height="1.2em"
+					>
+						<path
+							fill="currentColor"
+							d="M8.5 3.5c-1.4 0-2.5 1.1-2.5 2.5 0 .4.1.7.2 1-1.7.3-3 1.7-3 3.5 0 2 1.6 3.6 3.6 3.6h10.2c1.6 0 2.9-1.3 2.9-2.9 0-1.2-.7-2.2-1.7-2.6 0-.3 0-.5 0-.8-.3-2-1.9-3.5-4-3.3-.4 0-.7.1-1 .2-.5-.8-1.4-1.3-2.4-1.3-.9 0-1.7.4-2.2 1.1zm7.7 7.1c-.5-.3-1.1-.5-1.7-.5-.6 0-1.2.2-1.7.5-.1-2-1.7-3.6-3.8-3.6-1.3 0-2.4.6-3.1 1.6-.4-.2-.8-.3-1.3-.3-1.8 0-3.3 1.5-3.3 3.3 0 .2 0 .5.1.7-1.6.4-2.7 1.8-2.7 3.5 0 2 1.6 3.6 3.6 3.6h10.6c2 0 3.6-1.6 3.6-3.6 0-1.9-1.4-3.4-3.2-3.5z"
+						/>
+					</svg>
+				),
+			},
+
+			{
 				title: "Slack",
 				href: "/docs/authentication/slack",
 				isNew: true,
@@ -713,6 +789,24 @@ export const contents: Content[] = [
 						<path
 							fill="currentColor"
 							d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.933zm14.337.28c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.186v6.952L12.21 19s0 .84-1.168.84l-3.222.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.822 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.279v-6.44l-1.215-.139c-.093-.514.28-.887.747-.933zM1.936 1.035l13.31-.98c1.634-.14 2.055-.047 3.082.7l4.249 2.986c.7.513.934.653.934 1.213v16.378c0 1.026-.373 1.634-1.68 1.726l-15.458.934c-.98.047-1.448-.093-1.962-.747l-3.129-4.06c-.56-.747-.793-1.306-.793-1.96V2.667c0-.839.374-1.54 1.447-1.632z"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "Naver",
+				href: "/docs/authentication/naver",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M16.273 12.845 7.376 0H0v24h7.726V11.156L16.624 24H24V0h-7.727v12.845Z"
 						/>
 					</svg>
 				),
@@ -943,7 +1037,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Others",
 				group: true,
 				icon: () => null,
-				href: "/docs/authentication/others",
+				href: "",
 			},
 			{
 				title: "Other Social Providers",
@@ -1086,7 +1180,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				group: true,
 				title: "Adapters",
-				href: "/docs/adapters/drizzle",
+				href: "",
 				icon: () => <Database className="w-4 h-4 text-current" />,
 			},
 			{
@@ -1172,7 +1266,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				group: true,
 				title: "Others",
-				href: "/docs/adapters/community-adapters",
+				href: "",
 				icon: () => <Database className="w-4 h-4 text-current" />,
 			},
 			{
@@ -1222,7 +1316,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				group: true,
 				title: "Full Stack",
-				href: "/docs/integrations",
+				href: "",
 				icon: LucideAArrowDown,
 			},
 			{
@@ -1264,7 +1358,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				group: true,
 				title: "Backend",
-				href: "/docs/integrations",
+				href: "",
 				icon: LucideAArrowDown,
 			},
 			{
@@ -1300,13 +1394,18 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				group: true,
 				title: "Mobile & Desktop",
-				href: "/docs/integrations",
+				href: "",
 				icon: LucideAArrowDown,
 			},
 			{
 				title: "Expo",
 				icon: Icons.expo,
 				href: "/docs/integrations/expo",
+			},
+			{
+				title: "Lynx",
+				icon: Icons.lynx,
+				href: "/docs/integrations/lynx",
 			},
 		],
 	},
@@ -1332,7 +1431,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Authentication",
 				group: true,
-				href: "/docs/plugins/1st-party-plugins",
+				href: "",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 
@@ -1447,7 +1546,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Authorization",
 				group: true,
-				href: "/docs/plugins/1st-party-plugins",
+				href: "",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 			{
@@ -1517,7 +1616,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Enterprise",
 				group: true,
-				href: "/docs/plugins/1st-party-plugins",
+				href: "",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 			{
@@ -1562,7 +1661,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Utility",
 				group: true,
-				href: "/docs/plugins/1st-party-plugins",
+				href: "",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 			{
@@ -1609,6 +1708,24 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Have I Been Pwned",
 				href: "/docs/plugins/have-i-been-pwned",
 				icon: () => <p className="text-xs">';--</p>,
+			},
+			{
+				title: "Last Login Method",
+				href: "/docs/plugins/last-login-method",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 256 256"
+					>
+						<path
+							fill="currentColor"
+							d="m141.66 133.66l-40 40A8 8 0 0 1 88 168v-32H24a8 8 0 0 1 0-16h64V88a8 8 0 0 1 13.66-5.66l40 40a8 8 0 0 1 0 11.32M200 32h-64a8 8 0 0 0 0 16h56v160h-56a8 8 0 0 0 0 16h64a8 8 0 0 0 8-8V40a8 8 0 0 0-8-8"
+						/>
+					</svg>
+				),
+				isNew: true,
 			},
 			{
 				title: "Multi Session",
@@ -1722,7 +1839,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "3rd party",
 				group: true,
-				href: "/docs/plugins/1st-party-plugins",
+				href: "",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 			{

@@ -1,6 +1,7 @@
 import * as z from "zod/v4";
-import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
+import { atlassian } from "./atlassian";
+import { cognito } from "./cognito";
 import { discord } from "./discord";
 import { facebook } from "./facebook";
 import { figma } from "./figma";
@@ -21,12 +22,19 @@ import { gitlab } from "./gitlab";
 import { tiktok } from "./tiktok";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
+import { salesforce } from "./salesforce";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
+import { kakao } from "./kakao";
+import { naver } from "./naver";
 import { line } from "./line";
 import { paypal } from "./paypal";
+import type { OAuthProvider } from "../oauth2";
+
 export const socialProviders = {
 	apple,
+	atlassian,
+	cognito,
 	discord,
 	facebook,
 	figma,
@@ -46,11 +54,19 @@ export const socialProviders = {
 	tiktok,
 	reddit,
 	roblox,
+	salesforce,
 	vk,
 	zoom,
 	notion,
+	kakao,
+	naver,
 	line,
 	paypal,
+} satisfies {
+	[key: string]: (
+		// todo: fix any here
+		config: any,
+	) => OAuthProvider;
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -65,14 +81,16 @@ export const SocialProviderListEnum = z
 export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
 
 export type SocialProviders = {
-	[K in SocialProviderList[number]]?: Prettify<
-		Parameters<(typeof socialProviders)[K]>[0] & {
-			enabled?: boolean;
-		}
-	>;
+	[K in SocialProviderList[number]]?: Parameters<
+		(typeof socialProviders)[K]
+	>[0] & {
+		enabled?: boolean;
+	};
 };
 
 export * from "./apple";
+export * from "./atlassian";
+export * from "./cognito";
 export * from "./discord";
 export * from "./dropbox";
 export * from "./facebook";
@@ -88,6 +106,7 @@ export * from "./microsoft-entra-id";
 export * from "./notion";
 export * from "./reddit";
 export * from "./roblox";
+export * from "./salesforce";
 export * from "./spotify";
 export * from "./tiktok";
 export * from "./twitch";
@@ -97,6 +116,8 @@ export * from "./zoom";
 export * from "./kick";
 export * from "./huggingface";
 export * from "./slack";
+export * from "./kakao";
+export * from "./naver";
 export * from "./line";
 export * from "./paypal";
 

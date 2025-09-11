@@ -237,7 +237,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						user: InferUser<Option>;
 					});
 				}
-				await setCookieCache(ctx, session);
+				await setCookieCache(ctx, session, !!dontRememberMe);
 				return ctx.json(
 					session as unknown as {
 						session: InferSession<Option>;
@@ -294,6 +294,21 @@ export const getSessionFromCtx = async <
  */
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
+	if (!session?.session) {
+		throw new APIError("UNAUTHORIZED");
+	}
+	return {
+		session,
+	};
+});
+
+/**
+ * This middleware forces the endpoint to require a valid session and ignores cookie cache.
+ * This should be used for sensitive operations like password changes, account deletion, etc.
+ * to ensure that revoked sessions cannot be used even if they're still cached in cookies.
+ */
+export const sensitiveSessionMiddleware = createAuthMiddleware(async (ctx) => {
+	const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
 	if (!session?.session) {
 		throw new APIError("UNAUTHORIZED");
 	}
@@ -408,7 +423,7 @@ export const revokeSession = createAuthEndpoint(
 				description: "The token to revoke",
 			}),
 		}),
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 		requireHeaders: true,
 		metadata: {
 			openapi: {
@@ -486,7 +501,7 @@ export const revokeSessions = createAuthEndpoint(
 	"/revoke-sessions",
 	{
 		method: "POST",
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 		requireHeaders: true,
 		metadata: {
 			openapi: {
@@ -539,7 +554,7 @@ export const revokeOtherSessions = createAuthEndpoint(
 	{
 		method: "POST",
 		requireHeaders: true,
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 		metadata: {
 			openapi: {
 				description:

@@ -1,4 +1,4 @@
-import { createAuthClient } from "better-auth/client";
+import { createAuthClient } from "better-auth/react";
 import Database from "better-sqlite3";
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
 import { expo } from ".";
@@ -154,6 +154,19 @@ describe("expo", async () => {
 		const map = (await import("./client")).parseSetCookieHeader(header);
 		expect(map.get("better-auth.session_token")?.value).toBe("abc");
 		expect(map.get("better-auth.session_data")?.value).toBe("xyz");
+	});
+
+	it("should preserve unchanged client store session properties on signout", async () => {
+		const before = client.$store.atoms.session.get();
+		await client.signOut();
+		const after = client.$store.atoms.session.get();
+
+		expect(after).toMatchObject({
+			...before,
+			data: null,
+			error: null,
+			isPending: false,
+		});
 	});
 });
 

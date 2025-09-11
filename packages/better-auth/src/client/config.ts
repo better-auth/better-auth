@@ -38,13 +38,7 @@ export const getClientConfig = (options?: ClientOptions) => {
 				strict: false,
 			});
 		},
-		customFetchImpl: async (input, init) => {
-			try {
-				return await fetch(input, init);
-			} catch (error) {
-				return Response.error();
-			}
-		},
+		customFetchImpl: fetch,
 		...restOfFetchOptions,
 		plugins: [
 			lifeCyclePlugin,
@@ -118,6 +112,9 @@ export const getClientConfig = (options?: ClientOptions) => {
 		}
 	}
 	return {
+		get baseURL() {
+			return baseURL;
+		},
 		pluginsActions,
 		pluginsAtoms,
 		pluginPathMethods,

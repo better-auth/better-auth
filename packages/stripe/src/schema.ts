@@ -33,6 +33,14 @@ export const subscriptions = {
 				type: "date",
 				required: false,
 			},
+			trialStart: {
+				type: "date",
+				required: false,
+			},
+			trialEnd: {
+				type: "date",
+				required: false,
+			},
 			cancelAtPeriodEnd: {
 				type: "boolean",
 				required: false,

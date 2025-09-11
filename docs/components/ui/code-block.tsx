@@ -149,6 +149,7 @@ export function CodeBlock({
 					!isTab && [bg, "rounded-none border border-x-0 border-b-0"],
 					"text-[13px] overflow-auto max-h-[600px] bg-fd-muted/50 fd-scroll-container",
 					viewportProps.className,
+					!title && "border-t-0",
 				)}
 				style={
 					{

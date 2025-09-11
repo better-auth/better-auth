@@ -66,7 +66,7 @@ To get the token, call the `/token` endpoint. This will return the following:
   }
 ```
 
-Make sure to include the token in the `Authorization` header of your requests and the `bearer` plugin is added in your auth configuration.
+Make sure to include the token in the `Authorization` header of your requests if the `bearer` plugin is added in your auth configuration.
 
 ```ts
 await fetch("/api/auth/token", {
