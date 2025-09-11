@@ -37,7 +37,8 @@ export interface GoogleProfile {
 	sub: string;
 }
 
-export interface GoogleOptions extends Omit<ProviderOptions<GoogleProfile>, "clientId"> {
+export interface GoogleOptions
+	extends Omit<ProviderOptions<GoogleProfile>, "clientId"> {
 	/**
 	 * The client ID(s) of your application
 	 * Can be a single client ID string or an array of client IDs for cross-platform support
@@ -81,7 +82,11 @@ export const google = (options: GoogleOptions) => {
 
 			// Use the first client ID for authorization URL creation
 			const primaryClientId = Array.isArray(options.clientId)
-				? options.clientId[0]
+				? options.clientId[0] ||
+					(() => {
+						logger.error("Google clientId array cannot be empty");
+						throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+					})()
 				: options.clientId;
 
 			const _scopes = options.disableDefaultScope
@@ -114,7 +119,11 @@ export const google = (options: GoogleOptions) => {
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			// Use the first client ID for token exchange
 			const primaryClientId = Array.isArray(options.clientId)
-				? options.clientId[0]
+				? options.clientId[0] ||
+					(() => {
+						logger.error("Google clientId array cannot be empty");
+						throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+					})()
 				: options.clientId;
 
 			return validateAuthorizationCode({
@@ -133,7 +142,11 @@ export const google = (options: GoogleOptions) => {
 			: async (refreshToken) => {
 					// Use the first client ID for token refresh
 					const primaryClientId = Array.isArray(options.clientId)
-						? options.clientId[0]
+						? options.clientId[0] ||
+							(() => {
+								logger.error("Google clientId array cannot be empty");
+								throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+							})()
 						: options.clientId;
 
 					return refreshAccessToken({
