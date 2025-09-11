@@ -611,15 +611,18 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const acceptedI = await adapter.updateInvitation({
-				invitationId: ctx.body.invitationId,
-				status: "accepted",
-			});
-
-			if (!acceptedI) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
+			let acceptedI: typeof invitation | null = invitation;
+			if (invitation.email) {
+				acceptedI = await adapter.updateInvitation({
+					invitationId: ctx.body.invitationId,
+					status: "accepted",
 				});
+
+				if (!acceptedI) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
+					});
+				}
 			}
 
 			if (
