@@ -171,7 +171,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			const organizationId =
 				ctx.body.organizationId || session.session.activeOrganizationId;
 			if (!organizationId) {
-				throw new APIError("BAD_REQUEST", {
+				throw new APIError("NOT_FOUND", {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
@@ -300,6 +300,12 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				await adapter.updateInvitation({
 					invitationId: alreadyInvited[0].id,
 					status: "canceled",
+				});
+			}
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("NOT_FOUND", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
 
@@ -961,7 +967,7 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation.organizationId,
 			);
 			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
+				throw new APIError("NOT_FOUND", {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
