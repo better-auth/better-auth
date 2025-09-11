@@ -758,6 +758,118 @@ export const oauthProvider = (options: OAuthOptions) => {
 					}),
 					metadata: {
 						isAction: false,
+						openapi: {
+							description: "Introspect an OAuth2 access or refresh token",
+							requestBody: {
+								required: true,
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												client_id: {
+													type: "string",
+													description: "OAuth2 client ID",
+												},
+												client_secret: {
+													type: "string",
+													description: "OAuth2 client secret",
+												},
+												token: {
+													type: "string",
+													description: "The token to introspect (access or refresh token)",
+												},
+												token_type_hint: {
+													type: "string",
+													enum: ["access_token", "refresh_token"],
+													description: "Hint about the type of the token submitted for introspection",
+												},
+											},
+											required: ["token"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description: "Token introspection response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													active: {
+														type: "boolean",
+														description: "Whether the token is active",
+													},
+													scope: {
+														type: "string",
+														description: "Scopes associated with the token",
+													},
+													client_id: {
+														type: "string",
+														description: "Client ID associated with the token",
+													},
+													username: {
+														type: "string",
+														description: "Username associated with the token",
+													},
+													token_type: {
+														type: "string",
+														description: "Type of the token",
+													},
+													exp: {
+														type: "number",
+														description: "Expiration time of the token (seconds since epoch)",
+													},
+													iat: {
+														type: "number",
+														description: "Issued at time (seconds since epoch)",
+													},
+													nbf: {
+														type: "number",
+														description: "Not before time (seconds since epoch)",
+													},
+													sub: {
+														type: "string",
+														description: "Subject of the token",
+													},
+													aud: {
+														type: "string",
+														description: "Audience of the token",
+													},
+													iss: {
+														type: "string",
+														description: "Issuer of the token",
+													},
+													jti: {
+														type: "string",
+														description: "JWT ID",
+													},
+												},
+												required: ["active"],
+											},
+										},
+									},
+								},
+								"400": {
+									description: "Invalid request or error response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: { type: "string" },
+													error_description: { type: "string" },
+													error_uri: { type: "string" },
+												},
+												required: ["error"],
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 				async (ctx) => {
@@ -778,6 +890,68 @@ export const oauthProvider = (options: OAuthOptions) => {
 					}),
 					metadata: {
 						isAction: false,
+						openapi: {
+							description: "Revoke an OAuth2 access or refresh token",
+							requestBody: {
+								required: true,
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												client_id: {
+													type: "string",
+													description: "OAuth2 client ID",
+												},
+												client_secret: {
+													type: "string",
+													description: "OAuth2 client secret",
+												},
+												token: {
+													type: "string",
+													description: "The token to revoke (access or refresh token)",
+												},
+												token_type_hint: {
+													type: "string",
+													enum: ["access_token", "refresh_token"],
+													description: "Hint about the type of the token submitted for revocation",
+												},
+											},
+											required: ["token"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description: "Token revoked successfully. The response body is empty.",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												description: "Empty object on success",
+											},
+										},
+									},
+								},
+								"400": {
+									description: "Invalid request or error response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: { type: "string" },
+													error_description: { type: "string" },
+													error_uri: { type: "string" },
+												},
+												required: ["error"],
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 				async (ctx) => {
@@ -791,7 +965,20 @@ export const oauthProvider = (options: OAuthOptions) => {
 					metadata: {
 						isAction: false,
 						openapi: {
-							description: "Get OAuth2 user information",
+							description: "Get OpenID Connect user information (UserInfo endpoint)",
+							security: [
+								{ bearerAuth: [] },
+								{ OAuth2: ["openid", "profile", "email"] }
+							],
+							parameters: [
+								{
+									name: "Authorization",
+									in: "header",
+									required: false,
+									schema: { type: "string" },
+									description: "Bearer access token",
+								},
+							],
 							responses: {
 								"200": {
 									description: "User information retrieved successfully",
@@ -844,6 +1031,36 @@ export const oauthProvider = (options: OAuthOptions) => {
 													},
 												},
 												required: ["sub"],
+											},
+										},
+									},
+								},
+								"401": {
+									description: "Unauthorized - invalid or missing access token",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: { type: "string" },
+													error_description: { type: "string" },
+												},
+												required: ["error"],
+											},
+										},
+									},
+								},
+								"403": {
+									description: "Forbidden - insufficient scope",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: { type: "string" },
+													error_description: { type: "string" },
+												},
+												required: ["error"],
 											},
 										},
 									},
