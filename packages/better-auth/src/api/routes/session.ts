@@ -237,7 +237,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						user: InferUser<Option>;
 					});
 				}
-				await setCookieCache(ctx, session);
+				await setCookieCache(ctx, session, !!dontRememberMe);
 				return ctx.json(
 					session as unknown as {
 						session: InferSession<Option>;
