@@ -215,6 +215,29 @@ describe("Email Verification", async () => {
 			expect.any(Object),
 		);
 	});
+
+	it("should preserve encoded characters in callback URL", async () => {
+		const testEmail = "test+user@example.com";
+		const encodedEmail = encodeURIComponent(testEmail);
+		const callbackURL = `/sign-in?verifiedEmail=${encodedEmail}`;
+
+		await client.verifyEmail(
+			{
+				query: {
+					token,
+					callbackURL,
+				},
+			},
+			{
+				onError: (ctx) => {
+					const location = ctx.response.headers.get("location");
+					expect(location).toBe(`/sign-in?verifiedEmail=${encodedEmail}`);
+					const url = new URL(location!, "http://localhost:3000");
+					expect(url.searchParams.get("verifiedEmail")).toBe(testEmail);
+				},
+			},
+		);
+	});
 });
 
 describe("Email Verification Secondary Storage", async () => {
