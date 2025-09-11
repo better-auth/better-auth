@@ -473,7 +473,7 @@ describe("oauth introspect - config", async () => {
 		const url = new URL(callbackRedirectUrl);
 		const tokens = await client.oauth2.token({
 			grant_type: "authorization_code",
-			code: url.searchParams.get("code"),
+			code: url.searchParams.get("code") ?? undefined,
 			code_verifier: codeVerifier,
 			client_id: oauthClient?.client_id,
 			client_secret: oauthClient?.client_secret,
