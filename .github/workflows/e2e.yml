@@ -2,6 +2,7 @@ name: E2E
 on:
   push:
     branches: [ main, canary ]
+  merge_group:
   pull_request:
 jobs:
   smoke:
