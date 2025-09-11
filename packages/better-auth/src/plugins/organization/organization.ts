@@ -32,6 +32,7 @@ import {
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
+	listAllOrganizations,
 	listOrganizations,
 	setActiveOrganization,
 	updateOrganization,
@@ -65,6 +66,7 @@ import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 import type { OrganizationOptions } from "./types";
+import { isSuperAdmin } from "./admin";
 
 export function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -167,6 +169,22 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-full-organization)
 		 */
 		getFullOrganization: getFullOrganization(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/list-all`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listAllOrganizations`
+		 *
+		 * **client:**
+		 * `authClient.organization.listAll`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list)
+		 */
+		listAllOrganizations: listAllOrganizations(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -982,7 +1000,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						organizationId: activeOrganizationId,
 					});
-					if (!member) {
+					if (!member && !isSuperAdmin(options, ctx)) {
 						throw new APIError("UNAUTHORIZED", {
 							message:
 								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
