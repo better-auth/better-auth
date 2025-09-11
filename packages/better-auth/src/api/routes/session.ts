@@ -6,7 +6,7 @@ import {
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
-import * as z from "zod/v4";
+import * as z from "zod";
 import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
