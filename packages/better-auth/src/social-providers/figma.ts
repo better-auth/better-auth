@@ -12,7 +12,9 @@ export interface FigmaProfile {
 	img_url: string;
 }
 
-export interface FigmaOptions extends ProviderOptions<FigmaProfile> {}
+export interface FigmaOptions extends ProviderOptions<FigmaProfile> {
+	clientId: string;
+}
 
 export const figma = (options: FigmaOptions) => {
 	return {

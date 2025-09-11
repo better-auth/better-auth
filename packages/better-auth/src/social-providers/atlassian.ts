@@ -20,7 +20,9 @@ export interface AtlassianProfile {
 		location?: string;
 	};
 }
-export interface AtlassianOptions extends ProviderOptions<AtlassianProfile> {}
+export interface AtlassianOptions extends ProviderOptions<AtlassianProfile> {
+	clientId: string;
+}
 
 export const atlassian = (options: AtlassianOptions) => {
 	return {

@@ -17,6 +17,7 @@ export interface RedditProfile {
 }
 
 export interface RedditOptions extends ProviderOptions<RedditProfile> {
+	clientId: string;
 	duration?: string;
 }
 

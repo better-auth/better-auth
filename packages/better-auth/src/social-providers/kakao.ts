@@ -97,7 +97,9 @@ export interface KakaoProfile {
 	for_partner?: Partner;
 }
 
-export interface KakaoOptions extends ProviderOptions<KakaoProfile> {}
+export interface KakaoOptions extends ProviderOptions<KakaoProfile> {
+	clientId: string;
+}
 
 export const kakao = (options: KakaoOptions) => {
 	return {

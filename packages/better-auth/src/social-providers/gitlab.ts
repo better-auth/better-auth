@@ -52,6 +52,7 @@ export interface GitlabProfile extends Record<string, any> {
 }
 
 export interface GitlabOptions extends ProviderOptions<GitlabProfile> {
+	clientId: string;
 	issuer?: string;
 }
 
