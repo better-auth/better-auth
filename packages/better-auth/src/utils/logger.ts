@@ -1,3 +1,5 @@
+import { getColorDepth } from "./color-depth";
+
 export type LogLevel = "info" | "success" | "warn" | "error" | "debug";
 
 export const levels = ["info", "success", "warn", "error", "debug"] as const;
@@ -11,6 +13,7 @@ export function shouldPublishLog(
 
 export interface Logger {
 	disabled?: boolean;
+	disableColors?: boolean;
 	level?: Exclude<LogLevel, "success">;
 	log?: (
 		level: Exclude<LogLevel, "success">,
@@ -64,13 +67,22 @@ const levelColors: Record<LogLevel, string> = {
 	debug: colors.fg.magenta,
 };
 
-const formatMessage = (level: LogLevel, message: string): string => {
+const formatMessage = (
+	level: LogLevel,
+	message: string,
+	colorsEnabled: boolean,
+): string => {
 	const timestamp = new Date().toISOString();
-	return `${colors.dim}${timestamp}${colors.reset} ${
-		levelColors[level]
-	}${level.toUpperCase()}${colors.reset} ${colors.bright}[Better Auth]:${
-		colors.reset
-	} ${message}`;
+
+	if (colorsEnabled) {
+		return `${colors.dim}${timestamp}${colors.reset} ${
+			levelColors[level]
+		}${level.toUpperCase()}${colors.reset} ${colors.bright}[Better Auth]:${
+			colors.reset
+		} ${message}`;
+	}
+
+	return `${timestamp} ${level.toUpperCase()} [Better Auth]: ${message}`;
 };
 
 export type InternalLogger = {
@@ -83,6 +95,11 @@ export const createLogger = (options?: Logger): InternalLogger => {
 	const enabled = options?.disabled !== true;
 	const logLevel = options?.level ?? "error";
 
+	const isDisableColorsSpecified = options?.disableColors !== undefined;
+	const colorsEnabled = isDisableColorsSpecified
+		? !options.disableColors
+		: getColorDepth() !== 1;
+
 	const LogFunc = (
 		level: LogLevel,
 		message: string,
@@ -92,7 +109,7 @@ export const createLogger = (options?: Logger): InternalLogger => {
 			return;
 		}
 
-		const formattedMessage = formatMessage(level, message);
+		const formattedMessage = formatMessage(level, message, colorsEnabled);
 
 		if (!options || typeof options.log !== "function") {
 			if (level === "error") {
