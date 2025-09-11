@@ -5,6 +5,12 @@ import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 import { logger } from "../utils/logger";
 import { refreshAccessToken } from "../oauth2/refresh-access-token";
+import type { SocialProviderMultipleClientOptions } from "./multiple-client-config";
+import {
+	getAllClientIds,
+	resolvePrimaryClientConfig,
+	findClientConfig,
+} from "./multiple-client-config";
 
 export interface GoogleProfile {
 	aud: string;
@@ -33,7 +39,8 @@ export interface GoogleProfile {
 	sub: string;
 }
 
-export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
+export interface GoogleOptions
+	extends SocialProviderMultipleClientOptions<GoogleProfile> {
 	/**
 	 * The access type to use for the authorization code request
 	 */
@@ -59,8 +66,14 @@ export const google = (options: GoogleOptions) => {
 			redirectURI,
 			loginHint,
 			display,
+			clientId: requestedClientId,
 		}) {
-			if (!options.clientId || !options.clientSecret) {
+			const config = resolvePrimaryClientConfig(
+				requestedClientId || "",
+				options,
+			);
+
+			if (!config || !config.clientId || !config.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret is required for Google. Make sure to provide them in the options.",
 				);
@@ -72,11 +85,17 @@ export const google = (options: GoogleOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["email", "profile", "openid"];
-			options.scope && _scopes.push(...options.scope);
+			options.scopes && _scopes.push(...options.scopes);
+			config.scopes && _scopes.push(...config.scopes);
 			scopes && _scopes.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "google",
-				options,
+				options: {
+					...options,
+					clientId: config.clientId,
+					clientSecret: config.clientSecret,
+					redirectURI: config.redirectURI || options.redirectURI,
+				},
 				authorizationEndpoint: "https://accounts.google.com/o/oauth2/auth",
 				scopes: _scopes,
 				state,
@@ -93,18 +112,40 @@ export const google = (options: GoogleOptions) => {
 			});
 			return url;
 		},
-		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
+		validateAuthorizationCode: async ({
+			code,
+			codeVerifier,
+			redirectURI,
+			clientId: requestedClientId,
+		}) => {
+			const config = resolvePrimaryClientConfig(
+				requestedClientId || "",
+				options,
+			);
+
+			if (!config || !config.clientId || !config.clientSecret) {
+				logger.error(
+					"Client Id and Client Secret is required for Google. Make sure to provide them in the options.",
+				);
+				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+			}
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
 				redirectURI,
-				options,
+				options: {
+					...options,
+					clientId: config.clientId,
+					clientSecret: config.clientSecret,
+					redirectURI: config.redirectURI || options.redirectURI,
+				},
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
 			: async (refreshToken) => {
+					// Use default provider options for refresh token
 					return refreshAccessToken({
 						refreshToken,
 						options: {
@@ -135,11 +176,13 @@ export const google = (options: GoogleOptions) => {
 			if (!tokenInfo) {
 				return false;
 			}
-			const isValid =
-				tokenInfo.aud === options.clientId &&
-				(tokenInfo.iss === "https://accounts.google.com" ||
-					tokenInfo.iss === "accounts.google.com");
-			return isValid;
+			const validClientIds = getAllClientIds(options);
+			const isValidClientId = validClientIds.includes(tokenInfo.aud);
+			const isValidIssuer =
+				tokenInfo.iss === "https://accounts.google.com" ||
+				tokenInfo.iss === "accounts.google.com";
+
+			return isValidClientId && isValidIssuer;
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {

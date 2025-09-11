@@ -24,6 +24,7 @@ export async function generateState(
 		errorURL: c.body?.errorCallbackURL,
 		newUserURL: c.body?.newUserCallbackURL,
 		link,
+		clientId: c.body?.clientId,
 		/**
 		 * This is the actual expiry time of the state
 		 */
@@ -79,6 +80,7 @@ export async function parseState(c: GenericEndpointContext) {
 				})
 				.optional(),
 			requestSignUp: z.boolean().optional(),
+			clientId: z.string().optional(),
 		})
 		.parse(JSON.parse(data.value));
 
