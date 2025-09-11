@@ -83,7 +83,7 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean>(
 	return createAdapterBridge({
 		id: "internalAdapter",
 		adapter: adapter as Adapter,
-		staticMethods: staticMethods as OmitStaticMethods extends true
+		staticMethods: staticMethods as [OmitStaticMethods] extends [true]
 			? {}
 			: typeof staticMethods,
 		methods: {
