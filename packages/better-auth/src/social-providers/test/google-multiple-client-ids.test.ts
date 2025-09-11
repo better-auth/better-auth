@@ -160,7 +160,7 @@ describe("Google Provider - Multiple Client IDs", () => {
 			expect(result).toBe(false);
 		});
 
-		it("should reject token with accounts.google.com issuer (without https)", async () => {
+		it("should accept token with accounts.google.com issuer (without https)", async () => {
 			const provider = google({
 				clientId: ["ios-client-id", "android-client-id"],
 				clientSecret: "test-secret",
