@@ -2,7 +2,7 @@ import type { OrganizationOptions } from "./types";
 import { defaultRoles } from "./access";
 import type { GenericEndpointContext } from "../../types";
 import type { Role } from "../access";
-import * as z from "zod/v4";
+import * as z from "zod";
 import { APIError } from "../../api";
 import type { OrganizationRole } from "./schema";
 

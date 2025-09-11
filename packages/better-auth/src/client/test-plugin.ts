@@ -3,7 +3,7 @@ import type { BetterAuthClientPlugin } from "./types";
 import type { BetterAuthPlugin } from "../types/plugins";
 import { createAuthEndpoint } from "../api/call";
 import { useAuthQuery } from "./query";
-import z from "zod/v4";
+import z from "zod";
 
 const serverPlugin = {
 	id: "test",

@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { APIError, createAuthEndpoint } from "../../../api";
 import type { OrganizationOptions } from "../types";
 import { orgSessionMiddleware } from "../call";

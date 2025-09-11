@@ -1,6 +1,6 @@
 import { APIError, createAuthEndpoint } from "../../api";
 import { setSessionCookie } from "../../cookies";
-import { z } from "zod";
+import * as z from "zod";
 import type { BetterAuthPlugin, InferOptionSchema } from "../../types";
 import type {
 	ENSLookupArgs,

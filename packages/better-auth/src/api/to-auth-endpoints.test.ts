@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createAuthEndpoint, createAuthMiddleware } from "./call";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 import { init } from "../init";
-import * as z from "zod/v4";
+import * as z from "zod";
 import { APIError } from "better-call";
 import { getTestInstance } from "../test-utils/test-instance";
 
