@@ -5,11 +5,11 @@ import {
 	createAuthMiddleware,
 	sessionMiddleware,
 } from "../../api";
-import type { BetterAuthPlugin, Verification } from "../../types";
-import { generateRandomString } from "../../crypto";
+import type { BetterAuthPlugin } from "../../types";
 import { schema } from "./schema";
-import type { OAuthOptions, VerificationValue } from "./types";
-import { authorizeEndpoint, formatErrorURL } from "./authorize";
+import type { OAuthOptions } from "./types";
+import { authorizeEndpoint } from "./authorize";
+import { consentEndpoint } from "./consent";
 import { parseSetCookieHeader } from "../../cookies";
 import { tokenEndpoint } from "./token";
 import { userinfoEndpoint } from "./userinfo";
@@ -246,7 +246,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 			/**
 			 * A server_only endpoint that helps provide the
 			 * oAuth Server configuration at the well-known endpoint.
-			 * 
+			 *
 			 * Provided at /.well-known/oauth-authorization-server/[issuer-path]
 			 * (root if no issuer-path).
 			 */
@@ -277,7 +277,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 			/**
 			 * A server_only endpoint that helps provide the
 			 * OpenId configuration at the well-known endpoint.
-			 * 
+			 *
 			 * Provided at [issuer-path]/.well-known/openid-configuration
 			 * (root if no issuer-path).
 			 */
@@ -488,119 +488,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { name: cookieName } = ctx.context.createAuthCookie(
-						"oauth_consent_prompt",
-					);
-					const storedCode = await ctx.getSignedCookie(
-						cookieName,
-						ctx.context.secret,
-					);
-					if (!storedCode) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "No consent prompt found",
-							error: "invalid_request",
-						});
-					}
-
-					const verification = await ctx.context.internalAdapter
-						.findVerificationValue(storedCode)
-						.then((val) => {
-							if (!val) return null;
-							return {
-								...val,
-								value: val?.value ? JSON.parse(val?.value) : undefined,
-							} as Omit<Verification, "value"> & { value?: VerificationValue };
-						});
-					const verificationValue = verification?.value;
-
-					// Check verification
-					if (!verification) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "Invalid code",
-							error: "invalid_request",
-						});
-					}
-					if (verification.expiresAt < new Date()) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "Code expired",
-							error: "invalid_request",
-						});
-					}
-
-					// Check verification value
-					if (!verificationValue) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "missing verification value content",
-							error: "invalid_verification",
-						});
-					}
-					if (!verificationValue.requireConsent) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "Consent given or not required",
-							error: "invalid_request",
-						});
-					}
-					if (!verificationValue.redirectUri) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "Missing redirect uri",
-							error: "invalid_request",
-						});
-					}
-
-					// Consent not accepted
-					if (!ctx.body.accept) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
-						);
-						return ctx.json({
-							redirectURI: formatErrorURL(
-								verificationValue.redirectUri,
-								"access_denied",
-								"User denied access",
-								verificationValue.state,
-							),
-						});
-					}
-
-					// Consent accepted
-					const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-					const iat = Math.floor(Date.now() / 1000);
-					const now = new Date(iat * 1000);
-					const exp = iat + (opts.codeExpiresIn ?? 600);
-
-					await ctx.context.internalAdapter.updateVerificationValue(
-						verification.id,
-						{
-							value: JSON.stringify({
-								...verificationValue,
-								requireConsent: false,
-							}),
-							identifier: code,
-							expiresAt: new Date(exp * 1000),
-						},
-					);
-					await ctx.context.adapter.create({
-						model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
-						data: {
-							clientId: verificationValue.clientId,
-							userId: verificationValue.userId,
-							scopes: verificationValue.scopes,
-							consentGiven: true,
-							createdAt: now,
-							updatedAt: now,
-						},
-					});
-					const redirectURI = new URL(
-						verificationValue.redirectUri ?? opts.loginPage,
-					);
-					redirectURI.searchParams.set("code", code);
-					if (verificationValue.state) {
-						redirectURI.searchParams.set("state", verificationValue.state);
-					}
-					// Redirect back to application
-					return ctx.json({
-						redirectURI: redirectURI.toString(),
-					});
+					return consentEndpoint(ctx, opts);
 				},
 			),
 			oAuth2token: createAuthEndpoint(
@@ -644,12 +532,14 @@ export const oauthProvider = (options: OAuthOptions) => {
 												},
 												code: {
 													type: "string",
-													description: "Authorization code (for authorization_code grant)",
+													description:
+														"Authorization code (for authorization_code grant)",
 												},
 												redirect_uri: {
 													type: "string",
 													format: "uri",
-													description: "Redirect URI (for authorization_code grant)",
+													description:
+														"Redirect URI (for authorization_code grant)",
 												},
 												client_id: {
 													type: "string",
@@ -661,19 +551,23 @@ export const oauthProvider = (options: OAuthOptions) => {
 												},
 												code_verifier: {
 													type: "string",
-													description: "PKCE code verifier (for authorization_code grant)",
+													description:
+														"PKCE code verifier (for authorization_code grant)",
 												},
 												refresh_token: {
 													type: "string",
-													description: "Refresh token (for refresh_token grant)",
+													description:
+														"Refresh token (for refresh_token grant)",
 												},
 												resource: {
 													type: "string",
-													description: "Requested token resource (ie audience) to obtain a JWT formatted access token"
+													description:
+														"Requested token resource (ie audience) to obtain a JWT formatted access token",
 												},
 												scope: {
 													type: "string",
-													description: "Requested scopes (for client_credentials grant)",
+													description:
+														"Requested scopes (for client_credentials grant)",
 												},
 											},
 											required: ["grant_type"],
@@ -691,7 +585,8 @@ export const oauthProvider = (options: OAuthOptions) => {
 												properties: {
 													access_token: {
 														type: "string",
-														description: "The access token issued by the authorization server",
+														description:
+															"The access token issued by the authorization server",
 													},
 													token_type: {
 														type: "string",
@@ -700,7 +595,8 @@ export const oauthProvider = (options: OAuthOptions) => {
 													},
 													expires_in: {
 														type: "number",
-														description: "Lifetime in seconds of the access token",
+														description:
+															"Lifetime in seconds of the access token",
 													},
 													refresh_token: {
 														type: "string",
@@ -777,12 +673,14 @@ export const oauthProvider = (options: OAuthOptions) => {
 												},
 												token: {
 													type: "string",
-													description: "The token to introspect (access or refresh token)",
+													description:
+														"The token to introspect (access or refresh token)",
 												},
 												token_type_hint: {
 													type: "string",
 													enum: ["access_token", "refresh_token"],
-													description: "Hint about the type of the token submitted for introspection",
+													description:
+														"Hint about the type of the token submitted for introspection",
 												},
 											},
 											required: ["token"],
@@ -820,7 +718,8 @@ export const oauthProvider = (options: OAuthOptions) => {
 													},
 													exp: {
 														type: "number",
-														description: "Expiration time of the token (seconds since epoch)",
+														description:
+															"Expiration time of the token (seconds since epoch)",
 													},
 													iat: {
 														type: "number",
@@ -828,7 +727,8 @@ export const oauthProvider = (options: OAuthOptions) => {
 													},
 													nbf: {
 														type: "number",
-														description: "Not before time (seconds since epoch)",
+														description:
+															"Not before time (seconds since epoch)",
 													},
 													sub: {
 														type: "string",
@@ -909,12 +809,14 @@ export const oauthProvider = (options: OAuthOptions) => {
 												},
 												token: {
 													type: "string",
-													description: "The token to revoke (access or refresh token)",
+													description:
+														"The token to revoke (access or refresh token)",
 												},
 												token_type_hint: {
 													type: "string",
 													enum: ["access_token", "refresh_token"],
-													description: "Hint about the type of the token submitted for revocation",
+													description:
+														"Hint about the type of the token submitted for revocation",
 												},
 											},
 											required: ["token"],
@@ -924,7 +826,8 @@ export const oauthProvider = (options: OAuthOptions) => {
 							},
 							responses: {
 								"200": {
-									description: "Token revoked successfully. The response body is empty.",
+									description:
+										"Token revoked successfully. The response body is empty.",
 									content: {
 										"application/json": {
 											schema: {
@@ -965,10 +868,11 @@ export const oauthProvider = (options: OAuthOptions) => {
 					metadata: {
 						isAction: false,
 						openapi: {
-							description: "Get OpenID Connect user information (UserInfo endpoint)",
+							description:
+								"Get OpenID Connect user information (UserInfo endpoint)",
 							security: [
 								{ bearerAuth: [] },
-								{ OAuth2: ["openid", "profile", "email"] }
+								{ OAuth2: ["openid", "profile", "email"] },
 							],
 							parameters: [
 								{
