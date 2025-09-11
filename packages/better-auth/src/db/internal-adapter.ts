@@ -20,7 +20,7 @@ import { safeJSONParse } from "../utils/json";
 import { generateId, type InternalLogger } from "../utils";
 import { createAdapterBridge } from "./adapter-bridge";
 
-export const createInternalAdapter = <OmitStaticMethods extends boolean>(
+export const createInternalAdapter = <OmitStaticMethods extends boolean = false>(
 	adapter: OmitStaticMethods extends true ? TransactionAdapter : Adapter,
 	ctx: {
 		options: Omit<BetterAuthOptions, "logger">;
@@ -37,55 +37,50 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean>(
 	const { createWithHooks, updateWithHooks, updateManyWithHooks } =
 		getWithHooks(adapter, ctx);
 
-	const staticMethods = !omitStaticMethods
-		? {
-				createOAuthUser: async (
-					user: Omit<User, "id" | "createdAt" | "updatedAt">,
-					account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
-						Partial<Account>,
-					context?: GenericEndpointContext,
-				) => {
-					return (adapter as Adapter).transaction(async (trxAdapter) => {
-						const createdUser = await createWithHooks(
-							{
-								// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-								createdAt: new Date(),
-								updatedAt: new Date(),
-								...user,
-							},
-							"user",
-							undefined,
-							context,
-							trxAdapter,
-						);
-						const createdAccount = await createWithHooks(
-							{
-								...account,
-								userId: createdUser!.id,
-								// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-								createdAt: new Date(),
-								updatedAt: new Date(),
-							},
-							"account",
-							undefined,
-							context,
-							trxAdapter,
-						);
-						return {
-							user: createdUser,
-							account: createdAccount,
-						};
-					});
-				},
-			}
-		: undefined;
-
 	return createAdapterBridge({
 		id: "internalAdapter",
 		adapter: adapter as Adapter,
-		staticMethods: staticMethods as [OmitStaticMethods] extends [true]
-			? {}
-			: typeof staticMethods,
+		omitStaticMethods: omitStaticMethods as OmitStaticMethods,
+		staticMethods: {
+			createOAuthUser: async (
+				user: Omit<User, "id" | "createdAt" | "updatedAt">,
+				account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
+					Partial<Account>,
+				context?: GenericEndpointContext,
+			) => {
+				return (adapter as Adapter).transaction(async (trxAdapter) => {
+					const createdUser = await createWithHooks(
+						{
+							// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+							createdAt: new Date(),
+							updatedAt: new Date(),
+							...user,
+						},
+						"user",
+						undefined,
+						context,
+						trxAdapter,
+					);
+					const createdAccount = await createWithHooks(
+						{
+							...account,
+							userId: createdUser!.id,
+							// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+						"account",
+						undefined,
+						context,
+						trxAdapter,
+					);
+					return {
+						user: createdUser,
+						account: createdAccount,
+					};
+				});
+			},
+		},
 		methods: {
 			createUser:
 				({ adapter }) =>

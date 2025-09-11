@@ -40,6 +40,7 @@ export type AdapterBridgeOptions<ID extends LiteralString = LiteralString> = {
 	staticMethods?: Record<string, (...args: any[]) => any>;
 	methods: AdapterBridgeMethods;
 	getTransactionContext?: GetTransactionContextHandler<ID>;
+	omitStaticMethods?: boolean;
 };
 
 type InferAdditionalTransactionContext<
@@ -57,7 +58,7 @@ type InferAdditionalTransactionContext<
 	: {};
 
 export type AdapterBridge<O extends AdapterBridgeOptions> =
-	InferAdapterBridgeMethods<O["methods"]> & {
+	InferAdapterBridgeMethods<O["methods"]> & ([O["omitStaticMethods"]] extends [true] ? {} : {
 		withTransaction: <R>(
 			cb: (
 				trx: Prettify<
@@ -68,7 +69,7 @@ export type AdapterBridge<O extends AdapterBridgeOptions> =
 				>,
 			) => Promise<R>,
 		) => Promise<R>;
-	} & O["staticMethods"];
+	} & O["staticMethods"]);
 
 const isTransactionAdapter = (value: any): value is TransactionAdapter => {
 	return (
@@ -83,10 +84,26 @@ const isTransactionAdapter = (value: any): value is TransactionAdapter => {
 
 export const createAdapterBridge = <
 	ID extends LiteralString,
-	O extends AdapterBridgeOptions<ID>,
+	O extends AdapterBridgeOptions<ID>
 >(
 	bridge: O & { id: ID },
 ): AdapterBridge<O> => {
+	const staticMethods = {
+		withTransaction: async <R>(cb: (trx: any) => Promise<R>): Promise<R> => {
+			return bridge.adapter.transaction((trxAdapter) => {
+				const trx: AdapterBridgeContext & Record<string, any> = {
+					adapter: trxAdapter,
+					[bridge.id]: shimLastParam(methods, trxAdapter, isTransactionAdapter),
+				};
+
+				return cb({
+					...trx,
+					...(bridge.getTransactionContext?.(trx) ?? {}),
+				});
+			});
+		},
+		...bridge.staticMethods,
+	}
 	const methods: any = {};
 
 	for (const key in bridge.methods) {
@@ -106,20 +123,7 @@ export const createAdapterBridge = <
 
 	return {
 		...methods,
-		withTransaction: async <R>(cb: (trx: any) => Promise<R>): Promise<R> => {
-			return bridge.adapter.transaction((trxAdapter) => {
-				const trx: AdapterBridgeContext & Record<string, any> = {
-					adapter: trxAdapter,
-					[bridge.id]: shimLastParam(methods, trxAdapter, isTransactionAdapter),
-				};
-
-				return cb({
-					...trx,
-					...(bridge.getTransactionContext?.(trx) ?? {}),
-				});
-			});
-		},
-		...bridge.staticMethods,
+		...(!bridge.omitStaticMethods ? staticMethods : {}),
 	};
 };
 createAdapterBridge.create = <
@@ -152,3 +156,14 @@ createAdapterBridge.create = <
 		},
 	});
 };
+
+const x = createAdapterBridge.create({} as any, {
+	id: "testBridge",
+	methods: {
+		test: () => {},
+	}
+})
+
+x.withTransaction(async (trx) => {
+	
+})
