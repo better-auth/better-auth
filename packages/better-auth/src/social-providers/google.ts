@@ -33,7 +33,13 @@ export interface GoogleProfile {
 	sub: string;
 }
 
-export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
+export interface GoogleOptions
+	extends Omit<ProviderOptions<GoogleProfile>, "clientId"> {
+	/**
+	 * The client ID(s) of your application
+	 * Can be a single client ID string or an array of client IDs for cross-platform support
+	 */
+	clientId: string | string[];
 	/**
 	 * The access type to use for the authorization code request
 	 */
@@ -69,6 +75,16 @@ export const google = (options: GoogleOptions) => {
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Google");
 			}
+
+			// Use the first client ID for authorization URL creation
+			const primaryClientId = Array.isArray(options.clientId)
+				? options.clientId[0] ||
+					(() => {
+						logger.error("Google clientId array cannot be empty");
+						throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+					})()
+				: options.clientId;
+
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["email", "profile", "openid"];
@@ -76,7 +92,10 @@ export const google = (options: GoogleOptions) => {
 			scopes && _scopes.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "google",
-				options,
+				options: {
+					...options,
+					clientId: primaryClientId,
+				},
 				authorizationEndpoint: "https://accounts.google.com/o/oauth2/auth",
 				scopes: _scopes,
 				state,
@@ -94,21 +113,42 @@ export const google = (options: GoogleOptions) => {
 			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
+			// Use the first client ID for token exchange
+			const primaryClientId = Array.isArray(options.clientId)
+				? options.clientId[0] ||
+					(() => {
+						logger.error("Google clientId array cannot be empty");
+						throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+					})()
+				: options.clientId;
+
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
 				redirectURI,
-				options,
+				options: {
+					...options,
+					clientId: primaryClientId,
+				},
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
 			: async (refreshToken) => {
+					// Use the first client ID for token refresh
+					const primaryClientId = Array.isArray(options.clientId)
+						? options.clientId[0] ||
+							(() => {
+								logger.error("Google clientId array cannot be empty");
+								throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+							})()
+						: options.clientId;
+
 					return refreshAccessToken({
 						refreshToken,
 						options: {
-							clientId: options.clientId,
+							clientId: primaryClientId,
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
@@ -135,8 +175,14 @@ export const google = (options: GoogleOptions) => {
 			if (!tokenInfo) {
 				return false;
 			}
+
+			// Check if the token's audience matches any of the configured client IDs
+			const clientIds = Array.isArray(options.clientId)
+				? options.clientId
+				: [options.clientId];
+
 			const isValid =
-				tokenInfo.aud === options.clientId &&
+				clientIds.includes(tokenInfo.aud) &&
 				(tokenInfo.iss === "https://accounts.google.com" ||
 					tokenInfo.iss === "accounts.google.com");
 			return isValid;
@@ -162,6 +208,6 @@ export const google = (options: GoogleOptions) => {
 				data: user,
 			};
 		},
-		options,
+		options: options as any,
 	} satisfies OAuthProvider<GoogleProfile>;
 };
