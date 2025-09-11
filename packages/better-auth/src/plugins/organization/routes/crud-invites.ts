@@ -417,6 +417,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				email: email,
 				organizationId: organizationId,
 				teamIds,
+				domainWhitelist: ctx.body.domainWhitelist,
 				...(additionalFields ? additionalFields : {}),
 			};
 
@@ -532,41 +533,29 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			if (invitation.email) {
+			if (
+				invitation.email &&
+				invitation.email.toLowerCase() !== session.user.email.toLowerCase()
+			) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+				});
+			}
+
+			if (invitation.domainWhitelist) {
+				const [_localPart, domain] = session.user.email.split("@", 2);
+				const domainWhitelist = invitation.domainWhitelist.split(",");
+
 				if (
-					invitation.email.toLowerCase() !== session.user.email.toLowerCase()
+					domainWhitelist.length > 0 &&
+					!domainWhitelist.some(
+						(wDomain) =>
+							wDomain.trim().toLowerCase() === domain?.trim().toLowerCase(),
+					)
 				) {
 					throw new APIError("FORBIDDEN", {
-						message:
-							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
-					});
-				}
-			} else {
-				if (invitation.domainWhitelist) {
-					const [_localPart, domain] = session.user.email.split("@", 2);
-					const domainWhitelist = invitation.domainWhitelist.split(",");
-
-					if (
-						domainWhitelist.length > 0 &&
-						!domainWhitelist.some(
-							(wDomain) =>
-								wDomain.trim().toLowerCase() === domain?.trim().toLowerCase(),
-						)
-					) {
-						throw new APIError("FORBIDDEN", {
-							message: ORGANIZATION_ERROR_CODES.EMAIL_DOMAIN_NOT_ALLOWED,
-						});
-					}
-				}
-
-				const existingMember = await adapter.findMemberByEmail({
-					email: session.user.email,
-					organizationId: invitation.organizationId,
-				});
-				if (existingMember) {
-					throw new APIError("BAD_REQUEST", {
-						message:
-							ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+						message: ORGANIZATION_ERROR_CODES.EMAIL_DOMAIN_NOT_ALLOWED,
 					});
 				}
 			}
