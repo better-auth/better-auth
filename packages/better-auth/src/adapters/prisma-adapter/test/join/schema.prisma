@@ -1,0 +1,45 @@
+generator client {
+    provider        = "prisma-client-js"
+    previewFeatures = ["strictUndefinedChecks"]
+}
+
+datasource db {
+    provider = "sqlite"
+    url      = "file:.db/join-test.db"
+}
+
+model User {
+    id            String   @id @default(cuid())
+    email         String   @unique
+    name          String?
+    emailVerified Boolean  @default(false)
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @default(now()) @updatedAt
+    
+    // Relations
+    sessions      Session[]
+    profile       Profile?
+}
+
+model Session {
+    id        String   @id @default(cuid())
+    userId    String
+    token     String   @unique
+    expiresAt DateTime
+    createdAt DateTime @default(now())
+    updatedAt DateTime @default(now()) @updatedAt
+    
+    // Relations
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Profile {
+    id        String   @id @default(cuid())
+    userId    String   @unique
+    bio       String?
+    website   String?
+    createdAt DateTime @default(now())
+    
+    // Relations
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

@@ -17,7 +17,7 @@ import {
 	SQL,
 } from "drizzle-orm";
 import { BetterAuthError } from "../../error";
-import type { Where } from "../../types";
+import type { Where, Join } from "../../types";
 import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 
 export interface DB {
@@ -141,16 +141,44 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 					return res[0];
 				}
 			};
-			function convertWhereClause(where: Where[], model: string) {
+			function convertWhereClause(
+				where: Where[],
+				model: string,
+				joins?: Join[],
+			) {
 				const schemaModel = getSchema(model);
 				if (!where) return [];
+
+				// Helper function to resolve field references
+				const resolveField = (fieldRef: string) => {
+					if (fieldRef.includes(".")) {
+						const [tableName, fieldName] = fieldRef.split(".");
+						if (tableName === model) {
+							return schemaModel[getFieldName({ model, field: fieldName })];
+						}
+						// Find the join for this table
+						const join = joins?.find((j) => (j.alias || j.table) === tableName);
+						if (join) {
+							const joinSchema = getSchema(join.table);
+							return joinSchema[
+								getFieldName({ model: join.table, field: fieldName })
+							];
+						}
+						// Fallback to main table
+						return schemaModel[getFieldName({ model, field: fieldName })];
+					} else {
+						// Simple field name, use main table
+						return schemaModel[getFieldName({ model, field: fieldRef })];
+					}
+				};
+
 				if (where.length === 1) {
 					const w = where[0];
 					if (!w) {
 						return [];
 					}
-					const field = getFieldName({ model, field: w.field });
-					if (!schemaModel[field]) {
+					const field = resolveField(w.field);
+					if (!field) {
 						throw new BetterAuthError(
 							`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
 						);
@@ -161,7 +189,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 								`The value for the field "${w.field}" must be an array when using the "in" operator.`,
 							);
 						}
-						return [inArray(schemaModel[field], w.value)];
+						return [inArray(field, w.value)];
 					}
 
 					if (w.operator === "not_in") {
@@ -170,42 +198,42 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 								`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
 							);
 						}
-						return [notInArray(schemaModel[field], w.value)];
+						return [notInArray(field, w.value)];
 					}
 
 					if (w.operator === "contains") {
-						return [like(schemaModel[field], `%${w.value}%`)];
+						return [like(field, `%${w.value}%`)];
 					}
 
 					if (w.operator === "starts_with") {
-						return [like(schemaModel[field], `${w.value}%`)];
+						return [like(field, `${w.value}%`)];
 					}
 
 					if (w.operator === "ends_with") {
-						return [like(schemaModel[field], `%${w.value}`)];
+						return [like(field, `%${w.value}`)];
 					}
 
 					if (w.operator === "lt") {
-						return [lt(schemaModel[field], w.value)];
+						return [lt(field, w.value)];
 					}
 
 					if (w.operator === "lte") {
-						return [lte(schemaModel[field], w.value)];
+						return [lte(field, w.value)];
 					}
 
 					if (w.operator === "ne") {
-						return [ne(schemaModel[field], w.value)];
+						return [ne(field, w.value)];
 					}
 
 					if (w.operator === "gt") {
-						return [gt(schemaModel[field], w.value)];
+						return [gt(field, w.value)];
 					}
 
 					if (w.operator === "gte") {
-						return [gte(schemaModel[field], w.value)];
+						return [gte(field, w.value)];
 					}
 
-					return [eq(schemaModel[field], w.value)];
+					return [eq(field, w.value)];
 				}
 				const andGroup = where.filter(
 					(w) => w.connector === "AND" || !w.connector,
@@ -214,14 +242,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 
 				const andClause = and(
 					...andGroup.map((w) => {
-						const field = getFieldName({ model, field: w.field });
+						const field = resolveField(w.field);
 						if (w.operator === "in") {
 							if (!Array.isArray(w.value)) {
 								throw new BetterAuthError(
 									`The value for the field "${w.field}" must be an array when using the "in" operator.`,
 								);
 							}
-							return inArray(schemaModel[field], w.value);
+							return inArray(field, w.value);
 						}
 						if (w.operator === "not_in") {
 							if (!Array.isArray(w.value)) {
@@ -229,15 +257,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 									`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
 								);
 							}
-							return notInArray(schemaModel[field], w.value);
+							return notInArray(field, w.value);
 						}
-						return eq(schemaModel[field], w.value);
+						return eq(field, w.value);
 					}),
 				);
 				const orClause = or(
 					...orGroup.map((w) => {
-						const field = getFieldName({ model, field: w.field });
-						return eq(schemaModel[field], w.value);
+						const field = resolveField(w.field);
+						return eq(field, w.value);
 					}),
 				);
 
@@ -273,42 +301,225 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 					const returned = await withReturning(model, builder, values);
 					return returned;
 				},
-				async findOne({ model, where }) {
+				async findOne({ model, where, select, joins }) {
 					const schemaModel = getSchema(model);
-					const clause = convertWhereClause(where, model);
-					const res = await db
-						.select()
-						.from(schemaModel)
-						.where(...clause);
+					const clause = convertWhereClause(where, model, joins);
+					let query = db.select().from(schemaModel);
+
+					// Handle joins
+					if (joins && joins.length > 0) {
+						for (const join of joins) {
+							const joinSchema = getSchema(join.table);
+							const joinName = join.alias || join.table;
+
+							// Parse join conditions
+							const leftParts = join.on.left.split(".");
+							const rightParts = join.on.right.split(".");
+
+							let leftField: any, rightField: any;
+							if (leftParts.length === 2) {
+								// table.field format
+								const [leftTable, field] = leftParts;
+								leftField =
+									leftTable === model
+										? schemaModel[field]
+										: leftTable === joinName
+											? joinSchema[field]
+											: schemaModel[field];
+							} else {
+								// just field name, assume main table
+								leftField = schemaModel[leftParts[0]];
+							}
+
+							if (rightParts.length === 2) {
+								// table.field format
+								const [rightTable, field] = rightParts;
+								rightField =
+									rightTable === model
+										? schemaModel[field]
+										: rightTable === joinName
+											? joinSchema[field]
+											: joinSchema[field];
+							} else {
+								// just field name, assume joined table
+								rightField = joinSchema[rightParts[0]];
+							}
+
+							switch (join.type) {
+								case "inner":
+									query = query.innerJoin(
+										joinSchema,
+										eq(leftField, rightField),
+									);
+									break;
+								case "left":
+									query = query.leftJoin(joinSchema, eq(leftField, rightField));
+									break;
+								case "right":
+									query = query.rightJoin(
+										joinSchema,
+										eq(leftField, rightField),
+									);
+									break;
+								case "full":
+									query = query.fullJoin(joinSchema, eq(leftField, rightField));
+									break;
+							}
+						}
+					}
+
+					const res = await query.where(...clause);
 					if (!res.length) return null;
 					return res[0];
 				},
-				async findMany({ model, where, sortBy, limit, offset }) {
+				async findMany({ model, where, sortBy, limit, offset, joins }) {
 					const schemaModel = getSchema(model);
-					const clause = where ? convertWhereClause(where, model) : [];
+					const clause = where ? convertWhereClause(where, model, joins) : [];
 
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
-					const builder = db
-						.select()
-						.from(schemaModel)
-						.limit(limit || 100)
-						.offset(offset || 0);
+					let query = db.select().from(schemaModel);
+
+					// Handle joins
+					if (joins && joins.length > 0) {
+						for (const join of joins) {
+							const joinSchema = getSchema(join.table);
+							const joinName = join.alias || join.table;
+
+							// Parse join conditions
+							const leftParts = join.on.left.split(".");
+							const rightParts = join.on.right.split(".");
+
+							let leftField: any, rightField: any;
+							if (leftParts.length === 2) {
+								// table.field format
+								const [leftTable, field] = leftParts;
+								leftField =
+									leftTable === model
+										? schemaModel[field]
+										: leftTable === joinName
+											? joinSchema[field]
+											: schemaModel[field];
+							} else {
+								// just field name, assume main table
+								leftField = schemaModel[leftParts[0]];
+							}
+
+							if (rightParts.length === 2) {
+								// table.field format
+								const [rightTable, field] = rightParts;
+								rightField =
+									rightTable === model
+										? schemaModel[field]
+										: rightTable === joinName
+											? joinSchema[field]
+											: joinSchema[field];
+							} else {
+								// just field name, assume joined table
+								rightField = joinSchema[rightParts[0]];
+							}
+
+							switch (join.type) {
+								case "inner":
+									query = query.innerJoin(
+										joinSchema,
+										eq(leftField, rightField),
+									);
+									break;
+								case "left":
+									query = query.leftJoin(joinSchema, eq(leftField, rightField));
+									break;
+								case "right":
+									query = query.rightJoin(
+										joinSchema,
+										eq(leftField, rightField),
+									);
+									break;
+								case "full":
+									query = query.fullJoin(joinSchema, eq(leftField, rightField));
+									break;
+							}
+						}
+					}
+
+					query = query.limit(limit || 100).offset(offset || 0);
+
 					if (sortBy?.field) {
-						builder.orderBy(
+						query = query.orderBy(
 							sortFn(
 								schemaModel[getFieldName({ model, field: sortBy?.field })],
 							),
 						);
 					}
-					return (await builder.where(...clause)) as any[];
+					return (await query.where(...clause)) as any[];
 				},
-				async count({ model, where }) {
+				async count({ model, where, joins }) {
 					const schemaModel = getSchema(model);
-					const clause = where ? convertWhereClause(where, model) : [];
-					const res = await db
-						.select({ count: count() })
-						.from(schemaModel)
-						.where(...clause);
+					const clause = where ? convertWhereClause(where, model, joins) : [];
+					let query = db.select({ count: count() }).from(schemaModel);
+
+					// Handle joins
+					if (joins && joins.length > 0) {
+						for (const join of joins) {
+							const joinSchema = getSchema(join.table);
+							const joinName = join.alias || join.table;
+
+							// Parse join conditions
+							const leftParts = join.on.left.split(".");
+							const rightParts = join.on.right.split(".");
+
+							let leftField: any, rightField: any;
+							if (leftParts.length === 2) {
+								// table.field format
+								const [leftTable, field] = leftParts;
+								leftField =
+									leftTable === model
+										? schemaModel[field]
+										: leftTable === joinName
+											? joinSchema[field]
+											: schemaModel[field];
+							} else {
+								// just field name, assume main table
+								leftField = schemaModel[leftParts[0]];
+							}
+
+							if (rightParts.length === 2) {
+								// table.field format
+								const [rightTable, field] = rightParts;
+								rightField =
+									rightTable === model
+										? schemaModel[field]
+										: rightTable === joinName
+											? joinSchema[field]
+											: joinSchema[field];
+							} else {
+								// just field name, assume joined table
+								rightField = joinSchema[rightParts[0]];
+							}
+
+							switch (join.type) {
+								case "inner":
+									query = query.innerJoin(
+										joinSchema,
+										eq(leftField, rightField),
+									);
+									break;
+								case "left":
+									query = query.leftJoin(joinSchema, eq(leftField, rightField));
+									break;
+								case "right":
+									query = query.rightJoin(
+										joinSchema,
+										eq(leftField, rightField),
+									);
+									break;
+								case "full":
+									query = query.fullJoin(joinSchema, eq(leftField, rightField));
+									break;
+							}
+						}
+					}
+
+					const res = await query.where(...clause);
 					return res[0].count;
 				},
 				async update({ model, where, update: values }) {

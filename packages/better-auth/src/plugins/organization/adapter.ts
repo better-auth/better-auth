@@ -117,70 +117,65 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				value: any;
 			};
 		}) => {
-			const members = await Promise.all([
+			const whereClause = [
+				{ field: "organizationId", value: data.organizationId },
+				...(data.filter?.field
+					? [
+							{
+								field: data.filter?.field,
+								value: data.filter?.value,
+							},
+						]
+					: []),
+			];
+
+			const [membersWithUsers, total] = await Promise.all([
+				// Query 1: Get members with user data in a single JOIN query
 				adapter.findMany<Member>({
 					model: "member",
-					where: [
-						{ field: "organizationId", value: data.organizationId },
-						...(data.filter?.field
-							? [
-									{
-										field: data.filter?.field,
-										value: data.filter?.value,
-									},
-								]
-							: []),
-					],
+					where: whereClause,
 					limit: data.limit || options?.membershipLimit || 100,
 					offset: data.offset || 0,
 					sortBy: data.sortBy
 						? { field: data.sortBy, direction: data.sortOrder || "asc" }
 						: undefined,
-				}),
-				adapter.count({
-					model: "member",
-					where: [
-						{ field: "organizationId", value: data.organizationId },
-						...(data.filter?.field
-							? [
-									{
-										field: data.filter?.field,
-										value: data.filter?.value,
-									},
-								]
-							: []),
+					joins: [
+						{
+							type: "inner",
+							table: "user",
+							on: { left: "member.userId", right: "user.id" },
+							select: ["id", "name", "email", "image"],
+						},
 					],
 				}),
+				// Query 2: Get count (unchanged)
+				adapter.count({
+					model: "member",
+					where: whereClause,
+				}),
 			]);
-			const users = await adapter.findMany<User>({
-				model: "user",
-				where: [
-					{
-						field: "id",
-						value: members[0].map((member) => member.userId),
-						operator: "in",
-					},
-				],
-			});
+
+			// Transform joined data into expected format
 			return {
-				members: members[0].map((member) => {
-					const user = users.find((user) => user.id === member.userId);
-					if (!user) {
-						throw new BetterAuthError(
-							"Unexpected error: User not found for member",
-						);
-					}
+				members: membersWithUsers.map((memberWithUser) => {
+					// Extract user data from JOIN result (prefixed with table name)
+					const user = {
+						id: (memberWithUser as any).user_id,
+						name: (memberWithUser as any).user_name,
+						email: (memberWithUser as any).user_email,
+						image: (memberWithUser as any).user_image,
+					};
+
+					// Extract member data without user fields (destructuring approach)
+					const { user_id, user_name, user_email, user_image, ...member } =
+						memberWithUser as any;
+
 					return {
 						...member,
-						user: {
-							id: user.id,
-							name: user.name,
-							email: user.email,
-							image: user.image,
-						},
+						user,
 					};
 				}),
-				total: members[1],
+				total,
 			};
 		},
 		findMemberByOrgId: async (data: {

@@ -320,10 +320,12 @@ export interface CustomAdapter {
 		model,
 		where,
 		select,
+		joins,
 	}: {
 		model: string;
 		where: CleanedWhere[];
 		select?: string[];
+		joins?: import("../../types").Join[];
 	}) => Promise<T | null>;
 	findMany: <T>({
 		model,
@@ -331,12 +333,14 @@ export interface CustomAdapter {
 		limit,
 		sortBy,
 		offset,
+		joins,
 	}: {
 		model: string;
 		where?: CleanedWhere[];
 		limit: number;
 		sortBy?: { field: string; direction: "asc" | "desc" };
 		offset?: number;
+		joins?: import("../../types").Join[];
 	}) => Promise<T[]>;
 	delete: ({
 		model,
@@ -355,9 +359,11 @@ export interface CustomAdapter {
 	count: ({
 		model,
 		where,
+		joins,
 	}: {
 		model: string;
 		where?: CleanedWhere[];
+		joins?: import("../../types").Join[];
 	}) => Promise<number>;
 	createSchema?: (props: {
 		/**
