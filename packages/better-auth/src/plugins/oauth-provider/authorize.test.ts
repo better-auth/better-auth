@@ -81,11 +81,12 @@ describe("oauth authorize - unauthenticated", async () => {
 			state: "123",
 			scopes: ["openid"],
 			responseType: "code",
+			codeVerifier: generateRandomString(32),
 			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		});
 
 		let loginRedirectUrl = "";
-		await unauthenticatedClient.$fetch(authUrl.toString(), {
+		const res = await unauthenticatedClient.$fetch(authUrl.toString(), {
 			onError(context) {
 				loginRedirectUrl = context.response.headers.get("Location") || "";
 			},
