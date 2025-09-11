@@ -27,6 +27,27 @@ export const auth = betterAuth({
 });
 ```
 
+### Multiple Client IDs (Google Only)
+
+For cross-platform applications, Google provider supports multiple client IDs to enable seamless authentication across different platforms (iOS, Android, Web):
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  socialProviders: {
+    google: {
+      clientId: [
+        "123-ios.googleusercontent.com",      // iOS app
+        "456-android.googleusercontent.com",  // Android app
+        "789-web.googleusercontent.com"       // Web app
+      ],
+      clientSecret: "YOUR_GOOGLE_CLIENT_SECRET",
+    },
+  },
+});
+```
+
 ## Usage
 
 ### Sign In
