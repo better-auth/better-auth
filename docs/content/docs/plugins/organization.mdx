@@ -1980,6 +1980,10 @@ type listTeamMembers = {
      * The team whose members we should return. If this is not provided the members of the current active team get returned.
      */
     teamId?: string = "team-id"
+    /**
+     * Whether to include user details (name, email) in the response. By default, it's false.
+     */
+    includeUser?: boolean = true
 }
 ```
 </APIMethod>
