@@ -356,7 +356,7 @@ describe("checkEndpointConflicts", () => {
 				endpoint1: endpoint(
 					"/api/wildcard",
 					{
-						method: '*'
+						method: "*",
 					},
 					vi.fn(),
 				),
@@ -384,9 +384,7 @@ describe("checkEndpointConflicts", () => {
 
 		expect(mockLogger.error).toHaveBeenCalledTimes(1);
 		expect(mockLogger.error).toHaveBeenCalledWith(
-			expect.stringContaining(
-				'"/api/wildcard"',
-			),
+			expect.stringContaining('"/api/wildcard"'),
 		);
 	});
 

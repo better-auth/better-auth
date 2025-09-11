@@ -66,7 +66,7 @@ export function checkEndpointConflicts(
 					if (methods.length === 0) {
 						methods = ["*"];
 					}
-					
+
 					if (!endpointRegistry.has(path)) {
 						endpointRegistry.set(path, []);
 					}
@@ -80,12 +80,16 @@ export function checkEndpointConflicts(
 		}
 	});
 
-	const conflicts: { path: string; plugins: string[]; conflictingMethods: string[] }[] = [];
+	const conflicts: {
+		path: string;
+		plugins: string[];
+		conflictingMethods: string[];
+	}[] = [];
 	for (const [path, entries] of endpointRegistry.entries()) {
 		if (entries.length > 1) {
 			const methodMap = new Map<string, string[]>();
 			let hasConflict = false;
-			
+
 			for (const entry of entries) {
 				for (const method of entry.methods) {
 					if (!methodMap.has(method)) {
@@ -104,18 +108,21 @@ export function checkEndpointConflicts(
 					}
 				}
 			}
-			
+
 			if (hasConflict) {
 				const uniquePlugins = [...new Set(entries.map((e) => e.pluginId))];
 				const conflictingMethods: string[] = [];
 
 				for (const [method, plugins] of methodMap.entries()) {
-					if (plugins.length > 1 || (method === "*" && entries.length > 1) || 
-					    (method !== "*" && methodMap.has("*"))) {
+					if (
+						plugins.length > 1 ||
+						(method === "*" && entries.length > 1) ||
+						(method !== "*" && methodMap.has("*"))
+					) {
 						conflictingMethods.push(method);
 					}
 				}
-				
+
 				conflicts.push({
 					path,
 					plugins: uniquePlugins,
