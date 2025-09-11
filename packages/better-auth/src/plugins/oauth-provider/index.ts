@@ -339,20 +339,107 @@ export const oauthProvider = (options: OAuthOptions) => {
 				"/oauth2/authorize",
 				{
 					method: "GET",
-					query: z.record(z.string(), z.any()),
+					query: z.object({
+						response_type: z.enum(["code"]),
+						client_id: z.string(),
+						redirect_uri: z.string().optional(),
+						scope: z.string().optional(),
+						state: z.string().optional(),
+						code_challenge: z.string().optional(),
+						code_challenge_method: z.enum(["S256"]).optional(),
+						nonce: z.string().optional(),
+						prompt: z.enum(["consent", "login"]).optional(),
+					}),
 					metadata: {
 						openapi: {
 							description: "Authorize an OAuth2 request",
+							parameters: [
+								{
+									name: "response_type",
+									in: "query",
+									required: true,
+									schema: { type: "string" },
+									description: "OAuth2 response type (e.g., 'code')",
+								},
+								{
+									name: "client_id",
+									in: "query",
+									required: true,
+									schema: { type: "string" },
+									description: "OAuth2 client ID",
+								},
+								{
+									name: "redirect_uri",
+									in: "query",
+									required: false,
+									schema: { type: "string", format: "uri" },
+									description: "OAuth2 redirect URI",
+								},
+								{
+									name: "scope",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description: "OAuth2 scopes (space-separated)",
+								},
+								{
+									name: "state",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description: "OAuth2 state parameter",
+								},
+								{
+									name: "code_challenge",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description: "PKCE code challenge",
+								},
+								{
+									name: "code_challenge_method",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description: "PKCE code challenge method",
+								},
+								{
+									name: "nonce",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description: "OpenID Connect nonce",
+								},
+								{
+									name: "prompt",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description: "OAuth2 prompt parameter",
+								},
+							],
 							responses: {
-								"200": {
-									description: "Authorization response generated successfully",
+								"302": {
+									description: "Redirect to client with code or error",
+									headers: {
+										Location: {
+											description: "Redirect URI with code or error",
+											schema: { type: "string", format: "uri" },
+										},
+									},
+								},
+								"400": {
+									description: "Invalid request",
 									content: {
 										"application/json": {
 											schema: {
 												type: "object",
-												additionalProperties: true,
-												description:
-													"Authorization response, contents depend on the authorize function implementation",
+												properties: {
+													error: { type: "string" },
+													error_description: { type: "string" },
+													state: { type: "string" },
+												},
+												required: ["error"],
 											},
 										},
 									},
