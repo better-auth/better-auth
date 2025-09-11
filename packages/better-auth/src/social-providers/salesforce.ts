@@ -23,6 +23,7 @@ export interface SalesforceProfile {
 }
 
 export interface SalesforceOptions extends ProviderOptions<SalesforceProfile> {
+	clientId: string;
 	environment?: "sandbox" | "production";
 	loginUrl?: string;
 	/**
