@@ -36,7 +36,14 @@ export function createRefreshAccessTokenRequest({
 				"Basic " + base64.encode(`:${options.clientSecret ?? ""}`);
 		}
 	} else {
-		options.clientId && body.set("client_id", options.clientId);
+		const clientId = options.clientId;
+		if (typeof clientId === "string") {
+			body.set("client_id", clientId);
+		} else if (Array.isArray(clientId)) {
+			for (const id of clientId) {
+				body.append("client_id", id);
+			}
+		}
 		if (options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}
