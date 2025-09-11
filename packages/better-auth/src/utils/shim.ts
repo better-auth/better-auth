@@ -108,6 +108,7 @@ export const shimLastParam = <
 >(
 	obj: T,
 	shim: P,
+	isMatch?: (last: unknown) => boolean,
 	shouldOmit: Omit = false as Omit,
 ) => {
 	const out: Partial<Record<keyof T, any>> = {};
@@ -115,12 +116,19 @@ export const shimLastParam = <
 	for (const key in obj) {
 		const fn = obj[key] as any;
 		out[key] = (...args: any[]) => {
-			if (args.length < fn.length) {
-				return fn(
-					...args,
-					...Array(Math.max(0, fn.length - 1 - args.length)).fill(undefined),
-					shim,
-				);
+			if (isMatch) {
+				if (isMatch(args[args.length - 1])) {
+					return fn(...args);
+				}
+				return fn(...args, shim);
+			} else {
+				if (args.length < fn.length) {
+					return fn(
+						...args,
+						...Array(Math.max(0, fn.length - 1 - args.length)).fill(undefined),
+						shim,
+					);
+				}
 			}
 			return fn(...args);
 		};

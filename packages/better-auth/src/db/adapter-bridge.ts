@@ -70,6 +70,17 @@ export type AdapterBridge<O extends AdapterBridgeOptions> =
 		) => Promise<R>;
 	} & O["staticMethods"];
 
+const isTransactionAdapter = (value: any): value is TransactionAdapter => {
+	return (
+		!!value &&
+		typeof value === "object" &&
+		typeof value.id === "string" &&
+		["findOne", "findMany", "update", "delete"].every(
+			(key) => typeof value[key] === "function",
+		)
+	);
+};
+
 export const createAdapterBridge = <
 	ID extends LiteralString,
 	O extends AdapterBridgeOptions<ID>,
@@ -81,13 +92,7 @@ export const createAdapterBridge = <
 	for (const key in bridge.methods) {
 		methods[key] = (...args: any[]) => {
 			const maybeTrx = args[args.length - 1];
-			const hasTrx =
-				maybeTrx &&
-				typeof maybeTrx === "object" &&
-				typeof maybeTrx.id === "string" &&
-				["findOne", "findMany", "update", "delete"].every(
-					(key) => typeof maybeTrx[key] === "function",
-				);
+			const hasTrx = isTransactionAdapter(maybeTrx);
 
 			const ctx: AdapterBridgeContext = {
 				adapter: hasTrx ? maybeTrx : bridge.adapter,
@@ -105,7 +110,7 @@ export const createAdapterBridge = <
 			return bridge.adapter.transaction((trxAdapter) => {
 				const trx: AdapterBridgeContext & Record<string, any> = {
 					adapter: trxAdapter,
-					[bridge.id]: shimLastParam(methods, trxAdapter),
+					[bridge.id]: shimLastParam(methods, trxAdapter, isTransactionAdapter),
 				};
 
 				return cb({
