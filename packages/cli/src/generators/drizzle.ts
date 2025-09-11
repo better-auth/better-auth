@@ -104,7 +104,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				},
 				date: {
 					sqlite: `integer('${name}', { mode: 'timestamp' })`,
-					pg: `timestamp('${name}')`,
+					pg: `timestamp('${name}', { withTimezone: true })`,
 					mysql: `timestamp('${name}')`,
 				},
 				"number[]": {
