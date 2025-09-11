@@ -19,6 +19,7 @@ import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId, type InternalLogger } from "../utils";
 import { createAdapterBridge } from "./adapter-bridge";
+import { shimLastParam } from "../utils/shim";
 
 export const createInternalAdapter = <OmitStaticMethods extends boolean = false>(
 	adapter: OmitStaticMethods extends true ? TransactionAdapter : Adapter,
@@ -34,13 +35,17 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
-	const { createWithHooks, updateWithHooks, updateManyWithHooks } =
+	const withHooks =
 		getWithHooks(adapter, ctx);
 
 	return createAdapterBridge({
 		id: "internalAdapter",
 		adapter: adapter as Adapter,
 		omitStaticMethods: omitStaticMethods as OmitStaticMethods,
+		getBridgeContext(ctx) {
+			return shimLastParam(withHooks, ctx.adapter) as ReturnType<typeof getWithHooks>;
+		},
+	}, {
 		staticMethods: {
 			createOAuthUser: async (
 				user: Omit<User, "id" | "createdAt" | "updatedAt">,
@@ -49,7 +54,7 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 				context?: GenericEndpointContext,
 			) => {
 				return (adapter as Adapter).transaction(async (trxAdapter) => {
-					const createdUser = await createWithHooks(
+					const createdUser = await withHooks.createWithHooks(
 						{
 							// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 							createdAt: new Date(),
@@ -61,7 +66,7 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 						context,
 						trxAdapter,
 					);
-					const createdAccount = await createWithHooks(
+					const createdAccount = await withHooks.createWithHooks(
 						{
 							...account,
 							userId: createdUser!.id,
@@ -83,7 +88,7 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 		},
 		methods: {
 			createUser:
-				({ adapter }) =>
+				({ createWithHooks }) =>
 				async <T>(
 					user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 						Partial<User> &
@@ -101,12 +106,11 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 						"user",
 						undefined,
 						context,
-						adapter,
 					);
 					return createdUser as T & User;
 				},
 			createAccount:
-				({ adapter }) =>
+				({ createWithHooks }) =>
 				async <T extends Record<string, any>>(
 					account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 						Partial<Account> &
@@ -123,7 +127,6 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 						"account",
 						undefined,
 						context,
-						adapter,
 					);
 					return createdAccount as T & Account;
 				},
@@ -245,7 +248,7 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 					});
 				},
 			createSession:
-				({ adapter }) =>
+				({ createWithHooks }) =>
 				async (
 					userId: string,
 					ctx: GenericEndpointContext,
@@ -316,7 +319,6 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 								}
 							: undefined,
 						ctx,
-						adapter,
 					);
 					return res as Session;
 				},
@@ -468,7 +470,7 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 					}[];
 				},
 			updateSession:
-				({ adapter }) =>
+				({ updateWithHooks }) =>
 				async (
 					sessionToken: string,
 					session: Partial<Session> & Record<string, any>,
@@ -503,7 +505,6 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 								}
 							: undefined,
 						context,
-						adapter,
 					);
 					return updatedSession;
 				},
@@ -767,7 +768,7 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 					return user;
 				},
 			linkAccount:
-				({ adapter }) =>
+				({ createWithHooks }) =>
 				async (
 					account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 						Partial<Account>,
@@ -783,12 +784,11 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 						"account",
 						undefined,
 						context,
-						adapter,
 					);
 					return _account;
 				},
 			updateUser:
-				({ adapter }) =>
+				({ updateWithHooks }) =>
 				async (
 					userId: string,
 					data: Partial<User> & Record<string, any>,
@@ -805,7 +805,6 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 						"user",
 						undefined,
 						context,
-						adapter,
 					);
 					if (secondaryStorage && user) {
 						const listRaw = await secondaryStorage.get(
@@ -849,7 +848,7 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 					return user;
 				},
 			updateUserByEmail:
-				({ adapter }) =>
+				({ updateWithHooks }) =>
 				async (
 					email: string,
 					data: Partial<User & Record<string, any>>,
@@ -866,12 +865,11 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 						"user",
 						undefined,
 						context,
-						adapter,
 					);
 					return user;
 				},
 			updatePassword:
-				({ adapter }) =>
+				({ updateManyWithHooks }) =>
 				async (
 					userId: string,
 					password: string,
@@ -894,7 +892,6 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 						"account",
 						undefined,
 						context,
-						adapter,
 					);
 				},
 			findAccounts:
@@ -958,7 +955,7 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 					return account;
 				},
 			updateAccount:
-				({ adapter }) =>
+				({ updateWithHooks }) =>
 				async (
 					id: string,
 					data: Partial<Account>,
@@ -970,12 +967,11 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 						"account",
 						undefined,
 						context,
-						adapter,
 					);
 					return account;
 				},
 			createVerificationValue:
-				({ adapter }) =>
+				({ createWithHooks }) =>
 				async (
 					data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 						Partial<Verification>,
@@ -991,7 +987,6 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 						"verification",
 						undefined,
 						context,
-						adapter,
 					);
 					return verification as Verification;
 				},
@@ -1054,7 +1049,7 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 					});
 				},
 			updateVerificationValue:
-				({ adapter }) =>
+				({ updateWithHooks }) =>
 				async (
 					id: string,
 					data: Partial<Verification>,
@@ -1066,7 +1061,6 @@ export const createInternalAdapter = <OmitStaticMethods extends boolean = false>
 						"verification",
 						undefined,
 						context,
-						adapter,
 					);
 					return verification;
 				},
