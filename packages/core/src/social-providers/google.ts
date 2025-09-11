@@ -37,8 +37,12 @@ export interface GoogleProfile {
 	sub: string;
 }
 
-export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
-	clientId: string;
+export interface GoogleOptions extends Omit<ProviderOptions<GoogleProfile>, "clientId"> {
+	/**
+	 * The client ID(s) of your application
+	 * Can be a single client ID string or an array of client IDs for cross-platform support
+	 */
+	clientId: string | string[];
 	/**
 	 * The access type to use for the authorization code request
 	 */
@@ -202,7 +206,7 @@ export const google = (options: GoogleOptions) => {
 				data: user,
 			};
 		},
-		options,
+		options: options as any,
 	} satisfies OAuthProvider<GoogleProfile>;
 };
 

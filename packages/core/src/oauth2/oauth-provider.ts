@@ -96,11 +96,9 @@ export interface OAuthProvider<
 
 export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
-	 * The client ID(s) of your application
-	 * Can be a single client ID string or an array of client IDs for cross-platform support
-	 * Multiple clientIds is only available for Google provider
+	 * The client ID of your application
 	 */
-	clientId: string | string[];
+	clientId: string;
 	/**
 	 * The client secret of your application
 	 */
