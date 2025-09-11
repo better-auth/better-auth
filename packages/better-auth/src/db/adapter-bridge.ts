@@ -15,10 +15,16 @@ type WithTrx<F extends (...args: any[]) => any> = F &
 type InferAdapterBridgeMethods<T extends AdapterBridgeMethods> = {
 	[K in keyof T]: WithTrx<ReturnType<T[K]>>;
 };
-type AdapterBridgeMethods<O extends Omit<AdapterBridgeOptions, "adapter"> = Omit<AdapterBridgeOptions, "adapter">> = Record<
+type AdapterBridgeMethods<
+	O extends Omit<AdapterBridgeOptions, "adapter"> = Omit<
+		AdapterBridgeOptions,
+		"adapter"
+	>,
+> = Record<
 	string,
 	(
-		ctx: AdapterBridgeContext & InferAdditionalBridgeContext<O["getBridgeContext"]>,
+		ctx: AdapterBridgeContext &
+			InferAdditionalBridgeContext<O["getBridgeContext"]>,
 	) => any extends infer S
 		? S extends (...args: any[]) => any
 			? S
@@ -34,7 +40,9 @@ type GetTransactionContextHandler<
 		Record<ID, Record<string, (...args: any[]) => any>>,
 ) => R;
 
-type GetBridgeContextHandler<R extends Record<string, any> | void = Record<string, any> | void> = (ctx: AdapterBridgeContext) => R;
+type GetBridgeContextHandler<
+	R extends Record<string, any> | void = Record<string, any> | void,
+> = (ctx: AdapterBridgeContext) => R;
 
 export type AdapterBridgeOptions<ID extends LiteralString = LiteralString> = {
 	id: ID;
@@ -57,24 +65,35 @@ type InferAdditionalTransactionContext<
 		: {}
 	: {};
 
-type InferAdditionalBridgeContext<T> = T extends GetBridgeContextHandler<infer R> ? R extends Record<string,any> ? R : {} : {};
+type InferAdditionalBridgeContext<T> = T extends GetBridgeContextHandler<
+	infer R
+>
+	? R extends Record<string, any>
+		? R
+		: {}
+	: {};
 
-export type AdapterBridge<O extends AdapterBridgeOptions, M extends {
-	staticMethods?: Record<string, (...args: any[]) => any>;
-	methods: AdapterBridgeMethods;
-}> =
-	InferAdapterBridgeMethods<M["methods"]> & ([O["omitStaticMethods"]] extends [true] ? {} : {
-		withTransaction: <R>(
-			cb: (
-				trx: Prettify<
-					{
-						adapter: TransactionAdapter;
-					} & Record<O["id"], InferAdapterBridgeMethods<M["methods"]>> &
-						InferAdditionalTransactionContext<O>
-				>,
-			) => Promise<R>,
-		) => Promise<R>;
-	} & M["staticMethods"]);
+export type AdapterBridge<
+	O extends AdapterBridgeOptions,
+	M extends {
+		staticMethods?: Record<string, (...args: any[]) => any>;
+		methods: AdapterBridgeMethods;
+	},
+> = InferAdapterBridgeMethods<M["methods"]> &
+	([O["omitStaticMethods"]] extends [true]
+		? {}
+		: {
+				withTransaction: <R>(
+					cb: (
+						trx: Prettify<
+							{
+								adapter: TransactionAdapter;
+							} & Record<O["id"], InferAdapterBridgeMethods<M["methods"]>> &
+								InferAdditionalTransactionContext<O>
+						>,
+					) => Promise<R>,
+				) => Promise<R>;
+			} & M["staticMethods"]);
 
 const isTransactionAdapter = (value: any): value is TransactionAdapter => {
 	return (
@@ -93,7 +112,7 @@ export const createAdapterBridge = <
 	M extends {
 		staticMethods?: Record<string, (...args: any[]) => any>;
 		methods: AdapterBridgeMethods<O>;
-	}
+	},
 >(
 	options: O & { id: ID; adapter: Adapter },
 	data: M,
@@ -103,7 +122,11 @@ export const createAdapterBridge = <
 			return options.adapter.transaction((trxAdapter) => {
 				const trx: AdapterBridgeContext & Record<string, any> = {
 					adapter: trxAdapter,
-					[options.id]: shimLastParam(methods, trxAdapter, isTransactionAdapter),
+					[options.id]: shimLastParam(
+						methods,
+						trxAdapter,
+						isTransactionAdapter,
+					),
 				};
 
 				return cb({
@@ -113,7 +136,7 @@ export const createAdapterBridge = <
 			});
 		},
 		...data.staticMethods,
-	}
+	};
 	const methods: any = {};
 
 	for (const key in data.methods) {
@@ -146,7 +169,7 @@ createAdapterBridge.create = <
 	M extends {
 		staticMethods?: Record<string, (...args: any[]) => any>;
 		methods: AdapterBridgeMethods<O>;
-	}
+	},
 >(
 	context: AuthContext,
 	options: O & { id: ID },
@@ -173,6 +196,6 @@ createAdapterBridge.create = <
 					{}) as InferAdditionalTransactionContext<O>),
 			};
 		},
-	} satisfies AdapterBridgeOptions
+	} satisfies AdapterBridgeOptions;
 	return createAdapterBridge(opts, data);
 };
