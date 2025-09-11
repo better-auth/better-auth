@@ -104,12 +104,12 @@ export type InferShimLastParamResult<
 export const shimLastParam = <
 	T extends Record<string, (...args: any[]) => any>,
 	P extends LastParameter<T[keyof T]>,
-	Omit extends boolean = false,
+	ShouldOmit extends boolean = false,
 >(
 	obj: T,
 	shim: P,
 	isMatch?: (last: unknown) => boolean,
-	shouldOmit: Omit = false as Omit,
+	shouldOmit: ShouldOmit = false as ShouldOmit,
 ) => {
 	const out: Partial<Record<keyof T, any>> = {};
 
@@ -136,7 +136,7 @@ export const shimLastParam = <
 
 	return out as {
 		[K in keyof T]: (
-			...args: Omit extends true
+			...args: ShouldOmit extends true
 				? RestParameter<T[K]>
 				: [...RestParameter<T[K]>, LastParameter<T[K]>?]
 		) => ReturnType<T[K]>;
