@@ -1,5 +1,4 @@
 import { APIError } from "better-call";
-import { createLocalJWKSet, jwtVerify } from "jose";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import type { GenericEndpointContext, User } from "../../types";
 import {
@@ -11,6 +10,7 @@ import {
 import type { OAuthAccessToken, OAuthOptions, OAuthSession } from "./types";
 import { getJwtPlugin } from "./utils";
 import { decodeRefreshToken } from "./token";
+import { verifyJwsAccessToken } from "./verify";
 
 /**
  * IMPORTANT NOTES:
@@ -35,63 +35,46 @@ async function validateJwtAccessToken(
 		? undefined
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
-	if (!jwtPlugin) throw new APIError("INTERNAL_SERVER_ERROR");
-
-	// Validate JWT against the JWKs
-	const jwksResult = jwtPluginOptions?.jwks?.remoteUrl
-		? await fetch(jwtPluginOptions.jwks.remoteUrl, {
-				headers: {
-					Accept: "application/json",
-				},
-			}).then(async (res) => {
-				if (!res.ok) throw new Error(`Jwks error: status ${res.status}`);
-				return (await res.json()) as JSONWebKeySet | undefined;
-			})
-		: jwtPlugin?.endpoints
-			? await jwtPlugin.endpoints.getJwks(ctx).then(async (res) => {
-					// @ts-expect-error response is a JSONWebKeySet but within the response field
-					return res.response as JSONWebKeySet | undefined;
-				})
-			: undefined;
-	if (!jwksResult) throw new Error("No jwks found");
-	const jwks = createLocalJWKSet(jwksResult);
-
-	// Verify JWT Payload
 	let jwtPayload: JWTPayload & {
 		sid?: string;
 		azp?: string;
 	};
+
 	try {
-		const jwt = await jwtVerify<
-			JWTPayload & {
-				sid?: string;
-				azp?: string;
-			}
-		>(token, jwks, {
-			audience: jwtPluginOptions?.jwt?.audience ?? ctx.context.options.baseURL,
-			issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.options.baseURL,
+		jwtPayload = await verifyJwsAccessToken(token, {
+			jwksFetch: jwtPluginOptions?.jwks?.remoteUrl
+				? jwtPluginOptions.jwks.remoteUrl
+				: async () => {
+						const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
+						// @ts-expect-error response is a JSONWebKeySet but within the response field
+						return jwksRes?.response as JSONWebKeySet | undefined;
+					},
+			verifyOptions: {
+				audience: jwtPluginOptions?.jwt?.audience ?? ctx.context.baseURL,
+				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+			},
 		});
-		jwtPayload = jwt.payload;
 	} catch (error) {
 		if (error instanceof Error) {
-			if (error.name === "JWTExpired") {
+			if (error.name === "TypeError" || error.name === "JWSInvalid") {
+				// likely an opaque token
+				throw new APIError("BAD_REQUEST", {
+					error_description: "invalid JWT signature",
+					error: "invalid_token",
+				});
+			} else if (error.name === "JWTExpired") {
 				return {
 					active: false,
 				};
 			} else if (error.name === "JWTInvalid") {
 				// audience or issuer mismatch
 				throw new Error("jwt invalid likely audience or issuer mismatch");
-			} else if (error.name === "JWSInvalid") {
-				// likely an opaque token
-				throw new APIError("BAD_REQUEST", {
-					error_description: "invalid JWT signature",
-					error: "invalid_token",
-				});
 			}
 			throw error;
 		}
 		throw new Error(error as unknown as string);
 	}
+
 	if (jwtPayload.azp && clientId && jwtPayload.azp !== clientId) {
 		if (clientId && jwtPayload.azp !== clientId) {
 			throw new Error("token does not match client ID");
@@ -212,7 +195,7 @@ async function validateOpaqueAccessToken(
 	const jwtPluginOptions = jwtPlugin?.options;
 	return {
 		active: true,
-		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.options.baseURL,
+		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: accessToken.sessionId,
@@ -267,7 +250,7 @@ async function validateRefreshToken(
 	return {
 		active: true,
 		client_id: clientId,
-		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.options.baseURL,
+		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: userSession.userId,
 		sid: userSession.id,
 		exp: Math.floor(userSession.expiresAt.getTime() / 1000),
@@ -281,6 +264,8 @@ async function validateRefreshToken(
  * as a JWT first, then as an opaque token.
  *
  * @returns RFC7662 introspection format
+ *
+ * @internal
  */
 export async function validateAccessToken(
 	ctx: GenericEndpointContext,
