@@ -287,6 +287,42 @@ describe("getSessionCookie", async () => {
 		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
+	it("should respect dontRememberMe when storing session in cookie cache", async () => {
+		const { client, testUser } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+				rememberMe: false,
+			},
+			{
+				onSuccess(c) {
+					const headers = c.response.headers;
+					const setCookieHeader = headers.get("set-cookie");
+					expect(setCookieHeader).toBeDefined();
+
+					const parsed = parseSetCookieHeader(setCookieHeader!);
+
+					const sessionTokenCookie = parsed.get("better-auth.session_token")!;
+					expect(sessionTokenCookie).toBeDefined();
+					expect(sessionTokenCookie["max-age"]).toBeUndefined();
+
+					const sessionDataCookie = parsed.get("better-auth.session_data")!;
+					expect(sessionDataCookie).toBeDefined();
+					expect(sessionDataCookie["max-age"]).toBeUndefined();
+				},
+			},
+		);
+	});
+
 	it("should return null if the cookie is invalid", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			session: {
