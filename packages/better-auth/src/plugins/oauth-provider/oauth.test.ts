@@ -7,6 +7,7 @@ import { createAuthClient } from "../../client";
 import { oauthProviderClient } from "./client";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
+import { verifyAccessToken } from "./verify";
 import { listen, type Listener } from "listhen";
 import { toNodeHandler } from "../../integrations/node";
 import { createLocalJWKSet, jwtVerify } from "jose";
@@ -460,6 +461,7 @@ describe("oauth", async () => {
 describe("oauth - config", () => {
 	const port = 3002;
 	const authServerBaseUrl = `http://localhost:${port}`;
+	const authServerUrl = `${authServerBaseUrl}/api/auth`;
 	const rpBaseUrl = "http://localhost:5000";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
@@ -709,13 +711,20 @@ describe("oauth - config", () => {
 	);
 
 	it.each([
-		{ disableJWTPlugin: false, publicClient: false },
-		{ disableJWTPlugin: true, publicClient: false },
-		{ disableJWTPlugin: false, publicClient: true },
-		{ disableJWTPlugin: true, publicClient: true },
+		{ disableJWTPlugin: false, publicClient: false, resource: false },
+		{ disableJWTPlugin: true, publicClient: false, resource: false },
+		{ disableJWTPlugin: false, publicClient: true, resource: false },
+		{ disableJWTPlugin: true, publicClient: true, resource: false },
+		{ disableJWTPlugin: false, publicClient: false, resource: true },
+		{ disableJWTPlugin: true, publicClient: false, resource: true },
+		{ disableJWTPlugin: false, publicClient: true, resource: true },
+		{ disableJWTPlugin: true, publicClient: true, resource: true },
 	])(
-		"disableJWTPlugin: $disableJWTPlugin, publicClient: $publicClient",
-		async ({ disableJWTPlugin, publicClient }) => {
+		"disableJWTPlugin: $disableJWTPlugin, publicClient: $publicClient, resource: $resource",
+		async ({ disableJWTPlugin, publicClient, resource }) => {
+			const validAudience = disableJWTPlugin
+				? `${authServerBaseUrl}/api/auth`
+				: "https://api.example.com";
 			const {
 				auth: authorizationServer,
 				signInWithTestUser,
@@ -733,7 +742,15 @@ describe("oauth - config", () => {
 							openidConfig: true,
 						},
 					}),
-					...(disableJWTPlugin ? [] : [jwt()]),
+					...(disableJWTPlugin
+						? []
+						: [
+								jwt({
+									jwt: {
+										audience: resource ? validAudience : undefined,
+									},
+								}),
+							]),
 				],
 			});
 			const { headers, user } = await signInWithTestUser();
@@ -764,7 +781,13 @@ describe("oauth - config", () => {
 			oauthClient = createdClient.data;
 
 			// The RP (Relying Party) - the client application
-			const { customFetchImpl: customFetchImplRP } = await createTestInstance();
+			const { customFetchImpl: customFetchImplRP } = await createTestInstance({
+				tokenUrlParams: resource
+					? {
+							resource: validAudience,
+						}
+					: undefined,
+			});
 
 			const client = createAuthClient({
 				plugins: [genericOAuthClient()],
@@ -783,9 +806,7 @@ describe("oauth - config", () => {
 					throw: true,
 				},
 			);
-			expect(data.url).toContain(
-				`${authServerBaseUrl}/api/auth/oauth2/authorize`,
-			);
+			expect(data.url).toContain(`${authServerUrl}/oauth2/authorize`);
 			expect(data.url).toContain(`client_id=${oauthClient?.client_id}`);
 
 			let redirectUriResponse = "";
@@ -822,6 +843,32 @@ describe("oauth - config", () => {
 
 			// Check for access tokens
 			expect(tokens.data?.accessToken).toBeDefined();
+			if (publicClient && !(resource && !disableJWTPlugin)) {
+				await expect(
+					verifyAccessToken(tokens.data?.accessToken!, {
+						verifyOptions: {
+							audience: validAudience,
+							issuer: authServerUrl,
+						},
+						jwksUrl: disableJWTPlugin ? undefined : `${authServerUrl}/jwks`,
+					}),
+				).rejects.toThrowError();
+			} else {
+				await verifyAccessToken(tokens.data?.accessToken!, {
+					verifyOptions: {
+						audience: validAudience,
+						issuer: authServerUrl,
+					},
+					jwksUrl: disableJWTPlugin ? undefined : `${authServerUrl}/jwks`,
+					remoteVerify: publicClient
+						? undefined
+						: {
+								introspectUrl: `${authServerUrl}/oauth2/introspect`,
+								clientId: createdClient.data?.client_id!,
+								clientSecret: createdClient.data?.client_secret!,
+							},
+				});
+			}
 
 			// Check id token tokens
 			if (disableJWTPlugin) {

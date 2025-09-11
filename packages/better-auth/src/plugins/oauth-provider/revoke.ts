@@ -1,6 +1,5 @@
 import { APIError } from "better-call";
-import { createLocalJWKSet, jwtVerify } from "jose";
-import type { JSONWebKeySet, JWTPayload } from "jose";
+import type { JSONWebKeySet } from "jose";
 import type { GenericEndpointContext } from "../../types";
 import {
 	basicToClientCredentials,
@@ -10,6 +9,7 @@ import {
 import type { OAuthAccessToken, OAuthOptions, OAuthSession } from "./types";
 import { getJwtPlugin } from "./utils";
 import { decodeRefreshToken } from "./token";
+import { verifyJwsAccessToken } from "./verify";
 
 /**
  * IMPORTANT NOTES:
@@ -33,49 +33,34 @@ async function revokeJwtAccessToken(
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
 
-	// Validate JWT against the JWKs
-	const jwksResult = jwtPluginOptions?.jwks?.remoteUrl
-		? await fetch(jwtPluginOptions.jwks.remoteUrl, {
-				headers: {
-					Accept: "application/json",
-				},
-			}).then(async (res) => {
-				if (!res.ok) throw new Error(`Jwks error: status ${res.status}`);
-				return (await res.json()) as JSONWebKeySet | undefined;
-			})
-		: jwtPlugin?.endpoints
-			? await jwtPlugin.endpoints.getJwks(ctx).then(async (res) => {
-					// @ts-expect-error response is a JSONWebKeySet but within the response field
-					return res.response as JSONWebKeySet | undefined;
-				})
-			: undefined;
-	if (!jwksResult) throw new Error("No jwks found");
-	const jwks = createLocalJWKSet(jwksResult);
-
 	// Verify JWT Payload
 	try {
-		await jwtVerify<
-			JWTPayload & {
-				sid?: string;
-				azp?: string;
-			}
-		>(token, jwks, {
-			audience: jwtPluginOptions?.jwt?.audience ?? ctx.context.options.baseURL,
-			issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.options.baseURL,
+		await verifyJwsAccessToken(token, {
+			jwksFetch: jwtPluginOptions?.jwks?.remoteUrl
+				? jwtPluginOptions.jwks.remoteUrl
+				: async () => {
+						const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
+						// @ts-expect-error response is a JSONWebKeySet but within the response field
+						return jwksRes?.response as JSONWebKeySet | undefined;
+					},
+			verifyOptions: {
+				audience: jwtPluginOptions?.jwt?.audience ?? ctx.context.baseURL,
+				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+			},
 		});
 	} catch (error) {
 		if (error instanceof Error) {
-			if (error.name === "JWTExpired") {
-				return null;
-			} else if (error.name === "JWTInvalid") {
-				// audience or issuer mismatch
-				throw new Error("jwt invalid likely audience or issuer mismatch");
-			} else if (error.name === "JWSInvalid") {
+			if (error.name === "TypeError" || error.name === "JWSInvalid") {
 				// likely an opaque token
 				throw new APIError("BAD_REQUEST", {
 					error_description: "invalid JWT signature",
 					error: "invalid_token",
 				});
+			} else if (error.name === "JWTExpired") {
+				return null;
+			} else if (error.name === "JWTInvalid") {
+				// audience or issuer mismatch
+				throw new Error("jwt invalid likely audience or issuer mismatch");
 			}
 			throw error;
 		}
