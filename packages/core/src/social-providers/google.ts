@@ -74,6 +74,12 @@ export const google = (options: GoogleOptions) => {
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Google");
 			}
+
+			// Use the first client ID for authorization URL creation
+			const primaryClientId = Array.isArray(options.clientId)
+				? options.clientId[0]
+				: options.clientId;
+
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["email", "profile", "openid"];
@@ -81,7 +87,10 @@ export const google = (options: GoogleOptions) => {
 			if (scopes) _scopes.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "google",
-				options,
+				options: {
+					...options,
+					clientId: primaryClientId,
+				},
 				authorizationEndpoint: "https://accounts.google.com/o/oauth2/auth",
 				scopes: _scopes,
 				state,
@@ -99,21 +108,34 @@ export const google = (options: GoogleOptions) => {
 			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
+			// Use the first client ID for token exchange
+			const primaryClientId = Array.isArray(options.clientId)
+				? options.clientId[0]
+				: options.clientId;
+
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
 				redirectURI,
-				options,
+				options: {
+					...options,
+					clientId: primaryClientId,
+				},
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
 			: async (refreshToken) => {
+					// Use the first client ID for token refresh
+					const primaryClientId = Array.isArray(options.clientId)
+						? options.clientId[0]
+						: options.clientId;
+
 					return refreshAccessToken({
 						refreshToken,
 						options: {
-							clientId: options.clientId,
+							clientId: primaryClientId,
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
@@ -135,10 +157,16 @@ export const google = (options: GoogleOptions) => {
 			if (!kid || !jwtAlg) return false;
 
 			const publicKey = await getGooglePublicKey(kid);
+			
+			// Handle multiple client IDs - if array, verify audience manually
+			const clientIds = Array.isArray(options.clientId)
+				? options.clientId
+				: [options.clientId];
+			
 			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
 				algorithms: [jwtAlg],
 				issuer: ["https://accounts.google.com", "accounts.google.com"],
-				audience: options.clientId,
+				audience: clientIds.length === 1 ? clientIds[0] : clientIds,
 				maxTokenAge: "1h",
 			});
 
@@ -146,7 +174,12 @@ export const google = (options: GoogleOptions) => {
 				return false;
 			}
 
-			return true;
+			// Check if the token's audience matches any of the configured client IDs
+			const isValid =
+				clientIds.includes(jwtClaims.aud as string) &&
+				(jwtClaims.iss === "https://accounts.google.com" ||
+					jwtClaims.iss === "accounts.google.com");
+			return isValid;
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
