@@ -97,7 +97,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		useFetch?: UseFetch | undefined,
 	) {
 		if (useFetch) {
-			const ref = useStore(pluginsAtoms.$sessionSignal!);
+			const ref = useStore(pluginsAtoms.$sessionSignal);
 			return useFetch(`${baseURL}/get-session`, {
 				ref,
 			}).then((res: any) => {
