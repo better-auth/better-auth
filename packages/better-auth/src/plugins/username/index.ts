@@ -264,13 +264,13 @@ export const username = (options?: UsernameOptions) => {
 					}
 
 					const user = await ctx.context.adapter.findOne<
-						User & { username: string }
+						User & { username: string; displayUsername: string }
 					>({
 						model: "user",
 						where: [
 							{
 								field: "username",
-								value: username,
+								value: normalizer(username),
 							},
 						],
 					});
@@ -358,6 +358,7 @@ export const username = (options?: UsernameOptions) => {
 							email: user.email,
 							emailVerified: user.emailVerified,
 							username: user.username,
+							displayUsername: user.displayUsername,
 							name: user.name,
 							image: user.image,
 							createdAt: user.createdAt,
