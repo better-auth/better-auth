@@ -10,6 +10,7 @@ import type { OAuthAccessToken, OAuthOptions, OAuthSession } from "./types";
 import { getJwtPlugin } from "./utils";
 import { decodeRefreshToken } from "./token";
 import { verifyJwsAccessToken } from "./verify";
+import { logger } from "../../utils";
 
 /**
  * IMPORTANT NOTES:
@@ -295,10 +296,10 @@ export async function revokeEndpoint(
 		if (error instanceof APIError) {
 			throw error;
 		} else if (error instanceof Error) {
-			console.error("Introspection error:", error.message, error.stack);
+			logger.error("Introspection error:", error.message, error.stack);
 			throw new APIError("INTERNAL_SERVER_ERROR");
 		} else {
-			console.error("Introspection error:", error);
+			logger.error("Introspection error:", error);
 			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
 	}

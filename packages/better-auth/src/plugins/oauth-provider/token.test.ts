@@ -21,6 +21,7 @@ import {
 	type JSONWebKeySet,
 } from "jose";
 import { createClientCredentialsTokenRequest } from "../../oauth2/client-credentials-token";
+import { jwtClient } from "../jwt/client";
 
 describe("oauth token - authorization_code", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -54,7 +55,7 @@ describe("oauth token - authorization_code", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient()],
+		plugins: [oauthProviderClient(), jwtClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -72,24 +73,18 @@ describe("oauth token - authorization_code", async () => {
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
 		// This test is performed in register.test.ts
-		const application: Partial<OAuthClient> = {
+		const createdClient = await client.oauth2.register({
 			redirect_uris: [redirectUri],
-		};
-		const response = await client.$fetch<OAuthClient>("/oauth2/register", {
-			method: "POST",
-			body: application,
 		});
-		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.user_id).toBeDefined();
-		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual(application.redirect_uris);
+		expect(createdClient.data?.client_id).toBeDefined();
+		expect(createdClient.data?.user_id).toBeDefined();
+		expect(createdClient.data?.client_secret).toBeDefined();
+		expect(createdClient.data?.redirect_uris).toEqual([redirectUri]);
 
-		oauthClient = response.data;
+		oauthClient = createdClient.data;
 
 		// Get jwks
-		const jwksResult = await client.$fetch<JSONWebKeySet>("/jwks", {
-			method: "GET",
-		});
+		const jwksResult = await client.jwks();
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
