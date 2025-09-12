@@ -42,14 +42,10 @@ export async function createAuthorizationURL({
 }) {
 	const url = new URL(authorizationEndpoint);
 	url.searchParams.set("response_type", responseType || "code");
-	const clientId = options.clientId;
-	if (typeof clientId === "string") {
-		url.searchParams.set("client_id", clientId);
-	} else if (Array.isArray(clientId)) {
-		for (const id of clientId) {
-			url.searchParams.append("client_id", id);
-		}
-	}
+	const primaryClientId = Array.isArray(options.clientId)
+		? options.clientId[0]
+		: options.clientId;
+	url.searchParams.set("client_id", primaryClientId);
 	url.searchParams.set("state", state);
 	url.searchParams.set("scope", scopes.join(scopeJoiner || " "));
 	url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
