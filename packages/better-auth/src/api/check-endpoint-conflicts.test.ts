@@ -57,7 +57,7 @@ describe("checkEndpointConflicts", () => {
 		expect(mockLogger.error).not.toHaveBeenCalled();
 	});
 
-	it("should log an error when two plugins use the same endpoint path", () => {
+	it("should NOT log an error when two plugins use the same endpoint path with different methods", () => {
 		const plugin1: BetterAuthPlugin = {
 			id: "plugin1",
 			endpoints: {
@@ -90,30 +90,67 @@ describe("checkEndpointConflicts", () => {
 
 		checkEndpointConflicts(options, mockLogger);
 
+		// Should NOT report an error since methods are different
+		expect(mockLogger.error).not.toHaveBeenCalled();
+	});
+
+	it("should log an error when two plugins use the same endpoint path with the same method", () => {
+		const plugin1: BetterAuthPlugin = {
+			id: "plugin1",
+			endpoints: {
+				endpoint1: endpoint(
+					"/api/shared",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const plugin2: BetterAuthPlugin = {
+			id: "plugin2",
+			endpoints: {
+				endpoint2: endpoint(
+					"/api/shared",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const options: BetterAuthOptions = {
+			plugins: [plugin1, plugin2],
+		};
+
+		checkEndpointConflicts(options, mockLogger);
+
 		expect(mockLogger.error).toHaveBeenCalledTimes(1);
 		expect(mockLogger.error).toHaveBeenCalledWith(
 			expect.stringContaining("Endpoint path conflicts detected"),
 		);
 		expect(mockLogger.error).toHaveBeenCalledWith(
 			expect.stringContaining(
-				'"/api/shared" used by plugins: plugin1, plugin2',
+				'"/api/shared" [GET] used by plugins: plugin1, plugin2',
 			),
 		);
 	});
 
-	it("should detect multiple conflicts across different plugins", () => {
+	it("should NOT detect conflicts when plugins use different methods on same paths", () => {
 		const plugin1: BetterAuthPlugin = {
 			id: "plugin1",
 			endpoints: {
 				endpoint1: endpoint(
-					"/api/conflict1",
+					"/api/resource1",
 					{
 						method: "GET",
 					},
 					vi.fn(),
 				),
 				endpoint2: endpoint(
-					"/api/conflict2",
+					"/api/resource2",
 					{
 						method: "POST",
 					},
@@ -126,7 +163,7 @@ describe("checkEndpointConflicts", () => {
 			id: "plugin2",
 			endpoints: {
 				endpoint3: endpoint(
-					"/api/conflict1",
+					"/api/resource1",
 					{
 						method: "POST",
 					},
@@ -139,7 +176,7 @@ describe("checkEndpointConflicts", () => {
 			id: "plugin3",
 			endpoints: {
 				endpoint4: endpoint(
-					"/api/conflict2",
+					"/api/resource2",
 					{
 						method: "GET",
 					},
@@ -154,17 +191,51 @@ describe("checkEndpointConflicts", () => {
 
 		checkEndpointConflicts(options, mockLogger);
 
+		// Should not report errors since all methods are different
+		expect(mockLogger.error).not.toHaveBeenCalled();
+	});
+
+	it("should detect conflicts when plugins use the same method on the same path", () => {
+		const plugin1: BetterAuthPlugin = {
+			id: "plugin1",
+			endpoints: {
+				endpoint1: endpoint(
+					"/api/conflict",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const plugin2: BetterAuthPlugin = {
+			id: "plugin2",
+			endpoints: {
+				endpoint2: endpoint(
+					"/api/conflict",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const options: BetterAuthOptions = {
+			plugins: [plugin1, plugin2],
+		};
+
+		checkEndpointConflicts(options, mockLogger);
+
 		expect(mockLogger.error).toHaveBeenCalledTimes(1);
 		const errorCall = mockLogger.error.mock.calls[0][0];
 		expect(errorCall).toContain(
-			'"/api/conflict1" used by plugins: plugin1, plugin2',
-		);
-		expect(errorCall).toContain(
-			'"/api/conflict2" used by plugins: plugin1, plugin3',
+			'"/api/conflict" [GET] used by plugins: plugin1, plugin2',
 		);
 	});
 
-	it("should handle multiple endpoints from the same plugin using the same path", () => {
+	it("should allow multiple endpoints from the same plugin using the same path with different methods", () => {
 		const plugin1: BetterAuthPlugin = {
 			id: "plugin1",
 			endpoints: {
@@ -191,18 +262,49 @@ describe("checkEndpointConflicts", () => {
 
 		checkEndpointConflicts(options, mockLogger);
 
-		expect(mockLogger.error).toHaveBeenCalledTimes(1);
-		expect(mockLogger.error).toHaveBeenCalledWith(
-			expect.stringContaining('"/api/same" used by plugins: plugin1'),
-		);
+		// Should not report error since methods are different
+		expect(mockLogger.error).not.toHaveBeenCalled();
 	});
 
-	it("should handle three plugins conflicting on the same path", () => {
+	it("should detect conflicts when same plugin has duplicate methods on same path", () => {
 		const plugin1: BetterAuthPlugin = {
 			id: "plugin1",
 			endpoints: {
 				endpoint1: endpoint(
-					"/api/triple-conflict",
+					"/api/same",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+				endpoint2: endpoint(
+					"/api/same",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const options: BetterAuthOptions = {
+			plugins: [plugin1],
+		};
+
+		checkEndpointConflicts(options, mockLogger);
+
+		expect(mockLogger.error).toHaveBeenCalledTimes(1);
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			expect.stringContaining('"/api/same" [GET] used by plugins: plugin1'),
+		);
+	});
+
+	it("should allow three plugins on the same path with different methods", () => {
+		const plugin1: BetterAuthPlugin = {
+			id: "plugin1",
+			endpoints: {
+				endpoint1: endpoint(
+					"/api/resource",
 					{
 						method: "GET",
 					},
@@ -215,7 +317,7 @@ describe("checkEndpointConflicts", () => {
 			id: "plugin2",
 			endpoints: {
 				endpoint2: endpoint(
-					"/api/triple-conflict",
+					"/api/resource",
 					{
 						method: "POST",
 					},
@@ -228,7 +330,7 @@ describe("checkEndpointConflicts", () => {
 			id: "plugin3",
 			endpoints: {
 				endpoint3: endpoint(
-					"/api/triple-conflict",
+					"/api/resource",
 					{
 						method: "DELETE",
 					},
@@ -243,11 +345,46 @@ describe("checkEndpointConflicts", () => {
 
 		checkEndpointConflicts(options, mockLogger);
 
+		// Should not report error since all methods are different
+		expect(mockLogger.error).not.toHaveBeenCalled();
+	});
+
+	it("should detect conflicts when endpoints don't specify a method (wildcard)", () => {
+		const plugin1: BetterAuthPlugin = {
+			id: "plugin1",
+			endpoints: {
+				endpoint1: endpoint(
+					"/api/wildcard",
+					{
+						method: "*",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const plugin2: BetterAuthPlugin = {
+			id: "plugin2",
+			endpoints: {
+				endpoint2: endpoint(
+					"/api/wildcard",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const options: BetterAuthOptions = {
+			plugins: [plugin1, plugin2],
+		};
+
+		checkEndpointConflicts(options, mockLogger);
+
 		expect(mockLogger.error).toHaveBeenCalledTimes(1);
 		expect(mockLogger.error).toHaveBeenCalledWith(
-			expect.stringContaining(
-				'"/api/triple-conflict" used by plugins: plugin1, plugin2, plugin3',
-			),
+			expect.stringContaining('"/api/wildcard"'),
 		);
 	});
 

@@ -26,15 +26,11 @@ export function setup() {
 	};
 	return {
 		ref,
-		start: async (options?: { baseURL?: string; https?: boolean }) => {
-			server = await createAuthServer(options?.baseURL, options?.https);
+		start: async () => {
+			server = await createAuthServer();
 			clientChild = spawn("pnpm", ["run", "start:client"], {
 				cwd: root,
 				stdio: "pipe",
-				env: {
-					...process.env,
-					HTTPS: options?.https ? "1" : "0",
-				},
 			});
 			clientChild.stderr.on("data", (data) => {
 				const message = data.toString();
@@ -51,7 +47,6 @@ export function setup() {
 						const address = server.address();
 						if (address && typeof address === "object") {
 							ref.serverPort = address.port;
-							console.log(`Server listening on port ${ref.serverPort}`);
 							resolve();
 						}
 					});
@@ -60,14 +55,11 @@ export function setup() {
 					clientChild.stdout.on("data", (data) => {
 						const message = data.toString();
 						// find: http://localhost:5173/
-						if (
-							message.includes("http://localhost:") ||
-							message.includes("https://localhost:")
-						) {
+						if (message.includes("http://localhost:")) {
 							const port: string = message
-								.split("http")[1]
-								.split("localhost:")[1]
-								.split("/")[0];
+								.split("http://localhost:")[1]
+								.split("/")[0]
+								.trim();
 							ref.clientPort = Number(port.replace(/\x1b\[[0-9;]*m/g, ""));
 							resolve();
 						}

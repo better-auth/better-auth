@@ -1,5 +1,5 @@
 "use client";
-import { ChevronRight, Menu, Search } from "lucide-react";
+import { ChevronRight, Menu } from "lucide-react";
 import Link from "next/link";
 import { Fragment, createContext, useContext, useState } from "react";
 import {
@@ -11,7 +11,6 @@ import {
 import { contents, examples } from "./sidebar-content";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useSearchContext } from "fumadocs-ui/provider";
 
 interface NavbarMobileContextProps {
 	isOpen: boolean;

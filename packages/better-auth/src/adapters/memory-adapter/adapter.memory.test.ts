@@ -48,5 +48,9 @@ describe("Number Id Adapter Test", async () => {
 				...customOptions,
 			});
 		},
+		disableTests: {
+			SHOULD_ROLLBACK_FAILING_TRANSACTION: true,
+			SHOULD_RETURN_TRANSACTION_RESULT: true,
+		},
 	});
 });

@@ -1,4 +1,4 @@
-import { z } from "zod/v4";
+import * as z from "zod";
 import { APIError } from "better-call";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin, InferOptionSchema } from "../../types/plugins";

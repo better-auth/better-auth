@@ -9,7 +9,7 @@ import type { Auth } from "../auth";
 import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../db";
 import type { StripEmptyObjects, UnionToIntersection } from "./helper";
 import type { BetterAuthPlugin } from "./plugins";
-import type * as z from "zod/v4";
+import type * as z from "zod";
 
 export type Models =
 	| "user"

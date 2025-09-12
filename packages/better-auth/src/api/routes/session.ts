@@ -6,7 +6,7 @@ import {
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
-import * as z from "zod/v4";
+import * as z from "zod";
 import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
@@ -237,7 +237,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						user: InferUser<Option>;
 					});
 				}
-				await setCookieCache(ctx, session);
+				await setCookieCache(ctx, session, !!dontRememberMe);
 				return ctx.json(
 					session as unknown as {
 						session: InferSession<Option>;
