@@ -31,7 +31,7 @@ export function toExpJWT(
 
 async function deriveKey(secretKey: string): Promise<CryptoKey> {
 	const enc = new TextEncoder();
-	const keyMaterial = await crypto.subtle.importKey(
+	const keyMaterial = await subtle.importKey(
 		"raw",
 		enc.encode(secretKey),
 		{ name: "PBKDF2" },
