@@ -392,13 +392,6 @@ export const createAdapterFactory =
 				) {
 					newValue = JSON.stringify(newValue);
 				} else if (
-					config.supportsJSON === false &&
-					Array.isArray(newValue) &&
-					(fieldAttributes.type === "string[]" ||
-						fieldAttributes.type === "number[]")
-				) {
-					newValue = JSON.stringify(newValue);
-				} else if (
 					config.supportsDates === false &&
 					newValue instanceof Date &&
 					fieldAttributes.type === "date"
@@ -474,12 +467,6 @@ export const createAdapterFactory =
 						config.supportsJSON === false &&
 						typeof newValue === "string" &&
 						field.type === "json"
-					) {
-						newValue = safeJSONParse(newValue);
-					} else if (
-						config.supportsJSON === false &&
-						typeof newValue === "string" &&
-						(field.type === "string[]" || field.type === "number[]")
 					) {
 						newValue = safeJSONParse(newValue);
 					} else if (

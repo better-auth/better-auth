@@ -20,17 +20,17 @@ export const schema = {
 				required: false,
 			},
 			scopes: {
-				type: "string[]",
+				type: "json",
 				required: false,
 			},
 			// Recommended client data
 			userId: {
 				type: "string",
 				required: false,
-				// references: {
-				// 	model: "user",
-				// 	field: "id",
-				// },
+				references: {
+					model: "user",
+					field: "id",
+				},
 			},
 			createdAt: {
 				type: "date",
@@ -54,7 +54,7 @@ export const schema = {
 				required: false,
 			},
 			contacts: {
-				type: "string[]",
+				type: "json",
 				required: false,
 			},
 			tos: {
@@ -80,7 +80,7 @@ export const schema = {
 			},
 			// Authentication Metadata
 			redirectUris: {
-				type: "string[]",
+				type: "json",
 				required: false,
 			},
 			tokenEndpointAuthMethod: {
@@ -88,11 +88,11 @@ export const schema = {
 				required: false,
 			},
 			grantTypes: {
-				type: "string[]",
+				type: "json",
 				required: false,
 			},
 			responseTypes: {
-				type: "string[]",
+				type: "json",
 				required: false,
 			},
 			// RFC6749 Spec
@@ -130,13 +130,13 @@ export const schema = {
 			clientId: {
 				type: "string",
 				required: false,
-				// references: {
-				// 	model: "oauthApplication",
-				// 	field: "clientId",
-				// },
+				references: {
+					model: "oauthApplication",
+					field: "clientId",
+				},
 			},
 			scopes: {
-				type: "string[]",
+				type: "json",
 				required: false,
 			},
 		},
@@ -186,7 +186,7 @@ export const schema = {
 			},
 			// Shall be same as sessionId.scopes if using sessionId
 			scopes: {
-				type: "string[]",
+				type: "json",
 				required: true,
 			},
 		},
