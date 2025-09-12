@@ -118,7 +118,7 @@ export async function handleOAuthUserInfo(
 					);
 				}
 			}
-			// Update emailVerified status if the social provider confirms it
+
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
