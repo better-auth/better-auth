@@ -32,12 +32,18 @@ export function createClientCredentialsTokenRequest({
 		}
 	}
 	if (authentication === "basic") {
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
 		const encodedCredentials = base64Url.encode(
-			`${options.clientId}:${options.clientSecret}`,
+			`${primaryClientId}:${options.clientSecret}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
-		body.set("client_id", options.clientId);
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+		body.set("client_id", primaryClientId);
 		body.set("client_secret", options.clientSecret);
 	}
 

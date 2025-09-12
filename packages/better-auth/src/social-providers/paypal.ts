@@ -44,6 +44,7 @@ export interface PayPalTokenResponse {
 }
 
 export interface PayPalOptions extends ProviderOptions<PayPalProfile> {
+	clientId: string;
 	/**
 	 * PayPal environment - 'sandbox' for testing, 'live' for production
 	 * @default 'sandbox'
