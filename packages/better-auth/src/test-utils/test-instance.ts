@@ -47,6 +47,8 @@ export async function getTestInstance<
 		}),
 	});
 
+	const sqlite = new Database(":memory:");
+
 	const mysql = new Kysely({
 		dialect: new MysqlDialect(
 			createPool("mysql://user:password@localhost:3306/better_auth"),
@@ -83,7 +85,7 @@ export async function getTestInstance<
 					? mongodbAdapter(await mongodbClient())
 					: testWith === "mysql"
 						? { db: mysql, type: "mysql" }
-						: new Database(":memory:"),
+						: sqlite,
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -157,6 +159,10 @@ export async function getTestInstance<
 				await mysql.deleteFrom(table.name).execute();
 			}
 			await sql`SET FOREIGN_KEY_CHECKS = 1;`.execute(mysql);
+			return;
+		}
+		if (testWith === "sqlite") {
+			sqlite.close();
 			return;
 		}
 	};
