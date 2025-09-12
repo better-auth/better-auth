@@ -1,5 +1,3 @@
-import fs from "fs/promises";
-import { generateRandomString } from "../crypto/random";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
@@ -40,12 +38,6 @@ export async function getTestInstance<
 	},
 ) {
 	const testWith = config?.testWith || "sqlite";
-	/**
-	 * create db folder if not exists
-	 */
-	await fs.mkdir(".db", { recursive: true });
-	const randomStr = generateRandomString(4, "a-z");
-	const dbName = `./.db/test-${randomStr}.db`;
 
 	const postgres = new Kysely({
 		dialect: new PostgresDialect({
@@ -91,7 +83,7 @@ export async function getTestInstance<
 					? mongodbAdapter(await mongodbClient())
 					: testWith === "mysql"
 						? { db: mysql, type: "mysql" }
-						: new Database(dbName),
+						: new Database(":memory:"),
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -167,8 +159,6 @@ export async function getTestInstance<
 			await sql`SET FOREIGN_KEY_CHECKS = 1;`.execute(mysql);
 			return;
 		}
-
-		await fs.unlink(dbName);
 	};
 	cleanupSet.add(cleanup);
 
