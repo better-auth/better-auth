@@ -1,14 +1,4 @@
-import type { CookieOptions } from "better-call";
-import type { Database } from "better-sqlite3";
-import type { Database as BunDatabase } from "bun:sqlite";
 import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
-import type { DatabaseSync } from "node:sqlite";
-import type { AuthContext } from ".";
-import type { AdapterDebugLogs } from "../adapters";
-import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
-import type { FieldAttribute } from "../db";
-import type { AuthMiddleware } from "../plugins";
-import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type {
 	Account,
 	GenericEndpointContext,
@@ -16,11 +6,21 @@ import type {
 	User,
 	Verification,
 } from "../types";
-import type { Logger } from "../utils";
-import type { AdapterInstance, SecondaryStorage } from "./adapter";
-import type { LiteralUnion, OmitId } from "./helper";
-import type { Models, RateLimit } from "./models";
 import type { BetterAuthPlugin } from "./plugins";
+import type { SocialProviderList, SocialProviders } from "../social-providers";
+import type { AdapterInstance, SecondaryStorage } from "./adapter";
+import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
+import type { FieldAttribute } from "../db";
+import type { Models, RateLimit } from "./models";
+import type { AuthContext } from ".";
+import type { CookieOptions } from "better-call";
+import type { Database } from "better-sqlite3";
+import type { Logger } from "../utils";
+import type { AuthMiddleware } from "../plugins";
+import type { LiteralUnion, OmitId } from "./helper";
+import type { AdapterDebugLogs } from "../adapters";
+import type { Database as BunDatabase } from "bun:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
 export type BetterAuthOptions = {
 	/**
@@ -291,7 +291,7 @@ export type BetterAuthOptions = {
 	/**
 	 * List of Better Auth plugins
 	 */
-	plugins?: BetterAuthPlugin[];
+	plugins?: [] | BetterAuthPlugin[];
 	/**
 	 * User configuration
 	 */
@@ -710,30 +710,6 @@ export type BetterAuthOptions = {
 			 * domain from the base URL.
 			 */
 			domain?: string;
-		};
-		/**
-		 * Configure cookies for cross-origin scenarios
-		 *
-		 * This enables proper handling of SameSite=None cookies
-		 * when your API and frontend are on different domains.
-		 */
-		crossOriginCookies?: {
-			/**
-			 * Enable cross-origin cookie handling
-			 */
-			enabled: boolean;
-			/**
-			 * Automatically set Secure=true when SameSite=None is detected
-			 *
-			 * @default true
-			 */
-			autoSecure?: boolean;
-			/**
-			 * Allow localhost without secure cookies (for development)
-			 *
-			 * @default true
-			 */
-			allowLocalhostUnsecure?: boolean;
 		};
 		/*
 		 * Allows you to change default cookie names and attributes

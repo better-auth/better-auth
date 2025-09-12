@@ -21,6 +21,7 @@ export interface VkProfile {
 }
 
 export interface VkOption extends ProviderOptions {
+	clientId: string;
 	scheme?: "light" | "dark";
 }
 

@@ -97,13 +97,21 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const lastUsedLoginMethod = config.customResolveMethod(ctx);
-						lastUsedLoginMethod &&
-							ctx.setCookie(config.cookieName, lastUsedLoginMethod, {
+						if (lastUsedLoginMethod) {
+							// Inherit cookie attributes from Better Auth's centralized cookie system
+							// This ensures consistency with cross-origin, cross-subdomain, and security settings
+							const cookieAttributes = {
+								...ctx.context.authCookies.sessionToken.options,
 								maxAge: config.maxAge,
-								secure: false,
-								httpOnly: false,
-								path: "/",
-							});
+								httpOnly: false, // Override: plugin cookies are not httpOnly
+							};
+
+							ctx.setCookie(
+								config.cookieName,
+								lastUsedLoginMethod,
+								cookieAttributes,
+							);
+						}
 					}),
 				},
 			],
