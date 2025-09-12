@@ -80,6 +80,16 @@ export async function handleOAuthUserInfo(
 					},
 					c,
 				);
+
+				if (
+					userInfo.emailVerified &&
+					!dbUser.user.emailVerified &&
+					userInfo.email === dbUser.user.email
+				) {
+					await c.context.internalAdapter.updateUser(dbUser.user.id, {
+						emailVerified: true,
+					});
+				}
 			} catch (e) {
 				logger.error("Unable to link account", e);
 				return {
@@ -107,6 +117,16 @@ export async function handleOAuthUserInfo(
 						c,
 					);
 				}
+			}
+			// Update emailVerified status if the social provider confirms it
+			if (
+				userInfo.emailVerified &&
+				!dbUser.user.emailVerified &&
+				userInfo.email === dbUser.user.email
+			) {
+				await c.context.internalAdapter.updateUser(dbUser.user.id, {
+					emailVerified: true,
+				});
 			}
 		}
 		if (overrideUserInfo) {
