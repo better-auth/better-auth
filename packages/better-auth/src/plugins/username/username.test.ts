@@ -269,6 +269,31 @@ describe("username", async (it) => {
 		expect(session?.user.username).toBe("custom_user");
 		expect(session?.user.displayUsername).toBe("Fancy Display Name");
 	});
+
+	it("should sign in with normalized username", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [username()],
+			},
+			{
+				clientOptions: {
+					plugins: [usernameClient()],
+				},
+			},
+		);
+		await client.signUp.email({
+			email: "normalized-username@email.com",
+			username: "Custom_User",
+			password: "test-password",
+			name: "test-name",
+		});
+		const res2 = await client.signIn.username({
+			username: "Custom_User",
+			password: "test-password",
+		});
+		expect(res2.data?.user.username).toBe("custom_user");
+		expect(res2.data?.user.displayUsername).toBe("Custom_User");
+	});
 });
 
 describe("username custom normalization", async (it) => {
