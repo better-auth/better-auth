@@ -330,13 +330,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						),
 					);
 
-				// const activeSubscription = activeSubscriptions.find((sub) =>
-				// 	subscriptionToUpdate?.stripeSubscriptionId || ctx.body.subscriptionId
-				// 		? sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
-				// 			sub.id === ctx.body.subscriptionId
-				// 		: false,
-				// );
-
 				const activeSubscription = subscriptionToUpdate
 					? activeSubscriptions.find(
 							(sub) => sub.id === subscriptionToUpdate.stripeSubscriptionId,
