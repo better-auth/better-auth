@@ -412,7 +412,7 @@ export const username = (options?: UsernameOptions) => {
 						where: [
 							{
 								field: "username",
-								value: username.toLowerCase(),
+								value: normalizer(username),
 							},
 						],
 					});

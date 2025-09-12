@@ -180,6 +180,13 @@ describe("username", async (it) => {
 		expect(res.data?.available).toEqual(false);
 	});
 
+	it("should check if username is unavailable with different case (normalization)", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "PRIORITY_USER",
+		});
+		expect(res.data?.available).toEqual(false);
+	});
+
 	it("should check if username is available", async () => {
 		const res = await client.isUsernameAvailable({
 			username: "new_username_2.2",
