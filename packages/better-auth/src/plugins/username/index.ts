@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
@@ -201,6 +201,21 @@ export const username = (options?: UsernameOptions) => {
 										},
 									},
 								},
+								422: {
+									description: "Unprocessable Entity. Validation error",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													message: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
 							},
 						},
 					},
@@ -364,6 +379,30 @@ export const username = (options?: UsernameOptions) => {
 				async (ctx) => {
 					const username = ctx.body.username;
 					if (!username) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
+
+					const minUsernameLength = options?.minUsernameLength || 3;
+					const maxUsernameLength = options?.maxUsernameLength || 30;
+
+					if (username.length < minUsernameLength) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_SHORT,
+						});
+					}
+
+					if (username.length > maxUsernameLength) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_LONG,
+						});
+					}
+
+					const validator =
+						options?.usernameValidator || defaultUsernameValidator;
+
+					if (!(await validator(username))) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});

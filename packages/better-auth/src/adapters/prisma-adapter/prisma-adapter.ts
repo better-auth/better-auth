@@ -1,6 +1,11 @@
 import { BetterAuthError } from "../../error";
-import type { Where } from "../../types";
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
+import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import {
+	createAdapter,
+	type AdapterDebugLogs,
+	type CreateAdapterOptions,
+	type CreateCustomAdapter,
+} from "../create-adapter";
 
 export interface PrismaConfig {
 	/**
@@ -27,11 +32,24 @@ export interface PrismaConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+
+	/**
+	 * Whether to execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions,
+	 * set this to `false` and operations will be executed sequentially.
+	 * @default true
+	 */
+	transaction?: boolean;
 }
 
 interface PrismaClient {}
 
-interface PrismaClientInternal {
+type PrismaClientInternal = {
+	$transaction: (
+		callback: (db: PrismaClient) => Promise<any> | any,
+	) => Promise<any>;
+} & {
 	[model: string]: {
 		create: (data: any) => Promise<any>;
 		findFirst: (data: any) => Promise<any>;
@@ -40,17 +58,13 @@ interface PrismaClientInternal {
 		delete: (data: any) => Promise<any>;
 		[key: string]: any;
 	};
-}
+};
 
-export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
-	createAdapter({
-		config: {
-			adapterId: "prisma",
-			adapterName: "Prisma Adapter",
-			usePlural: config.usePlural ?? false,
-			debugLogs: config.debugLogs ?? false,
-		},
-		adapter: ({ getFieldName }) => {
+export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
+	let lazyOptions: BetterAuthOptions | null = null;
+	const createCustomAdapter =
+		(prisma: PrismaClient): CreateCustomAdapter =>
+		({ getFieldName }) => {
 			const db = prisma as PrismaClientInternal;
 
 			const convertSelect = (select?: string[], model?: string) => {
@@ -217,5 +231,33 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 				},
 				options: config,
 			};
+		};
+
+	let adapterOptions: CreateAdapterOptions | null = null;
+	adapterOptions = {
+		config: {
+			adapterId: "prisma",
+			adapterName: "Prisma Adapter",
+			usePlural: config.usePlural ?? false,
+			debugLogs: config.debugLogs ?? false,
+			transaction:
+				(config.transaction ?? true)
+					? (cb) =>
+							(prisma as PrismaClientInternal).$transaction((tx) => {
+								const adapter = createAdapter({
+									config: adapterOptions!.config,
+									adapter: createCustomAdapter(tx),
+								})(lazyOptions!);
+								return cb(adapter);
+							})
+					: false,
 		},
-	});
+		adapter: createCustomAdapter(prisma),
+	};
+
+	const adapter = createAdapter(adapterOptions);
+	return (options: BetterAuthOptions): Adapter => {
+		lazyOptions = options;
+		return adapter(options);
+	};
+};

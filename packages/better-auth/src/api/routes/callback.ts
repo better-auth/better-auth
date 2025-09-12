@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { setTokenUtil, type OAuth2Tokens } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -130,6 +130,13 @@ export const callbackOAuth = createAuthEndpoint(
 			) {
 				c.context.logger.error("Unable to link account - untrusted provider");
 				return redirectOnError("unable_to_link_account");
+			}
+
+			if (
+				userInfo.email !== link.email &&
+				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
+			) {
+				return redirectOnError("email_doesn't_match");
 			}
 
 			const existingAccount = await c.context.internalAdapter.findAccount(

@@ -194,6 +194,31 @@ describe("username", async (it) => {
 		expect(res.data?.available).toEqual(true);
 	});
 
+	it("should reject invalid username format in isUsernameAvailable", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "invalid username!",
+		});
+		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe("USERNAME_IS_INVALID");
+	});
+
+	it("should reject too short username in isUsernameAvailable", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "abc",
+		});
+		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe("USERNAME_IS_TOO_SHORT");
+	});
+
+	it("should reject too long username in isUsernameAvailable", async () => {
+		const longUsername = "a".repeat(31);
+		const res = await client.isUsernameAvailable({
+			username: longUsername,
+		});
+		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe("USERNAME_IS_TOO_LONG");
+	});
+
 	it("should not normalize displayUsername", async () => {
 		const headers = new Headers();
 		await client.signUp.email(
@@ -414,6 +439,40 @@ describe("username with displayUsername validation", async (it) => {
 
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe("DISPLAY_USERNAME_IS_INVALID");
+	});
+});
+
+describe("isUsernameAvailable with custom validator", async (it) => {
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					usernameValidator: async (username) => {
+						return username.startsWith("user_");
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient()],
+			},
+		},
+	);
+
+	it("should accept username with custom validator", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "user_valid123",
+		});
+		expect(res.data?.available).toEqual(true);
+	});
+
+	it("should reject username that doesn't match custom validator", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "invalid_user",
+		});
+		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe("USERNAME_IS_INVALID");
 	});
 });
 

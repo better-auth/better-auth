@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../test-utils/test-instance";
 import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
-import { parseSetCookieHeader } from "./cookie-utils";
+import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types/options";
+import { parseSetCookieHeader } from "./cookie-utils";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
@@ -287,6 +287,42 @@ describe("getSessionCookie", async () => {
 		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
+	it("should respect dontRememberMe when storing session in cookie cache", async () => {
+		const { client, testUser } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+				rememberMe: false,
+			},
+			{
+				onSuccess(c) {
+					const headers = c.response.headers;
+					const setCookieHeader = headers.get("set-cookie");
+					expect(setCookieHeader).toBeDefined();
+
+					const parsed = parseSetCookieHeader(setCookieHeader!);
+
+					const sessionTokenCookie = parsed.get("better-auth.session_token")!;
+					expect(sessionTokenCookie).toBeDefined();
+					expect(sessionTokenCookie["max-age"]).toBeUndefined();
+
+					const sessionDataCookie = parsed.get("better-auth.session_data")!;
+					expect(sessionDataCookie).toBeDefined();
+					expect(sessionDataCookie["max-age"]).toBeUndefined();
+				},
+			},
+		);
+	});
+
 	it("should return null if the cookie is invalid", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			session: {
@@ -331,5 +367,144 @@ describe("getSessionCookie", async () => {
 			headers,
 		});
 		await expect(getCookieCache(request)).rejects.toThrow();
+	});
+});
+
+describe("cross-origin cookies", () => {
+	it("should handle sameSite=none with secure=true correctly", async () => {
+		const { client, testUser } = await getTestInstance({
+			baseURL: "https://api.example.com",
+			advanced: {
+				defaultCookieAttributes: {
+					sameSite: "none",
+					secure: true,
+				},
+			},
+		});
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onResponse(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toContain("SameSite=None");
+					expect(setCookie).toContain("Secure");
+				},
+			},
+		);
+	});
+
+	it("should auto-enforce secure for sameSite=none", async () => {
+		const { client, testUser } = await getTestInstance({
+			baseURL: "https://api.example.com",
+			advanced: {
+				crossOriginCookies: {
+					enabled: true,
+					autoSecure: true,
+				},
+				defaultCookieAttributes: {
+					sameSite: "none",
+					// secure not explicitly set - should be auto-enforced
+				},
+			},
+		});
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onResponse(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toContain("SameSite=None");
+					expect(setCookie).toContain("Secure");
+				},
+			},
+		);
+	});
+
+	it("should allow unsecure cookies on localhost for development", async () => {
+		const { client, testUser } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			advanced: {
+				crossOriginCookies: {
+					enabled: true,
+					autoSecure: true,
+					allowLocalhostUnsecure: true,
+				},
+				defaultCookieAttributes: {
+					sameSite: "none",
+					secure: false,
+				},
+			},
+		});
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onResponse(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toContain("SameSite=None");
+					// Should not contain Secure on localhost when allowLocalhostUnsecure is true
+					expect(setCookie).not.toContain("Secure");
+				},
+			},
+		);
+	});
+
+	it("should throw error for sameSite=none without secure on non-localhost", async () => {
+		await expect(async () => {
+			await getTestInstance({
+				baseURL: "https://api.example.com",
+				advanced: {
+					crossOriginCookies: {
+						enabled: true,
+						autoSecure: false, // Disable auto-secure
+					},
+					defaultCookieAttributes: {
+						sameSite: "none",
+						secure: false, // Explicitly set to false
+					},
+				},
+			});
+		}).rejects.toThrow("SameSite=None cookies require Secure=true");
+	});
+
+	it("should work with partitioned attribute for cross-origin", async () => {
+		const { client, testUser } = await getTestInstance({
+			baseURL: "https://api.example.com",
+			advanced: {
+				crossOriginCookies: {
+					enabled: true,
+				},
+				defaultCookieAttributes: {
+					sameSite: "none",
+					secure: true,
+					partitioned: true,
+				},
+			},
+		});
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onResponse(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toContain("SameSite=None");
+					expect(setCookie).toContain("Secure");
+					expect(setCookie).toContain("Partitioned");
+				},
+			},
+		);
 	});
 });
