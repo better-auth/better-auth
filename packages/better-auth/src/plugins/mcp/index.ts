@@ -16,7 +16,7 @@ import { APIError, getSessionFromCtx } from "../../api";
 import { base64 } from "@better-auth/utils/base64";
 import { generateRandomString } from "../../crypto";
 import { createHash } from "@better-auth/utils/hash";
-import { subtle } from "@better-auth/utils";
+import { getWebcryptoSubtle } from "@better-auth/utils";
 import { SignJWT } from "jose";
 import type { BetterAuthOptions, GenericEndpointContext } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
@@ -568,7 +568,7 @@ export const mcp = (options: MCPOptions) => {
 					}
 					let secretKey = {
 						alg: "HS256",
-						key: await subtle.generateKey(
+						key: await getWebcryptoSubtle().generateKey(
 							{
 								name: "HMAC",
 								hash: "SHA-256",
