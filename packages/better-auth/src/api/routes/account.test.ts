@@ -349,9 +349,9 @@ describe("account", async () => {
 
 		const accountToUnlink = previousAccounts.data![0];
 		const unlinkAccountId = accountToUnlink.accountId;
-		const providerId = accountToUnlink.provider;
+		const providerId = accountToUnlink.providerId;
 		const accountsWithSameProvider = previousAccounts.data!.filter(
-			(account) => account.provider === providerId,
+			(account) => account.providerId === providerId,
 		);
 		if (accountsWithSameProvider.length <= 1) {
 			return;
@@ -412,7 +412,7 @@ describe("account", async () => {
 		});
 
 		const googleAccounts = previousAccounts.data!.filter(
-			(account) => account.provider === "google",
+			(account) => account.providerId === "google",
 		);
 		expect(googleAccounts.length).toBeGreaterThan(1);
 
@@ -434,7 +434,7 @@ describe("account", async () => {
 		});
 
 		const remainingGoogleAccounts = accountsAfterUnlink.data!.filter(
-			(account) => account.provider === "google",
+			(account) => account.providerId === "google",
 		);
 		expect(remainingGoogleAccounts.length).toBe(1);
 	});

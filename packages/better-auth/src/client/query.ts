@@ -4,6 +4,7 @@ import {
 	type BetterFetchOption,
 } from "@better-fetch/fetch";
 import { atom, onMount, type PreinitializedWritableAtom } from "nanostores";
+import type { SessionQueryParams } from "./types";
 
 // SSR detection
 const isServer = typeof window === "undefined";
@@ -27,18 +28,18 @@ export const useAuthQuery = <T>(
 		error: null | BetterFetchError;
 		isPending: boolean;
 		isRefetching: boolean;
-		refetch: () => void;
+		refetch: (queryParams?: { query?: SessionQueryParams }) => void;
 	}>({
 		data: null,
 		error: null,
 		isPending: true,
 		isRefetching: false,
-		refetch: () => {
-			return fn();
+		refetch: (queryParams?: { query?: SessionQueryParams }) => {
+			return fn(queryParams);
 		},
 	});
 
-	const fn = () => {
+	const fn = (queryParams?: { query?: SessionQueryParams }) => {
 		const opts =
 			typeof options === "function"
 				? options({
@@ -48,8 +49,12 @@ export const useAuthQuery = <T>(
 					})
 				: options;
 
-		return $fetch<T>(path, {
+		$fetch<T>(path, {
 			...opts,
+			query: {
+				...opts?.query,
+				...queryParams?.query,
+			},
 			async onSuccess(context) {
 				value.set({
 					data: context.data,
@@ -88,6 +93,14 @@ export const useAuthQuery = <T>(
 				});
 				await opts?.onRequest?.(context);
 			},
+		}).catch((error) => {
+			value.set({
+				error,
+				data: null,
+				isPending: false,
+				isRefetching: false,
+				refetch: value.value.refetch,
+			});
 		});
 	};
 	initializedAtom = Array.isArray(initializedAtom)

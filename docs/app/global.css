@@ -1,11 +1,10 @@
 @import "tailwindcss";
+@import "fumadocs-ui/css/black.css";
+@import "fumadocs-ui/css/preset.css";
 @config "../tailwind.config.js";
 @plugin 'tailwindcss-animate';
 @custom-variant dark (&:is(.dark *));
-@import "fumadocs-ui/css/black.css";
-@import "fumadocs-ui/css/preset.css";
-@source '../../node_modules/fumadocs-ui/dist/**/*.js';
-@source '../node_modules/fumadocs-ui/dist/**/*.js';
+
 :root {
 	--fd-nav-height: 56px;
 
@@ -247,6 +246,12 @@
 
 html {
 	scroll-behavior: smooth;
+	scroll-padding-top: calc(
+		var(--fd-nav-height) +
+		var(--fd-banner-height, 0px) +
+		var(--fd-tocnav-height, 0px) +
+		16px
+	);
 }
 
 @layer utilities {
