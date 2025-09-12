@@ -141,3 +141,90 @@ socialProviders: {
   already authorized your app, you must have them revoke your app's access in
   their Google account settings, then re-authorize.
 </Callout>
+
+## Multiple Client ID Support
+
+Better Auth supports configuring multiple client IDs for the Google provider, which is useful when you need different OAuth configurations for different platforms (e.g., web, iOS, Android) or different redirect URIs.
+
+### Configuration
+
+You can configure multiple client IDs by providing a `configs` array alongside your primary `clientId` and `clientSecret`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        google: {
+            // Primary client configuration (used by default)
+            clientId: process.env.GOOGLE_CLIENT_ID as string,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+            redirectURI: "https://yourapp.com/api/auth/callback/google",
+            
+            // Additional client configurations
+            configs: [
+                {
+                    clientId: "123-ios.googleusercontent.com",
+                    clientSecret: process.env.GOOGLE_IOS_CLIENT_SECRET as string,
+                    redirectURI: "com.yourapp://oauth/callback",
+                    scopes: ["email", "profile"],
+                },
+                {
+                    clientId: "456-android.googleusercontent.com", 
+                    clientSecret: process.env.GOOGLE_ANDROID_CLIENT_SECRET as string,
+                    redirectURI: "com.yourapp://oauth/callback",
+                    scopes: ["email", "profile", "openid"],
+                },
+            ],
+        },
+    },
+})
+```
+
+### Usage with Specific Client ID
+
+When calling `signIn.social`, you can specify which client configuration to use by passing the `clientId` parameter:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+const authClient = createAuthClient();
+
+// Use iOS client configuration
+const signInWithIOS = async () => {
+  const data = await authClient.signIn.social({
+    provider: "google",
+    clientId: "123-ios.googleusercontent.com", // [!code highlight]
+    callbackURL: "com.yourapp://oauth/callback",
+  });
+};
+
+// Use Android client configuration  
+const signInWithAndroid = async () => {
+  const data = await authClient.signIn.social({
+    provider: "google",
+    clientId: "456-android.googleusercontent.com", // [!code highlight]
+    callbackURL: "com.yourapp://oauth/callback",
+  });
+};
+
+// Use default (primary) client configuration
+const signInWithWeb = async () => {
+  const data = await authClient.signIn.social({
+    provider: "google",
+    callbackURL: "https://yourapp.com/callback",
+  });
+};
+```
+
+### Fallback Behavior
+
+If you specify a `clientId` that doesn't exist in your `configs` array, the system will automatically fall back to using the primary client configuration (the main `clientId` and `clientSecret` from your provider options).
+
+```ts
+// This will fallback to primary config if "invalid-client-id" doesn't exist
+const data = await authClient.signIn.social({
+    provider: "google", 
+    clientId: "invalid-client-id",
+    callbackURL: "https://yourapp.com/callback",
+});
+```
