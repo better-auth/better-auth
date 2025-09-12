@@ -61,7 +61,12 @@
     "unbuild": "^3.6.1"
   },
   "peerDependencies": {
-    "better-auth": "workspace:*"
+    "better-auth": ">=1.0.0",
+    "expo-constants": ">=17.0.0",
+    "expo-crypto": ">=13.0.0",
+    "expo-linking": ">=7.0.0",
+    "expo-secure-store": ">=14.0.0",
+    "expo-web-browser": ">=14.0.0"
   },
   "dependencies": {
     "@better-fetch/fetch": "catalog:"
