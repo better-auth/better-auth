@@ -1,141 +1,10 @@
-import type { AuthContext, GenericEndpointContext } from "../../types";
+import type { BetterAuthOptions } from "../../types";
 import type { Awaitable } from "../../types/helper";
-import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
-import {
-	createLocalJWKSet,
-	jwtVerify,
-	type JSONWebKeySet,
-	type JWTPayload,
-} from "jose";
+import { type JWTPayload } from "jose";
 import { APIError } from "better-call";
-
-/**
- * A generalized function that checks for an access token's validity
- * and will work for most platforms.
- *
- * @external
- */
-export const checkMcp = async <
-	Auth extends AuthContext & {
-		api?: {
-			getJwks: () => Promise<JSONWebKeySet>;
-			oAuth2introspect: (
-				ctx: Partial<GenericEndpointContext>,
-			) => Promise<JWTPayload>;
-		};
-	},
->({
-	auth,
-	clientId,
-	clientSecret,
-	accessToken,
-	forceServerValidation,
-	scopes,
-}: {
-	auth: Auth;
-	clientId: string;
-	clientSecret: string;
-	accessToken?: string;
-	forceServerValidation?: boolean;
-	/** If supplied, checks whether scopes are valid */
-	scopes?: string[];
-}) => {
-	if (accessToken?.startsWith("Bearer ")) {
-		accessToken = accessToken?.replace("Bearer ", "");
-	}
-	if (!accessToken?.length) {
-		throw new APIError("BAD_REQUEST", {
-			message: "missing token",
-		});
-	}
-
-	const oAuthPlugin = getOAuthProviderPlugin(auth);
-	let jwtPayload: JWTPayload | undefined;
-
-	// Try local validation
-	if (!forceServerValidation && !oAuthPlugin.options.disableJWTPlugin) {
-		// Get Jwks
-		const jwtPlugin = getJwtPlugin(auth);
-		const jwksResult = jwtPlugin.options?.jwks?.remoteUrl
-			? await fetch(jwtPlugin.options.jwks.remoteUrl, {
-					headers: {
-						Accept: "application/json",
-					},
-				}).then(async (res) => {
-					if (!res.ok) throw new Error(`Jwks error: status ${res.status}`);
-					return (await res.json()) as JSONWebKeySet | undefined;
-				})
-			: await auth.api?.getJwks();
-		if (!jwksResult) throw new Error("No jwks found");
-		const jwks = createLocalJWKSet(jwksResult);
-		// Verify using jwks
-		try {
-			const jwt = await jwtVerify(accessToken, jwks, {
-				audience: jwtPlugin.options?.jwt?.audience ?? auth.options.baseURL,
-				issuer: jwtPlugin.options?.jwt?.issuer ?? auth.options.baseURL,
-			});
-			jwtPayload = jwt.payload;
-		} catch (error) {
-			if (error instanceof Error) {
-				if (error.name === "JWTExpired") {
-					throw new APIError("UNAUTHORIZED", {
-						message: "token expired",
-					});
-				} else if (error.name === "JWTClaimValidationFailed") {
-					throw new APIError("UNAUTHORIZED", {
-						message: "jwt invalid due to audience or issuer mismatch",
-					});
-				} else if (error.name === "JWKSNoMatchingKey") {
-					throw new APIError("UNAUTHORIZED", {
-						message: "no matching key in jwks",
-					});
-				} else if (error.name === "JWSInvalid") {
-					// continue - likely an opaque token
-				} else {
-					throw error;
-				}
-			} else {
-				throw new Error(error as unknown as string);
-			}
-		}
-	}
-
-	// Remote introspect
-	if (!jwtPayload) {
-		const introspect = await auth.api?.oAuth2introspect({
-			method: "POST",
-			body: {
-				client_id: clientId,
-				client_secret: clientSecret,
-				token: accessToken,
-				token_type_hint: "access_token",
-			},
-		});
-		jwtPayload = introspect;
-	}
-
-	// Payload should exist by here
-	if (!jwtPayload) throw new APIError("INTERNAL_SERVER_ERROR");
-
-	// Verify scopes
-	if (scopes) {
-		const payloadScopes: string[] | undefined = (
-			jwtPayload?.scope as string | undefined
-		)?.split(" ");
-		if (!payloadScopes?.length) {
-			throw new APIError("FORBIDDEN");
-		}
-		for (const sc of scopes) {
-			if (!payloadScopes.includes(sc)) {
-				throw new APIError("FORBIDDEN");
-			}
-		}
-	}
-
-	return {
-		jwt: jwtPayload,
-	};
-};
+import { verifyAccessToken } from "./verify";
+import type { betterAuth } from "../../auth";
+import { logger } from "../../utils";
 
 /**
  * A request middleware handler that checks and responds with
@@ -147,7 +16,13 @@ export const checkMcp = async <
  * @external
  */
 export const mcpHandler = <
-	Auth extends AuthContext,
+	Auth extends typeof betterAuth & {
+		api: {
+			oAuth2introspectVerify: (...args: any) => Promise<JWTPayload | null>;
+		};
+		baseURL: string;
+		options: BetterAuthOptions;
+	},
 	Request extends {
 		readonly url: string;
 		readonly headers: Headers;
@@ -157,13 +32,10 @@ export const mcpHandler = <
 	},
 >(
 	auth: Auth,
+	/** Resource is the same url as the audience */
+	resource: string,
 	handler: (req: Request) => Awaitable<Response>,
-	opts: {
-		clientId: string;
-		clientSecret: string;
-		scopes?: string[];
-		forceServerValidation?: boolean;
-	},
+	opts?: Parameters<typeof verifyAccessToken>[1],
 ) => {
 	return async (req: Request) => {
 		const authorization = req.headers?.get("authorization") ?? undefined;
@@ -171,18 +43,22 @@ export const mcpHandler = <
 			? authorization.replace("Bearer ", "")
 			: authorization;
 		try {
-			const token = await checkMcp({
-				...opts,
-				auth,
-				accessToken,
+			const token = await auth.api.oAuth2introspectVerify({
+				body: {
+					token: accessToken,
+					verifyOpts: opts,
+				},
 			});
 			if (!req.context) req.context = {};
-			req.context.jwt = token;
+			req.context.jwt = token ?? undefined;
 		} catch (error) {
-			return handleMcpErrors(error, {
-				baseUrl: auth.options.baseURL ?? auth.baseURL,
-				path: auth.options.basePath,
-			});
+			try {
+				return handleMcpErrors(error, resource);
+			} catch (err) {
+				logger.error(err as unknown as string);
+				if (err instanceof Error) throw Error;
+				throw new Error(err as unknown as string);
+			}
 		}
 		return handler(req);
 	};
@@ -193,21 +69,15 @@ export const mcpHandler = <
  *
  * @external
  */
-export function handleMcpErrors(
-	error: unknown,
-	opts: {
-		baseUrl: string;
-		path?: string;
-	},
-) {
+export function handleMcpErrors(error: unknown, resource: string | URL) {
 	if (error instanceof APIError && error.status === "UNAUTHORIZED") {
-		let { baseUrl, path } = opts;
-		if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
-		if (path?.length && !path.startsWith("/")) path = "/" + path;
-		if (path && path.endsWith("/")) path = path.slice(0, -1);
+		const _resource =
+			typeof resource === "string" ? new URL(resource) : resource;
+		let audiencePath = _resource.pathname + _resource.search;
+		if (audiencePath.endsWith("/")) audiencePath = audiencePath.slice(0, -1);
 
-		const wwwAuthenticateValue = `Bearer resource_metadata="${baseUrl}/.well-known/oauth-authorization-server${
-			path ? path : ""
+		const wwwAuthenticateValue = `Bearer resource_metadata="${_resource.origin}/.well-known/oauth-protected-resource${
+			audiencePath
 		}"`;
 		return new Response(error.message, {
 			status: 401,

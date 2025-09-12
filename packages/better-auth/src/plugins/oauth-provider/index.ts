@@ -26,14 +26,15 @@ import { revokeEndpoint } from "./revoke";
 import { BetterAuthError } from "../../error";
 import { logger } from "../../utils";
 import type { ResourceServerMetadata } from "../../oauth-2.1/types";
+import { introspectVerifyEndpoint } from "./verify";
 export { authServerMetadata, oidcServerMetadata } from "./metadata";
 export {
 	oAuthProviderAuthServerMetadata,
 	oAuthProviderOpenIdConfigMetadata,
 	oAuthProviderProtectedResourceMetadata,
 } from "./metadata";
-export { mcpHandler, checkMcp, handleMcpErrors } from "./mcp";
-export { verifyAccessToken, verifyOAuthProviderAccessToken } from "./verify";
+export { verifyAccessToken } from "./verify";
+export { mcpHandler, handleMcpErrors } from "./mcp";
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -775,6 +776,29 @@ export const oauthProvider = (options: OAuthOptions) => {
 				},
 				async (ctx) => {
 					return introspectEndpoint(ctx, opts);
+				},
+			),
+			oAuth2introspectVerify: createAuthEndpoint(
+				"/oauth2/introspect/verify",
+				{
+					method: "POST",
+					body: z
+						.object({
+							token: z.string().optional(),
+							options: z.object().optional(),
+						})
+						.optional(),
+					metadata: {
+						SERVER_ONLY: true,
+					},
+				},
+				async (ctx) => {
+					return introspectVerifyEndpoint(
+						ctx,
+						opts,
+						ctx.body?.token,
+						ctx.body?.options,
+					);
 				},
 			),
 			oAuth2revoke: createAuthEndpoint(
