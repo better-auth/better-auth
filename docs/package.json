@@ -42,6 +42,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@scalar/nextjs-api-reference": "^0.8.17",
     "@vercel/analytics": "^1.5.0",
+    "@vercel/og": "^0.8.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",
