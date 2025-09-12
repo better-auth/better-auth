@@ -419,6 +419,7 @@ export const createAdapter =
 			data: Record<string, any> | null,
 			unsafe_model: string,
 			select: string[] = [],
+			joins?: any[],
 		) => {
 			if (!data) return null;
 			const newMappedKeys = config.mapKeysTransformOutput ?? {};
@@ -489,6 +490,22 @@ export const createAdapter =
 					transformedData[newFieldName] = newValue;
 				}
 			}
+
+			// Preserve JOIN fields if they exist
+			if (joins && joins.length > 0) {
+				for (const key in data) {
+					// Look for fields that match JOIN field patterns (table_field)
+					const isJoinField = joins.some((join) => {
+						const tableName = join.alias || join.table;
+						return key.startsWith(`${tableName}_`);
+					});
+
+					if (isJoinField && !(key in transformedData)) {
+						transformedData[key] = data[key];
+					}
+				}
+			}
+
 			return transformedData as any;
 		};
 
@@ -730,10 +747,12 @@ export const createAdapter =
 				model: unsafeModel,
 				where: unsafeWhere,
 				select,
+				joins,
 			}: {
 				model: string;
 				where: Where[];
 				select?: string[];
+				joins?: import("../../types").Join[];
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -746,12 +765,13 @@ export const createAdapter =
 					{ method: "findOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
 					`${formatMethod("findOne")}:`,
-					{ model, where, select },
+					{ model, where, select, joins },
 				);
 				const res = await adapterInstance.findOne<T>({
 					model,
 					where,
 					select,
+					joins,
 				});
 				debugLog(
 					{ method: "findOne" },
@@ -763,6 +783,7 @@ export const createAdapter =
 					res as any,
 					unsafeModel,
 					select,
+					joins,
 				);
 				debugLog(
 					{ method: "findOne" },
@@ -778,12 +799,14 @@ export const createAdapter =
 				limit: unsafeLimit,
 				sortBy,
 				offset,
+				joins,
 			}: {
 				model: string;
 				where?: Where[];
 				limit?: number;
 				sortBy?: { field: string; direction: "asc" | "desc" };
 				offset?: number;
+				joins?: import("../../types").Join[];
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -800,7 +823,7 @@ export const createAdapter =
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
 					`${formatMethod("findMany")}:`,
-					{ model, where, limit, sortBy, offset },
+					{ model, where, limit, sortBy, offset, joins },
 				);
 				const res = await adapterInstance.findMany<T>({
 					model,
@@ -808,6 +831,7 @@ export const createAdapter =
 					limit: limit,
 					sortBy,
 					offset,
+					joins,
 				});
 				debugLog(
 					{ method: "findMany" },
@@ -816,7 +840,10 @@ export const createAdapter =
 					{ model, data: res },
 				);
 				const transformed = await Promise.all(
-					res.map(async (r) => await transformOutput(r as any, unsafeModel)),
+					res.map(
+						async (r) =>
+							await transformOutput(r as any, unsafeModel, [], joins),
+					),
 				);
 				debugLog(
 					{ method: "findMany" },
@@ -892,9 +919,11 @@ export const createAdapter =
 			count: async ({
 				model: unsafeModel,
 				where: unsafeWhere,
+				joins,
 			}: {
 				model: string;
 				where?: Where[];
+				joins?: import("../../types").Join[];
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -910,11 +939,13 @@ export const createAdapter =
 					{
 						model,
 						where,
+						joins,
 					},
 				);
 				const res = await adapterInstance.count({
 					model,
 					where,
+					joins,
 				});
 				debugLog(
 					{ method: "count" },

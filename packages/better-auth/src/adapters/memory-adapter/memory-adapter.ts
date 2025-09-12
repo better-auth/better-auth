@@ -1,4 +1,5 @@
 import { logger } from "../../utils";
+import type { Join } from "../../types";
 import {
 	createAdapter,
 	type AdapterDebugLogs,
@@ -32,7 +33,70 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 			},
 		},
 		adapter: ({ getFieldName, options, debugLog }) => {
-			function convertWhereClause(where: CleanedWhere[], model: string) {
+			function performJoins(records: any[], model: string, joins?: Join[]) {
+				if (!joins || joins.length === 0) {
+					return records;
+				}
+
+				return records.map((record) => {
+					const joinedRecord = { ...record };
+
+					for (const join of joins) {
+						const joinTable = db[join.table];
+						if (!joinTable) {
+							logger.error(
+								`[MemoryAdapter] Join table ${join.table} not found`,
+							);
+							continue;
+						}
+
+						// Parse join conditions
+						const leftParts = join.on.left.split(".");
+						const rightParts = join.on.right.split(".");
+
+						const leftField =
+							leftParts.length === 2 ? leftParts[1] : leftParts[0];
+						const rightField =
+							rightParts.length === 2 ? rightParts[1] : rightParts[0];
+
+						// Find matching records from join table
+						const matchingJoinRecords = joinTable.filter((joinRecord) => {
+							return record[leftField] === joinRecord[rightField];
+						});
+
+						const joinName = join.alias || join.table;
+						if (matchingJoinRecords.length > 0) {
+							const joinedData = matchingJoinRecords[0];
+							// Add joined fields with prefixed names to avoid conflicts
+							if (join.select && join.select.length > 0) {
+								for (const field of join.select) {
+									joinedRecord[`${joinName}_${field}`] = joinedData[field];
+								}
+							} else {
+								// Add all fields from joined table with prefix
+								for (const [key, value] of Object.entries(joinedData)) {
+									joinedRecord[`${joinName}_${key}`] = value;
+								}
+							}
+						} else if (join.type === "left" || join.type === "full") {
+							// For left/full joins, include null fields when no match
+							if (join.select && join.select.length > 0) {
+								for (const field of join.select) {
+									joinedRecord[`${joinName}_${field}`] = null;
+								}
+							}
+						}
+					}
+
+					return joinedRecord;
+				});
+			}
+
+			function convertWhereClause(
+				where: CleanedWhere[],
+				model: string,
+				joins?: Join[],
+			) {
 				const table = db[model];
 				if (!table) {
 					logger.error(
@@ -41,30 +105,93 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 					);
 					throw new Error(`Model ${model} not found`);
 				}
+
+				// Helper function to resolve field references
+				const resolveFieldValue = (
+					record: any,
+					fieldRef: string,
+					joinedData?: any,
+				) => {
+					if (fieldRef.includes(".")) {
+						const [tableName, fieldName] = fieldRef.split(".");
+						if (tableName === model) {
+							return record[fieldName];
+						}
+						// Look for joined data
+						if (joinedData && joinedData[tableName]) {
+							return joinedData[tableName][fieldName];
+						}
+						// Fallback to main record
+						return record[fieldName];
+					} else {
+						// Simple field name, use main record
+						return record[fieldRef];
+					}
+				};
+
 				return table.filter((record) => {
+					// If we have joins, we need to perform the joins first
+					let joinedData: any = {};
+					if (joins && joins.length > 0) {
+						for (const join of joins) {
+							const joinTable = db[join.table];
+							if (!joinTable) {
+								logger.error(
+									`[MemoryAdapter] Join table ${join.table} not found`,
+								);
+								continue;
+							}
+
+							// Parse join conditions
+							const leftParts = join.on.left.split(".");
+							const rightParts = join.on.right.split(".");
+
+							const leftField =
+								leftParts.length === 2 ? leftParts[1] : leftParts[0];
+							const rightField =
+								rightParts.length === 2 ? rightParts[1] : rightParts[0];
+
+							// Find matching records from join table
+							const matchingJoinRecords = joinTable.filter((joinRecord) => {
+								return record[leftField] === joinRecord[rightField];
+							});
+
+							const joinName = join.alias || join.table;
+							if (matchingJoinRecords.length > 0) {
+								// For simplicity, take the first match (in real scenarios, this might create multiple result rows)
+								joinedData[joinName] = matchingJoinRecords[0];
+							} else if (join.type === "left" || join.type === "full") {
+								// For left/full joins, include null data when no match
+								joinedData[joinName] = null;
+							} else {
+								// For inner/right joins, exclude this record if no match
+								return false;
+							}
+						}
+					}
+
 					return where.every((clause) => {
 						let { field, value, operator } = clause;
+						const fieldValue = resolveFieldValue(record, field, joinedData);
 
 						if (operator === "in") {
 							if (!Array.isArray(value)) {
 								throw new Error("Value must be an array");
 							}
-							// @ts-expect-error
-							return value.includes(record[field]);
+							return (value as any[]).includes(fieldValue);
 						} else if (operator === "not_in") {
 							if (!Array.isArray(value)) {
 								throw new Error("Value must be an array");
 							}
-							// @ts-expect-error
-							return !value.includes(record[field]);
+							return !(value as any[]).includes(fieldValue);
 						} else if (operator === "contains") {
-							return record[field].includes(value);
+							return fieldValue && fieldValue.includes(value);
 						} else if (operator === "starts_with") {
-							return record[field].startsWith(value);
+							return fieldValue && fieldValue.startsWith(value);
 						} else if (operator === "ends_with") {
-							return record[field].endsWith(value);
+							return fieldValue && fieldValue.endsWith(value);
 						} else {
-							return record[field] === value;
+							return fieldValue === value;
 						}
 					});
 				});
@@ -81,16 +208,21 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 					db[model].push(data);
 					return data;
 				},
-				findOne: async ({ model, where }) => {
-					const res = convertWhereClause(where, model);
-					const record = res[0] || null;
+				findOne: async ({ model, where, select, joins }) => {
+					const res = convertWhereClause(where, model, joins);
+					const records = performJoins(res, model, joins);
+					const record = records[0] || null;
 					return record;
 				},
-				findMany: async ({ model, where, sortBy, limit, offset }) => {
+				findMany: async ({ model, where, sortBy, limit, offset, joins }) => {
 					let table = db[model];
 					if (where) {
-						table = convertWhereClause(where, model);
+						table = convertWhereClause(where, model, joins);
 					}
+
+					// Perform joins before sorting and pagination
+					table = performJoins(table, model, joins);
+
 					if (sortBy) {
 						table = table.sort((a, b) => {
 							const field = getFieldName({ model, field: sortBy.field });
@@ -109,8 +241,20 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 					}
 					return table;
 				},
-				count: async ({ model }) => {
-					return db[model].length;
+				count: async ({ model, where, joins }) => {
+					if (!where && (!joins || joins.length === 0)) {
+						return db[model].length;
+					}
+
+					let table = db[model];
+					if (where) {
+						table = convertWhereClause(where, model, joins);
+					} else if (joins && joins.length > 0) {
+						// Even without where clause, joins can filter records
+						table = convertWhereClause([], model, joins);
+					}
+
+					return table.length;
 				},
 				update: async ({ model, where, update }) => {
 					const res = convertWhereClause(where, model);
