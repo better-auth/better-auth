@@ -698,7 +698,7 @@
     }
   },
   "dependencies": {
-    "@better-auth/utils": "0.2.6",
+    "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.0.0",
     "@noble/hashes": "^2.0.0",

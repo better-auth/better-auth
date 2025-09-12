@@ -5,7 +5,6 @@ import type { BetterAuthPlugin, InferOptionSchema } from "../../types/plugins";
 import { generateRandomString } from "../../crypto";
 import { getSessionFromCtx } from "../../api/routes/session";
 import { ms, type StringValue as MSStringValue } from "ms";
-import { getRandomValues } from "@better-auth/utils";
 import { schema, type DeviceCode } from "./schema";
 import { mergeSchema } from "../../db";
 
@@ -150,7 +149,7 @@ const defaultGenerateDeviceCode = (length: number) => {
  */
 const defaultGenerateUserCode = (length: number) => {
 	const chars = new Uint8Array(length);
-	return Array.from(getRandomValues(chars))
+	return Array.from(crypto.getRandomValues(chars))
 		.map((byte) => defaultCharset[byte % defaultCharset.length])
 		.join("");
 };
