@@ -64,6 +64,8 @@ export async function getTestInstance<
 		return db;
 	}
 
+	const sqliteDb = testWith === "sqlite" ? new Database(":memory:") : null;
+
 	const opts = {
 		socialProviders: {
 			github: {
@@ -83,7 +85,7 @@ export async function getTestInstance<
 					? mongodbAdapter(await mongodbClient())
 					: testWith === "mysql"
 						? { db: mysql, type: "mysql" }
-						: new Database(":memory:"),
+						: sqliteDb,
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -157,6 +159,11 @@ export async function getTestInstance<
 				await mysql.deleteFrom(table.name).execute();
 			}
 			await sql`SET FOREIGN_KEY_CHECKS = 1;`.execute(mysql);
+			return;
+		}
+
+		if (testWith === "sqlite" && sqliteDb) {
+			sqliteDb.close();
 			return;
 		}
 	};
