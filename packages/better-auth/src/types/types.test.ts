@@ -55,4 +55,26 @@ describe("general types", async (it) => {
 			activeOrganizationId?: string | undefined | null;
 		}>();
 	});
+
+	it("should infer the same types for empty plugins and no plugins", async () => {
+		const { auth: authWithEmptyPlugins } = await getTestInstance({
+			plugins: [],
+			secret: "test-secret",
+			emailAndPassword: {
+				enabled: true,
+			},
+		});
+
+		const { auth: authWithoutPlugins } = await getTestInstance({
+			secret: "test-secret",
+			emailAndPassword: {
+				enabled: true,
+			},
+		});
+
+		type SessionWithEmptyPlugins = typeof authWithEmptyPlugins.$Infer;
+		type SessionWithoutPlugins = typeof authWithoutPlugins.$Infer;
+
+		expectTypeOf<SessionWithEmptyPlugins>().toEqualTypeOf<SessionWithoutPlugins>();
+	});
 });
