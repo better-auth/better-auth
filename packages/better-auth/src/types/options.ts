@@ -291,7 +291,7 @@ export type BetterAuthOptions = {
 	/**
 	 * List of Better Auth plugins
 	 */
-	plugins?: BetterAuthPlugin[];
+	plugins?: [] | BetterAuthPlugin[];
 	/**
 	 * User configuration
 	 */

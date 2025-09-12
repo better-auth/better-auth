@@ -274,19 +274,21 @@ export type InferFieldsFromPlugins<
 	Options extends BetterAuthOptions,
 	Key extends string,
 	Format extends "output" | "input" = "output",
-> = Options["plugins"] extends Array<infer T>
-	? T extends {
-			schema: {
-				[key in Key]: {
-					fields: infer Field;
+> = Options["plugins"] extends []
+	? {}
+	: Options["plugins"] extends Array<infer T>
+		? T extends {
+				schema: {
+					[key in Key]: {
+						fields: infer Field;
+					};
 				};
-			};
-		}
-		? Format extends "output"
-			? InferFieldsOutput<Field>
-			: InferFieldsInput<Field>
-		: {}
-	: {};
+			}
+			? Format extends "output"
+				? InferFieldsOutput<Field>
+				: InferFieldsInput<Field>
+			: {}
+		: {};
 
 export type InferFieldsFromOptions<
 	Options extends BetterAuthOptions,
