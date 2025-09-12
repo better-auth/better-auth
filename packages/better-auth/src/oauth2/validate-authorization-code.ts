@@ -50,19 +50,18 @@ export function createAuthorizationCodeRequest({
 	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
 	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
 		const encodedCredentials = base64.encode(
-			`${options.clientId}:${options.clientSecret ?? ""}`,
+			`${primaryClientId}:${options.clientSecret ?? ""}`,
 		);
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
-		const clientId = options.clientId;
-		if (typeof clientId === "string") {
-			body.set("client_id", clientId);
-		} else if (Array.isArray(clientId)) {
-			for (const id of clientId) {
-				body.append("client_id", id);
-			}
-		}
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+		body.set("client_id", primaryClientId);
 		if (options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}
