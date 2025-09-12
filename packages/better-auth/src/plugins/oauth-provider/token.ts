@@ -385,7 +385,7 @@ async function createUserTokens(
 	const audience = await checkResource(ctx, opts, scopes);
 
 	// Sign jwt and refresh tokens in parallel
-	const [accessToken, sessionRefresh, idToken] = await Promise.allSettled([
+	const [accessToken, sessionRefresh, idToken] = await Promise.all([
 		audience && !opts.disableJWTPlugin
 			? createJwtAccessToken(
 					ctx,
@@ -417,12 +417,7 @@ async function createUserTokens(
 					nonce,
 				)
 			: undefined,
-	]).then((val) =>
-		val.map((v) => {
-			if (v.status === "rejected") console.warn(v.reason);
-			return v.status === "fulfilled" ? v.value : undefined;
-		}),
-	);
+	]);
 
 	return ctx.json(
 		{

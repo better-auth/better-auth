@@ -1001,11 +1001,11 @@ You cannot disable the JWT Plugin if you are utilizing this plugin.
   <Step>
     ### Add oAuth Protected Resource Metadata to your API
 
-    NOTE: For issuers with paths, oAuth 2.1 Authorization Server utilizes path insertion, thus any path on the issuer should be appended after `/.well-known/oauth-protected-resource`.
+    NOTE: For resources with paths, oAuth 2.1 Authorization Server utilizes path insertion, thus any path should be appended after `/.well-known/oauth-protected-resource`.
 
     - Automatic (if you have access to the better-auth configuration)
 
-    ```ts title="/.well-known/oauth-protected-resource/[issuer-path]/route.ts"
+    ```ts title="/.well-known/oauth-protected-resource/[resource-path]/route.ts"
     import { oAuthProviderProtectedResourceMetadata } from "better-auth/plugins";
     import { auth } from "@/lib/auth";
 
@@ -1016,7 +1016,7 @@ You cannot disable the JWT Plugin if you are utilizing this plugin.
 
     Type support is recommended and may be downloaded into your API as a dev package.
 
-    ```ts title="/.well-known/oauth-protected-resource/[issuer-path]/route.ts"
+    ```ts title="/.well-known/oauth-protected-resource/[resource-path]/route.ts"
     import type { ResourceServerMetadata } from "better-auth";
 
     export const GET = async () => {
@@ -1045,66 +1045,90 @@ You cannot disable the JWT Plugin if you are utilizing this plugin.
     import { z } from "zod";
 
     const handler = mcpHandler(auth, (req, session) => {
-        // session contains the access token record with scopes and user ID
-        return createMcpHandler(
-            (server) => {
-                server.tool(
-                    "echo",
-                    "Echo a message",
-                    { message: z.string() },
-                    async ({ message }) => {
-                        return {
-                            content: [{ type: "text", text: `Tool echo: ${message}` }],
-                        };
-                    },
-                );
+      // session contains the access token record with scopes and user ID
+      return createMcpHandler(
+        (server) => {
+          server.tool(
+            "echo",
+            "Echo a message",
+            { message: z.string() },
+            async ({ message }) => {
+              return {
+                content: [{ type: "text", text: `Tool echo: ${message}` }],
+              };
             },
-            {
-                capabilities: {
-                    tools: {
-                        echo: {
-                            description: "Echo a message",
-                        },
-                    },
-                },
+          );
+        },
+        {
+          capabilities: {
+            tools: {
+              echo: {
+                description: "Echo a message",
+              },
             },
-            {
-                redisUrl: process.env.REDIS_URL,
-                basePath: "/api",
-                verboseLogs: true,
-                maxDuration: 60,
-            },
-        )(req);
+          },
+        },
+        {
+          redisUrl: process.env.REDIS_URL,
+          basePath: "/api",
+          verboseLogs: true,
+          maxDuration: 60,
+        },
+      )(req);
     });
 
     export { handler as GET, handler as POST, handler as DELETE };
     ```
 
-    - Using `checkMcp` function
+    - Manually handle Errors
 
-    We provide a generalized checker function as an alternative to `withMcpAuth` to check for an access token's validity.
-
-    This function throws an error if not authenticated and **MUST** return the `www-authenticate` header manually. You can use the helper function `handleMcpErrors` to perform this automatically.
+    To manually check for errors, watch for "Unauthorized" responses (status code 401) when using `api.oAuth2introspectVerify` with access to `auth`.
 
     ```ts
     import { auth } from "@/lib/auth"; // Location of BetterAuth options
-    import { checkMcp, handleMcpErrors } from "better-auth/plugins";
+    import { verifyAccessToken, handleMcpErrors } from "better-auth/plugins";
 
     // this is pseudocode to show how to properly handle errors
     export const GET = async (req: Request) => {
       const accessToken = req.headers.get('Authorization');
       try {
-        const tokens = await checkMcp({
-          auth,
-          accessToken,
-          baseUrl,
+        const tokens = await auth.api.oAuth2introspectVerify();
+        // ...continue
+      } catch (error) {
+        try {
+          return handleMcpErrors(
+            error,
+            "https://api.example.com",
+          );
+        } catch (error) {
+          console.error(error as unknown as string);
+        }
+      }
+    }
+    ```
+
+    Or fully manual when using the `verifyAccessToken` function.
+
+    ```ts
+    import { verifyAccessToken, handleMcpErrors } from "better-auth/plugins";
+
+    // this is pseudocode to show how to properly handle errors
+    export const GET = async (req: Request) => {
+      const accessToken = req.headers.get('Authorization');
+      try {
+        const tokens = await verifyAccessToken(accessToken, {
+          verifyOptions: {
+            audience: "https://api.example.com",
+            issuer: "https://auth.example.com",
+          }
         });
         // ...continue
       } catch (error) {
         try {
-          return handleMcpErrors(error, {
-            baseUrl: "https://auth.example.com/api/auth",
-          });
+          return handleMcpErrors(
+            error,
+            "https://api.example.com",
+          );
         } catch (error) {
           console.error(error as unknown as string);
         }
@@ -1495,7 +1519,7 @@ The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
 - `/oauth2/token` (previously `/mcp/token`)
 - `/oauth2/register` (previously `/mcp/register`)
 - `/mcp/get-session` removed as not oAuth2 compliant, use `/oauth2/introspect` instead
-- `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with `checkMcp` and `handleMcpErrors`)
+- `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with `api.oAuth2introspectVerify`/`verifyAccessToken` and `handleMcpErrors`)
 
 
 ### From [API Key](/docs/plugins/api-key)

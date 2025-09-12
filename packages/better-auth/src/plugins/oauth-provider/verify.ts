@@ -8,8 +8,10 @@ import {
 	type JWTVerifyOptions,
 	type ProtectedHeaderParameters,
 } from "jose";
-import type { AuthContext } from "../../types";
-import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
+import type { GenericEndpointContext } from "../../types";
+import { getJwtPlugin } from "./utils";
+import { APIError } from "better-call";
+import type { OAuthOptions } from "./types";
 
 /** Last fetched jwks */
 // Never export (used locally in ONLY verifyJwsAccessToken)
@@ -110,7 +112,6 @@ export async function verifyAccessToken(
 	},
 ) {
 	let payload: JWTPayload | undefined;
-
 	// Locally verify
 	if (opts.jwksUrl && !opts?.remoteVerify?.force) {
 		try {
@@ -167,20 +168,21 @@ export async function verifyAccessToken(
 		}
 	}
 
+	if (!payload) throw new Error("missing payload");
+
 	// Check scopes if provided
-	if (payload) {
-		if (opts.scopes) {
-			const scopes = (payload.scope as string | undefined)?.split(" ");
-			for (const sc of opts.scopes) {
-				if (!scopes?.includes(sc)) {
-					throw new Error(`invalid scope ${sc}`);
-				}
+	if (opts.scopes) {
+		const scopes = (payload.scope as string | undefined)?.split(" ");
+		for (const sc of opts.scopes) {
+			if (!scopes?.includes(sc)) {
+				throw new APIError("FORBIDDEN", {
+					message: `invalid scope ${sc}`,
+				});
 			}
 		}
-		return payload;
 	}
 
-	throw new Error("unauthenticated");
+	return payload;
 }
 
 /**
@@ -188,13 +190,12 @@ export async function verifyAccessToken(
  * using the oAuth configuration values.
  *
  * Utilizes `verifyAccessToken` under the hood.
- *
- * @external
  */
-export const verifyOAuthProviderAccessToken = <Auth extends AuthContext>(
-	auth: Auth,
-	token: string,
-	opts?: {
+export async function introspectVerifyEndpoint(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions,
+	token?: string,
+	verifyOpts?: {
 		/** Verify options */
 		verifyOptions?: JWTVerifyOptions;
 		/** Scopes to additionally verify. Token must include all but not exact. */
@@ -202,26 +203,47 @@ export const verifyOAuthProviderAccessToken = <Auth extends AuthContext>(
 		/** If provided, can verify a token remotely */
 		remoteVerify?: Omit<VerifyAccessTokenRemote, "introspectUrl">;
 	},
-) => {
-	const oAuthPlugin = getOAuthProviderPlugin(auth);
-	const jwtPlugin = oAuthPlugin.options.disableJWTPlugin
+) {
+	const jwtPlugin = opts.disableJWTPlugin
 		? undefined
-		: getJwtPlugin(auth);
-	return verifyAccessToken(token, {
-		verifyOptions: {
-			audience: jwtPlugin?.options?.jwt?.audience ?? auth.baseURL,
-			issuer: jwtPlugin?.options?.jwt?.issuer ?? auth.baseURL,
-			...opts?.verifyOptions,
-		},
-		scopes: opts?.scopes,
-		jwksUrl: oAuthPlugin.options.disableJWTPlugin
-			? undefined
-			: (jwtPlugin?.options?.jwks?.remoteUrl ?? `${auth.baseURL}/jwks`),
-		remoteVerify: opts?.remoteVerify
-			? {
-					...opts.remoteVerify,
-					introspectUrl: `${auth.baseURL}/oauth2/instrospect`,
-				}
-			: undefined,
-	});
-};
+		: getJwtPlugin(ctx.context);
+	const baseURL = ctx.context.baseURL;
+
+	if (!token) {
+		throw new APIError("UNAUTHORIZED", {
+			message: "missing access token",
+		});
+	}
+
+	try {
+		const accessToken = await verifyAccessToken(token, {
+			verifyOptions: {
+				audience: jwtPlugin?.options?.jwt?.audience ?? baseURL,
+				issuer: jwtPlugin?.options?.jwt?.issuer ?? baseURL,
+				...verifyOpts?.verifyOptions,
+			},
+			scopes: verifyOpts?.scopes,
+			jwksUrl: opts.disableJWTPlugin
+				? undefined
+				: (jwtPlugin?.options?.jwks?.remoteUrl ?? `${baseURL}/jwks`),
+			remoteVerify: verifyOpts?.remoteVerify
+				? {
+						...verifyOpts.remoteVerify,
+						introspectUrl: `${baseURL}/oauth2/instrospect`,
+					}
+				: undefined,
+		});
+		return accessToken;
+	} catch (error) {
+		if (error instanceof APIError) {
+			throw error;
+		} else if (error instanceof Error) {
+			throw new APIError("UNAUTHORIZED", {
+				message: error.message,
+			});
+		}
+		throw new APIError("UNAUTHORIZED", {
+			message: error as unknown as string,
+		});
+	}
+}
