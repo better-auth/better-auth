@@ -188,13 +188,12 @@ export const createOrganization = <O extends OrganizationOptions>(
 						user,
 					});
 				if (response && typeof response === "object" && "data" in response) {
-						orgData = {
+					orgData = {
 						...ctx.body,
 						...response.data,
 					};
 				}
 			}
-
 
 			const organization = await adapter.createOrganization({
 				organization: {
@@ -318,10 +317,13 @@ export const createOrganization = <O extends OrganizationOptions>(
 					teamMember.teamId,
 				);
 			}
-			
+
 			return ctx.json({
 				...organization,
-				metadata: organization.metadata && typeof organization.metadata === "string" ? JSON.parse(organization.metadata) : organization.metadata,
+				metadata:
+					organization.metadata && typeof organization.metadata === "string"
+						? JSON.parse(organization.metadata)
+						: organization.metadata,
 				members: [member],
 			});
 		},
