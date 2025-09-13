@@ -9,6 +9,17 @@ The Telegram plugin allows users to authenticate using their Telegram accounts v
 
 <Steps>
     <Step>
+        ### Create your Telegram bot
+        1. Sign in to your Telegram account and search for @BotFather
+        2. Create a new bot
+        3. Note your bot token
+        4. Configure the bot domain by going to `Bot Settings` > `Domain`
+
+        <Callout type="info">
+            - The Telegram Login Widget does not work with localhost bot domain. You need to use a public domain for the bot domain and HTTPS for local testing. You can use [NGROK](https://ngrok.com/) or another similar tool for this.
+        </Callout>
+    </Step>
+    <Step>
         ### Add the Server Plugin
 
         Add the Telegram plugin to your auth configuration:
