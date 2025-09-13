@@ -18,7 +18,7 @@ import { logger } from "../../utils";
 export const mcpHandler = <
 	Auth extends typeof betterAuth & {
 		api: {
-			oAuth2introspectVerify: (...args: any) => Promise<JWTPayload | null>;
+			oauth2IntrospectVerify: (...args: any) => Promise<JWTPayload | null>;
 		};
 		baseURL: string;
 		options: BetterAuthOptions;
@@ -43,7 +43,7 @@ export const mcpHandler = <
 			? authorization.replace("Bearer ", "")
 			: authorization;
 		try {
-			const token = await auth.api.oAuth2introspectVerify({
+			const token = await auth.api.oauth2IntrospectVerify({
 				body: {
 					token: accessToken,
 					verifyOpts: opts,

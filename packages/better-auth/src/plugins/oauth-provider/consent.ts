@@ -69,7 +69,7 @@ export async function consentEndpoint(
 	if (!ctx.body.accept) {
 		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 		return ctx.json({
-			redirectURI: formatErrorURL(
+			redirect_uri: formatErrorURL(
 				verificationValue.redirectUri,
 				"access_denied",
 				"User denied access",
@@ -103,13 +103,13 @@ export async function consentEndpoint(
 			updatedAt: now,
 		},
 	});
-	const redirectURI = new URL(verificationValue.redirectUri ?? opts.loginPage);
-	redirectURI.searchParams.set("code", code);
+	const redirectUri = new URL(verificationValue.redirectUri ?? opts.loginPage);
+	redirectUri.searchParams.set("code", code);
 	if (verificationValue.state) {
-		redirectURI.searchParams.set("state", verificationValue.state);
+		redirectUri.searchParams.set("state", verificationValue.state);
 	}
 	// Redirect back to application
 	return ctx.json({
-		redirectURI: redirectURI.toString(),
+		redirect_uri: redirectUri.toString(),
 	});
 }

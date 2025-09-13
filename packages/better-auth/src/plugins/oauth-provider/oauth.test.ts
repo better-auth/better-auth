@@ -367,11 +367,11 @@ describe("oauth", async () => {
 				throw: true,
 			},
 		);
-		expect(res.redirectURI).toContain(redirectUri);
-		expect(res.redirectURI).toContain(`code=`);
+		expect(res.redirect_uri).toContain(redirectUri);
+		expect(res.redirect_uri).toContain(`code=`);
 
 		let callbackURL = "";
-		await client.$fetch(res.redirectURI, {
+		await client.$fetch(res.redirect_uri, {
 			method: "GET",
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";

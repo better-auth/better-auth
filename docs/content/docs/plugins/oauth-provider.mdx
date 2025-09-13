@@ -146,7 +146,7 @@ After the application is created, you will receive a `client_id` and `client_sec
 To enable client registration set `allowDynamicClientRegistration: true` in your BetterAuth config.
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   allowDynamicClientRegistration: true,
   // ... other options
 })
@@ -155,7 +155,7 @@ oidcProvider({
 To enable unauthenticated client registration which allows for dynamically registered public clients, additionally set `allowUnauthenticatedClientRegistration: true` in your BetterAuth config.
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   allowDynamicClientRegistration: true,
   allowUnauthenticatedClientRegistration: true,
   // ... other options
@@ -455,9 +455,9 @@ This endpoint revokes the provided token.
 
 For an `access_token` type, 
 
-<APIMethod path="/oauth2/introspect" method="POST">
+<APIMethod path="/oauth2/revoke" method="POST">
 ```ts
-type introspectOAuth = {
+type revokeOAuth = {
   /**
    * Client Id.
    */
@@ -518,10 +518,10 @@ If this path is not at the root and you don't have an openid-configuration alrea
 NOTE: For issuers with paths, OpenId utilizes path appending, thus any path on the issuer should be prepended before `/.well-known/openid-configuration`. If no issuer path is specified, the path should start at the root.
 
 ```ts title="[issuer-path]/.well-known/openid-configuration/route.ts"
-import { oAuthProviderOpenIdConfigMetadata } from "better-auth/plugins";
+import { oauthProviderOpenIdConfigMetadata } from "better-auth/plugins";
 import { auth } from "@/lib/auth";
 
-export const GET = oAuthProviderOpenIdConfigMetadata(auth);
+export const GET = oauthProviderOpenIdConfigMetadata(auth);
 ```
 
 
@@ -534,10 +534,10 @@ You **must** add the configuration at the issuer path. If an issuer is unset, th
 NOTE: For issuers with paths, oAuth 2.1 Authorization Server utilizes path insertion, thus any path on the issuer should be appended after `/.well-known/oauth-authorization-server`. If no issuer path is specified, the path should start at the root.
 
 ```ts title="/.well-known/oauth-authorization-server/[issuer-path]/route.ts"
-import { oAuthProviderAuthServerMetadata } from "better-auth/plugins";
+import { oauthProviderAuthServerMetadata } from "better-auth/plugins";
 import { auth } from "@/lib/auth";
 
-export const GET = oAuthProviderAuthServerMetadata(auth);
+export const GET = oauthProviderAuthServerMetadata(auth);
 ```
 
 
@@ -631,7 +631,7 @@ When a user is redirected to the OIDC provider for authentication, if they are n
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-  plugins: [oidcProvider({
+  plugins: [oauthProvider({
     loginPage: "/sign-in"
   })]
 })
@@ -650,7 +650,7 @@ When a user is redirected to the OIDC provider for authentication, they may be p
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-  plugins: [oidcProvider({
+  plugins: [oauthProvider({
     consentPage: "/path/to/consent/page"
   })]
 })
@@ -698,11 +698,11 @@ For first-party applications and internal services, you can configure trusted cl
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { oidcProvider } from "better-auth/plugins";
+import { oauthProvider } from "better-auth/plugins";
 
 const auth = betterAuth({
   plugins: [
-    oidcProvider({
+    oauthProvider({
       loginPage: "/sign-in",
       trustedClients: [
         {
@@ -710,7 +710,7 @@ const auth = betterAuth({
           clientSecret: "secure-secret-here",
           name: "Internal Dashboard",
           type: "web",
-          redirectURLs: ["https://dashboard.company.com/auth/callback"],
+          redirectUris: ["https://dashboard.company.com/auth/callback"],
           disabled: false,
           skipConsent: true, // Skip consent for this trusted client
           metadata: { internal: true },
@@ -720,7 +720,7 @@ const auth = betterAuth({
           clientSecret: "mobile-secret", 
           name: "Company Mobile App",
           type: "native",
-          redirectURLs: ["com.company.app://auth"],
+          redirectUris: ["com.company.app://auth"],
           disabled: false,
           skipConsent: false, // Still require consent if needed
           metadata: {},
@@ -743,7 +743,7 @@ By default, we support the following scopes are supported:
 The scopes configuration can contain as many or as few scopes as you wish! Note that `openid` is required to be considered an OIDC server, otherwise this is a standard OAuth 2.1 server. All supported scopes must be in this array.
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   scopes: [ "openid", "profile", "offline_access", "read:post", "write:post" ],
 })
 ```
@@ -757,7 +757,7 @@ By internally, we support the following claims are supported: ["sub", "iss", "au
 The claims configuration can only be appended to the internal supported claims. Claims should be namespaced when possible to avoid potential future conflicts.
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   customClaims: [ "locale", "https://example.com/roles" ],
   // Attach claims to id tokens
   customIdTokenClaims: (_user: User, _scopes: string[]) => {
@@ -794,7 +794,7 @@ Each token type and grant type can independently can set a default expiration.
 Additionally, Access Tokens can set lower expirations based on scopes. This is useful for higher-privelege scopes that require shorter expiration times. The earliest expiration will take precendence. If not specified, the default will take place. Note: values should be lower than the defaults `accessTokenExpiresIn` and `m2mAccessTokenExpiresIn`.
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   scopeExpirations: {
     "write:payments": "5m",
     "read:payments": "30m",
@@ -810,7 +810,7 @@ oidcProvider({
 Dynamic registration allows for authorized registration of both public and confidential clients.
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   allowDynamicClientRegistration: true,
 })
 ```
@@ -818,7 +818,7 @@ oidcProvider({
 Unauthenticated client registration additionally allows for public clients (never confidential) to register without an authorization header. This is especially useful for an MCP to dynamically register themselves as a public client.
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   allowDynamicClientRegistration: true,
   allowUnauthenticatedClientRegistration: true,
 })
@@ -829,7 +829,7 @@ oidcProvider({
 You can additionally set an expiration time for how long a confidential client should last for. By default, dynamically registered confidential clients do not expire.
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   allowDynamicClientRegistration: true,
   clientRegistrationClientSecretExpiration: "30d",
 })
@@ -840,7 +840,7 @@ oidcProvider({
 To set a list of default scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationDefaultScopes` field. All scopes must be defined in `scopes`.
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   scopes: ["reader", "editor"],
   clientRegistrationDefaultScopes: ["reader"],
 })
@@ -849,7 +849,7 @@ oidcProvider({
 To also set a list of allowed scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationAllowedScopes` field. These are **in addition** to the `clientRegistrationDefaultScopes`. All scopes must be defined in `scopes`.
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   scopes: ["reader", "editor"],
   clientRegistrationDefaultScopes: ["reader"],
   clientRegistrationAllowedScopes: ["editor"],
@@ -876,7 +876,7 @@ If defined, both `encodeRefreshToken` and `decodeRefreshToken` functions. must b
 Example with change in refresh token format with backwards compatablity with original token-only format:
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   encodeRefreshToken: (token, session) => {
     const res = session ? `1.${token}.${session}` : token;
     return res;
@@ -904,7 +904,7 @@ const alg = "A256KW"
 const enc = "A256GCM"
 
 const auth = betterAuth({
-  plugins: [oidcProvider({
+  plugins: [oauthProvider({
     encodeRefreshToken: (token, session) {
       const value = JSON.stringify({
         sessionId: session.id,
@@ -934,7 +934,7 @@ All scopes and claims inside the advertisedMetadata section MUST be listed in `s
 #### Scopes
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   scopes: ["openid", "profile", "email", "offline_access", "read:post"],
   advertisedMetadata: {
     scopes_supported: ["openid", "profile", "read:post"],
@@ -947,7 +947,7 @@ oidcProvider({
 Claims are in addition to the internally supported claims which are automatically determined by `scopes`.
 
 ```ts title="auth.ts"
-oidcProvider({
+oauthProvider({
   claims_supported: ["https://client.example.com/roles"],
   advertisedMetadata: {
     claims_supported: ["https://client.example.com/roles"],
@@ -1006,10 +1006,10 @@ You cannot disable the JWT Plugin if you are utilizing this plugin.
     - Automatic (if you have access to the better-auth configuration)
 
     ```ts title="/.well-known/oauth-protected-resource/[resource-path]/route.ts"
-    import { oAuthProviderProtectedResourceMetadata } from "better-auth/plugins";
+    import { oauthProviderProtectedResourceMetadata } from "better-auth/plugins";
     import { auth } from "@/lib/auth";
 
-    export const GET = oAuthProviderProtectedResourceMetadata(auth);
+    export const GET = oauthProviderProtectedResourceMetadata(auth);
     ```
 
     - Manual (without access to your better-auth configuration)
@@ -1250,7 +1250,7 @@ Table Name: `oauthApplication`
       isOptional: true,
     },
     {
-      name: "redirectURLs",
+      name: "redirectUris",
       type: "string[]",
       description: "Array of of redirect uris",
       isRequired: true
