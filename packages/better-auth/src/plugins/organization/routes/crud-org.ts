@@ -156,7 +156,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				});
 			}
 
-			const {
+			let {
 				keepCurrentActiveOrganization: _,
 				userId: __,
 				...orgData
@@ -174,7 +174,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 					ctx.request,
 				);
 				if (response && typeof response === "object" && "data" in response) {
-					ctx.body = {
+					orgData = {
 						...ctx.body,
 						...response.data,
 					};
@@ -188,7 +188,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 						user,
 					});
 				if (response && typeof response === "object" && "data" in response) {
-					ctx.body = {
+					orgData = {
 						...ctx.body,
 						...response.data,
 					};
@@ -320,7 +320,10 @@ export const createOrganization = <O extends OrganizationOptions>(
 
 			return ctx.json({
 				...organization,
-				metadata: ctx.body.metadata,
+				metadata:
+					organization.metadata && typeof organization.metadata === "string"
+						? JSON.parse(organization.metadata)
+						: organization.metadata,
 				members: [member],
 			});
 		},
