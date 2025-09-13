@@ -829,7 +829,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						value: user.id,
 						operator: "eq",
 						connector: "AND",
-					}
+					},
 				],
 			});
 			if (!member) {
