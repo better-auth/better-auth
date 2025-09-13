@@ -19,6 +19,7 @@ export async function generateAction(opts: any) {
 			output: z.string().optional(),
 			y: z.boolean().optional(),
 			yes: z.boolean().optional(),
+			force: z.boolean().optional(),
 		})
 		.parse(opts);
 
@@ -38,7 +39,11 @@ export async function generateAction(opts: any) {
 		return;
 	}
 
-	const adapter = await getAdapter(config).catch((e) => {
+	const fullConfig = options.force
+		? ({ ...config, __force: true } as any)
+		: config;
+
+	const adapter = await getAdapter(fullConfig).catch((e) => {
 		logger.error(e.message);
 		process.exit(1);
 	});
@@ -48,7 +53,7 @@ export async function generateAction(opts: any) {
 	const schema = await generateSchema({
 		adapter,
 		file: options.output,
-		options: config,
+		options: fullConfig,
 	});
 
 	spinner.stop();
@@ -199,5 +204,6 @@ export const generate = new Command("generate")
 	)
 	.option("--output <output>", "the file to output to the generated schema")
 	.option("-y, --yes", "automatically answer yes to all prompts", false)
+	.option("-f, --force", "force generation of schema file", false)
 	.option("--y", "(deprecated) same as --yes", false)
 	.action(generateAction);
