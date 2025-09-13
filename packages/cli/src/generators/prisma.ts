@@ -84,6 +84,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				if (type === "date") {
 					return isOptional ? "DateTime?" : "DateTime";
 				}
+				if (type === "json") {
+					return isOptional ? "Json?" : "Json";
+				}
 				if (type === "string[]") {
 					return isOptional ? "String[]" : "String[]";
 				}
