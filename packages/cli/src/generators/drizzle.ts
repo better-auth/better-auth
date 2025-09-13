@@ -103,7 +103,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						: `int('${name}')`,
 				},
 				date: {
-					sqlite: `integer('${name}', { mode: 'timestamp' })`,
+					sqlite: `integer('${name}', { mode: 'timestamp_ms' })`,
 					pg: `timestamp('${name}')`,
 					mysql: `timestamp('${name}')`,
 				},
@@ -163,7 +163,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 										attr.type === "date" &&
 										attr.defaultValue.toString().includes("new Date()")
 									) {
-										type += `.defaultNow()`;
+										switch (databaseType) {
+											case "sqlite":
+												type += ".default(sql`(unixepoch('subsec') * 1000)`)";
+												break;
+
+											default:
+												type += `.defaultNow()`;
+												break;
+										}
 									} else {
 										type += `.$defaultFn(${attr.defaultValue})`;
 									}
@@ -274,7 +282,7 @@ function generateImport({
 	}
 	imports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
 
-	return `import { ${imports
+	return `${databaseType === "sqlite" ? `import { sql } from "drizzle-orm";\n` : ""}import { ${imports
 		.map((x) => x.trim())
 		.filter((x) => x !== "")
 		.join(", ")} } from "drizzle-orm/${databaseType}-core";\n`;
