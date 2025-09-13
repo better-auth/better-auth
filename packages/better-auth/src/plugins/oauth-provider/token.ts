@@ -65,7 +65,7 @@ export async function tokenEndpoint(
 	}
 }
 
-// User Jwt SHALL follow oAuth2
+// User Jwt SHALL follow oAuth 2
 // NOTE: Requires jwt plugin (assert !opts.disableJWTPlugin)
 async function createJwtAccessToken(
 	ctx: GenericEndpointContext,

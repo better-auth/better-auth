@@ -29,9 +29,9 @@ import type { ResourceServerMetadata } from "../../oauth-2.1/types";
 import { introspectVerifyEndpoint } from "./verify";
 export { authServerMetadata, oidcServerMetadata } from "./metadata";
 export {
-	oAuthProviderAuthServerMetadata,
-	oAuthProviderOpenIdConfigMetadata,
-	oAuthProviderProtectedResourceMetadata,
+	oauthProviderAuthServerMetadata,
+	oauthProviderOpenIdConfigMetadata,
+	oauthProviderProtectedResourceMetadata,
 } from "./metadata";
 export { verifyAccessToken } from "./verify";
 export { mcpHandler, handleMcpErrors } from "./mcp";
@@ -337,7 +337,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					return ctx.json(metadata);
 				},
 			),
-			oAuth2authorize: createAuthEndpoint(
+			oauth2Authorize: createAuthEndpoint(
 				"/oauth2/authorize",
 				{
 					method: "GET",
@@ -454,7 +454,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					return authorizeEndpoint(ctx, opts);
 				},
 			),
-			oAuthConsent: createAuthEndpoint(
+			oauthConsent: createAuthEndpoint(
 				"/oauth2/consent",
 				{
 					method: "POST",
@@ -473,14 +473,14 @@ export const oauthProvider = (options: OAuthOptions) => {
 											schema: {
 												type: "object",
 												properties: {
-													redirectURI: {
+													redirect_uri: {
 														type: "string",
 														format: "uri",
 														description:
 															"The URI to redirect to, either with an authorization code or an error",
 													},
 												},
-												required: ["redirectURI"],
+												required: ["redirect_uri"],
 											},
 										},
 									},
@@ -493,7 +493,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					return consentEndpoint(ctx, opts);
 				},
 			),
-			oAuth2token: createAuthEndpoint(
+			oauth2Token: createAuthEndpoint(
 				"/oauth2/token",
 				{
 					method: "POST",
@@ -642,7 +642,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					return tokenEndpoint(ctx, opts);
 				},
 			),
-			oAuth2introspect: createAuthEndpoint(
+			oauth2Introspect: createAuthEndpoint(
 				"/oauth2/introspect",
 				{
 					method: "POST",
@@ -778,7 +778,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					return introspectEndpoint(ctx, opts);
 				},
 			),
-			oAuth2introspectVerify: createAuthEndpoint(
+			oauth2IntrospectVerify: createAuthEndpoint(
 				"/oauth2/introspect/verify",
 				{
 					method: "POST",
@@ -801,7 +801,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					);
 				},
 			),
-			oAuth2revoke: createAuthEndpoint(
+			oauth2Revoke: createAuthEndpoint(
 				"/oauth2/revoke",
 				{
 					method: "POST",
@@ -886,7 +886,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					return revokeEndpoint(ctx, opts);
 				},
 			),
-			oAuth2userInfo: createAuthEndpoint(
+			oauth2UserInfo: createAuthEndpoint(
 				"/oauth2/userinfo",
 				{
 					method: "GET",
@@ -1180,7 +1180,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 													// 		"Additional metadata for the application",
 													// },
 												},
-												required: ["clientId"],
+												required: ["client_id"],
 											},
 										},
 									},

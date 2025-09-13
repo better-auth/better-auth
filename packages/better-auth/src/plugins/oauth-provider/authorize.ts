@@ -132,10 +132,10 @@ export async function authorizeEndpoint(
 		const errorURL = getErrorURL(ctx, "client_disabled", "client is disabled");
 		throw ctx.redirect(errorURL);
 	}
-	const redirectURI = client.redirectUris?.find(
+	const redirectUri = client.redirectUris?.find(
 		(url) => url === ctx.query.redirect_uri,
 	);
-	if (!redirectURI || !query.redirect_uri) {
+	if (!redirectUri || !query.redirect_uri) {
 		const errorURL = getErrorURL(
 			ctx,
 			"invalid_redirect",
@@ -225,17 +225,17 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const redirectURIWithCode = new URL(redirectURI);
-	redirectURIWithCode.searchParams.set("code", code);
-	redirectURIWithCode.searchParams.set("state", ctx.query.state);
+	const redirectUriWithCode = new URL(redirectUri);
+	redirectUriWithCode.searchParams.set("code", code);
+	redirectUriWithCode.searchParams.set("state", ctx.query.state);
 
 	if (query.prompt !== "consent") {
-		return handleRedirect(redirectURIWithCode.toString());
+		return handleRedirect(redirectUriWithCode.toString());
 	}
 
 	// Check if this is a trusted client that should skip consent
 	if (client.skipConsent) {
-		return handleRedirect(redirectURIWithCode.toString());
+		return handleRedirect(redirectUriWithCode.toString());
 	}
 
 	const hasAlreadyConsented = await ctx.context.adapter
@@ -257,7 +257,7 @@ export async function authorizeEndpoint(
 		.then((res) => !!res?.consentGiven);
 
 	if (hasAlreadyConsented) {
-		return handleRedirect(redirectURIWithCode.toString());
+		return handleRedirect(redirectUriWithCode.toString());
 	}
 
 	if (!options.consentPage) {
