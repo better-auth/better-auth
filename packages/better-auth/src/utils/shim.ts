@@ -1,4 +1,5 @@
 import type { AuthContext } from "../init";
+import type { Prettify } from "../types/helper";
 
 export const shimContext = <T extends Record<string, any>>(
 	originalObject: T,
@@ -78,5 +79,66 @@ export const shimEndpoint = (ctx: AuthContext, value: any) => {
 			}
 		}
 		return response;
+	};
+};
+
+type Last<T extends any[]> = T extends [...infer I, infer L]
+	? L
+	: T extends [...infer I, (infer L)?]
+		? L | undefined
+		: never;
+type Rest<T extends any[]> = T extends [...infer I, infer L]
+	? I
+	: T extends [...infer I, (infer L)?]
+		? I
+		: never;
+type LastParameter<F extends (...args: any) => any> = Last<Parameters<F>>;
+type RestParameter<F extends (...args: any) => any> = Rest<Parameters<F>>;
+
+export type InferShimLastParamResult<
+	T extends Record<string, (...args: any[]) => any>,
+	P extends LastParameter<T[keyof T]>,
+	Omit extends boolean = false,
+> = Prettify<ReturnType<typeof shimLastParam<T, P, Omit>>>;
+
+export const shimLastParam = <
+	T extends Record<string, (...args: any[]) => any>,
+	P extends LastParameter<T[keyof T]>,
+	ShouldOmit extends boolean = false,
+>(
+	obj: T,
+	shim: P,
+	isMatch?: (last: unknown) => boolean,
+	shouldOmit: ShouldOmit = false as ShouldOmit,
+) => {
+	const out: Partial<Record<keyof T, any>> = {};
+
+	for (const key in obj) {
+		const fn = obj[key] as any;
+		out[key] = (...args: any[]) => {
+			if (isMatch) {
+				if (isMatch(args[args.length - 1])) {
+					return fn(...args);
+				}
+				return fn(...args, shim);
+			} else {
+				if (args.length < fn.length) {
+					return fn(
+						...args,
+						...Array(Math.max(0, fn.length - 1 - args.length)).fill(undefined),
+						shim,
+					);
+				}
+			}
+			return fn(...args);
+		};
+	}
+
+	return out as {
+		[K in keyof T]: (
+			...args: ShouldOmit extends true
+				? RestParameter<T[K]>
+				: [...RestParameter<T[K]>, LastParameter<T[K]>?]
+		) => ReturnType<T[K]>;
 	};
 };

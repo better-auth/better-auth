@@ -216,7 +216,7 @@ export type AuthContext = {
 		storage: "memory" | "database" | "secondary-storage";
 	} & BetterAuthOptions["rateLimit"];
 	adapter: Adapter;
-	internalAdapter: ReturnType<typeof createInternalAdapter>;
+	internalAdapter: ReturnType<typeof createInternalAdapter<false>>;
 	createAuthCookie: ReturnType<typeof createCookieGetter>;
 	secret: string;
 	sessionConfig: {
