@@ -2,8 +2,9 @@ import { beforeAll, expect, it, describe, vi, afterEach } from "vitest";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
 import Database from "better-sqlite3";
 import { init } from "../init";
+import { betterAuth } from "../auth";
 import { getMigrations } from "./get-migration";
-import { SqliteDialect } from "kysely";
+import { Kysely, SqliteDialect } from "kysely";
 import { getTestInstance } from "../test-utils/test-instance";
 
 describe("adapter test", async () => {
@@ -190,5 +191,74 @@ describe("adapter test", async () => {
 		expect(value4).toMatchObject({
 			identifier: "test-id-1",
 		});
+	});
+
+	it("runs the after hook after adding user to db", async () => {
+		const sampleUser = {
+			name: "sample",
+			email: "sample@sampling.com",
+			password: "sampliiiiiing",
+		};
+		const hookUserCreateAfter = vi.fn();
+
+		const dialect = new SqliteDialect({
+			database: new Database(":memory:"),
+		});
+
+		const db = new Kysely<any>({
+			dialect,
+		});
+
+		const opts: BetterAuthOptions = {
+			database: {
+				dialect,
+				type: "sqlite",
+			},
+			databaseHooks: {
+				user: {
+					create: {
+						async after(user, context) {
+							hookUserCreateAfter(user, context);
+
+							const userFromDb: any = await db
+								.selectFrom("user")
+								.selectAll()
+								.where("id", "=", user.id)
+								.executeTakeFirst();
+
+							expect(user.id).toBe(userFromDb.id);
+							expect(user.name).toBe(userFromDb.name);
+							expect(user.email).toBe(userFromDb.email);
+							expect(user.image).toBe(userFromDb.image);
+							expect(user.emailVerified).toBe(
+								Boolean(userFromDb.emailVerified),
+							);
+							expect(user.createdAt).toStrictEqual(
+								new Date(userFromDb.createdAt),
+							);
+							expect(user.updatedAt).toStrictEqual(
+								new Date(userFromDb.updatedAt),
+							);
+						},
+					},
+				},
+			},
+			emailAndPassword: { enabled: true },
+		} satisfies BetterAuthOptions;
+
+		const migrations = await getMigrations(opts);
+		await migrations.runMigrations();
+
+		const auth = betterAuth(opts);
+
+		await auth.api.signUpEmail({
+			body: {
+				name: sampleUser.name,
+				email: sampleUser.email,
+				password: sampleUser.password,
+			},
+		});
+
+		expect(hookUserCreateAfter).toHaveBeenCalledOnce();
 	});
 });
