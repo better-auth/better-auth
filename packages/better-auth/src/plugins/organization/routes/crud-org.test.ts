@@ -269,6 +269,7 @@ describe("organization hooks", async () => {
 										metadata: {
 											hookCalled: true,
 										},
+										name: "changed-name",
 									},
 								};
 							},
@@ -291,6 +292,7 @@ describe("organization hooks", async () => {
 			headers,
 		});
 		expect(beforeCreateOrganization).toHaveBeenCalled();
+		expect(result?.name).toBe("changed-name");
 		expect(result?.metadata).toEqual({
 			hookCalled: true,
 		});
