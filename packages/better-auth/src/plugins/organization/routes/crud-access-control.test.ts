@@ -246,6 +246,32 @@ describe("dynamic access control", async (it) => {
 		expect(shouldPass.success).toBe(true);
 	});
 
+	it("should not be allowed to update a role without the right ac resource permissions", async () => {
+		const testRole = await authClient.organization.createRole(
+			{
+				role: `update-not-allowed-${crypto.randomUUID()}`,
+				permission: {
+					project: ["create"],
+				},
+				additionalFields: {
+					color: "#000000",
+				},
+			},
+			{ headers },
+		);
+		if (!testRole.data) throw testRole.error;
+		const roleId = testRole.data.roleData.id;
+		await expect(
+			auth.api.updateOrgRole({
+				body: {
+					roleId,
+					data: { roleName: `updated-${testRole.data.roleData.role}` },
+				},
+				headers: normalHeaders,
+			}),
+		).rejects.toThrow();
+	});
+
 	it("should not be allowed to create a role without the right ac resource permissions", async () => {
 		const testRole = await authClient.organization.createRole(
 			{
