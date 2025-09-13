@@ -12,7 +12,7 @@ import type {
 } from "../types/helper";
 import type { Auth } from "../auth";
 import type { InferRoutes } from "./path-to-object";
-import type { BetterAuthOptions, Session, User } from "../types";
+import type { BetterAuthSharedOptions, Session, User } from "../types";
 import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
 
 export type AtomListener = {
@@ -66,11 +66,9 @@ export interface BetterAuthClientPlugin {
 	atomListeners?: AtomListener[];
 }
 
-export interface ClientOptions {
+export interface ClientOptions extends BetterAuthSharedOptions {
 	fetchOptions?: BetterFetchOption;
 	plugins?: BetterAuthClientPlugin[];
-	baseURL?: string;
-	basePath?: string;
 	disableDefaultFetchPlugins?: boolean;
 	$InferAuth?: BetterAuthOptions;
 }
