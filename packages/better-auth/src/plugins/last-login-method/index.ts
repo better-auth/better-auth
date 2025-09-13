@@ -49,16 +49,33 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		"/sign-in/email",
 		"/sign-up/email",
 	];
+
+	const defaultResolveMethod = (ctx: GenericEndpointContext) => {
+		if (paths.includes(ctx.path)) {
+			return ctx.params?.id ? ctx.params.id : ctx.path.split("/").pop();
+		}
+		return null;
+	};
+
+	// Create the fallback resolve method
+	const resolveMethod = userConfig?.customResolveMethod
+		? (ctx: GenericEndpointContext) => {
+				// Try user's custom method first
+				const customResult = userConfig.customResolveMethod!(ctx);
+				if (customResult !== null) {
+					return customResult;
+				}
+				// Fall back to default method if custom returns null
+				return defaultResolveMethod(ctx);
+			}
+		: defaultResolveMethod;
+
 	const config = {
 		cookieName: "better-auth.last_used_login_method",
 		maxAge: 60 * 60 * 24 * 30,
-		customResolveMethod: (ctx) => {
-			if (paths.includes(ctx.path)) {
-				return ctx.params?.id ? ctx.params.id : ctx.path.split("/").pop();
-			}
-			return null;
-		},
 		...userConfig,
+		// Override customResolveMethod with our fallback logic
+		customResolveMethod: resolveMethod,
 	} satisfies LastLoginMethodOptions;
 
 	return {
