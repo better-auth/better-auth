@@ -1,5 +1,3 @@
-import fs from "fs/promises";
-import { generateRandomString } from "../crypto/random";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
@@ -17,6 +15,15 @@ import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
 
+const cleanupSet = new Set<Function>();
+
+afterAll(async () => {
+	for (const cleanup of cleanupSet) {
+		await cleanup();
+		cleanupSet.delete(cleanup);
+	}
+});
+
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
 	C extends ClientOptions,
@@ -31,12 +38,6 @@ export async function getTestInstance<
 	},
 ) {
 	const testWith = config?.testWith || "sqlite";
-	/**
-	 * create db folder if not exists
-	 */
-	await fs.mkdir(".db", { recursive: true });
-	const randomStr = generateRandomString(4, "a-z");
-	const dbName = `./.db/test-${randomStr}.db`;
 
 	const postgres = new Kysely({
 		dialect: new PostgresDialect({
@@ -45,6 +46,8 @@ export async function getTestInstance<
 			}),
 		}),
 	});
+
+	const sqlite = new Database(":memory:");
 
 	const mysql = new Kysely({
 		dialect: new MysqlDialect(
@@ -82,7 +85,7 @@ export async function getTestInstance<
 					? mongodbAdapter(await mongodbClient())
 					: testWith === "mysql"
 						? { db: mysql, type: "mysql" }
-						: new Database(dbName),
+						: sqlite,
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -91,6 +94,9 @@ export async function getTestInstance<
 		},
 		advanced: {
 			cookies: {},
+		},
+		logger: {
+			level: "debug",
 		},
 	} satisfies BetterAuthOptions;
 
@@ -103,7 +109,7 @@ export async function getTestInstance<
 			...options?.advanced,
 		},
 		plugins: [bearer(), ...(options?.plugins || [])],
-	} as O extends undefined ? typeof opts : O & typeof opts);
+	} as unknown as O extends undefined ? typeof opts : O & typeof opts);
 
 	const testUser = {
 		email: "test@test.com",
@@ -116,7 +122,7 @@ export async function getTestInstance<
 			return;
 		}
 		//@ts-expect-error
-		const res = await auth.api.signUpEmail({
+		await auth.api.signUpEmail({
 			body: testUser,
 		});
 	}
@@ -131,7 +137,7 @@ export async function getTestInstance<
 
 	await createTestUser();
 
-	afterAll(async () => {
+	const cleanup = async () => {
 		if (testWith === "mongodb") {
 			const db = await mongodbClient();
 			await db.dropDatabase();
@@ -155,9 +161,12 @@ export async function getTestInstance<
 			await sql`SET FOREIGN_KEY_CHECKS = 1;`.execute(mysql);
 			return;
 		}
-
-		await fs.unlink(dbName);
-	});
+		if (testWith === "sqlite") {
+			sqlite.close();
+			return;
+		}
+	};
+	cleanupSet.add(cleanup);
 
 	async function signInWithTestUser() {
 		if (config?.disableTestUser) {

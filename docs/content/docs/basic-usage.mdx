@@ -192,7 +192,7 @@ await authClient.signOut({
 
 ## Session
 
-Once a user is signed in, you'll want to access the user session. Better Auth allows you easily to access the session data from the server and client side.
+Once a user is signed in, you'll want to access the user session. Better Auth allows you to easily access the session data from both the server and client sides.
 
 ### Client Side
 
@@ -200,7 +200,7 @@ Once a user is signed in, you'll want to access the user session. Better Auth al
 
 Better Auth provides a `useSession` hook to easily access session data on the client side. This hook is implemented using nanostore and has support for each supported framework and vanilla client, ensuring that any changes to the session (such as signing out) are immediately reflected in your UI.
 
-<Tabs items={["React", "Vue","Svelte", "Solid", "Vanilla"]} defaultValue="React">
+<Tabs items={["React", "Vue","Svelte", "Solid", "Vanilla"]} defaultValue="react">
     <Tab value="React">
         ```tsx title="user.tsx"
         import { authClient } from "@/lib/auth-client" // import the auth client // [!code highlight] 
@@ -454,7 +454,7 @@ import { twoFactorClient } from "better-auth/client/plugins"; // [!code highligh
 const authClient = createAuthClient({
     plugins: [ // [!code highlight]
         twoFactorClient({ // [!code highlight]
-            twoFactorPage: "/two-factor" // the page to redirect if a user need to verify 2nd factor // [!code highlight]
+            twoFactorPage: "/two-factor" // the page to redirect if a user needs to verify 2nd factor // [!code highlight]
         }) // [!code highlight]
     ] // [!code highlight]
 })

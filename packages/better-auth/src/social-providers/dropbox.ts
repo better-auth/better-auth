@@ -21,6 +21,7 @@ export interface DropboxProfile {
 }
 
 export interface DropboxOptions extends ProviderOptions<DropboxProfile> {
+	clientId: string;
 	accessType?: "offline" | "online" | "legacy";
 }
 

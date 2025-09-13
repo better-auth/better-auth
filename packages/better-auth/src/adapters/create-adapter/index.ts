@@ -1,13 +1,17 @@
 import { safeJSONParse } from "../../utils/json";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type {
+	Adapter,
+	BetterAuthOptions,
+	TransactionAdapter,
+	Where,
+} from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
-	AdapterConfig,
+	CreateAdapterOptions,
 	AdapterTestDebugLogs,
 	CleanedWhere,
-	CreateCustomAdapter,
 } from "./types";
 import type { FieldAttribute } from "../../db";
 export * from "./types";
@@ -45,14 +49,13 @@ const colors = {
 	},
 };
 
+const createAsIsTransaction =
+	(adapter: Adapter) =>
+	<R>(fn: (trx: TransactionAdapter) => Promise<R>) =>
+		fn(adapter);
+
 export const createAdapter =
-	({
-		adapter,
-		config: cfg,
-	}: {
-		config: AdapterConfig;
-		adapter: CreateCustomAdapter;
-	}) =>
+	({ adapter: customAdapter, config: cfg }: CreateAdapterOptions) =>
 	(options: BetterAuthOptions): Adapter => {
 		const config = {
 			...cfg,
@@ -315,7 +318,7 @@ export const createAdapter =
 			return fields[defaultFieldName];
 		};
 
-		const adapterInstance = adapter({
+		const adapterInstance = customAdapter({
 			options,
 			schema,
 			debugLog,
@@ -352,9 +355,10 @@ export const createAdapter =
 					newMappedKeys[field] || fields[field].fieldName || field;
 				if (
 					value === undefined &&
-					((!fieldAttributes.defaultValue &&
-						!fieldAttributes.transform?.input) ||
-						action === "update")
+					((fieldAttributes.defaultValue === undefined &&
+						!fieldAttributes.transform?.input &&
+						!(action === "update" && fieldAttributes.onUpdate)) ||
+						(action === "update" && !fieldAttributes.onUpdate))
 				) {
 					continue;
 				}
@@ -379,7 +383,6 @@ export const createAdapter =
 				} else if (
 					config.supportsJSON === false &&
 					typeof newValue === "object" &&
-					//@ts-expect-error -Future proofing
 					fieldAttributes.type === "json"
 				) {
 					newValue = JSON.stringify(newValue);
@@ -408,7 +411,9 @@ export const createAdapter =
 					});
 				}
 
-				transformedData[newFieldName] = newValue;
+				if (newValue !== undefined) {
+					transformedData[newFieldName] = newValue;
+				}
 			}
 			return transformedData;
 		};
@@ -455,7 +460,6 @@ export const createAdapter =
 					} else if (
 						config.supportsJSON === false &&
 						typeof newValue === "string" &&
-						//@ts-expect-error - Future proofing
 						field.type === "json"
 					) {
 						newValue = safeJSONParse(newValue);
@@ -559,7 +563,24 @@ export const createAdapter =
 			}) as any;
 		};
 
-		return {
+		let lazyLoadTransaction: Adapter["transaction"] | null = null;
+		const adapter: Adapter = {
+			transaction: async (cb) => {
+				if (!lazyLoadTransaction) {
+					if (!config.transaction) {
+						logger.warn(
+							`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
+						);
+						lazyLoadTransaction = createAsIsTransaction(adapter);
+					} else {
+						logger.debug(
+							`[${config.adapterName}] - Using provided transaction implementation.`,
+						);
+						lazyLoadTransaction = config.transaction;
+					}
+				}
+				return lazyLoadTransaction(cb);
+			},
 			create: async <T extends Record<string, any>, R = T>({
 				data: unsafeData,
 				model: unsafeModel,
@@ -586,7 +607,7 @@ export const createAdapter =
 						.join("\n")
 						.replace("Error:", "Create method with `id` being called at:");
 					console.log(stack);
-					//@ts-ignore
+					//@ts-expect-error
 					unsafeData.id = undefined;
 				}
 				debugLog(
@@ -1015,6 +1036,7 @@ export const createAdapter =
 					}
 				: {}),
 		};
+		return adapter;
 	};
 
 function formatTransactionId(transactionId: number) {

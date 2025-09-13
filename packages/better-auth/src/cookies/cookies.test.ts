@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
+import { parseSetCookieHeader } from "./cookie-utils";
 import type { BetterAuthOptions } from "../types/options";
 
 describe("cookies", async () => {
@@ -152,6 +153,16 @@ describe("cookie configuration", () => {
 	});
 });
 
+describe("cookie-utils parseSetCookieHeader", () => {
+	it("handles Expires with commas and multiple cookies", () => {
+		const header =
+			"a=1; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, b=2; Expires=Thu, 22 Oct 2015 07:28:00 GMT; Path=/";
+		const map = parseSetCookieHeader(header);
+		expect(map.get("a")?.value).toBe("1");
+		expect(map.get("b")?.value).toBe("2");
+	});
+});
+
 describe("getSessionCookie", async () => {
 	it("should return the correct session cookie", async () => {
 		const { client, testUser, signInWithTestUser } = await getTestInstance();
@@ -274,6 +285,42 @@ describe("getSessionCookie", async () => {
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
 		expect(cache?.session?.token).toEqual(expect.any(String));
+	});
+
+	it("should respect dontRememberMe when storing session in cookie cache", async () => {
+		const { client, testUser } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+				rememberMe: false,
+			},
+			{
+				onSuccess(c) {
+					const headers = c.response.headers;
+					const setCookieHeader = headers.get("set-cookie");
+					expect(setCookieHeader).toBeDefined();
+
+					const parsed = parseSetCookieHeader(setCookieHeader!);
+
+					const sessionTokenCookie = parsed.get("better-auth.session_token")!;
+					expect(sessionTokenCookie).toBeDefined();
+					expect(sessionTokenCookie["max-age"]).toBeUndefined();
+
+					const sessionDataCookie = parsed.get("better-auth.session_data")!;
+					expect(sessionDataCookie).toBeDefined();
+					expect(sessionDataCookie["max-age"]).toBeUndefined();
+				},
+			},
+		);
 	});
 
 	it("should return null if the cookie is invalid", async () => {
