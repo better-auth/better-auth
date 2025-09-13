@@ -25,12 +25,12 @@ import { roblox } from "./roblox";
 import { salesforce } from "./salesforce";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
+import { todoist } from "./todoist";
 import { kakao } from "./kakao";
 import { naver } from "./naver";
 import { line } from "./line";
 import { paypal } from "./paypal";
 import type { OAuthProvider } from "../oauth2";
-
 export const socialProviders = {
 	apple,
 	atlassian,
@@ -58,6 +58,7 @@ export const socialProviders = {
 	vk,
 	zoom,
 	notion,
+	todoist,
 	kakao,
 	naver,
 	line,
@@ -116,6 +117,7 @@ export * from "./zoom";
 export * from "./kick";
 export * from "./huggingface";
 export * from "./slack";
+export * from "./todoist";
 export * from "./kakao";
 export * from "./naver";
 export * from "./line";
