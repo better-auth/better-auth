@@ -55,7 +55,7 @@
     "jose": "^6.1.0",
     "oauth2-mock-server": "^7.2.1",
     "samlify": "^2.10.1",
-    "zod": "^4.1.5"
+    "zod": "^4.1.8"
   },
   "devDependencies": {
     "@types/body-parser": "^1.19.6",
