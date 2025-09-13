@@ -123,7 +123,7 @@ export function protectedResourceMetadata(
  *
  * @external
  */
-export const oAuthProviderAuthServerMetadata = <
+export const oauthProviderAuthServerMetadata = <
 	Auth extends {
 		api: {
 			getOAuthServerConfig: (...args: any) => any;
@@ -160,7 +160,7 @@ export const oAuthProviderAuthServerMetadata = <
  *
  * @external
  */
-export const oAuthProviderOpenIdConfigMetadata = <
+export const oauthProviderOpenIdConfigMetadata = <
 	Auth extends {
 		api: {
 			getOpenIdConfig: (...args: any) => any;
@@ -196,7 +196,7 @@ export const oAuthProviderOpenIdConfigMetadata = <
  *
  * @external
  */
-export const oAuthProviderProtectedResourceMetadata = <
+export const oauthProviderProtectedResourceMetadata = <
 	Auth extends AuthContext & {
 		api: {
 			getOAuthProtectedResourceConfig: (...args: any) => any;

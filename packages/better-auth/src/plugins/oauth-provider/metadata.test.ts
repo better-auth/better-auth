@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt, type JwtOptions } from "../jwt";
 import { oauthProvider } from ".";
-import { oAuthProviderProtectedResourceMetadata } from "./metadata";
+import { oauthProviderProtectedResourceMetadata } from "./metadata";
 import { BetterAuthError } from "../../error";
 import { createAuthClient } from "../../client";
 import type { OAuthOptions } from "./types";
@@ -326,9 +326,9 @@ describe("metadata - resource discovery functions", async () => {
 		});
 	});
 
-	it("oAuthProviderProtectedResourceMetadata - should pass without opts providing resource discovery configuration", async () => {
+	it("oauthProviderProtectedResourceMetadata - should pass without opts providing resource discovery configuration", async () => {
 		// @ts-expect-error Full auth not provided
-		const metadataEndpoint = oAuthProviderProtectedResourceMetadata(auth);
+		const metadataEndpoint = oauthProviderProtectedResourceMetadata(auth);
 		const metadataRes = await metadataEndpoint(
 			new Request("http://localhost/.well-known/oauth-protected-resource", {
 				method: "GET",
@@ -342,10 +342,10 @@ describe("metadata - resource discovery functions", async () => {
 		});
 	});
 
-	it("oAuthProviderProtectedResourceMetadata - should not support 'openid' scope", async () => {
+	it("oauthProviderProtectedResourceMetadata - should not support 'openid' scope", async () => {
 		try {
 			// @ts-expect-error Full auth not provided
-			oAuthProviderProtectedResourceMetadata(auth, {
+			oauthProviderProtectedResourceMetadata(auth, {
 				overrides: {
 					scopes_supported: ["openid"],
 				},
@@ -356,9 +356,9 @@ describe("metadata - resource discovery functions", async () => {
 		}
 	});
 
-	it("oAuthProviderProtectedResourceMetadata - should pass with supported scopes", async () => {
+	it("oauthProviderProtectedResourceMetadata - should pass with supported scopes", async () => {
 		// @ts-expect-error Full auth not provided
-		const metadataEndpoint = oAuthProviderProtectedResourceMetadata(auth, {
+		const metadataEndpoint = oauthProviderProtectedResourceMetadata(auth, {
 			overrides: {
 				scopes_supported: ["read:posts"],
 			},
@@ -377,10 +377,10 @@ describe("metadata - resource discovery functions", async () => {
 		});
 	});
 
-	it("oAuthProviderProtectedResourceMetadata - should fail unsupported scope", async () => {
+	it("oauthProviderProtectedResourceMetadata - should fail unsupported scope", async () => {
 		try {
 			// @ts-expect-error Full auth not provided
-			oAuthProviderProtectedResourceMetadata(auth, {
+			oauthProviderProtectedResourceMetadata(auth, {
 				overrides: {
 					scopes_supported: ["write:posts"],
 				},
@@ -391,9 +391,9 @@ describe("metadata - resource discovery functions", async () => {
 		}
 	});
 
-	it("oAuthProviderProtectedResourceMetadata - should pass externally available scopes", async () => {
+	it("oauthProviderProtectedResourceMetadata - should pass externally available scopes", async () => {
 		// @ts-expect-error Full auth not provided
-		const metadataEndpoint = oAuthProviderProtectedResourceMetadata(auth, {
+		const metadataEndpoint = oauthProviderProtectedResourceMetadata(auth, {
 			externalScopes: ["write:posts"],
 			overrides: {
 				scopes_supported: ["read:posts", "write:posts"],
