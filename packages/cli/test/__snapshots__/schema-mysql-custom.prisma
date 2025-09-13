@@ -113,15 +113,16 @@ model Member {
 }
 
 model WorkspaceInvitation {
-  id             String    @id
-  organizationId String
-  workspace      Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  email          String    @db.Text
-  role           String?   @db.Text
-  status         String    @db.Text
-  expiresAt      DateTime
-  inviterId      String
-  user           User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+  id              String    @id
+  organizationId  String
+  workspace       Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email           String?   @db.Text
+  role            String?   @db.Text
+  status          String    @db.Text
+  expiresAt       DateTime
+  inviterId       String
+  user            User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+  domainWhitelist String?   @db.Text
 
   @@map("workspaceInvitation")
 }

@@ -71,4 +71,8 @@ export const ORGANIZATION_ERROR_CODES = {
 		"You are not allowed to access this organization as an owner",
 	YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION:
 		"You are not a member of this organization",
+	EMAIL_DOMAIN_NOT_ALLOWED:
+		"Your email domain is not allowed to accept this invitation",
+	PUBLIC_INVITATIONS_CANNOT_BE_REJECTED:
+		"Public invitations cannot be rejected",
 } as const;
