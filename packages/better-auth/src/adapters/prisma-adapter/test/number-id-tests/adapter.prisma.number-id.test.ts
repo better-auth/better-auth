@@ -4,59 +4,52 @@ import { prismaAdapter } from "../../prisma-adapter";
 import { PrismaClient } from "@prisma/client";
 import { beforeEach } from "vitest";
 
-describe(
-	"Number Id Adapter Test",
-	{
-		repeats: 1,
-	},
-	async () => {
-		const db = new PrismaClient();
-		async function clearDb() {
-			await db.sessions.deleteMany();
-			await db.user.deleteMany();
-			try {
-				await db.$executeRaw`DELETE FROM sqlite_sequence WHERE name = 'User'`;
-			} catch {}
-			try {
-				await db.$executeRaw`DELETE FROM sqlite_sequence WHERE name = 'Sessions'`;
-			} catch {}
-		}
-		const adapter = prismaAdapter(db, {
-			provider: "sqlite",
-			debugLogs: {
-				isRunningAdapterTests: true,
+describe("Number Id Adapter Test", async () => {
+	const db = new PrismaClient();
+
+	async function clearDb() {
+		await db.sessions.deleteMany();
+		await db.user.deleteMany();
+		try {
+			await db.$executeRaw`DELETE FROM sqlite_sequence WHERE name = 'User'`;
+		} catch {}
+		try {
+			await db.$executeRaw`DELETE FROM sqlite_sequence WHERE name = 'Sessions'`;
+		} catch {}
+	}
+
+	const adapter = prismaAdapter(db, {
+		provider: "sqlite",
+	});
+
+	beforeEach(async () => {
+		await clearDb();
+	});
+
+	test("Number Id Adapter Test", async () => {
+		await runNumberIdAdapterTest({
+			getAdapter: async () => {
+				return adapter({
+					database: adapter,
+					user: {
+						fields: { email: "email_address" },
+						additionalFields: {
+							test: {
+								type: "string",
+								defaultValue: "test",
+							},
+						},
+					},
+					session: {
+						modelName: "sessions",
+					},
+					advanced: {
+						database: {
+							useNumberId: true,
+						},
+					},
+				});
 			},
 		});
-
-		beforeEach(async () => {
-			await clearDb();
-		});
-
-		test("Number Id Adapter Test", async () => {
-			await runNumberIdAdapterTest({
-				getAdapter: async () => {
-					return adapter({
-						database: adapter,
-						user: {
-							fields: { email: "email_address" },
-							additionalFields: {
-								test: {
-									type: "string",
-									defaultValue: "test",
-								},
-							},
-						},
-						session: {
-							modelName: "sessions",
-						},
-						advanced: {
-							database: {
-								useNumberId: true,
-							},
-						},
-					});
-				},
-			});
-		});
-	},
-);
+	});
+});
