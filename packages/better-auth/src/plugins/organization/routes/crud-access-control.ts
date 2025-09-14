@@ -813,8 +813,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					`\nPlease refer to the documentation here: https://better-auth.com/docs/plugins/organization#dynamic-access-control`,
 				);
 				throw new APIError("NOT_IMPLEMENTED", {
-					message:
-						"Dynamic Access Control requires a pre-defined ac instance on the server auth plugin. Read server logs for more information.",
+					message: ORGANIZATION_ERROR_CODES.MISSING_AC_INSTANCE,
 				});
 			}
 
@@ -825,7 +824,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					`[Dynamic Access Control] The session is missing an active organization id to update a role. Either set an active org id, or pass an organizationId in the request body.`,
 				);
 				throw new APIError("BAD_REQUEST", {
-					message: "You must be in an organization to update a role.",
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
 			}
 
