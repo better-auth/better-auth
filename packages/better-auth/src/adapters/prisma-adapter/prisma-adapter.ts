@@ -92,39 +92,64 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			}
 			const convertWhereClause = (model: string, where?: Where[]) => {
 				if (!where) return {};
+
+				const convertValue = (field: string, value: any) => {
+					// Convert ID values to numbers when useNumberId is enabled
+					if (field === "id" && lazyOptions?.advanced?.database?.useNumberId) {
+						if (Array.isArray(value)) {
+							return value.map(v => Number(v));
+						}
+						return Number(value);
+					}
+					// Convert userId and other foreign key references to numbers when useNumberId is enabled
+					if ((field === "userId" || field.endsWith("Id")) && lazyOptions?.advanced?.database?.useNumberId) {
+						if (Array.isArray(value)) {
+							return value.map(v => Number(v));
+						}
+						return Number(value);
+					}
+					return value;
+				};
+
 				if (where.length === 1) {
 					const w = where[0];
 					if (!w) {
 						return;
 					}
+					const fieldName = getFieldName({ model, field: w.field });
+					const convertedValue = convertValue(w.field, w.value);
 					return {
-						[getFieldName({ model, field: w.field })]:
+						[fieldName]:
 							w.operator === "eq" || !w.operator
-								? w.value
+								? convertedValue
 								: {
-										[operatorToPrismaOperator(w.operator)]: w.value,
+										[operatorToPrismaOperator(w.operator)]: convertedValue,
 									},
 					};
 				}
 				const and = where.filter((w) => w.connector === "AND" || !w.connector);
 				const or = where.filter((w) => w.connector === "OR");
 				const andClause = and.map((w) => {
+					const fieldName = getFieldName({ model, field: w.field });
+					const convertedValue = convertValue(w.field, w.value);
 					return {
-						[getFieldName({ model, field: w.field })]:
+						[fieldName]:
 							w.operator === "eq" || !w.operator
-								? w.value
+								? convertedValue
 								: {
-										[operatorToPrismaOperator(w.operator)]: w.value,
+										[operatorToPrismaOperator(w.operator)]: convertedValue,
 									},
 					};
 				});
 				const orClause = or.map((w) => {
+					const fieldName = getFieldName({ model, field: w.field });
+					const convertedValue = convertValue(w.field, w.value);
 					return {
-						[getFieldName({ model, field: w.field })]:
+						[fieldName]:
 							w.operator === "eq" || !w.operator
-								? w.value
+								? convertedValue
 								: {
-										[operatorToPrismaOperator(w.operator)]: w.value,
+										[operatorToPrismaOperator(w.operator)]: convertedValue,
 									},
 					};
 				});
@@ -135,6 +160,19 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				};
 			};
 
+			const convertDataValues = (data: any) => {
+				if (!lazyOptions?.advanced?.database?.useNumberId) return data;
+
+				const converted = { ...data };
+				for (const key in converted) {
+					// Convert foreign key IDs to numbers when useNumberId is enabled
+					if ((key === "userId" || key.endsWith("Id")) && converted[key] !== null && converted[key] !== undefined) {
+						converted[key] = Number(converted[key]);
+					}
+				}
+				return converted;
+			};
+
 			return {
 				async create({ model, data: values, select }) {
 					if (!db[model]) {
@@ -142,8 +180,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
+					const convertedData = convertDataValues(values);
 					return await db[model].create({
-						data: values,
+						data: convertedData,
 						select: convertSelect(select, model),
 					});
 				},
@@ -199,16 +238,18 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						);
 					}
 					const whereClause = convertWhereClause(model, where);
+					const convertedData = convertDataValues(update);
 					return await db[model].update({
 						where: whereClause,
-						data: update,
+						data: convertedData,
 					});
 				},
 				async updateMany({ model, where, update }) {
 					const whereClause = convertWhereClause(model, where);
+					const convertedData = convertDataValues(update);
 					const result = await db[model].updateMany({
 						where: whereClause,
-						data: update,
+						data: convertedData,
 					});
 					return result ? (result.count as number) : 0;
 				},
