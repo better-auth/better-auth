@@ -35,6 +35,11 @@ export const opts = ({
 		session: {
 			modelName: "sessions",
 		},
+		verification: {
+			fields: {
+				expiresAt: "expires_at",
+			},
+		},
 		advanced: {
 			database: {
 				useNumberId: isNumberIdTest,
