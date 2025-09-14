@@ -212,7 +212,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			},
 			json: {
 				sqlite: "text",
-				postgres: "json",
+				postgres: "jsonb",
 				mysql: "json",
 				mssql: "varchar(8000)",
 			},
