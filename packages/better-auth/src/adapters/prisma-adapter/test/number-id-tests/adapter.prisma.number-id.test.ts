@@ -2,7 +2,7 @@ import { describe, test } from "vitest";
 import { runNumberIdAdapterTest } from "../../../test";
 import { prismaAdapter } from "../../prisma-adapter";
 import { PrismaClient } from "@prisma/client";
-import { beforeEach } from "node:test";
+import { beforeEach } from "vitest";
 
 describe(
 	"Number Id Adapter Test",
