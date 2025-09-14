@@ -176,21 +176,24 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					email: z.string({}).meta({
 						description: "Email address to send the OTP",
 					}),
-					metadata: {
-						openapi: {
-							operationId: "sendEmailVerificationOTP",
-							description: "Send a verification OTP to an email",
-							responses: {
-								200: {
-									description: "Success",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													success: {
-														type: "boolean",
-													},
+					type: z.enum(types).meta({
+						description: "Type of the OTP",
+					}),
+				}),
+				metadata: {
+					openapi: {
+						operationId: "sendEmailVerificationOTP",
+						description: "Send a verification OTP to an email",
+						responses: {
+							200: {
+								description: "Success",
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												success: {
+													type: "boolean",
 												},
 											},
 										},
@@ -199,7 +202,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							},
 						},
 					},
-				}),
+				},
 			},
 			async (ctx) => {
 				if (!options?.sendVerificationOTP) {
