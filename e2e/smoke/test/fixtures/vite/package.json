@@ -6,5 +6,8 @@
   },
   "dependencies": {
     "better-auth": "workspace:*"
+  },
+  "devDependencies": {
+    "vite-plugin-inspect": "^11.3.3"
   }
 }

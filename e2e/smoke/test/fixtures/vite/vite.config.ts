@@ -1,5 +1,6 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite";
 import { resolve } from "node:path";
+import inspect from 'vite-plugin-inspect'
 
 export default defineConfig({
 	build: {
@@ -9,5 +10,12 @@ export default defineConfig({
 			},
 		},
 		minify: false,
+		sourcemap: 'inline'
 	},
+	plugins: [
+		inspect({
+			build: true,
+			outputDir: '.vite-inspect'
+		}) as any
+	]
 });
