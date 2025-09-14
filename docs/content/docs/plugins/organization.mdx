@@ -584,7 +584,7 @@ export default {
 
 Or alternatively, you can call `organization.list` if you don't want to use a hook.
 
-<APIMethod path="/organization/list" method="GET">
+<APIMethod path="/organization/list" method="GET" requireSession>
   ```ts
   type listOrganizations = {
   }
