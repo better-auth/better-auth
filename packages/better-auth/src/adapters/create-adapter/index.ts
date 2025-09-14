@@ -1,7 +1,7 @@
 import { safeJSONParse } from "../../utils/json";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type { Adapter, BetterAuthOptions, Join, Where } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
 	AdapterConfig,
@@ -419,7 +419,7 @@ export const createAdapter =
 			data: Record<string, any> | null,
 			unsafe_model: string,
 			select: string[] = [],
-			joins?: any[],
+			joins?: Join[],
 		) => {
 			if (!data) return null;
 			const newMappedKeys = config.mapKeysTransformOutput ?? {};
@@ -752,7 +752,7 @@ export const createAdapter =
 				model: string;
 				where: Where[];
 				select?: string[];
-				joins?: import("../../types").Join[];
+				joins?: Join[];
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -806,7 +806,7 @@ export const createAdapter =
 				limit?: number;
 				sortBy?: { field: string; direction: "asc" | "desc" };
 				offset?: number;
-				joins?: import("../../types").Join[];
+				joins?: Join[];
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -923,7 +923,7 @@ export const createAdapter =
 			}: {
 				model: string;
 				where?: Where[];
-				joins?: import("../../types").Join[];
+				joins?: Join[];
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
