@@ -97,14 +97,17 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// Convert ID values to numbers when useNumberId is enabled
 					if (field === "id" && lazyOptions?.advanced?.database?.useNumberId) {
 						if (Array.isArray(value)) {
-							return value.map(v => Number(v));
+							return value.map((v) => Number(v));
 						}
 						return Number(value);
 					}
 					// Convert userId and other foreign key references to numbers when useNumberId is enabled
-					if ((field === "userId" || field.endsWith("Id")) && lazyOptions?.advanced?.database?.useNumberId) {
+					if (
+						(field === "userId" || field.endsWith("Id")) &&
+						lazyOptions?.advanced?.database?.useNumberId
+					) {
 						if (Array.isArray(value)) {
-							return value.map(v => Number(v));
+							return value.map((v) => Number(v));
 						}
 						return Number(value);
 					}
@@ -166,7 +169,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				const converted = { ...data };
 				for (const key in converted) {
 					// Convert foreign key IDs to numbers when useNumberId is enabled
-					if ((key === "userId" || key.endsWith("Id")) && converted[key] !== null && converted[key] !== undefined) {
+					if (
+						(key === "userId" || key.endsWith("Id")) &&
+						converted[key] !== null &&
+						converted[key] !== undefined
+					) {
 						converted[key] = Number(converted[key]);
 					}
 				}
