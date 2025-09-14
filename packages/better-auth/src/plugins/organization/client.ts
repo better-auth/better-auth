@@ -162,6 +162,32 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 					});
 					return isAuthorized;
 				},
+				setActive: async (data: { organizationId: string | null }) => {
+					const result = await $fetch("/organization/set-active", {
+						method: "POST",
+						body: data,
+					});
+					const sessionAtom = $store.atoms.session;
+					const currentSession = sessionAtom.get();
+					if (currentSession?.data) {
+						const updatedSession = {
+							...currentSession,
+							data: {
+								...currentSession.data,
+								session: {
+									...currentSession.data.session,
+									activeOrganizationId: data.organizationId,
+								},
+							},
+						};
+
+						sessionAtom.set(updatedSession);
+					}
+
+					$store.notify("$activeOrgSignal");
+
+					return result;
+				},
 			},
 		}),
 		getAtoms: ($fetch) => {
