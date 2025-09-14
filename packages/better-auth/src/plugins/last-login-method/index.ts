@@ -62,7 +62,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		? (ctx: GenericEndpointContext) => {
 				// Try user's custom method first
 				const customResult = userConfig.customResolveMethod!(ctx);
-				if (customResult !== null) {
+				if (!customResult) {
 					return customResult;
 				}
 				// Fall back to default method if custom returns null
