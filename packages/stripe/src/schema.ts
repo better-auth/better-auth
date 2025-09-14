@@ -65,6 +65,17 @@ export const user = {
 	},
 } satisfies AuthPluginSchema;
 
+export const organization = {
+	organization: {
+		fields: {
+			stripeCustomerId: {
+				type: "string",
+				required: false,
+			},
+		},
+	},
+} satisfies AuthPluginSchema;
+
 export const getSchema = (options: StripeOptions) => {
 	let baseSchema = {};
 
@@ -72,10 +83,12 @@ export const getSchema = (options: StripeOptions) => {
 		baseSchema = {
 			...subscriptions,
 			...user,
+      ...organization
 		};
 	} else {
 		baseSchema = {
 			...user,
+      ...organization
 		};
 	}
 

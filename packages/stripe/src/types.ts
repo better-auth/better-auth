@@ -6,6 +6,7 @@ import type {
 } from "better-auth";
 import type Stripe from "stripe";
 import type { subscriptions, user } from "./schema";
+import type { Organization } from "better-auth/plugins";
 
 export type StripePlan = {
 	/**
@@ -180,6 +181,12 @@ export interface StripeOptions {
 	 */
 	createCustomerOnSignUp?: boolean;
 	/**
+	 * Enable customer creation when a new organization is created
+	 * @description This will is especially useful for B2B platforms
+	 * where you want to create a customer for each organization/entity
+	 */
+	createOrganizationCustomer?: boolean;
+	/**
 	 * A callback to run after a customer has been created
 	 * @param customer - Customer Data
 	 * @param stripeCustomer - Stripe Customer Data
@@ -189,6 +196,7 @@ export interface StripeOptions {
 		data: {
 			stripeCustomer: Stripe.Customer;
 			user: User;
+      organization?: Organization; 
 		},
 		ctx: GenericEndpointContext,
 	) => Promise<void>;
@@ -300,6 +308,7 @@ export interface StripeOptions {
 				session: Session & Record<string, any>;
 				plan: StripePlan;
 				subscription: Subscription;
+				organization: (Organization & Record<string, any>) | null;
 			},
 			ctx: GenericEndpointContext,
 		) =>
