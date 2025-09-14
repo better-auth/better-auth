@@ -12,7 +12,7 @@ export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
 	{
 		method: "POST",
-		operationId: "signInSocial",
+		operationId: "socialSignIn",
 		body: z.object({
 			/**
 			 * Callback URL to redirect to after the user
@@ -151,7 +151,6 @@ export const signInSocial = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
-				operationId: "signInSocial",
 				description: "Sign in with a social provider",
 				operationId: "socialSignIn",
 				responses: {
@@ -178,47 +177,6 @@ export const signInSocial = createAuthEndpoint(
 										redirect: {
 											type: "boolean",
 											enum: [false],
-										},
-										token: {
-											type: "string",
-											description: "Session token",
-											url: {
-												type: "null",
-												nullable: true,
-											},
-											user: {
-												type: "object",
-												properties: {
-													id: { type: "string" },
-													email: { type: "string" },
-													name: {
-														type: "string",
-														nullable: true,
-													},
-													image: {
-														type: "string",
-														nullable: true,
-													},
-													emailVerified: {
-														type: "boolean",
-													},
-													createdAt: {
-														type: "string",
-														format: "date-time",
-													},
-													updatedAt: {
-														type: "string",
-														format: "date-time",
-													},
-												},
-												required: [
-													"id",
-													"email",
-													"emailVerified",
-													"createdAt",
-													"updatedAt",
-												],
-											},
 										},
 									},
 									required: ["redirect", "token", "user"],
@@ -418,12 +376,6 @@ export const signInEmail = createAuthEndpoint(
 										user: {
 											type: "object",
 											$ref: "#/components/schemas/User",
-										},
-										url: {
-											type: "string",
-										},
-										redirect: {
-											type: "boolean",
 										},
 									},
 									required: ["redirect", "token", "user"],
