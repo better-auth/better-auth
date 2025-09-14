@@ -53,13 +53,13 @@ export const callbackOAuth = createAuthEndpoint(
 		} = await parseState(c);
 
 		function redirectOnError(error: string, description?: string) {
-			const baseUrl = errorURL ?? defaultErrorURL;
+			const baseURL = errorURL ?? defaultErrorURL;
 
 			const params = new URLSearchParams({ error });
 			if (description) params.set("error_description", description);
 
-			const sep = baseUrl.includes("?") ? "&" : "?";
-			const url = `${baseUrl}${sep}${params.toString()}`;
+			const sep = baseURL.includes("?") ? "&" : "?";
+			const url = `${baseURL}${sep}${params.toString()}`;
 
 			throw c.redirect(url);
 		}
