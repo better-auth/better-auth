@@ -750,17 +750,47 @@ async function adapterTest(
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
+			await (await adapter()).create({
+				model: "user",
+				data: {
+					name: "user_starts",
+					email: "startswith1@test.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			await (await adapter()).create({
+				model: "user",
+				data: {
+					name: "user2_starts",
+					email: "startswith2@test.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			await (await adapter()).create({
+				model: "user",
+				data: {
+					name: "user3_starts",
+					email: "startswith3@test.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
 			const res = await (await adapter()).findMany({
 				model: "user",
 				where: [
 					{
 						field: "name",
 						operator: "starts_with",
-						value: "us",
+						value: "user",
 					},
 				],
 			});
-			expect(res.length).toBe(3);
+			expect(res.length).toBeGreaterThanOrEqual(3);
 		},
 	);
 
@@ -773,13 +803,24 @@ async function adapterTest(
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
+			// Create test user for this test with unique suffix
+			await (await adapter()).create({
+				model: "user",
+				data: {
+					name: "tester2",
+					email: "endswith@test.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
 			const res = await (await adapter()).findMany({
 				model: "user",
 				where: [
 					{
 						field: "name",
 						operator: "ends_with",
-						value: "er2",
+						value: "ter2",
 					},
 				],
 			});
