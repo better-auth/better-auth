@@ -43,16 +43,6 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const { code, error, state, error_description, device_id } = queryOrBody;
 
-		if (error) {
-			throw c.redirect(
-				`${defaultErrorURL}?error=${error}&error_description=${error_description}`,
-			);
-		}
-
-		if (!state) {
-			c.context.logger.error("State not found", error);
-			throw c.redirect(`${defaultErrorURL}?error=state_not_found`);
-		}
 		const {
 			codeVerifier,
 			callbackURL,
@@ -62,14 +52,25 @@ export const callbackOAuth = createAuthEndpoint(
 			requestSignUp,
 		} = await parseState(c);
 
-		function redirectOnError(error: string) {
-			let url = errorURL || defaultErrorURL;
-			if (url.includes("?")) {
-				url = `${url}&error=${error}`;
-			} else {
-				url = `${url}?error=${error}`;
-			}
+		function redirectOnError(error: string, description?: string) {
+			const baseUrl = errorURL ?? defaultErrorURL;
+
+			const params = new URLSearchParams({ error });
+			if (description) params.set("error_description", description);
+
+			const sep = baseUrl.includes("?") ? "&" : "?";
+			const url = `${baseUrl}${sep}${params.toString()}`;
+
 			throw c.redirect(url);
+		}
+
+		if (error) {
+			redirectOnError(error, error_description);
+		}
+
+		if (!state) {
+			c.context.logger.error("State not found", error);
+			redirectOnError("state_not_found");
 		}
 
 		if (!code) {
