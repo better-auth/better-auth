@@ -168,13 +168,6 @@ describe("dynamic access control", async (it) => {
 	} = await createUser({
 		role: "member",
 	});
-	const {
-		headers: normalHeaders2,
-		user: normalUser2,
-		member: normalMember2,
-	} = await createUser({
-		role: "member",
-	});
 
 	/**
 	 * The following test will:

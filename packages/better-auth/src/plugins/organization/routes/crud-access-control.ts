@@ -10,7 +10,6 @@ import {
 	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
-import { getOrgAdapter } from "../adapter";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
