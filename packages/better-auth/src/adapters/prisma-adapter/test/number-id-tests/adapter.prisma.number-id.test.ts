@@ -26,30 +26,28 @@ describe("Number Id Adapter Test", async () => {
 		await clearDb();
 	});
 
-	test("Number Id Adapter Test", async () => {
-		await runNumberIdAdapterTest({
-			getAdapter: async () => {
-				return adapter({
-					database: adapter,
-					user: {
-						fields: { email: "email_address" },
-						additionalFields: {
-							test: {
-								type: "string",
-								defaultValue: "test",
-							},
+	await runNumberIdAdapterTest({
+		getAdapter: async () => {
+			return adapter({
+				database: adapter,
+				user: {
+					fields: { email: "email_address" },
+					additionalFields: {
+						test: {
+							type: "string",
+							defaultValue: "test",
 						},
 					},
-					session: {
-						modelName: "sessions",
+				},
+				session: {
+					modelName: "sessions",
+				},
+				advanced: {
+					database: {
+						useNumberId: true,
 					},
-					advanced: {
-						database: {
-							useNumberId: true,
-						},
-					},
-				});
-			},
-		});
+				},
+			});
+		},
 	});
 });

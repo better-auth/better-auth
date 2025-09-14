@@ -84,13 +84,8 @@ async function adapterTest(
 		(await adapter())?.adapterTestDebugLogs?.printDebugLogs();
 	}
 
-	// Generate unique test identifier for this test run to avoid conflicts
-	const testRunId =
-		Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
-	const getUniqueEmail = (base: string) => `${testRunId}_${base}`;
-
 	//@ts-expect-error - intentionally omitting id
-	let user: {
+	const user: {
 		name: string;
 		email: string;
 		emailVerified: boolean;
@@ -99,7 +94,7 @@ async function adapterTest(
 		id: string;
 	} = {
 		name: "user",
-		email: getUniqueEmail("user@email.com"),
+		email: "user@email.com",
 		emailVerified: true,
 		createdAt: new Date(),
 		updatedAt: new Date(),
@@ -140,7 +135,7 @@ async function adapterTest(
 				model: "user",
 				data: {
 					name: "test-name-without-id",
-					email: getUniqueEmail("test-email-without-id@email.com"),
+					email: "test-email-without-id@email.com",
 				},
 			});
 			expect(res).toHaveProperty("id");
@@ -211,7 +206,7 @@ async function adapterTest(
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
-			const email = getUniqueEmail("test-email-with-modified-field@email.com");
+			const email = "test-email-with-modified-field@email.com";
 			const adapter = await getAdapter(
 				Object.assign(
 					{
@@ -279,7 +274,7 @@ async function adapterTest(
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
-			const newEmail = getUniqueEmail("updated@email.com");
+			const newEmail = "updated@email.com";
 
 			const res = await (await adapter()).update<User>({
 				model: "user",
@@ -327,7 +322,7 @@ async function adapterTest(
 				model: "user",
 				data: {
 					name: "user2",
-					email: getUniqueEmail("test@email.com"),
+					email: "test@email.com",
 					emailVerified: true,
 					createdAt: new Date(),
 					updatedAt: new Date(),
@@ -359,7 +354,7 @@ async function adapterTest(
 				model: "user",
 				data: {
 					name: "user",
-					email: getUniqueEmail("test-email2@email.com"),
+					email: "test-email2@email.com",
 					emailVerified: true,
 					createdAt: new Date(),
 					updatedAt: new Date(),
@@ -393,7 +388,7 @@ async function adapterTest(
 				model: "user",
 				data: {
 					name: "user",
-					email: getUniqueEmail("test-email3@email.com"),
+					email: "test-email3email.com",
 					emailVerified: true,
 					createdAt: new Date(),
 					updatedAt: new Date(),
@@ -441,7 +436,7 @@ async function adapterTest(
 				model: "user",
 				data: {
 					name: "user",
-					email: getUniqueEmail("my-email@email.com"),
+					email: "my-email@email.com",
 					emailVerified: true,
 					createdAt: new Date(),
 					updatedAt: new Date(),
@@ -498,7 +493,7 @@ async function adapterTest(
 				model: "user",
 				data: {
 					name: "a",
-					email: getUniqueEmail("a@email.com"),
+					email: "a@email.com",
 					emailVerified: true,
 					createdAt: new Date(),
 					updatedAt: new Date(),
@@ -568,8 +563,6 @@ async function adapterTest(
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
-			// Note: user's email was already updated in the previous test
-			const currentEmail = getUniqueEmail("updated@email.com");
 			await (await adapter()).updateMany({
 				model: "user",
 				where: [
@@ -579,11 +572,11 @@ async function adapterTest(
 					},
 					{
 						field: "email",
-						value: currentEmail,
+						value: user.email,
 					},
 				],
 				update: {
-					email: getUniqueEmail("updated2@email.com"),
+					email: "updated@email.com",
 				},
 			});
 			const updatedUser = await (await adapter()).findOne<User>({
@@ -591,13 +584,13 @@ async function adapterTest(
 				where: [
 					{
 						field: "email",
-						value: getUniqueEmail("updated2@email.com"),
+						value: "updated@email.com",
 					},
 				],
 			});
 			expect(updatedUser).toMatchObject({
 				name: user.name,
-				email: getUniqueEmail("updated2@email.com"),
+				email: "updated@email.com",
 			});
 		},
 	);
@@ -643,7 +636,7 @@ async function adapterTest(
 					model: "user",
 					data: {
 						name: "to-be-deleted",
-						email: getUniqueEmail(`email@test-${i}.com`),
+						email: `email@test-${i}.com`,
 						emailVerified: true,
 						createdAt: new Date(),
 						updatedAt: new Date(),
@@ -757,47 +750,17 @@ async function adapterTest(
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
-			await (await adapter()).create({
-				model: "user",
-				data: {
-					name: "user_starts",
-					email: getUniqueEmail("startswith1@test.com"),
-					emailVerified: true,
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				},
-			});
-			await (await adapter()).create({
-				model: "user",
-				data: {
-					name: "user2_starts",
-					email: getUniqueEmail("startswith2@test.com"),
-					emailVerified: true,
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				},
-			});
-			await (await adapter()).create({
-				model: "user",
-				data: {
-					name: "user3_starts",
-					email: getUniqueEmail("startswith3@test.com"),
-					emailVerified: true,
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				},
-			});
 			const res = await (await adapter()).findMany({
 				model: "user",
 				where: [
 					{
 						field: "name",
 						operator: "starts_with",
-						value: "user",
+						value: "us",
 					},
 				],
 			});
-			expect(res.length).toBeGreaterThanOrEqual(3);
+			expect(res.length).toBe(3);
 		},
 	);
 
@@ -810,24 +773,13 @@ async function adapterTest(
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
-			// Create test user for this test with unique suffix
-			await (await adapter()).create({
-				model: "user",
-				data: {
-					name: "tester2",
-					email: getUniqueEmail("endswith@test.com"),
-					emailVerified: true,
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				},
-			});
 			const res = await (await adapter()).findMany({
 				model: "user",
 				where: [
 					{
 						field: "name",
 						operator: "ends_with",
-						value: "ter2",
+						value: "er2",
 					},
 				],
 			});
@@ -861,7 +813,7 @@ async function adapterTest(
 				model: "user",
 				data: {
 					name: "user4",
-					email: getUniqueEmail("user4@email.com"),
+					email: "user4@email.com",
 					emailVerified: true,
 					createdAt: new Date(),
 					updatedAt: new Date(),
@@ -882,14 +834,14 @@ async function adapterTest(
 			const customAdapter = await adapter();
 			const user5 = {
 				name: "user5",
-				email: getUniqueEmail("user5@email.com"),
+				email: "user5@email.com",
 				emailVerified: true,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 			};
 			const user6 = {
 				name: "user6",
-				email: getUniqueEmail("user6@email.com"),
+				email: "user6@email.com",
 				emailVerified: true,
 				createdAt: new Date(),
 				updatedAt: new Date(),
@@ -935,7 +887,7 @@ async function adapterTest(
 					model: "user",
 					data: {
 						name: "user6",
-						email: getUniqueEmail("user6@email.com"),
+						email: "user6@email.com",
 						emailVerified: true,
 						createdAt: new Date(),
 						updatedAt: new Date(),
@@ -945,7 +897,7 @@ async function adapterTest(
 				return createdUser.email;
 			});
 
-			expect(result).toEqual(getUniqueEmail("user6@email.com"));
+			expect(result).toEqual("user6@email.com");
 		},
 	);
 
@@ -963,7 +915,7 @@ async function adapterTest(
 				model: "user",
 				data: {
 					name: "connector-user1",
-					email: getUniqueEmail("connector-user1@email.com"),
+					email: "connector-user1@email.com",
 					emailVerified: true,
 					createdAt: new Date(),
 					updatedAt: new Date(),
@@ -973,7 +925,7 @@ async function adapterTest(
 				model: "user",
 				data: {
 					name: "con-user2",
-					email: getUniqueEmail("connector-user2@email.com"),
+					email: "connector-user2@email.com",
 					emailVerified: true,
 					createdAt: new Date(),
 					updatedAt: new Date(),
@@ -990,7 +942,7 @@ async function adapterTest(
 					},
 					{
 						field: "email",
-						value: getUniqueEmail("connector-user2@email.com"),
+						value: "connector-user2@email.com",
 						connector: "AND",
 					},
 				],
@@ -1024,12 +976,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 
 export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 	const cleanup: { modelName: string; id: string }[] = [];
-
-	// Generate unique test identifier for this test run to avoid conflicts
-	const testRunId =
-		Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-	const getUniqueEmail = (base: string) => `${testRunId}_${base}`;
-
 	const adapter = async () =>
 		await opts.getAdapter({
 			advanced: {
@@ -1063,7 +1009,7 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 					model: "user",
 					data: {
 						name: "user",
-						email: getUniqueEmail("number-user@email.com"),
+						email: "user@email.com",
 					},
 				});
 				cleanup.push({ modelName: "user", id: res.id });
@@ -1086,7 +1032,7 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 					model: "user",
 					data: {
 						name: "user2",
-						email: getUniqueEmail("number-user2@email.com"),
+						email: "user2@email.com",
 					},
 				});
 				cleanup.push({ modelName: "user", id: res.id });
