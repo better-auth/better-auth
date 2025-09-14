@@ -518,6 +518,12 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 						operator: "eq",
 						connector: "AND",
 					},
+					{
+						field: "userId",
+						value: user.id,
+						operator: "eq",
+						connector: "AND",
+					},
 				],
 			});
 			if (!member) {
@@ -640,6 +646,12 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					{
 						field: "organizationId",
 						value: organizationId,
+						operator: "eq",
+						connector: "AND",
+					},
+					{
+						field: "userId",
+						value: user.id,
 						operator: "eq",
 						connector: "AND",
 					},
