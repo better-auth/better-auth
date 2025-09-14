@@ -210,7 +210,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.model(modelName)
 						.field(
 							`${referencedCustomModelName.toLowerCase()}`,
-							capitalizeFirstLetter(referencedCustomModelName),
+							`${capitalizeFirstLetter(referencedCustomModelName)}${
+								!attr.required ? "?" : ""
+							}`,
 						)
 						.attribute(
 							`relation(fields: [${fieldName}], references: [${attr.references.field}], onDelete: ${action})`,
