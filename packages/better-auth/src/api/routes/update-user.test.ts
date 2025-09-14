@@ -5,6 +5,7 @@ import type { Account } from "../../types";
 describe("updateUser", async () => {
 	const sendChangeEmail = vi.fn();
 	let emailVerificationToken = "";
+	let emailChangeToken = "";
 	const { client, testUser, sessionSetter, db, customFetchImpl } =
 		await getTestInstance({
 			emailVerification: {
@@ -21,6 +22,7 @@ describe("updateUser", async () => {
 						url,
 						token,
 					}) => {
+						emailChangeToken = token;
 						sendChangeEmail(user, newEmail, url, token);
 					},
 				},
@@ -138,6 +140,93 @@ describe("updateUser", async () => {
 			expect.any(String),
 			expect.any(String),
 		);
+	});
+
+	it("should change the email of a verified user and require verification", async () => {
+		const verifiedUserEmail = "verified-user@test.com";
+		const newEmail = "new-verified-email@test.com";
+		const verifiedUserHeaders = new Headers();
+		const { client: verifiedClient, db: verifiedDb } = await getTestInstance({
+			emailVerification: {
+				async sendVerificationEmail({ token }) {
+					emailVerificationToken = token;
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+					async sendChangeEmailVerification({ token }) {
+						emailChangeToken = token;
+					},
+				},
+			},
+		});
+
+		await verifiedClient.signUp.email({
+			email: verifiedUserEmail,
+			password: "password123",
+			name: "Verified User",
+			fetchOptions: {
+				onSuccess: sessionSetter(verifiedUserHeaders),
+			},
+		});
+
+		await verifiedDb.update({
+			model: "user",
+			update: {
+				emailVerified: true,
+			},
+			where: [{ field: "email", value: verifiedUserEmail }],
+		});
+
+		await verifiedClient.changeEmail({
+			newEmail,
+			fetchOptions: {
+				headers: verifiedUserHeaders,
+			},
+		});
+
+		expect(emailChangeToken).not.toBe("");
+
+		let session = await verifiedClient.getSession({
+			fetchOptions: { headers: verifiedUserHeaders, throw: true },
+		});
+		expect(session).toBeDefined();
+		expect(session!.user.email).toBe(verifiedUserEmail);
+
+		const verifyResponse = await verifiedClient.verifyEmail({
+			query: {
+				token: emailChangeToken,
+			},
+			fetchOptions: {
+				headers: verifiedUserHeaders,
+			},
+		});
+
+		session = await verifiedClient.getSession({
+			fetchOptions: { headers: verifiedUserHeaders, throw: true },
+		});
+		expect(session).toBeDefined();
+		expect(session!.user.email).toBe(newEmail);
+		expect(session!.user.emailVerified).toBe(false);
+
+		expect(emailVerificationToken).not.toBe("");
+		expect(emailVerificationToken).not.toBe(emailChangeToken);
+
+		await verifiedClient.verifyEmail({
+			query: {
+				token: emailVerificationToken,
+			},
+			fetchOptions: {
+				headers: verifiedUserHeaders,
+			},
+		});
+
+		session = await verifiedClient.getSession({
+			fetchOptions: { headers: verifiedUserHeaders, throw: true },
+		});
+		expect(session).toBeDefined();
+		expect(session!.user.emailVerified).toBe(true);
 	});
 
 	it("should update the user's password", async () => {
