@@ -1,0 +1,20 @@
+{
+  "name": "build-better-call",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "catalog:nextjs",
+    "react": "catalog:nextjs",
+    "react-dom": "catalog:nextjs"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:nextjs",
+    "@types/react-dom": "catalog:nextjs"
+  }
+}
