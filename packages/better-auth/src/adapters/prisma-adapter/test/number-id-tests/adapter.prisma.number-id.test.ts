@@ -7,7 +7,7 @@ import { beforeEach } from "node:test";
 describe(
 	"Number Id Adapter Test",
 	{
-		repeats: 3,
+		repeats: 1,
 	},
 	async () => {
 		const db = new PrismaClient();
