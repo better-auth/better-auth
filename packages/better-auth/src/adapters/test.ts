@@ -1005,38 +1005,31 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 				onTestFailed(async () => {
 					await printDebugLogs();
 				});
-				const res = await (await adapter()).create({
-					model: "user",
-					data: {
-						name: "user",
-						email: "user@email.com",
-					},
-				});
-				cleanup.push({ modelName: "user", id: res.id });
-				expect(typeof res.id).toBe("string"); // we forcefully return all `id`s as strings. this is intentional.
-				expect(parseInt(res.id)).toBeGreaterThan(0);
-				idNumber = parseInt(res.id);
-			},
-		);
-		test.skipIf(opts.disableTests?.SHOULD_INCREMENT_THE_ID_BY_1)(
-			`${opts.testPrefix ? `${opts.testPrefix} - ` : ""}${
-				numberIdAdapterTests.SHOULD_INCREMENT_THE_ID_BY_1
-			}`,
-			async ({ onTestFailed }) => {
-				await resetDebugLogs();
-				onTestFailed(async () => {
-					console.log(`ID number from last create: ${idNumber}`);
-					await printDebugLogs();
-				});
-				const res = await (await adapter()).create({
-					model: "user",
-					data: {
-						name: "user2",
-						email: "user2@email.com",
-					},
-				});
-				cleanup.push({ modelName: "user", id: res.id });
-				expect(parseInt(res.id)).toBe(idNumber + 1);
+				{
+					const res = await (await adapter()).create({
+						model: 'user',
+						data: {
+							name: 'user',
+							email: 'user@email.com'
+						}
+					})
+					cleanup.push({ modelName: 'user', id: res.id })
+					expect(typeof res.id).toBe('string') // we forcefully return all `id`s as strings. this is intentional.
+					expect(parseInt(res.id)).toBeGreaterThan(0)
+					idNumber = parseInt(res.id)
+				}
+
+				{
+					const res = await (await adapter()).create({
+						model: 'user',
+						data: {
+							name: 'user2',
+							email: 'user2@email.com'
+						}
+					})
+					cleanup.push({ modelName: 'user', id: res.id })
+					expect(parseInt(res.id)).toBe(idNumber + 1)
+				}
 			},
 		);
 	});

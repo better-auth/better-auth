@@ -1,8 +1,7 @@
-import { describe, test } from "vitest";
+import { describe, beforeAll } from "vitest";
 import { runNumberIdAdapterTest } from "../../../test";
 import { prismaAdapter } from "../../prisma-adapter";
 import { PrismaClient } from "@prisma/client";
-import { beforeEach } from "vitest";
 
 describe("Number Id Adapter Test", async () => {
 	const db = new PrismaClient();
@@ -22,7 +21,7 @@ describe("Number Id Adapter Test", async () => {
 		provider: "sqlite",
 	});
 
-	beforeEach(async () => {
+	beforeAll(async () => {
 		await clearDb();
 	});
 
