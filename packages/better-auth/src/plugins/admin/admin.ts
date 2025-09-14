@@ -1556,7 +1556,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					if (!session && (ctx.request || ctx.headers)) {
 						throw new APIError("UNAUTHORIZED");
 					}
-					if (!session && (!ctx.body.userId || !ctx.body.role)) {
+					if (!session && (!ctx.body.userId && !ctx.body.role)) {
 						throw new APIError("BAD_REQUEST", {
 							message: "user id or role is required",
 						});
