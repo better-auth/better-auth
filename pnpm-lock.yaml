@@ -10,8 +10,8 @@ catalogs:
       specifier: ^1.1.18
       version: 1.1.18
     better-call:
-      specifier: 1.0.18
-      version: 1.0.18
+      specifier: 1.0.19
+      version: 1.0.19
     typescript:
       specifier: ^5.9.2
       version: 5.9.2
@@ -180,7 +180,7 @@ importers:
         version: link:../../packages/better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.18
+        version: 1.0.19
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.2.0
@@ -649,7 +649,7 @@ importers:
         version: 13.1.2
       better-call:
         specifier: 'catalog:'
-        version: 1.0.18
+        version: 1.0.19
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -923,7 +923,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.18
+        version: 1.0.19
       body-parser:
         specifier: ^2.2.0
         version: 2.2.0
@@ -945,7 +945,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.18
+        version: 1.0.19
       stripe:
         specifier: ^18.5.0
         version: 18.5.0(@types/node@24.3.1)
@@ -5808,8 +5808,8 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  better-call@1.0.18:
-    resolution: {integrity: sha512-Ojyck3P3fs/egBmCW50tvfbCJorNV5KphfPOKrkCxPfOr8Brth1ruDtAJuhHVHEUiWrXv+vpEgWQk7m7FzhbbQ==}
+  better-call@1.0.19:
+    resolution: {integrity: sha512-sI3GcA1SCVa3H+CDHl8W8qzhlrckwXOTKhqq3OOPXjgn5aTOMIqGY34zLY/pHA6tRRMjTUC3lz5Mi7EbDA24Kw==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -17842,8 +17842,9 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  better-call@1.0.18:
+  better-call@1.0.19:
     dependencies:
+      '@better-auth/utils': 0.3.0
       '@better-fetch/fetch': 1.1.18
       rou3: 0.5.1
       set-cookie-parser: 2.7.1
