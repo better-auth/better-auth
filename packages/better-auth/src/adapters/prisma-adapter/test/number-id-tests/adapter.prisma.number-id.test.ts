@@ -1,55 +1,62 @@
-import { beforeAll, describe } from "vitest";
+import { describe, test } from "vitest";
 import { runNumberIdAdapterTest } from "../../../test";
-import { pushPrismaSchema } from "../push-schema";
-import { createTestOptions } from "../test-options";
-import * as fs from "fs";
-import { getState, stateFilePath } from "../state";
+import { prismaAdapter } from "../../prisma-adapter";
+import { PrismaClient } from "@prisma/client";
+import { beforeEach } from "node:test";
 
-describe("Number Id Adapter Test", async () => {
-	beforeAll(async () => {
-		await new Promise(async (resolve) => {
-			await new Promise((r) => setTimeout(r, 500));
-			if (getState() === "IDLE") {
-				resolve(true);
-				return;
-			}
-			console.log(`Waiting for state to be IDLE...`);
-			fs.watch(stateFilePath, () => {
-				if (getState() === "IDLE") {
-					resolve(true);
-					return;
-				}
+describe(
+	"Number Id Adapter Test",
+	{
+		repeats: 3,
+	},
+	async () => {
+		const db = new PrismaClient();
+		async function clearDb() {
+			await db.sessions.deleteMany();
+			await db.user.deleteMany();
+			try {
+				await db.$executeRaw`DELETE FROM sqlite_sequence WHERE name = 'User'`;
+			} catch {}
+			try {
+				await db.$executeRaw`DELETE FROM sqlite_sequence WHERE name = 'Sessions'`;
+			} catch {}
+		}
+		const adapter = prismaAdapter(db, {
+			provider: "sqlite",
+			debugLogs: {
+				isRunningAdapterTests: true,
+			},
+		});
+
+		beforeEach(async () => {
+			await clearDb();
+		});
+
+		test("Number Id Adapter Test", async () => {
+			await runNumberIdAdapterTest({
+				getAdapter: async () => {
+					return adapter({
+						database: adapter,
+						user: {
+							fields: { email: "email_address" },
+							additionalFields: {
+								test: {
+									type: "string",
+									defaultValue: "test",
+								},
+							},
+						},
+						session: {
+							modelName: "sessions",
+						},
+						advanced: {
+							database: {
+								useNumberId: true,
+							},
+						},
+					});
+				},
 			});
 		});
-		console.log(`Now running Number ID Prisma adapter test...`);
-		await pushPrismaSchema("number-id");
-		console.log(`Successfully pushed number id Prisma Schema using pnpm...`);
-		const { getAdapter } = await import("./get-adapter");
-		const { clearDb } = getAdapter();
-		await clearDb();
-	}, Number.POSITIVE_INFINITY);
-
-	await runNumberIdAdapterTest({
-		getAdapter: async (customOptions = {}) => {
-			const { getAdapter } = await import("./get-adapter");
-			const { adapter } = getAdapter();
-			const { advanced, database, session, user } = createTestOptions(adapter);
-			return adapter({
-				...customOptions,
-				user: {
-					...user,
-					...customOptions.user,
-				},
-				session: {
-					...session,
-					...customOptions.session,
-				},
-				advanced: {
-					...advanced,
-					...customOptions.advanced,
-				},
-				database,
-			});
-		},
-	});
-});
+	},
+);
