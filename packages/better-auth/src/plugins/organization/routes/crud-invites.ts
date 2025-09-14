@@ -765,8 +765,8 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			openapi: {
-				operationId: "getOrganizationInvitation",
-				description: "Get an invitation by ID",
+				operationId: "cancelOrganizationInvitation",
+				description: "Cancel an invitation to an organization",
 				responses: {
 					"200": {
 						description: "Success",

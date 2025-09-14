@@ -475,7 +475,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "POST",
 					operationId: "oauth2Token",
-					body: z.record(z.any()),
+					body: z.record(z.any(), z.any()),
 					metadata: {
 						isAction: false,
 					},

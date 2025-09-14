@@ -50,31 +50,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		{
 			method: "GET",
 			operationId: "getSession",
-			query: z.optional(
-				z.object({
-					/**
-					 * If cookie cache is enabled, it will disable the cache
-					 * and fetch the session from the database
-					 */
-					disableCookieCache: z
-						.optional(
-							z
-								.boolean({
-									description:
-										"Disable cookie cache and fetch session from database",
-								})
-								.or(z.string().transform((v) => v === "true")),
-						)
-						.optional(),
-					disableRefresh: z
-						.boolean({
-							description:
-								"Disable session refresh. Useful for checking session status, without updating the session",
-						})
-						.or(z.string().transform((v) => v === "true"))
-						.optional(),
-				}),
-			),
+			query: getSessionQuerySchema,
 			requireHeaders: true,
 			metadata: {
 				openapi: {

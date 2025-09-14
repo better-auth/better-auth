@@ -446,7 +446,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				},
 				openapi: {
 					operationId: "updateOrganizationMemberRole",
-					description: "Update a member's role in an organization",
+					description: "Update the role of a member in an organization",
 					responses: {
 						"200": {
 							description: "Success",

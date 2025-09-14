@@ -152,54 +152,54 @@ export const emailOTP = (options: EmailOTPOptions) => {
 
 		return otp === storedOtp;
 	}
-	const endpoints = {
-		/**
-		 * ### Endpoint
-		 *
-		 * POST `/email-otp/send-verification-otp`
-		 *
-		 * ### API Methods
-		 *
-		 * **server:**
-		 * `auth.api.sendVerificationOTP`
-		 *
-		 * **client:**
-		 * `authClient.emailOtp.sendVerificationOtp`
-		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-send-verification-otp)
-		 */
-		sendVerificationOTP: createAuthEndpoint(
-			"/email-otp/send-verification-otp",
-			{
-				method: "POST",
-				body: z.object({
-					email: z.string({}).meta({
-						description: "Email address to send the OTP",
-					}),
-					metadata: {
-						openapi: {
-							operationId: "sendEmailVerificationOTP",
-							description: "Send a verification OTP to an email",
-							responses: {
-								200: {
-									description: "Success",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													success: {
-														type: "boolean",
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+  const endpoints = {
+    /**
+     * ### Endpoint
+     *
+     * POST `/email-otp/send-verification-otp`
+     *
+     * ### API Methods
+     *
+     * **server:**
+     * `auth.api.sendVerificationOTP`
+     *
+     * **client:**
+     * `authClient.emailOtp.sendVerificationOtp`
+     *
+     * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-send-verification-otp)
+     */
+    sendVerificationOTP: createAuthEndpoint(
+      "/email-otp/send-verification-otp",
+      {
+        method: "POST",
+        body: z.object({
+          email: z.string({}).meta({
+            description: "Email address to send the OTP",
+          }),
+          metadata: {
+            openapi: {
+              operationId: "sendEmailVerificationOTP",
+              description: "Send a verification OTP to an email",
+              responses: {
+                200: {
+                  description: "Success",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        type: "object",
+                        properties: {
+                          success: {
+                            type: "boolean",
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }),
 			},
 			async (ctx) => {
 				if (!options?.sendVerificationOTP) {

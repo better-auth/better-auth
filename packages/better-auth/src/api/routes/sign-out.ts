@@ -7,7 +7,7 @@ export const signOut = createAuthEndpoint(
 	"/sign-out",
 	{
 		method: "POST",
-		operationId: "signOutCurrentUser",
+		operationId: "signOut",
 		requireHeaders: true,
 		metadata: {
 			openapi: {
