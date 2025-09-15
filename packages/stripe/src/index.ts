@@ -1164,10 +1164,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					cloneRequest: true,
 				},
 				async (ctx) => {
-					if (!ctx.body || !ctx.request) {
+					if (!ctx.request?.body) {
 						throw new APIError("INTERNAL_SERVER_ERROR");
 					}
-					const buf = ctx.body;
+					const buf = await ctx.request.text();
 					const sig = ctx.request.headers.get("stripe-signature") as string;
 					const webhookSecret = options.stripeWebhookSecret;
 					if (!webhookSecret) {
