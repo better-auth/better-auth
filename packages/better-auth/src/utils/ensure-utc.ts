@@ -9,9 +9,5 @@ export function ensureUTC(date: Date): Date {
 		date.getMilliseconds(),
 	);
 
-	if (utcTimestamp === date.getTime()) {
-		return date;
-	}
-
 	return new Date(utcTimestamp);
 }
