@@ -14,7 +14,6 @@ import type {
 	CleanedWhere,
 } from "./types";
 import type { FieldAttribute } from "../../db";
-import { ensureUTC } from "../../utils/ensure-utc";
 export * from "./types";
 
 let debugLogs: any[] = [];
