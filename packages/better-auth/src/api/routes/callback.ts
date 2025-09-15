@@ -43,6 +43,13 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const { code, error, state, error_description, device_id } = queryOrBody;
 
+		if (!state) {
+			c.context.logger.error("State not found", error);
+			const sep = defaultErrorURL.includes("?") ? "&" : "?";
+			const url = `${defaultErrorURL}${sep}state=state_not_found`;
+			throw c.redirect(url);
+		}
+
 		const {
 			codeVerifier,
 			callbackURL,
@@ -66,11 +73,6 @@ export const callbackOAuth = createAuthEndpoint(
 
 		if (error) {
 			redirectOnError(error, error_description);
-		}
-
-		if (!state) {
-			c.context.logger.error("State not found", error);
-			redirectOnError("state_not_found");
 		}
 
 		if (!code) {
