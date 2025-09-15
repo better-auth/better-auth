@@ -15,6 +15,7 @@ export const ORGANIZATION_ERROR_CODES = {
 	USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION:
 		"User is already a member of this organization",
 	MEMBER_NOT_FOUND: "Member not found",
+	NOT_A_MEMBER_OF_THIS_ORGANIZATION: "Not a member of this organization",
 	ROLE_NOT_FOUND: "Role not found",
 	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_TEAM:
 		"You are not allowed to create a new team",
@@ -71,4 +72,5 @@ export const ORGANIZATION_ERROR_CODES = {
 		"You are not allowed to access this organization as an owner",
 	YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION:
 		"You are not a member of this organization",
+	INVITATION_EXPIRED: "Invitation expired",
 } as const;
