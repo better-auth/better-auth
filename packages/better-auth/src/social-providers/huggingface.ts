@@ -36,7 +36,9 @@ export interface HuggingFaceProfile {
 }
 
 export interface HuggingFaceOptions
-	extends ProviderOptions<HuggingFaceProfile> {}
+	extends ProviderOptions<HuggingFaceProfile> {
+	clientId: string;
+}
 
 export const huggingface = (options: HuggingFaceOptions) => {
 	return {

@@ -331,9 +331,15 @@ async function getBetterAuthInfo(
 				shouldThrowOnError: false,
 			});
 			const packageInfo = await getPackageInfo();
+			const betterAuthVersion =
+				packageInfo.dependencies?.["better-auth"] ||
+				packageInfo.devDependencies?.["better-auth"] ||
+				packageInfo.peerDependencies?.["better-auth"] ||
+				packageInfo.optionalDependencies?.["better-auth"] ||
+				"Unknown";
 
 			return {
-				version: packageInfo.version || "Unknown",
+				version: betterAuthVersion,
 				config: sanitizeBetterAuthConfig(config),
 			};
 		} finally {

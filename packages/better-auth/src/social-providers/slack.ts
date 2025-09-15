@@ -33,7 +33,9 @@ export interface SlackProfile extends Record<string, any> {
 	"https://slack.com/team_image_default": boolean;
 }
 
-export interface SlackOptions extends ProviderOptions<SlackProfile> {}
+export interface SlackOptions extends ProviderOptions<SlackProfile> {
+	clientId: string;
+}
 
 export const slack = (options: SlackOptions) => {
 	return {

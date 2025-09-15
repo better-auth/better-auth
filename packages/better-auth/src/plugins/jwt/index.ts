@@ -10,7 +10,7 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import { mergeSchema } from "../../db/schema";
-import z from "zod";
+import * as z from "zod";
 import { BetterAuthError } from "../../error";
 import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";

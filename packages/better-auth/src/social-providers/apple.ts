@@ -69,6 +69,7 @@ export interface AppleNonConformUser {
 }
 
 export interface AppleOptions extends ProviderOptions<AppleProfile> {
+	clientId: string;
 	appBundleIdentifier?: string;
 	audience?: string | string[];
 }

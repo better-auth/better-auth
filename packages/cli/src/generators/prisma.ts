@@ -84,6 +84,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				if (type === "date") {
 					return isOptional ? "DateTime?" : "DateTime";
 				}
+				if (type === "json") {
+					return isOptional ? "Json?" : "Json";
+				}
 				if (type === "string[]") {
 					return isOptional ? "String[]" : "String[]";
 				}
@@ -106,11 +109,13 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.attribute(`map("_id")`);
 				} else {
 					if (options.advanced?.database?.useNumberId) {
-						builder
+						const col = builder
 							.model(modelName)
 							.field("id", "Int")
-							.attribute("id")
-							.attribute("default(autoincrement())");
+							.attribute("id");
+						if (provider !== "sqlite") {
+							col.attribute("default(autoincrement())");
+						}
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
 					}
@@ -205,7 +210,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.model(modelName)
 						.field(
 							`${referencedCustomModelName.toLowerCase()}`,
-							capitalizeFirstLetter(referencedCustomModelName),
+							`${capitalizeFirstLetter(referencedCustomModelName)}${
+								!attr.required ? "?" : ""
+							}`,
 						)
 						.attribute(
 							`relation(fields: [${fieldName}], references: [${attr.references.field}], onDelete: ${action})`,

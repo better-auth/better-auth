@@ -74,6 +74,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				| "number"
 				| "boolean"
 				| "date"
+				| "json"
 				| `${"string" | "number"}[]`;
 			const typeMap: Record<
 				typeof type,
@@ -121,6 +122,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					pg: `text('${name}').array()`,
 					mysql: `text('${name}').array()`,
 				},
+				json: {
+					sqlite: `text('${name}')`,
+					pg: `jsonb('${name}')`,
+					mysql: `json('${name}')`,
+				},
 			} as const;
 			return typeMap[type][databaseType];
 		}
@@ -130,6 +136,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		if (options.advanced?.database?.useNumberId) {
 			if (databaseType === "pg") {
 				id = `serial("id").primaryKey()`;
+			} else if (databaseType === "sqlite") {
+				id = `int("id").primaryKey()`;
 			} else {
 				id = `int("id").autoincrement().primaryKey()`;
 			}
@@ -217,9 +225,16 @@ function generateImport({
 }) {
 	let imports: string[] = [];
 
-	const hasBigint = Object.values(tables).some((table) =>
-		Object.values(table.fields).some((field) => field.bigint),
-	);
+	let hasBigint = false;
+	let hasJson = false;
+
+	for (const table of Object.values(tables)) {
+		for (const field of Object.values(table.fields)) {
+			if (field.bigint) hasBigint = true;
+			if (field.type === "json") hasJson = true;
+		}
+		if (hasJson && hasBigint) break;
+	}
 
 	const useNumberId = options.advanced?.database?.useNumberId;
 
@@ -271,6 +286,13 @@ function generateImport({
 		imports.push("integer");
 	}
 	imports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
+
+	//handle json last on the import order
+	if (hasJson) {
+		if (databaseType === "pg") imports.push("jsonb");
+		if (databaseType === "mysql") imports.push("json");
+		// sqlite uses text for JSON, so there's no need to handle this case
+	}
 
 	return `import { ${imports
 		.map((x) => x.trim())

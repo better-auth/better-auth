@@ -22,7 +22,9 @@ export interface LinearProfile {
 	};
 }
 
-export interface LinearOptions extends ProviderOptions<LinearUser> {}
+export interface LinearOptions extends ProviderOptions<LinearUser> {
+	clientId: string;
+}
 
 export const linear = (options: LinearOptions) => {
 	const tokenEndpoint = "https://api.linear.app/oauth/token";

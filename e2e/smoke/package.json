@@ -5,7 +5,7 @@
     "better-auth": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^24.3.0"
+    "@types/node": "^24.3.1"
   },
   "scripts": {
     "e2e:smoke": "node --test ./test/*.spec.ts"

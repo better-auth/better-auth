@@ -71,6 +71,13 @@ export type Adapter = {
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
+	 * Execute multiple operations in a transaction.
+	 * If the adapter doesn't support transactions, operations will be executed sequentially.
+	 */
+	transaction: <R>(
+		callback: (tx: Omit<Adapter, "transaction">) => Promise<R>,
+	) => Promise<R>;
+	/**
 	 *
 	 * @param options
 	 * @param file - file path if provided by the user
@@ -83,6 +90,8 @@ export type Adapter = {
 		adapterConfig: AdapterConfig;
 	} & CustomAdapter["options"];
 };
+
+export type TransactionAdapter = Omit<Adapter, "transaction">;
 
 export type AdapterSchemaCreation = {
 	/**
