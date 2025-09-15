@@ -79,6 +79,7 @@ function getTypeFromZodType(zodType: z.ZodType<any>) {
 function getFieldSchema(field: FieldAttribute) {
 	const schema: any = {
 		type: field.type === "date" ? "string" : field.type,
+		...(field.type === "date" ? { format: "date-time" } : {}),
 	};
 
 	if (field.defaultValue !== undefined) {
