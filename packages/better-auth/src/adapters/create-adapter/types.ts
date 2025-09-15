@@ -3,6 +3,7 @@ import type { BetterAuthDbSchema } from "../../db/get-tables";
 import type {
 	AdapterSchemaCreation,
 	BetterAuthOptions,
+	TransactionAdapter,
 	Where,
 } from "../../types";
 import type { Prettify } from "../../types/helper";
@@ -31,6 +32,11 @@ export type AdapterDebugLogs =
 			 */
 			isRunningAdapterTests: boolean;
 	  };
+
+export type CreateAdapterOptions = {
+	config: AdapterConfig;
+	adapter: CreateCustomAdapter;
+};
 
 export interface AdapterConfig {
 	/**
@@ -89,6 +95,15 @@ export interface AdapterConfig {
 	 * @default true
 	 */
 	supportsBooleans?: boolean;
+	/**
+	 * Execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
+	 *
+	 */
+	transaction?:
+		| false
+		| (<R>(callback: (trx: TransactionAdapter) => Promise<R>) => Promise<R>);
 	/**
 	 * Disable id generation for the `create` method.
 	 *
