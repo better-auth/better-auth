@@ -64,6 +64,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 	const $listOrg = atom<boolean>(false);
 	const $activeOrgSignal = atom<boolean>(false);
 	const $activeMemberSignal = atom<boolean>(false);
+	const $activeMemberRoleSignal = atom<boolean>(false);
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = CO["ac"] extends AccessControl<infer S>
@@ -204,17 +205,29 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				},
 			);
 
+			const activeMemberRole = useAuthQuery<{ role: string }>(
+				[$activeMemberRoleSignal],
+				"/organization/get-active-member-role",
+				$fetch,
+				{
+					method: "GET",
+				},
+			);
+
 			return {
 				$listOrg,
 				$activeOrgSignal,
 				$activeMemberSignal,
+				$activeMemberRoleSignal,
 				activeOrganization,
 				listOrganizations,
 				activeMember,
+				activeMemberRole,
 			};
 		},
 		pathMethods: {
 			"/organization/get-full-organization": "GET",
+			"/organization/list-user-teams": "GET",
 		},
 		atomListeners: [
 			{
@@ -244,6 +257,12 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 					return path.includes("/organization/update-member-role");
 				},
 				signal: "$activeMemberSignal",
+			},
+			{
+				matcher(path) {
+					return path.includes("/organization/update-member-role");
+				},
+				signal: "$activeMemberRoleSignal",
 			},
 		],
 	} satisfies BetterAuthClientPlugin;

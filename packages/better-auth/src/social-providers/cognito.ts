@@ -28,6 +28,7 @@ export interface CognitoProfile {
 }
 
 export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
+	clientId: string;
 	/**
 	 * The Cognito domain (e.g., "your-app.auth.us-east-1.amazoncognito.com")
 	 */

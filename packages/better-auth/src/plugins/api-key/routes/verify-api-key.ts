@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { APIError, createAuthEndpoint } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
@@ -191,7 +191,7 @@ export function verifyApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/verify",

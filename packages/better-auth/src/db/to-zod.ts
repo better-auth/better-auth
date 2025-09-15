@@ -1,5 +1,5 @@
-import * as z from "zod/v4";
-import type { ZodType } from "zod/v4";
+import * as z from "zod";
+import type { ZodType } from "zod";
 import type { FieldAttribute } from ".";
 
 export function toZodSchema<

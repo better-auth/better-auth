@@ -49,7 +49,7 @@ export const useAuthQuery = <T>(
 					})
 				: options;
 
-		return $fetch<T>(path, {
+		$fetch<T>(path, {
 			...opts,
 			query: {
 				...opts?.query,
@@ -93,6 +93,14 @@ export const useAuthQuery = <T>(
 				});
 				await opts?.onRequest?.(context);
 			},
+		}).catch((error) => {
+			value.set({
+				error,
+				data: null,
+				isPending: false,
+				isRefetching: false,
+				refetch: value.value.refetch,
+			});
 		});
 	};
 	initializedAtom = Array.isArray(initializedAtom)
@@ -110,13 +118,16 @@ export const useAuthQuery = <T>(
 				fn();
 			} else {
 				onMount(value, () => {
-					setTimeout(() => {
-						fn();
+					const timeoutId = setTimeout(() => {
+						if (!isMounted) {
+							fn();
+							isMounted = true;
+						}
 					}, 0);
-					isMounted = true;
 					return () => {
 						value.off();
 						initAtom.off();
+						clearTimeout(timeoutId);
 					};
 				});
 			}

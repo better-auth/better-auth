@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./email-verification";
 import { setSessionCookie } from "../../cookies";
@@ -130,6 +130,22 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 											},
 										},
 										required: ["user"], // token is optional
+									},
+								},
+							},
+						},
+						"422": {
+							description:
+								"Unprocessable Entity. User already exists or failed to create user.",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											message: {
+												type: "string",
+											},
+										},
 									},
 								},
 							},

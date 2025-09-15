@@ -34,6 +34,7 @@ export interface GoogleProfile {
 }
 
 export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
+	clientId: string;
 	/**
 	 * The access type to use for the authorization code request
 	 */

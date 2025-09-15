@@ -1,5 +1,10 @@
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
-import type { Where } from "../../types";
+import {
+	createAdapterFactory,
+	type AdapterDebugLogs,
+	type CreateCustomAdapter,
+	type CreateAdapterOptions,
+} from "../adapter-factory";
+import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 
@@ -20,26 +25,23 @@ interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+	/**
+	 * Whether to execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions,
+	 * set this to `false` and operations will be executed sequentially.
+	 * @default true
+	 */
+	transaction?: boolean;
 }
 
-export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
-	createAdapter({
-		config: {
-			adapterId: "kysely",
-			adapterName: "Kysely Adapter",
-			usePlural: config?.usePlural,
-			debugLogs: config?.debugLogs,
-			supportsBooleans:
-				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
-					? false
-					: true,
-			supportsDates:
-				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
-					? false
-					: true,
-			supportsJSON: false,
-		},
-		adapter: ({ getFieldName, schema }) => {
+export const kyselyAdapter = (
+	db: Kysely<any>,
+	config?: KyselyAdapterConfig,
+) => {
+	let lazyOptions: BetterAuthOptions | null = null;
+	const createCustomAdapter = (db: Kysely<any>): CreateCustomAdapter => {
+		return ({ getFieldName, schema }) => {
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -134,6 +136,14 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					const expr = (eb: any) => {
 						if (operator.toLowerCase() === "in") {
 							return eb(field, "in", Array.isArray(value) ? value : [value]);
+						}
+
+						if (operator.toLowerCase() === "not_in") {
+							return eb(
+								field,
+								"not in",
+								Array.isArray(value) ? value : [value],
+							);
 						}
 
 						if (operator === "contains") {
@@ -307,5 +317,43 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				},
 				options: config,
 			};
+		};
+	};
+	let adapterOptions: CreateAdapterOptions | null = null;
+	adapterOptions = {
+		config: {
+			adapterId: "kysely",
+			adapterName: "Kysely Adapter",
+			usePlural: config?.usePlural,
+			debugLogs: config?.debugLogs,
+			supportsBooleans:
+				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
+					? false
+					: true,
+			supportsDates:
+				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
+					? false
+					: true,
+			supportsJSON: false,
+			transaction:
+				(config?.transaction ?? true)
+					? (cb) =>
+							db.transaction().execute((trx) => {
+								const adapter = createAdapterFactory({
+									config: adapterOptions!.config,
+									adapter: createCustomAdapter(trx),
+								})(lazyOptions!);
+								return cb(adapter);
+							})
+					: false,
 		},
-	});
+		adapter: createCustomAdapter(db),
+	};
+
+	const adapter = createAdapterFactory(adapterOptions);
+
+	return (options: BetterAuthOptions): Adapter => {
+		lazyOptions = options;
+		return adapter(options);
+	};
+};

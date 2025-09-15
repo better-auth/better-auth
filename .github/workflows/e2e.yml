@@ -2,6 +2,7 @@ name: E2E
 on:
   push:
     branches: [ main, canary ]
+  merge_group:
   pull_request:
 jobs:
   smoke:
@@ -23,7 +24,7 @@ jobs:
 
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@v4.4.0
         with:
           node-version: 22.x
           registry-url: 'https://registry.npmjs.org'
@@ -36,7 +37,7 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_REMOTE_ONLY: true
+          TURBO_CACHE: remote:rw
         run: pnpm build
 
       - name: Start Docker Containers
@@ -55,7 +56,7 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_REMOTE_ONLY: true
+          TURBO_CACHE: remote:rw
         run: pnpm e2e:smoke
 
       - name: Stop Docker Containers
@@ -79,7 +80,7 @@ jobs:
 
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@v4.4.0
         with:
           node-version: 22.x
           registry-url: 'https://registry.npmjs.org'
@@ -95,7 +96,7 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_REMOTE_ONLY: true
+          TURBO_CACHE: remote:rw
         run: pnpm build
 
       - name: Start Docker Containers
@@ -108,7 +109,7 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_REMOTE_ONLY: true
+          TURBO_CACHE: remote:rw
         run: pnpm e2e:integration
 
       - name: Stop Docker Containers

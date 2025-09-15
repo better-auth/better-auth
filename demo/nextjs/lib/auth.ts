@@ -26,16 +26,24 @@ import { Stripe } from "stripe";
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
 
-const libsql = new LibsqlDialect({
-	url: process.env.TURSO_DATABASE_URL || "",
-	authToken: process.env.TURSO_AUTH_TOKEN || "",
-});
-
-const mysql = process.env.USE_MYSQL
-	? new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""))
-	: null;
-
-const dialect = process.env.USE_MYSQL ? mysql : libsql;
+const dialect = (() => {
+	if (process.env.USE_MYSQL) {
+		if (!process.env.MYSQL_DATABASE_URL) {
+			throw new Error(
+				"Using MySQL dialect without MYSQL_DATABASE_URL. Please set it in your environment variables.",
+			);
+		}
+		return new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""));
+	} else {
+		if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
+			return new LibsqlDialect({
+				url: process.env.TURSO_DATABASE_URL,
+				authToken: process.env.TURSO_AUTH_TOKEN,
+			});
+		}
+	}
+	return null;
+})();
 
 if (!dialect) {
 	throw new Error("No dialect found");
@@ -63,7 +71,7 @@ export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	baseURL,
 	database: {
-		dialect: libsql,
+		dialect,
 		type: "sqlite",
 	},
 	emailVerification: {

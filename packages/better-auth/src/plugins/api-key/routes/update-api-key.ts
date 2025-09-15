@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
@@ -18,7 +18,7 @@ export function updateApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/update",
