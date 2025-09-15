@@ -1,1 +1,1 @@
-export * from "./create-adapter";
+export * from "./adapter-factory";

@@ -1,11 +1,11 @@
 import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
-	createAdapter,
+	createAdapterFactory,
 	type AdapterDebugLogs,
 	type CreateAdapterOptions,
 	type CreateCustomAdapter,
-} from "../create-adapter";
+} from "../adapter-factory";
 
 export interface PrismaConfig {
 	/**
@@ -244,7 +244,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				(config.transaction ?? true)
 					? (cb) =>
 							(prisma as PrismaClientInternal).$transaction((tx) => {
-								const adapter = createAdapter({
+								const adapter = createAdapterFactory({
 									config: adapterOptions!.config,
 									adapter: createCustomAdapter(tx),
 								})(lazyOptions!);
@@ -255,7 +255,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		adapter: createCustomAdapter(prisma),
 	};
 
-	const adapter = createAdapter(adapterOptions);
+	const adapter = createAdapterFactory(adapterOptions);
 	return (options: BetterAuthOptions): Adapter => {
 		lazyOptions = options;
 		return adapter(options);
