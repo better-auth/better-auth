@@ -22,7 +22,7 @@ const postgresMap = {
 		"double precision",
 	],
 	boolean: ["bool", "boolean"],
-	date: ["timestamp", "date"],
+	date: ["timestamptz", "timestamp", "date"],
 	json: ["json", "jsonb"],
 };
 const mysqlMap = {
