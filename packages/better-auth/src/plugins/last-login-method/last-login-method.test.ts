@@ -51,4 +51,43 @@ describe("lastLoginMethod", async () => {
 		});
 		expect(session?.user.lastLoginMethod).toBe("email");
 	});
+
+	it("should NOT set the last login method cookie on failed authentication", async () => {
+		const headers = new Headers();
+		const response = await client.signIn.email(
+			{
+				email: testUser.email,
+				password: "wrong-password",
+			},
+			{
+				onError(context) {
+					cookieSetter(headers)(context);
+				},
+			},
+		);
+		
+		expect(response.error).toBeDefined();
+		
+		const cookies = parseCookies(headers.get("cookie") || "");
+		expect(cookies.get("better-auth.last_used_login_method")).toBeUndefined();
+	});
+
+	it("should NOT set the last login method cookie on failed OAuth callback", async () => {
+		const headers = new Headers();
+		const response = await client.$fetch("/callback/google", {
+			method: "GET",
+			query: {
+				code: "invalid-code",
+				state: "invalid-state",
+			},
+			onError(context) {
+				cookieSetter(headers)(context);
+			},
+		});
+		
+		expect(response.error).toBeDefined();
+		
+		const cookies = parseCookies(headers.get("cookie") || "");
+		expect(cookies.get("better-auth.last_used_login_method")).toBeUndefined();
+	});
 });
