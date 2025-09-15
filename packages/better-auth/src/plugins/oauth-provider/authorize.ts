@@ -2,7 +2,7 @@ import { APIError } from "better-call";
 import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
 import type {
-	AuthorizationQuery,
+	OAuthAuthorizationQuery,
 	OAuthOptions,
 	VerificationValue,
 } from "./types";
@@ -90,7 +90,7 @@ export async function authorizeEndpoint(
 		return handleRedirect(`${options.loginPage}?${queryFromURL}`);
 	}
 
-	const query = ctx.query as AuthorizationQuery;
+	const query = ctx.query as OAuthAuthorizationQuery;
 	if (!query.client_id) {
 		const errorURL = getErrorURL(
 			ctx,

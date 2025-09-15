@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt, type JwtOptions } from "../jwt";
-import { oauthProvider } from ".";
+import { oauthProvider } from "./oauth";
 import { oauthProviderProtectedResourceMetadata } from "./metadata";
 import { BetterAuthError } from "../../error";
 import { createAuthClient } from "../../client";

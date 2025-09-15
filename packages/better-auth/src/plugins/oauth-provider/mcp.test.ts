@@ -1,6 +1,6 @@
 import { beforeAll, describe, it, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { oauthProvider } from ".";
+import { oauthProvider } from "./oauth";
 import { jwt } from "../jwt";
 import { createAuthClient } from "../../client";
 import { oauthProviderClient } from "./client";

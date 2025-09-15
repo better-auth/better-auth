@@ -7,7 +7,11 @@ import {
 	getStoredToken,
 	validateClientCredentials,
 } from "./utils";
-import type { OAuthAccessToken, OAuthOptions, OAuthSession } from "./types";
+import type {
+	OAuthOpaqueAccessToken,
+	OAuthOptions,
+	OAuthSession,
+} from "./types";
 import { getJwtPlugin } from "./utils";
 import { decodeRefreshToken } from "./token";
 import { verifyJwsAccessToken } from "./verify";
@@ -138,7 +142,7 @@ async function validateOpaqueAccessToken(
 			});
 		}
 	}
-	const accessToken: OAuthAccessToken | null =
+	const accessToken: OAuthOpaqueAccessToken | null =
 		await ctx.context.adapter.findOne({
 			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 			where: [
