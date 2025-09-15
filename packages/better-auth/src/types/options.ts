@@ -889,7 +889,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Session & Record<string, any>;
+							data: Partial<Session> & Record<string, any>;
 					  }
 				>;
 				/**
