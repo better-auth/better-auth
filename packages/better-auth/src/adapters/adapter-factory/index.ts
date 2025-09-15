@@ -54,8 +54,13 @@ const createAsIsTransaction =
 	<R>(fn: (trx: TransactionAdapter) => Promise<R>) =>
 		fn(adapter);
 
-export const createAdapter =
-	({ adapter: customAdapter, config: cfg }: CreateAdapterOptions) =>
+export type AdapterFactory = (options: BetterAuthOptions) => Adapter;
+
+export const createAdapterFactory =
+	({
+		adapter: customAdapter,
+		config: cfg,
+	}: CreateAdapterOptions): AdapterFactory =>
 	(options: BetterAuthOptions): Adapter => {
 		const config = {
 			...cfg,

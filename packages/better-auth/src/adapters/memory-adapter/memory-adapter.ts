@@ -1,9 +1,9 @@
 import { logger } from "../../utils";
 import {
-	createAdapter,
+	createAdapterFactory,
 	type AdapterDebugLogs,
 	type CleanedWhere,
-} from "../create-adapter";
+} from "../adapter-factory";
 import type { BetterAuthOptions } from "../../types";
 
 export interface MemoryDB {
@@ -16,7 +16,7 @@ export interface MemoryAdapterConfig {
 
 export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
-	let adapterCreator = createAdapter({
+	let adapterCreator = createAdapterFactory({
 		config: {
 			adapterId: "memory",
 			adapterName: "Memory Adapter",
