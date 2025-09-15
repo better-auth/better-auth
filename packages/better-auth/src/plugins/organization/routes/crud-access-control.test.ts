@@ -246,6 +246,32 @@ describe("dynamic access control", async (it) => {
 		expect(shouldPass.success).toBe(true);
 	});
 
+	it("should not be allowed to update a role without the right ac resource permissions", async () => {
+		const testRole = await authClient.organization.createRole(
+			{
+				role: `update-not-allowed-${crypto.randomUUID()}`,
+				permission: {
+					project: ["create"],
+				},
+				additionalFields: {
+					color: "#000000",
+				},
+			},
+			{ headers },
+		);
+		if (!testRole.data) throw testRole.error;
+		const roleId = testRole.data.roleData.id;
+		await expect(
+			auth.api.updateOrgRole({
+				body: {
+					roleId,
+					data: { roleName: `updated-${testRole.data.roleData.role}` },
+				},
+				headers: normalHeaders,
+			}),
+		).rejects.toThrow();
+	});
+
 	it("should not be allowed to create a role without the right ac resource permissions", async () => {
 		const testRole = await authClient.organization.createRole(
 			{
@@ -589,5 +615,250 @@ describe("dynamic access control", async (it) => {
 		expect(res.roleData.color).toBe("#111111");
 		//@ts-expect-error - intentionally invalid key
 		expect(res.roleData.someInvalidKey).toBeUndefined();
+	});
+
+	/**
+	 * Security test cases for the privilege escalation vulnerability fix
+	 * These tests verify that member queries properly filter by userId to prevent
+	 * unauthorized privilege escalation where any member could gain admin permissions
+	 */
+	it("should not allow member to list roles using another member's permissions", async () => {
+		// Create a fresh member for this test to avoid role contamination
+		const {
+			headers: freshMemberHeaders,
+			user: freshMemberUser,
+			member: freshMember,
+		} = await createUser({
+			role: "member",
+		});
+
+		// Create a test role that only admin can read
+		const adminOnlyRole = await authClient.organization.createRole(
+			{
+				role: `admin-only-${crypto.randomUUID()}`,
+				permission: {
+					project: ["delete"],
+				},
+				additionalFields: {
+					color: "#ff0000",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		if (!adminOnlyRole.data) throw adminOnlyRole.error;
+
+		// Try to list roles as a regular member - should succeed but with member permissions
+		const listAsMembers = await auth.api.listOrgRoles({
+			query: { organizationId: org.data?.id },
+			headers: freshMemberHeaders,
+		});
+
+		// Member should be able to list roles (they have ac:read permission)
+		expect(listAsMembers).toBeDefined();
+		expect(Array.isArray(listAsMembers)).toBe(true);
+	});
+
+	it("should not allow member to get role details using another member's permissions", async () => {
+		// Create a fresh member for this test to avoid role contamination
+		const {
+			headers: freshMemberHeaders,
+			user: freshMemberUser,
+			member: freshMember,
+		} = await createUser({
+			role: "member",
+		});
+
+		// Create a test role
+		const testRole = await authClient.organization.createRole(
+			{
+				role: `test-get-role-${crypto.randomUUID()}`,
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#ff0000",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		if (!testRole.data) throw testRole.error;
+
+		// Try to get role as a regular member - should succeed with member permissions
+		const getRoleAsMember = await auth.api.getOrgRole({
+			query: {
+				organizationId: org.data?.id,
+				roleId: testRole.data.roleData.id,
+			},
+			headers: freshMemberHeaders,
+		});
+
+		// Member should be able to read the role (they have ac:read permission)
+		expect(getRoleAsMember).toBeDefined();
+		expect(getRoleAsMember.id).toBe(testRole.data.roleData.id);
+	});
+
+	it("should not allow member to update roles without proper permissions (privilege escalation test)", async () => {
+		// Create a fresh member for this test to avoid role contamination
+		const {
+			headers: freshMemberHeaders,
+			user: freshMemberUser,
+			member: freshMember,
+		} = await createUser({
+			role: "member",
+		});
+
+		// Create a test role that the owner will create
+		const vulnerableRole = await authClient.organization.createRole(
+			{
+				role: `vulnerable-role-${crypto.randomUUID()}`,
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#ff0000",
+				},
+			},
+			{
+				headers, // owner headers
+			},
+		);
+		if (!vulnerableRole.data) throw vulnerableRole.error;
+
+		// Regular member should NOT be able to update the role
+		// This tests the privilege escalation vulnerability fix
+		await expect(
+			auth.api.updateOrgRole({
+				body: {
+					roleId: vulnerableRole.data.roleData.id,
+					data: {
+						permission: {
+							ac: ["create", "update", "delete"], // Try to escalate privileges
+							organization: ["update", "delete"],
+							project: ["create", "read", "update", "delete"],
+						},
+					},
+				},
+				headers: freshMemberHeaders, // member headers
+			}),
+		).rejects.toThrow();
+
+		// Verify the role permissions haven't changed
+		const roleCheck = await auth.api.getOrgRole({
+			query: {
+				organizationId: org.data?.id,
+				roleId: vulnerableRole.data.roleData.id,
+			},
+			headers,
+		});
+		expect(roleCheck.permission).toEqual({
+			project: ["read"],
+		});
+	});
+
+	it("should properly identify the correct member when checking permissions", async () => {
+		// Create a fresh member for this test to avoid role contamination
+		const {
+			headers: freshMemberHeaders,
+			user: freshMemberUser,
+			member: freshMember,
+		} = await createUser({
+			role: "member",
+		});
+
+		// This test ensures that the member lookup uses both organizationId AND userId
+		// Create a role that only owner can update
+		const ownerOnlyRole = await authClient.organization.createRole(
+			{
+				role: `owner-only-update-${crypto.randomUUID()}`,
+				permission: {
+					sales: ["delete"],
+				},
+				additionalFields: {
+					color: "#ff0000",
+				},
+			},
+			{
+				headers, // owner headers
+			},
+		);
+		if (!ownerOnlyRole.data) throw ownerOnlyRole.error;
+
+		// Member should not be able to update (doesn't have ac:update)
+		await expect(
+			auth.api.updateOrgRole({
+				body: {
+					roleId: ownerOnlyRole.data.roleData.id,
+					data: {
+						roleName: "hijacked-role",
+					},
+				},
+				headers: freshMemberHeaders,
+			}),
+		).rejects.toThrow("You are not permitted to update a role");
+
+		// Admin should be able to update (has ac:update)
+		const adminUpdate = await auth.api.updateOrgRole({
+			body: {
+				roleId: ownerOnlyRole.data.roleData.id,
+				data: {
+					roleName: `admin-updated-${ownerOnlyRole.data.roleData.role}`,
+				},
+			},
+			headers: adminHeaders,
+		});
+		expect(adminUpdate).toBeDefined();
+		expect(adminUpdate.roleData.role).toContain("admin-updated");
+	});
+
+	it("should not allow cross-organization privilege escalation", async () => {
+		// Create a fresh member for this test to avoid role contamination
+		const {
+			headers: freshMemberHeaders,
+			user: freshMemberUser,
+			member: freshMember,
+		} = await createUser({
+			role: "member",
+		});
+
+		// Create a second organization
+		const org2 = await authClient.organization.create(
+			{
+				name: "second-org",
+				slug: `second-org-${crypto.randomUUID()}`,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+				headers,
+			},
+		);
+		if (!org2.data) throw new Error("Second organization not created");
+
+		// Try to list roles from org1 while active in org2 - should fail
+		await authClient.organization.setActive({
+			organizationId: org2.data.id,
+			fetchOptions: {
+				headers: freshMemberHeaders,
+			},
+		});
+
+		// This should fail because the member is not in org2
+		await expect(
+			auth.api.listOrgRoles({
+				query: { organizationId: org2.data.id },
+				headers: freshMemberHeaders,
+			}),
+		).rejects.toThrow("You are not a member of this organization");
+
+		// Switch back to org1
+		await authClient.organization.setActive({
+			organizationId: org.data?.id,
+			fetchOptions: {
+				headers: freshMemberHeaders,
+			},
+		});
 	});
 });

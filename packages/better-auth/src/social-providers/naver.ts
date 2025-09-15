@@ -35,7 +35,9 @@ export interface NaverProfile {
 	};
 }
 
-export interface NaverOptions extends ProviderOptions<NaverProfile> {}
+export interface NaverOptions extends ProviderOptions<NaverProfile> {
+	clientId: string;
+}
 
 export const naver = (options: NaverOptions) => {
 	return {
