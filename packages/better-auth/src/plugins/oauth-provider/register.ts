@@ -113,7 +113,7 @@ export async function registerEndpoint(
 
 	// Create the client with the existing schema
 	const iat = Math.floor(Date.now() / 1000);
-	let schema = oAuthToSchema(
+	let schema = oauthToSchema(
 		{
 			scope: opts.clientRegistrationDefaultScopes?.join(" "),
 			...((body ?? {}) as Partial<OAuthClient>),
@@ -169,7 +169,7 @@ export async function registerEndpoint(
  * @param cleaned - determines if the `rest` is converted into metadata
  * @returns
  */
-export function oAuthToSchema(
+export function oauthToSchema(
 	input: OAuthClient,
 	cleaned = true,
 ): SchemaClient {

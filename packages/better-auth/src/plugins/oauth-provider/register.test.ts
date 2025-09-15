@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { oauthProvider } from ".";
+import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "../../oauth-2.1/types";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";

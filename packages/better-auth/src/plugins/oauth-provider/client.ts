@@ -1,4 +1,4 @@
-import type { oauthProvider } from ".";
+import type { oauthProvider } from "./oauth";
 import type { BetterAuthClientPlugin } from "../../types";
 
 export const oauthProviderClient = () => {

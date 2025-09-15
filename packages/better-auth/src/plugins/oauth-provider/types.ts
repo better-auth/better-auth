@@ -403,7 +403,7 @@ export interface OAuthOptions {
 	disableJWTPlugin?: boolean;
 }
 
-export interface AuthorizationQuery {
+export interface OAuthAuthorizationQuery {
 	/**
 	 * The response type.
 	 * - "code": authorization code flow.
@@ -640,7 +640,7 @@ export interface SchemaClient {
 	metadata?: string; // in JSON format
 }
 
-export interface OAuthAccessToken {
+export interface OAuthOpaqueAccessToken {
 	/**
 	 * The opaque access token.
 	 */
