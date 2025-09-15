@@ -19,11 +19,11 @@ import {
 import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
-	createAdapter,
+	createAdapterFactory,
 	type AdapterDebugLogs,
 	type CreateAdapterOptions,
 	type CreateCustomAdapter,
-} from "../create-adapter";
+} from "../adapter-factory";
 
 export interface DB {
 	[key: string]: any;
@@ -364,7 +364,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				(config.transaction ?? true)
 					? (cb) =>
 							db.transaction((tx: DB) => {
-								const adapter = createAdapter({
+								const adapter = createAdapterFactory({
 									config: adapterOptions!.config,
 									adapter: createCustomAdapter(tx),
 								})(lazyOptions!);
@@ -374,7 +374,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		},
 		adapter: createCustomAdapter(db),
 	};
-	const adapter = createAdapter(adapterOptions);
+	const adapter = createAdapterFactory(adapterOptions);
 	return (options: BetterAuthOptions): Adapter => {
 		lazyOptions = options;
 		return adapter(options);

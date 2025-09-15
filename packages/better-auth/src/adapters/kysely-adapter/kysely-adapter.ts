@@ -1,9 +1,9 @@
 import {
-	createAdapter,
+	createAdapterFactory,
 	type AdapterDebugLogs,
 	type CreateCustomAdapter,
 	type CreateAdapterOptions,
-} from "../create-adapter";
+} from "../adapter-factory";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
@@ -339,7 +339,7 @@ export const kyselyAdapter = (
 				(config?.transaction ?? true)
 					? (cb) =>
 							db.transaction().execute((trx) => {
-								const adapter = createAdapter({
+								const adapter = createAdapterFactory({
 									config: adapterOptions!.config,
 									adapter: createCustomAdapter(trx),
 								})(lazyOptions!);
@@ -350,7 +350,7 @@ export const kyselyAdapter = (
 		adapter: createCustomAdapter(db),
 	};
 
-	const adapter = createAdapter(adapterOptions);
+	const adapter = createAdapterFactory(adapterOptions);
 
 	return (options: BetterAuthOptions): Adapter => {
 		lazyOptions = options;

@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { createAdapter } from "..";
+import { createAdapterFactory } from "..";
 import type {
 	AdapterConfig,
 	CleanedWhere,
@@ -53,7 +53,7 @@ async function createTestAdapter(
 		options = {},
 		adapter = () => ({}),
 	} = props;
-	const testAdapter = createAdapter({
+	const testAdapter = createAdapterFactory({
 		config: Object.assign(
 			{
 				adapterId: "test-id",
