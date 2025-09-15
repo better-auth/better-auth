@@ -118,7 +118,7 @@ export const useAuthQuery = <T>(
 				fn();
 			} else {
 				onMount(value, () => {
-					setTimeout(() => {
+					const timeoutId = setTimeout(() => {
 						if (!isMounted) {
 							fn();
 							isMounted = true;
@@ -127,6 +127,7 @@ export const useAuthQuery = <T>(
 					return () => {
 						value.off();
 						initAtom.off();
+						clearTimeout(timeoutId);
 					};
 				});
 			}
