@@ -119,9 +119,11 @@ export const useAuthQuery = <T>(
 			} else {
 				onMount(value, () => {
 					setTimeout(() => {
-						fn();
+						if (!isMounted) {
+							fn();
+							isMounted = true;
+						}
 					}, 0);
-					isMounted = true;
 					return () => {
 						value.off();
 						initAtom.off();
