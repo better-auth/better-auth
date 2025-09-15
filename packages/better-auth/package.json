@@ -708,7 +708,7 @@
     "defu": "^6.1.4",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
-    "nanostores": "^0.11.4",
+    "nanostores": "^1.0.1",
     "zod": "^4.1.5"
   },
   "peerDependencies": {
