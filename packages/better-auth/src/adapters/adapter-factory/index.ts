@@ -14,6 +14,7 @@ import type {
 	CleanedWhere,
 } from "./types";
 import type { FieldAttribute } from "../../db";
+import { ensureUTC } from "../../utils/ensure-utc";
 export * from "./types";
 
 let debugLogs: any[] = [];
@@ -474,6 +475,12 @@ export const createAdapterFactory =
 						field.type === "date"
 					) {
 						newValue = new Date(newValue);
+					} else if (
+						config.supportsDates === true &&
+						newValue instanceof Date &&
+						field.type === "date"
+					) {
+						newValue = ensureUTC(newValue);
 					} else if (
 						config.supportsBooleans === false &&
 						typeof newValue === "number" &&

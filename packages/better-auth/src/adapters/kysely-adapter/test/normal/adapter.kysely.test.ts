@@ -535,19 +535,6 @@ describe("mysql", async () => {
 		});
 
 		it("stores and retrieves timestamps correctly across timezones", async () => {
-			function ensureUTC(date: Date): Date {
-				const utcTimestamp = Date.UTC(
-					date.getFullYear(),
-					date.getMonth(),
-					date.getDate(),
-					date.getHours(),
-					date.getMinutes(),
-					date.getSeconds(),
-					date.getMilliseconds(),
-				);
-
-				return new Date(utcTimestamp);
-			}
 			const originalTZ = process.env.TZ;
 
 			try {
@@ -565,15 +552,15 @@ describe("mysql", async () => {
 						password: sampleUser.password,
 					},
 				});
-				const time1 = ensureUTC(userSignUp.user.createdAt);
 
 				process.env.TZ = "America/Los_Angeles";
 				const userSignIn = await auth.api.signInEmail({
 					body: { email: sampleUser.email, password: sampleUser.password },
 				});
-				const time2 = ensureUTC(userSignIn.user.createdAt);
 
-				expect(time1).toStrictEqual(time2);
+				expect(userSignUp.user.createdAt).toStrictEqual(
+					userSignIn.user.createdAt,
+				);
 			} finally {
 				process.env.TZ = originalTZ;
 			}
