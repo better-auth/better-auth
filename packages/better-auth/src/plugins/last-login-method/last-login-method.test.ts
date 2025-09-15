@@ -65,9 +65,9 @@ describe("lastLoginMethod", async () => {
 				},
 			},
 		);
-		
+
 		expect(response.error).toBeDefined();
-		
+
 		const cookies = parseCookies(headers.get("cookie") || "");
 		expect(cookies.get("better-auth.last_used_login_method")).toBeUndefined();
 	});
@@ -84,9 +84,9 @@ describe("lastLoginMethod", async () => {
 				cookieSetter(headers)(context);
 			},
 		});
-		
+
 		expect(response.error).toBeDefined();
-		
+
 		const cookies = parseCookies(headers.get("cookie") || "");
 		expect(cookies.get("better-auth.last_used_login_method")).toBeUndefined();
 	});

@@ -99,8 +99,10 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 						const lastUsedLoginMethod = config.customResolveMethod(ctx);
 						if (lastUsedLoginMethod) {
 							const setCookie = ctx.context.responseHeaders?.get("set-cookie");
-							const sessionTokenName = ctx.context.authCookies.sessionToken.name;
-							const hasSessionToken = setCookie && setCookie.includes(sessionTokenName);
+							const sessionTokenName =
+								ctx.context.authCookies.sessionToken.name;
+							const hasSessionToken =
+								setCookie && setCookie.includes(sessionTokenName);
 							if (hasSessionToken) {
 								// Inherit cookie attributes from Better Auth's centralized cookie system
 								// This ensures consistency with cross-origin, cross-subdomain, and security settings
