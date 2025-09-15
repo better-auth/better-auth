@@ -365,6 +365,8 @@ describe("session", async () => {
 		});
 
 		expect(sessionResWithHeaders.headers).toBeDefined();
+		expect(sessionResWithHeaders.response?.user).toBeDefined();
+		expect(sessionResWithHeaders.response?.session).toBeDefined();
 		expectTypeOf({ headers: sessionResWithHeaders.headers }).toMatchObjectType<{
 			headers: Headers;
 		}>();
