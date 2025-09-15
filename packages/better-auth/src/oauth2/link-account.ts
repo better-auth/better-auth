@@ -84,7 +84,7 @@ export async function handleOAuthUserInfo(
 				if (
 					userInfo.emailVerified &&
 					!dbUser.user.emailVerified &&
-					userInfo.email === dbUser.user.email
+					userInfo.email.toLowerCase() === dbUser.user.email
 				) {
 					await c.context.internalAdapter.updateUser(dbUser.user.id, {
 						emailVerified: true,
@@ -122,7 +122,7 @@ export async function handleOAuthUserInfo(
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
-				userInfo.email === dbUser.user.email
+				userInfo.email.toLowerCase() === dbUser.user.email
 			) {
 				await c.context.internalAdapter.updateUser(dbUser.user.id, {
 					emailVerified: true,
