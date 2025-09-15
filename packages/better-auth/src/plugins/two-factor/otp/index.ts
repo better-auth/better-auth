@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { verifyTwoFactor } from "../verify-two-factor";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";

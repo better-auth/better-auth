@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
@@ -264,13 +264,13 @@ export const username = (options?: UsernameOptions) => {
 					}
 
 					const user = await ctx.context.adapter.findOne<
-						User & { username: string }
+						User & { username: string; displayUsername: string }
 					>({
 						model: "user",
 						where: [
 							{
 								field: "username",
-								value: username,
+								value: normalizer(username),
 							},
 						],
 					});
@@ -358,6 +358,7 @@ export const username = (options?: UsernameOptions) => {
 							email: user.email,
 							emailVerified: user.emailVerified,
 							username: user.username,
+							displayUsername: user.displayUsername,
 							name: user.name,
 							image: user.image,
 							createdAt: user.createdAt,
@@ -383,12 +384,36 @@ export const username = (options?: UsernameOptions) => {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
 					}
+
+					const minUsernameLength = options?.minUsernameLength || 3;
+					const maxUsernameLength = options?.maxUsernameLength || 30;
+
+					if (username.length < minUsernameLength) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_SHORT,
+						});
+					}
+
+					if (username.length > maxUsernameLength) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_LONG,
+						});
+					}
+
+					const validator =
+						options?.usernameValidator || defaultUsernameValidator;
+
+					if (!(await validator(username))) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
 					const user = await ctx.context.adapter.findOne<User>({
 						model: "user",
 						where: [
 							{
 								field: "username",
-								value: username.toLowerCase(),
+								value: normalizer(username),
 							},
 						],
 					});

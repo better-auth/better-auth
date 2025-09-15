@@ -197,3 +197,5 @@ android/
 
 playwright-report/
 test-results/
+
+state.txt
