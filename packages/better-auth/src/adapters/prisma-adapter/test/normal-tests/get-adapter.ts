@@ -1,13 +1,17 @@
 import { PrismaClient } from "@prisma/client";
 import { prismaAdapter } from "../..";
+import { copyFile } from "node:fs/promises";
+import { join } from "node:path";
 
-export function getAdapter() {
-	const db = new PrismaClient();
-
-	async function clearDb() {
-		await db.sessions.deleteMany();
-		await db.user.deleteMany();
-	}
+export async function getAdapter() {
+	const dbFile = `${crypto.randomUUID()}.db`;
+	await copyFile(
+		join(import.meta.dirname, "./.db/dev.db"),
+		join(import.meta.dirname, `./.db/${dbFile}`),
+	);
+	const db = new PrismaClient({
+		datasourceUrl: `file:./.db/${dbFile}`,
+	});
 
 	const adapter = prismaAdapter(db, {
 		provider: "sqlite",
@@ -16,5 +20,11 @@ export function getAdapter() {
 		},
 	});
 
-	return { adapter, clearDb };
+	return {
+		adapter,
+		clear: async function clearDb() {
+			await db.sessions.deleteMany();
+			await db.user.deleteMany();
+		},
+	};
 }

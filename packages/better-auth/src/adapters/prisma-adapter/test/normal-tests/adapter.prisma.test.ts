@@ -1,29 +1,21 @@
-import { beforeAll, describe } from "vitest";
+import { beforeAll, beforeEach, describe } from "vitest";
 import { pushPrismaSchema } from "../push-schema";
 import { createTestOptions } from "../test-options";
 import { runAdapterTest } from "../../../test";
-import { setState } from "../state";
+import { getAdapter } from "./get-adapter";
+import type { Adapter, BetterAuthOptions } from "../../../../types";
 
-describe("Adapter tests", async () => {
-	beforeAll(async () => {
-		setState("RUNNING");
-		await pushPrismaSchema("normal");
-		console.log("Successfully pushed normal Prisma Schema using pnpm...");
-		const { getAdapter } = await import("./get-adapter");
-		const { clearDb } = getAdapter();
-		await clearDb();
-		return () => {
-			console.log(
-				`Normal Prisma adapter test finished. Now allowing number ID prisma tests to run.`,
-			);
-			setState("IDLE");
-		};
+describe("Adapter tests", () => {
+	let adapter: (options: BetterAuthOptions) => Adapter;
+	beforeEach(async () => {
+		pushPrismaSchema("normal");
+		const { clear, adapter: _adapter } = await getAdapter();
+		adapter = _adapter;
+		await clear();
 	});
 
-	await runAdapterTest({
+	runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
-			const { getAdapter } = await import("./get-adapter");
-			const { adapter } = getAdapter();
 			const { advanced, database, session, user } = createTestOptions(adapter);
 			return adapter({
 				...customOptions,

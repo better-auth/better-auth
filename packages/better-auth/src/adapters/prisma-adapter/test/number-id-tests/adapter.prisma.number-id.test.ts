@@ -1,38 +1,21 @@
-import { beforeAll, describe } from "vitest";
+import { beforeEach, describe } from "vitest";
 import { runNumberIdAdapterTest } from "../../../test";
 import { pushPrismaSchema } from "../push-schema";
 import { createTestOptions } from "../test-options";
-import * as fs from "fs";
-import { getState, stateFilePath } from "../state";
+import type { Adapter, BetterAuthOptions } from "../../../../types";
+import { getAdapter } from "./get-adapter";
 
-describe("Number Id Adapter Test", async () => {
-	beforeAll(async () => {
-		await new Promise(async (resolve) => {
-			await new Promise((r) => setTimeout(r, 500));
-			if (getState() === "IDLE") {
-				resolve(true);
-				return;
-			}
-			console.log(`Waiting for state to be IDLE...`);
-			fs.watch(stateFilePath, () => {
-				if (getState() === "IDLE") {
-					resolve(true);
-					return;
-				}
-			});
-		});
-		console.log(`Now running Number ID Prisma adapter test...`);
-		await pushPrismaSchema("number-id");
-		console.log(`Successfully pushed number id Prisma Schema using pnpm...`);
-		const { getAdapter } = await import("./get-adapter");
-		const { clearDb } = getAdapter();
-		await clearDb();
-	}, Number.POSITIVE_INFINITY);
+describe("Number Id Adapter Test", () => {
+	let adapter: (options: BetterAuthOptions) => Adapter;
+	beforeEach(async () => {
+		pushPrismaSchema("number-id");
+		const { clear, adapter: _adapter } = await getAdapter();
+		adapter = _adapter;
+		await clear();
+	});
 
-	await runNumberIdAdapterTest({
+	runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
-			const { getAdapter } = await import("./get-adapter");
-			const { adapter } = getAdapter();
 			const { advanced, database, session, user } = createTestOptions(adapter);
 			return adapter({
 				...customOptions,
