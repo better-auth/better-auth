@@ -1162,23 +1162,31 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						isAction: false,
 					},
 					cloneRequest: true,
-					//don't parse the body
-					disableBody: true,
 				},
 				async (ctx) => {
-					if (!ctx.request?.body) {
+					if (!ctx.body || !ctx.request) {
 						throw new APIError("INTERNAL_SERVER_ERROR");
 					}
-					const buf = await ctx.request.text();
+					const buf = ctx.body;
 					const sig = ctx.request.headers.get("stripe-signature") as string;
 					const webhookSecret = options.stripeWebhookSecret;
+					if (!webhookSecret) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Stripe webhook secret not found",
+						});
+					}
+					if (!sig) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Stripe signature header missing",
+						});
+					}
+					if (!buf) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Stripe webhook body missing",
+						});
+					}
 					let event: Stripe.Event;
 					try {
-						if (!sig || !webhookSecret) {
-							throw new APIError("BAD_REQUEST", {
-								message: "Stripe webhook secret not found",
-							});
-						}
 						event = await client.webhooks.constructEventAsync(
 							buf,
 							sig,
