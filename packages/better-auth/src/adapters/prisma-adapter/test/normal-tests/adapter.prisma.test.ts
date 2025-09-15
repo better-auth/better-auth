@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe } from "vitest";
+import { beforeEach, describe } from "vitest";
 import { pushPrismaSchema } from "../push-schema";
 import { createTestOptions } from "../test-options";
 import { runAdapterTest } from "../../../test";
