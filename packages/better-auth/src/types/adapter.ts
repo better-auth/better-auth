@@ -25,6 +25,22 @@ export type Where = {
 /**
  * Adapter Interface
  */
+/**
+ * JOIN query types
+ */
+export type JoinType = "inner" | "left" | "right" | "full";
+
+export type Join = {
+	table: string;
+	type: JoinType;
+	on: {
+		left: string; // field on the main table
+		right: string; // field on the joined table
+	};
+	select?: string[]; // specific fields to select from joined table, if not provided, all fields are selected
+	alias?: string; // alias for the joined table
+};
+
 export type Adapter = {
 	id: string;
 	create: <T extends Record<string, any>, R = T>(data: {
@@ -42,6 +58,7 @@ export type Adapter = {
 		model: string;
 		where: Where[];
 		select?: string[];
+		joins?: Join[];
 	}) => Promise<T | null>;
 	findMany: <T>(data: {
 		model: string;
@@ -52,8 +69,13 @@ export type Adapter = {
 			direction: "asc" | "desc";
 		};
 		offset?: number;
+		joins?: Join[];
 	}) => Promise<T[]>;
-	count: (data: { model: string; where?: Where[] }) => Promise<number>;
+	count: (data: {
+		model: string;
+		where?: Where[];
+		joins?: Join[];
+	}) => Promise<number>;
 	/**
 	 * ⚠︎ Update may not return the updated data
 	 * if multiple where clauses are provided

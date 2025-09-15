@@ -110,7 +110,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				return value;
 			}
 
-			function convertWhereClause(model: string, w?: Where[]) {
+			function convertWhereClause(model: string, w?: Where[], joins?: any[]) {
 				if (!w)
 					return {
 						and: null,
@@ -129,7 +129,13 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 						operator = "=",
 						connector = "AND",
 					} = condition;
-					const field = getFieldName({ model, field: _field });
+					let field = getFieldName({ model, field: _field });
+
+					// Qualify field names when joins are present to avoid ambiguity
+					if (joins && joins.length > 0) {
+						field = `${model}.${field}`;
+					}
+
 					value = transformValueToDB(value, model, _field);
 					const expr = (eb: any) => {
 						if (operator.toLowerCase() === "in") {
@@ -201,9 +207,91 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 
 					return (await withReturning(data, builder, model, [])) as any;
 				},
-				async findOne({ model, where, select }) {
-					const { and, or } = convertWhereClause(model, where);
-					let query = db.selectFrom(model).selectAll();
+				async findOne({ model, where, select, joins }) {
+					const { and, or } = convertWhereClause(model, where, joins);
+					let query = db.selectFrom(model);
+
+					// Handle joins
+					if (joins && joins.length > 0) {
+						for (const join of joins) {
+							const joinTableRef = join.alias
+								? `${join.table} as ${join.alias}`
+								: join.table;
+							const joinName = join.alias || join.table;
+							switch (join.type) {
+								case "inner":
+									query = query.innerJoin(
+										joinTableRef as any,
+										join.on.left as any,
+										join.on.right as any,
+									);
+									break;
+								case "left":
+									query = query.leftJoin(
+										joinTableRef as any,
+										join.on.left as any,
+										join.on.right as any,
+									);
+									break;
+								case "right":
+									query = query.rightJoin(
+										joinTableRef as any,
+										join.on.left as any,
+										join.on.right as any,
+									);
+									break;
+								case "full":
+									query = query.fullJoin(
+										joinTableRef as any,
+										join.on.left as any,
+										join.on.right as any,
+									);
+									break;
+							}
+						}
+
+						// For joins, get table metadata to select columns explicitly
+						// This avoids mixing selectAll() with additional select() calls which causes ambiguity
+						try {
+							const metadata = await db.introspection.getTables();
+							const mainTable = metadata.find((t) => t.name === model);
+
+							if (mainTable) {
+								// Select all columns from main table with qualified names only (no aliases)
+								// This prevents ambiguity as we don't duplicate column names in the result
+								for (const column of mainTable.columns) {
+									query = query.select(`${model}.${column.name}` as any);
+								}
+							} else {
+								// Fallback to qualified selectAll if metadata not available
+								query = query.selectAll(model as any);
+							}
+						} catch {
+							// Fallback to qualified selectAll if introspection fails
+							query = query.selectAll(model as any);
+						}
+
+						for (const join of joins) {
+							const joinName = join.alias || join.table;
+							if (join.select && join.select.length > 0) {
+								for (const field of join.select) {
+									query = query.select(
+										`${joinName}.${field} as ${joinName}_${field}` as any,
+									);
+								}
+							} else {
+								// When no specific fields are specified, we default to selecting all fields
+								// But to avoid ambiguity, we require join.select to be specified
+								// This is a limitation to prevent SQL ambiguity errors
+								console.warn(
+									`JOIN on table '${joinName}' without specific field selection may cause column ambiguity. Please specify join.select.`,
+								);
+							}
+						}
+					} else {
+						query = query.selectAll();
+					}
+
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -214,9 +302,91 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					if (!res) return null;
 					return res as any;
 				},
-				async findMany({ model, where, limit, offset, sortBy }) {
-					const { and, or } = convertWhereClause(model, where);
+				async findMany({ model, where, limit, offset, sortBy, joins }) {
+					const { and, or } = convertWhereClause(model, where, joins);
 					let query = db.selectFrom(model);
+
+					// Handle joins
+					if (joins && joins.length > 0) {
+						for (const join of joins) {
+							const joinTableRef = join.alias
+								? `${join.table} as ${join.alias}`
+								: join.table;
+							const joinName = join.alias || join.table;
+							switch (join.type) {
+								case "inner":
+									query = query.innerJoin(
+										joinTableRef as any,
+										join.on.left as any,
+										join.on.right as any,
+									);
+									break;
+								case "left":
+									query = query.leftJoin(
+										joinTableRef as any,
+										join.on.left as any,
+										join.on.right as any,
+									);
+									break;
+								case "right":
+									query = query.rightJoin(
+										joinTableRef as any,
+										join.on.left as any,
+										join.on.right as any,
+									);
+									break;
+								case "full":
+									query = query.fullJoin(
+										joinTableRef as any,
+										join.on.left as any,
+										join.on.right as any,
+									);
+									break;
+							}
+						}
+
+						// For joins, get table metadata to select columns explicitly
+						// This avoids mixing selectAll() with additional select() calls which causes ambiguity
+						try {
+							const metadata = await db.introspection.getTables();
+							const mainTable = metadata.find((t) => t.name === model);
+
+							if (mainTable) {
+								// Select all columns from main table with qualified names only (no aliases)
+								// This prevents ambiguity as we don't duplicate column names in the result
+								for (const column of mainTable.columns) {
+									query = query.select(`${model}.${column.name}` as any);
+								}
+							} else {
+								// Fallback to qualified selectAll if metadata not available
+								query = query.selectAll(model as any);
+							}
+						} catch {
+							// Fallback to qualified selectAll if introspection fails
+							query = query.selectAll(model as any);
+						}
+
+						for (const join of joins) {
+							const joinName = join.alias || join.table;
+							if (join.select && join.select.length > 0) {
+								for (const field of join.select) {
+									query = query.select(
+										`${joinName}.${field} as ${joinName}_${field}` as any,
+									);
+								}
+							} else {
+								// When no specific fields are specified, we default to selecting all fields
+								// But to avoid ambiguity, we require join.select to be specified
+								// This is a limitation to prevent SQL ambiguity errors
+								console.warn(
+									`JOIN on table '${joinName}' without specific field selection may cause column ambiguity. Please specify join.select.`,
+								);
+							}
+						}
+					} else {
+						query = query.selectAll();
+					}
+
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -247,7 +417,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 						}
 					}
 
-					const res = await query.selectAll().execute();
+					const res = await query.execute();
 					if (!res) return [];
 					return res as any;
 				},
@@ -275,12 +445,54 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					const res = await query.execute();
 					return res.length;
 				},
-				async count({ model, where }) {
-					const { and, or } = convertWhereClause(model, where);
-					let query = db
-						.selectFrom(model)
+				async count({ model, where, joins }) {
+					const { and, or } = convertWhereClause(model, where, joins);
+					let query = db.selectFrom(model);
+
+					// Handle joins
+					if (joins && joins.length > 0) {
+						for (const join of joins) {
+							const joinTableRef = join.alias
+								? `${join.table} as ${join.alias}`
+								: join.table;
+							switch (join.type) {
+								case "inner":
+									query = query.innerJoin(
+										joinTableRef as any,
+										join.on.left as any,
+										join.on.right as any,
+									);
+									break;
+								case "left":
+									query = query.leftJoin(
+										joinTableRef as any,
+										join.on.left as any,
+										join.on.right as any,
+									);
+									break;
+								case "right":
+									query = query.rightJoin(
+										joinTableRef as any,
+										join.on.left as any,
+										join.on.right as any,
+									);
+									break;
+								case "full":
+									query = query.fullJoin(
+										joinTableRef as any,
+										join.on.left as any,
+										join.on.right as any,
+									);
+									break;
+							}
+						}
+						// When JOINing, qualify the id column to avoid ambiguity
+						query = query.select(db.fn.count(`${model}.id`).as("count"));
+					} else {
 						// a temporal solution for counting other than "*" - see more - https://www.sqlite.org/quirks.html#double_quoted_string_literals_are_accepted
-						.select(db.fn.count("id").as("count"));
+						query = query.select(db.fn.count("id").as("count"));
+					}
+
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -288,7 +500,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					const res = await query.execute();
-					return res[0].count as number;
+					return (res[0] as any).count as number;
 				},
 				async delete({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);

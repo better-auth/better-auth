@@ -3,6 +3,7 @@ import type { BetterAuthDbSchema } from "../../db/get-tables";
 import type {
 	AdapterSchemaCreation,
 	BetterAuthOptions,
+	Join,
 	Where,
 } from "../../types";
 import type { Prettify } from "../../types/helper";
@@ -320,10 +321,12 @@ export interface CustomAdapter {
 		model,
 		where,
 		select,
+		joins,
 	}: {
 		model: string;
 		where: CleanedWhere[];
 		select?: string[];
+		joins?: Join[];
 	}) => Promise<T | null>;
 	findMany: <T>({
 		model,
@@ -331,12 +334,14 @@ export interface CustomAdapter {
 		limit,
 		sortBy,
 		offset,
+		joins,
 	}: {
 		model: string;
 		where?: CleanedWhere[];
 		limit: number;
 		sortBy?: { field: string; direction: "asc" | "desc" };
 		offset?: number;
+		joins?: Join[];
 	}) => Promise<T[]>;
 	delete: ({
 		model,
@@ -355,9 +360,11 @@ export interface CustomAdapter {
 	count: ({
 		model,
 		where,
+		joins,
 	}: {
 		model: string;
 		where?: CleanedWhere[];
+		joins?: Join[];
 	}) => Promise<number>;
 	createSchema?: (props: {
 		/**
