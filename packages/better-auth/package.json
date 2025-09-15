@@ -30,7 +30,8 @@
     "stub": "unbuild --stub",
     "test": "vitest",
     "bump": "bumpp",
-    "typecheck": "pnpm prisma:normal:push && pnpm prisma:number-id:push && tsc --noEmit"
+    "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/normal-tests/schema.prisma && prisma generate --schema ./src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
+    "typecheck": "tsc --noEmit"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
