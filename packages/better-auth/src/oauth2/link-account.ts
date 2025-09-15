@@ -80,22 +80,22 @@ export async function handleOAuthUserInfo(
 					},
 					c,
 				);
-
-				if (
-					userInfo.emailVerified &&
-					!dbUser.user.emailVerified &&
-					userInfo.email.toLowerCase() === dbUser.user.email
-				) {
-					await c.context.internalAdapter.updateUser(dbUser.user.id, {
-						emailVerified: true,
-					});
-				}
 			} catch (e) {
 				logger.error("Unable to link account", e);
 				return {
 					error: "unable to link account",
 					data: null,
 				};
+			}
+
+			if (
+				userInfo.emailVerified &&
+				!dbUser.user.emailVerified &&
+				userInfo.email.toLowerCase() === dbUser.user.email
+			) {
+				await c.context.internalAdapter.updateUser(dbUser.user.id, {
+					emailVerified: true,
+				});
 			}
 		} else {
 			if (c.context.options.account?.updateAccountOnSignIn !== false) {
