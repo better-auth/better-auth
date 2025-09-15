@@ -476,12 +476,6 @@ export const createAdapterFactory =
 					) {
 						newValue = new Date(newValue);
 					} else if (
-						config.supportsDates === true &&
-						newValue instanceof Date &&
-						field.type === "date"
-					) {
-						newValue = ensureUTC(newValue);
-					} else if (
 						config.supportsBooleans === false &&
 						typeof newValue === "number" &&
 						field.type === "boolean"
