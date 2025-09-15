@@ -36,6 +36,7 @@ import { createTelemetry } from "./telemetry";
 import type { TelemetryEvent } from "./telemetry/types";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
+import { isPromise } from "./utils/is-promise";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -177,7 +178,13 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 		publishTelemetry: publish,
 	};
-	let { context } = await runPluginInit(ctx);
+	const initOrPromise = runPluginInit(ctx);
+	let context: AuthContext;
+	if (isPromise(initOrPromise)) {
+		({ context } = await initOrPromise);
+	} else {
+		({ context } = initOrPromise);
+	}
 	return context;
 };
 
@@ -250,7 +257,13 @@ async function runPluginInit(ctx: AuthContext) {
 	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
-			const result = await plugin.init(context);
+			let initPromise = plugin.init(context);
+			let result: ReturnType<Required<BetterAuthPlugin>["init"]>;
+			if (isPromise(initPromise)) {
+				result = await initPromise;
+			} else {
+				result = initPromise;
+			}
 			if (typeof result === "object") {
 				if (result.options) {
 					const { databaseHooks, ...restOpts } = result.options;

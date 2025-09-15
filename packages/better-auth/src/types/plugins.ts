@@ -3,6 +3,7 @@ import { type AuthMiddleware } from "../api/call";
 import type { FieldAttribute } from "../db/field";
 import type { HookEndpointContext } from ".";
 import type {
+	Awaitable,
 	DeepPartial,
 	LiteralString,
 	UnionToIntersection,
@@ -28,11 +29,7 @@ export type BetterAuthPlugin = {
 	 * You can return a new context or modify the existing context.
 	 */
 	init?: (ctx: AuthContext) =>
-		| {
-				context?: DeepPartial<Omit<AuthContext, "options">>;
-				options?: Partial<BetterAuthOptions>;
-		  }
-		| Promise<{
+		| Awaitable<{
 				context?: DeepPartial<Omit<AuthContext, "options">>;
 				options?: Partial<BetterAuthOptions>;
 		  }>
