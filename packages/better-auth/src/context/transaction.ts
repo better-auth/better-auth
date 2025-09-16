@@ -4,7 +4,7 @@ import type { Adapter } from "../types";
 /**
  * Dynamically import AsyncLocalStorage to avoid issues in environments where it's not available.
  *
- * Right now, this is primarily for Cloudflare Workers and Vercel Edge Functions.
+ * Right now, this is primarily for Cloudflare Workers.
  *
  * We will directly import 'node:async_hooks' in the next major release.
  */
