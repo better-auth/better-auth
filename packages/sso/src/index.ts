@@ -173,8 +173,7 @@ export interface SSOOptions {
 	};
 	/**
 	 * Default SSO provider configurations for testing.
-	 * These providers will be used if no provider is found in the database.
-	 * This is useful for testing and development.
+	 * These will take the precedence over the database providers.
 	 */
 	defaultSSO?: Array<{
 		/**
@@ -967,38 +966,8 @@ export const sso = (options?: SSOOptions) => {
 								return res.id;
 							});
 					}
-
-					// Try to find provider in database
-					let provider = await ctx.context.adapter
-						.findOne<SSOProvider>({
-							model: "ssoProvider",
-							where: [
-								{
-									field: providerId
-										? "providerId"
-										: orgId
-											? "organizationId"
-											: "domain",
-									value: providerId || orgId || domain!,
-								},
-							],
-						})
-						.then((res) => {
-							if (!res) {
-								return null;
-							}
-							return {
-								...res,
-								oidcConfig: res.oidcConfig
-									? JSON.parse(res.oidcConfig as unknown as string)
-									: undefined,
-								samlConfig: res.samlConfig
-									? JSON.parse(res.samlConfig as unknown as string)
-									: undefined,
-							};
-						});
-
-					if (!provider && options?.defaultSSO?.length) {
+					let provider: SSOProvider | null = null;
+					if (options?.defaultSSO?.length) {
 						// Find matching default SSO provider by providerId
 						const matchingDefault = providerId
 							? options.defaultSSO.find(
@@ -1021,6 +990,38 @@ export const sso = (options?: SSOOptions) => {
 								samlConfig: matchingDefault.samlConfig,
 							};
 						}
+					}
+
+					// Try to find provider in database
+					if (!provider) {
+						await ctx.context.adapter
+							.findOne<SSOProvider>({
+								model: "ssoProvider",
+								where: [
+									{
+										field: providerId
+											? "providerId"
+											: orgId
+												? "organizationId"
+												: "domain",
+										value: providerId || orgId || domain!,
+									},
+								],
+							})
+							.then((res) => {
+								if (!res) {
+									return null;
+								}
+								return {
+									...res,
+									oidcConfig: res.oidcConfig
+										? JSON.parse(res.oidcConfig as unknown as string)
+										: undefined,
+									samlConfig: res.samlConfig
+										? JSON.parse(res.samlConfig as unknown as string)
+										: undefined,
+								};
+							});
 					}
 
 					if (!provider) {
@@ -1060,7 +1061,7 @@ export const sso = (options?: SSOOptions) => {
 								"profile",
 								"offline_access",
 							],
-							authorizationEndpoint: provider.oidcConfig.authorizationEndpoint,
+							authorizationEndpoint: provider.oidcConfig.authorizationEndpoint!,
 						});
 						return ctx.json({
 							url: authorizationURL.toString(),
