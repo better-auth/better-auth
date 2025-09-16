@@ -13,10 +13,11 @@ const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage> = import(
 	moduleName
 )
 	.then((mod) => mod.AsyncLocalStorage)
-	.catch(() => {
+	.catch((err) => {
 		console.warn(
 			"[better-auth] Warning: AsyncLocalStorage is not available in this environment. Transaction support is disabled.",
 		);
+		throw err;
 	});
 
 /**
