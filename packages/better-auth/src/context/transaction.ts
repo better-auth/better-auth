@@ -57,12 +57,17 @@ export const runWithAdapter = async <R>(
 	adapter: Adapter,
 	fn: () => R,
 ): Promise<R> => {
+	let called = true;
 	return ensureAsyncStorage()
 		.then((als) => {
+			called = true;
 			return als.run(adapter, fn);
 		})
-		.catch(() => {
-			return fn();
+		.catch((err) => {
+			if (!called) {
+				return fn();
+			}
+			throw err;
 		});
 };
 
@@ -70,13 +75,18 @@ export const runWithTransaction = async <R>(
 	adapter: Adapter,
 	fn: () => R,
 ): Promise<R> => {
+	let called = true;
 	return ensureAsyncStorage()
 		.then((als) => {
+			called = true;
 			return adapter.transaction(async (trx) => {
 				return als.run(trx, fn);
 			});
 		})
-		.catch(() => {
-			return fn();
+		.catch((err) => {
+			if (!called) {
+				return fn();
+			}
+			throw err;
 		});
 };
