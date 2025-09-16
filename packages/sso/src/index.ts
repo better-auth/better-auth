@@ -781,6 +781,7 @@ export const sso = (options?: SSOOptions) => {
 							providerId: body.providerId,
 						},
 					});
+
 					return ctx.json({
 						...provider,
 						oidcConfig: JSON.parse(
@@ -991,10 +992,14 @@ export const sso = (options?: SSOOptions) => {
 							};
 						}
 					}
-
+					if (!providerId && !orgId && !domain) {
+						throw new APIError("BAD_REQUEST", {
+							message: "providerId, orgId or domain is required",
+						});
+					}
 					// Try to find provider in database
 					if (!provider) {
-						await ctx.context.adapter
+						provider = await ctx.context.adapter
 							.findOne<SSOProvider>({
 								model: "ssoProvider",
 								where: [
