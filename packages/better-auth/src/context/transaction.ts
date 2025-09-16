@@ -17,6 +17,9 @@ const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage> = import(
 		console.warn(
 			"[better-auth] Warning: AsyncLocalStorage is not available in this environment. Transaction support is disabled.",
 		);
+		console.warn(
+			"[better-auth] Please read more about this warning at https://better-auth.com/docs/installation#mount-handler",
+		);
 		throw err;
 	});
 
