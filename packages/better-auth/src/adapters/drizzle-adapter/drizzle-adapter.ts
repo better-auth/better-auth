@@ -21,8 +21,8 @@ import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
 	createAdapterFactory,
 	type AdapterDebugLogs,
-	type CreateAdapterOptions,
-	type CreateCustomAdapter,
+	type AdapterFactoryOptions,
+	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
 
 export interface DB {
@@ -70,7 +70,7 @@ export interface DrizzleAdapterConfig {
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
-		(db: DB): CreateCustomAdapter =>
+		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldName, debugLog }) => {
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
@@ -353,7 +353,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				options: config,
 			};
 		};
-	let adapterOptions: CreateAdapterOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "drizzle",
