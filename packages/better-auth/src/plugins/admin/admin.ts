@@ -975,6 +975,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 
+					const foundUser = await ctx.context.internalAdapter.findUserById(
+						ctx.body.userId,
+					);
+
+					if (!foundUser) {
+						throw new APIError("NOT_FOUND", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+
 					if (ctx.body.userId === ctx.context.session.user.id) {
 						throw new APIError("BAD_REQUEST", {
 							message: ADMIN_ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
