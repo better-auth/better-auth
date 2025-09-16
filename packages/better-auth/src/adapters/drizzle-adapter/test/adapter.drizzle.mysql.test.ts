@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "./schema.mysql";
-import { runAdapterTest, runNumberIdAdapterTest } from "../../test";
+import {
+	recoverProcessTZ,
+	runAdapterTest,
+	runNumberIdAdapterTest,
+} from "../../test";
 import { drizzleAdapter } from "..";
 import { getMigrations } from "../../../db/get-migration";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -126,34 +130,28 @@ describe("Drizzle Adapter Authentication Flow Tests (MySQL)", async () => {
 	});
 
 	it("stores and retrieves timestamps correctly across timezones", async () => {
-		const originalTZ = process.env.TZ;
+		using _ = recoverProcessTZ();
 
-		try {
-			const sampleUser = {
-				name: "sample",
-				email: "sampler@test.com",
-				password: "samplerrrrr",
-			};
+		const sampleUser = {
+			name: "sample",
+			email: "sampler@test.com",
+			password: "samplerrrrr",
+		};
 
-			process.env.TZ = "Europe/London";
-			const userSignUp = await auth.api.signUpEmail({
-				body: {
-					name: sampleUser.name,
-					email: sampleUser.email,
-					password: sampleUser.password,
-				},
-			});
-			process.env.TZ = "America/Los_Angeles";
-			const userSignIn = await auth.api.signInEmail({
-				body: { email: sampleUser.email, password: sampleUser.password },
-			});
+		process.env.TZ = "Europe/London";
+		const userSignUp = await auth.api.signUpEmail({
+			body: {
+				name: sampleUser.name,
+				email: sampleUser.email,
+				password: sampleUser.password,
+			},
+		});
+		process.env.TZ = "America/Los_Angeles";
+		const userSignIn = await auth.api.signInEmail({
+			body: { email: sampleUser.email, password: sampleUser.password },
+		});
 
-			expect(userSignUp.user.createdAt).toStrictEqual(
-				userSignIn.user.createdAt,
-			);
-		} finally {
-			process.env.TZ = originalTZ;
-		}
+		expect(userSignUp.user.createdAt).toStrictEqual(userSignIn.user.createdAt);
 	});
 });
 
