@@ -3,8 +3,8 @@ import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
 	createAdapterFactory,
 	type AdapterDebugLogs,
-	type CreateAdapterOptions,
-	type CreateCustomAdapter,
+	type AdapterFactoryOptions,
+	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
 
 export interface MongoDBAdapterConfig {
@@ -47,7 +47,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 	};
 
 	const createCustomAdapter =
-		(db: Db, session?: ClientSession): CreateCustomAdapter =>
+		(db: Db, session?: ClientSession): AdapterFactoryCustomizeAdapterCreator =>
 		({ options, getFieldName, schema, getDefaultModelName }) => {
 			const customIdGen = getCustomIdGenerator(options);
 
@@ -267,7 +267,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 		};
 
 	let lazyAdapter: ((options: BetterAuthOptions) => Adapter) | null = null;
-	let adapterOptions: CreateAdapterOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "mongodb-adapter",

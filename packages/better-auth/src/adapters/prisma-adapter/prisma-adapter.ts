@@ -3,8 +3,8 @@ import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
 	createAdapterFactory,
 	type AdapterDebugLogs,
-	type CreateAdapterOptions,
-	type CreateCustomAdapter,
+	type AdapterFactoryOptions,
+	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
 
 export interface PrismaConfig {
@@ -63,7 +63,7 @@ type PrismaClientInternal = {
 export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
-		(prisma: PrismaClient): CreateCustomAdapter =>
+		(prisma: PrismaClient): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldName }) => {
 			const db = prisma as PrismaClientInternal;
 
@@ -233,7 +233,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			};
 		};
 
-	let adapterOptions: CreateAdapterOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "prisma",

@@ -9,7 +9,7 @@ import type {
 } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
-	CreateAdapterOptions,
+	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 	CleanedWhere,
 } from "./types";
@@ -60,7 +60,7 @@ export const createAdapterFactory =
 	({
 		adapter: customAdapter,
 		config: cfg,
-	}: CreateAdapterOptions): AdapterFactory =>
+	}: AdapterFactoryOptions): AdapterFactory =>
 	(options: BetterAuthOptions): Adapter => {
 		const config = {
 			...cfg,
@@ -1059,3 +1059,8 @@ function formatMethod(method: string) {
 function formatAction(action: string) {
 	return `${colors.dim}(${action})${colors.reset}`;
 }
+
+/**
+ * @deprecated Use `createAdapterFactory` instead. This export will be removed in a future version.
+ */
+export const createAdapter = createAdapterFactory;
