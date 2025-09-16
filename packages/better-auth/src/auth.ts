@@ -17,10 +17,12 @@ import { BetterAuthError } from "./error";
 export type WithJsDoc<T, D> = Expand<T & D>;
 
 export const betterAuth = <O extends BetterAuthOptions>(
-	options: O & Record<never, never>,
+	options: O &
+		// fixme(alex): do we need Record<never, never> here?
+		Record<never, never>,
 ) => {
-	const authContext = init(options as O);
-	const { api } = getEndpoints(authContext, options as O);
+	const authContext = init(options);
+	const { api } = getEndpoints(authContext, options);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
 		if (plugin.$ERROR_CODES) {
 			return {
