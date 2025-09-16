@@ -499,6 +499,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 						client_secret: z.string().optional(),
 						code: z.string().optional(),
 						code_verifier: z.string().optional(),
+						redirect_uri: z.string().optional(),
 						refresh_token: z.string().optional(),
 						resource: z.string().optional(),
 						scope: z.string().optional(),
@@ -540,6 +541,12 @@ export const oauthProvider = (options: OAuthOptions) => {
 													type: "string",
 													description:
 														"PKCE code verifier (for authorization_code grant)",
+												},
+												redirect_uri: {
+													type: "string",
+													format: "uri",
+													description:
+														"Redirect URI (for authorization_code grant)",
 												},
 												refresh_token: {
 													type: "string",
