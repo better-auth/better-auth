@@ -61,7 +61,7 @@ export const runWithTransaction = async <R>(
 				return als.run(trx, fn);
 			});
 		})
-		.then(() => {
+		.catch(() => {
 			return fn();
 		});
 };
