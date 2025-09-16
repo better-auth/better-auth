@@ -431,6 +431,7 @@ describe("oauth introspect - config", async () => {
 			client_id: oauthClient?.client_id,
 			client_secret: oauthClient?.client_secret,
 			scope: testScopes.join(" "),
+			redirect_uri: redirectUri,
 		});
 		expect(tokens.data?.access_token?.startsWith(prefix)).toBeTruthy();
 
@@ -478,6 +479,7 @@ describe("oauth introspect - config", async () => {
 			client_id: oauthClient?.client_id,
 			client_secret: oauthClient?.client_secret,
 			scope: testScopes.join(" "),
+			redirect_uri: redirectUri,
 		});
 		if ("refresh_token" in (tokens.data ?? {})) {
 			expect(

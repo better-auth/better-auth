@@ -443,6 +443,7 @@ async function checkVerificationValue(
 	ctx: GenericEndpointContext,
 	code: string,
 	client_id: string,
+	redirect_uri?: string,
 ) {
 	const verification =
 		await ctx.context.internalAdapter.findVerificationValue(code);
@@ -489,6 +490,15 @@ async function checkVerificationValue(
 			error: "invalid_user",
 		});
 	}
+	if (
+		verificationValue.redirectUri &&
+		verificationValue.redirectUri != redirect_uri
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "missing verification redirect_uri",
+			error: "invalid_request",
+		});
+	}
 
 	return verificationValue;
 }
@@ -506,11 +516,13 @@ async function handleAuthorizationCodeGrant(
 		client_secret,
 		code,
 		code_verifier,
+		redirect_uri,
 	}: {
 		client_id?: string;
 		client_secret?: string;
 		code?: string;
 		code_verifier?: string;
+		redirect_uri?: string;
 	} = body;
 	const authorization = ctx.request?.headers.get("authorization") || null;
 
@@ -533,6 +545,12 @@ async function handleAuthorizationCodeGrant(
 			error: "invalid_request",
 		});
 	}
+	if (!redirect_uri) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "redirect_uri is required",
+			error: "invalid_request",
+		});
+	}
 
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
@@ -546,7 +564,12 @@ async function handleAuthorizationCodeGrant(
 	}
 
 	/** Get and check Verification Value */
-	const verificationValue = await checkVerificationValue(ctx, code, client_id);
+	const verificationValue = await checkVerificationValue(
+		ctx,
+		code,
+		client_id,
+		redirect_uri,
+	);
 	const scopes = verificationValue.scopes?.split(" ");
 
 	/** Verify Client */

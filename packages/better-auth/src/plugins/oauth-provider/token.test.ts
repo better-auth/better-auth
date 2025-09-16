@@ -1205,6 +1205,7 @@ describe("oauth token - config", async () => {
 				resource: validAudience,
 				client_id: oauthClient?.client_id,
 				client_secret: oauthClient?.client_secret,
+				redirect_uri: redirectUri,
 			});
 			expect(tokens.data?.expires_in).toBe(result); // 5m lowest
 			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
@@ -1280,6 +1281,7 @@ describe("oauth token - config", async () => {
 			grant_type: "authorization_code",
 			client_id: oauthClient?.client_id,
 			client_secret: oauthClient?.client_secret,
+			redirect_uri: redirectUri,
 		});
 		expect(
 			tokens.data?.access_token?.startsWith(accessTokenPrefix),
