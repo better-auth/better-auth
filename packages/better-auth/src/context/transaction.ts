@@ -5,11 +5,19 @@ import type { Adapter } from "../types";
  * Dynamically import AsyncLocalStorage to avoid issues in environments where it's not available.
  *
  * Right now, this is primarily for Cloudflare Workers and Vercel Edge Functions.
+ *
+ * We will directly import 'node:async_hooks' in the next major release.
  */
 let moduleName: string = "node:async_hooks";
 const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage> = import(
 	moduleName
-).then((mod) => mod.AsyncLocalStorage);
+)
+	.then((mod) => mod.AsyncLocalStorage)
+	.catch(() => {
+		console.warn(
+			"[better-auth] Warning: AsyncLocalStorage is not available in this environment. Transaction support is disabled.",
+		);
+	});
 
 /**
  * @internal

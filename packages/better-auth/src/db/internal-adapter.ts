@@ -5,7 +5,6 @@ import type {
 	AuthContext,
 	BetterAuthOptions,
 	GenericEndpointContext,
-	TransactionAdapter,
 	Where,
 } from "../types";
 import {
