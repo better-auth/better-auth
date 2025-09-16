@@ -461,7 +461,8 @@ export const createAdapterFactory =
 
 					if (originalKey === "id" || field.references?.field === "id") {
 						// Even if `useNumberId` is true, we must always return a string `id` output.
-						if (typeof newValue !== "undefined" && newValue !== null) newValue = String(newValue);
+						if (typeof newValue !== "undefined" && newValue !== null)
+							newValue = String(newValue);
 					} else if (
 						config.supportsJSON === false &&
 						typeof newValue === "string" &&
