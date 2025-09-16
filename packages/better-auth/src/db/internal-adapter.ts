@@ -18,11 +18,7 @@ import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId, type InternalLogger } from "../utils";
-import {
-	getCurrentAdapter,
-	runWithAdapter,
-	runWithTransaction,
-} from "../context/transaction";
+import { getCurrentAdapter, runWithTransaction } from "../context/transaction";
 
 export const createInternalAdapter = (
 	adapter: Adapter,

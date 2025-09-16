@@ -57,9 +57,7 @@ export const betterAuth = <O extends BetterAuthOptions>(
 				ctx.options.baseURL!,
 			];
 			const { handler } = router(ctx, options);
-			return runWithAdapter(ctx.adapter, () => {
-				handler(request);
-			});
+			return runWithAdapter(ctx.adapter, () => handler(request));
 		},
 		api: api as InferAPI<typeof api>,
 		options: options as O,
