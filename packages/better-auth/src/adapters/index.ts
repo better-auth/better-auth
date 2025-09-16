@@ -37,6 +37,6 @@ export type CreateAdapterOptions = AdapterFactoryOptions;
 export type AdapterConfig = AdapterFactoryConfig;
 
 /**
- * @deprecated Use `AdapterFactoryCustomizeAdapterCreator` from adapter-factory instead. This export will be removed in the next major version.
+ * @deprecated Use `AdapterFactoryCustomizeAdapterCreator` instead. This export will be removed in the next major version.
  */
 export type CreateCustomAdapter = AdapterFactoryCustomizeAdapterCreator;
