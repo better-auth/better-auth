@@ -192,7 +192,7 @@ await authClient.signOut({
 
 ## Session
 
-Once a user is signed in, you'll want to access the user session. Better Auth allows you easily to access the session data from the server and client side.
+Once a user is signed in, you'll want to access the user session. Better Auth allows you to easily access the session data from both the server and client sides.
 
 ### Client Side
 
@@ -454,7 +454,7 @@ import { twoFactorClient } from "better-auth/client/plugins"; // [!code highligh
 const authClient = createAuthClient({
     plugins: [ // [!code highlight]
         twoFactorClient({ // [!code highlight]
-            twoFactorPage: "/two-factor" // the page to redirect if a user need to verify 2nd factor // [!code highlight]
+            twoFactorPage: "/two-factor" // the page to redirect if a user needs to verify 2nd factor // [!code highlight]
         }) // [!code highlight]
     ] // [!code highlight]
 })

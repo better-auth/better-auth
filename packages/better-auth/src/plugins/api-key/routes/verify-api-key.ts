@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { APIError, createAuthEndpoint } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
@@ -9,7 +9,6 @@ import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
 import { defaultKeyHasher } from "../";
-import { createApiKey } from "./create-api-key";
 
 export async function validateApiKey({
 	hashedKey,

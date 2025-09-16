@@ -291,7 +291,7 @@ export type BetterAuthOptions = {
 	/**
 	 * List of Better Auth plugins
 	 */
-	plugins?: BetterAuthPlugin[];
+	plugins?: [] | BetterAuthPlugin[];
 	/**
 	 * User configuration
 	 */
@@ -609,12 +609,17 @@ export type BetterAuthOptions = {
 						 */
 						max: number;
 				  }
+				| false
 				| ((request: Request) =>
 						| { window: number; max: number }
-						| Promise<{
-								window: number;
-								max: number;
-						  }>);
+						| false
+						| Promise<
+								| {
+										window: number;
+										max: number;
+								  }
+								| false
+						  >);
 		};
 		/**
 		 * Storage configuration
