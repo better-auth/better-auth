@@ -4,9 +4,6 @@
   "dependencies": {
     "better-auth": "workspace:*"
   },
-  "devDependencies": {
-    "@types/node": "^24.3.0"
-  },
   "scripts": {
     "e2e:smoke": "node --test ./test/*.spec.ts"
   }
