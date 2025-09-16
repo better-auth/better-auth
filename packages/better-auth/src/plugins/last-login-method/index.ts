@@ -64,49 +64,52 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 	return {
 		id: "last-login-method",
 		init(ctx) {
-		return {
-			options: {
-				databaseHooks: {
-					user: {
-						create: {
-							async before(user, context) {
-								if (!config.storeInDatabase) return;
-								if (!context) return;
-								const lastUsedLoginMethod =
-									config.customResolveMethod(context);
-								if (lastUsedLoginMethod) {
-									return {
-										data: {
-											...user,
-											lastLoginMethod: lastUsedLoginMethod,
-										},
-									};
-								}
+			return {
+				options: {
+					databaseHooks: {
+						user: {
+							create: {
+								async before(user, context) {
+									if (!config.storeInDatabase) return;
+									if (!context) return;
+									const lastUsedLoginMethod =
+										config.customResolveMethod(context);
+									if (lastUsedLoginMethod) {
+										return {
+											data: {
+												...user,
+												lastLoginMethod: lastUsedLoginMethod,
+											},
+										};
+									}
+								},
 							},
 						},
-					},
-					session: {
-						create: {
-							async after(session, context) {
-								if (!config.storeInDatabase) return;
-								if (!context) return;
-								const lastUsedLoginMethod =
-									config.customResolveMethod(context);
-								if (lastUsedLoginMethod && session?.userId) {
-									try {
-										await ctx.internalAdapter.updateUser(session.userId , {
-											lastLoginMethod: lastUsedLoginMethod,
-										})		
-									} catch (error) {
-										ctx.logger.error("Failed to update lastLoginMethod", error);
+						session: {
+							create: {
+								async after(session, context) {
+									if (!config.storeInDatabase) return;
+									if (!context) return;
+									const lastUsedLoginMethod =
+										config.customResolveMethod(context);
+									if (lastUsedLoginMethod && session?.userId) {
+										try {
+											await ctx.internalAdapter.updateUser(session.userId, {
+												lastLoginMethod: lastUsedLoginMethod,
+											});
+										} catch (error) {
+											ctx.logger.error(
+												"Failed to update lastLoginMethod",
+												error,
+											);
+										}
 									}
-								}
+								},
 							},
 						},
 					},
 				},
-			},
-		};
+			};
 		},
 		hooks: {
 			after: [

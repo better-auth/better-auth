@@ -174,7 +174,7 @@ describe("lastLoginMethod", async () => {
 				authorization: `Bearer ${emailSignInData2.token}`,
 			}),
 		});
-		
+
 		expect((session?.user as any).lastLoginMethod).toBe("email");
 	});
 
@@ -188,7 +188,6 @@ describe("lastLoginMethod", async () => {
 				},
 			},
 		});
-
 
 		await client.signUp.email(
 			{
@@ -212,7 +211,7 @@ describe("lastLoginMethod", async () => {
 				authorization: `Bearer ${emailSignInData.token}`,
 			}),
 		});
-		
+
 		expect((session?.user as any).lastLoginMethod).toBe("email");
 
 		await client.signOut();
@@ -238,13 +237,15 @@ describe("lastLoginMethod", async () => {
 				expect(context.response.status).toBe(302);
 				const location = context.response.headers.get("location");
 				expect(location).toBeDefined();
-				
+
 				cookieSetter(headers)(context as any);
-				
+
 				const cookies = parseSetCookieHeader(
 					context.response.headers.get("set-cookie") || "",
 				);
-				const lastLoginMethod = cookies.get("better-auth.last_used_login_method")?.value;
+				const lastLoginMethod = cookies.get(
+					"better-auth.last_used_login_method",
+				)?.value;
 				if (lastLoginMethod) {
 					expect(lastLoginMethod).toBe("google");
 				}
@@ -257,7 +258,5 @@ describe("lastLoginMethod", async () => {
 			},
 		});
 		expect((oauthSession?.data?.user as any).lastLoginMethod).toBe("google");
-
 	});
-
 });
