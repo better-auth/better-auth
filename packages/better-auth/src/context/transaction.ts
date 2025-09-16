@@ -46,7 +46,7 @@ export const runWithAdapter = async <R>(
 		.then((als) => {
 			return als.run(adapter, fn);
 		})
-		.then(() => {
+		.catch(() => {
 			return fn();
 		});
 };
