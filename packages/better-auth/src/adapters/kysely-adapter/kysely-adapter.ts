@@ -1,8 +1,8 @@
 import {
 	createAdapterFactory,
 	type AdapterDebugLogs,
-	type CreateCustomAdapter,
-	type CreateAdapterOptions,
+	type AdapterFactoryCustomizeAdapterCreator,
+	type AdapterFactoryOptions,
 } from "../adapter-factory";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
@@ -40,7 +40,9 @@ export const kyselyAdapter = (
 	config?: KyselyAdapterConfig,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
-	const createCustomAdapter = (db: Kysely<any>): CreateCustomAdapter => {
+	const createCustomAdapter = (
+		db: Kysely<any>,
+	): AdapterFactoryCustomizeAdapterCreator => {
 		return ({ getFieldName, schema }) => {
 			const withReturning = async (
 				values: Record<string, any>,
@@ -319,7 +321,7 @@ export const kyselyAdapter = (
 			};
 		};
 	};
-	let adapterOptions: CreateAdapterOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "kysely",
