@@ -120,7 +120,7 @@ if (data) {
 Here are examples for different blockchain networks:
 
 ```ts title="ethereum-mainnet.ts"
-// ✅ Ethereum Mainnet (chainId can be omitted, defaults to 1)
+// Ethereum Mainnet (chainId can be omitted, defaults to 1)
 const { data, error } = await authClient.siwe.verify({
   message,
   signature,
@@ -130,7 +130,7 @@ const { data, error } = await authClient.siwe.verify({
 ```
 
 ```ts title="polygon.ts"
-// ✅ Polygon (chainId REQUIRED)
+// Polygon (chainId REQUIRED)
 const { data, error } = await authClient.siwe.verify({
   message,
   signature,
@@ -140,7 +140,7 @@ const { data, error } = await authClient.siwe.verify({
 ```
 
 ```ts title="arbitrum.ts"
-// ✅ Arbitrum (chainId REQUIRED)
+// Arbitrum (chainId REQUIRED)
 const { data, error } = await authClient.siwe.verify({
   message,
   signature,
