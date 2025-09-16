@@ -1,13 +1,17 @@
 import { safeJSONParse } from "../../utils/json";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type {
+	Adapter,
+	BetterAuthOptions,
+	TransactionAdapter,
+	Where,
+} from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
-	AdapterConfig,
+	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 	CleanedWhere,
-	CreateCustomAdapter,
 } from "./types";
 import type { FieldAttribute } from "../../db";
 export * from "./types";
@@ -45,14 +49,18 @@ const colors = {
 	},
 };
 
-export const createAdapter =
+const createAsIsTransaction =
+	(adapter: Adapter) =>
+	<R>(fn: (trx: TransactionAdapter) => Promise<R>) =>
+		fn(adapter);
+
+export type AdapterFactory = (options: BetterAuthOptions) => Adapter;
+
+export const createAdapterFactory =
 	({
-		adapter,
+		adapter: customAdapter,
 		config: cfg,
-	}: {
-		config: AdapterConfig;
-		adapter: CreateCustomAdapter;
-	}) =>
+	}: AdapterFactoryOptions): AdapterFactory =>
 	(options: BetterAuthOptions): Adapter => {
 		const config = {
 			...cfg,
@@ -315,7 +323,7 @@ export const createAdapter =
 			return fields[defaultFieldName];
 		};
 
-		const adapterInstance = adapter({
+		const adapterInstance = customAdapter({
 			options,
 			schema,
 			debugLog,
@@ -560,7 +568,24 @@ export const createAdapter =
 			}) as any;
 		};
 
-		return {
+		let lazyLoadTransaction: Adapter["transaction"] | null = null;
+		const adapter: Adapter = {
+			transaction: async (cb) => {
+				if (!lazyLoadTransaction) {
+					if (!config.transaction) {
+						logger.warn(
+							`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
+						);
+						lazyLoadTransaction = createAsIsTransaction(adapter);
+					} else {
+						logger.debug(
+							`[${config.adapterName}] - Using provided transaction implementation.`,
+						);
+						lazyLoadTransaction = config.transaction;
+					}
+				}
+				return lazyLoadTransaction(cb);
+			},
 			create: async <T extends Record<string, any>, R = T>({
 				data: unsafeData,
 				model: unsafeModel,
@@ -1016,6 +1041,7 @@ export const createAdapter =
 					}
 				: {}),
 		};
+		return adapter;
 	};
 
 function formatTransactionId(transactionId: number) {
@@ -1033,3 +1059,8 @@ function formatMethod(method: string) {
 function formatAction(action: string) {
 	return `${colors.dim}(${action})${colors.reset}`;
 }
+
+/**
+ * @deprecated Use `createAdapterFactory` instead. This export will be removed in a future version.
+ */
+export const createAdapter = createAdapterFactory;

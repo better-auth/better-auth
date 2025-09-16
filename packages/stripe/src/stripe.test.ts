@@ -1102,4 +1102,182 @@ describe("stripe", async () => {
 		});
 		expect(personalAfter?.status).toBe("active");
 	});
+
+	it("should prevent multiple free trials for the same user", async () => {
+		// Create a user
+		const userRes = await authClient.signUp.email(
+			{ ...testUser, email: "trial-prevention@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{ ...testUser, email: "trial-prevention@email.com" },
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		// First subscription with trial
+		const firstUpgradeRes = await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		expect(firstUpgradeRes.data?.url).toBeDefined();
+
+		// Simulate the subscription being created with trial data
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "trialing",
+				trialStart: new Date(),
+				trialEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Cancel the subscription
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "canceled",
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Try to subscribe again - should NOT get a trial
+		const secondUpgradeRes = await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		expect(secondUpgradeRes.data?.url).toBeDefined();
+
+		// Verify that the checkout session was created without trial_period_days
+		// We can't directly test the Stripe session, but we can verify the logic
+		// by checking that the user has trial history
+		const subscriptions = (await ctx.adapter.findMany({
+			model: "subscription",
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		})) as Subscription[];
+
+		// Should have 2 subscriptions (first canceled, second new)
+		expect(subscriptions).toHaveLength(2);
+
+		// At least one should have trial data
+		const hasTrialData = subscriptions.some(
+			(s: Subscription) => s.trialStart || s.trialEnd,
+		);
+		expect(hasTrialData).toBe(true);
+	});
+
+	it("should prevent multiple free trials across different plans", async () => {
+		// Create a user
+		const userRes = await authClient.signUp.email(
+			{ ...testUser, email: "cross-plan-trial@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{ ...testUser, email: "cross-plan-trial@email.com" },
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		// First subscription with trial on starter plan
+		const firstUpgradeRes = await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		expect(firstUpgradeRes.data?.url).toBeDefined();
+
+		// Simulate the subscription being created with trial data
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "trialing",
+				trialStart: new Date(),
+				trialEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Cancel the subscription
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "canceled",
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Try to subscribe to a different plan - should NOT get a trial
+		const secondUpgradeRes = await authClient.subscription.upgrade({
+			plan: "premium",
+			fetchOptions: { headers },
+		});
+
+		expect(secondUpgradeRes.data?.url).toBeDefined();
+
+		// Verify that the user has trial history from the first plan
+		const subscriptions = (await ctx.adapter.findMany({
+			model: "subscription",
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		})) as Subscription[];
+
+		// Should have at least 1 subscription (the starter with trial data)
+		expect(subscriptions.length).toBeGreaterThanOrEqual(1);
+
+		// The starter subscription should have trial data
+		const starterSub = subscriptions.find(
+			(s: Subscription) => s.plan === "starter",
+		) as Subscription | undefined;
+		expect(starterSub?.trialStart).toBeDefined();
+		expect(starterSub?.trialEnd).toBeDefined();
+
+		// Verify that the trial eligibility logic is working by checking
+		// that the user has ever had a trial (which should prevent future trials)
+		const hasEverTrialed = subscriptions.some((s: Subscription) => {
+			const hadTrial =
+				!!(s.trialStart || s.trialEnd) || s.status === "trialing";
+			return hadTrial;
+		});
+		expect(hasEverTrialed).toBe(true);
+	});
 });

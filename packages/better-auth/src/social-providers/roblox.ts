@@ -20,6 +20,7 @@ export interface RobloxProfile extends Record<string, any> {
 }
 
 export interface RobloxOptions extends ProviderOptions<RobloxProfile> {
+	clientId: string;
 	prompt?:
 		| "none"
 		| "consent"

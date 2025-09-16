@@ -1,9 +1,9 @@
 import { describe, test, expect } from "vitest";
-import { createAdapter } from "..";
+import { createAdapterFactory } from "..";
 import type {
-	AdapterConfig,
+	AdapterFactoryConfig,
 	CleanedWhere,
-	CreateCustomAdapter,
+	AdapterFactoryCustomizeAdapterCreator,
 } from "../types";
 import type { BetterAuthOptions, User, Where } from "../../../types";
 import { betterAuth } from "../../../auth";
@@ -21,11 +21,11 @@ The rest are just edge cases.
 
 async function createTestAdapter(
 	props: {
-		config?: Partial<AdapterConfig>;
+		config?: Partial<AdapterFactoryConfig>;
 		options?: BetterAuthOptions;
 		adapter?: (
-			...args: Parameters<CreateCustomAdapter>
-		) => Partial<ReturnType<CreateCustomAdapter>>;
+			...args: Parameters<AdapterFactoryCustomizeAdapterCreator>
+		) => Partial<ReturnType<AdapterFactoryCustomizeAdapterCreator>>;
 	} = {
 		config: {
 			adapterId: "test-id",
@@ -53,7 +53,7 @@ async function createTestAdapter(
 		options = {},
 		adapter = () => ({}),
 	} = props;
-	const testAdapter = createAdapter({
+	const testAdapter = createAdapterFactory({
 		config: Object.assign(
 			{
 				adapterId: "test-id",
@@ -67,7 +67,9 @@ async function createTestAdapter(
 			config,
 		),
 		adapter: (...args) => {
-			const x = adapter(...args) as Partial<ReturnType<CreateCustomAdapter>>;
+			const x = adapter(...args) as Partial<
+				ReturnType<AdapterFactoryCustomizeAdapterCreator>
+			>;
 			return {
 				async create(data) {
 					if (x.create) {
