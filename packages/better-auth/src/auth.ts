@@ -7,6 +7,7 @@ import type {
 	InferSession,
 	InferUser,
 	AuthContext,
+	Adapter,
 } from "./types";
 import type { PrettifyDeep, Expand } from "./types/helper";
 import { getBaseURL, getOrigin } from "./utils/url";
@@ -55,8 +56,23 @@ export const betterAuth = <O extends BetterAuthOptions>(
 					: []),
 				ctx.options.baseURL!,
 			];
+			const { runWithAdapter } = await import("./context/transaction.js").catch(
+				() => {
+					ctx.logger.warn(
+						'Failed to load "AsyncLocalStorage" from "node:async_hooks". Transactional operations are not supported in this environment.',
+					);
+					return {
+						runWithAdapter: <T>(
+							adapter: Omit<Adapter, "transaction">,
+							fn: () => T,
+						): T => fn(),
+					};
+				},
+			);
 			const { handler } = router(ctx, options);
-			return handler(request);
+			return ctx.adapter.transaction((trx) => {
+				return runWithAdapter(trx, () => handler(request));
+			});
 		},
 		api: api as InferAPI<typeof api>,
 		options: options as O,

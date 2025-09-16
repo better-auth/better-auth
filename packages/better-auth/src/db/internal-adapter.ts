@@ -5,7 +5,6 @@ import type {
 	AuthContext,
 	BetterAuthOptions,
 	GenericEndpointContext,
-	TransactionAdapter,
 	Where,
 } from "../types";
 import {
@@ -19,8 +18,12 @@ import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId, type InternalLogger } from "../utils";
 
+let lazyLoadGetCurrentAdapter:
+	| (() => Promise<Omit<Adapter, "transaction">>)
+	| null = null;
+
 export const createInternalAdapter = (
-	adapter: Adapter,
+	adapterFallback: Adapter,
 	ctx: {
 		options: Omit<BetterAuthOptions, "logger">;
 		logger: InternalLogger;
@@ -32,8 +35,36 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
+	// use getCurrentAdapter directly in the next major release
+	const getAdapter = async () => {
+		if (!lazyLoadGetCurrentAdapter) {
+			const { getCurrentAdapter } = await import("../context/transaction.js")
+				.then(({ getCurrentAdapter }) => {
+					return {
+						getCurrentAdapter: async () => {
+							try {
+								return getCurrentAdapter();
+							} catch {
+								return adapterFallback;
+							}
+						},
+					};
+				})
+				.catch(() => {
+					ctx.logger.warn(
+						'Failed to load "AsyncLocalStorage" from "node:async_hooks". Transactional operations are not supported in this environment.',
+					);
+					return {
+						getCurrentAdapter: async () =>
+							adapterFallback as Omit<Adapter, "transaction">,
+					};
+				});
+			lazyLoadGetCurrentAdapter = async () => getCurrentAdapter();
+		}
+		return lazyLoadGetCurrentAdapter();
+	};
 	const { createWithHooks, updateWithHooks, updateManyWithHooks } =
-		getWithHooks(adapter, ctx);
+		getWithHooks(getAdapter, ctx);
 
 	return {
 		createOAuthUser: async (
@@ -42,44 +73,39 @@ export const createInternalAdapter = (
 				Partial<Account>,
 			context?: GenericEndpointContext,
 		) => {
-			return adapter.transaction(async (trxAdapter) => {
-				const createdUser = await createWithHooks(
-					{
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						...user,
-					},
-					"user",
-					undefined,
-					context,
-					trxAdapter,
-				);
-				const createdAccount = await createWithHooks(
-					{
-						...account,
-						userId: createdUser!.id,
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
-					"account",
-					undefined,
-					context,
-					trxAdapter,
-				);
-				return {
-					user: createdUser,
-					account: createdAccount,
-				};
-			});
+			const createdUser = await createWithHooks(
+				{
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...user,
+				},
+				"user",
+				undefined,
+				context,
+			);
+			const createdAccount = await createWithHooks(
+				{
+					...account,
+					userId: createdUser!.id,
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+				"account",
+				undefined,
+				context,
+			);
+			return {
+				user: createdUser,
+				account: createdAccount,
+			};
 		},
 		createUser: async <T>(
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 				Partial<User> &
 				Record<string, any>,
 			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
 		) => {
 			const createdUser = await createWithHooks(
 				{
@@ -92,7 +118,6 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 				context,
-				trxAdapter,
 			);
 			return createdUser as T & User;
 		},
@@ -101,7 +126,6 @@ export const createInternalAdapter = (
 				Partial<Account> &
 				T,
 			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
 		) => {
 			const createdAccount = await createWithHooks(
 				{
@@ -113,11 +137,10 @@ export const createInternalAdapter = (
 				"account",
 				undefined,
 				context,
-				trxAdapter,
 			);
 			return createdAccount as T & Account;
 		},
-		listSessions: async (userId: string, trxAdapter?: TransactionAdapter) => {
+		listSessions: async (userId: string) => {
 			if (secondaryStorage) {
 				const currentList = await secondaryStorage.get(
 					`active-sessions-${userId}`,
@@ -149,7 +172,7 @@ export const createInternalAdapter = (
 				return sessions;
 			}
 
-			const sessions = await (trxAdapter || adapter).findMany<Session>({
+			const sessions = await (await getAdapter()).findMany<Session>({
 				model: "session",
 				where: [
 					{
@@ -168,9 +191,8 @@ export const createInternalAdapter = (
 				direction: "asc" | "desc";
 			},
 			where?: Where[],
-			trxAdapter?: TransactionAdapter,
 		) => {
-			const users = await (trxAdapter || adapter).findMany<User>({
+			const users = await (await getAdapter()).findMany<User>({
 				model: "user",
 				limit,
 				offset,
@@ -179,11 +201,8 @@ export const createInternalAdapter = (
 			});
 			return users;
 		},
-		countTotalUsers: async (
-			where?: Where[],
-			trxAdapter?: TransactionAdapter,
-		) => {
-			const total = await (trxAdapter || adapter).count({
+		countTotalUsers: async (where?: Where[]) => {
+			const total = await (await getAdapter()).count({
 				model: "user",
 				where,
 			});
@@ -192,13 +211,13 @@ export const createInternalAdapter = (
 			}
 			return total;
 		},
-		deleteUser: async (userId: string, trxAdapter?: TransactionAdapter) => {
+		deleteUser: async (userId: string) => {
 			if (secondaryStorage) {
 				await secondaryStorage.delete(`active-sessions-${userId}`);
 			}
 
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-				await (trxAdapter || adapter).deleteMany({
+				await (await getAdapter()).deleteMany({
 					model: "session",
 					where: [
 						{
@@ -209,7 +228,7 @@ export const createInternalAdapter = (
 				});
 			}
 
-			await (trxAdapter || adapter).deleteMany({
+			await (await getAdapter()).deleteMany({
 				model: "account",
 				where: [
 					{
@@ -218,7 +237,7 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			await (trxAdapter || adapter).delete({
+			await (await getAdapter()).delete({
 				model: "user",
 				where: [
 					{
@@ -234,7 +253,6 @@ export const createInternalAdapter = (
 			dontRememberMe?: boolean,
 			override?: Partial<Session> & Record<string, any>,
 			overrideAll?: boolean,
-			trxAdapter?: TransactionAdapter,
 		) => {
 			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
@@ -299,13 +317,11 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 				ctx,
-				trxAdapter,
 			);
 			return res as Session;
 		},
 		findSession: async (
 			token: string,
-			trxAdapter?: TransactionAdapter,
 		): Promise<{
 			session: Session & Record<string, any>;
 			user: User & Record<string, any>;
@@ -339,7 +355,7 @@ export const createInternalAdapter = (
 				}
 			}
 
-			const session = await (trxAdapter || adapter).findOne<Session>({
+			const session = await (await getAdapter()).findOne<Session>({
 				model: "session",
 				where: [
 					{
@@ -353,7 +369,7 @@ export const createInternalAdapter = (
 				return null;
 			}
 
-			const user = await (trxAdapter || adapter).findOne<User>({
+			const user = await (await getAdapter()).findOne<User>({
 				model: "user",
 				where: [
 					{
@@ -373,10 +389,7 @@ export const createInternalAdapter = (
 				user: parsedUser,
 			};
 		},
-		findSessions: async (
-			sessionTokens: string[],
-			trxAdapter?: TransactionAdapter,
-		) => {
+		findSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
 				const sessions: {
 					session: Session;
@@ -410,7 +423,7 @@ export const createInternalAdapter = (
 				return sessions;
 			}
 
-			const sessions = await (trxAdapter || adapter).findMany<Session>({
+			const sessions = await (await getAdapter()).findMany<Session>({
 				model: "session",
 				where: [
 					{
@@ -424,7 +437,7 @@ export const createInternalAdapter = (
 				return session.userId;
 			});
 			if (!userIds.length) return [];
-			const users = await (trxAdapter || adapter).findMany<User>({
+			const users = await (await getAdapter()).findMany<User>({
 				model: "user",
 				where: [
 					{
@@ -450,7 +463,6 @@ export const createInternalAdapter = (
 			sessionToken: string,
 			session: Partial<Session> & Record<string, any>,
 			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
 		) => {
 			const updatedSession = await updateWithHooks<Session>(
 				session,
@@ -480,11 +492,10 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 				context,
-				trxAdapter,
 			);
 			return updatedSession;
 		},
-		deleteSession: async (token: string, trxAdapter?: TransactionAdapter) => {
+		deleteSession: async (token: string) => {
 			if (secondaryStorage) {
 				// remove the session from the active sessions list
 				const data = await secondaryStorage.get(token);
@@ -531,7 +542,7 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-			await (trxAdapter || adapter).delete<Session>({
+			await (await getAdapter()).delete<Session>({
 				model: "session",
 				where: [
 					{
@@ -541,8 +552,8 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		deleteAccounts: async (userId: string, trxAdapter?: TransactionAdapter) => {
-			await (trxAdapter || adapter).deleteMany({
+		deleteAccounts: async (userId: string) => {
+			await (await getAdapter()).deleteMany({
 				model: "account",
 				where: [
 					{
@@ -552,11 +563,8 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		deleteAccount: async (
-			accountId: string,
-			trxAdapter?: TransactionAdapter,
-		) => {
-			await (trxAdapter || adapter).delete({
+		deleteAccount: async (accountId: string) => {
+			await (await getAdapter()).delete({
 				model: "account",
 				where: [
 					{
@@ -566,10 +574,7 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		deleteSessions: async (
-			userIdOrSessionTokens: string | string[],
-			trxAdapter?: TransactionAdapter,
-		) => {
+		deleteSessions: async (userIdOrSessionTokens: string | string[]) => {
 			if (secondaryStorage) {
 				if (typeof userIdOrSessionTokens === "string") {
 					const activeSession = await secondaryStorage.get(
@@ -598,7 +603,7 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-			await (trxAdapter || adapter).deleteMany({
+			await (await getAdapter()).deleteMany({
 				model: "session",
 				where: [
 					{
@@ -613,10 +618,9 @@ export const createInternalAdapter = (
 			email: string,
 			accountId: string,
 			providerId: string,
-			trxAdapter?: TransactionAdapter,
 		) => {
 			// we need to find account first to avoid missing user if the email changed with the provider for the same account
-			const account = await (trxAdapter || adapter)
+			const account = await (await getAdapter())
 				.findMany<Account>({
 					model: "account",
 					where: [
@@ -630,7 +634,7 @@ export const createInternalAdapter = (
 					return accounts.find((a) => a.providerId === providerId);
 				});
 			if (account) {
-				const user = await (trxAdapter || adapter).findOne<User>({
+				const user = await (await getAdapter()).findOne<User>({
 					model: "user",
 					where: [
 						{
@@ -645,7 +649,7 @@ export const createInternalAdapter = (
 						accounts: [account],
 					};
 				} else {
-					const user = await (trxAdapter || adapter).findOne<User>({
+					const user = await (await getAdapter()).findOne<User>({
 						model: "user",
 						where: [
 							{
@@ -663,7 +667,7 @@ export const createInternalAdapter = (
 					return null;
 				}
 			} else {
-				const user = await (trxAdapter || adapter).findOne<User>({
+				const user = await (await getAdapter()).findOne<User>({
 					model: "user",
 					where: [
 						{
@@ -673,7 +677,7 @@ export const createInternalAdapter = (
 					],
 				});
 				if (user) {
-					const accounts = await (trxAdapter || adapter).findMany<Account>({
+					const accounts = await (await getAdapter()).findMany<Account>({
 						model: "account",
 						where: [
 							{
@@ -694,9 +698,8 @@ export const createInternalAdapter = (
 		findUserByEmail: async (
 			email: string,
 			options?: { includeAccounts: boolean },
-			trxAdapter?: TransactionAdapter,
 		) => {
-			const user = await (trxAdapter || adapter).findOne<User>({
+			const user = await (await getAdapter()).findOne<User>({
 				model: "user",
 				where: [
 					{
@@ -707,7 +710,7 @@ export const createInternalAdapter = (
 			});
 			if (!user) return null;
 			if (options?.includeAccounts) {
-				const accounts = await (trxAdapter || adapter).findMany<Account>({
+				const accounts = await (await getAdapter()).findMany<Account>({
 					model: "account",
 					where: [
 						{
@@ -726,8 +729,8 @@ export const createInternalAdapter = (
 				accounts: [],
 			};
 		},
-		findUserById: async (userId: string, trxAdapter?: TransactionAdapter) => {
-			const user = await (trxAdapter || adapter).findOne<User>({
+		findUserById: async (userId: string) => {
+			const user = await (await getAdapter()).findOne<User>({
 				model: "user",
 				where: [
 					{
@@ -742,7 +745,6 @@ export const createInternalAdapter = (
 			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
 		) => {
 			const _account = await createWithHooks(
 				{
@@ -754,7 +756,6 @@ export const createInternalAdapter = (
 				"account",
 				undefined,
 				context,
-				trxAdapter,
 			);
 			return _account;
 		},
@@ -762,7 +763,6 @@ export const createInternalAdapter = (
 			userId: string,
 			data: Partial<User> & Record<string, any>,
 			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
 		) => {
 			const user = await updateWithHooks<User>(
 				data,
@@ -775,7 +775,6 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 				context,
-				trxAdapter,
 			);
 			if (secondaryStorage && user) {
 				const listRaw = await secondaryStorage.get(`active-sessions-${userId}`);
@@ -818,7 +817,6 @@ export const createInternalAdapter = (
 			email: string,
 			data: Partial<User & Record<string, any>>,
 			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
 		) => {
 			const user = await updateWithHooks<User>(
 				data,
@@ -831,7 +829,6 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 				context,
-				trxAdapter,
 			);
 			return user;
 		},
@@ -839,7 +836,6 @@ export const createInternalAdapter = (
 			userId: string,
 			password: string,
 			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
 		) => {
 			await updateManyWithHooks(
 				{
@@ -858,11 +854,10 @@ export const createInternalAdapter = (
 				"account",
 				undefined,
 				context,
-				trxAdapter,
 			);
 		},
-		findAccounts: async (userId: string, trxAdapter?: TransactionAdapter) => {
-			const accounts = await (trxAdapter || adapter).findMany<Account>({
+		findAccounts: async (userId: string) => {
+			const accounts = await (await getAdapter()).findMany<Account>({
 				model: "account",
 				where: [
 					{
@@ -873,8 +868,8 @@ export const createInternalAdapter = (
 			});
 			return accounts;
 		},
-		findAccount: async (accountId: string, trxAdapter?: TransactionAdapter) => {
-			const account = await (trxAdapter || adapter).findOne<Account>({
+		findAccount: async (accountId: string) => {
+			const account = await (await getAdapter()).findOne<Account>({
 				model: "account",
 				where: [
 					{
@@ -885,12 +880,8 @@ export const createInternalAdapter = (
 			});
 			return account;
 		},
-		findAccountByProviderId: async (
-			accountId: string,
-			providerId: string,
-			trxAdapter?: TransactionAdapter,
-		) => {
-			const account = await (trxAdapter || adapter).findOne<Account>({
+		findAccountByProviderId: async (accountId: string, providerId: string) => {
+			const account = await (await getAdapter()).findOne<Account>({
 				model: "account",
 				where: [
 					{
@@ -905,11 +896,8 @@ export const createInternalAdapter = (
 			});
 			return account;
 		},
-		findAccountByUserId: async (
-			userId: string,
-			trxAdapter?: TransactionAdapter,
-		) => {
-			const account = await (trxAdapter || adapter).findMany<Account>({
+		findAccountByUserId: async (userId: string) => {
+			const account = await (await getAdapter()).findMany<Account>({
 				model: "account",
 				where: [
 					{
@@ -924,7 +912,6 @@ export const createInternalAdapter = (
 			id: string,
 			data: Partial<Account>,
 			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
 		) => {
 			const account = await updateWithHooks<Account>(
 				data,
@@ -932,7 +919,6 @@ export const createInternalAdapter = (
 				"account",
 				undefined,
 				context,
-				trxAdapter,
 			);
 			return account;
 		},
@@ -940,7 +926,6 @@ export const createInternalAdapter = (
 			data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 				Partial<Verification>,
 			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
 		) => {
 			const verification = await createWithHooks(
 				{
@@ -952,32 +937,26 @@ export const createInternalAdapter = (
 				"verification",
 				undefined,
 				context,
-				trxAdapter,
 			);
 			return verification as Verification;
 		},
-		findVerificationValue: async (
-			identifier: string,
-			trxAdapter?: TransactionAdapter,
-		) => {
-			const verification = await (trxAdapter || adapter).findMany<Verification>(
-				{
-					model: "verification",
-					where: [
-						{
-							field: "identifier",
-							value: identifier,
-						},
-					],
-					sortBy: {
-						field: "createdAt",
-						direction: "desc",
+		findVerificationValue: async (identifier: string) => {
+			const verification = await (await getAdapter()).findMany<Verification>({
+				model: "verification",
+				where: [
+					{
+						field: "identifier",
+						value: identifier,
 					},
-					limit: 1,
+				],
+				sortBy: {
+					field: "createdAt",
+					direction: "desc",
 				},
-			);
+				limit: 1,
+			});
 			if (!options.verification?.disableCleanup) {
-				await (trxAdapter || adapter).deleteMany({
+				await (await getAdapter()).deleteMany({
 					model: "verification",
 					where: [
 						{
@@ -991,11 +970,8 @@ export const createInternalAdapter = (
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;
 		},
-		deleteVerificationValue: async (
-			id: string,
-			trxAdapter?: TransactionAdapter,
-		) => {
-			await (trxAdapter || adapter).delete<Verification>({
+		deleteVerificationValue: async (id: string) => {
+			await (await getAdapter()).delete<Verification>({
 				model: "verification",
 				where: [
 					{
@@ -1005,11 +981,8 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		deleteVerificationByIdentifier: async (
-			identifier: string,
-			trxAdapter?: TransactionAdapter,
-		) => {
-			await (trxAdapter || adapter).delete<Verification>({
+		deleteVerificationByIdentifier: async (identifier: string) => {
+			await (await getAdapter()).delete<Verification>({
 				model: "verification",
 				where: [
 					{
@@ -1023,7 +996,6 @@ export const createInternalAdapter = (
 			id: string,
 			data: Partial<Verification>,
 			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
 		) => {
 			const verification = await updateWithHooks<Verification>(
 				data,
@@ -1031,7 +1003,6 @@ export const createInternalAdapter = (
 				"verification",
 				undefined,
 				context,
-				trxAdapter,
 			);
 			return verification;
 		},
