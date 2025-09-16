@@ -334,40 +334,48 @@ async function createUserTokens(
 	const refreshTokenExpiresAt = refreshToken
 		? new Date((iat + (opts.refreshTokenExpiresIn ?? 2592000)) * 1000)
 		: undefined;
-	const session: OAuthSession | null = _session?.sessionToken
-		? await ctx.context.adapter.update({
-				model: "session",
-				where: [
-					{
-						field: "refresh",
-						value: await getStoredToken(
-							opts.storeTokens,
-							_session.sessionToken,
-						),
+	let session: OAuthSession | null = null;
+	try {
+		session = _session?.sessionToken
+			? await ctx.context.adapter.update({
+					model: "session",
+					where: [
+						{
+							field: "refresh",
+							value: await getStoredToken(
+								opts.storeTokens,
+								_session.sessionToken,
+							),
+						},
+					],
+					update: {
+						refresh: refreshToken
+							? await storeToken(opts.storeTokens, refreshToken)
+							: undefined,
+						updatedAt: now,
+						expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
 					},
-				],
-				update: {
-					refresh: refreshToken
-						? await storeToken(opts.storeTokens, refreshToken)
-						: undefined,
-					updatedAt: now,
-					expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
-				},
-			})
-		: await ctx.context.adapter.create({
-				model: "session",
-				data: {
-					userId: user.id,
-					clientId: client.clientId,
-					scopes,
-					refresh: refreshToken
-						? await storeToken(opts.storeTokens, refreshToken)
-						: undefined,
-					createdAt: now,
-					updatedAt: now,
-					expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
-				},
-			});
+				})
+			: await ctx.context.adapter.create({
+					model: "session",
+					data: {
+						userId: user.id,
+						clientId: client.clientId,
+						scopes,
+						refresh: refreshToken
+							? await storeToken(opts.storeTokens, refreshToken)
+							: undefined,
+						createdAt: now,
+						updatedAt: now,
+						expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
+					},
+				});
+	} catch (err) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "invalid_request",
+			error_description: "unable to update/create user session",
+		});
+	}
 
 	if (!session) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
