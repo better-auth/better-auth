@@ -1148,27 +1148,43 @@ export const sso = (options?: SSOOptions) => {
 							}?error=${error}&error_description=${error_description}`,
 						);
 					}
-					const provider = await ctx.context.adapter
-						.findOne<{
-							oidcConfig: string;
-						}>({
-							model: "ssoProvider",
-							where: [
-								{
-									field: "providerId",
-									value: ctx.params.providerId,
-								},
-							],
-						})
-						.then((res) => {
-							if (!res) {
-								return null;
-							}
-							return {
-								...res,
-								oidcConfig: JSON.parse(res.oidcConfig),
-							} as SSOProvider;
-						});
+					let provider: SSOProvider | null = null;
+					if (options?.defaultSSO?.length) {
+						const matchingDefault = options.defaultSSO.find(
+							(defaultProvider) =>
+								defaultProvider.providerId === ctx.params.providerId,
+						);
+						if (matchingDefault) {
+							provider = {
+								...matchingDefault,
+								issuer: matchingDefault.oidcConfig?.issuer || "",
+								userId: "default",
+							};
+						}
+					}
+					if (!provider) {
+						provider = await ctx.context.adapter
+							.findOne<{
+								oidcConfig: string;
+							}>({
+								model: "ssoProvider",
+								where: [
+									{
+										field: "providerId",
+										value: ctx.params.providerId,
+									},
+								],
+							})
+							.then((res) => {
+								if (!res) {
+									return null;
+								}
+								return {
+									...res,
+									oidcConfig: JSON.parse(res.oidcConfig),
+								} as SSOProvider;
+							});
+					}
 					if (!provider) {
 						throw ctx.redirect(
 							`${
@@ -1468,10 +1484,35 @@ export const sso = (options?: SSOOptions) => {
 				async (ctx) => {
 					const { SAMLResponse, RelayState } = ctx.body;
 					const { providerId } = ctx.params;
-					const provider = await ctx.context.adapter.findOne<SSOProvider>({
-						model: "ssoProvider",
-						where: [{ field: "providerId", value: providerId }],
-					});
+					let provider: SSOProvider | null = null;
+					if (options?.defaultSSO?.length) {
+						const matchingDefault = options.defaultSSO.find(
+							(defaultProvider) => defaultProvider.providerId === providerId,
+						);
+						if (matchingDefault) {
+							provider = {
+								...matchingDefault,
+								userId: "default",
+								issuer: matchingDefault.samlConfig?.issuer || "",
+							};
+						}
+					}
+					if (!provider) {
+						provider = await ctx.context.adapter
+							.findOne<SSOProvider>({
+								model: "ssoProvider",
+								where: [{ field: "providerId", value: providerId }],
+							})
+							.then((res) => {
+								if (!res) return null;
+								return {
+									...res,
+									samlConfig: res.samlConfig
+										? JSON.parse(res.samlConfig as unknown as string)
+										: undefined,
+								};
+							});
+					}
 
 					if (!provider) {
 						throw new APIError("NOT_FOUND", {
