@@ -21,6 +21,7 @@ import {
 	type InferAdminRolesFromOption,
 } from "./types";
 import { schema } from "./schema";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -906,6 +907,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					if (!canBanUser) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
+						});
+					}
+
+					const foundUser = await ctx.context.internalAdapter.findUserById(
+						ctx.body.userId,
+					);
+
+					if (!foundUser) {
+						throw new APIError("NOT_FOUND", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 
