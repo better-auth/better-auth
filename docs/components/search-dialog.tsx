@@ -57,7 +57,6 @@ export function CustomSearchDialog(props: SharedProps) {
 					<SearchDialogHeader>
 						<SearchDialogIcon />
 						<SearchDialogInput />
-						{/* Ask AI Button */}
 						<Button
 							variant="ghost"
 							size="sm"
