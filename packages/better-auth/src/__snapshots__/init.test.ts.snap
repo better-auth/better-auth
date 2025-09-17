@@ -24,6 +24,7 @@ exports[`init > should match config 1`] = `
         "usePlural": undefined,
       },
       "debugLogs": false,
+      "transaction": undefined,
       "type": "sqlite",
     },
     "transaction": [Function],
