@@ -315,6 +315,53 @@ describe("Create Adapter Helper", async () => {
 				expect(createWithoutId.id).toBeUndefined();
 			});
 
+			test("Should not modify result null to string for id or fields referencing id", async () => {
+				const result: { id: string; testPluginField: string | null } =
+					await new Promise(async (r) => {
+						const adapter = await createTestAdapter({
+							adapter(args_0) {
+								return {
+									async create({ data, model, select }) {
+										return data;
+									},
+								};
+							},
+							options: {
+								plugins: [
+									{
+										id: "test-plugin-id",
+										schema: {
+											testPluginTable: {
+												fields: {
+													testPluginField: {
+														type: "string",
+														required: false,
+														references: {
+															model: "user",
+															field: "id",
+														},
+													},
+												},
+											},
+										},
+									},
+								],
+							},
+						});
+						r(
+							await adapter.create({
+								model: "testPluginTable",
+								data: {
+									testPluginField: null,
+								},
+							}),
+						);
+					});
+
+				expect(result.id).toBeTypeOf("string");
+				expect(result.testPluginField).toBeNull();
+			});
+
 			test("Should modify boolean type to 1 or 0 if the DB doesn't support it. And expect the result to be transformed back to boolean", async () => {
 				// Testing true
 				const createTRUEParameters: { data: { emailVerified: number } } =
