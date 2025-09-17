@@ -861,7 +861,7 @@ oauthProvider({
 
 By default all secrets are `hashed` by default on the database. This helps protect the `client_secret` in case of a database leak.
 
-- **storeClientSecret**: the storage method of application `client_secrets`. Only when `disableJWTPlugin: true`, the client secret shall rather be `encrypted`.
+- **storeClientSecret**: the storage method of application `client_secrets`. Only when `disableJwtPlugin: true`, the client secret shall rather be `encrypted`.
 - **storeTokens**: the storage method of token values, specifically session refresh tokens and opaque access tokens.
 
 
@@ -973,7 +973,7 @@ import { oauthProvider } from "better-auth/plugins";
 const auth = betterAuth({
   plugins: [
     oauthProvider({
-      disableJWTPlugin: true,
+      disableJwtPlugin: true,
       loginPage: "/sign-in",
       consentPage: "/consent",
       // ...other options
@@ -1460,8 +1460,8 @@ To improve lookup performance, map the field `client_id` on the table `oauthAppl
 - **`requirePKCE`** is removed as PKCE is required in oAuth2.1
 - **`allowPlainCodeChallengeMethod`** is removed as the `plain` code challenge is considered less secure than the default `S256` method
 - **`getAdditionalUserInfoClaim`** removes the client object as a parameter
-- **`storeClientSecret`** now defaults to `hashed`, or `encrypted` if `disableJWTPlugin: true` (previously `plain`).
-- JWT plugin now is enabled by default. To disable the plugin, set `disableJWTPlugin: true`.
+- **`storeClientSecret`** now defaults to `hashed`, or `encrypted` if `disableJwtPlugin: true` (previously `plain`).
+- JWT plugin now is enabled by default. To disable the plugin, set `disableJwtPlugin: true`.
 - Authorization query `code_challenge_method` "S256" must be in caps as described by oAuth 2.1
 
 #### Database

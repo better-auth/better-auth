@@ -400,7 +400,7 @@ export interface OAuthOptions {
 	 *
 	 * @default false
 	 */
-	disableJWTPlugin?: boolean;
+	disableJwtPlugin?: boolean;
 }
 
 export interface OAuthAuthorizationQuery {

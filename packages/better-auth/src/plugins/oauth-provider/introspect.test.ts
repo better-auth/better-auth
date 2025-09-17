@@ -325,7 +325,7 @@ describe("oauth introspect - config", async () => {
 					},
 					...opts?.oauthProviderConfig,
 				}),
-				...(opts?.oauthProviderConfig?.disableJWTPlugin
+				...(opts?.oauthProviderConfig?.disableJwtPlugin
 					? []
 					: [
 							jwt({

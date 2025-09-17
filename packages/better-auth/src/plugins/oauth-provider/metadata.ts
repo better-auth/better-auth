@@ -67,7 +67,7 @@ export function oidcServerMetadata(
 	opts: OAuthOptions & { claims?: string[] },
 ) {
 	const baseURL = ctx.context.baseURL;
-	const jwtPluginOptions = opts.disableJWTPlugin
+	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context).options;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
@@ -89,7 +89,7 @@ export function oidcServerMetadata(
 		id_token_signing_alg_values_supported: jwtPluginOptions?.jwks?.keyPairConfig
 			?.alg
 			? [jwtPluginOptions?.jwks?.keyPairConfig?.alg]
-			: opts.disableJWTPlugin
+			: opts.disableJwtPlugin
 				? ["HS256"]
 				: ["EdDSA"],
 		acr_values_supported: ["urn:mace:incommon:iap:bronze"],
@@ -103,7 +103,7 @@ export function protectedResourceMetadata(
 	overrides?: Partial<ResourceServerMetadata>,
 ) {
 	const baseURL = ctx.context.baseURL;
-	const jwtPluginOptions = opts.disableJWTPlugin
+	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context).options;
 
@@ -235,7 +235,7 @@ export const oauthProviderProtectedResourceMetadata = <
 	}
 
 	if (opts?.overrides?.authorization_servers?.length) {
-		const jwtPluginOptions = oauthProviderPlugin.options.disableJWTPlugin
+		const jwtPluginOptions = oauthProviderPlugin.options.disableJwtPlugin
 			? undefined
 			: getJwtPlugin(auth).options;
 		if (

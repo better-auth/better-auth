@@ -204,7 +204,7 @@ export async function introspectVerifyEndpoint(
 		remoteVerify?: Omit<VerifyAccessTokenRemote, "introspectUrl">;
 	},
 ) {
-	const jwtPlugin = opts.disableJWTPlugin
+	const jwtPlugin = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context);
 	const baseURL = ctx.context.baseURL;
@@ -223,7 +223,7 @@ export async function introspectVerifyEndpoint(
 				...verifyOpts?.verifyOptions,
 			},
 			scopes: verifyOpts?.scopes,
-			jwksUrl: opts.disableJWTPlugin
+			jwksUrl: opts.disableJwtPlugin
 				? undefined
 				: (jwtPlugin?.options?.jwks?.remoteUrl ?? `${baseURL}/jwks`),
 			remoteVerify: verifyOpts?.remoteVerify
