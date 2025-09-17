@@ -7,6 +7,8 @@ import { getSessionFromCtx } from "../../api/routes/session";
 import { ms, type StringValue as MSStringValue } from "ms";
 import { schema, type DeviceCode } from "./schema";
 import { mergeSchema } from "../../db";
+import { implEndpoint } from "../../better-call/server";
+import { deviceCodeDef } from "./shared";
 
 const msStringValueSchema = z.custom<MSStringValue>(
 	(val) => {
@@ -176,155 +178,65 @@ export const deviceAuthorization = (
 		id: "device-authorization",
 		schema: mergeSchema(schema, options?.schema),
 		endpoints: {
-			deviceCode: createAuthEndpoint(
-				"/device/code",
-				{
-					method: "POST",
-					body: z.object({
-						client_id: z.string().meta({
-							description: "The client ID of the application",
-						}),
-						scope: z
-							.string()
-							.meta({
-								description: "Space-separated list of scopes",
-							})
-							.optional(),
-					}),
-					error: z.object({
-						error: z.enum(["invalid_request", "invalid_client"]).meta({
-							description: "Error code",
-						}),
-						error_description: z.string().meta({
-							description: "Detailed error description",
-						}),
-					}),
-					metadata: {
-						openapi: {
-							description: `Request a device and user code
+			deviceCode: implEndpoint(deviceCodeDef, async (ctx) => {
+				if (opts.validateClient) {
+					const isValid = await opts.validateClient(ctx.body.client_id);
+					if (!isValid) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_client",
+							error_description: "Invalid client ID",
+						});
+					}
+				}
 
-Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#section-3.2)`,
-							responses: {
-								200: {
-									description: "Success",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													device_code: {
-														type: "string",
-														description: "The device verification code",
-													},
-													user_code: {
-														type: "string",
-														description: "The user code to display",
-													},
-													verification_uri: {
-														type: "string",
-														description: "The URL for user verification",
-													},
-													verification_uri_complete: {
-														type: "string",
-														description: "The complete URL with user code",
-													},
-													expires_in: {
-														type: "number",
-														description:
-															"Lifetime in seconds of the device code",
-													},
-													interval: {
-														type: "number",
-														description: "Minimum polling interval in seconds",
-													},
-												},
-											},
-										},
-									},
-								},
-								400: {
-									description: "Error response",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													error: {
-														type: "string",
-														enum: ["invalid_request", "invalid_client"],
-													},
-													error_description: {
-														type: "string",
-													},
-												},
-											},
-										},
-									},
-								},
-							},
+				if (opts.onDeviceAuthRequest) {
+					await opts.onDeviceAuthRequest(ctx.body.client_id, ctx.body.scope);
+				}
+
+				const deviceCode = await generateDeviceCode();
+				const userCode = await generateUserCode();
+				const expiresIn = ms(opts.expiresIn);
+				const expiresAt = new Date(Date.now() + expiresIn);
+
+				await ctx.context.adapter.create({
+					model: "deviceCode",
+					data: {
+						deviceCode,
+						userCode,
+						expiresAt,
+						status: "pending",
+						pollingInterval: ms(opts.interval),
+						clientId: ctx.body.client_id,
+						scope: ctx.body.scope,
+					},
+				});
+
+				const baseURL = new URL(ctx.context.baseURL);
+				const verification_uri = new URL("/device", baseURL);
+
+				const verification_uri_complete = new URL(verification_uri);
+				verification_uri_complete.searchParams.set(
+					"user_code",
+					// should we support custom formatting function here?
+					encodeURIComponent(userCode),
+				);
+
+				return ctx.json(
+					{
+						device_code: deviceCode,
+						user_code: userCode,
+						verification_uri: verification_uri.toString(),
+						verification_uri_complete: verification_uri_complete.toString(),
+						expires_in: Math.floor(expiresIn / 1000),
+						interval: Math.floor(ms(opts.interval) / 1000),
+					},
+					{
+						headers: {
+							"Cache-Control": "no-store",
 						},
 					},
-				},
-				async (ctx) => {
-					if (opts.validateClient) {
-						const isValid = await opts.validateClient(ctx.body.client_id);
-						if (!isValid) {
-							throw new APIError("BAD_REQUEST", {
-								error: "invalid_client",
-								error_description: "Invalid client ID",
-							});
-						}
-					}
-
-					if (opts.onDeviceAuthRequest) {
-						await opts.onDeviceAuthRequest(ctx.body.client_id, ctx.body.scope);
-					}
-
-					const deviceCode = await generateDeviceCode();
-					const userCode = await generateUserCode();
-					const expiresIn = ms(opts.expiresIn);
-					const expiresAt = new Date(Date.now() + expiresIn);
-
-					await ctx.context.adapter.create({
-						model: "deviceCode",
-						data: {
-							deviceCode,
-							userCode,
-							expiresAt,
-							status: "pending",
-							pollingInterval: ms(opts.interval),
-							clientId: ctx.body.client_id,
-							scope: ctx.body.scope,
-						},
-					});
-
-					const baseURL = new URL(ctx.context.baseURL);
-					const verification_uri = new URL("/device", baseURL);
-
-					const verification_uri_complete = new URL(verification_uri);
-					verification_uri_complete.searchParams.set(
-						"user_code",
-						// should we support custom formatting function here?
-						encodeURIComponent(userCode),
-					);
-
-					return ctx.json(
-						{
-							device_code: deviceCode,
-							user_code: userCode,
-							verification_uri: verification_uri.toString(),
-							verification_uri_complete: verification_uri_complete.toString(),
-							expires_in: Math.floor(expiresIn / 1000),
-							interval: Math.floor(ms(opts.interval) / 1000),
-						},
-						{
-							headers: {
-								"Cache-Control": "no-store",
-							},
-						},
-					);
-				},
-			),
+				);
+			}),
 			deviceToken: createAuthEndpoint(
 				"/device/token",
 				{
