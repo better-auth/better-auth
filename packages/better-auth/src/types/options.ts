@@ -100,6 +100,13 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				debugLogs?: AdapterDebugLogs;
+				/**
+				 * Whether to execute multiple operations in a transaction.
+				 * If the database doesn't support transactions,
+				 * set this to `false` and operations will be executed sequentially.
+				 * @default true
+				 */
+				transaction?: boolean;
 		  }
 		| {
 				/**
@@ -122,6 +129,13 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				debugLogs?: AdapterDebugLogs;
+				/**
+				 * Whether to execute multiple operations in a transaction.
+				 * If the database doesn't support transactions,
+				 * set this to `false` and operations will be executed sequentially.
+				 * @default true
+				 */
+				transaction?: boolean;
 		  };
 	/**
 	 * Secondary storage configuration
