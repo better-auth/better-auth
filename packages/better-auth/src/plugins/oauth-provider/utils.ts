@@ -109,7 +109,7 @@ async function verifyStoredClientSecret(
 	clientSecret?: string,
 ): Promise<boolean> {
 	const storageMethod =
-		opts.storeClientSecret ?? (opts.disableJWTPlugin ? "encrypted" : "hashed");
+		opts.storeClientSecret ?? (opts.disableJwtPlugin ? "encrypted" : "hashed");
 
 	if (clientSecret && opts.clientSecretPrefix) {
 		if (clientSecret.startsWith(opts.clientSecretPrefix)) {
@@ -160,7 +160,7 @@ export async function storeClientSecret(
 	clientSecret: string,
 ) {
 	const storageMethod =
-		opts.storeClientSecret ?? (opts.disableJWTPlugin ? "encrypted" : "hashed");
+		opts.storeClientSecret ?? (opts.disableJwtPlugin ? "encrypted" : "hashed");
 
 	if (storageMethod === "encrypted") {
 		return await symmetricEncrypt({

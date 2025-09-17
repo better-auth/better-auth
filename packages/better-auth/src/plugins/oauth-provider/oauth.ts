@@ -101,8 +101,8 @@ export const oauthProvider = (options: OAuthOptions) => {
 		refreshTokenExpiresIn: 2592000, // 30 days
 		allowUnauthenticatedClientRegistration: false,
 		allowDynamicClientRegistration: false,
-		disableJWTPlugin: false,
-		storeClientSecret: options.disableJWTPlugin ? "encrypted" : "hashed",
+		disableJwtPlugin: false,
+		storeClientSecret: options.disableJwtPlugin ? "encrypted" : "hashed",
 		storeTokens: "hashed",
 		grantTypes: ["authorization_code", "client_credentials", "refresh_token"],
 		...options,
@@ -133,7 +133,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 	}
 
 	if (
-		opts.disableJWTPlugin &&
+		opts.disableJwtPlugin &&
 		(opts.storeClientSecret === "hashed" ||
 			(typeof opts.storeClientSecret === "object" &&
 				"hash" in opts.storeClientSecret))
@@ -144,7 +144,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 	}
 
 	if (
-		!opts.disableJWTPlugin &&
+		!opts.disableJwtPlugin &&
 		(opts.storeClientSecret === "encrypted" ||
 			(typeof opts.storeClientSecret === "object" &&
 				("encrypt" in opts.storeClientSecret ||
@@ -160,7 +160,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 		options: opts,
 		init: (ctx) => {
 			// Check for jwt plugin registration
-			if (!opts.disableJWTPlugin) {
+			if (!opts.disableJwtPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
 				const jwtPluginOptions = jwtPlugin.options;
 
@@ -257,7 +257,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 						const metadata = oidcServerMetadata(ctx, opts);
 						return ctx.json(metadata);
 					} else {
-						const jwtPluginOptions = opts.disableJWTPlugin
+						const jwtPluginOptions = opts.disableJwtPlugin
 							? undefined
 							: getJwtPlugin(ctx.context).options;
 						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {

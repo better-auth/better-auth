@@ -35,7 +35,7 @@ async function validateJwtAccessToken(
 	token: string,
 	clientId?: string,
 ) {
-	const jwtPlugin = opts.disableJWTPlugin
+	const jwtPlugin = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
@@ -210,7 +210,7 @@ async function validateOpaqueAccessToken(
 
 	// Return the access token in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
-	const jwtPlugin = opts.disableJWTPlugin
+	const jwtPlugin = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
@@ -272,7 +272,7 @@ async function validateRefreshToken(
 
 	// Return the access token in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
-	const jwtPlugin = opts.disableJWTPlugin
+	const jwtPlugin = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;

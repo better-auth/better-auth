@@ -39,7 +39,7 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						disableJWTPlugin: true,
+						disableJwtPlugin: true,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
@@ -628,7 +628,7 @@ describe("oauth - config", () => {
 						consentPage: "/consent",
 						allowDynamicClientRegistration: true,
 						storeClientSecret,
-						disableJWTPlugin: true,
+						disableJwtPlugin: true,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
@@ -729,7 +729,7 @@ describe("oauth - config", () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 						allowDynamicClientRegistration: true,
-						disableJWTPlugin,
+						disableJwtPlugin: disableJWTPlugin,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,

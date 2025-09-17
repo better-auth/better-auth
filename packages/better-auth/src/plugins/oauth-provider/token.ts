@@ -141,7 +141,7 @@ async function createIdToken(
 		? await opts.customIdTokenClaims(user, scopes)
 		: {};
 
-	const jwtPluginOptions = opts.disableJWTPlugin
+	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context).options;
 
@@ -160,11 +160,11 @@ async function createIdToken(
 
 	// Public clients without a client secret cannot receive an idToken as it can't be verified
 	// Confidential clients would still receive an idToken signed by the clientSecret
-	if (opts.disableJWTPlugin && !clientSecret) {
+	if (opts.disableJwtPlugin && !clientSecret) {
 		return undefined;
 	}
 
-	return opts.disableJWTPlugin
+	return opts.disableJwtPlugin
 		? new SignJWT(payload)
 				.setProtectedHeader({ alg: "HS256" })
 				.sign(
@@ -275,7 +275,7 @@ async function checkResource(
 			audience.push(`${ctx.context.baseURL}/oauth2/userinfo`);
 		}
 		// Check valid audiences
-		const jwtPluginOptions = opts.disableJWTPlugin
+		const jwtPluginOptions = opts.disableJwtPlugin
 			? undefined
 			: getJwtPlugin(ctx.context).options;
 		const validAudiences = [
@@ -411,7 +411,7 @@ async function createUserTokens(
 
 	// Sign jwt and refresh tokens in parallel
 	const [accessToken, sessionRefresh, idToken] = await Promise.all([
-		audience && !opts.disableJWTPlugin
+		audience && !opts.disableJwtPlugin
 			? createJwtAccessToken(
 					ctx,
 					opts,
@@ -729,7 +729,7 @@ async function handleClientCredentialsGrant(
 	}
 
 	// Check requested audience if sent as the resource parameter
-	const jwtPluginOptions = opts.disableJWTPlugin
+	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context).options;
 	const audience = await checkResource(ctx, opts, requestedScopes);
@@ -757,7 +757,7 @@ async function handleClientCredentialsGrant(
 		: defaultExp;
 
 	const accessToken =
-		audience && !opts.disableJWTPlugin
+		audience && !opts.disableJwtPlugin
 			? await signJWT(ctx, {
 					options: jwtPluginOptions,
 					payload: {

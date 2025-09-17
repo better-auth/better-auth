@@ -33,7 +33,7 @@ async function revokeJwtAccessToken(
 	opts: OAuthOptions,
 	token: string,
 ) {
-	const jwtPlugin = opts.disableJWTPlugin
+	const jwtPlugin = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;

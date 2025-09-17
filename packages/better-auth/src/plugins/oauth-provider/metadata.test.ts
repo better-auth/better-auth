@@ -46,7 +46,7 @@ describe("oauth metadata", async () => {
 					},
 					...opts?.oauthProviderConfig,
 				}),
-				...(opts?.oauthProviderConfig?.disableJWTPlugin
+				...(opts?.oauthProviderConfig?.disableJwtPlugin
 					? []
 					: [jwt(opts?.jwtConfig)]),
 			],
@@ -257,7 +257,7 @@ describe("oauth metadata", async () => {
 	it("should support disableJWTPlugin", async () => {
 		const { auth } = await createTestInstance({
 			oauthProviderConfig: {
-				disableJWTPlugin: true,
+				disableJwtPlugin: true,
 			},
 		});
 		const metadata = await auth.api.getOpenIdConfig();

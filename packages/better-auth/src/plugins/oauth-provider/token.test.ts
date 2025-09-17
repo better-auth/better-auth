@@ -1040,7 +1040,7 @@ describe("oauth token - config", async () => {
 					},
 					...opts?.oauthProviderConfig,
 				}),
-				...(opts?.oauthProviderConfig?.disableJWTPlugin
+				...(opts?.oauthProviderConfig?.disableJwtPlugin
 					? []
 					: [
 							jwt({

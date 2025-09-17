@@ -283,7 +283,7 @@ describe("oauth revoke - config", async () => {
 					},
 					...opts?.oauthProviderConfig,
 				}),
-				...(opts?.oauthProviderConfig?.disableJWTPlugin
+				...(opts?.oauthProviderConfig?.disableJwtPlugin
 					? []
 					: [
 							jwt({
