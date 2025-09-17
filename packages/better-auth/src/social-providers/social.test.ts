@@ -109,7 +109,7 @@ vi.mock("../oauth2", async (importOriginal) => {
 });
 
 describe("Social Providers", async (c) => {
-	const { auth, customFetchImpl, client, cookieSetter } = await getTestInstance(
+	const { client, cookieSetter } = await getTestInstance(
 		{
 			user: {
 				additionalFields: {
@@ -443,7 +443,7 @@ describe("Redirect URI", async () => {
 	});
 
 	it("should respect custom redirect uri", async () => {
-		const { auth, customFetchImpl, client } = await getTestInstance({
+		const { client } = await getTestInstance({
 			socialProviders: {
 				google: {
 					clientId: "test",
