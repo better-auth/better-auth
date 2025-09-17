@@ -60,79 +60,47 @@ describe("oauth register", async () => {
 				customFetchImpl,
 			},
 		});
-		const applicationRedirectOnly: Partial<OAuthClient> = {
+		const response = await unauthenticatedClient.oauth2.register({
 			redirect_uris: [redirectUri],
-		};
-		const response = await unauthenticatedClient.$fetch("/oauth2/register", {
-			method: "POST",
-			body: applicationRedirectOnly,
 		});
 		expect(response.error?.status).toBe(401);
 	});
 
 	it("should register private client with minimum requirements", async () => {
-		const applicationRedirectOnly: Partial<OAuthClient> = {
+		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
-		};
-		const response = await serverClient.$fetch<OAuthClient>(
-			"/oauth2/register",
-			{
-				method: "POST",
-				body: applicationRedirectOnly,
-			},
-		);
+		});
 		expect(response.data?.client_id).toBeDefined();
 		expect(response.data?.user_id).toBeDefined();
 		expect(response.data?.client_secret).toBeDefined();
 	});
 
 	it("should fail authorization_code without response type code", async () => {
-		const applicationImplicit: Partial<OAuthClient> = {
+		const response = await serverClient.oauth2.register({
 			// @ts-expect-error testing with a different response type even though unsupported
 			response_types: ["token"],
 			redirect_uris: [redirectUri],
-		};
-		const response = await serverClient.$fetch<OAuthClient>(
-			"/oauth2/register",
-			{
-				method: "POST",
-				body: applicationImplicit,
-			},
-		);
+		});
 		expect(response.error?.status).toBe(400);
 	});
 
 	it("should fail type check for public client request", async () => {
-		const applicationImplicit: Partial<OAuthClient> = {
+		const response = await serverClient.oauth2.register({
 			token_endpoint_auth_method: "none",
 			type: "web",
 			redirect_uris: [redirectUri],
-		};
-		const response = await serverClient.$fetch<OAuthClient>(
-			"/oauth2/register",
-			{
-				method: "POST",
-				body: applicationImplicit,
-			},
-		);
+		});
 		expect(response.error?.status).toBe(400);
 	});
 
 	it.each(["native", "user-agent-based"] as OAuthClient["type"][])(
 		"should fail with type '%s' check for confidential client request",
 		async (type) => {
-			const applicationImplicit: Partial<OAuthClient> = {
+			const response = await serverClient.oauth2.register({
 				token_endpoint_auth_method: "client_secret_post",
 				type,
 				redirect_uris: [redirectUri],
-			};
-			const response = await serverClient.$fetch<OAuthClient>(
-				"/oauth2/register",
-				{
-					method: "POST",
-					body: applicationImplicit,
-				},
-			);
+			});
 			expect(response.error?.status).toBe(400);
 		},
 	);
@@ -256,33 +224,19 @@ describe("oauth register - unauthenticated", async () => {
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
 	it("should create public clients without authentication", async () => {
-		const applicationRedirectOnly: Partial<OAuthClient> = {
+		const response = await unauthenticatedClient.oauth2.register({
 			token_endpoint_auth_method: "none",
 			redirect_uris: [redirectUri],
-		};
-		const response = await unauthenticatedClient.$fetch<OAuthClient>(
-			"/oauth2/register",
-			{
-				method: "POST",
-				body: applicationRedirectOnly,
-			},
-		);
+		});
 		expect(response.data?.client_id).toBeDefined();
 		expect(response.data?.user_id).toBeDefined();
 		expect(response.data?.client_secret).toBeUndefined();
 	});
 
 	it("should not create confidential clients without authentication", async () => {
-		const applicationRedirectOnly: Partial<OAuthClient> = {
+		const response = await unauthenticatedClient.oauth2.register({
 			redirect_uris: [redirectUri],
-		};
-		const response = await unauthenticatedClient.$fetch<OAuthClient>(
-			"/oauth2/register",
-			{
-				method: "POST",
-				body: applicationRedirectOnly,
-			},
-		);
+		});
 		expect(response.error?.status).toBe(401);
 	});
 });

@@ -49,20 +49,13 @@ describe("oauth authorize - unauthenticated", async () => {
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
 		// This test is performed in register.test.ts
-		const application: Partial<OAuthClient> = {
+		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
-		};
-		const response = await serverClient.$fetch<OAuthClient>(
-			"/oauth2/register",
-			{
-				method: "POST",
-				body: application,
-			},
-		);
+		});
 		expect(response.data?.client_id).toBeDefined();
 		expect(response.data?.user_id).toBeDefined();
 		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual(application.redirect_uris);
+		expect(response.data?.redirect_uris).toEqual([redirectUri]);
 
 		oauthClient = response.data;
 	});
@@ -86,7 +79,7 @@ describe("oauth authorize - unauthenticated", async () => {
 		});
 
 		let loginRedirectUrl = "";
-		const res = await unauthenticatedClient.$fetch(authUrl.toString(), {
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
 			onError(context) {
 				loginRedirectUrl = context.response.headers.get("Location") || "";
 			},
@@ -135,17 +128,13 @@ describe("oauth authorize - authenticated", async () => {
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
 		// This test is performed in register.test.ts
-		const application: Partial<OAuthClient> = {
+		const response = await client.oauth2.register({
 			redirect_uris: [redirectUri],
-		};
-		const response = await client.$fetch<OAuthClient>("/oauth2/register", {
-			method: "POST",
-			body: application,
 		});
 		expect(response.data?.client_id).toBeDefined();
 		expect(response.data?.user_id).toBeDefined();
 		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual(application.redirect_uris);
+		expect(response.data?.redirect_uris).toEqual([redirectUri]);
 
 		oauthClient = response.data;
 	});

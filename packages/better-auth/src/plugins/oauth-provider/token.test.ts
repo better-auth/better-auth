@@ -400,7 +400,7 @@ describe("oauth token - refresh_token", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient()],
+		plugins: [oauthProviderClient(), jwtClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -418,24 +418,18 @@ describe("oauth token - refresh_token", async () => {
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
 		// This test is performed in register.test.ts
-		const application: Partial<OAuthClient> = {
+		const response = await client.oauth2.register({
 			redirect_uris: [redirectUri],
-		};
-		const response = await client.$fetch<OAuthClient>("/oauth2/register", {
-			method: "POST",
-			body: application,
 		});
 		expect(response.data?.client_id).toBeDefined();
 		expect(response.data?.user_id).toBeDefined();
 		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual(application.redirect_uris);
+		expect(response.data?.redirect_uris).toEqual([redirectUri]);
 
 		oauthClient = response.data;
 
 		// Get jwks
-		const jwksResult = await client.$fetch<JSONWebKeySet>("/jwks", {
-			method: "GET",
-		});
+		const jwksResult = await client.jwks();
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
@@ -866,7 +860,7 @@ describe("oauth token - client_credentials", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient()],
+		plugins: [oauthProviderClient(), jwtClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -883,24 +877,18 @@ describe("oauth token - client_credentials", async () => {
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
 		// This test is performed in register.test.ts
-		const application: Partial<OAuthClient> = {
+		const response = await client.oauth2.register({
 			redirect_uris: [redirectUri],
-		};
-		const response = await client.$fetch<OAuthClient>("/oauth2/register", {
-			method: "POST",
-			body: application,
 		});
 		expect(response.data?.client_id).toBeDefined();
 		expect(response.data?.user_id).toBeDefined();
 		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual(application.redirect_uris);
+		expect(response.data?.redirect_uris).toEqual([redirectUri]);
 
 		oauthClient = response.data;
 
 		// Get jwks
-		const jwksResult = await client.$fetch<JSONWebKeySet>("/jwks", {
-			method: "GET",
-		});
+		const jwksResult = await client.jwks();
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
