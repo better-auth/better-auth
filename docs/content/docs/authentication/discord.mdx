@@ -54,7 +54,7 @@ For the full list of options supported by all social providers, check the [Provi
 
 ### Bot Permissions (Optional)
 
-If you're using the `bot` scope with Discord OAuth, you can specify bot permissions using the `permissions` option. It can either be a bitwise value (e.g `2048 | 4096` for Send Messages and Embed Links) or a specific permission value (e.g `4096` for Embed Links).
+If you're using the `bot` scope with Discord OAuth, you can specify bot permissions using the `permissions` option. It can either be a bitwise value (e.g `2048 | 16384` for Send Messages and Embed Links) or a specific permission value (e.g `16384` for Embed Links).
 
 ```ts title="auth.ts" 
 import { betterAuth } from "better-auth"
