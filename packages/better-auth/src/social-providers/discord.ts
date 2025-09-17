@@ -88,7 +88,7 @@ export const discord = (options: DiscordOptions) => {
 			options.scope && _scopes.push(...options.scope);
 			const hasBotScope = _scopes.includes("bot");
 			const permissionsParam =
-				hasBotScope && options.permissions
+				hasBotScope && options.permissions !== undefined
 					? `&permissions=${options.permissions}`
 					: "";
 			return new URL(
