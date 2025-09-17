@@ -26,7 +26,7 @@ describe("organization creation in database hooks", async () => {
 										name: `${user.email}'s Organization`,
 										slug: `org-${user.id.substring(0, 8)}`,
 										userId: user.id,
-									}
+									},
 								});
 								orgCreated = org;
 							} catch (error) {
@@ -70,7 +70,9 @@ describe("organization creation in database hooks", async () => {
 
 		const createdOrg = orgs.find((o: any) => o.slug?.startsWith("org-"));
 		expect(createdOrg).toBeDefined();
-		expect((createdOrg as any)?.name).toBe("test-hook@example.com's Organization");
+		expect((createdOrg as any)?.name).toBe(
+			"test-hook@example.com's Organization",
+		);
 
 		// Verify the user is a member of the organization
 		const members = await db.findMany({
@@ -79,8 +81,8 @@ describe("organization creation in database hooks", async () => {
 				{
 					field: "organizationId",
 					value: orgCreated?.id,
-				}
-			]
+				},
+			],
 		});
 		expect(members).toHaveLength(1);
 		expect(members[0]).toMatchObject({
@@ -110,7 +112,7 @@ describe("organization creation in database hooks", async () => {
 									name: "Test Org",
 									slug: "duplicate-test-org", // Same slug for all users
 									userId: user.id,
-								}
+								},
 							});
 							if (!firstUserCreated) {
 								firstUserCreated = true;
@@ -150,9 +152,9 @@ describe("organization creation in database hooks", async () => {
 			where: [
 				{
 					field: "slug",
-					value: "duplicate-test-org"
-				}
-			]
+					value: "duplicate-test-org",
+				},
+			],
 		});
 		expect(orgs).toHaveLength(1);
 
@@ -162,9 +164,9 @@ describe("organization creation in database hooks", async () => {
 			where: [
 				{
 					field: "email",
-					value: "user2-hook@example.com"
-				}
-			]
+					value: "user2-hook@example.com",
+				},
+			],
 		});
 		expect(users).toHaveLength(0);
 	});
@@ -184,12 +186,13 @@ describe("organization creation in database hooks", async () => {
 								return;
 							}
 							// Simulate some async operation
-							await new Promise(resolve => setTimeout(resolve, 10));
+							await new Promise((resolve) => setTimeout(resolve, 10));
 							asyncOperationsCompleted++;
 
 							// Check if user exists in the transaction context
 							// This should work because we're in the same transaction
-							const foundUser = await ctx?.context?.internalAdapter?.findUserById?.(user.id);
+							const foundUser =
+								await ctx?.context?.internalAdapter?.findUserById?.(user.id);
 							foundUserInTransaction = !!foundUser;
 
 							// Create organization
@@ -198,11 +201,11 @@ describe("organization creation in database hooks", async () => {
 									name: `Async Org for ${user.name}`,
 									slug: `async-${user.id.substring(0, 8)}`,
 									userId: user.id,
-								}
+								},
 							});
 
 							// Another async operation
-							await new Promise(resolve => setTimeout(resolve, 10));
+							await new Promise((resolve) => setTimeout(resolve, 10));
 							asyncOperationsCompleted++;
 
 							return org;
@@ -232,9 +235,9 @@ describe("organization creation in database hooks", async () => {
 				{
 					field: "slug",
 					operator: "contains",
-					value: "async-"
-				}
-			]
+					value: "async-",
+				},
+			],
 		});
 		expect(orgs.length).toBeGreaterThanOrEqual(1);
 
@@ -258,7 +261,7 @@ describe("organization creation in database hooks", async () => {
 								data: {
 									...user,
 									image: "prepared-in-before-hook",
-								}
+								},
 							};
 						},
 						after: async (user) => {
@@ -272,7 +275,7 @@ describe("organization creation in database hooks", async () => {
 									name: `Before-After Org`,
 									slug: `before-after-${user.id.substring(0, 8)}`,
 									userId: user.id,
-								}
+								},
 							});
 							orgId = org?.id || null;
 						},
@@ -298,8 +301,8 @@ describe("organization creation in database hooks", async () => {
 				{
 					field: "id",
 					value: orgId!,
-				}
-			]
+				},
+			],
 		});
 		expect(org).toBeDefined();
 		expect((org as any)?.name).toBe("Before-After Org");
