@@ -1,6 +1,5 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
-import inspect from 'vite-plugin-inspect'
 
 export default defineConfig({
 	build: {
@@ -8,14 +7,12 @@ export default defineConfig({
 			input: {
 				client: resolve(__dirname, "src", "client.ts"),
 			},
+			output: {
+				entryFileNames: "[name].js",
+				format: "es",
+			},
 		},
 		minify: false,
-		sourcemap: 'inline'
+		sourcemap: "inline",
 	},
-	plugins: [
-		inspect({
-			build: true,
-			outputDir: '.vite-inspect'
-		}) as any
-	]
 });
