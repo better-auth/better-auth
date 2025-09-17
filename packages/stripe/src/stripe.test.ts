@@ -143,6 +143,7 @@ describe("stripe", async () => {
 		expect(res).toMatchObject({
 			id: expect.any(String),
 			stripeCustomerId: expect.any(String),
+			createdAt: expect.any(Date),
 		});
 	});
 
