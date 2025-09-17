@@ -64,7 +64,7 @@ export const auth = betterAuth({
         discord: {
             clientId: process.env.DISCORD_CLIENT_ID as string,
             clientSecret: process.env.DISCORD_CLIENT_SECRET as string,
-            permissions: 2048 | 4096, // Send Messages + Embed Links // [!code highlight]
+            permissions: 2048 | 16384, // Send Messages + Embed Links // [!code highlight]
         }, 
     },
 })
