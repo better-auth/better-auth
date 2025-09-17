@@ -36,9 +36,7 @@ export function CustomSearchDialog(props: SharedProps) {
 	});
 
 	const handleAskAIClick = () => {
-		// Close the search dialog
 		props.onOpenChange?.(false);
-		// Open the AI modal
 		setIsAIModalOpen(true);
 	};
 
@@ -86,7 +84,6 @@ export function CustomSearchDialog(props: SharedProps) {
 				</SearchDialogContent>
 			</SearchDialog>
 
-			{/* AI Chat Modal */}
 			<AIChatModal isOpen={isAIModalOpen} onClose={handleAIModalClose} />
 		</>
 	);
