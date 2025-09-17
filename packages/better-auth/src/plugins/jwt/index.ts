@@ -1,8 +1,20 @@
 import type { BetterAuthPlugin } from "../../types";
+import {
+	customJwtClaimsSchema,
+	jwkExportedSchema,
+	jwkOptionsSchema,
+	verifyJwtOptionsSchema,
+	type CryptoKeyIdAlg,
+	type CustomJwtClaims,
+	type Jwk,
+	type JwkAlgorithm,
+	type JwkOptions,
+	type JwksOptions,
+	type JwtPluginOptions,
+	type VerifyJwtOptions,
+} from "./types";
 import { schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
-import { getJwtToken, signJWT } from "./sign";
-import type { JSONWebKeySet, JWTPayload } from "jose";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -10,32 +22,28 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import { mergeSchema } from "../../db/schema";
-import * as z from "zod";
+import { createJwkInternal, getJwk } from "./jwk";
+import { getSessionJwtInternal, signJwtInternal } from "./sign";
+import { verifyJwt, verifyJwtWithKey } from "./verify";
+import { importJWK, type JSONWebKeySet, type JWK } from "jose";
+import * as z from "zod/v4";
+import { getPublicJwk, isJwkAlgValid } from "./utils";
 import { BetterAuthError } from "../../error";
-import type { JwtOptions } from "./types";
-import { createJwk } from "./utils";
 export type * from "./types";
-export { generateExportedKeyPair, createJwk } from "./utils";
+export { createJwk, getJwk, importJwk } from "./jwk";
+export { getSessionJwt, signJwt } from "./sign";
+export { verifyJwt, verifyJwtWithKey } from "./verify";
 
-export const jwt = (options?: JwtOptions) => {
-	// Remote url must be set when using signing function
-	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
-		throw new BetterAuthError(
-			"jwks_config",
-			"jwks.remoteUrl must be set when using jwt.sign",
-		);
-	}
-
-	// Alg is required to be specified when using remote url (needed in openid metadata)
-	if (options?.jwks?.remoteUrl && !options.jwks?.keyPairConfig?.alg) {
-		throw new BetterAuthError(
-			"jwks_config",
-			"must specify alg when using the oidc plugin and jwks.remoteUrl",
-		);
-	}
-
+export const jwt = (options?: JwtPluginOptions) => {
 	return {
 		id: "jwt",
+		async init(ctx) {
+			const adapter = getJwksAdapter(ctx.adapter);
+			await adapter.updateKeysEncryption(
+				ctx.secret,
+				options?.jwks?.disablePrivateKeyEncryption ?? false,
+			);
+		},
 		options,
 		endpoints: {
 			getJwks: createAuthEndpoint(
@@ -46,7 +54,7 @@ export const jwt = (options?: JwtOptions) => {
 						openapi: {
 							description: "Get the JSON Web Key Set",
 							responses: {
-								"200": {
+								200: {
 									description: "JSON Web Key Set retrieved successfully",
 									content: {
 										"application/json": {
@@ -126,17 +134,12 @@ export const jwt = (options?: JwtOptions) => {
 					},
 				},
 				async (ctx) => {
-					// Disables endpoint if using remote url strategy
-					if (options?.jwks?.remoteUrl) {
-						throw new APIError("NOT_FOUND");
-					}
-
 					const adapter = getJwksAdapter(ctx.context.adapter);
 
 					const keySets = await adapter.getAllKeys();
 
 					if (keySets.length === 0) {
-						const key = await createJwk(ctx, options);
+						const key = await createJwkInternal(ctx, options?.jwks);
 						keySets.push(key);
 					}
 
@@ -146,19 +149,21 @@ export const jwt = (options?: JwtOptions) => {
 							? (keyPairConfig as { crv: string }).crv
 							: undefined
 						: undefined;
+
 					return ctx.json({
 						keys: keySets.map((keySet) => {
+							const publicKey = JSON.parse(keySet.publicKey);
 							return {
-								alg: keySet.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-								crv: keySet.crv ?? defaultCrv,
-								...JSON.parse(keySet.publicKey),
+								alg:
+									publicKey.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+								crv: publicKey.crv ?? defaultCrv,
+								...publicKey,
 								kid: keySet.id,
 							};
 						}),
 					} satisfies JSONWebKeySet as JSONWebKeySet);
 				},
 			),
-
 			getToken: createAuthEndpoint(
 				"/token",
 				{
@@ -189,13 +194,87 @@ export const jwt = (options?: JwtOptions) => {
 					},
 				},
 				async (ctx) => {
-					const jwt = await getJwtToken(ctx, options);
+					const jwt = await getSessionJwtInternal(ctx, options);
 					return ctx.json({
 						token: jwt,
 					});
 				},
 			),
-			signJWT: createAuthEndpoint(
+			verifyJwt: createAuthEndpoint(
+				"/verify-jwt",
+				{
+					method: "POST",
+					body: z.object({
+						jwt: z.string().meta({
+							description: "Signed JWT to verify",
+						}),
+						jwk: jwkExportedSchema.optional(),
+						options: verifyJwtOptionsSchema.optional(),
+					}),
+					metadata: {
+						SERVER_ONLY: true,
+						$Infer: {
+							body: {} as {
+								jwt: string;
+								jwk?: JWK;
+								options?: VerifyJwtOptions;
+							},
+						},
+						openapi: {
+							description: "Verify JWT",
+							responses: {
+								200: {
+									description: "Verified successfully and returned the payload",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+											},
+										},
+									},
+								},
+								400: {
+									description: "Could not verify the JWT",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					try {
+						const { jwk, jwt, options } = ctx.body;
+						if (jwk) {
+							if (typeof jwk === "string")
+								return ctx.json({
+									payload: await verifyJwtWithKey(ctx, jwt, jwk, options),
+								});
+
+							if (!isJwkAlgValid(jwk.alg!))
+								throw new BetterAuthError(
+									`Invalid JWK algorithm: "${jwk.alg}"`,
+									JSON.stringify(jwk),
+								);
+							const publicKey: CryptoKeyIdAlg = {
+								id: jwk.kid,
+								alg: jwk.alg as JwkAlgorithm,
+								key: (await importJWK(jwk)) as CryptoKey,
+							};
+
+							return ctx.json({
+								payload: await verifyJwtWithKey(ctx, jwt, publicKey, options),
+							});
+						}
+						return ctx.json({
+							payload: await verifyJwt(ctx, jwt, options),
+						});
+					} catch (error: unknown) {
+						throw new APIError("BAD_REQUEST", {
+							message: `Could not verify JWT: ${error}`,
+						});
+					}
+				},
+			),
+			signJwt: createAuthEndpoint(
 				"/sign-jwt",
 				{
 					method: "POST",
@@ -203,25 +282,276 @@ export const jwt = (options?: JwtOptions) => {
 						SERVER_ONLY: true,
 						$Infer: {
 							body: {} as {
-								payload: JWTPayload;
-								overrideOptions?: JwtOptions;
+								data: Record<string, any>;
+								jwk?: string | JWK;
+								claims?: CustomJwtClaims;
+							},
+						},
+						openapi: {
+							description: "Sign any data as JWT",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													token: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
 							},
 						},
 					},
 					body: z.object({
-						payload: z.record(z.string(), z.any()),
-						overrideOptions: z.record(z.string(), z.any()).optional(),
+						data: z.record(z.string(), z.any()),
+						jwk: jwkExportedSchema.optional(),
+						claims: customJwtClaimsSchema.optional(),
 					}),
 				},
-				async (c) => {
-					const jwt = await signJWT(c, {
-						options: {
-							...options,
-							...c.body.overrideOptions,
-						},
-						payload: c.body.payload,
+				async (ctx) => {
+					const { data, jwk, claims } = ctx.body;
+					if (jwk === undefined || typeof jwk === "string") {
+						const privateKey = await getJwk(ctx, true, jwk);
+						const jwt = await signJwtInternal(ctx, data, options, {
+							jwk: privateKey,
+							claims: claims,
+						});
+						return ctx.json({ token: jwt });
+					}
+
+					if (!isJwkAlgValid(jwk.alg!))
+						throw new BetterAuthError(
+							`Invalid JWK algorithm: "${jwk.alg}"`,
+							JSON.stringify(jwk),
+						);
+
+					const privateKey: CryptoKeyIdAlg = {
+						id: jwk.kid,
+						alg: jwk.alg as JwkAlgorithm,
+						key: (await importJWK(jwk)) as CryptoKey,
+					};
+					const jwt = await signJwtInternal(ctx, data, options, {
+						jwk: privateKey,
+						claims: claims,
 					});
-					return c.json({ token: jwt });
+					return ctx.json({ token: jwt });
+				},
+			),
+			createJwk: createAuthEndpoint(
+				"/create-jwk",
+				{
+					method: "POST",
+					metadata: {
+						SERVER_ONLY: true,
+						$Infer: {
+							body: {} as {
+								jwkOptions?: JwkOptions;
+							},
+						},
+						openapi: {
+							description:
+								"Create a JSON Web Key pair and save it in the database",
+							responses: {
+								200: {
+									description: "JSON Web Key pair created successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													key: {
+														description:
+															"The public key from newly created JSON Web Key pair",
+														type: "object",
+														properties: {
+															kid: {
+																type: "string",
+																description:
+																	"Key ID uniquely identifying the key, corresponds to the 'id' from the stored Jwk",
+															},
+															kty: {
+																type: "string",
+																description:
+																	"Key type (e.g., 'RSA', 'EC', 'OKP')",
+															},
+															alg: {
+																type: "string",
+																description:
+																	"Algorithm intended for use with the key (e.g., 'EdDSA', 'RS256')",
+															},
+															use: {
+																type: "string",
+																description:
+																	"Intended use of the public key (e.g., 'sig' for signature)",
+																enum: ["sig"],
+																nullable: true,
+															},
+															n: {
+																type: "string",
+																description:
+																	"Modulus for RSA keys (base64url-encoded)",
+																nullable: true,
+															},
+															e: {
+																type: "string",
+																description:
+																	"Exponent for RSA keys (base64url-encoded)",
+																nullable: true,
+															},
+															crv: {
+																type: "string",
+																description:
+																	"Curve name for elliptic curve keys (e.g., 'Ed25519', 'P-256')",
+																nullable: true,
+															},
+															x: {
+																type: "string",
+																description:
+																	"X coordinate for elliptic curve keys (base64url-encoded)",
+																nullable: true,
+															},
+															y: {
+																type: "string",
+																description:
+																	"Y coordinate for elliptic curve keys (base64url-encoded)",
+																nullable: true,
+															},
+														},
+														required: ["kid", "kty", "alg"],
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					body: z.object({
+						jwkOptions: jwkOptionsSchema.optional(),
+					}),
+				},
+				async (ctx) => {
+					const jwkOptions = ctx.body.jwkOptions;
+					const jwksOptions: JwksOptions = {
+						...options?.jwks,
+						keyPairConfig: jwkOptions ?? options?.jwks?.keyPairConfig,
+					};
+					const key = await createJwkInternal(ctx, jwksOptions);
+
+					return ctx.json({
+						key: { ...(await JSON.parse(key.publicKey)), kid: key.id },
+					});
+				},
+			),
+			importJwk: createAuthEndpoint(
+				"/import-jwk",
+				{
+					method: "POST",
+					metadata: {
+						SERVER_ONLY: true,
+						$Infer: {
+							body: {} as {
+								jwk: JWK;
+							},
+						},
+						openapi: {
+							description: "Import external JWK into the database",
+							responses: {
+								200: {
+									description: "JSON Web Key imported successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													key: {
+														description: "The newly created JSON Web Key",
+														type: "object",
+														properties: {
+															kid: {
+																type: "string",
+																description:
+																	"Key ID uniquely identifying the key, corresponds to the 'id' from the stored Jwk",
+															},
+															kty: {
+																type: "string",
+																description:
+																	"Key type (e.g., 'RSA', 'EC', 'OKP')",
+															},
+															alg: {
+																type: "string",
+																description:
+																	"Algorithm intended for use with the key (e.g., 'EdDSA', 'RS256')",
+															},
+															use: {
+																type: "string",
+																description:
+																	"Intended use of the public key (e.g., 'sig' for signature)",
+																enum: ["sig"],
+																nullable: true,
+															},
+															n: {
+																type: "string",
+																description:
+																	"Modulus for RSA keys (base64url-encoded)",
+																nullable: true,
+															},
+															e: {
+																type: "string",
+																description:
+																	"Exponent for RSA keys (base64url-encoded)",
+																nullable: true,
+															},
+															crv: {
+																type: "string",
+																description:
+																	"Curve name for elliptic curve keys (e.g., 'Ed25519', 'P-256')",
+																nullable: true,
+															},
+															x: {
+																type: "string",
+																description:
+																	"X coordinate for elliptic curve keys (base64url-encoded)",
+																nullable: true,
+															},
+															y: {
+																type: "string",
+																description:
+																	"Y coordinate for elliptic curve keys (base64url-encoded)",
+																nullable: true,
+															},
+														},
+														required: ["kid", "kty", "alg"],
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					body: z.object({
+						jwk: jwkExportedSchema.nonoptional(),
+					}),
+				},
+				async (ctx) => {
+					const exportedPrivateKey = ctx.body.jwk;
+					// Not calling `importJwk` from `./jwk.ts`, because this key is already exported
+					const key = getJwksAdapter(ctx.context.adapter).importKey({
+						id: exportedPrivateKey.kid!,
+						publicKey: JSON.stringify(getPublicJwk(exportedPrivateKey)),
+						privateKey: JSON.stringify(exportedPrivateKey),
+					} as Jwk);
+
+					return ctx.json({ key: key });
 				},
 			),
 		},
@@ -238,7 +568,7 @@ export const jwt = (options?: JwtOptions) => {
 
 						const session = ctx.context.session || ctx.context.newSession;
 						if (session && session.session) {
-							const jwt = await getJwtToken(ctx, options);
+							const jwt = await getSessionJwtInternal(ctx, options);
 							const exposedHeaders =
 								ctx.context.responseHeaders?.get(
 									"access-control-expose-headers",
@@ -263,5 +593,3 @@ export const jwt = (options?: JwtOptions) => {
 		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };
-
-export { getJwtToken };

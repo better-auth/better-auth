@@ -1,167 +1,106 @@
-import { getWebcryptoSubtle } from "@better-auth/utils";
-import { base64 } from "@better-auth/utils/base64";
+import type { AuthContext } from "../../types";
+import type { LogHandlerParams, LogLevel } from "../../utils/logger";
+import type { JwkAlgorithm, JwtPluginOptions } from "./types";
+import type { JWK } from "jose";
+import { BetterAuthError } from "../../error";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { joseSecs } from "../../utils/time";
-import type { JwtOptions, Jwk } from "./types";
-import { generateKeyPair, exportJWK } from "jose";
-import type { GenericEndpointContext } from "../../types";
-import { symmetricEncrypt } from "../../crypto";
-import { getJwksAdapter } from "./adapter";
 
-/**
- * Converts an expirationTime to ISO seconds expiration time (the format of JWT exp)
- *
- * See https://github.com/panva/jose/blob/main/src/lib/jwt_claims_set.ts#L245
- *
- * @param expirationTime - see options.jwt.expirationTime
- * @param iat - the iat time to consolidate on
- * @returns
- */
-export function toExpJWT(
-	expirationTime: number | Date | string,
-	iat: number,
-): number {
-	if (typeof expirationTime === "number") {
-		return expirationTime;
-	} else if (expirationTime instanceof Date) {
-		return Math.floor(expirationTime.getTime() / 1000);
-	} else {
-		return iat + joseSecs(expirationTime);
-	}
+export const getJwtPluginOptions = (
+	ctx: AuthContext,
+): JwtPluginOptions | undefined => {
+	const plugin = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
+	if (plugin === undefined)
+		throw new BetterAuthError(
+			'You need to initialize "jwt" plugin before calling JWT related functions!',
+		);
+	return plugin.options;
+};
+
+export function getPublicJwk(
+	privateJwk: JWK,
+): Omit<JWK, "d" | "p" | "q" | "dp" | "dq" | "qi"> {
+	const { d, p, q, dp, dq, qi, ...publicJwk } = privateJwk;
+	return publicJwk;
 }
 
-async function deriveKey(secretKey: string): Promise<CryptoKey> {
-	const enc = new TextEncoder();
-	const subtle = getWebcryptoSubtle();
-	const keyMaterial = await subtle.importKey(
-		"raw",
-		enc.encode(secretKey),
-		{ name: "PBKDF2" },
-		false,
-		["deriveKey"],
-	);
-
-	return subtle.deriveKey(
-		{
-			name: "PBKDF2",
-			salt: enc.encode("encryption_salt"),
-			iterations: 100000,
-			hash: "SHA-256",
-		},
-		keyMaterial,
-		{ name: "AES-GCM", length: 256 },
-		false,
-		["encrypt", "decrypt"],
-	);
+export function isPrivateKeyEncrypted(key: string) {
+	// If it is encrypted it will contain hex data, otherwise it is a JSON
+	return key.at(0) !== "{";
 }
 
 export async function encryptPrivateKey(
-	privateKey: string,
-	secretKey: string,
-): Promise<{ encryptedPrivateKey: string; iv: string; authTag: string }> {
-	const key = await deriveKey(secretKey); // Derive a 32-byte key from the provided secret
-	const iv = crypto.getRandomValues(new Uint8Array(12)); // 12-byte IV for AES-GCM
-
-	const enc = new TextEncoder();
-	const ciphertext = await getWebcryptoSubtle().encrypt(
-		{
-			name: "AES-GCM",
-			iv: iv,
-		},
-		key,
-		enc.encode(privateKey),
+	secret: string,
+	stringifiedPrivateWebKey: string,
+): Promise<string> {
+	return JSON.stringify(
+		await symmetricEncrypt({ key: secret, data: stringifiedPrivateWebKey }),
 	);
-
-	const encryptedPrivateKey = base64.encode(ciphertext);
-	const ivBase64 = base64.encode(iv);
-
-	return {
-		encryptedPrivateKey,
-		iv: ivBase64,
-		authTag: encryptedPrivateKey.slice(-16),
-	};
 }
 
 export async function decryptPrivateKey(
-	encryptedPrivate: {
-		encryptedPrivateKey: string;
-		iv: string;
-		authTag: string;
-	},
-	secretKey: string,
+	secret: string,
+	privateKey: string,
 ): Promise<string> {
-	const key = await deriveKey(secretKey);
-	const { encryptedPrivateKey, iv } = encryptedPrivate;
-
-	const ivBuffer = base64.decode(iv);
-	const ciphertext = base64.decode(encryptedPrivateKey);
-
-	const decrypted = await getWebcryptoSubtle().decrypt(
-		{
-			name: "AES-GCM",
-			iv: ivBuffer as BufferSource,
-		},
-		key,
-		ciphertext as BufferSource,
-	);
-
-	const dec = new TextDecoder();
-	return dec.decode(decrypted);
+	return await symmetricDecrypt({
+		key: secret,
+		data: JSON.parse(privateKey),
+	}).catch(() => {
+		throw new BetterAuthError(
+			"Failed to decrypt private private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either cleanup your jwks or disable private key encryption.",
+		);
+	});
 }
 
-export async function generateExportedKeyPair(options?: JwtOptions) {
-	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
-		alg: "EdDSA",
-		crv: "Ed25519",
-	};
-	const { publicKey, privateKey } = await generateKeyPair(alg, {
-		...cfg,
-		extractable: true,
-	});
+export function isJwkAlgValid(jwkAlgorithm: string): boolean {
+	const JWK_ALGS = ["EdDSA", "ES256", "ES512", "PS256", "RS256"] as const;
 
-	const publicWebKey = await exportJWK(publicKey);
-	const privateWebKey = await exportJWK(privateKey);
-
-	return { publicWebKey, privateWebKey, alg, cfg };
+	if (JWK_ALGS.includes(jwkAlgorithm as JwkAlgorithm)) return true;
+	return false;
 }
 
 /**
- * Creates a Jwk on the database
+ * Converts *JOSE* **"expiration"** or **"not before"** time claims to ISO seconds time (the format of JWT).
  *
- * @param ctx
- * @param options
- * @returns
+ * See https://github.com/panva/jose/blob/main/src/lib/jwt_claims_set.ts#L245
+ *
+ * @param time - See options.jwt.expirationTime.
+ * @param iat - The `iat` ("Issued At" JWT Claim) time to consolidate on.
+ * @returns ISO seconds time
  */
-export async function createJwk(
-	ctx: GenericEndpointContext,
-	options?: JwtOptions,
-) {
-	const { publicWebKey, privateWebKey, alg, cfg } =
-		await generateExportedKeyPair(options);
+export function toJwtTime(time: number | Date | string, iat?: number): number {
+	if (typeof time === "number") {
+		return time;
+	} else if (time instanceof Date) {
+		return Math.floor(time.getTime() / 1000);
+	} else {
+		return iat ?? Date.now() / 1000 + joseSecs(time);
+	}
+}
 
-	const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
-	const privateKeyEncryptionEnabled =
-		!options?.jwks?.disablePrivateKeyEncryption;
-	let jwk: Omit<Jwk, "id"> = {
-		alg,
-		...(cfg && "crv" in cfg
-			? {
-					crv: (cfg as { crv: (typeof jwk)["crv"] }).crv,
-				}
-			: {}),
-		publicKey: JSON.stringify(publicWebKey),
-		privateKey: privateKeyEncryptionEnabled
-			? JSON.stringify(
-					await symmetricEncrypt({
-						key: ctx.context.secret,
-						data: stringifiedPrivateWebKey,
-					}),
-				)
-			: stringifiedPrivateWebKey,
-		createdAt: new Date(),
-	};
+/**
+ * Makes sure `data` does not contain any of the *#RFC7519 JWT Claims*.
+ *
+ * @description The `data` is modified in place, there is no copy and this function does not return anything.
+ */
+export function removeJwtClaims(
+	data: Record<string, unknown>,
+	logger?: Record<LogLevel, (...params: LogHandlerParams) => void>,
+): void {
+	const reservedClaims = ["aud", "exp", "iat", "iss", "jti", "nbf", "sub"];
+	const editableClaims = ["aud", "exp", "jti", "nbf", "sub"];
 
-	const adapter = getJwksAdapter(ctx.context.adapter);
-	const key = await adapter.createJwk(jwk as Jwk);
-
-	return key;
+	for (const claim of reservedClaims) {
+		if (data[claim] !== undefined) {
+			let warn: string = `Signing JWT: Removing "${claim}" field from the data to be signed (affects original record!). This is a reserved field.`;
+			if (editableClaims.includes(claim))
+				warn +=
+					' If you need to edit this JWT Claim, provide its override in "signJwt" function\'s "claim" argument.';
+			else
+				warn +=
+					' If you need to edit this field (unrecommended), sign payload yourself with a key from "getJwk".';
+			logger?.warn(warn);
+			delete data[claim];
+		}
+	}
 }
