@@ -168,7 +168,7 @@ export interface OAuthOptions {
 	 *
 	 * @example
 	 * ```ts
-	 * consentPage: "/oauth/authorize"
+	 * consentPage: "/consent"
 	 * ```
 	 */
 	consentPage: string;
