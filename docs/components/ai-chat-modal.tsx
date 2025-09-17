@@ -117,10 +117,8 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 				throw new Error(`HTTP ${response.status}: ${errorText}`);
 			}
 
-			// Since we're using stream: false, we'll always get JSON response
 			const data = await response.json();
 
-			// Extract session_id for future requests
 			if (data.session_id) {
 				setSessionId(data.session_id);
 			}
