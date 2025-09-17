@@ -543,7 +543,7 @@ export interface VerificationValue {
 }
 
 /**
- * Client registered values as stored on the database
+ * Client registered values as used within the plugin
  */
 export interface SchemaClient {
 	//---- Required ----//

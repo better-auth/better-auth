@@ -249,7 +249,7 @@ async function createOpaqueAccessToken(
 			token: await storeToken(opts.storeTokens, token),
 			clientId,
 			sessionId: payload?.sid,
-			scopes,
+			scopes: scopes.join(" "), // TODO: remove join when native arrays supported
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
 		},
@@ -337,39 +337,56 @@ async function createUserTokens(
 	let session: OAuthSession | null = null;
 	try {
 		session = _session?.sessionToken
-			? await ctx.context.adapter.update({
-					model: "session",
-					where: [
-						{
-							field: "refresh",
-							value: await getStoredToken(
-								opts.storeTokens,
-								_session.sessionToken,
-							),
+			? await ctx.context.adapter
+					.update({
+						model: "session",
+						where: [
+							{
+								field: "refresh",
+								value: await getStoredToken(
+									opts.storeTokens,
+									_session.sessionToken,
+								),
+							},
+						],
+						update: {
+							refresh: refreshToken
+								? await storeToken(opts.storeTokens, refreshToken)
+								: undefined,
+							updatedAt: now,
+							expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
 						},
-					],
-					update: {
-						refresh: refreshToken
-							? await storeToken(opts.storeTokens, refreshToken)
-							: undefined,
-						updatedAt: now,
-						expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
-					},
-				})
-			: await ctx.context.adapter.create({
-					model: "session",
-					data: {
-						userId: user.id,
-						clientId: client.clientId,
-						scopes,
-						refresh: refreshToken
-							? await storeToken(opts.storeTokens, refreshToken)
-							: undefined,
-						createdAt: now,
-						updatedAt: now,
-						expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
-					},
-				});
+					})
+					.then((res: any) => {
+						// TODO: remove join when native arrays supported
+						if (!res) return res;
+						return {
+							...res,
+							scopes: res.scopes?.split(" "),
+						} as OAuthSession;
+					})
+			: await ctx.context.adapter
+					.create({
+						model: "session",
+						data: {
+							userId: user.id,
+							clientId: client.clientId,
+							scopes: scopes.join(" "), // TODO: remove join when native arrays supported
+							refresh: refreshToken
+								? await storeToken(opts.storeTokens, refreshToken)
+								: undefined,
+							createdAt: now,
+							updatedAt: now,
+							expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
+						},
+					})
+					.then((res) => {
+						// TODO: remove join when native arrays supported
+						return {
+							...res,
+							scopes: res.scopes.split(" "),
+						} as OAuthSession;
+					});
 	} catch (err) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error: "invalid_request",
@@ -822,15 +839,24 @@ async function handleRefreshTokenGrant(
 	}
 	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);
 
-	const session = await ctx.context.adapter.findOne<OAuthSession>({
-		model: "session",
-		where: [
-			{
-				field: "refresh",
-				value: await getStoredToken(opts.storeTokens, decodedRefresh.token),
-			},
-		],
-	});
+	const session = await ctx.context.adapter
+		.findOne<OAuthSession>({
+			model: "session",
+			where: [
+				{
+					field: "refresh",
+					value: await getStoredToken(opts.storeTokens, decodedRefresh.token),
+				},
+			],
+		})
+		.then((res) => {
+			// TODO: remove when native arrays supported
+			if (!res) return res;
+			return {
+				...res,
+				scopes: (res?.scopes as unknown as string)?.split(" "),
+			} as OAuthSession;
+		});
 
 	// Check session
 	if (!session) {

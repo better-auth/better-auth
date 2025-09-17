@@ -94,15 +94,24 @@ async function revokeOpaqueAccessToken(
 		}
 	}
 	const accessToken: (OAuthOpaqueAccessToken & { id?: string }) | null =
-		await ctx.context.adapter.findOne({
-			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
-			where: [
-				{
-					field: "token",
-					value: await getStoredToken(opts.storeTokens, tokenValue),
-				},
-			],
-		});
+		await ctx.context.adapter
+			.findOne<OAuthOpaqueAccessToken>({
+				model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
+				where: [
+					{
+						field: "token",
+						value: await getStoredToken(opts.storeTokens, tokenValue),
+					},
+				],
+			})
+			.then((res) => {
+				// TODO: remove join when native arrays supported
+				if (!res) return res;
+				return {
+					...res,
+					scopes: (res.scopes as unknown as string)?.split(" "),
+				} as OAuthOpaqueAccessToken;
+			});
 	if (!accessToken) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "opaque access token not found",

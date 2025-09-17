@@ -7,6 +7,7 @@ import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { OAuthOptions, SchemaClient } from "./types";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { databaseToSchema, type DatabaseClient } from "./register";
 
 /**
  * Gets the oAuth Provider Plugin
@@ -44,10 +45,15 @@ export async function getClient(
 	if (trustedClient) {
 		return trustedClient;
 	}
-	const dbClient = await ctx.context.adapter.findOne<SchemaClient>({
-		model: options.schema?.oauthApplication?.modelName ?? "oauthApplication",
-		where: [{ field: "clientId", value: clientId }],
-	});
+	const dbClient = await ctx.context.adapter
+		.findOne<DatabaseClient>({
+			model: options.schema?.oauthApplication?.modelName ?? "oauthApplication",
+			where: [{ field: "clientId", value: clientId }],
+		})
+		.then((res) => {
+			if (!res) return null;
+			return databaseToSchema(res);
+		});
 
 	return dbClient as (SchemaClient & { skipConsent?: boolean }) | null;
 }
