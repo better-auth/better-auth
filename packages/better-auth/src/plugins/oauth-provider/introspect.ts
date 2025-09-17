@@ -142,8 +142,8 @@ async function validateOpaqueAccessToken(
 			});
 		}
 	}
-	const accessToken: OAuthOpaqueAccessToken | null =
-		await ctx.context.adapter.findOne({
+	const accessToken = await ctx.context.adapter
+		.findOne<OAuthOpaqueAccessToken>({
 			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 			where: [
 				{
@@ -151,6 +151,14 @@ async function validateOpaqueAccessToken(
 					value: await getStoredToken(opts.storeTokens, tokenValue),
 				},
 			],
+		})
+		.then((res) => {
+			// TODO: remove join when native arrays supported
+			if (!res) return res;
+			return {
+				...res,
+				scopes: (res.scopes as unknown as string)?.split(" "),
+			} as OAuthOpaqueAccessToken;
 		});
 	if (!accessToken) {
 		throw new APIError("BAD_REQUEST", {
@@ -169,15 +177,24 @@ async function validateOpaqueAccessToken(
 
 	let user: (User & Record<string, any>) | undefined;
 	if (accessToken.sessionId) {
-		const session = await ctx.context.adapter.findOne<OAuthSession>({
-			model: "session",
-			where: [
-				{
-					field: "id",
-					value: accessToken.sessionId,
-				},
-			],
-		});
+		const session = await ctx.context.adapter
+			.findOne<OAuthSession>({
+				model: "session",
+				where: [
+					{
+						field: "id",
+						value: accessToken.sessionId,
+					},
+				],
+			})
+			.then((res) => {
+				// TODO: remove join when native arrays supported
+				if (!res) return res;
+				return {
+					...res,
+					scopes: (res.scopes as unknown as string)?.split(" "),
+				};
+			});
 		// Token was valid but associated session is no longer valid
 		if (!session || session.expiresAt < new Date()) {
 			return {
@@ -220,15 +237,24 @@ async function validateRefreshToken(
 	token: string,
 	clientId: string,
 ) {
-	const userSession = await ctx.context.adapter.findOne<OAuthSession | null>({
-		model: "session",
-		where: [
-			{
-				field: "refresh",
-				value: await getStoredToken(opts.storeTokens, token),
-			},
-		],
-	});
+	const userSession = await ctx.context.adapter
+		.findOne<OAuthSession | null>({
+			model: "session",
+			where: [
+				{
+					field: "refresh",
+					value: await getStoredToken(opts.storeTokens, token),
+				},
+			],
+		})
+		.then((res) => {
+			// TODO: remove join when native arrays supported
+			if (!res) return res;
+			return {
+				...res,
+				scopes: (res.scopes as unknown as string)?.split(" "),
+			};
+		});
 	if (!userSession) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "token not found",

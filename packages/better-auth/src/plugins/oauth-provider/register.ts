@@ -137,10 +137,14 @@ export async function registerEndpoint(
 		},
 		true,
 	);
-	const client = await ctx.context.adapter.create<SchemaClient>({
-		model: opts.schema?.oauthApplication?.modelName ?? "oauthApplication",
-		data: schema,
-	});
+	const client = await ctx.context.adapter
+		.create<DatabaseClient>({
+			model: opts.schema?.oauthApplication?.modelName ?? "oauthApplication",
+			data: schemaToDatabase(schema),
+		})
+		.then((res) => {
+			return databaseToSchema(res as DatabaseClient);
+		});
 	// Format the response according to RFC7591
 	return ctx.json(
 		schemaToOAuth(
@@ -160,6 +164,64 @@ export async function registerEndpoint(
 			},
 		},
 	);
+}
+
+/**
+ * Client values as stored on the database.
+ * TODO: Easily removable when native `string[]` is used
+ *
+ * @internal
+ */
+export interface DatabaseClient
+	extends Omit<
+		SchemaClient,
+		| "allowedScopes"
+		| "contacts"
+		| "redirectUris"
+		| "grantTypes"
+		| "responseTypes"
+	> {
+	allowedScopes?: string;
+	contacts?: string;
+	redirectUris?: string;
+	grantTypes?: string;
+	responseTypes?: string;
+}
+
+/**
+ * Converts values stored on the database to a typed schema client.
+ * TODO: Easily removable when native `string[]` is used
+ *
+ * @internal
+ */
+export function databaseToSchema(input: DatabaseClient): SchemaClient {
+	return {
+		...input,
+		allowedScopes: input.allowedScopes?.split(" "),
+		contacts: input.contacts?.split(","),
+		redirectUris: input.redirectUris?.split(","),
+		grantTypes: input.grantTypes?.split(",") as SchemaClient["grantTypes"],
+		responseTypes: input.responseTypes?.split(
+			",",
+		) as SchemaClient["responseTypes"],
+	};
+}
+
+/**
+ * Converts typed schema client to untyped database type.
+ * TODO: Easily removable when native `string[]` is used
+ *
+ * @internal
+ */
+export function schemaToDatabase(input: SchemaClient): DatabaseClient {
+	return {
+		...input,
+		allowedScopes: input.allowedScopes?.join(" "),
+		contacts: input.contacts?.join(","),
+		redirectUris: input.redirectUris?.join(","),
+		grantTypes: input.grantTypes?.join(","),
+		responseTypes: input.responseTypes?.join(","),
+	};
 }
 
 /**

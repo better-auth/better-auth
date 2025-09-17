@@ -14,12 +14,7 @@ import {
 import type { ProviderOptions } from "../../oauth2";
 import { generateRandomString } from "../../crypto";
 import type { MakeRequired } from "../../types/helper";
-import {
-	createLocalJWKSet,
-	decodeJwt,
-	jwtVerify,
-	type JSONWebKeySet,
-} from "jose";
+import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
 import { createClientCredentialsTokenRequest } from "../../oauth2/client-credentials-token";
 import { jwtClient } from "../jwt/client";
 
