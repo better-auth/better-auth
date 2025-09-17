@@ -22,7 +22,7 @@ const postgresMap = {
 		"double precision",
 	],
 	boolean: ["bool", "boolean"],
-	date: ["timestamp", "date"],
+	date: ["timestamptz", "timestamp", "date"],
 	json: ["json", "jsonb"],
 };
 const mysqlMap = {
@@ -206,13 +206,13 @@ export async function getMigrations(config: BetterAuthOptions) {
 			},
 			date: {
 				sqlite: "date",
-				postgres: "timestamp",
-				mysql: "datetime",
+				postgres: "timestamptz",
+				mysql: "timestamp",
 				mssql: "datetime",
 			},
 			json: {
 				sqlite: "text",
-				postgres: "json",
+				postgres: "jsonb",
 				mysql: "json",
 				mssql: "varchar(8000)",
 			},
@@ -289,7 +289,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 							: "text",
 					(col) => {
 						if (config.advanced?.database?.useNumberId) {
-							if (dbType === "postgres") {
+							if (dbType === "postgres" || dbType === "sqlite") {
 								return col.primaryKey().notNull();
 							}
 							return col.autoIncrement().primaryKey().notNull();

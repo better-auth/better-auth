@@ -3,6 +3,7 @@ import type { BetterAuthDbSchema } from "../../db/get-tables";
 import type {
 	AdapterSchemaCreation,
 	BetterAuthOptions,
+	TransactionAdapter,
 	Where,
 } from "../../types";
 import type { Prettify } from "../../types/helper";
@@ -32,7 +33,12 @@ export type AdapterDebugLogs =
 			isRunningAdapterTests: boolean;
 	  };
 
-export interface AdapterConfig {
+export type AdapterFactoryOptions = {
+	config: AdapterFactoryConfig;
+	adapter: AdapterFactoryCustomizeAdapterCreator;
+};
+
+export interface AdapterFactoryConfig {
 	/**
 	 * Use plural table names.
 	 *
@@ -89,6 +95,15 @@ export interface AdapterConfig {
 	 * @default true
 	 */
 	supportsBooleans?: boolean;
+	/**
+	 * Execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
+	 *
+	 */
+	transaction?:
+		| false
+		| (<R>(callback: (trx: TransactionAdapter) => Promise<R>) => Promise<R>);
 	/**
 	 * Disable id generation for the `create` method.
 	 *
@@ -225,13 +240,7 @@ export interface AdapterConfig {
 	customIdGenerator?: (props: { model: string }) => string;
 }
 
-export type CreateCustomAdapter = ({
-	options,
-	debugLog,
-	schema,
-	getDefaultModelName,
-	getDefaultFieldName,
-}: {
+export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	options: BetterAuthOptions;
 	/**
 	 * The schema of the user's Better-Auth instance.
@@ -381,3 +390,18 @@ export type AdapterTestDebugLogs = {
 	resetDebugLogs: () => void;
 	printDebugLogs: () => void;
 };
+
+/**
+ * @deprecated Use `AdapterFactoryOptions` instead. This export will be removed in a future version.
+ */
+export type CreateAdapterOptions = AdapterFactoryOptions;
+
+/**
+ * @deprecated Use `AdapterFactoryConfig` instead. This export will be removed in a future version.
+ */
+export type AdapterConfig = AdapterFactoryConfig;
+
+/**
+ * @deprecated Use `AdapterFactoryCustomizeAdapterCreator` instead. This export will be removed in a future version.
+ */
+export type CreateCustomAdapter = AdapterFactoryCustomizeAdapterCreator;
