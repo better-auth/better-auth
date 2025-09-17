@@ -140,24 +140,20 @@ describe("oauth userinfo", async () => {
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
 		// This test is performed in register.test.ts
-		const application: Partial<OAuthClient> = {
+		const response = await client.oauth2.register({
 			redirect_uris: [redirectUri],
-		};
-		const response = await client.$fetch<OAuthClient>("/oauth2/register", {
-			method: "POST",
-			body: application,
 		});
 		expect(response.data?.client_id).toBeDefined();
 		expect(response.data?.user_id).toBeDefined();
 		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual(application.redirect_uris);
+		expect(response.data?.redirect_uris).toEqual([redirectUri]);
 		oauthClient = response.data;
 	});
 
 	it("should fail unauthenticated request", async () => {
 		const tokens = await getTokens();
 		expect(tokens.data?.access_token).toBeDefined();
-		const userinfo = await client.$fetch("/oauth2/userinfo");
+		const userinfo = await client.oauth2.userinfo();
 		expect(userinfo.error?.status).toBe(401);
 	});
 

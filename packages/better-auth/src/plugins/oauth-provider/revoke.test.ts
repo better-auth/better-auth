@@ -142,41 +142,31 @@ describe("oauth revoke", async () => {
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
 		// This test is performed in register.test.ts
-		const application: Partial<OAuthClient> = {
+		const response = await client.oauth2.register({
 			redirect_uris: [redirectUri],
-		};
-		const response = await client.$fetch<OAuthClient>("/oauth2/register", {
-			method: "POST",
-			body: application,
 		});
 		expect(response.data?.client_id).toBeDefined();
 		expect(response.data?.user_id).toBeDefined();
 		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual(application.redirect_uris);
+		expect(response.data?.redirect_uris).toEqual([redirectUri]);
 		oauthClient = response.data;
 	});
 
 	it("should fail unauthenticated request", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.$fetch("/oauth2/revoke", {
-			method: "POST",
-			body: {
-				token: tokens.data?.access_token,
-			},
+		const revocation = await client.oauth2.revoke({
+			token: tokens.data?.access_token!,
 		});
 		expect(revocation.error?.status).toBe(401);
 	});
 
 	it("should pass verification with token_type_hint access_token and sent jwt access_token", async () => {
 		const tokens = await getTokens(undefined, validAudience);
-		const revocation = await client.$fetch("/oauth2/revoke", {
-			method: "POST",
-			body: {
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: tokens.data?.access_token,
-				token_type_hint: "access_token",
-			},
+		const revocation = await client.oauth2.revoke({
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			token: tokens.data?.access_token!,
+			token_type_hint: "access_token",
 		});
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
@@ -184,14 +174,11 @@ describe("oauth revoke", async () => {
 
 	it("should pass verification with token_type_hint access_token and sent opaque access_token", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.$fetch("/oauth2/revoke", {
-			method: "POST",
-			body: {
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: tokens.data?.access_token,
-				token_type_hint: "access_token",
-			},
+		const revocation = await client.oauth2.revoke({
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			token: tokens.data?.access_token!,
+			token_type_hint: "access_token",
 		});
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
@@ -199,28 +186,22 @@ describe("oauth revoke", async () => {
 
 	it("should fail with token_type_hint access_token and sent refresh_token", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.$fetch("/oauth2/revoke", {
-			method: "POST",
-			body: {
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: tokens.data?.refresh_token,
-				token_type_hint: "access_token",
-			},
+		const revocation = await client.oauth2.revoke({
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			token: tokens.data?.refresh_token!,
+			token_type_hint: "access_token",
 		});
 		expect(revocation.error?.status).toBe(400);
 	});
 
 	it("should pass verification with token_type_hint refresh_token and sent refresh_token", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.$fetch("/oauth2/revoke", {
-			method: "POST",
-			body: {
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: tokens.data?.refresh_token,
-				token_type_hint: "refresh_token",
-			},
+		const revocation = await client.oauth2.revoke({
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			token: tokens.data?.refresh_token!,
+			token_type_hint: "refresh_token",
 		});
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
@@ -228,27 +209,21 @@ describe("oauth revoke", async () => {
 
 	it("should fail verification with token_type_hint refresh_token and sent access_token", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.$fetch("/oauth2/revoke", {
-			method: "POST",
-			body: {
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: tokens.data?.access_token,
-				token_type_hint: "refresh_token",
-			},
+		const revocation = await client.oauth2.revoke({
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			token: tokens.data?.access_token!,
+			token_type_hint: "refresh_token",
 		});
 		expect(revocation.error?.status).toBe(400);
 	});
 
 	it("should pass verification without token_type_hint and sent jwt access_token", async () => {
 		const tokens = await getTokens(undefined, validAudience);
-		const revocation = await client.$fetch("/oauth2/revoke", {
-			method: "POST",
-			body: {
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: tokens.data?.access_token,
-			},
+		const revocation = await client.oauth2.revoke({
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			token: tokens.data?.access_token!,
 		});
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
@@ -256,13 +231,10 @@ describe("oauth revoke", async () => {
 
 	it("should pass verification without token_type_hint and sent opaque access_token", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.$fetch("/oauth2/revoke", {
-			method: "POST",
-			body: {
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: tokens.data?.access_token,
-			},
+		const revocation = await client.oauth2.revoke({
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			token: tokens.data?.access_token!,
 		});
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
@@ -270,13 +242,10 @@ describe("oauth revoke", async () => {
 
 	it("should pass verification without token_type_hint and sent refresh_token", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.$fetch("/oauth2/revoke", {
-			method: "POST",
-			body: {
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: tokens.data?.refresh_token,
-			},
+		const revocation = await client.oauth2.revoke({
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			token: tokens.data?.refresh_token!,
 		});
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
