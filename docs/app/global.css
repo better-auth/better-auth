@@ -268,7 +268,6 @@ html {
 	@apply text-sm leading-relaxed;
 }
 
-/* Ensure code blocks don't overflow */
 .markdown-content pre {
 	@apply max-w-full overflow-x-auto;
 }
