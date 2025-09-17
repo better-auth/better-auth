@@ -129,6 +129,7 @@ export const createInternalAdapter = (
 				context,
 				trxAdapter,
 			);
+
 			return createdUser as T & User;
 		},
 		createAccount: async <T extends Record<string, any>>(
