@@ -987,7 +987,9 @@ const auth = betterAuth({
 
 You can easily make your APIs MCP-compatabile simply by adding a resource server which directs users to this oAuth2.1 authorization server.
 
-You cannot disable the JWT Plugin if you are utilizing this plugin.
+<Callout type="info">
+If you are using "openid" and confidential MCP clients, you cannot disable the JWT plugin since `id_token` verification may not necessarily be supported via a `client_secret`.
+</Callout>
 
 #### Installation
 
