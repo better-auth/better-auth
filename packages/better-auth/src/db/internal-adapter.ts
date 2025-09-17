@@ -90,6 +90,7 @@ export const createInternalAdapter = (
 				undefined,
 				context,
 			);
+
 			return createdUser as T & User;
 		},
 		createAccount: async <T extends Record<string, any>>(
