@@ -710,7 +710,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
 				organizationId: organizationId,
-			})
+			});
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null);
 				throw new APIError("FORBIDDEN", {
