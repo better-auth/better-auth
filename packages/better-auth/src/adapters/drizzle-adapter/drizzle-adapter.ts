@@ -361,7 +361,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			transaction:
-				(config.transaction ?? true)
+				(config.transaction ?? false)
 					? (cb) =>
 							db.transaction((tx: DB) => {
 								const adapter = createAdapterFactory({
