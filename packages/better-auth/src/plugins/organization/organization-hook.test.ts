@@ -92,7 +92,9 @@ describe("organization creation in database hooks", async () => {
 		});
 	});
 
-	it("should handle errors gracefully when organization creation fails in hook", async () => {
+	it("should handle errors gracefully when organization creation fails in hook", async ({
+		skip,
+	}) => {
 		let firstUserCreated = false;
 		let errorOnSecondUser: any = null;
 
@@ -122,6 +124,12 @@ describe("organization creation in database hooks", async () => {
 				},
 			},
 		});
+
+		if (!db.options?.adapterConfig.transaction) {
+			skip(
+				"Skipping since transactions are enabled and will rollback automatically",
+			);
+		}
 
 		// First user should succeed
 		const result1 = await client.signUp.email({
