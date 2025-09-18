@@ -235,9 +235,14 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 				</DialogHeader>
 
 				<div className="flex-1 flex flex-col min-h-0">
-					<div className="flex-1 overflow-y-auto space-y-4 p-6">
+					<div
+						className={cn(
+							"flex-1 overflow-y-auto space-y-4 p-6",
+							messages.length === 0 ? "overflow-y-hidden" : "overflow-y-auto",
+						)}
+					>
 						{messages.length === 0 ? (
-							<div className="flex flex-col items-center justify-center h-full text-center">
+							<div className="flex h-full flex-col items-center justify-center text-center">
 								<div className="mb-6">
 									<div className="w-16 h-16 mx-auto bg-transparent border border-input/70 border-dashed rounded-none flex items-center justify-center mb-4">
 										<Bot className="h-8 w-8 text-primary" />
