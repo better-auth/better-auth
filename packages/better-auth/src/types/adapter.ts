@@ -46,11 +46,10 @@ export type Join = {
 		 * * **right**: returns all rows from the right table, plus matching rows from the left (if none, NULL fills in).
 		 * * **inner**: returns rows where there’s a match in both tables.
 		 * * **full**: returns rows from both sides, filling in gaps with NULLs.
-		 * * **cross**: cartesian product - every row from left * every row from right.
 		 *
 		 * @default "left"
 		 */
-		type?: "left" | "right" | "inner" | "full" | "cross";
+		type?: "left" | "right" | "inner" | "full"
 		on: [originalModel: string, joinModel: string];
 	};
 };

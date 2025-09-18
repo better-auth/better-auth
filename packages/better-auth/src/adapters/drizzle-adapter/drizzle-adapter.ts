@@ -459,13 +459,30 @@ export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 						let base = from as ReturnType<typeof from.leftJoin>;
 						for (const model in join) {
 							const joinSchemaModel = getSchema<"pg">(model);
-							const where = join[model].on;
-							const field1 = getFieldName({ model, field: where[0] });
-							const field2 = getFieldName({ model, field: where[1] });
-							base = base.leftJoin(
-								joinSchemaModel,
-								eq(schemaModel[field1], joinSchemaModel[field2]),
-							);
+							const { on, type } = join[model];
+							const field1 = getFieldName({ model, field: on[0] });
+							const field2 = getFieldName({ model, field: on[1] });
+							if (type === "full") {
+								base = base.fullJoin(
+									joinSchemaModel,
+									eq(schemaModel[field1], joinSchemaModel[field2]),
+								);
+							} else if (type === "inner") {
+								base = base.innerJoin(
+									joinSchemaModel,
+									eq(schemaModel[field1], joinSchemaModel[field2]),
+								);
+							} else if (type === "left") {
+								base = base.leftJoin(
+									joinSchemaModel,
+									eq(schemaModel[field1], joinSchemaModel[field2]),
+								);
+							} else if (type === "right") {
+								base = base.rightJoin(
+									joinSchemaModel,
+									eq(schemaModel[field1], joinSchemaModel[field2]),
+								);
+							}
 						}
 						return base;
 					})();
@@ -483,13 +500,30 @@ export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 						let base = from as ReturnType<typeof from.leftJoin>;
 						for (const model in join) {
 							const joinSchemaModel = getSchema<"mysql">(model);
-							const where = join[model].on;
-							const field1 = getFieldName({ model, field: where[0] });
-							const field2 = getFieldName({ model, field: where[1] });
-							base = base.leftJoin(
-								joinSchemaModel,
-								eq(schemaModel[field1], joinSchemaModel[field2]),
-							);
+							const { on, type } = join[model];
+							const field1 = getFieldName({ model, field: on[0] });
+							const field2 = getFieldName({ model, field: on[1] });
+							if (type === "full") {
+								base = base.fullJoin(
+									joinSchemaModel,
+									eq(schemaModel[field1], joinSchemaModel[field2]),
+								);
+							} else if (type === "inner") {
+								base = base.innerJoin(
+									joinSchemaModel,
+									eq(schemaModel[field1], joinSchemaModel[field2]),
+								);
+							} else if (type === "left") {
+								base = base.leftJoin(
+									joinSchemaModel,
+									eq(schemaModel[field1], joinSchemaModel[field2]),
+								);
+							} else if (type === "right") {
+								base = base.rightJoin(
+									joinSchemaModel,
+									eq(schemaModel[field1], joinSchemaModel[field2]),
+								);
+							}
 						}
 						return base;
 					})();
@@ -507,13 +541,30 @@ export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 						let base = from as ReturnType<typeof from.leftJoin>;
 						for (const model in join) {
 							const joinSchemaModel = getSchema<"sqlite">(model);
-							const where = join[model].on;
-							const field1 = getFieldName({ model, field: where[0] });
-							const field2 = getFieldName({ model, field: where[1] });
-							base = base.leftJoin(
-								joinSchemaModel,
-								eq(schemaModel[field1], joinSchemaModel[field2]),
-							);
+							const { on, type } = join[model];
+							const field1 = getFieldName({ model, field: on[0] });
+							const field2 = getFieldName({ model, field: on[1] });
+							if (type === "full") {
+								base = base.fullJoin(
+									joinSchemaModel,
+									eq(schemaModel[field1], joinSchemaModel[field2]),
+								);
+							} else if (type === "inner") {
+								base = base.innerJoin(
+									joinSchemaModel,
+									eq(schemaModel[field1], joinSchemaModel[field2]),
+								);
+							} else if (type === "left") {
+								base = base.leftJoin(
+									joinSchemaModel,
+									eq(schemaModel[field1], joinSchemaModel[field2]),
+								);
+							} else if (type === "right") {
+								base = base.rightJoin(
+									joinSchemaModel,
+									eq(schemaModel[field1], joinSchemaModel[field2]),
+								);
+							}
 						}
 						return base;
 					})();
