@@ -799,10 +799,4 @@ export interface OrganizationOptions {
 			organization: Organization & Record<string, any>;
 		}) => Promise<void>;
 	};
-	/**
-	 * Automatically create an organization for the user on sign up.
-	 *
-	 * @default false
-	 */
-	autoCreateOrganizationOnSignUp?: boolean;
 }
