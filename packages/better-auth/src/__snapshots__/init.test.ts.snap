@@ -20,7 +20,7 @@ exports[`init > should match config 1`] = `
         "supportsDates": false,
         "supportsJSON": false,
         "supportsNumericIds": true,
-        "transaction": [Function],
+        "transaction": false,
         "usePlural": undefined,
       },
       "debugLogs": false,
