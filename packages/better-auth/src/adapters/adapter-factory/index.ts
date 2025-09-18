@@ -10,6 +10,7 @@ import type {
 } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
+	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 	CleanedWhere,
@@ -71,7 +72,8 @@ export const createAdapterFactory =
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 			supportsJoins: cfg.supportsJoins ?? false,
-		} satisfies AdapterConfig;
+			transaction: cfg.transaction ?? false,
+		} satisfies AdapterFactoryConfig;
 
 		if (
 			options.advanced?.database?.useNumberId === true &&
@@ -471,7 +473,6 @@ export const createAdapterFactory =
 			} else {
 				for (const key in tableSchema) {
 					if (select.length && !select.includes(key)) continue;
-
 					const field = tableSchema[key];
 					if (field) {
 						const originalKey = field.fieldName || key;
