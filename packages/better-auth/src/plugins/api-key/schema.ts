@@ -49,7 +49,7 @@ export const apiKeySchema = ({
 				 */
 				userId: {
 					type: "string",
-					references: { model: "user", field: "id" },
+					references: { model: "user", field: "id", onDelete: "cascade" },
 					required: true,
 					input: false,
 				},

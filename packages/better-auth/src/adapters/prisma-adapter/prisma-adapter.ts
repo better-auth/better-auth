@@ -1,11 +1,11 @@
 import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
-	createAdapter,
+	createAdapterFactory,
 	type AdapterDebugLogs,
-	type CreateAdapterOptions,
-	type CreateCustomAdapter,
-} from "../create-adapter";
+	type AdapterFactoryOptions,
+	type AdapterFactoryCustomizeAdapterCreator,
+} from "../adapter-factory";
 
 export interface PrismaConfig {
 	/**
@@ -63,7 +63,7 @@ type PrismaClientInternal = {
 export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
-		(prisma: PrismaClient): CreateCustomAdapter =>
+		(prisma: PrismaClient): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldName }) => {
 			const db = prisma as PrismaClientInternal;
 
@@ -233,7 +233,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			};
 		};
 
-	let adapterOptions: CreateAdapterOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "prisma",
@@ -241,10 +241,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			transaction:
-				(config.transaction ?? true)
+				(config.transaction ?? false)
 					? (cb) =>
 							(prisma as PrismaClientInternal).$transaction((tx) => {
-								const adapter = createAdapter({
+								const adapter = createAdapterFactory({
 									config: adapterOptions!.config,
 									adapter: createCustomAdapter(tx),
 								})(lazyOptions!);
@@ -255,7 +255,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		adapter: createCustomAdapter(prisma),
 	};
 
-	const adapter = createAdapter(adapterOptions);
+	const adapter = createAdapterFactory(adapterOptions);
 	return (options: BetterAuthOptions): Adapter => {
 		lazyOptions = options;
 		return adapter(options);

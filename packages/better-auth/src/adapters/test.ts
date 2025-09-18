@@ -874,12 +874,26 @@ async function adapterTest(
 
 	test.skipIf(disabledTests?.SHOULD_ROLLBACK_FAILING_TRANSACTION)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.SHOULD_ROLLBACK_FAILING_TRANSACTION}`,
-		async ({ onTestFailed }) => {
+		async ({ onTestFailed, skip }) => {
 			await resetDebugLogs();
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
 			const customAdapter = await adapter();
+
+			// Check if adapter actually supports transactions
+			const enableTransaction =
+				customAdapter?.options?.adapterConfig.transaction;
+			if (!enableTransaction) {
+				skip(
+					`Skipping test: ${
+						customAdapter?.options?.adapterConfig.adapterName || "Adapter"
+					}
+					 does not support transactions`,
+				);
+				return;
+			}
+
 			const user5 = {
 				name: "user5",
 				email: getUniqueEmail("user5@email.com"),
@@ -924,12 +938,25 @@ async function adapterTest(
 
 	test.skipIf(disabledTests?.SHOULD_RETURN_TRANSACTION_RESULT)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.SHOULD_RETURN_TRANSACTION_RESULT}`,
-		async ({ onTestFailed }) => {
+		async ({ onTestFailed, skip }) => {
 			await resetDebugLogs();
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
 			const customAdapter = await adapter();
+
+			const enableTransaction =
+				customAdapter?.options?.adapterConfig.transaction;
+			if (!enableTransaction) {
+				skip(
+					`Skipping test: ${
+						customAdapter?.options?.adapterConfig.adapterName || "Adapter"
+					}
+					 does not support transactions`,
+				);
+				return;
+			}
+
 			const result = await customAdapter.transaction(async (tx) => {
 				const createdUser = await tx.create<User>({
 					model: "user",
@@ -1123,4 +1150,13 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 			},
 		);
 	});
+}
+
+export function recoverProcessTZ() {
+	const originalTZ = process.env.TZ;
+	return {
+		[Symbol.dispose]: () => {
+			process.env.TZ = originalTZ;
+		},
+	};
 }
