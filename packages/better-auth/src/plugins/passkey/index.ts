@@ -332,16 +332,6 @@ export const passkey = (options?: PasskeyOptions) => {
 				"/passkey/generate-authenticate-options",
 				{
 					method: "POST",
-					body: z
-						.object({
-							email: z
-								.string()
-								.meta({
-									description: "The email address of the user",
-								})
-								.optional(),
-						})
-						.optional(),
 					metadata: {
 						openapi: {
 							description: "Generate authentication options for a passkey",
