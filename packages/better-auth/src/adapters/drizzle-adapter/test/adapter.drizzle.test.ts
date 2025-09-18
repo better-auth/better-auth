@@ -70,7 +70,7 @@ describe("Drizzle Adapter Tests", async () => {
 	const db = drizzle(pg);
 	const adapter = drizzleAdapter(db, { provider: "pg", schema });
 
-	await runAdapterTest({
+	runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			const db = opts.database;
 			//@ts-expect-error
@@ -170,7 +170,7 @@ describe("Drizzle Adapter Number Id Test", async () => {
 		},
 	});
 
-	await runNumberIdAdapterTest({
+	runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			const db = opts.database;
 			//@ts-expect-error
