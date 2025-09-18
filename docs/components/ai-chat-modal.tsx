@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Send, Loader2, Bot, User, AlertCircle } from "lucide-react";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { betterFetch } from "@better-fetch/fetch";
+import { atom } from "jotai";
 
 interface Message {
 	id: string;
@@ -21,6 +22,8 @@ interface Message {
 	timestamp: Date;
 	isStreaming?: boolean;
 }
+
+export const aiChatModalAtom = atom(false);
 
 interface AIChatModalProps {
 	isOpen: boolean;

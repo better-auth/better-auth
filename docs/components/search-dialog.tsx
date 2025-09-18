@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
 	SearchDialog,
 	SearchDialogClose,
@@ -18,7 +17,8 @@ import { OramaClient } from "@oramacloud/client";
 import { useI18n } from "fumadocs-ui/contexts/i18n";
 import { Button } from "@/components/ui/button";
 import { Bot } from "lucide-react";
-import { AIChatModal } from "./ai-chat-modal";
+import { AIChatModal, aiChatModalAtom } from "./ai-chat-modal";
+import { useAtom } from "jotai";
 
 const client = new OramaClient({
 	endpoint: process.env.NEXT_PUBLIC_ORAMA_ENDPOINT!,
@@ -27,7 +27,7 @@ const client = new OramaClient({
 
 export function CustomSearchDialog(props: SharedProps) {
 	const { locale } = useI18n();
-	const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+	const [isAIModalOpen, setIsAIModalOpen] = useAtom(aiChatModalAtom);
 
 	const { search, setSearch, query } = useDocsSearch({
 		type: "orama-cloud",
