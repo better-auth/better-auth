@@ -165,7 +165,9 @@ export async function createJwk(
 	ctx: GenericEndpointContext,
 	jwkOpts?: JwkOptions,
 ): Promise<Jwk> {
-	const jwksOpts = getJwtPluginOptions(ctx.context)?.jwks || { keyPairConfig: jwkOpts };
+	const jwksOpts = getJwtPluginOptions(ctx.context)?.jwks || {
+		keyPairConfig: jwkOpts,
+	};
 
 	return createJwkInternal(ctx, jwksOpts);
 }

@@ -307,7 +307,6 @@ describe("jwt", async () => {
 					if (jwks.keys.at(0)?.n)
 						expect(jwks?.keys.at(0)?.n).toHaveLength(expectedOutcome.length);
 				});
-
 				it(`${alg} algorithm${enc}: Client can sign in`, async () => {
 					try {
 						const { headers } = await createTestCase(jwtPluginOptions);

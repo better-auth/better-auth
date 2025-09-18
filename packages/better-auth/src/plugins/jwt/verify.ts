@@ -122,15 +122,14 @@ export async function verifyJwtWithKey(
 		options,
 	);
 
-	if (protectedHeader.kid !== privateKey.id)
-    {
-	   	if (options?.allowNoKeyId && protectedHeader.kid === undefined)
-            return payload;
+	if (protectedHeader.kid !== privateKey.id) {
+		if (options?.allowNoKeyId && protectedHeader.kid === undefined)
+			return payload;
 
 		throw new BetterAuthError(
 			`JWT has invalid "kid" field in the protected header ("${protectedHeader.kid}" !== "${privateKey.id}")`,
 			jwt,
 		);
-    }
+	}
 	return payload;
 }

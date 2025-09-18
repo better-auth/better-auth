@@ -124,6 +124,7 @@ export async function signJwtInternal(
 
 	return await signJwtPayload(ctx, payload, pluginOpts, options?.jwk);
 }
+
 /**
  * Signs arbitrary data in **JWT** format.
  *
