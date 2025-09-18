@@ -709,7 +709,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			}
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
-				organizationId: organizationId,
+				organizationId: organization.id,
 			});
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null);
