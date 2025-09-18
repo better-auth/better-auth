@@ -9,6 +9,7 @@ import type {
 } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
+	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 	CleanedWhere,
@@ -69,7 +70,8 @@ export const createAdapterFactory =
 			supportsJSON: cfg.supportsJSON ?? false,
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
-		};
+			transaction: cfg.transaction ?? false,
+		} satisfies AdapterFactoryConfig;
 
 		if (
 			options.advanced?.database?.useNumberId === true &&
