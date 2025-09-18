@@ -241,7 +241,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			transaction:
-				(config.transaction ?? true)
+				(config.transaction ?? false)
 					? (cb) =>
 							(prisma as PrismaClientInternal).$transaction((tx) => {
 								const adapter = createAdapterFactory({

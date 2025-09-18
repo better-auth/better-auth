@@ -6,7 +6,11 @@ import type {
 } from "better-call";
 import * as z from "zod";
 import { getEndpoints } from "../../api";
-import { getAuthTables } from "../../db";
+import {
+	type FieldAttributeConfig,
+	type FieldType,
+	getAuthTables,
+} from "../../db";
 import type { AuthContext, BetterAuthOptions } from "../../types";
 import type { FieldAttribute } from "../../db";
 
@@ -76,8 +80,20 @@ function getTypeFromZodType(zodType: z.ZodType<any>) {
 	return allowedType.has(type) ? (type as AllowedType) : "string";
 }
 
+type FieldSchema = {
+	type: FieldType;
+	default?: FieldAttributeConfig["defaultValue"] | "Generated at runtime";
+	readOnly?: boolean;
+};
+
+type OpenAPIModelSchema = {
+	type: "object";
+	properties: Record<string, FieldSchema>;
+	required?: string[];
+};
+
 function getFieldSchema(field: FieldAttribute) {
-	const schema: any = {
+	const schema: FieldSchema = {
 		type: field.type === "date" ? "string" : field.type,
 	};
 
@@ -331,11 +347,13 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			storeSessionInDatabase: true, // Forcing this to true to return the session table schema
 		},
 	});
-	const models = Object.entries(tables).reduce((acc, [key, value]) => {
+	const models = Object.entries(tables).reduce<
+		Record<string, OpenAPIModelSchema>
+	>((acc, [key, value]) => {
 		const modelName = key.charAt(0).toUpperCase() + key.slice(1);
 		const fields = value.fields;
 		const required: string[] = [];
-		const properties: Record<string, any> = {
+		const properties: Record<string, FieldSchema> = {
 			id: { type: "string" },
 		};
 		Object.entries(fields).forEach(([fieldKey, fieldValue]) => {
