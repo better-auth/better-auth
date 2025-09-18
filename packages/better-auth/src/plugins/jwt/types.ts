@@ -1,4 +1,5 @@
 import type { InferOptionSchema, Session, User } from "../../types";
+import type { Awaitable } from "../../types/helper";
 import type { schema } from "./schema";
 import z from "zod/v4";
 
@@ -98,7 +99,7 @@ export interface JwksOptions {
 	 *
 	 * ⚠ If a key is revoked, a POST request to /revoke-jwk **server-only** endpoint must be done or the server must be restarted.
 	 */
-	remoteJwks?: (() => Jwk[])[];
+	remoteJwks?: (() => Awaitable<Jwk[]>)[];
 
 	/**
 	 * Default key pair configuration.
@@ -169,7 +170,7 @@ export interface JwtOptions {
 	defineSessionJwtData?: (session: {
 		user: User & Record<string, any>;
 		session: Session & Record<string, any>;
-	}) => Promise<Record<string, any>> | Record<string, any>;
+	}) => Awaitable<Record<string, any>>;
 	/**
 	 * A function that is called to get the subject of the **JWT** in the `getSessionJwt` function.
 	 *
@@ -178,7 +179,7 @@ export interface JwtOptions {
 	defineSessionJwtSubject?: (session: {
 		user: User & Record<string, any>;
 		session: Session & Record<string, any>;
-	}) => Promise<string> | string;
+	}) => Awaitable<string>;
 }
 
 export interface CustomJwtClaims {
@@ -277,9 +278,9 @@ export interface VerifyJwtOptions {
 	 */
 	expectedType?: string;
 	/**
-	 * Do not throw error when `CryptoKeyWithId` has set `id`, but `jwt` does not have **JWT "kid" (Key ID) Header Parameter**.
+	 * Do not throw error when `CryptoKeyIdAlg` has set `id`, but `jwt` does not have **JWT "kid" (Key ID) Header Parameter**.
 	 *
-	 * ⚠ Might be necessary to set this to `true` when dealing with JWTs issued by external systems if your key has been assigned `id`.
+	 * ⚠ Might be necessary to set this to `true` when dealing with **JWT**s issued by external systems if the key has an assigned `id`.
 	 *
 	 * @default false
 	 */
