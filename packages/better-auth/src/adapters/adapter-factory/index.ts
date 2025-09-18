@@ -492,7 +492,8 @@ export const createAdapterFactory =
 
 						if (originalKey === "id" || field.references?.field === "id") {
 							// Even if `useNumberId` is true, we must always return a string `id` output.
-							if (typeof newValue !== "undefined") newValue = String(newValue);
+							if (typeof newValue !== "undefined" && newValue !== null)
+								newValue = String(newValue);
 						} else if (
 							config.supportsJSON === false &&
 							typeof newValue === "string" &&
@@ -610,7 +611,6 @@ export const createAdapterFactory =
 
 		const transformSelect = (select: string[] | undefined, model: string) =>
 			(select || []).map((field) => getFieldName({ field, model }));
-		
 
 		let lazyLoadTransaction: Adapter["transaction"] | null = null;
 		const adapter: Adapter = {
