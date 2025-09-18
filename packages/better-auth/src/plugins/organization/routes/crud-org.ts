@@ -664,6 +664,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "getOrganization",
 					description: "Get the full organization",
 					responses: {
 						"200": {
@@ -759,6 +760,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			use: [orgSessionMiddleware, orgMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "setActiveOrganization",
 					description: "Set the active organization",
 					responses: {
 						"200": {

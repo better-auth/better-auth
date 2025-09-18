@@ -20,6 +20,7 @@ export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
 	{
 		method: ["GET", "POST"],
+		operationId: "handleOAuthCallback",
 		body: schema.optional(),
 		query: schema.optional(),
 		metadata: HIDE_METADATA,
