@@ -115,44 +115,6 @@ export async function getJwk(
 /**
  * Creates a new **JSON Web Key (JWK)** pair and saves it in the database.
  *
- * @param ctx - Endpoint context.
- * @param jwkOpts - Optional. Configuration for the key pair (algorithm, curve, etc.). If not provided, plugin defaults are used.
- *
- * @throws {TypeError | JOSENotSupported} - If key generation fails.
- * @throws {Error} - If private key encryption or database insert fails.
- *
- * @returns The created JWK object stored in the database.
- */
-export async function createJwk(
-	ctx: GenericEndpointContext,
-	jwkOpts?: JwkOptions,
-): Promise<Jwk> {
-	const pluginJwksOpts = getJwtPluginOptions(ctx.context)?.jwks;
-
-	if (!jwkOpts) jwkOpts = pluginJwksOpts?.keyPairConfig;
-
-	const { publicKey, privateKey } = await generateExportedKeyPair(jwkOpts);
-	const stringifiedPrivateKey = JSON.stringify(privateKey);
-
-	let jwk: Omit<Jwk, "id"> = {
-		publicKey: JSON.stringify({
-			alg: jwkOpts?.alg ?? "EdDSA",
-			...publicKey,
-		}),
-		privateKey: pluginJwksOpts?.disablePrivateKeyEncryption
-			? stringifiedPrivateKey
-			: await encryptPrivateKey(ctx.context.secret, stringifiedPrivateKey),
-		createdAt: new Date(),
-	};
-
-	const adapter = getJwksAdapter(ctx.context.adapter);
-
-	return adapter.createKey(jwk as Jwk);
-}
-
-/**
- * Creates a new **JSON Web Key (JWK)** pair and saves it in the database.
- *
  * ⓘ **Internal use only**: not exported in `index.ts`.
  *
  * @param ctx - Endpoint context.
@@ -186,6 +148,26 @@ export async function createJwkInternal(
 	const adapter = getJwksAdapter(ctx.context.adapter);
 
 	return adapter.createKey(jwk as Jwk);
+}
+
+/**
+ * Creates a new **JSON Web Key (JWK)** pair and saves it in the database.
+ *
+ * @param ctx - Endpoint context.
+ * @param jwkOpts - Optional. Configuration for the key pair (algorithm, curve, etc.). If not provided, plugin defaults are used.
+ *
+ * @throws {TypeError | JOSENotSupported} - If key generation fails.
+ * @throws {Error} - If private key encryption or database insert fails.
+ *
+ * @returns The created JWK object stored in the database.
+ */
+export async function createJwk(
+	ctx: GenericEndpointContext,
+	jwkOpts?: JwkOptions,
+): Promise<Jwk> {
+	const jwksOpts = getJwtPluginOptions(ctx.context)?.jwks || { keyPairConfig: jwkOpts };
+
+	return createJwkInternal(ctx, jwksOpts);
 }
 
 /**
