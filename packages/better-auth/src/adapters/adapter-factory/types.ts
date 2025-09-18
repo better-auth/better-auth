@@ -5,7 +5,7 @@ import type {
 	BetterAuthOptions,
 	TransactionAdapter,
 	Where,
-	Join
+	Join,
 } from "../../types";
 import type { Prettify } from "../../types/helper";
 
@@ -269,19 +269,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	/**
 	 * Get the field name which is expected to be saved in the database based on the user's schema.
 	 */
-	getFieldName: <ShouldThrow extends boolean = false>({
-		model,
-		field,
-		dontThrow,
-	}: {
-		model: string;
-		field: string;
-		/**
-		 * By default, we throw an error if the field is not found. If you don't want to throw an error, set this to `true`.
-		 * @default false
-		 */
-		dontThrow?: ShouldThrow;
-	}) => ShouldThrow extends true ? string | null : string;
+	getFieldName: ({ model, field }: { model: string; field: string }) => string;
 	/**
 	 * This function helps us get the default model name from the schema defined by devs.
 	 * Often times, the user will be using the `modelName` which could had been customized by the users.

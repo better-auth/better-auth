@@ -587,7 +587,7 @@ export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 						orderBy: sortCol ? sortFn(schemaModel[sortCol]) : undefined,
 					});
 					const res = await builder.offset(offset ?? 0);
-					return res as any;
+					return res as any[];
 				},
 				async count({ model, where }) {
 					const clause = where ? convertWhereClause(where, model) : [];
