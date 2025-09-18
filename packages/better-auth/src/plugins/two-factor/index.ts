@@ -1,6 +1,7 @@
 import { generateRandomString } from "../../crypto/random";
-import * as z from "zod";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
+import { createAuthMiddleware } from "../../api/call";
+import { implEndpoint } from "../../better-call/server";
+import { enableTwoFactorDef, disableTwoFactorDef } from "./shared";
 import { sessionMiddleware } from "../../api";
 import { symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types/plugins";
@@ -49,54 +50,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-enable)
 			 */
-			enableTwoFactor: createAuthEndpoint(
-				"/two-factor/enable",
+			enableTwoFactor: implEndpoint(
+				enableTwoFactorDef,
 				{
-					method: "POST",
-					body: z.object({
-						password: z.string().meta({
-							description: "User password",
-						}),
-						issuer: z
-							.string()
-							.meta({
-								description: "Custom issuer for the TOTP URI",
-							})
-							.optional(),
-					}),
 					use: [sessionMiddleware],
-					metadata: {
-						openapi: {
-							summary: "Enable two factor authentication",
-							description:
-								"Use this endpoint to enable two factor authentication. This will generate a TOTP URI and backup codes. Once the user verifies the TOTP URI, the two factor authentication will be enabled.",
-							responses: {
-								200: {
-									description: "Successful response",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													totpURI: {
-														type: "string",
-														description: "TOTP URI",
-													},
-													backupCodes: {
-														type: "array",
-														items: {
-															type: "string",
-														},
-														description: "Backup codes",
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
@@ -187,40 +144,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-disable)
 			 */
-			disableTwoFactor: createAuthEndpoint(
-				"/two-factor/disable",
+			disableTwoFactor: implEndpoint(
+				disableTwoFactorDef,
 				{
-					method: "POST",
-					body: z.object({
-						password: z.string().meta({
-							description: "User password",
-						}),
-					}),
 					use: [sessionMiddleware],
-					metadata: {
-						openapi: {
-							summary: "Disable two factor authentication",
-							description:
-								"Use this endpoint to disable two factor authentication.",
-							responses: {
-								200: {
-									description: "Successful response",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													status: {
-														type: "boolean",
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;

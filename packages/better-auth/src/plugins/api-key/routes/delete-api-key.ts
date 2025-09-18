@@ -1,5 +1,6 @@
-import * as z from "zod";
-import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
+import { APIError, sessionMiddleware } from "../../../api";
+import { implEndpoint } from "../../../better-call/server";
+import { deleteApiKeyDef } from "../shared";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -18,57 +19,10 @@ export function deleteApiKey({
 		byPassLastCheckTime?: boolean,
 	): void;
 }) {
-	return createAuthEndpoint(
-		"/api-key/delete",
+	return implEndpoint(
+		deleteApiKeyDef,
 		{
-			method: "POST",
-			body: z.object({
-				keyId: z.string().meta({
-					description: "The id of the Api Key",
-				}),
-			}),
 			use: [sessionMiddleware],
-			metadata: {
-				openapi: {
-					description: "Delete an existing API key",
-					requestBody: {
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										keyId: {
-											type: "string",
-											description: "The id of the API key to delete",
-										},
-									},
-									required: ["keyId"],
-								},
-							},
-						},
-					},
-					responses: {
-						"200": {
-							description: "API key deleted successfully",
-							content: {
-								"application/json": {
-									schema: {
-										type: "object",
-										properties: {
-											success: {
-												type: "boolean",
-												description:
-													"Indicates if the API key was successfully deleted",
-											},
-										},
-										required: ["success"],
-									},
-								},
-							},
-						},
-					},
-				},
-			},
 		},
 		async (ctx) => {
 			const { keyId } = ctx.body;

@@ -1,5 +1,5 @@
-import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { createAuthEndpoint } from "../call";
+import { implEndpoint } from "../../better-call/server";
+import { errorDef } from "./shared";
 
 function sanitize(input: string): string {
 	return input
@@ -93,31 +93,8 @@ const html = (errorCode: string = "Unknown") => `<!DOCTYPE html>
     </div>
 </body>
 </html>`;
-export const error = createAuthEndpoint(
-	"/error",
-	{
-		method: "GET",
-		metadata: {
-			...HIDE_METADATA,
-			openapi: {
-				description: "Displays an error page",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"text/html": {
-								schema: {
-									type: "string",
-									description: "The HTML content of the error page",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	},
-	async (c) => {
+export const error = () =>
+	implEndpoint(errorDef, async (c) => {
 		const query =
 			new URL(c.request?.url || "").searchParams.get("error") || "Unknown";
 		return new Response(html(query), {
@@ -125,5 +102,4 @@ export const error = createAuthEndpoint(
 				"Content-Type": "text/html",
 			},
 		});
-	},
-);
+	});
