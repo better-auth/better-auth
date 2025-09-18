@@ -194,7 +194,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 					};
 				}
 			}
-			let {
+			const {
 				keepCurrentActiveOrganization: ___,
 				userId: ____,
 				...orgData2
