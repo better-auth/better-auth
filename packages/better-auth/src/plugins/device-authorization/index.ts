@@ -578,6 +578,28 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							});
 						}
 
+						// Set new session context for hooks and plugins
+						// (matches setSessionCookie logic)
+						ctx.context.setNewSession({
+							session,
+							user,
+						});
+
+						// If secondary storage is enabled, store the session data in the secondary storage
+						// (matches setSessionCookie logic)
+						if (ctx.context.options.secondaryStorage) {
+							await ctx.context.secondaryStorage?.set(
+								session.token,
+								JSON.stringify({
+									user,
+									session,
+								}),
+								Math.floor(
+									(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
+								),
+							);
+						}
+
 						// Return OAuth 2.0 compliant token response
 						return ctx.json(
 							{

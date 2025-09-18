@@ -9,6 +9,7 @@ import type {
 } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
+	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 	CleanedWhere,
@@ -69,7 +70,8 @@ export const createAdapterFactory =
 			supportsJSON: cfg.supportsJSON ?? false,
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
-		};
+			transaction: cfg.transaction ?? false,
+		} satisfies AdapterFactoryConfig;
 
 		if (
 			options.advanced?.database?.useNumberId === true &&
@@ -461,7 +463,8 @@ export const createAdapterFactory =
 
 					if (originalKey === "id" || field.references?.field === "id") {
 						// Even if `useNumberId` is true, we must always return a string `id` output.
-						if (typeof newValue !== "undefined") newValue = String(newValue);
+						if (typeof newValue !== "undefined" && newValue !== null)
+							newValue = String(newValue);
 					} else if (
 						config.supportsJSON === false &&
 						typeof newValue === "string" &&

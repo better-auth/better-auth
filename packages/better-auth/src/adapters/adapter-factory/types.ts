@@ -100,6 +100,7 @@ export interface AdapterFactoryConfig {
 	 *
 	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
 	 *
+	 * @default false
 	 */
 	transaction?:
 		| false
