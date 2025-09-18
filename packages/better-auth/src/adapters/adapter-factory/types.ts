@@ -5,6 +5,7 @@ import type {
 	BetterAuthOptions,
 	TransactionAdapter,
 	Where,
+	Join
 } from "../../types";
 import type { Prettify } from "../../types/helper";
 
@@ -238,6 +239,15 @@ export interface AdapterFactoryConfig {
 	 * ```
 	 */
 	customIdGenerator?: (props: { model: string }) => string;
+	/**
+	 * Whether or not the adapter supports JOINs where one query can include multiple
+	 * queries to grab more than 1 table's worth of data.
+	 *
+	 * If `false` (doesn't support JOINs) multiple adapter calls will be automatically made as a solution.
+	 *
+	 * @default false
+	 */
+	supportsJoins?: boolean;
 }
 
 export type AdapterFactoryCustomizeAdapterCreator = (config: {
@@ -259,7 +269,19 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	/**
 	 * Get the field name which is expected to be saved in the database based on the user's schema.
 	 */
-	getFieldName: ({ model, field }: { model: string; field: string }) => string;
+	getFieldName: <ShouldThrow extends boolean = false>({
+		model,
+		field,
+		dontThrow,
+	}: {
+		model: string;
+		field: string;
+		/**
+		 * By default, we throw an error if the field is not found. If you don't want to throw an error, set this to `true`.
+		 * @default false
+		 */
+		dontThrow?: ShouldThrow;
+	}) => ShouldThrow extends true ? string | null : string;
 	/**
 	 * This function helps us get the default model name from the schema defined by devs.
 	 * Often times, the user will be using the `modelName` which could had been customized by the users.
@@ -329,10 +351,12 @@ export interface CustomAdapter {
 		model,
 		where,
 		select,
+		join,
 	}: {
 		model: string;
 		where: CleanedWhere[];
 		select?: string[];
+		join?: Join;
 	}) => Promise<T | null>;
 	findMany: <T>({
 		model,

@@ -1,12 +1,13 @@
-import { describe, test, expect } from "vitest";
 import { createAdapterFactory } from "..";
+import { describe, test, expect, expectTypeOf } from "vitest";
 import type {
 	AdapterFactoryConfig,
 	CleanedWhere,
 	AdapterFactoryCustomizeAdapterCreator,
 } from "../types";
-import type { BetterAuthOptions, User, Where } from "../../../types";
+import type { BetterAuthOptions, Session, User, Where } from "../../../types";
 import { betterAuth } from "../../../auth";
+import { organization, type Member } from "../../../plugins";
 
 /*
 
@@ -212,7 +213,7 @@ describe("Create Adapter Helper", async () => {
 		expect(error).not.toBeNull();
 	});
 
-	describe("Checking for the results of an adapter call, as well as the parameters passed into the adapter call", () => {
+	describe("Adapter call results", () => {
 		describe("create", () => {
 			test("Should fill in the missing fields in the result", async () => {
 				const res = await adapter.create({
@@ -1502,6 +1503,637 @@ describe("Create Adapter Helper", async () => {
 					});
 				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
 				expect(parameters.where?.[0].value).toEqual(1);
+			});
+		});
+
+		describe("JOINs", () => {
+			test("Should support INNER JOINs", async () => {
+				const data = {
+					user: {
+						id: "123",
+						email: "test@test.com",
+						name: "test-name",
+						createdAt: new Date(),
+						emailVerified: true,
+						image: "test-image",
+						updatedAt: new Date(),
+					} satisfies User,
+					session: {
+						id: "345",
+						userId: "123",
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						token: "some-long-token",
+						expiresAt: new Date(),
+						ipAddress: "",
+						userAgent: "",
+					} satisfies Session,
+				};
+
+				const adapter = await createTestAdapter({
+					options: {
+						advanced: {
+							database: {
+								useNumberId: true,
+							},
+						},
+					},
+					adapter(args_0) {
+						return {
+							async findOne({ model, where, join }) {
+								return data as any;
+							},
+						};
+					},
+				});
+
+				const { user, session } = await adapter.findOne<
+					{
+						session: Session;
+						user: User;
+					},
+					true
+				>({
+					model: "user",
+					where: [{ field: "id", value: "1234567890" }],
+					join: {
+						session: {
+							type: "inner",
+							on: ["user.id", "session.userId"],
+						},
+					},
+				});
+
+				expectTypeOf({ user, session }).toEqualTypeOf<{
+					session: Session | null;
+					user: User | null;
+				}>();
+				expect(user).toEqual(data.user);
+				expect(session).toEqual(data.session);
+			});
+
+			test("Should support LEFT JOINs", async () => {
+				const data = {
+					user: {
+						id: "123",
+						email: "test@test.com",
+						name: "test-name",
+						createdAt: new Date(),
+						emailVerified: true,
+						image: "test-image",
+						updatedAt: new Date(),
+					} satisfies User,
+					session: null, // Simulating no session found
+				};
+
+				const adapter = await createTestAdapter({
+					options: {
+						advanced: {
+							database: {
+								useNumberId: true,
+							},
+						},
+					},
+					adapter(args_0) {
+						return {
+							async findOne({ model, where, join }) {
+								return data as any;
+							},
+						};
+					},
+				});
+
+				const { user, session } = await adapter.findOne<
+					{
+						session: Session;
+						user: User;
+					},
+					true
+				>({
+					model: "user",
+					where: [{ field: "id", value: "1234567890" }],
+					join: {
+						session: {
+							type: "left",
+							on: ["id", "userId"],
+						},
+					},
+				});
+
+				expectTypeOf({ user, session }).toEqualTypeOf<{
+					session: Session | null;
+					user: User | null;
+				}>();
+				expect(user).toEqual(data.user);
+				expect(session).toBeNull();
+			});
+
+			test("Should support RIGHT JOINs", async () => {
+				const data = {
+					user: null, // Simulating no user found
+					session: {
+						id: "345",
+						userId: "123",
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						token: "some-long-token",
+						expiresAt: new Date(),
+						ipAddress: "",
+						userAgent: "",
+					} satisfies Session,
+				};
+
+				const adapter = await createTestAdapter({
+					options: {
+						advanced: {
+							database: {
+								useNumberId: true,
+							},
+						},
+					},
+					adapter(args_0) {
+						return {
+							async findOne({ model, where, join }) {
+								return data as any;
+							},
+						};
+					},
+				});
+
+				const { user, session } = await adapter.findOne<
+					{
+						session: Session;
+						user: User;
+					},
+					true
+				>({
+					model: "user",
+					where: [{ field: "id", value: "1234567890" }],
+					join: {
+						session: {
+							type: "right",
+							on: ["id", "userId"],
+						},
+					},
+				});
+
+				expectTypeOf({ user, session }).toEqualTypeOf<{
+					session: Session | null;
+					user: User | null;
+				}>();
+				expect(user).toBeNull();
+				expect(session).toEqual(data.session);
+			});
+
+			test("Should support JOINs with select statements", async () => {
+				const data = {
+					user: {
+						id: "123",
+						email: "test@test.com",
+						name: "test-name",
+						createdAt: new Date(),
+						emailVerified: true,
+						image: "test-image",
+						updatedAt: new Date(),
+					} satisfies User,
+					session: {
+						id: "345",
+						userId: "123",
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						token: "some-long-token",
+						expiresAt: new Date(),
+						ipAddress: "",
+						userAgent: "",
+					} satisfies Session,
+					member: {
+						id: "456",
+						userId: "123",
+						organizationId: "789",
+						role: "member",
+						createdAt: new Date(),
+					} satisfies Member,
+				};
+
+				const adapter = await createTestAdapter({
+					options: {
+						plugins: [organization()],
+						advanced: {
+							database: {
+								useNumberId: true,
+							},
+						},
+					},
+					adapter(args_0) {
+						return {
+							async findOne({ model, where, join }) {
+								return data as any;
+							},
+						};
+					},
+				});
+
+				const { user, member, session } = await adapter.findOne<
+					{
+						session: Session;
+						member: Pick<Member, "userId" | "role">;
+						user: User;
+					},
+					true
+				>({
+					model: "user",
+					where: [{ field: "id", value: "1234567890" }],
+					join: {
+						session: {
+							type: "inner",
+							on: ["user.id", "session.userId"],
+						},
+						member: {
+							on: ["user.id", "member.userId"],
+						},
+					},
+					select: [
+						"id",
+						"name",
+						"email",
+						"emailVerified",
+						"createdAt",
+						"updatedAt",
+						"image",
+					],
+				});
+
+				expectTypeOf({ user, session, member }).toEqualTypeOf<{
+					session: Session | null;
+					member: Pick<Member, "userId" | "role"> | null;
+					user: User | null;
+				}>();
+				expect(user).toEqual(data.user);
+				expect(session).toEqual(data.session);
+				expect(member).toEqual(data.member);
+			});
+
+			test("Should support JOINs with field transformations", async () => {
+				const data = {
+					user: {
+						id: "123",
+						email_address: "test@test.com", // Using transformed field name
+						name: "test-name",
+						createdAt: new Date(),
+						emailVerified: true,
+						image: "test-image",
+						updatedAt: new Date(),
+					},
+					session: {
+						id: "345",
+						userId: "123",
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						token: "some-long-token",
+						expiresAt: new Date(),
+						ipAddress: "",
+						userAgent: "",
+					} satisfies Session,
+				};
+
+				const adapter = await createTestAdapter({
+					options: {
+						user: {
+							fields: {
+								email: "email_address",
+							},
+						},
+						advanced: {
+							database: {
+								useNumberId: true,
+							},
+						},
+					},
+					adapter(args_0) {
+						return {
+							async findOne({ model, where, join }) {
+								return data as any;
+							},
+						};
+					},
+				});
+
+				const { user, session } = await adapter.findOne<
+					{
+						session: Session;
+						user: User;
+					},
+					true
+				>({
+					model: "user",
+					where: [{ field: "email", value: "test@test.com" }],
+					join: {
+						session: {
+							type: "inner",
+							on: ["id", "sessiuserId"],
+						},
+					},
+				});
+
+				expectTypeOf({ user, session }).toEqualTypeOf<{
+					session: Session | null;
+					user: User | null;
+				}>();
+				expect(user).toHaveProperty("email");
+				expect(user?.email).toEqual("test@test.com");
+				expect(session).toEqual(data.session);
+			});
+
+			test("Should support JOINs with custom key transformations", async () => {
+				const data = {
+					user: {
+						id: "123",
+						email: "test@test.com",
+						name: "test-name",
+						createdAt: new Date(),
+						emailVerified: true,
+						image: "test-image",
+						updatedAt: new Date(),
+					} satisfies User,
+					session: {
+						id: "345",
+						user_id: "123", // Using transformed field name
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						token: "some-long-token",
+						expiresAt: new Date(),
+						ipAddress: "",
+						userAgent: "",
+					},
+				};
+
+				const adapter = await createTestAdapter({
+					config: {
+						mapKeysTransformInput: {
+							userId: "user_id",
+						},
+						mapKeysTransformOutput: {
+							user_id: "userId",
+						},
+					},
+					options: {
+						advanced: {
+							database: {
+								useNumberId: true,
+							},
+						},
+					},
+					adapter(args_0) {
+						return {
+							async findOne({ model, where, join }) {
+								return data as any;
+							},
+						};
+					},
+				});
+
+				const { user, session } = await adapter.findOne<
+					{
+						session: Session;
+						user: User;
+					},
+					true
+				>({
+					model: "user",
+					where: [{ field: "id", value: "1234567890" }],
+					join: {
+						session: {
+							type: "inner",
+							on: ["id", "userId"],
+						},
+					},
+				});
+
+				expectTypeOf({ user, session }).toEqualTypeOf<{
+					session: Session | null;
+					user: User | null;
+				}>();
+				expect(user).toEqual(data.user);
+				expect(session).toHaveProperty("userId");
+				expect(session?.userId).toEqual("123");
+			});
+
+			test("Should support JOINs with boolean transformations", async () => {
+				const data = {
+					user: {
+						id: "123",
+						email: "test@test.com",
+						name: "test-name",
+						createdAt: new Date(),
+						emailVerified: 1, // Boolean as number
+						image: "test-image",
+						updatedAt: new Date(),
+					},
+					session: {
+						id: "345",
+						userId: "123",
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						token: "some-long-token",
+						expiresAt: new Date(),
+						ipAddress: "",
+						userAgent: "",
+					} satisfies Session,
+				};
+
+				const adapter = await createTestAdapter({
+					config: {
+						supportsBooleans: false,
+					},
+					options: {
+						advanced: {
+							database: {
+								useNumberId: true,
+							},
+						},
+					},
+					adapter(args_0) {
+						return {
+							async findOne({ model, where, join }) {
+								return data as any;
+							},
+						};
+					},
+				});
+
+				const { user, session } = await adapter.findOne<
+					{
+						session: Session;
+						user: User;
+					},
+					true
+				>({
+					model: "user",
+					where: [{ field: "id", value: "1234567890" }],
+					join: {
+						session: {
+							type: "inner",
+							on: ["user.id", "session.userId"],
+						},
+					},
+				});
+
+				expectTypeOf({ user, session }).toEqualTypeOf<{
+					session: Session | null;
+					user: User | null;
+				}>();
+				expect(user).toHaveProperty("emailVerified");
+				expect(user?.emailVerified).toBe(true);
+				expect(session).toEqual(data.session);
+			});
+
+			test("Should support JOINs with date transformations", async () => {
+				const testDate = new Date();
+				const data = {
+					user: {
+						id: "123",
+						email: "test@test.com",
+						name: "test-name",
+						createdAt: testDate.toISOString(), // Date as string
+						emailVerified: true,
+						image: "test-image",
+						updatedAt: testDate.toISOString(),
+					},
+					session: {
+						id: "345",
+						userId: "123",
+						createdAt: testDate.toISOString(),
+						updatedAt: testDate.toISOString(),
+						token: "some-long-token",
+						expiresAt: testDate.toISOString(),
+						ipAddress: "",
+						userAgent: "",
+					},
+				};
+
+				const adapter = await createTestAdapter({
+					config: {
+						supportsDates: false,
+					},
+					options: {
+						advanced: {
+							database: {
+								useNumberId: true,
+							},
+						},
+					},
+					adapter(args_0) {
+						return {
+							async findOne({ model, where, join }) {
+								return data as any;
+							},
+						};
+					},
+				});
+
+				const { user, session } = await adapter.findOne<
+					{
+						session: Session;
+						user: User;
+					},
+					true
+				>({
+					model: "user",
+					where: [{ field: "id", value: "1234567890" }],
+					join: {
+						session: {
+							type: "inner",
+							on: ["user.id", "session.userId"],
+						},
+					},
+				});
+
+				expectTypeOf({ user, session }).toEqualTypeOf<{
+					session: Session | null;
+					user: User | null;
+				}>();
+				expect(user).toHaveProperty("createdAt");
+				expect(user?.createdAt).toBeInstanceOf(Date);
+				expect(session).toHaveProperty("createdAt");
+				expect(session?.createdAt).toBeInstanceOf(Date);
+			});
+
+			test("Should support JOINs with additional fields", async () => {
+				const preferences = { theme: "dark", language: "en" };
+				const data = {
+					user: {
+						id: "123",
+						email: "test@test.com",
+						name: "test-name",
+						createdAt: new Date(),
+						emailVerified: true,
+						image: "test-image",
+						updatedAt: new Date(),
+						preferences: JSON.stringify(preferences), // JSON as string
+					},
+					session: {
+						id: "345",
+						userId: "123",
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						token: "some-long-token",
+						expiresAt: new Date(),
+						ipAddress: "",
+						userAgent: "",
+					} satisfies Session,
+				};
+
+				const adapter = await createTestAdapter({
+					config: {
+						supportsJSON: false,
+					},
+					options: {
+						user: {
+							additionalFields: {
+								preferences: {
+									type: "json",
+								},
+							},
+						},
+						advanced: {
+							database: {
+								useNumberId: true,
+							},
+						},
+					},
+					adapter(args_0) {
+						return {
+							async findOne({ model, where, join }) {
+								return data as any;
+							},
+						};
+					},
+				});
+
+				const { user, session } = await adapter.findOne<
+					{
+						session: Session;
+						user: User & { preferences: typeof preferences };
+					},
+					true
+				>({
+					model: "user",
+					where: [{ field: "id", value: "1234567890" }],
+					join: {
+						session: {
+							type: "inner",
+							on: ["user.id", "session.userId"],
+						},
+					},
+				});
+
+				expectTypeOf({ user, session }).toEqualTypeOf<{
+					session: Session | null;
+					user: (User & { preferences: typeof preferences }) | null;
+				}>();
+				expect(user).toHaveProperty("preferences");
+				expect(user?.preferences).toEqual(preferences);
+				expect(session).toEqual(data.session);
 			});
 		});
 	});

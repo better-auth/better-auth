@@ -5,6 +5,9 @@ import type { AdapterFactoryConfig, CustomAdapter } from "../adapters";
  * Adapter where clause
  */
 export type Where = {
+	/**
+	 * @default "eq"
+	 */
 	operator?:
 		| "eq"
 		| "ne"
@@ -16,10 +19,40 @@ export type Where = {
 		| "not_in"
 		| "contains"
 		| "starts_with"
-		| "ends_with"; //eq by default
+		| "ends_with";
 	value: string | number | boolean | string[] | number[] | Date | null;
 	field: string;
-	connector?: "AND" | "OR"; //AND by default
+	/**
+	 * @default "AND"
+	 */
+	connector?: "AND" | "OR";
+};
+
+/**
+ * Join configuration for relational queries.
+ *
+ * Allows you to join related tables/models in a single query operation.
+ * Each key represents the name of the joined table/model, and the value
+ * configures how the join should be performed.
+ */
+export type Join = {
+	[model: string]: {
+		// In the future we may support nested joins:
+		// with?: Join;
+		/**
+		 * The Join type that will be performed
+		 *
+		 * * **left**: returns all rows from the left table, plus matching rows from the right (if none, NULL fills in).
+		 * * **right**: returns all rows from the right table, plus matching rows from the left (if none, NULL fills in).
+		 * * **inner**: returns rows where there’s a match in both tables.
+		 * * **full**: returns rows from both sides, filling in gaps with NULLs.
+		 * * **cross**: cartesian product - every row from left * every row from right.
+		 *
+		 * @default "left"
+		 */
+		type?: "left" | "right" | "inner" | "full" | "cross";
+		on: [originalModel: string, joinModel: string];
+	};
 };
 
 /**
@@ -38,11 +71,14 @@ export type Adapter = {
 		 */
 		forceAllowId?: boolean;
 	}) => Promise<R>;
-	findOne: <T>(data: {
+	findOne: <T, IsJoin extends boolean = false>(data: {
 		model: string;
 		where: Where[];
 		select?: string[];
-	}) => Promise<T | null>;
+		join?: Join;
+	}) => Promise<
+		IsJoin extends true ? { [key in keyof T]: T[key] | null } : T | null
+	>;
 	findMany: <T>(data: {
 		model: string;
 		where?: Where[];
@@ -68,7 +104,7 @@ export type Adapter = {
 		where: Where[];
 		update: Record<string, any>;
 	}) => Promise<number>;
-	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
+	delete: (data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
 	 * Execute multiple operations in a transaction.

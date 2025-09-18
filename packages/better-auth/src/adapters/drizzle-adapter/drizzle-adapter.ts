@@ -17,17 +17,137 @@ import {
 	SQL,
 } from "drizzle-orm";
 import { BetterAuthError } from "../../error";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type { Adapter, BetterAuthOptions, Join, Where } from "../../types";
 import {
 	createAdapterFactory,
 	type AdapterDebugLogs,
 	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
+import {
+	drizzle as pgDrizzle,
+	type NodePgQueryResultHKT,
+} from "drizzle-orm/node-postgres";
+import {
+	drizzle as mysqlDrizzle,
+	type MySql2PreparedQueryHKT,
+	type MySql2QueryResultHKT,
+} from "drizzle-orm/mysql2";
+import { drizzle as sqliteDrizzle } from "drizzle-orm/libsql";
+import {
+	PgInsertBase,
+	pgTable,
+	text as pgText,
+	PgUpdateBase,
+	type PgTableWithColumns,
+} from "drizzle-orm/pg-core";
+import {
+	MySqlInsertBase,
+	mysqlTable,
+	MySqlUpdateBase,
+	varchar as mysqlVarchar,
+	type MySqlTableWithColumns,
+} from "drizzle-orm/mysql-core";
+import {
+	SQLiteInsertBase,
+	sqliteTable,
+	text as sqliteText,
+	SQLiteUpdateBase,
+	type SQLiteTableWithColumns,
+} from "drizzle-orm/sqlite-core";
 
 export interface DB {
 	[key: string]: any;
 }
+
+const pguser = pgTable("user", { id: pgText("id") });
+const pgsession = pgTable("session", { id: pgText("id") });
+type PgDB = ReturnType<
+	typeof pgDrizzle<{ pguser: typeof pguser; pgsession: typeof pgsession }>
+>;
+
+const mysqluser = mysqlTable("user", {
+	id: mysqlVarchar("id", { length: 255 }),
+});
+const mysqlsession = mysqlTable("session", {
+	id: mysqlVarchar("id", { length: 255 }),
+});
+type MysqlDB = ReturnType<
+	typeof mysqlDrizzle<{
+		mysqluser: typeof mysqluser;
+		mysqlsession: typeof mysqlsession;
+	}>
+>;
+
+const sqliteuser = sqliteTable("user", { id: sqliteText("id") });
+const sqliSession = sqliteTable("session", { id: sqliteText("id") });
+type SqliteDB = ReturnType<
+	typeof sqliteDrizzle<{
+		sqliteuser: typeof sqliteuser;
+		sqliSession: typeof sqliSession;
+	}>
+>;
+
+type PgBuilder = PgInsertBase<PgTableWithColumns<any>, NodePgQueryResultHKT>;
+type MySqlBuilder = MySqlInsertBase<
+	MySqlTableWithColumns<any>,
+	MySql2QueryResultHKT,
+	MySql2PreparedQueryHKT
+>;
+type SQLiteBuilder = SQLiteInsertBase<
+	SQLiteTableWithColumns<any>,
+	"async",
+	any
+>;
+
+type PgUpdateBaseType = Omit<
+	PgUpdateBase<
+		PgTableWithColumns<any>,
+		NodePgQueryResultHKT,
+		undefined,
+		undefined,
+		Record<any, "not-null">,
+		[],
+		false,
+		"where" | "leftJoin" | "rightJoin" | "innerJoin" | "fullJoin"
+	>,
+	"where" | "leftJoin" | "rightJoin" | "innerJoin" | "fullJoin"
+>;
+
+type MysqlBaseType = Omit<
+	MySqlUpdateBase<
+		MySqlTableWithColumns<any>,
+		MySql2QueryResultHKT,
+		MySql2PreparedQueryHKT,
+		false,
+		"where"
+	>,
+	"where"
+>;
+
+type SQLiteUpdateBaseType = Omit<
+	SQLiteUpdateBase<
+		SQLiteTableWithColumns<any>,
+		"async",
+		any,
+		undefined,
+		undefined,
+		false,
+		"where" | "leftJoin" | "rightJoin" | "innerJoin" | "fullJoin"
+	>,
+	"where" | "leftJoin" | "rightJoin" | "innerJoin" | "fullJoin"
+>;
+
+type AnySchema<Provider extends DrizzleAdapterConfig["provider"]> = Record<
+	string,
+	Provider extends "pg"
+		? PgTableWithColumns<any>
+		: Provider extends "mysql"
+			? MySqlTableWithColumns<any>
+			: Provider extends "sqlite"
+				? SQLiteTableWithColumns<any>
+				: never
+>;
 
 export interface DrizzleAdapterConfig {
 	/**
@@ -67,13 +187,17 @@ export interface DrizzleAdapterConfig {
 	transaction?: boolean;
 }
 
-export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
+export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldName, debugLog }) => {
-			function getSchema(model: string) {
-				const schema = config.schema || db._.fullSchema;
+			function getSchema<Provider extends DrizzleAdapterConfig["provider"]>(
+				model: string,
+			) {
+				const schema = (config.schema || _db._.fullSchema) as
+					| AnySchema<Provider>
+					| undefined;
 				if (!schema) {
 					throw new BetterAuthError(
 						"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
@@ -82,30 +206,58 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				const schemaModel = schema[model];
 				if (!schemaModel) {
 					throw new BetterAuthError(
-						`[# Drizzle Adapter]: The model "${model}" was not found in the schema object. Please pass the schema directly to the adapter options.`,
+						`[# Drizzle Adapter]: The model "${model}" was not found in the schema object. Please pass the drizzle schema directly to the adapter options in your auth config.`,
 					);
 				}
 				return schemaModel;
 			}
-			const withReturning = async (
-				model: string,
-				builder: any,
-				data: Record<string, any>,
-				where?: Where[],
+
+			const getColumns = (
+				select: string[] | undefined,
+				schemaModel: ReturnType<typeof getSchema>,
 			) => {
-				if (config.provider !== "mysql") {
+				if (!select?.length) return null;
+				return Object.fromEntries(select.map((v) => [v, schemaModel[v]]));
+			};
+
+			const withReturning = async <
+				Provider extends DrizzleAdapterConfig["provider"] = "pg",
+			>({
+				builder: builder_,
+				data,
+				model,
+				select,
+				where,
+			}: {
+				model: string;
+				builder: Provider extends "pg"
+					? PgBuilder | PgUpdateBaseType
+					: Provider extends "mysql"
+						? MySqlBuilder | MysqlBaseType
+						: Provider extends "sqlite"
+							? SQLiteBuilder | SQLiteUpdateBaseType
+							: never;
+				data: Record<string, any>;
+				where?: Where[];
+				select?: string[];
+			}): Promise<any> => {
+				const provider = config.provider as Provider;
+				if (provider !== "mysql") {
+					const builder = builder_ as PgBuilder | SQLiteBuilder;
 					const c = await builder.returning();
 					return c[0];
 				}
+				const builder = builder_ as SQLiteBuilder;
 				await builder.execute();
-				const schemaModel = getSchema(model);
+				const schemaModel = getSchema<"mysql">(model);
+				//@ts-expect-error - config is private
 				const builderVal = builder.config?.values;
+				const db = _db as MysqlDB;
 				if (where?.length) {
 					const clause = convertWhereClause(where, model);
-					const res = await db
-						.select()
-						.from(schemaModel)
-						.where(...clause);
+					const columns = getColumns(select, schemaModel);
+					const builder = columns ? db.select(columns) : db.select();
+					const res = await builder.from(schemaModel).where(clause[0]);
 					return res[0];
 				} else if (builderVal && builderVal[0]?.id?.value) {
 					let tId = builderVal[0]?.id?.value;
@@ -118,16 +270,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							.limit(1);
 						tId = lastInsertId[0].id;
 					}
-					const res = await db
-						.select()
+					const columns = getColumns(select, schemaModel);
+					const builder = columns ? db.select(columns) : db.select();
+					const res = await builder
 						.from(schemaModel)
 						.where(eq(schemaModel.id, tId))
 						.limit(1)
 						.execute();
 					return res[0];
 				} else if (data.id) {
-					const res = await db
-						.select()
+					const columns = getColumns(select, schemaModel);
+					const builder = columns ? db.select(columns) : db.select();
+					const res = await builder
 						.from(schemaModel)
 						.where(eq(schemaModel.id, data.id))
 						.limit(1)
@@ -141,8 +295,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							`The model "${model}" does not have an "id" field. Please use the "id" field as your primary key.`,
 						);
 					}
-					const res = await db
-						.select()
+					const columns = getColumns(select, schemaModel);
+					const builder = columns ? db.select(columns) : db.select();
+					const res = await builder
 						.from(schemaModel)
 						.orderBy(desc(schemaModel.id))
 						.limit(1)
@@ -150,9 +305,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					return res[0];
 				}
 			};
+
 			function convertWhereClause(where: Where[], model: string) {
 				const schemaModel = getSchema(model);
-				if (!where) return [];
+				if (!where.length) return [];
 				if (where.length === 1) {
 					const w = where[0];
 					if (!w) {
@@ -220,7 +376,6 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					(w) => w.connector === "AND" || !w.connector,
 				);
 				const orGroup = where.filter((w) => w.connector === "OR");
-
 				const andClause = and(
 					...andGroup.map((w) => {
 						const field = getFieldName({ model, field: w.field });
@@ -250,12 +405,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}),
 				);
 
-				const clause: SQL<unknown>[] = [];
-
+				const clause: SQL[] = [];
 				if (andGroup.length) clause.push(andClause!);
 				if (orGroup.length) clause.push(orClause!);
 				return clause;
 			}
+
 			function checkMissingFields(
 				schema: Record<string, any>,
 				model: string,
@@ -274,81 +429,306 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 				}
 			}
+
+			const build = <Provider extends "mysql" | "pg" | "sqlite">({
+				model,
+				provider,
+				select,
+				where,
+				limit = 1,
+				orderBy,
+				join,
+			}: {
+				provider: Provider;
+				select?: string[];
+				model: string;
+				where: Where[];
+				limit?: number;
+				orderBy?: SQL;
+				join?: Join;
+			}) => {
+				const clause = convertWhereClause(where, model);
+				if (provider === "pg") {
+					const db = _db as PgDB;
+					const schemaModel = getSchema<"pg">(model);
+					const columns = getColumns(select, schemaModel);
+					const selected = columns ? db.select(columns) : db.select();
+					const from = selected.from(schemaModel);
+					const base = (() => {
+						if (!join) return from;
+						let base = from as ReturnType<typeof from.leftJoin>;
+						for (const model in join) {
+							const joinSchemaModel = getSchema<"pg">(model);
+							const where = join[model].on;
+							const field1 = getFieldName({ model, field: where[0] });
+							const field2 = getFieldName({ model, field: where[1] });
+							base = base.leftJoin(
+								joinSchemaModel,
+								eq(schemaModel[field1], joinSchemaModel[field2]),
+							);
+						}
+						return base;
+					})();
+					const builder = base.where(clause[0]).limit(limit);
+					if (orderBy) return builder.orderBy(orderBy);
+					return builder;
+				} else if (provider === "mysql") {
+					const db = _db as MysqlDB;
+					const schemaModel = getSchema<"mysql">(model);
+					const columns = getColumns(select, schemaModel);
+					const selected = columns ? db.select(columns) : db.select();
+					const from = selected.from(schemaModel);
+					const base = (() => {
+						if (!join) return from;
+						let base = from as ReturnType<typeof from.leftJoin>;
+						for (const model in join) {
+							const joinSchemaModel = getSchema<"mysql">(model);
+							const where = join[model].on;
+							const field1 = getFieldName({ model, field: where[0] });
+							const field2 = getFieldName({ model, field: where[1] });
+							base = base.leftJoin(
+								joinSchemaModel,
+								eq(schemaModel[field1], joinSchemaModel[field2]),
+							);
+						}
+						return base;
+					})();
+					const builder = base.where(clause[0]).limit(limit);
+					if (orderBy) return builder.orderBy(orderBy);
+					return builder;
+				} else {
+					const db = _db as SqliteDB;
+					const schemaModel = getSchema<"sqlite">(model);
+					const columns = getColumns(select, schemaModel);
+					const selected = columns ? db.select(columns) : db.select();
+					const from = selected.from(schemaModel);
+					const base = (() => {
+						if (!join) return from;
+						let base = from as ReturnType<typeof from.leftJoin>;
+						for (const model in join) {
+							const joinSchemaModel = getSchema<"sqlite">(model);
+							const where = join[model].on;
+							const field1 = getFieldName({ model, field: where[0] });
+							const field2 = getFieldName({ model, field: where[1] });
+							base = base.leftJoin(
+								joinSchemaModel,
+								eq(schemaModel[field1], joinSchemaModel[field2]),
+							);
+						}
+						return base;
+					})();
+					const builder = base.where(clause[0]).limit(limit);
+					if (orderBy) return builder.orderBy(orderBy);
+					return builder;
+				}
+			};
+
 			return {
-				async create({ model, data: values }) {
-					const schemaModel = getSchema(model);
-					checkMissingFields(schemaModel, model, values);
-					const builder = db.insert(schemaModel).values(values);
-					const returned = await withReturning(model, builder, values);
-					return returned;
+				async create({ model, data: values, select }) {
+					const provider = config.provider;
+					if (provider === "pg") {
+						const db = _db as PgDB;
+						const schemaModel = getSchema<typeof provider>(model);
+						checkMissingFields(schemaModel, model, values);
+						const builder = db.insert(schemaModel).values(values);
+						const returned = await withReturning<"pg">({
+							model,
+							builder,
+							data: values,
+							select,
+						});
+						return returned;
+					} else if (provider === "mysql") {
+						const db = _db as MysqlDB;
+						const schemaModel = getSchema<typeof provider>(model);
+						checkMissingFields(schemaModel, model, values);
+						const builder = db.insert(schemaModel).values(values);
+						const returned = await withReturning<"mysql">({
+							model,
+							builder,
+							data: values,
+							select,
+						});
+						return returned;
+					} else if (provider === "sqlite") {
+						const db = _db as SqliteDB;
+						const schemaModel = getSchema<typeof provider>(model);
+						checkMissingFields(schemaModel, model, values);
+						const builder = db.insert(schemaModel).values(values);
+						const returned = await withReturning<"sqlite">({
+							model,
+							builder,
+							data: values,
+							select,
+						});
+						return returned;
+					} else {
+						debugLog("Invalid database provider", { provider });
+						throw new BetterAuthError("Invalid provider");
+					}
 				},
-				async findOne({ model, where }) {
-					const schemaModel = getSchema(model);
-					const clause = convertWhereClause(where, model);
-					const res = await db
-						.select()
-						.from(schemaModel)
-						.where(...clause);
+				async findOne({ model, where, select, join }) {
+					const provider = config.provider;
+					const res = await build({ model, provider, select, where, join });
 					if (!res.length) return null;
-					return res[0];
+					return res[0] as any;
 				},
 				async findMany({ model, where, sortBy, limit, offset }) {
 					const schemaModel = getSchema(model);
-					const clause = where ? convertWhereClause(where, model) : [];
-
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
-					const builder = db
-						.select()
-						.from(schemaModel)
-						.limit(limit || 100)
-						.offset(offset || 0);
-					if (sortBy?.field) {
-						builder.orderBy(
-							sortFn(
-								schemaModel[getFieldName({ model, field: sortBy?.field })],
-							),
-						);
-					}
-					return (await builder.where(...clause)) as any[];
+					const sortCol = sortBy?.field
+						? getFieldName({ model, field: sortBy?.field || "" })
+						: undefined;
+					const builder = build({
+						model,
+						provider: config.provider,
+						where: where ?? [],
+						limit: limit ?? 100,
+						orderBy: sortCol ? sortFn(schemaModel[sortCol]) : undefined,
+					});
+					const res = await builder.offset(offset ?? 0);
+					return res as any;
 				},
 				async count({ model, where }) {
-					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
-					const res = await db
-						.select({ count: count() })
-						.from(schemaModel)
-						.where(...clause);
-					return res[0].count;
+					const provider = config.provider;
+					if (provider === "pg") {
+						const db = _db as PgDB;
+						const schemaModel = getSchema<"pg">(model);
+						const res = await db
+							.select({ count: count() })
+							.from(schemaModel)
+							.where(clause[0]);
+						return res[0].count;
+					} else if (provider === "mysql") {
+						const db = _db as MysqlDB;
+						const schemaModel = getSchema<typeof provider>(model);
+						const res = await db
+							.select({ count: count() })
+							.from(schemaModel)
+							.where(clause[0]);
+						return res[0].count;
+					} else if (provider === "sqlite") {
+						const db = _db as SqliteDB;
+						const schemaModel = getSchema<typeof provider>(model);
+						const res = await db
+							.select({ count: count() })
+							.from(schemaModel)
+							.where(clause[0]);
+						return res[0].count;
+					} else {
+						debugLog("Invalid database provider", { provider });
+						throw new BetterAuthError("Invalid provider");
+					}
 				},
-				async update({ model, where, update: values }) {
-					const schemaModel = getSchema(model);
+				async update({ model, where, update }) {
+					const provider = config.provider;
 					const clause = convertWhereClause(where, model);
-					const builder = db
-						.update(schemaModel)
-						.set(values)
-						.where(...clause);
-					return await withReturning(model, builder, values as any, where);
+					const values = update as Record<string, any>;
+					if (provider === "pg") {
+						const db = _db as PgDB;
+						const schemaModel = getSchema<"pg">(model);
+						const builder = db.update(schemaModel).set(values).where(clause[0]);
+						return await withReturning<"pg">({
+							model,
+							builder,
+							data: values,
+							where,
+						});
+					} else if (provider === "mysql") {
+						const db = _db as MysqlDB;
+						const schemaModel = getSchema<"mysql">(model);
+						const builder = db.update(schemaModel).set(values).where(clause[0]);
+						return await withReturning<"mysql">({
+							model,
+							builder,
+							data: values,
+							where,
+						});
+					} else if (provider === "sqlite") {
+						const db = _db as SqliteDB;
+						const schemaModel = getSchema<"sqlite">(model);
+						const builder = db.update(schemaModel).set(values).where(clause[0]);
+						return await withReturning<"sqlite">({
+							model,
+							builder,
+							data: values,
+							where,
+						});
+					} else {
+						debugLog("Invalid database provider", { provider });
+						throw new BetterAuthError("Invalid provider");
+					}
 				},
 				async updateMany({ model, where, update: values }) {
-					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = db
-						.update(schemaModel)
-						.set(values)
-						.where(...clause);
-					return await builder;
+					const provider = config.provider;
+					if (provider === "pg") {
+						const db = _db as PgDB;
+						const schemaModel = getSchema<"pg">(model);
+						const builder = db.update(schemaModel).set(values).where(clause[0]);
+						return (await builder) as any;
+					} else if (provider === "mysql") {
+						const db = _db as MysqlDB;
+						const schemaModel = getSchema<"mysql">(model);
+						const builder = db.update(schemaModel).set(values).where(clause[0]);
+						return (await builder) as any;
+					} else if (provider === "sqlite") {
+						const db = _db as SqliteDB;
+						const schemaModel = getSchema<"sqlite">(model);
+						const builder = db.update(schemaModel).set(values).where(clause[0]);
+						return (await builder) as any;
+					} else {
+						debugLog("Invalid database provider", { provider });
+						throw new BetterAuthError("Invalid provider");
+					}
 				},
 				async delete({ model, where }) {
-					const schemaModel = getSchema(model);
-					const clause = convertWhereClause(where, model);
-					const builder = db.delete(schemaModel).where(...clause);
-					return await builder;
+					const provider = config.provider;
+					if (provider === "pg") {
+						const db = _db as PgDB;
+						const schemaModel = getSchema<"pg">(model);
+						const clause = convertWhereClause(where, model);
+						await db.delete(schemaModel).where(clause[0]);
+					} else if (provider === "mysql") {
+						const db = _db as MysqlDB;
+						const schemaModel = getSchema<"mysql">(model);
+						const clause = convertWhereClause(where, model);
+						await db.delete(schemaModel).where(clause[0]);
+					} else if (provider === "sqlite") {
+						const db = _db as SqliteDB;
+						const schemaModel = getSchema<"sqlite">(model);
+						const clause = convertWhereClause(where, model);
+						await db.delete(schemaModel).where(clause[0]);
+					} else {
+						debugLog("Invalid database provider", { provider });
+						throw new BetterAuthError("Invalid provider");
+					}
 				},
 				async deleteMany({ model, where }) {
-					const schemaModel = getSchema(model);
-					const clause = convertWhereClause(where, model);
-					const builder = db.delete(schemaModel).where(...clause);
-					return await builder;
+					const provider = config.provider;
+					if (provider === "pg") {
+						const db = _db as PgDB;
+						const schemaModel = getSchema<"pg">(model);
+						const clause = convertWhereClause(where, model);
+						const builder = db.delete(schemaModel).where(clause[0]);
+						return (await builder) as any;
+					} else if (provider === "mysql") {
+						const db = _db as MysqlDB;
+						const schemaModel = getSchema<"mysql">(model);
+						const clause = convertWhereClause(where, model);
+						const builder = db.delete(schemaModel).where(clause[0]);
+						return (await builder) as any;
+					} else if (provider === "sqlite") {
+						const db = _db as SqliteDB;
+						const schemaModel = getSchema<"sqlite">(model);
+						const clause = convertWhereClause(where, model);
+						const builder = db.delete(schemaModel).where(clause[0]);
+						return (await builder) as any;
+					} else {
+						debugLog("Invalid database provider", { provider });
+						throw new BetterAuthError("Invalid provider");
+					}
 				},
 				options: config,
 			};
@@ -363,7 +743,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			transaction:
 				(config.transaction ?? true)
 					? (cb) =>
-							db.transaction((tx: DB) => {
+							_db.transaction((tx: DB) => {
 								const adapter = createAdapterFactory({
 									config: adapterOptions!.config,
 									adapter: createCustomAdapter(tx),
@@ -372,7 +752,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							})
 					: false,
 		},
-		adapter: createCustomAdapter(db),
+		adapter: createCustomAdapter(_db),
 	};
 	const adapter = createAdapterFactory(adapterOptions);
 	return (options: BetterAuthOptions): Adapter => {
