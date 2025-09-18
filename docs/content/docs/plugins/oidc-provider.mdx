@@ -335,7 +335,7 @@ export const auth = betterAuth({
 })
 ```
 
-### JWKS Endpoint
+### JWT Plugin Integration
 
 The OIDC Provider plugin can integrate with the JWT plugin to provide asymmetric key signing for ID tokens verifiable at a JWKS endpoint.
 
@@ -351,7 +351,14 @@ export const auth = betterAuth({
         "/token",
     ],
     plugins: [
-        jwt(), // Make sure to add the JWT plugin
+        jwt({
+            jwks: {
+                keyPairConfig: {
+                    alg: "RS256",
+                    modulusLength: 2048,
+                },
+            },
+        }),
         oidcProvider({
             useJWTPlugin: true, // Enable JWT plugin integration
             loginPage: "/sign-in",
@@ -361,8 +368,19 @@ export const auth = betterAuth({
 })
 ```
 
+#### Configuration Options
+
+- **`useJWTPlugin`**: When `true`, ID tokens are signed using the JWT plugin's asymmetric keys. When `false` (default), ID tokens are signed with HMAC-SHA256 using the application secret.
+
+#### Benefits of JWT Plugin Integration
+
+- **Standard Compliance**: ID tokens can be verified using the public JWKS endpoint
+- **Asymmetric Signing**: Uses RSA or EdDSA keys instead of shared secrets
+- **Key Rotation**: Supports proper key rotation through the JWT plugin
+- **Third-party Verification**: External services can verify tokens without shared secrets
+
 <Callout type="info">
-When `useJWTPlugin: false` (default), ID tokens are signed with the application secret.
+When `useJWTPlugin: false` (default), ID tokens are signed with HMAC-SHA256 for backward compatibility. This is secure but requires the verifying party to have access to the application secret.
 </Callout>
 
 ### Dynamic Client Registration

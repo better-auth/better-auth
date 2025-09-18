@@ -13,6 +13,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
+import { subtle } from "@better-auth/utils";
 import { schema } from "./schema";
 import type {
 	Client,
@@ -25,6 +26,8 @@ import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
+import { getJwksAdapter } from "../jwt/adapter";
+import { BetterAuthError } from "../../error";
 import { getJwtToken } from "../jwt/sign";
 import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
@@ -781,6 +784,80 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
+					let secretKey: {
+						alg: string;
+						key: CryptoKey;
+						kid?: string;
+					};
+
+					if (options.useJWTPlugin) {
+						// Use JWT plugin for signing
+						const adapter = getJwksAdapter(ctx.context.adapter);
+						const key = await adapter.getLatestKey();
+
+						if (!key) {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error_description:
+									"No JWT signing key found. Make sure the JWT plugin is properly configured.",
+								error: "server_error",
+							});
+						}
+
+						// Parse the public key to get the algorithm
+						const publicKeyInfo = JSON.parse(key.publicKey);
+						const keyAlg = publicKeyInfo.alg || "EdDSA";
+
+						// Get JWT plugin options from context
+						const jwtPluginOptions = ctx.context.options.plugins?.find(
+							(p) => p.id === "jwt",
+						)?.options;
+						const privateKeyEncryptionEnabled =
+							!jwtPluginOptions?.jwks?.disablePrivateKeyEncryption;
+
+						let privateWebKey = privateKeyEncryptionEnabled
+							? await symmetricDecrypt({
+									key: ctx.context.secret,
+									data: JSON.parse(key.privateKey),
+								}).catch(() => {
+									throw new BetterAuthError(
+										"Failed to decrypt private key. Make sure the secret currently in use is the same as the one used to encrypt the private key.",
+									);
+								})
+							: key.privateKey;
+
+						const privateKey = await importJWK(
+							JSON.parse(privateWebKey),
+							keyAlg,
+						);
+
+						// Accept both CryptoKey and KeyLike objects returned by importJWK
+						// In some environments (Node.js, certain polyfills), importJWK returns KeyLike instead of CryptoKey
+						if (!privateKey || typeof privateKey !== "object") {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error_description: `JWK import returned ${typeof privateKey} instead of CryptoKey or KeyLike. This may indicate an environment compatibility issue.`,
+								error: "server_error",
+							});
+						}
+
+						secretKey = {
+							alg: keyAlg,
+							key: privateKey,
+							kid: key.id,
+						};
+					} else {
+						// Use HMAC for backward compatibility
+						secretKey = {
+							alg: "HS256",
+							key: await subtle.generateKey(
+								{
+									name: "HMAC",
+									hash: "SHA-256",
+								},
+								true,
+								["sign", "verify"],
+							),
+						};
+					}
 					const profile = {
 						given_name: user.name.split(" ")[0],
 						family_name: user.name.split(" ")[1],
