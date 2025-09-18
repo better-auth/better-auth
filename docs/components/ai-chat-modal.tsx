@@ -8,11 +8,11 @@ import {
 	DialogTitle,
 	DialogDescription,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Send, Loader2, Bot, User, AlertCircle } from "lucide-react";
 import { MarkdownRenderer } from "./markdown-renderer";
+import { betterFetch } from "@better-fetch/fetch";
 
 interface Message {
 	id: string;
@@ -102,7 +102,12 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 				fetch_existing: false,
 			};
 
-			const response = await fetch("/api/ai-chat", {
+			const { data, error } = await betterFetch<{
+				content?: string;
+				answer?: string;
+				response?: string;
+				session_id?: string;
+			}>("/api/ai-chat", {
 				method: "POST",
 				headers: {
 					"content-type": "application/json",
@@ -111,13 +116,10 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 				signal: abortControllerRef.current.signal,
 			});
 
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error("API Error Response:", errorText);
-				throw new Error(`HTTP ${response.status}: ${errorText}`);
+			if (error) {
+				console.error("API Error Response:", error);
+				throw new Error(`HTTP ${error.status}: ${error.message}`);
 			}
-
-			const data = await response.json();
 
 			if (data.session_id) {
 				setSessionId(data.session_id);
@@ -215,11 +217,11 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 
 	return (
 		<Dialog open={isOpen} onOpenChange={onClose}>
-			<DialogContent className="max-w-4xl h-[80vh] flex flex-col">
+			<DialogContent className="max-w-4xl border-b h-[80vh] flex flex-col">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
 						<Bot className="h-5 w-5 text-primary" />
-						Ask AI Assistant
+						Ask AI About Better Auth 
 					</DialogTitle>
 					<DialogDescription>
 						Ask questions about Better-Auth and get AI-powered answers
@@ -350,40 +352,65 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 						<div ref={messagesEndRef} />
 					</div>
 
-					<div className="border-t bg-background/50 backdrop-blur-sm">
-						<form onSubmit={handleSubmit} className="flex gap-3 p-4 px-0">
-							<div className="flex-1 items-end justify-end relative">
-								<Textarea
-									value={input}
-									onChange={(e) => setInput(e.target.value)}
-									placeholder="Ask a question about Better-Auth..."
-									className="min-h-[60px] rounded-none max-h-32 resize-none border-border/90 focus:border-primary/50 focus:ring-1 focus:ring-primary/20 bg-background/80 backdrop-blur-sm transition-all duration-200"
-									disabled={isLoading}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" && !e.shiftKey) {
+					<div className="border-t px-0 bg-background/50 backdrop-blur-sm p-4">
+						<div className="relative max-w-4xl mx-auto">
+							<div
+								className={cn(
+									"relative flex flex-col border-input rounded-lg transition-all duration-200 w-full text-left",
+									"ring-1 ring-border/20 bg-muted/30 border-input border-1 backdrop-blur-sm",
+									"focus-within:ring-primary/30 focus-within:bg-muted/[35%]"
+								)}
+							>
+								<div className="overflow-y-auto max-h-[200px]">
+									<Textarea
+										value={input}
+										onChange={(e) => setInput(e.target.value)}
+										placeholder="Ask a question about Better-Auth..."
+										className="w-full rounded-none rounded-b-none px-4 py-3 h-[70px] bg-transparent border-none text-foreground placeholder:text-muted-foreground resize-none focus-visible:ring-0 leading-[1.2] min-h-[52px] max-h-32"
+										disabled={isLoading}
+										onKeyDown={(e) => {
+											if (e.key === "Enter" && !e.shiftKey) {
+												e.preventDefault();
+												void handleSubmit(e);
+											}
+										}}
+									/>
+								</div>
+
+								<div className="h-12 bg-muted/20 rounded-b-xl flex items-center justify-between px-3">
+									<div className="flex items-center gap-2">
+										<div className="flex items-center gap-2 text-xs text-muted-foreground">
+											{/* <span>Better Auth Assistant</span> */}
+										</div>
+									</div>
+									
+									<button
+										type="submit"
+										onClick={(e) => {
 											e.preventDefault();
 											void handleSubmit(e);
-										}
-									}}
-								/>
+										}}
+										disabled={!input.trim() || isLoading}
+										className={cn(
+											"rounded-lg p-2 transition-all duration-200",
+											input.trim() && !isLoading
+												? "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-md"
+												: "bg-muted/50 text-muted-foreground cursor-not-allowed"
+										)}
+									>
+										{isLoading ? (
+											<div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+										) : (
+											<Send className="h-4 w-4" />
+										)}
+									</button>
+								</div>
 							</div>
-							<Button
-								type="submit"
-								disabled={!input.trim() || isLoading}
-								size="icon"
-								className="min-h-[40px] min-w-[40px] shrink-0 bg-primary hover:bg-primary/90 transition-all duration-200"
-							>
-								{isLoading ? (
-									<Loader2 className="h-4 w-4 animate-spin" />
-								) : (
-									<Send className="h-4 w-4" />
-								)}
-							</Button>
-						</form>
-						<div className="px-0 pb-2">
-							<p className="text-xs flex gap-1 text-muted-foreground">
-								Press <pre>Enter</pre> to send, <pre>Shift+Enter</pre> for new
-								line
+						</div>
+						
+						<div className="mt-3 text-center">
+							<p className="text-xs text-muted-foreground">
+								Press <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded">Enter</kbd> to send, <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded">Shift+Enter</kbd> for new line
 							</p>
 						</div>
 					</div>
