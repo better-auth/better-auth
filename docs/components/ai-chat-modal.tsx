@@ -357,7 +357,7 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 									onKeyDown={(e) => {
 										if (e.key === "Enter" && !e.shiftKey) {
 											e.preventDefault();
-											handleSubmit(e);
+											void handleSubmit(e);
 										}
 									}}
 								/>
