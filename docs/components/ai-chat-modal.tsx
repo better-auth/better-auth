@@ -221,7 +221,7 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
 						<Bot className="h-5 w-5 text-primary" />
-						Ask AI About Better Auth 
+						Ask AI About Better Auth
 					</DialogTitle>
 					<DialogDescription>
 						Ask questions about Better-Auth and get AI-powered answers
@@ -358,7 +358,7 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 								className={cn(
 									"relative flex flex-col border-input rounded-lg transition-all duration-200 w-full text-left",
 									"ring-1 ring-border/20 bg-muted/30 border-input border-1 backdrop-blur-sm",
-									"focus-within:ring-primary/30 focus-within:bg-muted/[35%]"
+									"focus-within:ring-primary/30 focus-within:bg-muted/[35%]",
 								)}
 							>
 								<div className="overflow-y-auto max-h-[200px]">
@@ -383,7 +383,7 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 											{/* <span>Better Auth Assistant</span> */}
 										</div>
 									</div>
-									
+
 									<button
 										type="submit"
 										onClick={(e) => {
@@ -395,7 +395,7 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 											"rounded-lg p-2 transition-all duration-200",
 											input.trim() && !isLoading
 												? "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-md"
-												: "bg-muted/50 text-muted-foreground cursor-not-allowed"
+												: "bg-muted/50 text-muted-foreground cursor-not-allowed",
 										)}
 									>
 										{isLoading ? (
@@ -407,10 +407,18 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 								</div>
 							</div>
 						</div>
-						
+
 						<div className="mt-3 text-center">
 							<p className="text-xs text-muted-foreground">
-								Press <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded">Enter</kbd> to send, <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded">Shift+Enter</kbd> for new line
+								Press{" "}
+								<kbd className="px-1.5 py-0.5 text-xs bg-muted rounded">
+									Enter
+								</kbd>{" "}
+								to send,{" "}
+								<kbd className="px-1.5 py-0.5 text-xs bg-muted rounded">
+									Shift+Enter
+								</kbd>{" "}
+								for new line
 							</p>
 						</div>
 					</div>
