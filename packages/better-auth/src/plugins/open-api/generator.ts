@@ -84,6 +84,7 @@ type FieldSchema = {
 	type: FieldType;
 	default?: FieldAttributeConfig["defaultValue"] | "Generated at runtime";
 	readOnly?: boolean;
+	format?: string;
 };
 
 type OpenAPIModelSchema = {
@@ -370,7 +371,6 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 				prop.format = "date-time";
 			}
 		});
-		// @ts-expect-error
 		acc[modelName] = {
 			type: "object",
 			properties,
