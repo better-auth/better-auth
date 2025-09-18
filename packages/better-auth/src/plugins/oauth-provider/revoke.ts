@@ -59,13 +59,13 @@ async function revokeJwtAccessToken(
 				// likely an opaque token
 				throw new APIError("BAD_REQUEST", {
 					error_description: "invalid JWT signature",
-					error: "invalid_token",
+					error: "invalid_request",
 				});
 			} else if (error.name === "JWTExpired") {
 				return null;
 			} else if (error.name === "JWTInvalid") {
 				// audience or issuer mismatch
-				throw new Error("jwt invalid likely audience or issuer mismatch");
+				return null;
 			}
 			throw error;
 		}
@@ -89,7 +89,7 @@ async function revokeOpaqueAccessToken(
 		} else {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "opaque access token not found",
-				error: "invalid_token",
+				error: "invalid_request",
 			});
 		}
 	}
@@ -115,11 +115,11 @@ async function revokeOpaqueAccessToken(
 	if (!accessToken) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "opaque access token not found",
-			error: "invalid_token",
+			error: "invalid_request",
 		});
 	}
 	if (!accessToken.clientId || accessToken.clientId !== clientId) {
-		throw new Error("access token does not match client ID");
+		return null;
 	}
 
 	accessToken.id
@@ -154,11 +154,11 @@ async function revokeRefreshToken(
 	if (!userSession) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "token not found",
-			error: "invalid_token",
+			error: "invalid_request",
 		});
 	}
 	if (!userSession.clientId || userSession.clientId !== clientId) {
-		throw new Error("token does not match client ID");
+		return null;
 	}
 
 	await Promise.allSettled([
@@ -209,7 +209,7 @@ async function revokeAccessToken(
 	}
 	throw new APIError("BAD_REQUEST", {
 		error_description: "Invalid access token",
-		error: "invalid_token",
+		error: "invalid_request",
 	});
 }
 
@@ -236,7 +236,8 @@ export async function revokeEndpoint(
 		client_id = res?.client_id;
 		client_secret = res?.client_secret;
 	}
-	if (!client_id || !client_secret) {
+	// client_id is always required, client_secret is required for confidential clients
+	if (!client_id) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "missing required credentials",
 			error: "invalid_client",
@@ -250,7 +251,7 @@ export async function revokeEndpoint(
 	if (!token.length) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "missing a required token for introspection",
-			error: "invalid_token",
+			error: "invalid_request",
 		});
 	}
 
@@ -303,10 +304,13 @@ export async function revokeEndpoint(
 
 		throw new APIError("BAD_REQUEST", {
 			error_description: "token not found",
-			error: "invalid_token",
+			error: "invalid_request",
 		});
 	} catch (error) {
 		if (error instanceof APIError) {
+			if (error.name === "BAD_REQUEST") {
+				return null;
+			}
 			throw error;
 		} else if (error instanceof Error) {
 			logger.error("Introspection error:", error.message, error.stack);

@@ -139,7 +139,7 @@ describe("oauth authorize - authenticated", async () => {
 		oauthClient = response.data;
 	});
 
-	it("should authorize - prompt undefined, response code, state set, no codeVerifier", async () => {
+	it("should authorize - prompt undefined, response code, state set, with codeVerifier", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}

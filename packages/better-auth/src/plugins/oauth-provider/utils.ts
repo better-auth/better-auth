@@ -8,6 +8,7 @@ import { createHash } from "@better-auth/utils/hash";
 import type { OAuthOptions, SchemaClient } from "./types";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { databaseToSchema, type DatabaseClient } from "./register";
+import { timingSafeEqual } from "crypto";
 
 /**
  * Gets the oAuth Provider Plugin
@@ -122,16 +123,30 @@ async function verifyStoredClientSecret(
 		}
 	}
 
+	function sideChannelEqual(valueA: string, valueB: string) {
+		// Use timing-safe comparison to avoid side-channel leaks
+		const a = Buffer.from(valueA, "utf8");
+		const b = Buffer.from(valueB, "utf8");
+		// Inputs must be the same length for timingSafeEqual
+		return a.length === b.length && timingSafeEqual(a, b);
+	}
+
 	if (storageMethod === "hashed") {
 		const hashedClientSecret = clientSecret
 			? await defaultHasher(clientSecret)
 			: undefined;
-		return hashedClientSecret === storedClientSecret;
+		return (
+			!!hashedClientSecret &&
+			sideChannelEqual(hashedClientSecret, storedClientSecret)
+		);
 	} else if (typeof storageMethod === "object" && "hash" in storageMethod) {
 		const hashedClientSecret = clientSecret
 			? await storageMethod.hash(clientSecret)
 			: undefined;
-		return hashedClientSecret === storedClientSecret;
+		return (
+			!!hashedClientSecret &&
+			sideChannelEqual(hashedClientSecret, storedClientSecret)
+		);
 	} else if (
 		storageMethod === "encrypted" ||
 		(typeof storageMethod === "object" && "decrypt" in storageMethod)
@@ -141,7 +156,9 @@ async function verifyStoredClientSecret(
 			storageMethod,
 			storedClientSecret,
 		);
-		return decryptedClientSecret === clientSecret;
+		return (
+			!!clientSecret && sideChannelEqual(decryptedClientSecret, clientSecret)
+		);
 	}
 
 	throw new BetterAuthError(
@@ -239,7 +256,7 @@ export function basicToClientCredentials(authorization: string) {
 				error: "invalid_client",
 			});
 		}
-		const [id, secret] = decoded.split(":");
+		const [id, secret] = decoded.split(":", 2);
 		if (!id || !secret) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "invalid authorization header format",

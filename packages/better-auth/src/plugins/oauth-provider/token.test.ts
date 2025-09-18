@@ -138,7 +138,7 @@ describe("oauth token - authorization_code", async () => {
 			id_token?: string;
 			refresh_token?: string;
 			expires_in?: number;
-			expires_at?: string;
+			expires_at?: number;
 			token_type?: string;
 			scope?: string;
 			[key: string]: unknown;
@@ -483,7 +483,7 @@ describe("oauth token - refresh_token", async () => {
 			id_token?: string;
 			refresh_token?: string;
 			expires_in?: number;
-			expires_at?: string;
+			expires_at?: number;
 			token_type?: string;
 			scope?: string;
 			[key: string]: unknown;
@@ -560,7 +560,7 @@ describe("oauth token - refresh_token", async () => {
 			id_token?: string;
 			refresh_token?: string;
 			expires_in?: number;
-			expires_at?: string;
+			expires_at?: number;
 			token_type?: string;
 			scope?: string;
 			[key: string]: unknown;
@@ -607,7 +607,7 @@ describe("oauth token - refresh_token", async () => {
 			id_token?: string;
 			refresh_token?: string;
 			expires_in?: number;
-			expires_at?: string;
+			expires_at?: number;
 			token_type?: string;
 			scope?: string;
 			[key: string]: unknown;
@@ -664,7 +664,7 @@ describe("oauth token - refresh_token", async () => {
 			id_token?: string;
 			refresh_token?: string;
 			expires_in?: number;
-			expires_at?: string;
+			expires_at?: number;
 			token_type?: string;
 			scope?: string;
 			[key: string]: unknown;
@@ -712,7 +712,7 @@ describe("oauth token - refresh_token", async () => {
 			id_token?: string;
 			refresh_token?: string;
 			expires_in?: number;
-			expires_at?: string;
+			expires_at?: number;
 			token_type?: string;
 			scope?: string;
 			[key: string]: unknown;
@@ -769,7 +769,7 @@ describe("oauth token - refresh_token", async () => {
 			id_token?: string;
 			refresh_token?: string;
 			expires_in?: number;
-			expires_at?: string;
+			expires_at?: number;
 			token_type?: string;
 			scope?: string;
 			[key: string]: unknown;
@@ -814,7 +814,7 @@ describe("oauth token - refresh_token", async () => {
 			id_token?: string;
 			refresh_token?: string;
 			expires_in?: number;
-			expires_at?: string;
+			expires_at?: number;
 			token_type?: string;
 			scope?: string;
 			[key: string]: unknown;
@@ -909,7 +909,7 @@ describe("oauth token - client_credentials", async () => {
 			id_token?: string;
 			refresh_token?: string;
 			expires_in?: number;
-			expires_at?: string;
+			expires_at?: number;
 			token_type?: string;
 			scope?: string;
 			[key: string]: unknown;
@@ -945,7 +945,7 @@ describe("oauth token - client_credentials", async () => {
 			id_token?: string;
 			refresh_token?: string;
 			expires_in?: number;
-			expires_at?: string;
+			expires_at?: number;
 			token_type?: string;
 			scope?: string;
 			[key: string]: unknown;
@@ -977,7 +977,7 @@ describe("oauth token - client_credentials", async () => {
 			id_token?: string;
 			refresh_token?: string;
 			expires_in?: number;
-			expires_at?: string;
+			expires_at?: number;
 			token_type?: string;
 			scope?: string;
 			[key: string]: unknown;

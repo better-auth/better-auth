@@ -87,7 +87,9 @@ export async function authorizeEndpoint(
 			cookieAttributes,
 		);
 		const queryFromURL = ctx.request.url?.split("?")[1];
-		return handleRedirect(`${options.loginPage}?${queryFromURL}`);
+		return handleRedirect(
+			`${options.loginPage}${queryFromURL ? "?" + queryFromURL : ""}}`,
+		);
 	}
 
 	const query = ctx.query as OAuthAuthorizationQuery;
@@ -119,7 +121,7 @@ export async function authorizeEndpoint(
 	}
 
 	/** Check client */
-	const client = await getClient(ctx, options, ctx.query.client_id);
+	const client = await getClient(ctx, options, query.client_id);
 	if (!client) {
 		const errorURL = getErrorURL(
 			ctx,
@@ -133,7 +135,7 @@ export async function authorizeEndpoint(
 		throw ctx.redirect(errorURL);
 	}
 	const redirectUri = client.redirectUris?.find(
-		(url) => url === ctx.query.redirect_uri,
+		(url) => url === query.redirect_uri,
 	);
 	if (!redirectUri || !query.redirect_uri) {
 		const errorURL = getErrorURL(
@@ -227,7 +229,7 @@ export async function authorizeEndpoint(
 
 	const redirectUriWithCode = new URL(redirectUri);
 	redirectUriWithCode.searchParams.set("code", code);
-	redirectUriWithCode.searchParams.set("state", ctx.query.state);
+	redirectUriWithCode.searchParams.set("state", query.state);
 
 	if (query.prompt !== "consent") {
 		return handleRedirect(redirectUriWithCode.toString());

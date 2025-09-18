@@ -250,11 +250,11 @@ describe("oauth metadata", async () => {
 			jwks_uri: remoteUrl,
 			id_token_signing_alg_values_supported: [alg],
 		});
-		const oauthMetadata = await auth.api.getOpenIdConfig();
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 
-	it("should support disableJWTPlugin", async () => {
+	it("should support disableJwtPlugin", async () => {
 		const { auth } = await createTestInstance({
 			oauthProviderConfig: {
 				disableJwtPlugin: true,

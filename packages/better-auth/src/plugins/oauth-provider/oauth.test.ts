@@ -30,7 +30,7 @@ describe("oauth - init", () => {
 		).rejects.toThrowError("jwt_config");
 	});
 
-	it("should pass without the jwt plugin and disableJWTPlugin set", async ({
+	it("should pass without the jwt plugin and disableJwtPlugin set", async ({
 		expect,
 	}) => {
 		await expect(
@@ -244,14 +244,14 @@ describe("oauth", async () => {
 		expect(redirectUriResponse).toContain(redirectUri);
 		expect(redirectUriResponse).toContain("code=");
 
-		let callbackURL = "";
+		let callbackUrl = "";
 		await client.$fetch(redirectUriResponse, {
 			method: "GET",
 			onError(context) {
-				callbackURL = context.response.headers.get("Location") || "";
+				callbackUrl = context.response.headers.get("Location") || "";
 			},
 		});
-		expect(callbackURL).toContain("/success");
+		expect(callbackUrl).toContain("/success");
 	});
 
 	it("should sign in using generic oauth discovery", async ({ expect }) => {
@@ -292,7 +292,7 @@ describe("oauth", async () => {
 				redirectUriResponse = context.response.headers.get("Location") || "";
 			},
 		});
-		expect(redirectUriResponse).toContain(redirectUriResponse);
+		expect(redirectUriResponse).toContain(redirectUri);
 		expect(redirectUriResponse).toContain("code=");
 
 		let callbackURL = "";
@@ -407,20 +407,20 @@ describe("oauth", async () => {
 		);
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
 
-		let loginRedirectURI = "";
+		let loginRedirectUri = "";
 		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			onError(context) {
-				loginRedirectURI = context.response.headers.get("Location") || "";
+				loginRedirectUri = context.response.headers.get("Location") || "";
 				cookieSetter(newHeaders)(context);
 			},
 			headers: newHeaders,
 		});
-		expect(loginRedirectURI).toContain("/login");
-		expect(loginRedirectURI).toContain(`prompt=login`);
-		expect(loginRedirectURI).toContain(`client_id=${oauthClient.client_id}`);
-		expect(loginRedirectURI).toContain(
+		expect(loginRedirectUri).toContain("/login");
+		expect(loginRedirectUri).toContain(`prompt=login`);
+		expect(loginRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
+		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
 
@@ -704,18 +704,18 @@ describe("oauth - config", () => {
 	);
 
 	it.each([
-		{ disableJWTPlugin: false, publicClient: false, resource: false },
-		{ disableJWTPlugin: true, publicClient: false, resource: false },
-		{ disableJWTPlugin: false, publicClient: true, resource: false },
-		{ disableJWTPlugin: true, publicClient: true, resource: false },
-		{ disableJWTPlugin: false, publicClient: false, resource: true },
-		{ disableJWTPlugin: true, publicClient: false, resource: true },
-		{ disableJWTPlugin: false, publicClient: true, resource: true },
-		{ disableJWTPlugin: true, publicClient: true, resource: true },
+		{ disableJwtPlugin: false, publicClient: false, resource: false },
+		{ disableJwtPlugin: true, publicClient: false, resource: false },
+		{ disableJwtPlugin: false, publicClient: true, resource: false },
+		{ disableJwtPlugin: true, publicClient: true, resource: false },
+		{ disableJwtPlugin: false, publicClient: false, resource: true },
+		{ disableJwtPlugin: true, publicClient: false, resource: true },
+		{ disableJwtPlugin: false, publicClient: true, resource: true },
+		{ disableJwtPlugin: true, publicClient: true, resource: true },
 	])(
-		"disableJWTPlugin: $disableJWTPlugin, publicClient: $publicClient, resource: $resource",
-		async ({ disableJWTPlugin, publicClient, resource }) => {
-			const validAudience = disableJWTPlugin
+		"disableJwtPlugin: $disableJwtPlugin, publicClient: $publicClient, resource: $resource",
+		async ({ disableJwtPlugin, publicClient, resource }) => {
+			const validAudience = disableJwtPlugin
 				? `${authServerBaseUrl}/api/auth`
 				: "https://api.example.com";
 			const {
@@ -729,13 +729,13 @@ describe("oauth - config", () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 						allowDynamicClientRegistration: true,
-						disableJwtPlugin: disableJWTPlugin,
+						disableJwtPlugin: disableJwtPlugin,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
 						},
 					}),
-					...(disableJWTPlugin
+					...(disableJwtPlugin
 						? []
 						: [
 								jwt({
@@ -836,14 +836,14 @@ describe("oauth - config", () => {
 
 			// Check for access tokens
 			expect(tokens.data?.accessToken).toBeDefined();
-			if (publicClient && !(resource && !disableJWTPlugin)) {
+			if (publicClient && !(resource && !disableJwtPlugin)) {
 				await expect(
 					verifyAccessToken(tokens.data?.accessToken!, {
 						verifyOptions: {
 							audience: validAudience,
 							issuer: authServerUrl,
 						},
-						jwksUrl: disableJWTPlugin ? undefined : `${authServerUrl}/jwks`,
+						jwksUrl: disableJwtPlugin ? undefined : `${authServerUrl}/jwks`,
 					}),
 				).rejects.toThrowError();
 			} else {
@@ -852,7 +852,7 @@ describe("oauth - config", () => {
 						audience: validAudience,
 						issuer: authServerUrl,
 					},
-					jwksUrl: disableJWTPlugin ? undefined : `${authServerUrl}/jwks`,
+					jwksUrl: disableJwtPlugin ? undefined : `${authServerUrl}/jwks`,
 					remoteVerify: publicClient
 						? undefined
 						: {
@@ -864,7 +864,7 @@ describe("oauth - config", () => {
 			}
 
 			// Check id token tokens
-			if (disableJWTPlugin) {
+			if (disableJwtPlugin) {
 				if (!publicClient) {
 					const clientSecret = oauthClient?.client_secret;
 					const checkSignature = await jwtVerify(

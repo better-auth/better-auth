@@ -229,7 +229,7 @@ export async function introspectVerifyEndpoint(
 			remoteVerify: verifyOpts?.remoteVerify
 				? {
 						...verifyOpts.remoteVerify,
-						introspectUrl: `${baseURL}/oauth2/instrospect`,
+						introspectUrl: `${baseURL}/oauth2/introspect`,
 					}
 				: undefined,
 		});

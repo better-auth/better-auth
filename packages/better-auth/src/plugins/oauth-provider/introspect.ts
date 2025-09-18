@@ -64,7 +64,7 @@ async function validateJwtAccessToken(
 				// likely an opaque token
 				throw new APIError("BAD_REQUEST", {
 					error_description: "invalid JWT signature",
-					error: "invalid_token",
+					error: "invalid_request",
 				});
 			} else if (error.name === "JWTExpired") {
 				return {
@@ -72,17 +72,21 @@ async function validateJwtAccessToken(
 				};
 			} else if (error.name === "JWTInvalid") {
 				// audience or issuer mismatch
-				throw new Error("jwt invalid likely audience or issuer mismatch");
+				return {
+					active: false,
+				};
 			}
 			throw error;
 		}
 		throw new Error(error as unknown as string);
 	}
 
-	if (jwtPayload.azp && clientId && jwtPayload.azp !== clientId) {
+	if (jwtPayload.azp) {
 		if (clientId && jwtPayload.azp !== clientId) {
-			throw new Error("token does not match client ID");
-		} else {
+			return {
+				active: false,
+			};
+		} else if (!clientId) {
 			const client = await getClient(ctx, opts, jwtPayload.azp);
 			if (!client || client?.disabled) {
 				return {
@@ -138,7 +142,7 @@ async function validateOpaqueAccessToken(
 		} else {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "opaque access token not found",
-				error: "invalid_token",
+				error: "invalid_request",
 			});
 		}
 	}
@@ -161,13 +165,16 @@ async function validateOpaqueAccessToken(
 			} as OAuthOpaqueAccessToken;
 		});
 	if (!accessToken) {
+		// Pass through, may be other token type
 		throw new APIError("BAD_REQUEST", {
 			error_description: "opaque access token not found",
 			error: "invalid_token",
 		});
 	}
 	if (clientId && accessToken.clientId !== clientId) {
-		throw new Error("access token does not match client ID");
+		return {
+			active: false,
+		};
 	}
 	if (!accessToken.expiresAt || accessToken.expiresAt < new Date()) {
 		return {
@@ -256,13 +263,16 @@ async function validateRefreshToken(
 			};
 		});
 	if (!userSession) {
+		// Pass through may be other token type
 		throw new APIError("BAD_REQUEST", {
 			error_description: "token not found",
 			error: "invalid_token",
 		});
 	}
 	if (!userSession.clientId || userSession.clientId !== clientId) {
-		throw new Error("token does not match client ID");
+		return {
+			active: false,
+		};
 	}
 	if (!userSession.expiresAt || userSession.expiresAt < new Date()) {
 		return {
@@ -327,7 +337,7 @@ export async function validateAccessToken(
 	}
 	throw new APIError("BAD_REQUEST", {
 		error_description: "Invalid access token",
-		error: "invalid_token",
+		error: "invalid_request",
 	});
 }
 
@@ -362,13 +372,13 @@ export async function introspectEndpoint(
 	}
 
 	// Check token
-	if (typeof token === "string" && token.startsWith("Bearer ")) {
+	if (token && typeof token === "string" && token.startsWith("Bearer ")) {
 		token = token.replace("Bearer ", "");
 	}
-	if (!token.length) {
+	if (!token?.length) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "missing a required token for introspection",
-			error: "invalid_token",
+			error: "invalid_request",
 		});
 	}
 
@@ -428,10 +438,15 @@ export async function introspectEndpoint(
 
 		throw new APIError("BAD_REQUEST", {
 			error_description: "token not found",
-			error: "invalid_token",
+			error: "invalid_request",
 		});
 	} catch (error) {
 		if (error instanceof APIError) {
+			if (error.name === "BAD_REQUEST") {
+				return {
+					active: false,
+				};
+			}
 			throw error;
 		} else if (error instanceof Error) {
 			console.error("Introspection error:", error.message, error.stack);
