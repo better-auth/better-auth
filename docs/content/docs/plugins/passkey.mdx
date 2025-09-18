@@ -117,9 +117,9 @@ To sign in with a passkey you can use the `signIn.passkey` method. This will pro
 ```ts
 type signInPasskey = {
     /**
-     * The email of the user to sign in.
+     * The email of the user to sign in. Optional - when not provided, allows for discoverable credential authentication.
      */
-    email: string = "example@gmail.com"
+    email?: string = "example@gmail.com"
     /**
      * Browser autofill, a.k.a. Conditional UI. Read more: https://simplewebauthn.dev/docs/packages/browser#browser-autofill-aka-conditional-ui
     */
@@ -135,7 +135,6 @@ type signInPasskey = {
 ```ts
 // With post authentication redirect
 await authClient.signIn.passkey({
-    email: "user@example.com",
     autoFill: true,
     fetchOptions: {
         onSuccess(context) {
