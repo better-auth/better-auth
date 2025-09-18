@@ -95,7 +95,7 @@ export function removeJwtClaims(
 			let warn: string = `Signing JWT: Removing "${claim}" field from the data to be signed (affects original record!). This is a reserved field.`;
 			if (editableClaims.includes(claim))
 				warn +=
-					' If you need to edit this JWT Claim, provide its override in "signJwt" function\'s "claim" argument.';
+					' If you need to edit this JWT Claim, provide its override in "signJwt" function\'s "options.claims" argument.';
 			else
 				warn +=
 					' If you need to edit this field (unrecommended), sign payload yourself with a key from "getJwk".';
