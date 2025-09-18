@@ -224,7 +224,7 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 						Ask AI About Better Auth
 					</DialogTitle>
 					<DialogDescription>
-						Get instant help about Better Auth and help you on implemmentation.
+						Ask questions about Better-Auth and get AI-powered answers
 						{apiError && (
 							<div className="flex items-center gap-2 mt-2 text-amber-600 dark:text-amber-400">
 								<AlertCircle className="h-4 w-4" />
@@ -253,10 +253,10 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 
 								<div className="mb-8 max-w-md">
 									<h3 className="text-xl font-semibold text-foreground mb-2">
-										Welcome to Better-Auth AI Assistant
+										Ask About Better Auth
 									</h3>
 									<p className="text-muted-foreground text-sm leading-relaxed">
-										I'm here to help you with Better-Auth questions, setup
+										I'm here to help you with Better Auth questions, setup
 										guides, and implementation tips. Ask me anything!
 									</p>
 								</div>
