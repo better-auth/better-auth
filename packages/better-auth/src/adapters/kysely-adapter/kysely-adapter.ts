@@ -372,7 +372,7 @@ export const kyselyAdapter = (
 					: true,
 			supportsJSON: false,
 			transaction:
-				(config?.transaction ?? true)
+				(config?.transaction ?? false)
 					? (cb) =>
 							db.transaction().execute((trx) => {
 								const adapter = createAdapterFactory({
