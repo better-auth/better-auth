@@ -224,7 +224,7 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 						Ask AI About Better Auth
 					</DialogTitle>
 					<DialogDescription>
-						Ask questions about Better-Auth and get AI-powered answers
+						Get instant help about Better Auth and help you on implemmentation.
 						{apiError && (
 							<div className="flex items-center gap-2 mt-2 text-amber-600 dark:text-amber-400">
 								<AlertCircle className="h-4 w-4" />
@@ -377,13 +377,7 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 									/>
 								</div>
 
-								<div className="h-12 bg-muted/20 rounded-b-xl flex items-center justify-between px-3">
-									<div className="flex items-center gap-2">
-										<div className="flex items-center gap-2 text-xs text-muted-foreground">
-											{/* <span>Better Auth Assistant</span> */}
-										</div>
-									</div>
-
+								<div className="h-12 bg-muted/20 rounded-b-xl flex items-center justify-end px-3">
 									<button
 										type="submit"
 										onClick={(e) => {
