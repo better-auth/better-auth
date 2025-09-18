@@ -893,6 +893,7 @@ async function adapterTest(
 				);
 				return;
 			}
+
 			const user5 = {
 				name: "user5",
 				email: getUniqueEmail("user5@email.com"),
@@ -937,22 +938,25 @@ async function adapterTest(
 
 	test.skipIf(disabledTests?.SHOULD_RETURN_TRANSACTION_RESULT)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.SHOULD_RETURN_TRANSACTION_RESULT}`,
-		async ({ onTestFailed }) => {
+		async ({ onTestFailed, skip }) => {
 			await resetDebugLogs();
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
 			const customAdapter = await adapter();
 
-			// Check if adapter actually supports transactions
-			// @ts-expect-error - accessing internal config
-			const adapterConfig = customAdapter?.config;
-			if (adapterConfig && !adapterConfig.transaction) {
-				console.log(
-					`Skipping test: ${adapterConfig.adapterName || "Adapter"} does not support transactions`,
+			const enableTransaction =
+				customAdapter?.options?.adapterConfig.transaction;
+			if (!enableTransaction) {
+				skip(
+					`Skipping test: ${
+						customAdapter?.options?.adapterConfig.adapterName || "Adapter"
+					}
+					 does not support transactions`,
 				);
 				return;
 			}
+
 			const result = await customAdapter.transaction(async (tx) => {
 				const createdUser = await tx.create<User>({
 					model: "user",
