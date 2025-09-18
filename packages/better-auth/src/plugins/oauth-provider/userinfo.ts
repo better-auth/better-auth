@@ -9,7 +9,7 @@ import type { OAuthOptions } from "./types";
  * @see https://openid.net/specs/openid-connect-core-1_0.html#NormalClaims
  */
 export function userNormalClaims(user: User, scopes: string[]) {
-	const name = user.name.split(" ").filter((v) => v !== " ");
+	const name = user.name.split(" ").filter((v) => v !== "");
 	const profile = {
 		name: user.name ?? undefined,
 		picture: user.image ?? undefined,
@@ -31,7 +31,7 @@ export function userNormalClaims(user: User, scopes: string[]) {
 /**
  * Handles the /oauth2/userinfo endpoint
  */
-export async function userinfoEndpoint(
+export async function userInfoEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
 ) {

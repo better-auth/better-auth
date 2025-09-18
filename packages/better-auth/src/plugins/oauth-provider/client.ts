@@ -3,7 +3,7 @@ import type { BetterAuthClientPlugin } from "../../types";
 
 export const oauthProviderClient = () => {
 	return {
-		id: "oauthProvider-client",
+		id: "oauth-provider-client",
 		$InferServerPlugin: {} as ReturnType<typeof oauthProvider>,
 	} satisfies BetterAuthClientPlugin;
 };

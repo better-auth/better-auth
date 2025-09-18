@@ -56,8 +56,8 @@ export const mcpHandler = <
 				return handleMcpErrors(error, resource);
 			} catch (err) {
 				logger.error(err as unknown as string);
-				if (err instanceof Error) throw Error;
-				throw new Error(err as unknown as string);
+				if (err instanceof Error) throw err;
+				throw new Error(String(err));
 			}
 		}
 		return handler(req);
@@ -82,7 +82,7 @@ export function handleMcpErrors(error: unknown, resource: string | URL) {
 		return new Response(error.message, {
 			status: 401,
 			headers: {
-				"Content-Type": "application/text",
+				"Content-Type": "application/json",
 				"WWW-Authenticate": wwwAuthenticateValue,
 			},
 		});

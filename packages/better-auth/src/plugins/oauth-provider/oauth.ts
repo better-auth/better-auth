@@ -12,7 +12,7 @@ import { authorizeEndpoint } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { parseSetCookieHeader } from "../../cookies";
 import { tokenEndpoint } from "./token";
-import { userinfoEndpoint } from "./userinfo";
+import { userInfoEndpoint } from "./userinfo";
 import { mergeSchema } from "../../db";
 import { registerEndpoint } from "./register";
 import {
@@ -38,13 +38,12 @@ import { introspectVerifyEndpoint } from "./verify";
 export const oauthProvider = (options: OAuthOptions) => {
 	let clientRegistrationAllowedScopes = options.clientRegistrationAllowedScopes;
 	if (options.clientRegistrationDefaultScopes) {
-		if (!clientRegistrationAllowedScopes) {
-			clientRegistrationAllowedScopes = options.clientRegistrationDefaultScopes;
-		} else {
-			clientRegistrationAllowedScopes.push(
-				...options.clientRegistrationDefaultScopes,
-			);
-		}
+		clientRegistrationAllowedScopes = clientRegistrationAllowedScopes
+			? [
+					...clientRegistrationAllowedScopes,
+					...options.clientRegistrationDefaultScopes,
+				]
+			: [...options.clientRegistrationDefaultScopes];
 	}
 
 	// Validate scopes
@@ -446,7 +445,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					return authorizeEndpoint(ctx, opts);
 				},
 			),
-			oauthConsent: createAuthEndpoint(
+			oauth2Consent: createAuthEndpoint(
 				"/oauth2/consent",
 				{
 					method: "POST",
@@ -991,7 +990,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 				},
 				async (ctx) => {
-					return userinfoEndpoint(ctx, opts);
+					return userInfoEndpoint(ctx, opts);
 				},
 			),
 			registerOAuthClient: createAuthEndpoint(
@@ -1131,28 +1130,31 @@ export const oauthProvider = (options: OAuthOptions) => {
 														],
 													},
 													grant_types: {
-														type: "string",
+														type: "array",
+														items: {
+															type: "string",
+															enum: [
+																"authorization_code",
+																"client_credentials",
+																"refresh_token",
+															],
+														},
 														description:
 															"Requested authentication method for the token endpoint",
-														nullable: true,
-														enum: [
-															"authorization_code",
-															"client_credentials",
-															"refresh_token",
-														],
 													},
 													response_types: {
-														type: "string",
+														type: "array",
+														items: {
+															type: "string",
+															enum: ["code"],
+														},
 														description:
 															"Requested authentication method for the token endpoint",
-														nullable: true,
-														enum: ["code", "token"],
 													},
 													public: {
 														type: "boolean",
 														description:
 															"Whether the client is public as determined by the type",
-														enum: [false],
 													},
 													type: {
 														type: "string",
@@ -1162,7 +1164,6 @@ export const oauthProvider = (options: OAuthOptions) => {
 													disabled: {
 														type: "boolean",
 														description: "Whether the client is disabled",
-														enum: [false],
 													},
 													// metadata: {
 													// 	type: "object",

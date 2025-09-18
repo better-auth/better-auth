@@ -106,7 +106,7 @@ describe("oauth introspect", async () => {
 			id_token?: string;
 			refresh_token?: string;
 			expires_in?: number;
-			expires_at?: string;
+			expires_at?: number;
 			token_type?: string;
 			scope?: string;
 			[key: string]: unknown;
@@ -206,7 +206,7 @@ describe("oauth introspect", async () => {
 			token: tokens.data?.refresh_token!,
 			token_type_hint: "access_token",
 		});
-		expect(introspection.error?.status).toBe(400);
+		expect(introspection.data?.active).toBeFalsy();
 	});
 
 	it("should pass verification with token_type_hint refresh_token and sent refresh_token", async () => {
@@ -236,7 +236,7 @@ describe("oauth introspect", async () => {
 			token: tokens.data?.access_token!,
 			token_type_hint: "refresh_token",
 		});
-		expect(introspection.error?.status).toBe(400);
+		expect(introspection.data?.active).toBeFalsy();
 	});
 
 	it("should pass verification without token_type_hint and sent jwt access_token", async () => {

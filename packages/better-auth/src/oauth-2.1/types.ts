@@ -19,7 +19,7 @@ export type AuthMethod =
 // | "private_key_jwt" // must also add alg_values_supported for that endpoint
 // | "client_secret_jwt" // must also add alg_values_supported for that endpoint
 export type TokenEndpointAuthMethod = AuthMethod | "none"; // Public client support for the token auth endpoint
-export type BearerMethodsSupported = "header" | "body" | "query";
+export type BearerMethodsSupported = "header" | "body";
 
 /**
  * Metadata for authentication servers.

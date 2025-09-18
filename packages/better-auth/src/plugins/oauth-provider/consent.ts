@@ -13,6 +13,9 @@ export async function consentEndpoint(
 		"oauth_consent_prompt",
 	);
 	const storedCode = await ctx.getSignedCookie(cookieName, ctx.context.secret);
+	ctx.setCookie(cookieName, "", {
+		maxAge: 0,
+	});
 	if (!storedCode) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "No consent prompt found",
@@ -24,9 +27,21 @@ export async function consentEndpoint(
 		.findVerificationValue(storedCode)
 		.then((val) => {
 			if (!val) return null;
+			let parsedValue: VerificationValue | undefined;
+			if (val.value) {
+				try {
+					parsedValue = JSON.parse(val.value);
+				} catch (err) {
+					// Handle invalid JSON gracefully
+					// For example, return null or throw a specific invalid_request error
+					throw new Error(
+						"invalid_request: verification value is not valid JSON",
+					);
+				}
+			}
 			return {
 				...val,
-				value: val?.value ? JSON.parse(val?.value) : undefined,
+				value: parsedValue,
 			} as Omit<Verification, "value"> & { value?: VerificationValue };
 		});
 	const verificationValue = verification?.value;
@@ -65,8 +80,9 @@ export async function consentEndpoint(
 		});
 	}
 
-	// Consent not accepted
-	if (!ctx.body.accept) {
+	// Consent not accepted (ensure it's strictly boolean true)
+	const accepted = ctx.body.accept === true;
+	if (!accepted) {
 		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 		return ctx.json({
 			redirect_uri: formatErrorURL(
