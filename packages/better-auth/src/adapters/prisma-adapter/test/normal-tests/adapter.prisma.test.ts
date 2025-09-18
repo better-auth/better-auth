@@ -20,7 +20,7 @@ describe("Adapter tests", async () => {
 		};
 	});
 
-	await runAdapterTest({
+	runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			const { getAdapter } = await import("./get-adapter");
 			const { adapter } = getAdapter();

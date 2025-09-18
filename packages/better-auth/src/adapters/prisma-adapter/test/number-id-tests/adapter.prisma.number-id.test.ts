@@ -29,7 +29,7 @@ describe("Number Id Adapter Test", async () => {
 		await clearDb();
 	}, Number.POSITIVE_INFINITY);
 
-	await runNumberIdAdapterTest({
+	runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			const { getAdapter } = await import("./get-adapter");
 			const { adapter } = getAdapter();

@@ -100,7 +100,8 @@ describe("adapter test", async () => {
 			isRunningAdapterTests: true,
 		},
 	});
-	await runAdapterTest({
+
+	runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return mysqlAdapter(merge(customOptions, mysqlOptions));
 		},
@@ -113,7 +114,7 @@ describe("adapter test", async () => {
 			isRunningAdapterTests: true,
 		},
 	});
-	await runAdapterTest({
+	runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return sqliteAdapter(merge(customOptions, sqliteOptions));
 		},
@@ -183,7 +184,7 @@ describe("mssql", async () => {
 		await sql`DROP TABLE dbo.users;`.execute(mssql);
 	}
 
-	await runAdapterTest({
+	runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			// const merged = merge( customOptions,opts);
 			// merged.database = opts.database;
@@ -321,7 +322,7 @@ describe("postgres", async () => {
 		await sql`DROP TABLE users;`.execute(pg);
 	}
 
-	await runAdapterTest({
+	runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			// const merged = merge( customOptions,opts);
 			// merged.database = opts.database;
@@ -459,7 +460,7 @@ describe("mysql", async () => {
 		await sql`DROP TABLE users;`.execute(mysql);
 	}
 
-	await runAdapterTest({
+	runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			// const merged = merge( customOptions,opts);
 			// merged.database = opts.database;

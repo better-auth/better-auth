@@ -102,7 +102,7 @@ describe("Number ID Adapter tests", async () => {
 			isRunningAdapterTests: false,
 		},
 	});
-	await runNumberIdAdapterTest({
+	runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			const merged = merge(customOptions, mysqlOptions);
 			return mysqlAdapter(merged);
@@ -117,7 +117,7 @@ describe("Number ID Adapter tests", async () => {
 		},
 	});
 
-	await runNumberIdAdapterTest({
+	runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return sqliteAdapter(merge(customOptions, sqliteOptions));
 		},

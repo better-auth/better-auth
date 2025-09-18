@@ -81,7 +81,7 @@ describe("Drizzle Adapter Tests (MySQL)", async () => {
 		},
 	});
 
-	await runAdapterTest({
+	runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			const db = opts.database;
 			opts.database = undefined;
@@ -184,7 +184,7 @@ describe("Drizzle Adapter Number Id Test (MySQL)", async () => {
 		},
 	});
 
-	await runNumberIdAdapterTest({
+	runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			const db = opts.database;
 			opts.database = undefined;

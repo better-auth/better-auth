@@ -234,7 +234,7 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 			},
 		});
 
-		await runAdapterTest({
+		runAdapterTest({
 			getAdapter: async (customOptions = {}) => {
 				return adapter(merge(customOptions, opts));
 			},
