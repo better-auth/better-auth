@@ -117,16 +117,9 @@ To sign in with a passkey you can use the `signIn.passkey` method. This will pro
 ```ts
 type signInPasskey = {
     /**
-     * The email of the user to sign in. Optional - when not provided, allows for discoverable credential authentication.
-     */
-    email?: string = "example@gmail.com"
-    /**
      * Browser autofill, a.k.a. Conditional UI. Read more: https://simplewebauthn.dev/docs/packages/browser#browser-autofill-aka-conditional-ui
     */
     autoFill?: boolean = true
-    /**
-     * The URL to redirect to after the user has signed in.
-    */
 }
 ```
 </APIMethod>
