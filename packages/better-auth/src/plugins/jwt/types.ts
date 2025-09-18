@@ -1,3 +1,4 @@
+import type { JSONWebKeySet } from "jose";
 import type { InferOptionSchema, Session, User } from "../../types";
 import type { Awaitable } from "../../types/helper";
 import type { schema } from "./schema";
@@ -99,7 +100,7 @@ export interface JwksOptions {
 	 *
 	 * ⚠ If a key is revoked, a POST request to /revoke-jwk **server-only** endpoint must be done or the server must be restarted.
 	 */
-	remoteJwks?: (() => Awaitable<Jwk[]>)[];
+	remoteJwks?: (() => Awaitable<Jwk[] | JSONWebKeySet>)[];
 
 	/**
 	 * Default key pair configuration.
