@@ -1,4 +1,5 @@
 export const ORGANIZATION_ERROR_CODES = {
+	ORGANIZATION_ID_IS_REQUIRED: "Organization ID is required",
 	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION:
 		"You are not allowed to create a new organization",
 	YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS:
@@ -69,8 +70,12 @@ export const ORGANIZATION_ERROR_CODES = {
 	YOU_ARE_NOT_ALLOWED_TO_REMOVE_A_TEAM_MEMBER:
 		"You are not allowed to remove a team member",
 	YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION:
-		"You are not allowed to access this organization as an owner",
+		"You are not allowed to access this organization",
 	YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION:
 		"You are not a member of this organization",
 	INVITATION_EXPIRED: "Invitation expired",
+	USER_EMAIL_CANNOT_BE_PASSED_FOR_CLIENT_SIDE_API_CALLS:
+		"User email cannot be passed for client side API calls.",
+	MISSING_SESSION_HEADERS_OR_EMAIL_QUERY_PARAMETER:
+		"Missing session headers, or email query parameter.",
 } as const;

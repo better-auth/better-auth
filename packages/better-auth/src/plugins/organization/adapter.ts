@@ -808,10 +808,43 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return invitations;
 		},
-		listUserInvitations: async (email: string) => {
+		listUserInvitations: async (
+			email: string,
+			data: {
+				limit?: number;
+				offset?: number;
+				sortBy?: string;
+				sortOrder?: "asc" | "desc";
+				filter?: {
+					field: string;
+					operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
+					value: any;
+				};
+			},
+		) => {
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
-				where: [{ field: "email", value: email.toLowerCase() }],
+				where: [
+					...(data.filter?.field
+						? [
+								{
+									field: data.filter?.field,
+									value: data.filter?.value,
+									operator: data.filter?.operator,
+								},
+							]
+						: []),
+					//⚠︎ this must be last
+					{
+						field: "email",
+						value: email.toLowerCase(),
+					},
+				],
+				limit: data.limit,
+				offset: data.offset,
+				sortBy: data.sortBy
+					? { field: data.sortBy, direction: data.sortOrder || "asc" }
+					: undefined,
 			});
 			return invitations;
 		},
@@ -904,15 +937,41 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				(invite) => new Date(invite.expiresAt) > new Date(),
 			);
 		},
-		listInvitations: async (data: { organizationId: string }) => {
+		listInvitations: async (data: {
+			organizationId: string;
+			limit?: number;
+			offset?: number;
+			sortBy?: string;
+			sortOrder?: "asc" | "desc";
+			filter?: {
+				field: string;
+				operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
+				value: any;
+			};
+		}) => {
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
 				where: [
+					...(data.filter?.field
+						? [
+								{
+									field: data.filter?.field,
+									value: data.filter?.value,
+									operator: data.filter?.operator,
+								},
+							]
+						: []),
+					//this must be last
 					{
 						field: "organizationId",
 						value: data.organizationId,
 					},
 				],
+				limit: data.limit,
+				offset: data.offset,
+				sortBy: data.sortBy
+					? { field: data.sortBy, direction: data.sortOrder || "asc" }
+					: undefined,
 			});
 			return invitations;
 		},
