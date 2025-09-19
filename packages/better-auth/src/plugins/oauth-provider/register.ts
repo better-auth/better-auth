@@ -6,7 +6,7 @@ import { generateRandomString } from "../../crypto";
 import { storeClientSecret } from "./utils";
 import { toExpJWT } from "../jwt/utils";
 
-export async function registerEndpoint(
+export async function dynamicRegisterEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
 ) {
@@ -18,7 +18,6 @@ export async function registerEndpoint(
 		});
 	}
 
-	const body = ctx.body as OAuthClient;
 	const session = await getSessionFromCtx(ctx);
 
 	// Check authorization
@@ -28,6 +27,17 @@ export async function registerEndpoint(
 			error_description: "Authentication required for client registration",
 		});
 	}
+
+	return registerOAuthClient(ctx, opts);
+}
+
+export async function registerOAuthClient(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions,
+) {
+	const body = ctx.body as OAuthClient;
+	const session = await getSessionFromCtx(ctx);
+
 	// Determine whether registration request for public client
 	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
 	const isPublic = body.token_endpoint_auth_method === "none";
