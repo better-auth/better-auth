@@ -3,9 +3,9 @@ import { setSessionCookie } from "../../cookies";
 import { setTokenUtil, type OAuth2Tokens } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
-import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { createAuthEndpoint } from "../call";
+import { implEndpoint } from "../../better-call/server";
 import { safeJSONParse } from "../../utils/json";
+import { callbackOAuthDef } from "./shared";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -16,15 +16,8 @@ const schema = z.object({
 	user: z.string().optional(),
 });
 
-export const callbackOAuth = createAuthEndpoint(
-	"/callback/:id",
-	{
-		method: ["GET", "POST"],
-		body: schema.optional(),
-		query: schema.optional(),
-		metadata: HIDE_METADATA,
-	},
-	async (c) => {
+export const callbackOAuth = () =>
+	implEndpoint(callbackOAuthDef, async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
 		const defaultErrorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
@@ -236,5 +229,4 @@ export const callbackOAuth = createAuthEndpoint(
 				: callbackURL;
 		}
 		throw c.redirect(toRedirectTo);
-	},
-);
+	});
