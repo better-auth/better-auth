@@ -17,9 +17,9 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
 - **OIDC compatability**: [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant with the `openid` scope
   - **UserInfo**: Endpoint providing current user details
   - **id_token**: JWT-signed user information
-- **Dynamic Client Registration**: Allow clients to register applications dynamically.
-  - **Public Clients**: Support public clients for native mobile applications and user-agent applications (like AI)
-  - **Confidential Clients**: Supports confidential clients for web applications
+- **Dynamic Client Registration**: Allow clients to register clients dynamically.
+  - **Public Clients**: Support public clients for native mobile clients and user-agent clients (like AI)
+  - **Confidential Clients**: Supports confidential clients for web clients
   - **Trusted Clients**: Configure hard-coded trusted clients with optional consent bypass.
 - **JWT Plugin compatability**: required by default with an option to disable
   - **JWT Signing**: sign JWT tokens when requesting a `resource`
@@ -117,13 +117,13 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
     Register your first confidential client.
 
     ```ts
-    const application = await auth.api.registerOAuthClient({
+    const client = await auth.api.registerOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
 			}
 		});
-    console.log(application); // You may add this to `trustedClients`
+    console.log(client); // You may add this to `trustedClients`
     ```
   </Step>
 </Steps>
@@ -141,7 +141,7 @@ This endpoint supports [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) 
 
 Once installed, you can utilize the OAuth Provider to manage authentication flows within your application.
 
-After the application is created, you will receive a `client_id` and `client_secret` that you can display to the user. The `client_secret` can only be provided once, ensure the user saves it.
+After the client is created, you will receive a `client_id` and `client_secret` that you can display to the user. The `client_secret` can only be provided once, ensure the user saves it.
 
 #### Setup
 
@@ -169,7 +169,7 @@ oauthProvider({
 To register a new OIDC client, use the `oauth2.register` method.
 
 ```ts
-const application = await client.oauth2.register({
+const client = await client.oauth2.register({
   client_name: "My Client",
   redirect_uris: ["https://client.example.com/callback"],
 });
@@ -187,20 +187,50 @@ An [OAuth 2.1 authorization endpoint](https://datatracker.ietf.org/doc/html/draf
 
 The Authorization Endpoint is the entry point for initiating an OAuth 2.1 authorization flows, requiring the grant type `authorization_code` in the options grant types list.
 
-#### Simple Example
+#### Client Login Endpoint
 
-To register a new OIDC client, use the `oauth2.register` method.
+To generate an authorization request from your client, the authorization parameters should look something like the following:
 
-```ts
-const application = await client.oauth2.authorize({
-  response_type: "code", // required
-  client_id: "my_client", // required
-  redirect_uri: "https://client.example.com/callback", // required
-  scope: "openid profile email offline_access",
-  state: "123", // recommended (ex: randomBytes(32).toString('base64url'))
-  code_challenge_method: "S256", // required
-  code_challenge: "456789",
+```ts title="/api/login/index.ts"
+import { randomBytes, createHash } from "crypto";
+
+// Save initial state
+const state = randomBytes(32).toString("base64url");
+const codeVerifier = randomBytes(32).toString("base64url");
+const codeChallenge = createHash("SHA-256")
+  .update(codeVerifier)
+  .digest()
+  .toString("base64url");
+const stateData = {
+  codeVerifier,
+  state,
+  redirectUri: "/dashboard",
+};
+// pseudocode set cookie
+await signedCookie(
+  "__Secure-auth.client-state",
+  JSON.stringify(stateData), {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    maxAge: 3600,
+    path: "/api/login",
+  }
+);
+
+// Generate and present app redirect_uri
+const searchParams = new URLSearchParams({
+  client_id: "my_client",
+  redirect_uri: "https://client.example.com/api/login/callback", // required
+  state: "123",
+  code_challenge: codeChallenge,
+  code_challenge_method: "S256",
+  response_type: "code",
+  scope: "openid email profile offline_access",
 });
+return {
+  redirect_uri: `https://auth.example.com/api/auth/oauth2/authorize?${searchParams.toString()}`,
+};
 ```
 
 For all endpoint parameters, see [OAuth 2.1 Authorization Request](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13#name-authorization-request).
@@ -208,8 +238,6 @@ For all endpoint parameters, see [OAuth 2.1 Authorization Request](https://datat
 Important notes:
 - In OAuth 2.1, only `response_type: "code"` is supported.
 - `code_challenge_method: "plain"` will not be supported since this is a security vulnerability.
-
-#### Parameters
 
 **State**
 
@@ -223,57 +251,44 @@ Code challenges helps protect the authorization `code` returned from the authori
 
 To do so, a code challenge is derived from the code verifier, used and sent in a [Proof Key for Code Exchange (PKCE)](https://datatracker.ietf.org/doc/html/rfc7636) to the Authorization Server.
 
-**Example**
-
-```ts
-import { randomBytes, createHash } from 'crypto'
-
-const state = randomBytes(32).toString('base64url');
-const codeVerifier = randomBytes(32).toString('base64url');
-const codeChallenge = createHash("SHA-256")
-  .update(codeVerifier)
-  .digest()
-  .toString('base64url');
-
-const stateData = {
-  codeVerifier,
-  state,
-  redirectUri: '/dashboard',
-};
-
-// pseudocode set cookie
-await signedCookie(
-  "__Secure-auth.client-state",
-  JSON.stringify(stateData), {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'lax',
-    maxAge: 3600,
-    path: '/api/auth/oauth2/',
-  }
-);
-```
-
 Now at your `redirect_uri`, check to see if the returned state matches the initial state.
 
-```ts
+#### Client Callback Endpoint
+
+This endpoint converts the redirect code into tokens. See [Token Endpoint](#token-endpoint) for further details.
+
+```ts title="/api/login/callback.ts"
 // pseudocode get cookie
 const stateCookie = JSON.parse(
-  (await getSignedCookie("__Secure-auth.client-state")) ?? '{}',
+  (await getSignedCookie("__Secure-auth.client-state")) ?? "{}",
 );
 
 // Compare states if returned
 if (stateCookie?.state !== query?.state) {
-  throw new Error('Login state does not match.')
+  throw new Error("Login state does not match.");
 }
 
-const tokens = await client.oauth2.token({
-  client_id: "my_client", // required
-  client_secret: "my_client_secret", // required for confidential clients
-  grant_type: 'authorization_code',
-  code: codeQuery,
-  code_verifier: stateCookie.codeVerifier,
-});
+// Exchange code for tokens
+const tokens = await $fetch(
+  `https://auth.example.com/api/auth/oauth2/token`,
+  {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code: query.code, // passed from the query parameter
+      code_verifier: stateCookie.codeVerifier, // stored in the cookie
+      client_id: "my_client",
+      client_secret: "my_client_secret", // required
+      scope: "openid email profile offline_access",
+      resource: "https://api.example.com", // optional
+      redirect_uri: "https://client.example.com/api/login/callback", // required since originally sent
+    }),
+  },
+);
 ```
 
 
