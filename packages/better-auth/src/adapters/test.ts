@@ -1,5 +1,5 @@
 import { expect, test, describe, beforeAll } from "vitest";
-import type { Adapter, BetterAuthOptions, User } from "../types";
+import type { Adapter, BetterAuthOptions, Session, User } from "../types";
 import { generateId } from "../utils";
 
 interface AdapterTestOptions {
@@ -52,6 +52,7 @@ const adapterTests = {
 	SHOULD_FIND_MANY_WITH_CONNECTORS: "should find many with connectors",
 	SHOULD_SUCCESSFULLY_FIND_A_RECORD_WITH_MULTIPLE_WHERE_CLAUSES:
 		"should successfully find a record with multiple where clauses",
+	SHOULD_SUPPORT_INNER_JOIN: "should support inner join",
 } as const;
 
 const { ...numberIdAdapterTestsCopy } = adapterTests;
@@ -1083,6 +1084,65 @@ function adapterTest(
 				],
 			});
 			expect(orRes.length).toBe(2);
+		},
+	);
+
+	test.skipIf(disabledTests?.SHOULD_SUPPORT_INNER_JOIN)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_SUPPORT_INNER_JOIN
+		}`,
+		async ({ onTestFailed }) => {
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
+			});
+
+			const user = await (await adapter()).create<User>({
+				model: "user",
+				data: {
+					name: "inner-join-user",
+					email: getUniqueEmail("inner-join-user@email.com"),
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			const session = await (await adapter()).create<Session>({
+				model: "session",
+				data: {
+					createdAt: new Date(),
+					expiresAt: new Date(),
+					token: "123",
+					updatedAt: new Date(),
+					ipAddress: "127.0.0.1",
+					userAgent: "test",
+					userId: user.id,
+				},
+			});
+
+			const joinResult = await (await adapter()).findOne<{
+				user: User;
+				session: Session;
+			}>({
+				model: "user",
+				where: [
+					{
+						field: "name",
+						value: "inner-join-user",
+					},
+				],
+				join: {
+					session: {
+						on: ["id", "userId"],
+						type: "inner",
+					},
+				},
+			});
+
+			expect(joinResult?.user).toBeDefined();
+			expect(joinResult?.user).toEqual(user);
+			expect(joinResult?.session).toBeDefined();
+			expect(joinResult?.session).toEqual(session);
 		},
 	);
 }

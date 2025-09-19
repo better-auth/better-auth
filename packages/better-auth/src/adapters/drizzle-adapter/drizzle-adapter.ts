@@ -191,7 +191,7 @@ export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldName, debugLog }) => {
+		({ getFieldName, debugLog, getModelName }) => {
 			function getSchema<Provider extends DrizzleAdapterConfig["provider"]>(
 				model: string,
 			) {
@@ -205,6 +205,16 @@ export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 				}
 				const schemaModel = schema[model];
 				if (!schemaModel) {
+					const err = new Error();
+					const stack = err.stack
+						?.split("\n")
+						.filter((_, i) => i !== 1)
+						.join("\n")
+						.replace(
+							"Error:",
+							`The model "${model}" was not found in the schema object. Please pass the drizzle schema directly to the adapter options in your auth config.`,
+						);
+					console.log(stack);
 					throw new BetterAuthError(
 						`[# Drizzle Adapter]: The model "${model}" was not found in the schema object. Please pass the drizzle schema directly to the adapter options in your auth config.`,
 					);
@@ -450,7 +460,7 @@ export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 				const clause = convertWhereClause(where, model);
 				if (provider === "pg") {
 					const db = _db as PgDB;
-					const schemaModel = getSchema<"pg">(model);
+					const schemaModel = getSchema<"pg">(getModelName(model));
 					const columns = getColumns(select, schemaModel);
 					const selected = columns ? db.select(columns) : db.select();
 					const from = selected.from(schemaModel);
@@ -458,7 +468,7 @@ export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 						if (!join) return from;
 						let base = from as ReturnType<typeof from.leftJoin>;
 						for (const model in join) {
-							const joinSchemaModel = getSchema<"pg">(model);
+							const joinSchemaModel = getSchema<"pg">(getModelName(model));
 							const { on, type } = join[model];
 							const statement = eq(
 								schemaModel[getFieldName({ model, field: on[0] })],
@@ -481,7 +491,7 @@ export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 					return builder;
 				} else if (provider === "mysql") {
 					const db = _db as MysqlDB;
-					const schemaModel = getSchema<"mysql">(model);
+					const schemaModel = getSchema<"mysql">(getModelName(model));
 					const columns = getColumns(select, schemaModel);
 					const selected = columns ? db.select(columns) : db.select();
 					const from = selected.from(schemaModel);
@@ -489,7 +499,7 @@ export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 						if (!join) return from;
 						let base = from as ReturnType<typeof from.leftJoin>;
 						for (const model in join) {
-							const joinSchemaModel = getSchema<"mysql">(model);
+							const joinSchemaModel = getSchema<"mysql">(getModelName(model));
 							const { on, type } = join[model];
 							const statement = eq(
 								schemaModel[getFieldName({ model, field: on[0] })],
@@ -512,7 +522,7 @@ export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 					return builder;
 				} else {
 					const db = _db as SqliteDB;
-					const schemaModel = getSchema<"sqlite">(model);
+					const schemaModel = getSchema<"sqlite">(getModelName(model));
 					const columns = getColumns(select, schemaModel);
 					const selected = columns ? db.select(columns) : db.select();
 					const from = selected.from(schemaModel);
@@ -520,7 +530,7 @@ export const drizzleAdapter = (_db: DB, config: DrizzleAdapterConfig) => {
 						if (!join) return from;
 						let base = from as ReturnType<typeof from.leftJoin>;
 						for (const model in join) {
-							const joinSchemaModel = getSchema<"sqlite">(model);
+							const joinSchemaModel = getSchema<"sqlite">(getModelName(model));
 							const { on, type } = join[model];
 							const statement = eq(
 								schemaModel[getFieldName({ model, field: on[0] })],

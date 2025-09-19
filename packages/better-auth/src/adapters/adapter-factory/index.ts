@@ -451,8 +451,8 @@ export const createAdapterFactory =
 			// We need to transform the data of each model separately, and then merge them back together.
 			if (join) {
 				for (const key in join) {
-					const joinData = data[key];
-					delete data[key];
+					const joinData = data[getModelName(key)];
+					delete data[getModelName(key)];
 					transformedJoinData[key] = await transformOutput(joinData, key);
 				}
 				// By this point, there should only be 1 key left in the `data` object, which is the `unsafe_model`
