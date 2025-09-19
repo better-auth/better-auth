@@ -209,6 +209,7 @@ export interface CustomJwtClaims {
 	 * Changes **JWT "Issued At" Claim**. Expects the same type as `expirationTime` in `JwtOptions` interface.
 	 *
 	 * @default new Date() // Current local machine time
+	 * @todo: should {`string`} be allowed?
 	 */
 	iat?: string | number | Date;
 	/**
