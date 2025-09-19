@@ -226,6 +226,7 @@ export interface SSOOptions {
 	trustEmailVerified?: boolean;
 	/**
 	 * Use the provider domain to build the callback URL.
+	 * @default false
 	 */
 	useProviderDomain?: boolean;
 }
