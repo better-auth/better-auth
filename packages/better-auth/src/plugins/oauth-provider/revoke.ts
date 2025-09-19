@@ -100,7 +100,11 @@ async function revokeOpaqueAccessToken(
 				where: [
 					{
 						field: "token",
-						value: await getStoredToken(opts.storeTokens, tokenValue),
+						value: await getStoredToken(
+							opts.storeTokens,
+							tokenValue,
+							"access_token",
+						),
 					},
 				],
 			})
@@ -147,7 +151,7 @@ async function revokeRefreshToken(
 		where: [
 			{
 				field: "refresh",
-				value: await getStoredToken(opts.storeTokens, token),
+				value: await getStoredToken(opts.storeTokens, token, "refresh_token"),
 			},
 		],
 	});

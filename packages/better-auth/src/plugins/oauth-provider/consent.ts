@@ -4,6 +4,7 @@ import type { GenericEndpointContext } from "../../types";
 import type { Verification } from "../../types";
 import { generateRandomString } from "../../crypto";
 import { formatErrorURL } from "./authorize";
+import { storeToken } from "./utils";
 
 export async function consentEndpoint(
 	ctx: GenericEndpointContext,
@@ -24,7 +25,9 @@ export async function consentEndpoint(
 	}
 
 	const verification = await ctx.context.internalAdapter
-		.findVerificationValue(storedCode)
+		.findVerificationValue(
+			await storeToken(opts.storeTokens, storedCode, "code"),
+		)
 		.then((val) => {
 			if (!val) return null;
 			let parsedValue: VerificationValue | undefined;
@@ -105,7 +108,7 @@ export async function consentEndpoint(
 			...verificationValue,
 			requireConsent: false,
 		}),
-		identifier: code,
+		identifier: await storeToken(opts.storeTokens, code, "code"),
 		expiresAt: new Date(exp * 1000),
 	});
 	await ctx.context.adapter.create({
