@@ -884,6 +884,7 @@ export const mcp = (options: MCPOptions) => {
 					return new Response(JSON.stringify(responseData), {
 						status: 201,
 						headers: {
+							"Content-Type": "application/json",
 							"Cache-Control": "no-store",
 							Pragma: "no-cache",
 						},

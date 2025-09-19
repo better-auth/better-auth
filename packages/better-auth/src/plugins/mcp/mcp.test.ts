@@ -79,6 +79,9 @@ describe("mcp", async () => {
 			},
 			onResponse(context) {
 				expect(context.response.status).toBe(201);
+				expect(context.response.headers.get("Content-Type")).toBe(
+					"application/json",
+				);
 			},
 		});
 
