@@ -16,17 +16,17 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: options.baseURL !== undefined
+			: typeof options.baseURL === "string"
 				? options.baseURL.startsWith("https://")
-					? true
-					: false
 				: isProduction;
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
 	const domain = crossSubdomainEnabled
 		? options.advanced?.crossSubDomainCookies?.domain ||
-			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
+			(typeof options.baseURL === "string"
+				? new URL(options.baseURL).hostname
+				: undefined)
 		: undefined;
 	if (crossSubdomainEnabled && !domain) {
 		throw new BetterAuthError(
