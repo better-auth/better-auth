@@ -224,6 +224,10 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	trustEmailVerified?: boolean;
+	/**
+	 * Use the provider domain to build the callback URL.
+	 */
+	useProviderDomain?: boolean;
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -801,7 +805,9 @@ export const sso = (options?: SSOOptions) => {
 							providerId: body.providerId,
 						},
 					});
-
+					const baseURL = options?.useProviderDomain
+						? `https://${provider.domain}/api/auth`
+						: ctx.context.baseURL;
 					return ctx.json({
 						...provider,
 						oidcConfig: JSON.parse(
@@ -810,7 +816,7 @@ export const sso = (options?: SSOOptions) => {
 						samlConfig: JSON.parse(
 							provider.samlConfig as unknown as string,
 						) as SAMLConfig,
-						redirectURI: `${ctx.context.baseURL}/sso/callback/${provider.providerId}`,
+						redirectURI: `${baseURL}/sso/callback/${provider.providerId}`,
 					});
 				},
 			),
@@ -1068,7 +1074,10 @@ export const sso = (options?: SSOOptions) => {
 					}
 					if (provider.oidcConfig && body.providerType !== "saml") {
 						const state = await generateState(ctx);
-						const redirectURI = `${ctx.context.baseURL}/sso/callback/${provider.providerId}`;
+						const baseURL = options?.useProviderDomain
+							? `https://${provider.domain}/api/auth`
+							: ctx.context.baseURL;
+						const redirectURI = `${baseURL}/sso/callback/${provider.providerId}`;
 						const authorizationURL = await createAuthorizationURL({
 							id: provider.issuer,
 							options: {
@@ -1254,10 +1263,13 @@ export const sso = (options?: SSOOptions) => {
 						);
 					}
 
+					const baseURL = options?.useProviderDomain
+						? `https://${provider.domain}/api/auth`
+						: ctx.context.baseURL;
 					const tokenResponse = await validateAuthorizationCode({
 						code,
 						codeVerifier: config.pkce ? stateData.codeVerifier : undefined,
-						redirectURI: `${ctx.context.baseURL}/sso/callback/${provider.providerId}`,
+						redirectURI: `${baseURL}/sso/callback/${provider.providerId}`,
 						options: {
 							clientId: config.clientId,
 							clientSecret: config.clientSecret,
