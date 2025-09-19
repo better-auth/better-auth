@@ -85,6 +85,28 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 								},
 							},
 						},
+						session: {
+							create: {
+								async after(session, context) {
+									if (!config.storeInDatabase) return;
+									if (!context) return;
+									const lastUsedLoginMethod =
+										config.customResolveMethod(context);
+									if (lastUsedLoginMethod && session?.userId) {
+										try {
+											await ctx.internalAdapter.updateUser(session.userId, {
+												lastLoginMethod: lastUsedLoginMethod,
+											});
+										} catch (error) {
+											ctx.logger.error(
+												"Failed to update lastLoginMethod",
+												error,
+											);
+										}
+									}
+								},
+							},
+						},
 					},
 				},
 			};
