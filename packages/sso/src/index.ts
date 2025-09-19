@@ -164,6 +164,7 @@ export interface SSOOptions {
 	trustEmailVerified?: boolean;
 	/**
 	 * Use the provider domain to build the callback URL.
+	 * @default false
 	 */
 	useProviderDomain?: boolean;
 }
@@ -669,7 +670,9 @@ export const sso = (options?: SSOOptions) => {
 							providerId: body.providerId,
 						},
 					});
-					const baseURL = options?.useProviderDomain ? `https://${provider.domain}/api/auth` : ctx.context.baseURL;
+					const baseURL = options?.useProviderDomain
+						? `https://${provider.domain}/api/auth`
+						: ctx.context.baseURL;
 					return ctx.json({
 						...provider,
 						oidcConfig: JSON.parse(
@@ -891,7 +894,9 @@ export const sso = (options?: SSOOptions) => {
 					}
 					if (provider.oidcConfig && body.providerType !== "saml") {
 						const state = await generateState(ctx);
-						const baseURL = options?.useProviderDomain ? `https://${provider.domain}/api/auth` : ctx.context.baseURL;
+						const baseURL = options?.useProviderDomain
+							? `https://${provider.domain}/api/auth`
+							: ctx.context.baseURL;
 						const redirectURI = `${baseURL}/sso/callback/${provider.providerId}`;
 						const authorizationURL = await createAuthorizationURL({
 							id: provider.issuer,
@@ -1056,7 +1061,9 @@ export const sso = (options?: SSOOptions) => {
 						);
 					}
 
-					const baseURL = options?.useProviderDomain ? `https://${provider.domain}/api/auth` : ctx.context.baseURL;
+					const baseURL = options?.useProviderDomain
+						? `https://${provider.domain}/api/auth`
+						: ctx.context.baseURL;
 					const tokenResponse = await validateAuthorizationCode({
 						code,
 						codeVerifier: config.pkce ? stateData.codeVerifier : undefined,
