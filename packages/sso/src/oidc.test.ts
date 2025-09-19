@@ -84,13 +84,13 @@ describe("SSO", async () => {
 					tokenEndpoint: `${server.issuer.url}/token`,
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
-				},
-				mapping: {
-					id: "sub",
-					email: "email",
-					emailVerified: "email_verified",
-					name: "name",
-					image: "picture",
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
 				},
 				providerId: "test",
 			},
@@ -196,6 +196,67 @@ describe("SSO", async () => {
 	});
 });
 
+describe("SSO with defaultSSO array", async () => {
+	const { auth, signInWithTestUser, customFetchImpl } =
+		await getTestInstanceMemory({
+			plugins: [
+				sso({
+					defaultSSO: [
+						{
+							domain: "localhost.com",
+							providerId: "default-test",
+							oidcConfig: {
+								issuer: "http://localhost:8080",
+								clientId: "test",
+								clientSecret: "test",
+								authorizationEndpoint: "http://localhost:8080/authorize",
+								tokenEndpoint: "http://localhost:8080/token",
+								jwksEndpoint: "http://localhost:8080/jwks",
+								discoveryEndpoint:
+									"http://localhost:8080/.well-known/openid-configuration",
+								pkce: true,
+								mapping: {
+									id: "sub",
+									email: "email",
+									emailVerified: "email_verified",
+									name: "name",
+									image: "picture",
+								},
+							},
+						},
+					],
+				}),
+				organization(),
+			],
+		});
+
+	it("should use default SSO provider from array when no provider found in database using providerId", async () => {
+		const res = await auth.api.signInSSO({
+			body: {
+				providerId: "default-test",
+				callbackURL: "/dashboard",
+			},
+		});
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fdefault-test",
+		);
+	});
+
+	it("should use default SSO provider from array when no provider found in database using domain fallback", async () => {
+		const res = await auth.api.signInSSO({
+			body: {
+				email: "test@localhost.com",
+				callbackURL: "/dashboard",
+			},
+		});
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fdefault-test",
+		);
+	});
+});
+
 describe("SSO disable implicit sign in", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } =
 		await getTestInstanceMemory({
@@ -272,13 +333,14 @@ describe("SSO disable implicit sign in", async () => {
 					authorizationEndpoint: `${server.issuer.url}/authorize`,
 					tokenEndpoint: `${server.issuer.url}/token`,
 					jwksEndpoint: `${server.issuer.url}/jwks`,
-				},
-				mapping: {
-					id: "sub",
-					email: "email",
-					emailVerified: "email_verified",
-					name: "name",
-					image: "picture",
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
 				},
 				providerId: "test",
 			},
@@ -526,13 +588,14 @@ describe("provisioning", async (ctx) => {
 					authorizationEndpoint: `${server.issuer.url}/authorize`,
 					tokenEndpoint: `${server.issuer.url}/token`,
 					jwksEndpoint: `${server.issuer.url}/jwks`,
-				},
-				mapping: {
-					id: "sub",
-					email: "email",
-					emailVerified: "email_verified",
-					name: "name",
-					image: "picture",
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
 				},
 				providerId: "test2",
 				organizationId: organization?.id,
