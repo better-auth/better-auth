@@ -1,5 +1,4 @@
 import { BetterAuthClientPlugin, Store } from "better-auth/types";
-import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
@@ -203,12 +202,25 @@ export const expoClient = (opts: ExpoClientOptions) => {
 
 						if (
 							context.data?.redirect &&
-							context.request.url.toString().includes("/sign-in") &&
+							(context.request.url.toString().includes("/sign-in") ||
+								context.request.url.toString().includes("/link-social")) &&
 							!context.request?.body.includes("idToken") // id token is used for silent sign-in
 						) {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
 							const to = callbackURL;
 							const signInURL = context.data?.url;
+							let Browser: typeof import("expo-web-browser") | undefined =
+								undefined;
+							try {
+								Browser = await import("expo-web-browser");
+							} catch (error) {
+								throw new Error(
+									'"expo-web-browser" is not installed as a dependency!',
+									{
+										cause: error,
+									},
+								);
+							}
 							const result = await Browser.openAuthSessionAsync(signInURL, to);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
@@ -263,6 +275,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					if (url.includes("/sign-out")) {
 						await storage.setItem(cookieName, "{}");
 						store?.atoms.session?.set({
+							...store.atoms.session.get(),
 							data: null,
 							error: null,
 							isPending: false,

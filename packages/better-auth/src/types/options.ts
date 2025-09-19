@@ -19,8 +19,8 @@ import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
 import type { AdapterDebugLogs } from "../adapters";
-//@ts-ignore - we need to import this to get the type of the database
 import type { Database as BunDatabase } from "bun:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
 export type BetterAuthOptions = {
 	/**
@@ -84,6 +84,7 @@ export type BetterAuthOptions = {
 		| Dialect
 		| AdapterInstance
 		| BunDatabase
+		| DatabaseSync
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
@@ -99,6 +100,13 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				debugLogs?: AdapterDebugLogs;
+				/**
+				 * Whether to execute multiple operations in a transaction.
+				 * If the database doesn't support transactions,
+				 * set this to `false` and operations will be executed sequentially.
+				 * @default true
+				 */
+				transaction?: boolean;
 		  }
 		| {
 				/**
@@ -121,6 +129,13 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				debugLogs?: AdapterDebugLogs;
+				/**
+				 * Whether to execute multiple operations in a transaction.
+				 * If the database doesn't support transactions,
+				 * set this to `false` and operations will be executed sequentially.
+				 * @default true
+				 */
+				transaction?: boolean;
 		  };
 	/**
 	 * Secondary storage configuration
@@ -290,7 +305,7 @@ export type BetterAuthOptions = {
 	/**
 	 * List of Better Auth plugins
 	 */
-	plugins?: BetterAuthPlugin[];
+	plugins?: [] | BetterAuthPlugin[];
 	/**
 	 * User configuration
 	 */
@@ -608,12 +623,17 @@ export type BetterAuthOptions = {
 						 */
 						max: number;
 				  }
+				| false
 				| ((request: Request) =>
 						| { window: number; max: number }
-						| Promise<{
-								window: number;
-								max: number;
-						  }>);
+						| false
+						| Promise<
+								| {
+										window: number;
+										max: number;
+								  }
+								| false
+						  >);
 		};
 		/**
 		 * Storage configuration
