@@ -7,7 +7,7 @@ import type {
 	VerificationValue,
 } from "./types";
 import { generateRandomString } from "../../crypto";
-import { getClient } from "./utils";
+import { getClient, storeToken } from "./utils";
 
 /**
  * Formats an error url
@@ -43,13 +43,10 @@ function getErrorURL(
 
 export async function authorizeEndpoint(
 	ctx: GenericEndpointContext,
-	options: OAuthOptions,
+	opts: OAuthOptions,
 ) {
 	// Grant type must include authorization_code to use this endpoint
-	if (
-		options.grantTypes &&
-		!options.grantTypes.includes("authorization_code")
-	) {
+	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
 		throw new APIError("NOT_FOUND");
 	}
 
@@ -88,7 +85,7 @@ export async function authorizeEndpoint(
 		);
 		const queryFromURL = ctx.request.url?.split("?")[1];
 		return handleRedirect(
-			`${options.loginPage}${queryFromURL ? "?" + queryFromURL : ""}}`,
+			`${opts.loginPage}${queryFromURL ? "?" + queryFromURL : ""}}`,
 		);
 	}
 
@@ -121,7 +118,7 @@ export async function authorizeEndpoint(
 	}
 
 	/** Check client */
-	const client = await getClient(ctx, options, query.client_id);
+	const client = await getClient(ctx, opts, query.client_id);
 	if (!client) {
 		const errorURL = getErrorURL(
 			ctx,
@@ -150,7 +147,7 @@ export async function authorizeEndpoint(
 	const invalidScopes = requestScope.filter((scope) => {
 		// invalid in scopes list
 		return (
-			!options.scopes?.includes(scope) ||
+			!opts.scopes?.includes(scope) ||
 			// offline access must be requested through PKCE
 			(scope === "offline_access" &&
 				(query.code_challenge_method !== "S256" || !query.code_challenge))
@@ -192,16 +189,18 @@ export async function authorizeEndpoint(
 	}
 
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-	const codeExpiresInMs = (options.codeExpiresIn ?? 600) * 1000;
-	const expiresAt = new Date(Date.now() + codeExpiresInMs);
+	const now = Math.floor(Date.now() / 1000);
+	const expiresAt = now + (opts.codeExpiresIn ?? 600);
+
 	try {
 		/**
 		 * Save the code in the database
 		 */
 		await ctx.context.internalAdapter.createVerificationValue(
 			{
-				identifier: code,
-				expiresAt,
+				identifier: await storeToken(opts.storeTokens, code, "code"),
+				createdAt: new Date(now * 1000),
+				expiresAt: new Date(expiresAt * 1000),
 				value: JSON.stringify({
 					clientId: client.clientId,
 					userId: session.user.id,
@@ -244,7 +243,7 @@ export async function authorizeEndpoint(
 		.findOne<{
 			consentGiven: boolean;
 		}>({
-			model: options.schema?.oauthConsent?.modelName ?? "oauthConsent",
+			model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
 			where: [
 				{
 					field: "clientId",
@@ -262,12 +261,6 @@ export async function authorizeEndpoint(
 		return handleRedirect(redirectUriWithCode.toString());
 	}
 
-	if (!options.consentPage) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			message: "No consent page provided",
-		});
-	}
-
 	const { name: cookieName, attributes: cookieAttributes } =
 		ctx.context.createAuthCookie("oauth_consent_prompt");
 	await ctx.setSignedCookie(
@@ -280,7 +273,7 @@ export async function authorizeEndpoint(
 		client_id: client.clientId,
 		scope: requestScope.join(" "),
 	});
-	const consentURI = `${options.consentPage}?${params.toString()}`;
+	const consentUri = `${opts.consentPage}?${params.toString()}`;
 
-	return handleRedirect(consentURI);
+	return handleRedirect(consentUri);
 }

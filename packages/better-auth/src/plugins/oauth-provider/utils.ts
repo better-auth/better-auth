@@ -5,7 +5,7 @@ import type { jwt } from "../jwt";
 import type { oauthProvider } from "../oauth-provider";
 import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import type { OAuthOptions, SchemaClient } from "./types";
+import type { OAuthOptions, SchemaClient, StoreTokenType } from "./types";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { databaseToSchema, type DatabaseClient } from "./register";
 import { timingSafeEqual } from "crypto";
@@ -198,7 +198,7 @@ export async function storeClientSecret(
 }
 
 /**
- * Stores a token value (ie opaque token or refresh token)
+ * Stores a token value (ie opaque tokens, refresh tokens, transaction tokens, verification codes)
  * on the database in a secure hashed format.
  *
  * @internal
@@ -206,11 +206,12 @@ export async function storeClientSecret(
 export async function storeToken(
 	storageMethod: OAuthOptions["storeTokens"] = "hashed",
 	token: string,
+	type: StoreTokenType,
 ) {
 	if (storageMethod === "hashed") {
 		return await defaultHasher(token);
 	} else if (typeof storageMethod === "object" && "hash" in storageMethod) {
-		return await storageMethod.hash(token);
+		return await storageMethod.hash(token, type);
 	}
 
 	throw new BetterAuthError(
@@ -226,12 +227,13 @@ export async function storeToken(
 export async function getStoredToken(
 	storageMethod: OAuthOptions["storeTokens"] = "hashed",
 	token: string,
+	type: StoreTokenType,
 ) {
 	if (storageMethod === "hashed") {
 		const hashedClientSecret = await defaultHasher(token);
 		return hashedClientSecret;
 	} else if (typeof storageMethod === "object" && "hash" in storageMethod) {
-		const hashedClientSecret = await storageMethod.hash(token);
+		const hashedClientSecret = await storageMethod.hash(token, type);
 		return hashedClientSecret;
 	}
 

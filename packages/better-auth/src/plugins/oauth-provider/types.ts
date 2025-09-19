@@ -3,6 +3,8 @@ import type { InferOptionSchema, Session, User } from "../../types";
 import type { Awaitable } from "../../types/helper";
 import { schema } from "./schema";
 
+export type StoreTokenType = "access_token" | "refresh_token" | "code";
+
 export interface OAuthOptions {
 	/**
 	 * Custom schema definitions
@@ -207,11 +209,13 @@ export interface OAuthOptions {
 	 * Storage method of opaque access tokens and refresh tokens on your database.
 	 *
 	 * - "hashed" - The client secret is hashed using the `hash` function.
-	 * - { hash: (token: string) => Promise<string> } - A function that hashes the token
+	 * - { hash: (token: string, type: StoreTokenType) => Promise<string> } - A function that hashes the token
 	 *
 	 * @default "hashed"
 	 */
-	storeTokens?: "hashed" | { hash: (token: string) => Promise<string> };
+	storeTokens?:
+		| "hashed"
+		| { hash: (token: string, type: StoreTokenType) => Promise<string> };
 	/**
 	 * Get the additional user info claims
 	 *

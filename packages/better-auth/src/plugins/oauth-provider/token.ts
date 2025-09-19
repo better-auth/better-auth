@@ -246,7 +246,7 @@ async function createOpaqueAccessToken(
 	await ctx.context.adapter.create({
 		model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 		data: {
-			token: await storeToken(opts.storeTokens, token),
+			token: await storeToken(opts.storeTokens, token, "access_token"),
 			clientId,
 			sessionId: payload?.sid,
 			scopes: scopes.join(" "), // TODO: remove join when native arrays supported
@@ -346,12 +346,17 @@ async function createUserTokens(
 								value: await getStoredToken(
 									opts.storeTokens,
 									_session.sessionToken,
+									"refresh_token",
 								),
 							},
 						],
 						update: {
 							refresh: refreshToken
-								? await storeToken(opts.storeTokens, refreshToken)
+								? await storeToken(
+										opts.storeTokens,
+										refreshToken,
+										"refresh_token",
+									)
 								: undefined,
 							updatedAt: now,
 							expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
@@ -373,7 +378,11 @@ async function createUserTokens(
 							clientId: client.clientId,
 							scopes: scopes.join(" "), // TODO: remove join when native arrays supported
 							refresh: refreshToken
-								? await storeToken(opts.storeTokens, refreshToken)
+								? await storeToken(
+										opts.storeTokens,
+										refreshToken,
+										"refresh_token",
+									)
 								: undefined,
 							createdAt: now,
 							updatedAt: now,
@@ -466,12 +475,14 @@ async function createUserTokens(
 /** Checks verification value */
 async function checkVerificationValue(
 	ctx: GenericEndpointContext,
+	opts: OAuthOptions,
 	code: string,
 	client_id: string,
 	redirect_uri?: string,
 ) {
-	const verification =
-		await ctx.context.internalAdapter.findVerificationValue(code);
+	const verification = await ctx.context.internalAdapter.findVerificationValue(
+		await storeToken(opts.storeTokens, code, "code"),
+	);
 	const verificationValue = verification
 		? JSON.parse(verification?.value)
 		: undefined;
@@ -591,6 +602,7 @@ async function handleAuthorizationCodeGrant(
 	/** Get and check Verification Value */
 	const verificationValue = await checkVerificationValue(
 		ctx,
+		opts,
 		code,
 		client_id,
 		redirect_uri,
@@ -845,7 +857,11 @@ async function handleRefreshTokenGrant(
 			where: [
 				{
 					field: "refresh",
-					value: await getStoredToken(opts.storeTokens, decodedRefresh.token),
+					value: await getStoredToken(
+						opts.storeTokens,
+						decodedRefresh.token,
+						"refresh_token",
+					),
 				},
 			],
 		})

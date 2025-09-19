@@ -152,7 +152,11 @@ async function validateOpaqueAccessToken(
 			where: [
 				{
 					field: "token",
-					value: await getStoredToken(opts.storeTokens, tokenValue),
+					value: await getStoredToken(
+						opts.storeTokens,
+						tokenValue,
+						"access_token",
+					),
 				},
 			],
 		})
@@ -250,7 +254,7 @@ async function validateRefreshToken(
 			where: [
 				{
 					field: "refresh",
-					value: await getStoredToken(opts.storeTokens, token),
+					value: await getStoredToken(opts.storeTokens, token, "refresh_token"),
 				},
 			],
 		})
