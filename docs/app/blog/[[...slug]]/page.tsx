@@ -23,6 +23,7 @@ import { StarField } from "../_components/stat-field";
 import Image from "next/image";
 import { BlogPage } from "../_components/blog-list";
 import { Callout } from "@/components/ui/callout";
+import { ExternalLink } from "lucide-react";
 
 const metaTitle = "Blogs";
 const metaDescription = "Latest changes , fixes and updates.";
@@ -123,18 +124,60 @@ export default async function Page({
 					<MDX
 						components={{
 							...defaultMdxComponents,
-							Link: ({
-								className,
-								...props
-							}: React.ComponentProps<typeof Link>) => (
-								<Link
-									className={cn(
-										"font-medium underline underline-offset-4",
-										className,
-									)}
-									{...props}
-								/>
-							),
+							a: ({ className, href, children, ...props }: any) => {
+								const isExternal =
+									typeof href === "string" && /^(https?:)?\/\//.test(href);
+								const classes = cn(
+									"inline-flex items-center gap-1 font-medium underline decoration-dashed underline-offset-4 bg-bed",
+									className,
+								);
+								if (isExternal) {
+									return (
+										<a
+											className={classes}
+											href={href}
+											target="_blank"
+											rel="noreferrer noopener"
+											{...props}
+										>
+											{children}
+											<ExternalLink className="ms-0.5 inline size-[0.9em] text-fd-muted-foreground" />
+										</a>
+									);
+								}
+								return (
+									<Link className={classes} href={href} {...(props as any)}>
+										{children}
+									</Link>
+								);
+							},
+							Link: ({ className, href, children, ...props }: any) => {
+								const isExternal =
+									typeof href === "string" && /^(https?:)?\/\//.test(href);
+								const classes = cn(
+									"inline-flex items-center gap-1 font-medium underline decoration-dashed underline-offset-4",
+									className,
+								);
+								if (isExternal) {
+									return (
+										<a
+											className={classes}
+											href={href}
+											target="_blank"
+											rel="noreferrer noopener"
+											{...props}
+										>
+											{children}
+											<ExternalLink className="ms-0.5 inline size-[0.9em] text-fd-muted-foreground" />
+										</a>
+									);
+								}
+								return (
+									<Link className={classes} href={href} {...(props as any)}>
+										{children}
+									</Link>
+								);
+							},
 							Step,
 							Steps,
 							File,
