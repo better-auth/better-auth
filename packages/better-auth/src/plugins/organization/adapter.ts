@@ -1,4 +1,4 @@
-import type { Session, User } from "../../types";
+import type { GenericEndpointContext, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
 import type { OrganizationOptions } from "./types";
 import type {
@@ -366,12 +366,14 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		setActiveOrganization: async (
 			sessionToken: string,
 			organizationId: string | null,
+			ctx: GenericEndpointContext,
 		) => {
 			const session = await context.internalAdapter.updateSession(
 				sessionToken,
 				{
 					activeOrganizationId: organizationId,
 				},
+				ctx,
 			);
 			return session as Session;
 		},
@@ -670,12 +672,17 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return invitation;
 		},
 
-		setActiveTeam: async (sessionToken: string, teamId: string | null) => {
+		setActiveTeam: async (
+			sessionToken: string,
+			teamId: string | null,
+			ctx: GenericEndpointContext,
+		) => {
 			const session = await context.internalAdapter.updateSession(
 				sessionToken,
 				{
 					activeTeamId: teamId,
 				},
+				ctx,
 			);
 			return session as Session;
 		},
