@@ -101,6 +101,7 @@ export function createAuthClient<Option extends ClientOptions>(
 					data: res.data,
 					isPending: false,
 					error: res.error,
+					refetch: res.refetch,
 				};
 			});
 		}
