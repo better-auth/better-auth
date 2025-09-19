@@ -651,7 +651,7 @@ oauthProvider({
 
 Claims are fields defined in your access and id tokens. You can add more claims using the `customClaims`.
 
-By internally, we support the following claims are supported: ["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "sid", "scope", "azp"].
+By internally, we support the following claims are supported: ["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"].
 
 The claims configuration can only be appended to the internal supported claims. Claims should be namespaced when possible to avoid potential future conflicts.
 
@@ -710,7 +710,7 @@ Dynamic registration allows for authorized registration of both public and confi
 
 ```ts title="auth.ts"
 oauthProvider({
-  allowDynamicClientRegistration: true,
+  allowDynamicClientRegistration: true, // [!code highlight]
 })
 ```
 
@@ -719,7 +719,7 @@ Unauthenticated client registration additionally allows for public clients (neve
 ```ts title="auth.ts"
 oauthProvider({
   allowDynamicClientRegistration: true,
-  allowUnauthenticatedClientRegistration: true,
+  allowUnauthenticatedClientRegistration: true, // [!code highlight]
 })
 ```
 
@@ -730,7 +730,7 @@ You can additionally set an expiration time for how long a confidential client s
 ```ts title="auth.ts"
 oauthProvider({
   allowDynamicClientRegistration: true,
-  clientRegistrationClientSecretExpiration: "30d",
+  clientRegistrationClientSecretExpiration: "30d", // [!code highlight]
 })
 ```
 
@@ -741,7 +741,7 @@ To set a list of default scopes for newly registered clients when scopes paramet
 ```ts title="auth.ts"
 oauthProvider({
   scopes: ["reader", "editor"],
-  clientRegistrationDefaultScopes: ["reader"],
+  clientRegistrationDefaultScopes: ["reader"], // [!code highlight]
 })
 ```
 
@@ -751,7 +751,7 @@ To also set a list of allowed scopes for newly registered clients when scopes pa
 oauthProvider({
   scopes: ["reader", "editor"],
   clientRegistrationDefaultScopes: ["reader"],
-  clientRegistrationAllowedScopes: ["editor"],
+  clientRegistrationAllowedScopes: ["editor"], // [!code highlight]
 })
 ```
 
@@ -793,7 +793,7 @@ oauthProvider({
 })
 ```
 
-Pseudocode for a token encryption:
+Pseudocode for a token encryption method:
 
 ```ts title="auth.ts"
 import { CompactEncrypt, compactDecrypt } from 'jose'
@@ -872,7 +872,7 @@ import { oauthProvider } from "better-auth/plugins";
 const auth = betterAuth({
   plugins: [
     oauthProvider({
-      disableJwtPlugin: true,
+      disableJwtPlugin: true, // [!code highlight]
       loginPage: "/sign-in",
       consentPage: "/consent",
       // ...other options
@@ -1046,7 +1046,7 @@ The OIDC Provider plugin adds the following tables to the database:
 
 ### OAuth Application
 
-Table Name: `oauthApplication`
+Table Name: `oauthClient`
 
 <DatabaseTable
   fields={[
@@ -1188,7 +1188,7 @@ Table Name: `oauthApplication`
     },
     {
       name: "metadata",
-      type: "string",
+      type: "json",
       description: "Additional metadata for the OAuth client",
       isOptional: true,
     },
@@ -1217,7 +1217,7 @@ The original required `token` field is now marked as optional.
       name: "clientId",
       type: "string",
       description: "ID of the OAuth client",
-      references: { model: "oauthApplication", field: "clientId" },
+      references: { model: "oauthClient", field: "clientId" },
       isOptional: true,
     },
     {
@@ -1251,7 +1251,7 @@ Table Name: `oauthAccessToken`
       type: "string",
       description: "ID of the OAuth client",
       isForeignKey: true,
-      references: { model: "oauthApplication", field: "clientId" }
+      references: { model: "oauthClient", field: "clientId" }
     },
     {
       name: "sessionId",
@@ -1344,7 +1344,7 @@ We recommend to add a prefix to each of the following prior to your first produc
 
 ## Optimizations
 
-To improve lookup performance, map the field `client_id` on the table `oauthApplication` to `id` through your database adapter.
+To improve lookup performance, map the field `client_id` on the table `oauthClient` to `id` through your database adapter.
 
 ## Migrations
 
@@ -1367,7 +1367,9 @@ To improve lookup performance, map the field `client_id` on the table `oauthAppl
 
 #### Database
 
-##### Table: `oauthApplication`
+##### Table: `oauthClient`
+
+Previously `oauthApplication`
 
 - If `storeClientSecret` was unset or `plain`, you must hash all the stored `clientSecret` values into its "SHA-256" representation then convert it into base64Url format or use another storage method specified by `storeClientSecret`.
 - `type` field is no longer a required field. Instead, the schema requires `public` of type `boolean`. Migrate with the following rules:

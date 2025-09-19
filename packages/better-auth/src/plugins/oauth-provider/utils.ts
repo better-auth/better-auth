@@ -48,7 +48,7 @@ export async function getClient(
 	}
 	const dbClient = await ctx.context.adapter
 		.findOne<DatabaseClient>({
-			model: options.schema?.oauthApplication?.modelName ?? "oauthApplication",
+			model: options.schema?.oauthClient?.modelName ?? "oauthClient",
 			where: [{ field: "clientId", value: clientId }],
 		})
 		.then((res) => {
