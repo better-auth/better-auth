@@ -245,27 +245,26 @@ export interface SSOOptions {
  *   → "http://company.com/custom-auth"
  * - constructProviderDomainURL("http://localhost:3000/api/auth", undefined, true)
  *   → "https://localhost:3000/api/auth"
+ * - constructProviderDomainURL("http://localhost:3000/api/auth")
+ *   → "https://localhost:3000/api/auth" (defaults to HTTPS)
  *
  * This addresses the issue where hardcoded https and /api/auth can break:
  * - Custom basePath configurations (by preserving the original path)
- * - Protocol preferences (by using explicit useHttps parameter)
+ * - Protocol preferences (by using explicit useHttps parameter, defaults to true)
  */
 function constructProviderDomainURL(
 	baseURL: string,
 	providerDomain?: string,
-	useHttps?: boolean,
+	useHttps: boolean = true,
 ): string {
 	try {
 		const base = new URL(baseURL);
-		const protocol =
-			useHttps !== undefined ? (useHttps ? "https:" : "http:") : base.protocol;
+		const protocol = useHttps ? "https:" : "http:";
 		const host = providerDomain || base.host;
 		return `${protocol}//${host}${base.pathname}`;
 	} catch (error) {
 		// Fallback to original behavior if URL parsing fails
-		const protocol = useHttps !== false ? "https" : "http";
-		const host = providerDomain || "localhost:3000";
-		return `${protocol}://${host}/api/auth`;
+		return baseURL;
 	}
 }
 
@@ -859,7 +858,7 @@ export const sso = (options?: SSOOptions) => {
 							? constructProviderDomainURL(
 									ctx.context.baseURL,
 									provider.domain,
-									provider.useHttps,
+									provider.useHttps ?? true,
 								)
 							: ctx.context.baseURL;
 					return ctx.json({
@@ -1133,7 +1132,7 @@ export const sso = (options?: SSOOptions) => {
 								? constructProviderDomainURL(
 										ctx.context.baseURL,
 										provider.domain,
-										provider.useHttps,
+										provider.useHttps ?? true,
 									)
 								: ctx.context.baseURL;
 						const redirectURI = `${baseURL}/sso/callback/${provider.providerId}`;
@@ -1327,7 +1326,7 @@ export const sso = (options?: SSOOptions) => {
 							? constructProviderDomainURL(
 									ctx.context.baseURL,
 									provider.domain,
-									provider.useHttps,
+									provider.useHttps ?? true,
 								)
 							: ctx.context.baseURL;
 					const tokenResponse = await validateAuthorizationCode({
