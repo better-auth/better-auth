@@ -56,7 +56,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						? JSON.stringify(data.organization.metadata)
 						: undefined,
 				},
-				forceAllowId: true
+				forceAllowId: true,
 			});
 
 			return {
