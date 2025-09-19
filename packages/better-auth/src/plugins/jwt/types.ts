@@ -59,6 +59,7 @@ export type JwkOptions =
 			modulusLength?: number;
 	  };
 
+// todo: add describe() to fields
 export const jwkOptionsSchema = z
 	.discriminatedUnion("alg", [
 		z.object({
@@ -164,6 +165,14 @@ export interface JwtOptions {
 	 */
 	expirationTime?: number | string | Date;
 	/**
+	 * The amount of time in seconds, the requested `iat` ("Issued At" Claim) can be "into the future" because of the clock differences from different machines within the request chain.
+	 *
+	 * Also leeway for `exp` ("Expiration Time" Claim) and `nbf` ("Not Before" Claim). It effectively extends allowed `exp` and lower `nbf` requirement by this amount.
+	 *
+	 * @default 60
+	 */
+	allowedClockSkew?: number;
+	/**
 	 * A function that is called to define the data of the **JWT** in the `getSessionJwt` function.
 	 *
 	 * @default session.user // If `defineSessionJwtData` is `undefined`
@@ -187,15 +196,21 @@ export interface CustomJwtClaims {
 	/**
 	 * Changes **JWT "Audience" Claim**.
 	 *
-	 * @default getJWTPluginOptions(ctx)?.jwt?.audience // plugin configuration
+	 * @default getJWTPluginOptions(ctx)?.jwt?.audience // Plugin configuration
 	 */
 	aud?: string | string[];
 	/**
-	 * Changes **JWT "Expiration Time" Claim**. Expects the same type as `expiratiomTime` in `JwtOptions` interface.
+	 * Changes **JWT "Expiration Time" Claim**. Expects the same type as `expirationTime` in `JwtOptions` interface.
 	 *
-	 * @default getJWTPluginOptions(ctx)?.jwt?.expirationTime // plugin configuration
+	 * @default getJWTPluginOptions(ctx)?.jwt?.expirationTime // Plugin configuration
 	 */
 	exp?: string | number | Date;
+	/**
+	 * Changes **JWT "Issued At" Claim**. Expects the same type as `expirationTime` in `JwtOptions` interface.
+	 *
+	 * @default new Date() // Current local machine time
+	 */
+	iat?: string | number | Date;
 	/**
 	 * Sets **"JWT ID" Claim**. Useful when implementing JWT revocation list.
 	 */
@@ -223,6 +238,11 @@ export const customJwtClaimsSchema = z
 			.union([z.string(), z.number(), z.date()])
 			.optional()
 			.describe('Changes JWT "Expiration Time" Claim.'),
+
+		iat: z
+			.union([z.string(), z.number(), z.date()])
+			.optional()
+			.describe('Changes JWT "Issued At" Claim.'),
 
 		jti: z
 			.string()
@@ -286,8 +306,17 @@ export interface VerifyJwtOptions {
 	 * @default false
 	 */
 	allowNoKeyId?: boolean;
+	/**
+	 * The amount of time in seconds, the requested `iat` ("Issued At" Claim) can be "into the future" because of the clock differences from different machines within the request chain.
+	 *
+	 * Also leeway for `exp` ("Expiration Time" Claim) and `nbf` ("Not Before" Claim). It effectively extends allowed `exp` and lower `nbf` requirement by this amount.
+	 *
+	 * @default getJwtPluginOptions(ctx.context)?.jwt?.allowedClockSkew // 60 if not defined
+	 */
+	allowedClockSkew?: number;
 }
 
+// todo: add describe() to fields
 export const jwkSchema = z
 	.object({
 		id: z.string(),
@@ -316,6 +345,7 @@ export type CryptoKeyIdAlg = {
 	key: CryptoKey;
 };
 
+// todo: add describe() to fields
 export const verifyJwtOptionsSchema = z
 	.object({
 		maxExpirationTime: z.string().optional(),
@@ -324,9 +354,11 @@ export const verifyJwtOptionsSchema = z
 		expectedSubject: z.string().optional(),
 		expectedType: z.string().optional(),
 		allowNoKeyId: z.boolean().optional(),
+		allowedClockSkew: z.number().optional(),
 	})
 	.describe("Strictness of verification");
 
+// todo: add describe() to fields
 export const jwkParametersSchema = z.object({
 	kty: z.string().optional(),
 	alg: z.string().optional(),
@@ -340,6 +372,7 @@ export const jwkParametersSchema = z.object({
 	kid: z.string().optional(),
 });
 
+// todo: add describe() to fields
 export const jwkExportedSchema = jwkParametersSchema
 	.extend({
 		crv: z.string().optional(),

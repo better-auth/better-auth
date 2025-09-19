@@ -1,11 +1,14 @@
 import type { AuthContext } from "../../types";
 import type { LogHandlerParams, LogLevel } from "../../utils/logger";
-import type { JwkAlgorithm, JwtPluginOptions } from "./types";
-import type { JWK } from "jose";
+import type { CryptoKeyIdAlg, JwkAlgorithm, JwtPluginOptions } from "./types";
+import { importJWK, type JWK } from "jose";
 import { BetterAuthError } from "../../error";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { joseSecs } from "../../utils/time";
 
+/**
+ * @todo: JSDoc
+ */
 export const getJwtPluginOptions = (
 	ctx: AuthContext,
 ): JwtPluginOptions | undefined => {
@@ -17,6 +20,9 @@ export const getJwtPluginOptions = (
 	return plugin.options;
 };
 
+/**
+ * @todo: JSDoc
+ */
 export function getPublicJwk(
 	privateJwk: JWK,
 ): Omit<JWK, "d" | "p" | "q" | "dp" | "dq" | "qi"> {
@@ -55,8 +61,24 @@ export async function decryptPrivateKey(
 export function isJwkAlgValid(jwkAlgorithm: string): boolean {
 	const JWK_ALGS = ["EdDSA", "ES256", "ES512", "PS256", "RS256"] as const;
 
-	if (JWK_ALGS.includes(jwkAlgorithm as JwkAlgorithm)) return true;
-	return false;
+	return JWK_ALGS.includes(jwkAlgorithm as JwkAlgorithm);
+}
+
+/**
+ * @todo: JSDoc
+ */
+export async function parseJwk(key: JWK): Promise<CryptoKeyIdAlg> {
+	if (!isJwkAlgValid(key.alg!))
+		throw new BetterAuthError(
+			`Invalid JWK algorithm: "${key.alg}"`,
+			JSON.stringify(key),
+		);
+
+	return {
+		id: key.kid,
+		alg: key.alg as JwkAlgorithm,
+		key: (await importJWK(key)) as CryptoKey,
+	} satisfies CryptoKeyIdAlg as CryptoKeyIdAlg;
 }
 
 /**

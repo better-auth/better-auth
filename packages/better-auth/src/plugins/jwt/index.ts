@@ -4,10 +4,8 @@ import {
 	jwkExportedSchema,
 	jwkOptionsSchema,
 	verifyJwtOptionsSchema,
-	type CryptoKeyIdAlg,
 	type CustomJwtClaims,
 	type Jwk,
-	type JwkAlgorithm,
 	type JwkOptions,
 	type JwksOptions,
 	type JwtPluginOptions,
@@ -24,27 +22,26 @@ import {
 import { mergeSchema } from "../../db/schema";
 import { createJwkInternal, getJwk } from "./jwk";
 import { getSessionJwtInternal, signJwtInternal } from "./sign";
-import { verifyJwt, verifyJwtWithKey } from "./verify";
-import { importJWK, type JSONWebKeySet, type JWK } from "jose";
+import { verifyJwtInternal, verifyJwtWithKeyInternal } from "./verify";
+import { type JSONWebKeySet, type JWK } from "jose";
 import * as z from "zod/v4";
-import { getPublicJwk, isJwkAlgValid } from "./utils";
-import { BetterAuthError } from "../../error";
+import { getPublicJwk, parseJwk } from "./utils";
 export type * from "./types";
 export { createJwk, getJwk, importJwk } from "./jwk";
 export { getSessionJwt, signJwt } from "./sign";
 export { verifyJwt, verifyJwtWithKey } from "./verify";
 
-export const jwt = (options?: JwtPluginOptions) => {
+export const jwt = (pluginOpts?: JwtPluginOptions) => {
 	return {
 		id: "jwt",
 		async init(ctx) {
 			const adapter = getJwksAdapter(ctx.adapter);
 			await adapter.updateKeysEncryption(
 				ctx.secret,
-				options?.jwks?.disablePrivateKeyEncryption ?? false,
+				pluginOpts?.jwks?.disablePrivateKeyEncryption ?? false,
 			);
 		},
-		options,
+		options: pluginOpts,
 		endpoints: {
 			getJwks: createAuthEndpoint(
 				"/jwks",
@@ -139,11 +136,11 @@ export const jwt = (options?: JwtPluginOptions) => {
 					const keySets = await adapter.getAllKeys();
 
 					if (keySets.length === 0) {
-						const key = await createJwkInternal(ctx, options?.jwks);
+						const key = await createJwkInternal(ctx, pluginOpts?.jwks);
 						keySets.push(key);
 					}
 
-					const keyPairConfig = options?.jwks?.keyPairConfig;
+					const keyPairConfig = pluginOpts?.jwks?.keyPairConfig;
 					const defaultCrv = keyPairConfig
 						? "crv" in keyPairConfig
 							? (keyPairConfig as { crv: string }).crv
@@ -155,7 +152,9 @@ export const jwt = (options?: JwtPluginOptions) => {
 							const publicKey = JSON.parse(keySet.publicKey);
 							return {
 								alg:
-									publicKey.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+									publicKey.alg ??
+									pluginOpts?.jwks?.keyPairConfig?.alg ??
+									"EdDSA",
 								crv: publicKey.crv ?? defaultCrv,
 								...publicKey,
 								kid: keySet.id,
@@ -194,7 +193,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 					},
 				},
 				async (ctx) => {
-					const jwt = await getSessionJwtInternal(ctx, options);
+					const jwt = await getSessionJwtInternal(ctx, pluginOpts);
 					return ctx.json({
 						token: jwt,
 					});
@@ -216,7 +215,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 						$Infer: {
 							body: {} as {
 								jwt: string;
-								jwk?: JWK;
+								jwk?: string | JWK;
 								options?: VerifyJwtOptions;
 							},
 						},
@@ -246,26 +245,28 @@ export const jwt = (options?: JwtPluginOptions) => {
 						if (jwk) {
 							if (typeof jwk === "string")
 								return ctx.json({
-									payload: await verifyJwtWithKey(ctx, jwt, jwk, options),
+									payload: await verifyJwtWithKeyInternal(
+										ctx,
+										jwt,
+										jwk,
+										pluginOpts,
+										options,
+									),
 								});
 
-							if (!isJwkAlgValid(jwk.alg!))
-								throw new BetterAuthError(
-									`Invalid JWK algorithm: "${jwk.alg}"`,
-									JSON.stringify(jwk),
-								);
-							const publicKey: CryptoKeyIdAlg = {
-								id: jwk.kid,
-								alg: jwk.alg as JwkAlgorithm,
-								key: (await importJWK(jwk)) as CryptoKey,
-							};
-
+							const publicKey = await parseJwk(jwk);
 							return ctx.json({
-								payload: await verifyJwtWithKey(ctx, jwt, publicKey, options),
+								payload: await verifyJwtWithKeyInternal(
+									ctx,
+									jwt,
+									publicKey,
+									pluginOpts,
+									options,
+								),
 							});
 						}
 						return ctx.json({
-							payload: await verifyJwt(ctx, jwt, options),
+							payload: await verifyJwtInternal(ctx, jwt, pluginOpts, options),
 						});
 					} catch (error: unknown) {
 						throw new APIError("BAD_REQUEST", {
@@ -318,25 +319,16 @@ export const jwt = (options?: JwtPluginOptions) => {
 					const { data, jwk, claims } = ctx.body;
 					if (jwk === undefined || typeof jwk === "string") {
 						const privateKey = await getJwk(ctx, true, jwk);
-						const jwt = await signJwtInternal(ctx, data, options, {
+						const jwt = await signJwtInternal(ctx, data, pluginOpts, {
 							jwk: privateKey,
 							claims: claims,
 						});
 						return ctx.json({ token: jwt });
 					}
 
-					if (!isJwkAlgValid(jwk.alg!))
-						throw new BetterAuthError(
-							`Invalid JWK algorithm: "${jwk.alg}"`,
-							JSON.stringify(jwk),
-						);
+					const privateKey = await parseJwk(jwk);
 
-					const privateKey: CryptoKeyIdAlg = {
-						id: jwk.kid,
-						alg: jwk.alg as JwkAlgorithm,
-						key: (await importJWK(jwk)) as CryptoKey,
-					};
-					const jwt = await signJwtInternal(ctx, data, options, {
+					const jwt = await signJwtInternal(ctx, data, pluginOpts, {
 						jwk: privateKey,
 						claims: claims,
 					});
@@ -440,8 +432,8 @@ export const jwt = (options?: JwtPluginOptions) => {
 				async (ctx) => {
 					const jwkOptions = ctx.body.jwkOptions;
 					const jwksOptions: JwksOptions = {
-						...options?.jwks,
-						keyPairConfig: jwkOptions ?? options?.jwks?.keyPairConfig,
+						...pluginOpts?.jwks,
+						keyPairConfig: jwkOptions ?? pluginOpts?.jwks?.keyPairConfig,
 					};
 					const key = await createJwkInternal(ctx, jwksOptions);
 
@@ -562,13 +554,13 @@ export const jwt = (options?: JwtPluginOptions) => {
 						return context.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						if (options?.disableSettingJwtHeader) {
+						if (pluginOpts?.disableSettingJwtHeader) {
 							return;
 						}
 
 						const session = ctx.context.session || ctx.context.newSession;
 						if (session && session.session) {
-							const jwt = await getSessionJwtInternal(ctx, options);
+							const jwt = await getSessionJwtInternal(ctx, pluginOpts);
 							const exposedHeaders =
 								ctx.context.responseHeaders?.get(
 									"access-control-expose-headers",
@@ -590,6 +582,6 @@ export const jwt = (options?: JwtPluginOptions) => {
 				},
 			],
 		},
-		schema: mergeSchema(schema, options?.schema),
+		schema: mergeSchema(schema, pluginOpts?.schema),
 	} satisfies BetterAuthPlugin;
 };
