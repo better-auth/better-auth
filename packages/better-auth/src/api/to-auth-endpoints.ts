@@ -42,7 +42,6 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 
 	for (const [key, endpoint] of Object.entries(endpoints)) {
 		api[key] = async (context) => {
-			debugger;
 			const authContext = await ctx;
 			let internalContext: InternalContext = {
 				...context,
