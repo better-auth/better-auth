@@ -9,7 +9,8 @@ import { parseJSON } from "./parser";
 export const getClientConfig = (options?: ClientOptions) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
-	const baseURL = getBaseURL(options?.baseURL, options?.basePath);
+	const baseURL =
+		getBaseURL(options?.baseURL, options?.basePath) ?? "/api/auth";
 	const pluginsFetchPlugins =
 		options?.plugins
 			?.flatMap((plugin) => plugin.fetchPlugins)
