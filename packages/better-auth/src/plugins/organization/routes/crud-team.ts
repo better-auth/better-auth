@@ -700,6 +700,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 				const updatedSession = await adapter.setActiveTeam(
 					session.session.token,
 					null,
+					ctx,
 				);
 
 				await setSessionCookie(ctx, {
@@ -745,6 +746,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 			const updatedSession = await adapter.setActiveTeam(
 				session.session.token,
 				team.id,
+				ctx,
 			);
 
 			await setSessionCookie(ctx, {
