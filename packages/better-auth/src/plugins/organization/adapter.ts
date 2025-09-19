@@ -303,7 +303,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		deleteMember: async (memberId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.delete<InferMember<O>>({
+			await adapter.delete({
 				model: "member",
 				where: [
 					{
@@ -312,7 +312,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			return member;
 		},
 		updateOrganization: async (
 			organizationId: string,
@@ -365,7 +364,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			await adapter.delete<InferOrganization<O>>({
+			await adapter.delete({
 				model: "organization",
 				where: [
 					{
@@ -632,7 +631,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			const team = await adapter.delete<Team>({
+			await adapter.delete({
 				model: "team",
 				where: [
 					{
@@ -641,7 +640,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			return team;
 		},
 
 		listTeams: async (organizationId: string) => {
