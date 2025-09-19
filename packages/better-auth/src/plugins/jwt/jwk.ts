@@ -42,6 +42,9 @@ export async function generateExportedKeyPair(
 	const publicWebKey = await exportJWK(publicKey);
 	const privateWebKey = await exportJWK(privateKey);
 
+	publicWebKey.alg = alg;
+	privateWebKey.alg = alg;
+
 	return { publicKey: publicWebKey, privateKey: privateWebKey };
 }
 
@@ -52,8 +55,6 @@ export async function generateExportedKeyPair(
  * - If `jwk` is a {`CryptoKeyWithId`}, returns it directly.
  * - If `jwk` is a {`string`}, treats it as a **key ID** and fetches it from the database. If the key is not found, throws {`BetterAuthError`}.
  * - If `jwk` is **`undefined`**, returns the **latest key** from the database. Returns `undefined` if the database is **empty**.
- *
- * ⓘ **Internal use only**: not exported in `index.ts`.
  *
  * @param ctx - Endpoint context.
  * @param isPrivate - Whether to return the **private key** or the **public key**.
@@ -157,9 +158,9 @@ export async function createJwkInternal(
  * @param jwkOpts - Optional. Configuration for the key pair (algorithm, curve, etc.). If not provided, plugin defaults are used.
  *
  * @throws {TypeError | JOSENotSupported} - If key generation fails.
- * @throws {Error} - If private key encryption or database insert fails.
+ * @throws {Error} - If private key encryption or the database insert fails.
  *
- * @returns The created JWK object stored in the database.
+ * @returns The newly created **JWK** stored in the database.
  */
 export async function createJwk(
 	ctx: GenericEndpointContext,
@@ -178,9 +179,9 @@ export async function createJwk(
  * @param ctx - Endpoint context.
  * @param privateKey - Private key. **Must** have `id`.
  *
- * @throws {Error} - If private key encryption or database insert fails.
+ * @throws {Error} - If private key encryption or the database insert fails.
  *
- * @returns The imported JWK object stored in the database.
+ * @returns The imported **JWK** stored in the database.
  */
 export async function importJwk(
 	ctx: GenericEndpointContext,
