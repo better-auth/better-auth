@@ -149,7 +149,7 @@ export async function registerOAuthClient(
 	);
 	const client = await ctx.context.adapter
 		.create<DatabaseClient>({
-			model: opts.schema?.oauthApplication?.modelName ?? "oauthApplication",
+			model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
 			data: schemaToDatabase(schema),
 		})
 		.then((res) => {
