@@ -19,7 +19,7 @@ import { importJWK, SignJWT } from "jose";
 /**
  * Signs a payload in **JWT** format.
  *
- * ⓘ **Internal use only**: This function is not exported in `index.ts` and is intended for use inside the **JWT plugin endpoint**. It is called before the plugin is initialized, at which point `getJwtPluginOptions` cannot access the plugin configuration, so it is passed directly.
+ * ⓘ **Internal use only**: This function is not exported in `index.ts` and is intended for use inside the **JWT plugin endpoint**. It is called before the plugin is initialized, at which point `getJwtPluginOptions` cannot access the plugin configuration, so the options are passed directly.
  *
  * @param ctx - Endpoint context.
  * @param payload - Payload to sign. Can include JWT-specific fields like `exp` or `aud`.
@@ -88,7 +88,7 @@ async function signJwtPayload(
  *
  * ⚠ Note: `iat` ("Issued At") and `iss` ("Issuer") Claims **cannot** be overwritten for security reasons.
  *
- * ⓘ **Internal use only**: This function is not exported in `index.ts` and is intended for use inside the **JWT plugin endpoint**. It is called before the plugin is initialized, at which point `getJwtPluginOptions` cannot access the plugin configuration, so it is passed directly.
+ * ⓘ **Internal use only**: This function is not exported in `index.ts` and is intended for use inside the **JWT plugin endpoint**. It is called before the plugin is initialized, at which point `getJwtPluginOptions` cannot access the plugin configuration, so the options are passed directly.
  *
  * @param ctx - Endpoint context.
  * @param data - Arbitrary data to include in the JWT payload. Any standard JWT claims present here will be removed.
@@ -98,7 +98,7 @@ async function signJwtPayload(
  * @param options.claims - Optional JWT claims to set or override (`aud`, `exp`, `jti`, `nbf`, `sub`). `iat` and `iss` cannot be overridden.
  *
  * @throws {SyntaxError} - If a key (public or private) cannot be parsed as JSON.
- * @throws {BetterAuthError} - If a **key ID** is provided but not found in the database.
+ * @throws {BetterAuthError} - If a **key ID** is provided but not found in the database or `iat` ("Issued At" Claim) is set into future.
  * @throws {TypeError | JOSENotSupported} - If signing the JWT fails due to an invalid key or payload.
  *
  * @returns Signed JWT.
@@ -118,6 +118,17 @@ export async function signJwtInternal(
 	const payload: JWTPayload = data;
 	if (options?.claims?.aud) payload.aud = options.claims.aud;
 	if (options?.claims?.exp) payload.exp = toJwtTime(options.claims.exp);
+	if (options?.claims?.iat) {
+		const iat = toJwtTime(options.claims.iat);
+		const allowedClockSkew: number = pluginOpts?.jwt?.allowedClockSkew ?? 60;
+		const now = new Date().getTime() / 1000;
+		if (iat > now + allowedClockSkew)
+			throw new BetterAuthError(
+				`Requested "Issued At" Claim is in the future ${iat} > ${now} and it exceeds allowed leeway of ${allowedClockSkew} seconds`,
+				iat.toString(),
+			);
+		payload.iat = iat;
+	}
 	if (options?.claims?.jti) payload.jti = options.claims.jti;
 	if (options?.claims?.nbf) payload.nbf = toJwtTime(options.claims.nbf);
 	if (options?.claims?.sub) payload.sub = options.claims.sub;
@@ -165,12 +176,12 @@ export async function signJwt(
 /**
  * Creates and signs a **JSON Web Token (JWT)** containing **session data**.
  *
- * ⓘ **Internal use only**: This function is not exported in `index.ts` and is intended for use inside the **JWT plugin endpoint**. It is called before the plugin is initialized, at which point `getJwtPluginOptions` cannot access the plugin configuration, so it is passed directly.
+ * ⓘ **Internal use only**: This function is not exported in `index.ts` and is intended for use inside the **JWT plugin endpoint**. It is called before the plugin is initialized, at which point `getJwtPluginOptions` cannot access the plugin configuration, so the options are passed directly.
  *
- * @description Returns a **JWT** containing the result of `definePayload` from **plugin configuration**, or `session.user` if `definePayload` is `undefined`.
- * The **JWT `sub` ("Subject" Claim)** is determined by `getSubject` from **plugin configuration**, or `session.user.id` if `getSubject` is `undefined`.
+ * @description Returns a **JWT** containing the result of `defineSessionJwtData` from **plugin configuration**, or `session.user` if `defineSessionJwtData` is `undefined`.
+ * The **JWT `sub` ("Subject" Claim)** is determined by `defineSessionJwtSubject` from **plugin configuration**, or `session.user.id` if `defineSessionJwtSubject` is `undefined`.
  *
- * ⚠︎ Any standard **JWT Claims** (`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`) set by `definePayload` or *custom session fields* will be overwritten or removed by this function.
+ * ⚠︎ Any standard **JWT Claims** (`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`) set by `defineSessionJwtData` or *custom session fields* will be overwritten or removed by this function.
  *
  * @param ctx - Endpoint context.
  * @param pluginOpts - Plugin options.
@@ -179,7 +190,7 @@ export async function signJwt(
  * @throws {SyntaxError} - If a key (public or private) cannot be parsed as JSON.
  * @throws {BetterAuthError} - If a **key ID** is provided but not found in the database.
  * @throws {TypeError | JOSENotSupported} - If signing the JWT fails due to an invalid key or payload.
- * @throws {Error} - If `definePayload` or `getSubject` callbacks throw.
+ * @throws {Error} - If `defineSessionJwtData` or `defineSessionJwtSubject` callbacks throw.
  *
  * @returns A signed **JWT** containing **session data**.
  */
@@ -206,10 +217,10 @@ export async function getSessionJwtInternal(
 /**
  * Creates and signs a **JSON Web Token (JWT)** containing **session data**.
  *
- * @description Returns a **JWT** containing the result of `definePayload` from **plugin configuration**, or `session.user` if `definePayload` is `undefined`.
- * The **JWT `sub` ("Subject" Claim)** is determined by `getSubject` from **plugin configuration**, or `session.user.id` if `getSubject` is `undefined`.
+ * @description Returns a **JWT** containing the result of `defineSessionJwtData` from **plugin configuration**, or `session.user` if `defineSessionJwtData` is `undefined`.
+ * The **JWT `sub` ("Subject" Claim)** is determined by `defineSessionJwtSubject` from **plugin configuration**, or `session.user.id` if `defineSessionJwtSubject` is `undefined`.
  *
- * ⚠︎ Any standard **JWT Claims** (`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`) set by `definePayload` or *custom session fields* will be overwritten or removed by this function.
+ * ⚠︎ Any standard **JWT Claims** (`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`) set by `defineSessionJwtData` or *custom session fields* will be overwritten or removed by this function.
  *
  * @param ctx - Endpoint context.
  * @param jwk - **ID** of the key in the database or the **private key** itself. If omitted, **latest JWK** will be used. If `id` in the **private key** is not provided, there will be no **"kid" (Key ID) Field** in the **JWT Protected Header**.
@@ -217,7 +228,7 @@ export async function getSessionJwtInternal(
  * @throws {SyntaxError} - If a key (public or private) cannot be parsed as JSON.
  * @throws {BetterAuthError} - If a **key ID** is provided but not found in the database.
  * @throws {TypeError | JOSENotSupported} - If signing the JWT fails due to an invalid key or payload.
- * @throws {Error} - If `definePayload` or `getSubject` callbacks throw.
+ * @throws {Error} - If `defineSessionJwtData` or `defineSessionJwtSubject` callbacks throw.
  *
  * @returns A signed **JWT** containing **session data**.
  */

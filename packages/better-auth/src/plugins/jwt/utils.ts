@@ -58,6 +58,9 @@ export async function decryptPrivateKey(
 	});
 }
 
+/**
+ * @todo: JSDoc
+ */
 export function isJwkAlgValid(jwkAlgorithm: string): boolean {
 	const JWK_ALGS = ["EdDSA", "ES256", "ES512", "PS256", "RS256"] as const;
 
@@ -110,7 +113,7 @@ export function removeJwtClaims(
 	logger?: Record<LogLevel, (...params: LogHandlerParams) => void>,
 ): void {
 	const reservedClaims = ["aud", "exp", "iat", "iss", "jti", "nbf", "sub"];
-	const editableClaims = ["aud", "exp", "jti", "nbf", "sub"];
+	const editableClaims = ["aud", "exp", "iat", "jti", "nbf", "sub"];
 
 	for (const claim of reservedClaims) {
 		if (data[claim] !== undefined) {
