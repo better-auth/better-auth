@@ -83,6 +83,8 @@ export interface SSOProvider {
 	userId: string;
 	providerId: string;
 	organizationId?: string;
+	domain?: string;
+	useHttps?: boolean;
 }
 
 export interface SSOOptions {
@@ -169,6 +171,42 @@ export interface SSOOptions {
 	useProviderDomain?: boolean;
 }
 
+/**
+ * Constructs a provider domain URL by reusing the path from the base URL
+ * but replacing the host with the provider domain and using the specified protocol.
+ * If no provider domain is provided, returns the base URL with the specified protocol.
+ *
+ * Examples:
+ * - constructProviderDomainURL("http://localhost:3000/api/auth", "company.com", true)
+ *   → "https://company.com/api/auth"
+ * - constructProviderDomainURL("https://myapp.com/custom-auth", "company.com", false)
+ *   → "http://company.com/custom-auth"
+ * - constructProviderDomainURL("http://localhost:3000/api/auth", undefined, true)
+ *   → "https://localhost:3000/api/auth"
+ *
+ * This addresses the issue where hardcoded https and /api/auth can break:
+ * - Custom basePath configurations (by preserving the original path)
+ * - Protocol preferences (by using explicit useHttps parameter)
+ */
+function constructProviderDomainURL(
+	baseURL: string,
+	providerDomain?: string,
+	useHttps?: boolean,
+): string {
+	try {
+		const base = new URL(baseURL);
+		const protocol =
+			useHttps !== undefined ? (useHttps ? "https:" : "http:") : base.protocol;
+		const host = providerDomain || base.host;
+		return `${protocol}//${host}${base.pathname}`;
+	} catch (error) {
+		// Fallback to original behavior if URL parsing fails
+		const protocol = useHttps !== false ? "https" : "http";
+		const host = providerDomain || "localhost:3000";
+		return `${protocol}://${host}/api/auth`;
+	}
+}
+
 export const sso = (options?: SSOOptions) => {
 	return {
 		id: "sso",
@@ -237,6 +275,10 @@ export const sso = (options?: SSOOptions) => {
 						domain: z.string({}).meta({
 							description:
 								"The domain of the provider. This is used for email matching",
+						}),
+						useHttps: z.boolean({}).optional().meta({
+							description:
+								"Whether to use HTTPS for the provider domain. Defaults to true if not specified.",
 						}),
 						oidcConfig: z
 							.object({
@@ -402,6 +444,11 @@ export const sso = (options?: SSOOptions) => {
 														type: "string",
 														description:
 															"The domain of the provider, used for email matching",
+													},
+													useHttps: {
+														type: "boolean",
+														description:
+															"Whether to use HTTPS for the provider domain. Defaults to true if not specified.",
 													},
 													oidcConfig: {
 														type: "object",
@@ -668,11 +715,17 @@ export const sso = (options?: SSOOptions) => {
 							organizationId: body.organizationId,
 							userId: ctx.context.session.user.id,
 							providerId: body.providerId,
+							useHttps: body.useHttps,
 						},
 					});
-					const baseURL = options?.useProviderDomain
-						? `https://${provider.domain}/api/auth`
-						: ctx.context.baseURL;
+					const baseURL =
+						options?.useProviderDomain && provider.domain
+							? constructProviderDomainURL(
+									ctx.context.baseURL,
+									provider.domain,
+									provider.useHttps,
+								)
+							: ctx.context.baseURL;
 					return ctx.json({
 						...provider,
 						oidcConfig: JSON.parse(
@@ -894,9 +947,14 @@ export const sso = (options?: SSOOptions) => {
 					}
 					if (provider.oidcConfig && body.providerType !== "saml") {
 						const state = await generateState(ctx);
-						const baseURL = options?.useProviderDomain
-							? `https://${provider.domain}/api/auth`
-							: ctx.context.baseURL;
+						const baseURL =
+							options?.useProviderDomain && provider.domain
+								? constructProviderDomainURL(
+										ctx.context.baseURL,
+										provider.domain,
+										provider.useHttps,
+									)
+								: ctx.context.baseURL;
 						const redirectURI = `${baseURL}/sso/callback/${provider.providerId}`;
 						const authorizationURL = await createAuthorizationURL({
 							id: provider.issuer,
@@ -1061,9 +1119,14 @@ export const sso = (options?: SSOOptions) => {
 						);
 					}
 
-					const baseURL = options?.useProviderDomain
-						? `https://${provider.domain}/api/auth`
-						: ctx.context.baseURL;
+					const baseURL =
+						options?.useProviderDomain && provider.domain
+							? constructProviderDomainURL(
+									ctx.context.baseURL,
+									provider.domain,
+									provider.useHttps,
+								)
+							: ctx.context.baseURL;
 					const tokenResponse = await validateAuthorizationCode({
 						code,
 						codeVerifier: config.pkce ? stateData.codeVerifier : undefined,
@@ -1548,6 +1611,10 @@ export const sso = (options?: SSOOptions) => {
 					domain: {
 						type: "string",
 						required: true,
+					},
+					useHttps: {
+						type: "boolean",
+						required: false,
 					},
 				},
 			},
