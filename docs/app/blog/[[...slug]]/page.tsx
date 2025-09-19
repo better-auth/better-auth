@@ -21,8 +21,7 @@ import { StarField } from "../_components/stat-field";
 import Image from "next/image";
 import { BlogPage } from "../_components/blog-list";
 import { Callout } from "@/components/ui/callout";
-import { ArrowLeftIcon, ExternalLink } from "lucide-react";
-import { Support } from "../_components/support";
+import { ExternalLink } from "lucide-react";
 
 const metaTitle = "Blogs";
 const metaDescription = "Latest changes , fixes and updates.";
@@ -113,7 +112,7 @@ export default async function Page({
 								const isExternal =
 									typeof href === "string" && /^(https?:)?\/\//.test(href);
 								const classes = cn(
-									"inline-flex items-center gap-1 font-medium underline decoration-dashed",
+									"inline-flex items-center gap-1 font-medium underline decoration-dashed underline-offset-4 bg-bed",
 									className,
 								);
 								if (isExternal) {
@@ -140,7 +139,7 @@ export default async function Page({
 								const isExternal =
 									typeof href === "string" && /^(https?:)?\/\//.test(href);
 								const classes = cn(
-									"inline-flex items-center gap-1 font-medium underline decoration-dashed",
+									"inline-flex items-center gap-1 font-medium underline decoration-dashed underline-offset-4",
 									className,
 								);
 								if (isExternal) {
