@@ -14,7 +14,7 @@ import { parseSetCookieHeader } from "../../cookies";
 import { tokenEndpoint } from "./token";
 import { userInfoEndpoint } from "./userinfo";
 import { mergeSchema } from "../../db";
-import { registerEndpoint } from "./register";
+import { dynamicRegisterEndpoint, registerOAuthClient } from "./register";
 import {
 	authServerMetadata,
 	oidcServerMetadata,
@@ -994,6 +994,200 @@ export const oauthProvider = (options: OAuthOptions) => {
 				},
 			),
 			registerOAuthClient: createAuthEndpoint(
+				"/oauth2/server/register",
+				{
+					method: "POST",
+					body: z.object({
+						redirect_uris: z.array(z.string()),
+						scope: z.string().optional(),
+						client_name: z.string().optional(),
+						client_uri: z.string().optional(),
+						logo_uri: z.string().optional(),
+						contacts: z.array(z.string()).optional(),
+						tos_uri: z.string().optional(),
+						policy_uri: z.string().optional(),
+						software_id: z.string().optional(),
+						software_version: z.string().optional(),
+						software_statement: z.string().optional(),
+						token_endpoint_auth_method: z
+							.enum(["none", "client_secret_basic", "client_secret_post"])
+							.default("client_secret_basic")
+							.optional(),
+						grant_types: z
+							.array(
+								z.enum([
+									"authorization_code",
+									"client_credentials",
+									"refresh_token",
+								]),
+							)
+							.default(["authorization_code"])
+							.optional(),
+						response_types: z
+							.array(z.enum(["code"]))
+							.default(["code"])
+							.optional(),
+						type: z.enum(["web", "native", "user-agent-based"]).optional(),
+					}),
+					metadata: {
+						SERVER_ONLY: true,
+						openapi: {
+							description: "Register an OAuth2 application",
+							responses: {
+								"200": {
+									description: "OAuth2 application registered successfully",
+									content: {
+										"application/json": {
+											schema: {
+												/** @returns {OauthClient} */
+												type: "object",
+												properties: {
+													client_id: {
+														type: "string",
+														description: "Unique identifier for the client",
+													},
+													client_secret: {
+														type: "string",
+														description: "Secret key for the client",
+													},
+													client_secret_expires_at: {
+														type: "number",
+														description:
+															"Time the client secret will expire. If 0, the client secret will never expire.",
+													},
+													scope: {
+														type: "string",
+														description:
+															"Space-separated scopes allowed by the client",
+													},
+													user_id: {
+														type: "string",
+														description:
+															"ID of the user who registered the client, null if registered anonymously",
+													},
+													client_id_issued_at: {
+														type: "number",
+														description: "Creation timestamp of this client",
+													},
+													client_name: {
+														type: "string",
+														description: "Name of the OAuth2 application",
+													},
+													client_uri: {
+														type: "string",
+														description: "Name of the OAuth2 application",
+													},
+													logo_uri: {
+														type: "string",
+														description: "Icon URL for the application",
+													},
+													contacts: {
+														type: "array",
+														items: {
+															type: "string",
+														},
+														description:
+															"List representing ways to contact people responsible for this client, typically email addresses",
+													},
+													tos_uri: {
+														type: "string",
+														description: "Client's terms of service uri",
+													},
+													policy_uri: {
+														type: "string",
+														description: "Client's policy uri",
+													},
+													software_id: {
+														type: "string",
+														description:
+															"Unique identifier assigned by the developer to help in the dynamic registration process",
+													},
+													software_version: {
+														type: "string",
+														description:
+															"Version identifier for the software_id",
+													},
+													software_statement: {
+														type: "string",
+														description:
+															"JWT containing metadata values about the client software as claims",
+													},
+													redirect_uris: {
+														type: "array",
+														items: {
+															type: "string",
+															format: "uri",
+														},
+														description: "List of allowed redirect uris",
+													},
+													token_endpoint_auth_method: {
+														type: "string",
+														description:
+															"Requested authentication method for the token endpoint",
+														enum: [
+															"none",
+															"client_secret_basic",
+															"client_secret_post",
+														],
+													},
+													grant_types: {
+														type: "array",
+														items: {
+															type: "string",
+															enum: [
+																"authorization_code",
+																"client_credentials",
+																"refresh_token",
+															],
+														},
+														description:
+															"Requested authentication method for the token endpoint",
+													},
+													response_types: {
+														type: "array",
+														items: {
+															type: "string",
+															enum: ["code"],
+														},
+														description:
+															"Requested authentication method for the token endpoint",
+													},
+													public: {
+														type: "boolean",
+														description:
+															"Whether the client is public as determined by the type",
+													},
+													type: {
+														type: "string",
+														description: "Type of the client",
+														enum: ["web", "native", "user-agent-based"],
+													},
+													disabled: {
+														type: "boolean",
+														description: "Whether the client is disabled",
+													},
+													// metadata: {
+													// 	type: "object",
+													// 	additionalProperties: true,
+													// 	nullable: true,
+													// 	description:
+													// 		"Additional metadata for the application",
+													// },
+												},
+												required: ["client_id"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return registerOAuthClient(ctx, opts);
+				},
+			),
+			dynamicRegisterOAuthClient: createAuthEndpoint(
 				"/oauth2/register",
 				{
 					method: "POST",
@@ -1183,7 +1377,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 				},
 				async (ctx) => {
-					return registerEndpoint(ctx, opts);
+					return dynamicRegisterEndpoint(ctx, opts);
 				},
 			),
 		},

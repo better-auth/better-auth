@@ -9,7 +9,7 @@ import { oauthProviderClient } from "./client";
 describe("oauth register", async () => {
 	const baseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
 		plugins: [
 			oauthProvider({
@@ -75,6 +75,18 @@ describe("oauth register", async () => {
 		expect(response.data?.client_secret).toBeDefined();
 	});
 
+	it("should register private client with minimum requirements via server", async () => {
+		const response = await auth.api.registerOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.user_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+	});
+
 	it("should fail authorization_code without response type code", async () => {
 		const response = await serverClient.oauth2.register({
 			// @ts-expect-error testing with a different response type even though unsupported
@@ -105,7 +117,23 @@ describe("oauth register", async () => {
 		},
 	);
 
-	it("should check that certain fields are overwritten", async () => {
+	it.each(["native", "user-agent-based"] as OAuthClient["type"][])(
+		"should register public '%s' client with minimum requirements via server",
+		async (type) => {
+			const response = await auth.api.registerOAuthClient({
+				headers,
+				body: {
+					token_endpoint_auth_method: "none",
+					redirect_uris: [redirectUri],
+				},
+			});
+			expect(response?.client_id).toBeDefined();
+			expect(response?.user_id).toBeDefined();
+			expect(response?.client_secret).toBeUndefined();
+		},
+	);
+
+	it("should register confidential client and check that certain fields are overwritten", async () => {
 		const applicationRequest: OAuthClient = {
 			client_id: "bad-actor",
 			client_secret: "bad-actor",

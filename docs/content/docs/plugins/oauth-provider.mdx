@@ -101,20 +101,6 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
   </Step>
 
   <Step>
-    ### Disable the "/token" endpoint
-
-    To make your plugin oAuth compliant, you **MUST** disable the `/token` endpoint enacted by the JWT plugin, the OAuth equivalent is located at [`/oauth2/token`](#token-endpoint) instead.
-
-    ```ts title="auth.ts"
-    const auth = betterAuth({
-      disabledPaths: [
-        "/token",
-      ],
-    });
-    ```
-  </Step>
-
-  <Step>
     ### Add `./well-known` endpoints
 
     Please add all [Well-Known endpoints](#well-known) to your project. The locations are provided as warnings if you are unsure.
@@ -124,6 +110,22 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
     - If you are using the resource server (ie for MCP), you **MUST** add the resource server metadata to your API, with the issuer path appended.
 
   </Step>
+
+  <Step>
+    ### Create your first client
+
+    Register your first confidential client.
+
+    ```ts
+    const application = await auth.api.registerOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+			}
+		});
+    console.log(application); // You may add this to `trustedClients`
+    ```
+  </Step>
 </Steps>
 
 
@@ -131,7 +133,7 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
 
 The plugin operates as an oAuth 2.1 server with OIDC compatable endpoints and JWT verifiable access tokens. The following provides more detailed information about each endpoint.
 
-### Register Endpoint
+### Dynamic Registeration Endpoint
 
 <Callout type="info">
 This endpoint supports [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
@@ -152,7 +154,7 @@ oauthProvider({
 })
 ```
 
-To enable unauthenticated client registration which allows for dynamically registered public clients, additionally set `allowUnauthenticatedClientRegistration: true` in your BetterAuth config.
+To enable unauthenticated client registration which allows for dynamically registered public clients, additionally set `allowUnauthenticatedClientRegistration: true` in your auth config.
 
 ```ts title="auth.ts"
 oauthProvider({
