@@ -164,7 +164,7 @@ oauthProvider({
 })
 ```
 
-#### Simple Example
+#### Basic Example
 
 To register a new OIDC client, use the `oauth2.register` method.
 
@@ -175,75 +175,11 @@ const application = await client.oauth2.register({
 });
 ```
 
-#### Full Method
+For all endpoint parameters, see [RFC 7591 Registeration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
-<APIMethod path="/oauth2/register" method="POST">
-```ts
-type registerOAuthApplication = {
-  /**
-   * A list of redirect URIs. 
-   */
-  redirect_uris: string[] = ["https://client.example.com/callback"]
-  /**
-   * The authentication method for the token endpoint. 
-   */
-  token_endpoint_auth_method?: "none" | "client_secret_basic" | "client_secret_post" = "client_secret_basic"
-  /**
-   * The grant types supported by the application. 
-   */
-  grant_types?: ("authorization_code" | "client_credentials" | "refresh_token")[] = ["authorization_code"]
-  /**
-   * The response types supported by the application. 
-   */
-  response_types?: ("code")[] = ["code"]
-  /**
-   * The name of the application. 
-   */
-  client_name?: string = "My App"
-  /**
-   * The URI of the application. 
-   */
-  client_uri?: string = "https://client.example.com"
-  /**
-   * The URI of the application logo. 
-   */
-  logo_uri?: string = "https://client.example.com/logo.png"
-  /**
-   * The scopes supported by the application. Separated by spaces. 
-   */
-  scope?: string = "profile email"
-  /**
-   * The contact information for the application. 
-   */
-  contacts?: string[] = ["admin@example.com"]
-  /**
-   * The URI of the application terms of service. 
-   */
-  tos_uri?: string = "https://client.example.com/tos"
-  /**
-   * The URI of the application privacy policy. 
-   */
-  policy_uri?: string = "https://client.example.com/policy"
-  /**
-   * The software ID of the application. 
-   */
-  software_id?: string = "my-software"
-  /**
-   * The software version of the application. 
-   */
-  software_version?: string = "1.0.0"
-  /**
-   * The software statement of the application. 
-   */
-  software_statement?: string
-  /**
-   * The metadata of the application. 
-   */
-  metadata?: Record<string, any> = {"key": "value"}
-}
-```
-</APIMethod>
-
+Note the following parameters are not yet supported:
+- `jwks`
+- `jwks_uri`
 
 ### Authorize Endpoint
 
@@ -267,50 +203,11 @@ const application = await client.oauth2.authorize({
 });
 ```
 
-#### Full Method
+For all endpoint parameters, see [OAuth 2.1 Authorization Request](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13#name-authorization-request).
 
-<APIMethod path="/oauth2/authorize" method="POST">
-```ts
-type authorizeOAuth = {
-  /**
-   * Authorization processing flow being used
-   */
-  response_type: string = "code",
-  /**
-   * Client Id issued by the Authorization Server during registration.
-   */
-  client_id: string = "my_client",
-  /**
-   * Redirect uri to return to after the request
-   */
-  redirect_uri: string = "https://client.example.com/callback",
-  /**
-   * Space-separated list of requested scopes.
-   */
-  scope: string = "openid profile email offline_access",
-  /**
-   * Recommended random state used to mitigate CSRF attacks
-   */
-  state?: string = "https://client.example.com/callback",
-  /**
-   * Challenge derived from the code verifier
-   */
-  code_challenge: string = "123",
-  /**
-   * Method used to derive code_challenge
-   */
-  code_challenge_method: string = "S256",
-  /**
-   * nonce value
-   */
-  nonce?: string = "123",
-  /**
-   * Assert whether the server should prompt a specific authentication flow
-   */
-  prompt?: ["none" | "login" | "consent"] = "none",
-}
-```
-</APIMethod>
+Important notes:
+- In OAuth 2.1, only `response_type: "code"` is supported.
+- `code_challenge_method: "plain"` will not be supported since this is a security vulnerability.
 
 #### Parameters
 

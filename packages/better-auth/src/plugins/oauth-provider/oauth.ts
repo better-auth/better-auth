@@ -1166,13 +1166,13 @@ export const oauthProvider = (options: OAuthOptions) => {
 														type: "boolean",
 														description: "Whether the client is disabled",
 													},
-													// metadata: {
-													// 	type: "object",
-													// 	additionalProperties: true,
-													// 	nullable: true,
-													// 	description:
-													// 		"Additional metadata for the application",
-													// },
+													metadata: {
+														type: "object",
+														additionalProperties: true,
+														nullable: true,
+														description:
+															"Additional metadata for the application",
+													},
 												},
 												required: ["client_id"],
 											},
@@ -1359,13 +1359,6 @@ export const oauthProvider = (options: OAuthOptions) => {
 														type: "boolean",
 														description: "Whether the client is disabled",
 													},
-													// metadata: {
-													// 	type: "object",
-													// 	additionalProperties: true,
-													// 	nullable: true,
-													// 	description:
-													// 		"Additional metadata for the application",
-													// },
 												},
 												required: ["client_id"],
 											},
