@@ -673,7 +673,7 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
         },
         { name: "issuer", type: "string", description: "The issuer identifier", isRequired: true },
         { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
-        { name: "useHttps", type: "boolean", description: "Whether to use HTTPS for the provider domain", isRequired: false },
+        { name: "useHttps", type: "boolean", description: "Whether to use HTTPS for the provider domain (defaults to true)", isRequired: false },
         { name: "oidcConfig", type: "string", description: "The OIDC configuration (JSON string)", isRequired: false },
         { name: "samlConfig", type: "string", description: "The SAML configuration (JSON string)", isRequired: false },
         { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
@@ -696,7 +696,7 @@ With `useProviderDomain: true`:
 ### Configuration Options
 
 - **`domain`**: The provider's domain.
-- **`useHttps`** (optional): Explicitly control whether to use HTTPS or HTTP for the provider domain. If not specified, preserves the protocol from your base URL
+- **`useHttps`** (optional): Explicitly control whether to use HTTPS or HTTP for the provider domain. Defaults to `true` (HTTPS) if not specified.
 
 ### Example
 
