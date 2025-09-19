@@ -40,6 +40,7 @@ import { type InternalLogger, logger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
+import { wildcardMatch } from "../utils/wildcard";
 
 export function checkEndpointConflicts(
 	options: BetterAuthOptions,
@@ -270,6 +271,16 @@ export const router = <Option extends BetterAuthOptions>(
 			const disabledPaths = ctx.options.disabledPaths || [];
 			const path = new URL(req.url).pathname.replace(basePath, "");
 			if (disabledPaths.includes(path)) {
+				return new Response("Not Found", { status: 404 });
+			}
+			// for avoid performace issue on every request, we run this as fallback when path is glob pattern
+			const isDisabled = disabledPaths.some((pattern) => {
+				if (pattern.includes("*")) {
+					return wildcardMatch(pattern)(path);
+				}
+				return pattern === path;
+			});
+			if (isDisabled) {
 				return new Response("Not Found", { status: 404 });
 			}
 			for (const plugin of ctx.options.plugins || []) {
