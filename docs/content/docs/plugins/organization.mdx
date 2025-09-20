@@ -740,6 +740,30 @@ type getFullOrganization = {
 ```
 </APIMethod>
 
+### Get Organization
+
+To get the details of an organization without members and invitation.
+By default, if you don't pass any properties, it will use the active organization.
+
+<APIMethod
+  path="/organization/get"
+  method="GET"
+  requireSession
+>
+```ts
+type getOrganization = {
+    /**
+     * The organization id to get.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * The organization slug to get.
+     */
+    organizationSlug?: string = "org-slug"
+}
+```
+</APIMethod>
+
 
 ### Update Organization
 
