@@ -16,6 +16,7 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
+import type { InternalLogger } from "../../utils/logger";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -147,6 +148,87 @@ interface GenericOAuthOptions {
 	config: GenericOAuthConfig[];
 }
 
+type DiscoveryDocument = {
+	authorization_endpoint?: string;
+	token_endpoint?: string;
+	userinfo_endpoint?: string;
+};
+
+const discoverySchema = z
+	.object({
+		authorization_endpoint: z.string().min(1).optional(),
+		token_endpoint: z.string().min(1).optional(),
+		userinfo_endpoint: z.string().min(1).optional(),
+	})
+	.partial();
+
+const parseDiscoveryDocument = (value: unknown): DiscoveryDocument | null => {
+	const parsed = discoverySchema.safeParse(value);
+	if (!parsed.success) {
+		return null;
+	}
+	const { authorization_endpoint, token_endpoint, userinfo_endpoint } = parsed.data;
+	if (!authorization_endpoint && !token_endpoint && !userinfo_endpoint) {
+		return null;
+	}
+	return {
+		authorization_endpoint,
+		token_endpoint,
+		userinfo_endpoint,
+	};
+};
+
+const fetchDiscoveryDocument = (
+	{
+		discoveryUrl,
+		headers,
+		logger,
+	}: {
+		discoveryUrl: string;
+		headers?: HeadersInit;
+		logger?: InternalLogger;
+	},
+): Promise<{ data: DiscoveryDocument | null; error: unknown | null }> => {
+	return fetch(discoveryUrl, {
+		method: "GET",
+		headers,
+	})
+		.then(async (response) => {
+			const contentType = response.headers.get("content-type") || "";
+			const isJsonContentType = contentType.toLowerCase().includes("json");
+			if (response.status !== 200 || !isJsonContentType) {
+				logger?.warn?.(
+					"Discovery document response violates OIDC discovery expectations",
+					{
+						discoveryUrl,
+						status: response.status,
+						contentType,
+						expectedStatus: 200,
+						expectedContentType: "application/json",
+						note: "RFC 8414 section 3.1 requires a 200 response with application/json. Proceeding with best-effort JSON parsing despite provider mismatch.",
+					},
+				);
+			}
+			return response
+				.text()
+				.then((body) => {
+					if (!body) {
+						return { data: null, error: null };
+					}
+					const parsed = parseDiscoveryDocument(JSON.parse(body));
+					return { data: parsed, error: null };
+				});
+		})
+		.catch((error) => {
+			logger?.error?.(
+				"Failed to parse discovery document",
+				error,
+				{ discoveryUrl },
+			);
+			return { data: null, error };
+		});
+};
+
 async function getUserInfo(
 	tokens: OAuth2Tokens,
 	finalUserInfoUrl: string | undefined,
@@ -230,19 +312,17 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					},
 					async validateAuthorizationCode(data) {
 						let finalTokenUrl = c.tokenUrl;
-						if (c.discoveryUrl) {
-							const discovery = await betterFetch<{
-								token_endpoint: string;
-								userinfo_endpoint: string;
-							}>(c.discoveryUrl, {
-								method: "GET",
-								headers: c.discoveryHeaders,
-							});
-							if (discovery.data) {
-								finalTokenUrl = discovery.data.token_endpoint;
-								finalUserInfoUrl = discovery.data.userinfo_endpoint;
-							}
+					if (c.discoveryUrl) {
+						const discovery = await fetchDiscoveryDocument({
+							discoveryUrl: c.discoveryUrl,
+							headers: c.discoveryHeaders,
+							logger: ctx.logger,
+						});
+						if (discovery.data) {
+							finalTokenUrl = discovery.data.token_endpoint;
+							finalUserInfoUrl = discovery.data.userinfo_endpoint;
 						}
+					}
 						if (!finalTokenUrl) {
 							throw new APIError("BAD_REQUEST", {
 								message: "Invalid OAuth configuration. Token URL not found.",
@@ -266,17 +346,16 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						refreshToken: string,
 					): Promise<OAuth2Tokens> {
 						let finalTokenUrl = c.tokenUrl;
-						if (c.discoveryUrl) {
-							const discovery = await betterFetch<{
-								token_endpoint: string;
-							}>(c.discoveryUrl, {
-								method: "GET",
-								headers: c.discoveryHeaders,
-							});
-							if (discovery.data) {
-								finalTokenUrl = discovery.data.token_endpoint;
-							}
+					if (c.discoveryUrl) {
+						const discovery = await fetchDiscoveryDocument({
+							discoveryUrl: c.discoveryUrl,
+							headers: c.discoveryHeaders,
+							logger: ctx.logger,
+						});
+						if (discovery.data?.token_endpoint) {
+							finalTokenUrl = discovery.data.token_endpoint;
 						}
+					}
 						if (!finalTokenUrl) {
 							throw new APIError("BAD_REQUEST", {
 								message: "Invalid OAuth configuration. Token URL not found.",
@@ -439,17 +518,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					let finalAuthUrl = authorizationUrl;
 					let finalTokenUrl = tokenUrl;
 					if (discoveryUrl) {
-						const discovery = await betterFetch<{
-							authorization_endpoint: string;
-							token_endpoint: string;
-						}>(discoveryUrl, {
-							method: "GET",
+						const discovery = await fetchDiscoveryDocument({
+							discoveryUrl,
 							headers: config.discoveryHeaders,
-							onError(context) {
-								ctx.context.logger.error(context.error.message, context.error, {
-									discoveryUrl,
-								});
-							},
+							logger: ctx.context.logger,
 						});
 						if (discovery.data) {
 							finalAuthUrl = discovery.data.authorization_endpoint;
@@ -601,12 +673,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					let finalTokenUrl = provider.tokenUrl;
 					let finalUserInfoUrl = provider.userInfoUrl;
 					if (provider.discoveryUrl) {
-						const discovery = await betterFetch<{
-							token_endpoint: string;
-							userinfo_endpoint: string;
-						}>(provider.discoveryUrl, {
-							method: "GET",
+						const discovery = await fetchDiscoveryDocument({
+							discoveryUrl: provider.discoveryUrl,
 							headers: provider.discoveryHeaders,
+							logger: ctx.context.logger,
 						});
 						if (discovery.data) {
 							finalTokenUrl = discovery.data.token_endpoint;
@@ -893,17 +963,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 							});
 						}
-						const discovery = await betterFetch<{
-							authorization_endpoint: string;
-							token_endpoint: string;
-						}>(discoveryUrl, {
-							method: "GET",
+						const discovery = await fetchDiscoveryDocument({
+							discoveryUrl,
 							headers: provider.discoveryHeaders,
-							onError(context) {
-								c.context.logger.error(context.error.message, context.error, {
-									discoveryUrl,
-								});
-							},
+							logger: c.context.logger,
 						});
 						if (discovery.data) {
 							finalAuthUrl = discovery.data.authorization_endpoint;

@@ -1,3 +1,6 @@
+import { createServer } from "node:http";
+import { AddressInfo } from "node:net";
+
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { genericOAuth } from ".";
 import { createAuthClient } from "../../client";
@@ -8,6 +11,44 @@ import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
 import { parseSetCookieHeader } from "../../cookies";
 
+type DiscoveryServerOptions = {
+	contentType: string;
+	body: Record<string, unknown>;
+};
+
+const createDiscoveryServer = ({ contentType, body }: DiscoveryServerOptions) => {
+	const server = createServer((req, res) => {
+		if (req.url !== "/.well-known/openid-configuration") {
+			res.statusCode = 404;
+			res.end();
+			return;
+		}
+		res.setHeader("content-type", contentType);
+		res.end(JSON.stringify(body));
+	});
+	return {
+		async start() {
+			await new Promise<void>((resolve) => {
+				server.listen(0, resolve);
+			});
+		},
+		get port() {
+			return (server.address() as AddressInfo).port;
+		},
+		async stop() {
+			await new Promise<void>((resolve, reject) => {
+				server.close((error) => {
+					if (error) {
+						reject(error);
+						return;
+					}
+					resolve();
+				});
+			});
+		},
+	};
+};
+
 describe("oauth2", async () => {
 	const providerId = "test";
 	const clientId = "test-client-id";
@@ -16,8 +57,32 @@ describe("oauth2", async () => {
 	await server.start();
 	const port = Number(server.issuer.url?.split(":")[2]!);
 
+	const jsonDiscoveryServer = createDiscoveryServer({
+		contentType: "application/json",
+		body: {
+			authorization_endpoint: `${server.issuer.url}/authorize`,
+			token_endpoint: `${server.issuer.url}/token`,
+			userinfo_endpoint: `${server.issuer.url}/userinfo`,
+		},
+	});
+	await jsonDiscoveryServer.start();
+	const jsonDiscoveryPort = jsonDiscoveryServer.port;
+
+	const malformedDiscoveryServer = createDiscoveryServer({
+		contentType: "application/x-www-form-urlencoded",
+		body: {
+			authorization_endpoint: `${server.issuer.url}/authorize`,
+			token_endpoint: `${server.issuer.url}/token`,
+			userinfo_endpoint: `${server.issuer.url}/userinfo`,
+		},
+	});
+	await malformedDiscoveryServer.start();
+	const malformedDiscoveryPort = malformedDiscoveryServer.port;
+
 	afterAll(async () => {
 		await server.stop();
+		await malformedDiscoveryServer.stop();
+		await jsonDiscoveryServer.stop();
 	});
 
 	const { customFetchImpl, auth } = await getTestInstance({
@@ -26,9 +91,16 @@ describe("oauth2", async () => {
 				config: [
 					{
 						providerId,
-						discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+						discoveryUrl: `http://localhost:${jsonDiscoveryPort}/.well-known/openid-configuration`,
 						clientId: clientId,
 						clientSecret: clientSecret,
+						pkce: true,
+					},
+					{
+						providerId: "test-nonjson",
+						discoveryUrl: `http://localhost:${malformedDiscoveryPort}/.well-known/openid-configuration`,
+						clientId,
+						clientSecret,
 						pkce: true,
 					},
 				],
@@ -179,6 +251,15 @@ describe("oauth2", async () => {
 			headers,
 		);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+	});
+
+	it("falls back to manual discovery parsing when the content-type is incorrect", async () => {
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "test-nonjson",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+
+		expect(signInRes.data?.url).toContain(`http://localhost:${port}/authorize`);
 	});
 
 	it("should handle invalid provider ID", async () => {
