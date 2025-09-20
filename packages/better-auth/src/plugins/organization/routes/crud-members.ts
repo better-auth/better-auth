@@ -50,9 +50,8 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				...baseSchema.shape,
 				...additionalFieldsSchema.shape,
 			}),
-			use: [orgMiddleware],
+			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
-				SERVER_ONLY: true,
 				$Infer: {
 					body: {} as {
 						userId: string;
