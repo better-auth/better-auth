@@ -160,6 +160,16 @@ export interface OIDCOptions {
 	 * Custom schema for the OIDC plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * Function to check if a user is allowed to create an application.
+	 *
+	 * This is called when a user tries to register a new client via the dynamic
+	 * client registration endpoint.
+	 *
+	 * @param user - The user object.
+	 * @returns Whether the user is allowed to create an application.
+	 */
+	canUserRegisterClient?: (user: User) => boolean | Promise<boolean>;
 }
 
 export interface AuthorizationQuery {

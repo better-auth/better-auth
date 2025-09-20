@@ -1,5 +1,7 @@
-import * as z from "zod";
+import { base64 } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
+import * as z from "zod";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -7,12 +9,17 @@ import {
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "../../api";
-import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+import { parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
+import { mergeSchema } from "../../db";
+import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+import type { jwt } from "../jwt";
+import { getJwtToken } from "../jwt/sign";
+import { authorize } from "./authorize";
 import { schema } from "./schema";
 import type {
 	Client,
@@ -21,14 +28,7 @@ import type {
 	OIDCMetadata,
 	OIDCOptions,
 } from "./types";
-import { authorize } from "./authorize";
-import { parseSetCookieHeader } from "../../cookies";
-import { createHash } from "@better-auth/utils/hash";
-import { base64 } from "@better-auth/utils/base64";
-import { getJwtToken } from "../jwt/sign";
-import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
-import { mergeSchema } from "../../db";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -1301,11 +1301,28 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const session = await getSessionFromCtx(ctx);
 
 					// Check authorization
-					if (!session && !options.allowDynamicClientRegistration) {
+					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
 							error: "invalid_token",
 							error_description:
 								"Authentication required for client registration",
+						});
+					}
+
+					if (!options.allowDynamicClientRegistration) {
+						throw new APIError("FORBIDDEN", {
+							error: "dynamic_client_registration_not_allowed",
+							error_description: "Dynamic client registration is not allowed",
+						});
+					}
+
+					if (
+						options.canUserRegisterClient &&
+						!(await options.canUserRegisterClient(session.user))
+					) {
+						throw new APIError("FORBIDDEN", {
+							error: "insufficient_scope",
+							error_description: "User is not allowed to register clients",
 						});
 					}
 
@@ -1370,7 +1387,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							authenticationScheme:
 								body.token_endpoint_auth_method || "client_secret_basic",
 							disabled: false,
-							userId: session?.session.userId,
+							userId: session.session.userId,
 							createdAt: new Date(),
 							updatedAt: new Date(),
 						},
