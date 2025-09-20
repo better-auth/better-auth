@@ -41,6 +41,17 @@ function getErrorURL(
 	return formattedURL;
 }
 
+const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
+	const fromFetch = ctx.request?.headers.get("sec-fetch-mode") === "cors";
+	if (fromFetch) {
+		return ctx.json({
+			redirect_uri: uri.toString(),
+		});
+	} else {
+		throw ctx.redirect(uri);
+	}
+};
+
 export async function authorizeEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
@@ -50,18 +61,6 @@ export async function authorizeEndpoint(
 		throw new APIError("NOT_FOUND");
 	}
 
-	const handleRedirect = (url: string) => {
-		const fromFetch = ctx.request?.headers.get("sec-fetch-mode") === "cors";
-		if (fromFetch) {
-			return ctx.json({
-				redirect: true,
-				url,
-			});
-		} else {
-			throw ctx.redirect(url);
-		}
-	};
-
 	if (!ctx.request) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "request not found",
@@ -69,27 +68,13 @@ export async function authorizeEndpoint(
 		});
 	}
 
+	const query: OAuthAuthorizationQuery = ctx.query;
 	const session = await getSessionFromCtx(ctx);
-	if (!session) {
-		/**
-		 * If the user is not logged in, we need to redirect them to the
-		 * login page.
-		 */
-		const { name: cookieName, attributes: cookieAttributes } =
-			ctx.context.createAuthCookie("oauth_login_prompt");
-		await ctx.setSignedCookie(
-			cookieName,
-			JSON.stringify(ctx.query),
-			ctx.context.secret,
-			cookieAttributes,
-		);
-		const queryFromURL = ctx.request.url?.split("?")[1];
-		return handleRedirect(
-			`${opts.loginPage}${queryFromURL ? "?" + queryFromURL : ""}}`,
-		);
+	if (!session || query.prompt === "login") {
+		const reqestUrl = new URL(ctx.request.url);
+		return handleRedirect(ctx, `${opts.loginPage}?${reqestUrl.search}`);
 	}
 
-	const query = ctx.query as OAuthAuthorizationQuery;
 	if (!query.client_id) {
 		const errorURL = getErrorURL(
 			ctx,
@@ -155,6 +140,7 @@ export async function authorizeEndpoint(
 	});
 	if (invalidScopes.length) {
 		return handleRedirect(
+			ctx,
 			formatErrorURL(
 				query.redirect_uri,
 				"invalid_scope",
@@ -166,6 +152,7 @@ export async function authorizeEndpoint(
 
 	if (!query.code_challenge || !query.code_challenge_method) {
 		return handleRedirect(
+			ctx,
 			formatErrorURL(
 				query.redirect_uri,
 				"invalid_request",
@@ -179,6 +166,7 @@ export async function authorizeEndpoint(
 	const codeChallengesSupported = ["S256"];
 	if (!codeChallengesSupported.includes(query.code_challenge_method)) {
 		return handleRedirect(
+			ctx,
 			formatErrorURL(
 				query.redirect_uri,
 				"invalid_request",
@@ -188,57 +176,25 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-	const now = Math.floor(Date.now() / 1000);
-	const expiresAt = now + (opts.codeExpiresIn ?? 600);
-
-	try {
-		/**
-		 * Save the code in the database
-		 */
-		await ctx.context.internalAdapter.createVerificationValue(
-			{
-				identifier: await storeToken(opts.storeTokens, code, "code"),
-				createdAt: new Date(now * 1000),
-				expiresAt: new Date(expiresAt * 1000),
-				value: JSON.stringify({
-					clientId: client.clientId,
-					userId: session.user.id,
-					requireConsent: query.prompt === "consent",
-					redirectUri: query.redirect_uri,
-					scopes: requestScope.join(" "),
-					state: query.state,
-					codeChallenge: query.code_challenge,
-					codeChallengeMethod: query.code_challenge_method,
-					nonce: query.nonce,
-				} as VerificationValue),
-			},
-			ctx,
-		);
-	} catch (e) {
-		return handleRedirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"server_error",
-				"An error occurred while processing the request",
-				query.state,
-			),
-		);
+	// Force consent screen
+	if (query.prompt === "consent") {
+		return redirectWithConsentCode(ctx, opts, {
+			query,
+			clientId: client.clientId,
+			userId: session.user.id,
+			scopes: requestScope.join(" "),
+		});
 	}
 
-	const redirectUriWithCode = new URL(redirectUri);
-	redirectUriWithCode.searchParams.set("code", code);
-	redirectUriWithCode.searchParams.set("state", query.state);
-
-	if (query.prompt !== "consent") {
-		return handleRedirect(redirectUriWithCode.toString());
-	}
-
-	// Check if this is a trusted client that should skip consent
+	// Can skip consent (unless forced by prompt above)
 	if (client.skipConsent) {
-		return handleRedirect(redirectUriWithCode.toString());
+		return redirectWithAuthorizationCode(ctx, opts, {
+			query,
+			clientId: client.clientId,
+			userId: session.user.id,
+			scopes: requestScope.join(" "),
+		});
 	}
-
 	const hasAlreadyConsented = await ctx.context.adapter
 		.findOne<{
 			consentGiven: boolean;
@@ -258,8 +214,103 @@ export async function authorizeEndpoint(
 		.then((res) => !!res?.consentGiven);
 
 	if (hasAlreadyConsented) {
-		return handleRedirect(redirectUriWithCode.toString());
+		return redirectWithAuthorizationCode(ctx, opts, {
+			query,
+			clientId: client.clientId,
+			userId: session.user.id,
+			scopes: requestScope.join(" "),
+		});
 	}
+
+	return redirectWithConsentCode(ctx, opts, {
+		query,
+		clientId: client.clientId,
+		userId: session.user.id,
+		scopes: requestScope.join(" "),
+	});
+}
+
+async function redirectWithAuthorizationCode(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions,
+	verificationValue: {
+		query: OAuthAuthorizationQuery;
+		clientId: string;
+		userId: string;
+		scopes: string;
+	},
+) {
+	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
+	const now = Math.floor(Date.now() / 1000);
+	const expiresAt = now + (opts.codeExpiresIn ?? 600);
+
+	await ctx.context.internalAdapter.createVerificationValue(
+		{
+			identifier: await storeToken(
+				opts.storeTokens,
+				code,
+				"authorization_code",
+			),
+			createdAt: new Date(now * 1000),
+			expiresAt: new Date(expiresAt * 1000),
+			value: JSON.stringify({
+				type: "authorization_code",
+				clientId: verificationValue.clientId,
+				userId: verificationValue.userId,
+				redirectUri: verificationValue.query.redirect_uri,
+				scopes: verificationValue.scopes,
+				state: verificationValue.query.state,
+				codeChallenge: verificationValue.query.code_challenge,
+				codeChallengeMethod: verificationValue.query.code_challenge_method,
+				nonce: verificationValue.query.nonce,
+			} satisfies VerificationValue),
+		},
+		ctx,
+	);
+
+	const redirectUriWithCode = new URL(verificationValue.query.redirect_uri);
+	redirectUriWithCode.searchParams.set("code", code);
+	redirectUriWithCode.searchParams.set("state", verificationValue.query.state);
+	return handleRedirect(ctx, redirectUriWithCode.toString());
+}
+
+async function redirectWithConsentCode(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions,
+	verificationValue: {
+		query: OAuthAuthorizationQuery;
+		clientId: string;
+		userId: string;
+		scopes: string;
+	},
+) {
+	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
+	const iat = Math.floor(Date.now() / 1000);
+	const exp = iat + (opts.codeExpiresIn ?? 600);
+
+	await ctx.context.internalAdapter.createVerificationValue(
+		{
+			identifier: await storeToken(
+				opts.storeTokens,
+				code,
+				"authorization_code",
+			),
+			createdAt: new Date(iat * 1000),
+			expiresAt: new Date(exp * 1000),
+			value: JSON.stringify({
+				type: "consent",
+				clientId: verificationValue.clientId,
+				userId: verificationValue.userId,
+				redirectUri: verificationValue.query.redirect_uri,
+				scopes: verificationValue.scopes,
+				state: verificationValue.query.state,
+				codeChallenge: verificationValue.query.code_challenge,
+				codeChallengeMethod: verificationValue.query.code_challenge_method,
+				nonce: verificationValue.query.nonce,
+			} satisfies VerificationValue),
+		},
+		ctx,
+	);
 
 	const { name: cookieName, attributes: cookieAttributes } =
 		ctx.context.createAuthCookie("oauth_consent_prompt");
@@ -269,11 +320,13 @@ export async function authorizeEndpoint(
 		ctx.context.secret,
 		cookieAttributes,
 	);
+
 	const params = new URLSearchParams({
-		client_id: client.clientId,
-		scope: requestScope.join(" "),
+		client_id: verificationValue.clientId,
+		scope: verificationValue.scopes,
+		state: verificationValue.query.state,
 	});
 	const consentUri = `${opts.consentPage}?${params.toString()}`;
 
-	return handleRedirect(consentUri);
+	return handleRedirect(ctx, consentUri);
 }

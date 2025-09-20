@@ -291,7 +291,6 @@ describe("metadata - resource discovery functions", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				allowDynamicClientRegistration: true,
 				scopes: supportedScopes,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,

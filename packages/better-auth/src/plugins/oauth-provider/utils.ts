@@ -5,7 +5,7 @@ import type { jwt } from "../jwt";
 import type { oauthProvider } from "../oauth-provider";
 import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import type { OAuthOptions, SchemaClient, StoreTokenType } from "./types";
+import type { OAuthOptions, StoreTokenType } from "./types";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { databaseToSchema, type DatabaseClient } from "./register";
 import { timingSafeEqual } from "crypto";
@@ -55,8 +55,7 @@ export async function getClient(
 			if (!res) return null;
 			return databaseToSchema(res);
 		});
-
-	return dbClient as (SchemaClient & { skipConsent?: boolean }) | null;
+	return dbClient;
 }
 
 /**

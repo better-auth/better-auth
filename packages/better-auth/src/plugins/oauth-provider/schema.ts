@@ -19,6 +19,10 @@ export const schema = {
 				defaultValue: false,
 				required: false,
 			},
+			skipConsent: {
+				type: "boolean",
+				required: false,
+			},
 			scopes: {
 				type: "string[]",
 				required: false,

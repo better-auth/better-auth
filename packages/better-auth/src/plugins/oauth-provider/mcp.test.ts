@@ -2,9 +2,6 @@ import { beforeAll, describe, it, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oauthProvider } from "./oauth";
 import { jwt } from "../jwt";
-import { createAuthClient } from "../../client";
-import { oauthProviderClient } from "./client";
-import { jwtClient } from "../jwt/client";
 import type { OAuthClient } from "../../oauth-2.1/types";
 import { mcpHandler } from "./mcp";
 
@@ -21,7 +18,6 @@ describe("mcp", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				allowDynamicClientRegistration: true,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -31,28 +27,22 @@ describe("mcp", async () => {
 	});
 
 	const { headers } = await signInWithTestUser();
-	const client = createAuthClient({
-		plugins: [jwtClient(), oauthProviderClient()],
-		baseURL: authServerUrl,
-		fetchOptions: {
-			customFetchImpl,
-			headers,
-		},
-	});
 
 	let oauthClient: OAuthClient | null;
 
 	beforeAll(async () => {
-		// This test is performed in register.test.ts
-		const createdClient = await client.oauth2.register({
-			redirect_uris: [redirectUri],
+		const response = await auth.api.registerOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
 		});
-		expect(createdClient.data?.client_id).toBeDefined();
-		expect(createdClient.data?.user_id).toBeDefined();
-		expect(createdClient.data?.client_secret).toBeDefined();
-		expect(createdClient.data?.redirect_uris).toEqual([redirectUri]);
-
-		oauthClient = createdClient.data;
+		expect(response?.client_id).toBeDefined();
+		expect(response?.user_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toEqual([redirectUri]);
+		oauthClient = response;
 	});
 
 	it("should return 401 if the request is not authenticated returning the right WWW-Authenticate header", async ({

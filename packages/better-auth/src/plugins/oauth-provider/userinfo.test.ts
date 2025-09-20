@@ -16,7 +16,7 @@ describe("oauth userinfo", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";
-	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
 			jwt({
@@ -28,7 +28,6 @@ describe("oauth userinfo", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				allowDynamicClientRegistration: true,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -139,15 +138,18 @@ describe("oauth userinfo", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		// This test is performed in register.test.ts
-		const response = await client.oauth2.register({
-			redirect_uris: [redirectUri],
+		const response = await auth.api.registerOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
 		});
-		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.user_id).toBeDefined();
-		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual([redirectUri]);
-		oauthClient = response.data;
+		expect(response?.client_id).toBeDefined();
+		expect(response?.user_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toEqual([redirectUri]);
+		oauthClient = response;
 	});
 
 	it("should fail unauthenticated request", async () => {

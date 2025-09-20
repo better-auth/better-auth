@@ -85,7 +85,6 @@ describe("oauth", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				allowDynamicClientRegistration: true,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -129,16 +128,18 @@ describe("oauth", async () => {
 			},
 		);
 
-		// This test is performed in register.test.ts
-		const response = await serverClient.oauth2.register({
-			redirect_uris: [redirectUri],
+		const response = await authorizationServer.api.registerOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
 		});
-		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.user_id).toBeDefined();
-		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual([redirectUri]);
-
-		oauthClient = response.data;
+		expect(response?.client_id).toBeDefined();
+		expect(response?.user_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toEqual([redirectUri]);
+		oauthClient = response;
 	});
 
 	afterAll(async () => {
@@ -304,17 +305,136 @@ describe("oauth", async () => {
 		});
 		expect(callbackURL).toContain("/success");
 	});
+});
 
-	it("should sign in after a consent flow", async ({ expect }) => {
+describe("oauth - prompt", async () => {
+	const port = 3001;
+	const authServerBaseUrl = `http://localhost:${port}`;
+	const rpBaseUrl = "http://localhost:5000";
+	const {
+		auth: authorizationServer,
+		signInWithTestUser,
+		customFetchImpl,
+		testUser,
+	} = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const serverClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let server: Listener;
+	let oauthClient: OAuthClient | null;
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
+	// Registers a confidential client application to work with
+	beforeAll(async () => {
+		// Opens the authorization server for testing with genericOAuth
+		server = await listen(
+			async (req, res) => {
+				// Adds openid-config as the endpoint manually since server-endpoint
+				if (req.url === "/.well-known/openid-configuration") {
+					const config = await authorizationServer.api.getOpenIdConfig();
+					res.setHeader("Content-Type", "application/json");
+					res.end(JSON.stringify(config));
+				} else {
+					toNodeHandler(authorizationServer.handler)(req, res);
+				}
+			},
+			{
+				port,
+			},
+		);
+
+		const response = await authorizationServer.api.registerOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.user_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toEqual([redirectUri]);
+		oauthClient = response;
+	});
+
+	afterAll(async () => {
+		await server.close();
+	});
+
+	async function createTestInstance(
+		config?: Omit<
+			GenericOAuthConfig,
+			"providerId" | "clientId" | "clientSecret"
+		>,
+	) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		return await getTestInstance({
+			// Used to trust callbackUrl in test
+			account: {
+				accountLinking: {
+					trustedProviders: [providerId],
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							scopes: ["openid", "profile", "email"],
+							...config,
+							providerId,
+							redirectURI: redirectUri,
+							authorizationUrl: config?.discoveryUrl
+								? undefined
+								: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+							tokenUrl: config?.discoveryUrl
+								? undefined
+								: `${authServerBaseUrl}/api/auth/oauth2/token`,
+							userInfoUrl: config?.discoveryUrl
+								? undefined
+								: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
+							clientId: oauthClient.client_id,
+							clientSecret: oauthClient.client_secret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+	}
+
+	it("login - should always redirect to login", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
 
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
 			await createTestInstance({
-				prompt: "consent",
+				prompt: "login",
 			});
-
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
@@ -322,6 +442,8 @@ describe("oauth", async () => {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
+
+		// Generate authorize url
 		const data = await client.signIn.oauth2(
 			{
 				providerId,
@@ -336,12 +458,69 @@ describe("oauth", async () => {
 		);
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
 
+		// Check for redirection to /login
+		let loginRedirectUri = "";
+		const newHeaders = new Headers();
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers: newHeaders,
+			onError(context) {
+				loginRedirectUri = context.response.headers.get("Location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+		expect(loginRedirectUri).toContain("/login");
+		expect(loginRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
+		expect(loginRedirectUri).toContain(
+			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
+		);
+		// authorize should not have cookies (no user logged in)
+		expect(newHeaders.get("cookie")).toBeNull();
+	});
+
+	it("consent - should sign in", async ({ expect }) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance({
+				prompt: "consent",
+			});
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		// Generate authorize url
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+			},
+		);
+		expect(data.url).toContain(
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
+		);
+		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
+		expect(data.url).toContain(`prompt=consent`);
+
+		// Check for redirection to /consent
 		let consentRedirectUri = "";
 		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			onError(context) {
 				consentRedirectUri = context.response.headers.get("Location") || "";
+				expect(context.response.headers.get("set-cookie")).toContain(
+					"better-auth.oauth_consent_prompt=",
+				);
 				cookieSetter(newHeaders)(context);
 				newHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
@@ -349,6 +528,7 @@ describe("oauth", async () => {
 		expect(consentRedirectUri).toContain(`/consent`);
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
+		expect(consentRedirectUri).toContain(`state=`);
 
 		// Give consent and obtain redirect callback
 		const res = await serverClient.oauth2.consent(
@@ -358,6 +538,11 @@ describe("oauth", async () => {
 			{
 				headers: newHeaders,
 				throw: true,
+				onResponse(context) {
+					expect(context.response.headers.get("set-cookie")).toContain(
+						"better-auth.oauth_consent_prompt=; Max-Age=0",
+					);
+				},
 			},
 		);
 		expect(res.redirect_uri).toContain(redirectUri);
@@ -368,13 +553,14 @@ describe("oauth", async () => {
 			method: "GET",
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
+				cookieSetter(newHeaders)(context);
 			},
 		});
 		expect(callbackURL).toContain("/success");
+		expect(newHeaders.get("cookie")).toContain("better-auth.session_token=");
 	});
 
-	// NOTE: Previous test must be successful since consent for user was given in the previous test
-	it("should sign in after a login flow (consent given in previous test)", async ({
+	it("consent - should sign in given previous consent (see previous test)", async ({
 		expect,
 	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
@@ -382,10 +568,7 @@ describe("oauth", async () => {
 		}
 
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
-			await createTestInstance({
-				prompt: "login",
-			});
-
+			await createTestInstance();
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
@@ -393,6 +576,8 @@ describe("oauth", async () => {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
+
+		// Generate authorize url
 		const data = await client.signIn.oauth2(
 			{
 				providerId,
@@ -407,42 +592,24 @@ describe("oauth", async () => {
 		);
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
 
-		let loginRedirectUri = "";
+		// No redirect and user should get code
+		let callbackRedirectUrl = "";
 		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			onError(context) {
-				loginRedirectUri = context.response.headers.get("Location") || "";
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
 				cookieSetter(newHeaders)(context);
+				newHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
-			headers: newHeaders,
 		});
-		expect(loginRedirectUri).toContain("/login");
-		expect(loginRedirectUri).toContain(`prompt=login`);
-		expect(loginRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
-		expect(loginRedirectUri).toContain(
-			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
-		);
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("code=");
+		expect(callbackRedirectUrl).toContain("state=");
 
-		let redirectUriResponse = "";
-		await serverClient.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				headers: newHeaders,
-				onError(context) {
-					redirectUriResponse = context.response.headers.get("Location") || "";
-					cookieSetter(newHeaders)(context);
-				},
-			},
-		);
-		expect(redirectUriResponse).toContain(redirectUri);
-		expect(redirectUriResponse).toContain("code=");
-
+		// Code exchange should be successful
 		let callbackURL = "";
-		await client.$fetch(redirectUriResponse, {
+		await client.$fetch(callbackRedirectUrl, {
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
@@ -532,7 +699,6 @@ describe("oauth - config", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						allowDynamicClientRegistration: true,
 						storeClientSecret,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
@@ -556,14 +722,18 @@ describe("oauth - config", () => {
 				port,
 			});
 
-			const createdClient = await serverClient.oauth2.register({
-				redirect_uris: [redirectUri],
+			const createdClient = await authorizationServer.api.registerOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					skip_consent: true,
+				},
 			});
-			expect(createdClient.data?.client_id).toBeDefined();
-			expect(createdClient.data?.user_id).toBeDefined();
-			expect(createdClient.data?.client_secret).toBeDefined();
-			expect(createdClient.data?.redirect_uris).toEqual([redirectUri]);
-			oauthClient = createdClient.data;
+			expect(createdClient?.client_id).toBeDefined();
+			expect(createdClient?.user_id).toBeDefined();
+			expect(createdClient?.client_secret).toBeDefined();
+			expect(createdClient?.redirect_uris).toEqual([redirectUri]);
+			oauthClient = createdClient;
 
 			// The RP (Relying Party) - the client application
 			const { customFetchImpl: customFetchImplRP } = await createTestInstance();
@@ -626,7 +796,6 @@ describe("oauth - config", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						allowDynamicClientRegistration: true,
 						storeClientSecret,
 						disableJwtPlugin: true,
 						silenceWarnings: {
@@ -650,14 +819,18 @@ describe("oauth - config", () => {
 				port,
 			});
 
-			const createdClient = await serverClient.oauth2.register({
-				redirect_uris: [redirectUri],
+			const createdClient = await authorizationServer.api.registerOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					skip_consent: true,
+				},
 			});
-			expect(createdClient.data?.client_id).toBeDefined();
-			expect(createdClient.data?.user_id).toBeDefined();
-			expect(createdClient.data?.client_secret).toBeDefined();
-			expect(createdClient.data?.redirect_uris).toEqual([redirectUri]);
-			oauthClient = createdClient.data;
+			expect(createdClient?.client_id).toBeDefined();
+			expect(createdClient?.user_id).toBeDefined();
+			expect(createdClient?.client_secret).toBeDefined();
+			expect(createdClient?.redirect_uris).toEqual([redirectUri]);
+			oauthClient = createdClient;
 
 			// The RP (Relying Party) - the client application
 			const { customFetchImpl: customFetchImplRP } = await createTestInstance();
@@ -713,7 +886,7 @@ describe("oauth - config", () => {
 		{ disableJwtPlugin: false, publicClient: true, resource: true },
 		{ disableJwtPlugin: true, publicClient: true, resource: true },
 	])(
-		"disableJwtPlugin: $disableJwtPlugin, publicClient: $publicClient, resource: $resource",
+		"token return type - disableJwtPlugin: $disableJwtPlugin, publicClient: $publicClient, resource: $resource",
 		async ({ disableJwtPlugin, publicClient, resource }) => {
 			const validAudience = disableJwtPlugin
 				? `${authServerBaseUrl}/api/auth`
@@ -728,7 +901,6 @@ describe("oauth - config", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						allowDynamicClientRegistration: true,
 						disableJwtPlugin: disableJwtPlugin,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
@@ -759,19 +931,23 @@ describe("oauth - config", () => {
 				port,
 			});
 
-			const createdClient = await serverClient.oauth2.register({
-				redirect_uris: [redirectUri],
-				token_endpoint_auth_method: publicClient ? "none" : undefined,
+			const createdClient = await authorizationServer.api.registerOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					token_endpoint_auth_method: publicClient ? "none" : undefined,
+					skip_consent: true,
+				},
 			});
-			expect(createdClient.data?.client_id).toBeDefined();
-			expect(createdClient.data?.user_id).toBeDefined();
+			expect(createdClient?.client_id).toBeDefined();
+			expect(createdClient?.user_id).toBeDefined();
 			if (publicClient) {
-				expect(createdClient.data?.client_secret).toBeUndefined();
+				expect(createdClient?.client_secret).toBeUndefined();
 			} else {
-				expect(createdClient.data?.client_secret).toBeDefined();
+				expect(createdClient?.client_secret).toBeDefined();
 			}
-			expect(createdClient.data?.redirect_uris).toEqual([redirectUri]);
-			oauthClient = createdClient.data;
+			expect(createdClient?.redirect_uris).toEqual([redirectUri]);
+			oauthClient = createdClient;
 
 			// The RP (Relying Party) - the client application
 			const { customFetchImpl: customFetchImplRP } = await createTestInstance({
@@ -857,8 +1033,8 @@ describe("oauth - config", () => {
 						? undefined
 						: {
 								introspectUrl: `${authServerUrl}/oauth2/introspect`,
-								clientId: createdClient.data?.client_id!,
-								clientSecret: createdClient.data?.client_secret!,
+								clientId: createdClient?.client_id!,
+								clientSecret: createdClient?.client_secret!,
 							},
 				});
 			}

@@ -11,13 +11,12 @@ import { generateRandomString } from "../../crypto";
 describe("oauth authorize - unauthenticated", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				allowDynamicClientRegistration: true,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -27,14 +26,6 @@ describe("oauth authorize - unauthenticated", async () => {
 		],
 	});
 	const { headers } = await signInWithTestUser();
-	const serverClient = createAuthClient({
-		plugins: [oauthProviderClient()],
-		baseURL: authServerBaseUrl,
-		fetchOptions: {
-			customFetchImpl,
-			headers,
-		},
-	});
 	const unauthenticatedClient = createAuthClient({
 		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
@@ -48,16 +39,18 @@ describe("oauth authorize - unauthenticated", async () => {
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		// This test is performed in register.test.ts
-		const response = await serverClient.oauth2.register({
-			redirect_uris: [redirectUri],
+		const response = await auth.api.registerOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
 		});
-		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.user_id).toBeDefined();
-		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual([redirectUri]);
-
-		oauthClient = response.data;
+		expect(response?.client_id).toBeDefined();
+		expect(response?.user_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toEqual([redirectUri]);
+		oauthClient = response;
 	});
 
 	it("should always redirect to /login because user is not logged in", async () => {
@@ -97,13 +90,13 @@ describe("oauth authorize - unauthenticated", async () => {
 describe("oauth authorize - authenticated", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				allowDynamicClientRegistration: true,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -127,16 +120,18 @@ describe("oauth authorize - authenticated", async () => {
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		// This test is performed in register.test.ts
-		const response = await client.oauth2.register({
-			redirect_uris: [redirectUri],
+		const response = await auth.api.registerOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
 		});
-		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.user_id).toBeDefined();
-		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual([redirectUri]);
-
-		oauthClient = response.data;
+		expect(response?.client_id).toBeDefined();
+		expect(response?.user_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toEqual([redirectUri]);
+		oauthClient = response;
 	});
 
 	it("should authorize - prompt undefined, response code, state set, with codeVerifier", async () => {

@@ -26,7 +26,7 @@ export async function consentEndpoint(
 
 	const verification = await ctx.context.internalAdapter
 		.findVerificationValue(
-			await storeToken(opts.storeTokens, storedCode, "code"),
+			await storeToken(opts.storeTokens, storedCode, "authorization_code"),
 		)
 		.then((val) => {
 			if (!val) return null;
@@ -70,9 +70,9 @@ export async function consentEndpoint(
 			error: "invalid_verification",
 		});
 	}
-	if (!verificationValue.requireConsent) {
+	if (verificationValue.type !== "consent") {
 		throw new APIError("UNAUTHORIZED", {
-			error_description: "Consent given or not required",
+			error_description: "incorrect token type",
 			error: "invalid_request",
 		});
 	}
@@ -100,15 +100,14 @@ export async function consentEndpoint(
 	// Consent accepted
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const iat = Math.floor(Date.now() / 1000);
-	const now = new Date(iat * 1000);
 	const exp = iat + (opts.codeExpiresIn ?? 600);
 
 	await ctx.context.internalAdapter.updateVerificationValue(verification.id, {
 		value: JSON.stringify({
 			...verificationValue,
-			requireConsent: false,
+			type: "authorization_code",
 		}),
-		identifier: await storeToken(opts.storeTokens, code, "code"),
+		identifier: await storeToken(opts.storeTokens, code, "authorization_code"),
 		expiresAt: new Date(exp * 1000),
 	});
 	await ctx.context.adapter.create({
@@ -118,8 +117,8 @@ export async function consentEndpoint(
 			userId: verificationValue.userId,
 			scopes: verificationValue.scopes,
 			consentGiven: true,
-			createdAt: now,
-			updatedAt: now,
+			createdAt: new Date(iat * 1000),
+			updatedAt: new Date(iat * 1000),
 		},
 	});
 	const redirectUri = new URL(verificationValue.redirectUri ?? opts.loginPage);
@@ -127,6 +126,7 @@ export async function consentEndpoint(
 	if (verificationValue.state) {
 		redirectUri.searchParams.set("state", verificationValue.state);
 	}
+
 	// Redirect back to application
 	return ctx.json({
 		redirect_uri: redirectUri.toString(),

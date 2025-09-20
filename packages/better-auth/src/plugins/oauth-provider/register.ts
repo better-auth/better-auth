@@ -278,6 +278,7 @@ export function oauthToSchema(
 		type,
 		// Not Part of RFC7591 Spec
 		disabled,
+		skip_consent: skipConsent,
 		// All other metadata
 		...rest
 	} = input;
@@ -317,6 +318,7 @@ export function oauthToSchema(
 		public: _public,
 		type,
 		// All other metadata
+		skipConsent,
 		metadata: cleaned ? undefined : JSON.stringify(rest),
 	};
 }
@@ -362,6 +364,7 @@ export function schemaToOAuth(
 		public: _public,
 		type,
 		// All other metadata
+		skipConsent,
 		metadata, // in JSON format
 	} = input;
 
@@ -408,6 +411,7 @@ export function schemaToOAuth(
 		type,
 		// Not Part of RFC7591 Spec
 		disabled,
+		skip_consent: skipConsent,
 		// All other metadata
 		...(cleaned ? undefined : rest),
 	};
