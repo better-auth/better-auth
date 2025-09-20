@@ -8,6 +8,7 @@ import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
 import { listApiKeys } from "./list-api-keys";
 import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
+import { regenerateApiKey } from "./regenerate-api-key";
 import { API_KEY_TABLE_NAME } from "..";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
@@ -84,6 +85,12 @@ export function createApiKeyRoutes({
 }) {
 	return {
 		createApiKey: createApiKey({
+			keyGenerator,
+			opts,
+			schema,
+			deleteAllExpiredApiKeys,
+		}),
+		regenerateApiKey: regenerateApiKey({
 			keyGenerator,
 			opts,
 			schema,
