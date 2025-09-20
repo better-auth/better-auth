@@ -161,7 +161,7 @@ export interface OIDCOptions {
 	 */
 	schema?: InferOptionSchema<typeof schema>;
 	/**
-	 * Function to check if a user is allowed to create an application.
+	 * Function to check if a user is allowed to create a client.
 	 *
 	 * This is called when a user tries to register a new client via the dynamic
 	 * client registration endpoint.
