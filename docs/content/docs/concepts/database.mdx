@@ -495,13 +495,13 @@ export const auth = betterAuth({
 
 ### Database Hooks
 
-Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in Better Auth. You can create hooks for the following models: **user**, **session**, and **account**.
+Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in Better Auth. You can create hooks for the following models: **user**, **session**, **account**, and **verification**.
 
 There are two types of hooks you can define:
 
 #### 1. Before Hook
 
-- **Purpose**: This hook is called before the respective entity (user, session, or account) is created or updated.
+- **Purpose**: This hook is called before the respective entity (user, session, account, or verification) is created, updated, or deleted.
 - **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload.
 
 #### 2. After Hook
@@ -530,6 +530,34 @@ export const auth = betterAuth({
         },
         after: async (user) => {
           //perform additional actions, like creating a stripe customer
+        },
+      },
+      delete: {
+        before: async (user, ctx) => {
+          console.log(`User ${user.email} is being deleted`);
+          if (user.email.includes("admin")) {
+            return false; // Abort deletion
+          }
+          
+          return true; // Allow deletion
+        },
+        after: async (user) => {
+          console.log(`User ${user.email} has been deleted`);
+        },
+      },
+    },
+    session: {
+      delete: {
+        before: async (session, ctx) => {
+          console.log(`Session ${session.token} is being deleted`);
+          if (session.userId === "admin-user-id") {
+            return false; // Abort deletion
+          }
+          return true; // Allow deletion
+        },
+        after: async (session) => {
+          // Clean up any session-related data
+          console.log(`Session ${session.token} has been deleted`);
         },
       },
     },
