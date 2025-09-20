@@ -86,6 +86,9 @@ Once installed, you can utilize the OIDC Provider to manage authentication flows
 ### Register a New Client
 
 To register a new OIDC client, use the `oauth2.register` method.
+This endpoint is only available if you have enabled dynamic client registration by setting the `allowDynamicClientRegistration` option to `true`.
+You can configure the `canUserRegisterClient` option to control which users can register new clients.
+
 
 
 #### Simple Example
@@ -375,6 +378,21 @@ const auth = betterAuth({
         allowDynamicClientRegistration: true,
     })]
 })
+```
+
+#### Controlling Client Registration
+You can control which users can register new clients by providing a `canUserRegisterClient` function. This function receives the user object and should return `true` if the user is allowed to register new clients, or `false` otherwise.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [oidcProvider({
+        allowDynamicClientRegistration: true,
+        canUserRegisterClient: (user) => {
+            // Only allow users with the "admin" role to register new clients
+            return user.role  === "admin";
+        }
+    })]
+});
 ```
 
 This will allow clients to register using the `/register` endpoint to be publicly available.
