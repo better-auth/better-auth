@@ -501,7 +501,7 @@ There are two types of hooks you can define:
 
 #### 1. Before Hook
 
-- **Purpose**: This hook is called before the respective entity (user, session, account, or verification) is created, updated, or deleted.
+- **Purpose**: This hook is called before the respective entity (user, session, or account) is created, updated, or deleted.
 - **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload.
 
 #### 2. After Hook
