@@ -96,6 +96,10 @@ export interface GenericOAuthConfig {
 		profile: Record<string, any>,
 	) => Partial<Partial<User>> | Promise<Partial<User>>;
 	/**
+	 * verifyIdToken function to verify the id token
+	 */
+	verifyIdToken?: (token: string, nonce?: string) => Promise<boolean>;
+	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
@@ -312,6 +316,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							data: userInfo,
 						};
 					},
+
+					verifyIdToken: c.verifyIdToken,
 				} as OAuthProvider;
 			});
 			return {
