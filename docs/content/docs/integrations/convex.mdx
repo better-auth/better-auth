@@ -91,17 +91,17 @@ If you're not using Next.js, please refer to the [installation guide by Convex](
 
         ```ts title="convex/auth.config.ts"
         export default {
-        providers: [
-            {
-            domain: process.env.CONVEX_SITE_URL,
-            applicationID: "convex",
-            },
-        ],
+            providers: [
+                {
+                    domain: process.env.CONVEX_SITE_URL,
+                    applicationID: "convex",
+                },
+            ],
         };
         ```
     </Step>
     <Step>
-        #### Set enviroment variables
+        #### Set environment variables
 
         Generate a secret for encryption and generating hashes. Use the command below if you have openssl installed,
         or use the button to generate a random value instead. Or generate your own however you like.
@@ -150,7 +150,7 @@ If you're not using Next.js, please refer to the [installation guide by Convex](
         ### Create a Better Auth instance
         Create a Better Auth instance and initialize the component.
 
-        <Callout>Some Typescript errors will show until you save the file.</Callout>
+        <Callout>Some TypeScript errors will show until you save the file.</Callout>
 
         ```ts title="convex/auth.ts"
         import { createClient, type GenericCtx } from "@convex-dev/better-auth";
