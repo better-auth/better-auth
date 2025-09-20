@@ -230,7 +230,6 @@ describe("db", async () => {
 		expect(hookUserDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookUserDeleteAfter).not.toHaveBeenCalled();
 
-		// Verify the hook was called with the correct user data
 		expect(hookUserDeleteBefore).toHaveBeenCalledWith(
 			expect.objectContaining({
 				id: userId,
