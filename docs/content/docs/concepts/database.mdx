@@ -556,7 +556,6 @@ export const auth = betterAuth({
           return true; // Allow deletion
         },
         after: async (session) => {
-          // Clean up any session-related data
           console.log(`Session ${session.token} has been deleted`);
         },
       },
