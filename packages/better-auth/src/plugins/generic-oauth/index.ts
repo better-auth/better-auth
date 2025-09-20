@@ -1,7 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
-import { decodeJwt } from "jose";
-import * as z from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "../../error/codes";
@@ -16,136 +15,13 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
+import { mergeSchema } from "../../db";
+import { oauthRegistrationSchema } from "./schema";
+import { getClientIdAndSecret } from "./get-client-id-and-secret";
+import type { GenericOAuthOptions } from "./types";
+import { decodeJwt } from "jose";
 
-/**
- * Configuration interface for generic OAuth providers.
- */
-export interface GenericOAuthConfig {
-	/** Unique identifier for the OAuth provider */
-	providerId: string;
-	/**
-	 * URL to fetch OAuth 2.0 configuration.
-	 * If provided, the authorization and token endpoints will be fetched from this URL.
-	 */
-	discoveryUrl?: string;
-	/**
-	 * URL for the authorization endpoint.
-	 * Optional if using discoveryUrl.
-	 */
-	authorizationUrl?: string;
-	/**
-	 * URL for the token endpoint.
-	 * Optional if using discoveryUrl.
-	 */
-	tokenUrl?: string;
-	/**
-	 * URL for the user info endpoint.
-	 * Optional if using discoveryUrl.
-	 */
-	userInfoUrl?: string;
-	/** OAuth client ID */
-	clientId: string;
-	/** OAuth client secret */
-	clientSecret?: string;
-	/**
-	 * Array of OAuth scopes to request.
-	 * @default []
-	 */
-	scopes?: string[];
-	/**
-	 * Custom redirect URI.
-	 * If not provided, a default URI will be constructed.
-	 */
-	redirectURI?: string;
-	/**
-	 * OAuth response type.
-	 * @default "code"
-	 */
-	responseType?: string;
-	/**
-	 * The response mode to use for the authorization code request.
-
-	 */
-	responseMode?: "query" | "form_post";
-	/**
-	 * Prompt parameter for the authorization request.
-	 * Controls the authentication experience for the user.
-	 */
-	prompt?: "none" | "login" | "consent" | "select_account";
-	/**
-	 * Whether to use PKCE (Proof Key for Code Exchange)
-	 * @default false
-	 */
-	pkce?: boolean;
-	/**
-	 * Access type for the authorization request.
-	 * Use "offline" to request a refresh token.
-	 */
-	accessType?: string;
-	/**
-	 * Custom function to fetch user info.
-	 * If provided, this function will be used instead of the default user info fetching logic.
-	 * @param tokens - The OAuth tokens received after successful authentication
-	 * @returns A promise that resolves to a User object or null
-	 */
-	getUserInfo?: (tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>;
-	/**
-	 * Custom function to map the user profile to a User object.
-	 */
-	mapProfileToUser?: (
-		profile: Record<string, any>,
-	) => Partial<Partial<User>> | Promise<Partial<User>>;
-	/**
-	 * Additional search-params to add to the authorizationUrl.
-	 * Warning: Search-params added here overwrite any default params.
-	 */
-	authorizationUrlParams?: Record<string, string>;
-
-	/**
-	 * Additional search-params to add to the tokenUrl.
-	 * Warning: Search-params added here overwrite any default params.
-	 */
-	tokenUrlParams?: Record<string, string>;
-	/**
-	 * Disable implicit sign up for new users. When set to true for the provider,
-	 * sign-in need to be called with with requestSignUp as true to create new users.
-	 */
-	disableImplicitSignUp?: boolean;
-	/**
-	 * Disable sign up for new users.
-	 */
-	disableSignUp?: boolean;
-	/**
-	 * Authentication method for token requests.
-	 * @default "post"
-	 */
-	authentication?: "basic" | "post";
-	/**
-	 * Custom headers to include in the discovery request.
-	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
-	 */
-	discoveryHeaders?: Record<string, string>;
-	/**
-	 * Custom headers to include in the authorization request.
-	 * Useful for providers like Qonto that require specific headers (e.g., X-Qonto-Staging-Token for local development).
-	 */
-	authorizationHeaders?: Record<string, string>;
-	/**
-	 * Override user info with the provider info.
-	 *
-	 * This will update the user info with the provider info,
-	 * when the user signs in with the provider.
-	 * @default false
-	 */
-	overrideUserInfo?: boolean;
-}
-
-interface GenericOAuthOptions {
-	/**
-	 * Array of OAuth provider configurations.
-	 */
-	config: GenericOAuthConfig[];
-}
+export * from "./types";
 
 async function getUserInfo(
 	tokens: OAuth2Tokens,
@@ -213,12 +89,16 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				return {
 					id: c.providerId,
 					name: c.providerId,
-					createAuthorizationURL(data) {
+					async createAuthorizationURL(data) {
+						const { clientId, clientSecret } = await getClientIdAndSecret(
+							c,
+							ctx,
+						);
 						return createAuthorizationURL({
 							id: c.providerId,
 							options: {
-								clientId: c.clientId,
-								clientSecret: c.clientSecret,
+								clientId: clientId,
+								clientSecret: clientSecret,
 								redirectURI: c.redirectURI,
 							},
 							authorizationEndpoint: c.authorizationUrl!,
@@ -248,14 +128,18 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration. Token URL not found.",
 							});
 						}
+						const { clientId, clientSecret } = await getClientIdAndSecret(
+							c,
+							ctx,
+						);
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
 							codeVerifier: data.codeVerifier,
 							redirectURI: data.redirectURI,
 							options: {
-								clientId: c.clientId,
-								clientSecret: c.clientSecret,
+								clientId: clientId,
+								clientSecret: clientSecret,
 								redirectURI: c.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
@@ -282,11 +166,15 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration. Token URL not found.",
 							});
 						}
+						const { clientId, clientSecret } = await getClientIdAndSecret(
+							c,
+							ctx,
+						);
 						return refreshAccessToken({
 							refreshToken,
 							options: {
-								clientId: c.clientId,
-								clientSecret: c.clientSecret,
+								clientId: clientId,
+								clientSecret: clientSecret,
 							},
 							authentication: c.authentication,
 							tokenEndpoint: finalTokenUrl,
@@ -424,8 +312,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						discoveryUrl,
 						authorizationUrl,
 						tokenUrl,
-						clientId,
-						clientSecret,
 						scopes,
 						redirectURI,
 						responseType,
@@ -436,6 +322,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						responseMode,
 						authentication,
 					} = config;
+					const { clientId, clientSecret } = await getClientIdAndSecret(
+						config,
+						ctx.context,
+					);
 					let finalAuthUrl = authorizationUrl;
 					let finalTokenUrl = tokenUrl;
 					if (discoveryUrl) {
@@ -619,14 +509,18 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration.",
 							});
 						}
+						const { clientId, clientSecret } = await getClientIdAndSecret(
+							provider,
+							ctx.context,
+						);
 						tokens = await validateAuthorizationCode({
 							headers: provider.authorizationHeaders,
 							code,
 							codeVerifier: provider.pkce ? codeVerifier : undefined,
 							redirectURI: `${ctx.context.baseURL}/oauth2/callback/${provider.providerId}`,
 							options: {
-								clientId: provider.clientId,
-								clientSecret: provider.clientSecret,
+								clientId: clientId,
+								clientSecret: clientSecret,
 								redirectURI: provider.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
@@ -874,8 +768,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 					const {
 						providerId,
-						clientId,
-						clientSecret,
 						redirectURI,
 						authorizationUrl,
 						discoveryUrl,
@@ -921,6 +813,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						email: session.user.email,
 					});
 
+					const { clientId, clientSecret } = await getClientIdAndSecret(
+						provider,
+						c.context,
+					);
+
 					const url = await createAuthorizationURL({
 						id: providerId,
 						options: {
@@ -950,5 +847,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 			),
 		},
 		$ERROR_CODES: ERROR_CODES,
+		schema: mergeSchema(oauthRegistrationSchema, options.schema),
 	} satisfies BetterAuthPlugin;
 };
