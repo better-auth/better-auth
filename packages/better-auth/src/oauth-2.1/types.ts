@@ -274,6 +274,7 @@ export interface OAuthClient {
 	type?: "web" | "native" | "user-agent-based";
 	//---- Not Part of RFC7591 Spec ----//
 	disabled?: boolean;
+	skip_consent?: boolean;
 	//---- All other metadata ----//
 	[key: string]: any;
 }

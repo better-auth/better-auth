@@ -17,27 +17,25 @@ describe("oauth revoke", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";
-	const { auth, signInWithTestUser, testUser, customFetchImpl } =
-		await getTestInstance({
-			baseURL: authServerBaseUrl,
-			plugins: [
-				jwt({
-					jwt: {
-						audience: validAudience,
-						issuer: authServerBaseUrl,
-					},
-				}),
-				oauthProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-					allowDynamicClientRegistration: true,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
-				}),
-			],
-		});
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					audience: validAudience,
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -141,15 +139,18 @@ describe("oauth revoke", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		// This test is performed in register.test.ts
-		const response = await client.oauth2.register({
-			redirect_uris: [redirectUri],
+		const response = await auth.api.registerOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
 		});
-		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.user_id).toBeDefined();
-		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual([redirectUri]);
-		oauthClient = response.data;
+		expect(response?.client_id).toBeDefined();
+		expect(response?.user_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toEqual([redirectUri]);
+		oauthClient = response;
 	});
 
 	it("should fail unauthenticated request", async () => {
@@ -269,32 +270,33 @@ describe("oauth revoke - config", async () => {
 	async function createTestInstance(opts?: {
 		oauthProviderConfig?: Omit<OAuthOptions, "loginPage" | "consentPage">;
 	}) {
-		const { customFetchImpl, signInWithTestUser } = await getTestInstance({
-			baseURL: authServerBaseUrl,
-			plugins: [
-				oauthProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-					scopes,
-					allowDynamicClientRegistration: true,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
-					...opts?.oauthProviderConfig,
-				}),
-				...(opts?.oauthProviderConfig?.disableJwtPlugin
-					? []
-					: [
-							jwt({
-								jwt: {
-									audience: validAudience,
-									issuer: authServerBaseUrl,
-								},
-							}),
-						]),
-			],
-		});
+		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
+			{
+				baseURL: authServerBaseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						scopes,
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+						...opts?.oauthProviderConfig,
+					}),
+					...(opts?.oauthProviderConfig?.disableJwtPlugin
+						? []
+						: [
+								jwt({
+									jwt: {
+										audience: validAudience,
+										issuer: authServerBaseUrl,
+									},
+								}),
+							]),
+				],
+			},
+		);
 		const { headers } = await signInWithTestUser();
 		const client = createAuthClient({
 			plugins: [oauthProviderClient()],
@@ -305,13 +307,17 @@ describe("oauth revoke - config", async () => {
 			},
 		});
 
-		const registeredClient = await client.oauth2.register({
-			redirect_uris: [redirectUri],
+		const registeredClient = await auth.api.registerOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
 		});
 
 		return {
 			client,
-			oauthClient: registeredClient.data,
+			oauthClient: registeredClient,
 		};
 	}
 

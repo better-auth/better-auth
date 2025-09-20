@@ -3,7 +3,10 @@ import type { InferOptionSchema, Session, User } from "../../types";
 import type { Awaitable } from "../../types/helper";
 import { schema } from "./schema";
 
-export type StoreTokenType = "access_token" | "refresh_token" | "code";
+export type StoreTokenType =
+	| "access_token"
+	| "refresh_token"
+	| "authorization_code";
 
 export interface OAuthOptions {
 	/**
@@ -14,7 +17,7 @@ export interface OAuthOptions {
 	 * Trusted clients that are configured directly in the provider options.
 	 * These clients bypass database lookups and can optionally skip consent screens.
 	 */
-	trustedClients?: (SchemaClient & { skipConsent?: boolean })[];
+	trustedClients?: SchemaClient[];
 	/**
 	 * The amount of time in seconds that the access token is valid for.
 	 *
@@ -535,9 +538,9 @@ export type OAuthSession = Omit<Session, "token"> & {
  * direct searches by field on the db
  */
 export interface VerificationValue {
+	type: "authorization_code" | "consent";
 	clientId?: string;
 	userId?: string;
-	requireConsent?: boolean;
 	redirectUri?: string;
 	scopes?: string;
 	state?: string;
@@ -638,6 +641,8 @@ export interface SchemaClient {
 	 */
 	type?: "web" | "native" | "user-agent-based";
 	//---- All other metadata ----//
+	/** Used to indicate if consent screen can be skipped */
+	skipConsent?: boolean;
 	/**
 	 * Additional metadata about the client.
 	 */

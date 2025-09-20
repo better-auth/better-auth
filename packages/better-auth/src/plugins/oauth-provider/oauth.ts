@@ -1,16 +1,10 @@
 import { z } from "zod";
-import {
-	APIError,
-	createAuthEndpoint,
-	createAuthMiddleware,
-	sessionMiddleware,
-} from "../../api";
+import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
 import type { BetterAuthPlugin } from "../../types";
 import { schema } from "./schema";
 import type { OAuthOptions } from "./types";
 import { authorizeEndpoint } from "./authorize";
 import { consentEndpoint } from "./consent";
-import { parseSetCookieHeader } from "../../cookies";
 import { tokenEndpoint } from "./token";
 import { userInfoEndpoint } from "./userinfo";
 import { mergeSchema } from "../../db";
@@ -186,54 +180,6 @@ export const oauthProvider = (options: OAuthOptions) => {
 					);
 				}
 			}
-		},
-		hooks: {
-			after: [
-				{
-					matcher() {
-						return true;
-					},
-					/**
-					 * If user logged in already (after a redirect to /login request),
-					 * prompt a consent screen or return with session if consented
-					 */
-					handler: createAuthMiddleware(async (ctx) => {
-						const { name: loginPromptCookieName } =
-							ctx.context.createAuthCookie("oauth_login_prompt");
-						const cookie = await ctx.getSignedCookie(
-							loginPromptCookieName,
-							ctx.context.secret,
-						);
-						const cookieName = ctx.context.authCookies.sessionToken.name;
-						const parsedSetCookieHeader = parseSetCookieHeader(
-							ctx.context.responseHeaders?.get("set-cookie") || "",
-						);
-						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
-						if (!cookie || !hasSessionToken) {
-							return;
-						}
-						ctx.setCookie(loginPromptCookieName, "", {
-							maxAge: 0,
-						});
-						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-						const sessionToken = sessionCookie?.split(".")[0];
-						if (!sessionToken) {
-							return;
-						}
-						const session =
-							await ctx.context.internalAdapter.findSession(sessionToken);
-						if (!session) {
-							return;
-						}
-						// Return the initial query into the context but prompt for consent
-						ctx.query = JSON.parse(cookie);
-						ctx.query!.prompt = "consent";
-						ctx.context.session = session;
-						const response = await authorizeEndpoint(ctx, opts);
-						return response;
-					}),
-				},
-			],
 		},
 		endpoints: {
 			/**
@@ -1028,6 +974,9 @@ export const oauthProvider = (options: OAuthOptions) => {
 							.default(["code"])
 							.optional(),
 						type: z.enum(["web", "native", "user-agent-based"]).optional(),
+						// SERVER_ONLY applicable fields
+						skip_consent: z.boolean().optional(),
+						metadata: z.object().optional(),
 					}),
 					metadata: {
 						SERVER_ONLY: true,

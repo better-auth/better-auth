@@ -1,6 +1,11 @@
 import { APIError } from "../../api";
 import type { GenericEndpointContext, Session, User } from "../../types";
-import type { SchemaClient, OAuthOptions, OAuthSession } from "./types";
+import type {
+	SchemaClient,
+	OAuthOptions,
+	OAuthSession,
+	VerificationValue,
+} from "./types";
 import { createHash } from "@better-auth/utils/hash";
 import { generateRandomString } from "../../crypto";
 import {
@@ -481,9 +486,9 @@ async function checkVerificationValue(
 	redirect_uri?: string,
 ) {
 	const verification = await ctx.context.internalAdapter.findVerificationValue(
-		await storeToken(opts.storeTokens, code, "code"),
+		await storeToken(opts.storeTokens, code, "authorization_code"),
 	);
-	const verificationValue = verification
+	const verificationValue: VerificationValue = verification
 		? JSON.parse(verification?.value)
 		: undefined;
 
@@ -511,6 +516,12 @@ async function checkVerificationValue(
 	if (!verificationValue) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "missing verification value content",
+			error: "invalid_verification",
+		});
+	}
+	if (verificationValue.type !== "authorization_code") {
+		throw new APIError("UNAUTHORIZED", {
+			error_description: "incorrect verification type",
 			error: "invalid_verification",
 		});
 	}
