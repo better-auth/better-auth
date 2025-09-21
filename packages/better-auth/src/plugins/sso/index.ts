@@ -1,6 +1,7 @@
 import * as z from "zod";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
 import type { BetterAuthPlugin, User } from "../../types";
+import type { FieldAttribute, InferAdditionalFieldsFromPluginOptions } from "../../db/field";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -72,9 +73,41 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	defaultOverrideUserInfo?: boolean;
+	/**
+	 * Extend or customize the underlying ssoProvider model.
+	 *
+	 * Similar to other plugins, you can:
+	 *  - Provide custom DB column names for existing fields via `fields`
+	 *  - Add additional fields via `additionalFields`
+	 *  - Change the table/model name via `modelName`
+	 */
+	schema?: {
+		ssoProvider?: {
+			modelName?: string;
+			fields?: Partial<
+				Record<
+					| "issuer"
+					| "oidcConfig"
+					| "samlConfig"
+					| "userId"
+					| "providerId"
+					| "organizationId"
+					| "domain",
+					string
+				>
+			>;
+			additionalFields?: Record<string, FieldAttribute>;
+		};
+	};
 }
 
-export const sso = (options?: SSOOptions) => {
+export type InferSSOProvider<
+	O extends SSOOptions | undefined,
+	isClientSide extends boolean = true,
+> = SSOProvider &
+	InferAdditionalFieldsFromPluginOptions<"ssoProvider", NonNullable<O>, isClientSide>;
+
+export const sso = <O extends SSOOptions | undefined = undefined>(options?: O) => {
 	return {
 		id: "sso",
 		endpoints: {
@@ -1008,18 +1041,22 @@ export const sso = (options?: SSOOptions) => {
 		},
 		schema: {
 			ssoProvider: {
+				modelName: options?.schema?.ssoProvider?.modelName,
 				fields: {
 					issuer: {
 						type: "string",
 						required: true,
+						fieldName: options?.schema?.ssoProvider?.fields?.issuer,
 					},
 					oidcConfig: {
 						type: "string",
 						required: false,
+						fieldName: options?.schema?.ssoProvider?.fields?.oidcConfig,
 					},
 					samlConfig: {
 						type: "string",
 						required: false,
+						fieldName: options?.schema?.ssoProvider?.fields?.samlConfig,
 					},
 					userId: {
 						type: "string",
@@ -1027,27 +1064,37 @@ export const sso = (options?: SSOOptions) => {
 							model: "user",
 							field: "id",
 						},
+						fieldName: options?.schema?.ssoProvider?.fields?.userId,
 					},
 					providerId: {
 						type: "string",
 						required: true,
 						unique: true,
+						fieldName: options?.schema?.ssoProvider?.fields?.providerId,
 					},
 					organizationId: {
 						type: "string",
 						required: false,
+						fieldName: options?.schema?.ssoProvider?.fields?.organizationId,
 					},
 					domain: {
 						type: "string",
 						required: true,
+						fieldName: options?.schema?.ssoProvider?.fields?.domain,
 					},
+					...(options?.schema?.ssoProvider?.additionalFields || {}),
 				},
 			},
 		},
+		$Infer: {
+			SSOProvider: {} as InferSSOProvider<O>,
+		},
+		options: options as O,
 	} satisfies BetterAuthPlugin;
 };
 
 export interface SSOProvider {
+	id: string;
 	issuer: string;
 	oidcConfig: OIDCConfig;
 	userId: string;

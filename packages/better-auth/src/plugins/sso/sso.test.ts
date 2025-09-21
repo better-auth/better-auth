@@ -4,6 +4,7 @@ import { sso } from ".";
 import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
 import { organization } from "../organization";
+import type { FieldAttribute } from "../../db/field";
 
 let server = new OAuth2Server();
 
@@ -187,6 +188,64 @@ describe("SSO", async () => {
 		const headers = new Headers();
 		const callbackURL = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
+	});
+});
+
+describe("SSO schema additionalFields", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			sso({
+				schema: {
+					ssoProvider: {
+						additionalFields: {
+							environment: {
+								type: "string",
+								required: true,
+								defaultValue: "prod",
+							} satisfies FieldAttribute,
+						},
+					},
+				},
+			}),
+		],
+	});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.issuer.on;
+		await server.start(8081, "localhost");
+	});
+
+	afterAll(async () => {
+		await server.stop().catch(() => {});
+	});
+
+	it("should persist additional field with default value", async () => {
+		const { headers } = await signInWithTestUser();
+		const provider = await auth.api.createOIDCProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "localhost.com",
+				clientId: "test",
+				clientSecret: "test",
+				authorizationEndpoint: `${server.issuer.url}/authorize`,
+				tokenEndpoint: `${server.issuer.url}/token`,
+				jwksEndpoint: `${server.issuer.url}/jwks`,
+				mapping: {
+					id: "sub",
+					email: "email",
+					emailVerified: "email_verified",
+					name: "name",
+					image: "picture",
+				},
+				providerId: "test-additional",
+			},
+			headers,
+		});
+		expect(provider).toMatchObject({
+			id: expect.any(String),
+			environment: "prod",
+		});
 	});
 });
 
