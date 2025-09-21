@@ -717,47 +717,55 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
     ]}
 />
 
-## Provider Domain Configuration
+### Extending the `ssoProvider` schema
 
-When `useProviderDomain` is enabled, the SSO plugin will construct callback URLs using the provider's domain instead of your application's base URL. This is useful for multi-tenant applications where each tenant has their own domain.
+You can customize the underlying table via the `schema.ssoProvider` option. This lets you:
 
-### How it works
+- Override column names for built‑in fields using `fields`
+- Provide a custom table name via `modelName`
+- Add your own columns with `additionalFields`
 
-With `useProviderDomain: true`:
-- **Authorization URLs** are resolved against `https://{provider.domain}/api/auth`
-- **Callback URIs** use the provider domain: `https://{provider.domain}/api/auth/sso/callback/{providerId}`
-- **Token requests** are made to endpoints on the provider domain
+Each additional field uses the same `FieldAttribute` structure as other Better Auth plugins. You can specify `type`, `required`, `defaultValue`, `input`, `returned`, `unique`, `references`, validators, and more.
 
-### Configuration Options
+#### Example: Adding environment and region columns
 
-- **`domain`**: The provider's domain.
-- **`useHttps`** (optional): Explicitly control whether to use HTTPS or HTTP for the provider domain. Defaults to `true` (HTTPS) if not specified.
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
 
-### Example
-
-```ts
-// Server configuration
-const auth = betterAuth({
+export const auth = betterAuth({
     plugins: [
         sso({
-            useProviderDomain: true, // Enable provider domain resolution
-        })
-    ]
-})
-
-// Provider registration
-await authClient.sso.register({
-    providerId: "tenant-sso",
-    issuer: "https://idp.tenant.com",
-    domain: "tenant.example.com",
-    useHttps: true, // Optional - force HTTPS
-    oidcConfig: {
-        // ... OIDC configuration
-    }
+            schema: {
+                ssoProvider: {
+                    modelName: "singleSignOnProvider", // optional table name override
+                    fields: {
+                        providerId: "provider_id", // map column name
+                    },
+                    additionalFields: {
+                        environment: {
+                            type: "string",
+                            required: true,
+                            defaultValue: "prod", // auto-filled on create
+                        },
+                        region: {
+                            type: "string",
+                            required: false,
+                        },
+                    },
+                },
+            },
+        }),
+    ],
 });
 ```
 
-With this configuration, the callback URL will be `https://tenant.example.com/api/auth/sso/callback/tenant-sso` instead of your application's base URL.
+Once added, the inferred type for an SSO provider is augmented. You can access it via the plugin inference helper:
+
+```ts
+type MySSOProvider = typeof auth.$Infer.SSOProvider;
+// has environment (string) and region?: string
+```
 
 ## Options
 
