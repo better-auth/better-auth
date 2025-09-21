@@ -1,5 +1,4 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "../call";
+import { implEndpoint } from "../../better-call/server";
 import { APIError } from "better-call";
 import {
 	generateState,
@@ -13,68 +12,17 @@ import {
 	sessionMiddleware,
 } from "./session";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { SocialProviderListEnum } from "../../social-providers";
+import {
+	listUserAccountsDef,
+	linkSocialAccountDef,
+	unlinkAccountDef,
+	getAccessTokenDef,
+	refreshTokenDef,
+	accountInfoDef,
+} from "./shared";
 
-export const listUserAccounts = createAuthEndpoint(
-	"/list-accounts",
-	{
-		method: "GET",
-		use: [sessionMiddleware],
-		metadata: {
-			openapi: {
-				description: "List all accounts linked to the user",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "array",
-									items: {
-										type: "object",
-										properties: {
-											id: {
-												type: "string",
-											},
-											providerId: {
-												type: "string",
-											},
-											createdAt: {
-												type: "string",
-												format: "date-time",
-											},
-											updatedAt: {
-												type: "string",
-												format: "date-time",
-											},
-											accountId: {
-												type: "string",
-											},
-											scopes: {
-												type: "array",
-												items: {
-													type: "string",
-												},
-											},
-										},
-										required: [
-											"id",
-											"providerId",
-											"createdAt",
-											"updatedAt",
-											"accountId",
-											"scopes",
-										],
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	},
-	async (c) => {
+export const listUserAccounts = () =>
+	implEndpoint(listUserAccountsDef, [sessionMiddleware], async (c) => {
 		const session = c.context.session;
 		const accounts = await c.context.internalAdapter.findAccounts(
 			session.user.id,
@@ -89,115 +37,10 @@ export const listUserAccounts = createAuthEndpoint(
 				scopes: a.scope?.split(",") || [],
 			})),
 		);
-	},
-);
+	});
 
-export const linkSocialAccount = createAuthEndpoint(
-	"/link-social",
-	{
-		method: "POST",
-		requireHeaders: true,
-		body: z.object({
-			/**
-			 * Callback URL to redirect to after the user has signed in.
-			 */
-			callbackURL: z
-				.string()
-				.meta({
-					description: "The URL to redirect to after the user has signed in",
-				})
-				.optional(),
-			/**
-			 * OAuth2 provider to use
-			 */
-			provider: SocialProviderListEnum,
-			/**
-			 * ID Token for direct authentication without redirect
-			 */
-			idToken: z
-				.object({
-					token: z.string(),
-					nonce: z.string().optional(),
-					accessToken: z.string().optional(),
-					refreshToken: z.string().optional(),
-					scopes: z.array(z.string()).optional(),
-				})
-				.optional(),
-			/**
-			 * Whether to allow sign up for new users
-			 */
-			requestSignUp: z.boolean().optional(),
-			/**
-			 * Additional scopes to request when linking the account.
-			 * This is useful for requesting additional permissions when
-			 * linking a social account compared to the initial authentication.
-			 */
-			scopes: z
-				.array(z.string())
-				.meta({
-					description: "Additional scopes to request from the provider",
-				})
-				.optional(),
-			/**
-			 * The URL to redirect to if there is an error during the link process.
-			 */
-			errorCallbackURL: z
-				.string()
-				.meta({
-					description:
-						"The URL to redirect to if there is an error during the link process",
-				})
-				.optional(),
-			/**
-			 * Disable automatic redirection to the provider
-			 *
-			 * This is useful if you want to handle the redirection
-			 * yourself like in a popup or a different tab.
-			 */
-			disableRedirect: z
-				.boolean()
-				.meta({
-					description:
-						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
-				})
-				.optional(),
-		}),
-		use: [sessionMiddleware],
-		metadata: {
-			openapi: {
-				description: "Link a social account to the user",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										url: {
-											type: "string",
-											description:
-												"The authorization URL to redirect the user to",
-										},
-										redirect: {
-											type: "boolean",
-											description:
-												"Indicates if the user should be redirected to the authorization URL",
-										},
-										status: {
-											type: "boolean",
-										},
-									},
-									required: ["redirect"],
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	},
-	async (c) => {
+export const linkSocialAccount = () =>
+	implEndpoint(linkSocialAccountDef, [sessionMiddleware], async (c) => {
 		const session = c.context.session;
 
 		const provider = c.context.socialProviders.find(
@@ -361,41 +204,9 @@ export const linkSocialAccount = createAuthEndpoint(
 			url: url.toString(),
 			redirect: !c.body.disableRedirect,
 		});
-	},
-);
-export const unlinkAccount = createAuthEndpoint(
-	"/unlink-account",
-	{
-		method: "POST",
-		body: z.object({
-			providerId: z.string(),
-			accountId: z.string().optional(),
-		}),
-		use: [freshSessionMiddleware],
-		metadata: {
-			openapi: {
-				description: "Unlink an account",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: {
-											type: "boolean",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	},
-	async (ctx) => {
+	});
+export const unlinkAccount = () =>
+	implEndpoint(unlinkAccountDef, [freshSessionMiddleware], async (ctx) => {
 		const { providerId, accountId } = ctx.body;
 		const accounts = await ctx.context.internalAdapter.findAccounts(
 			ctx.context.session.user.id,
@@ -422,74 +233,10 @@ export const unlinkAccount = createAuthEndpoint(
 		return ctx.json({
 			status: true,
 		});
-	},
-);
+	});
 
-export const getAccessToken = createAuthEndpoint(
-	"/get-access-token",
-	{
-		method: "POST",
-		body: z.object({
-			providerId: z.string().meta({
-				description: "The provider ID for the OAuth provider",
-			}),
-			accountId: z
-				.string()
-				.meta({
-					description: "The account ID associated with the refresh token",
-				})
-				.optional(),
-			userId: z
-				.string()
-				.meta({
-					description: "The user ID associated with the account",
-				})
-				.optional(),
-		}),
-		metadata: {
-			openapi: {
-				description: "Get a valid access token, doing a refresh if needed",
-				responses: {
-					200: {
-						description: "A Valid access token",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										tokenType: {
-											type: "string",
-										},
-										idToken: {
-											type: "string",
-										},
-										accessToken: {
-											type: "string",
-										},
-										refreshToken: {
-											type: "string",
-										},
-										accessTokenExpiresAt: {
-											type: "string",
-											format: "date-time",
-										},
-										refreshTokenExpiresAt: {
-											type: "string",
-											format: "date-time",
-										},
-									},
-								},
-							},
-						},
-					},
-					400: {
-						description: "Invalid refresh token or provider configuration",
-					},
-				},
-			},
-		},
-	},
-	async (ctx) => {
+export const getAccessToken = () =>
+	implEndpoint(getAccessTokenDef, async (ctx) => {
 		const { providerId, accountId, userId } = ctx.body;
 		const req = ctx.request;
 		const session = await getSessionFromCtx(ctx);
@@ -567,74 +314,10 @@ export const getAccessToken = createAuthEndpoint(
 				cause: error,
 			});
 		}
-	},
-);
+	});
 
-export const refreshToken = createAuthEndpoint(
-	"/refresh-token",
-	{
-		method: "POST",
-		body: z.object({
-			providerId: z.string().meta({
-				description: "The provider ID for the OAuth provider",
-			}),
-			accountId: z
-				.string()
-				.meta({
-					description: "The account ID associated with the refresh token",
-				})
-				.optional(),
-			userId: z
-				.string()
-				.meta({
-					description: "The user ID associated with the account",
-				})
-				.optional(),
-		}),
-		metadata: {
-			openapi: {
-				description: "Refresh the access token using a refresh token",
-				responses: {
-					200: {
-						description: "Access token refreshed successfully",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										tokenType: {
-											type: "string",
-										},
-										idToken: {
-											type: "string",
-										},
-										accessToken: {
-											type: "string",
-										},
-										refreshToken: {
-											type: "string",
-										},
-										accessTokenExpiresAt: {
-											type: "string",
-											format: "date-time",
-										},
-										refreshTokenExpiresAt: {
-											type: "string",
-											format: "date-time",
-										},
-									},
-								},
-							},
-						},
-					},
-					400: {
-						description: "Invalid refresh token or provider configuration",
-					},
-				},
-			},
-		},
-	},
-	async (ctx) => {
+export const refreshToken = () =>
+	implEndpoint(refreshTokenDef, async (ctx) => {
 		const { providerId, accountId, userId } = ctx.body;
 		const req = ctx.request;
 		const session = await getSessionFromCtx(ctx);
@@ -689,69 +372,10 @@ export const refreshToken = createAuthEndpoint(
 				cause: error,
 			});
 		}
-	},
-);
+	});
 
-export const accountInfo = createAuthEndpoint(
-	"/account-info",
-	{
-		method: "POST",
-		use: [sessionMiddleware],
-		metadata: {
-			openapi: {
-				description: "Get the account info provided by the provider",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										user: {
-											type: "object",
-											properties: {
-												id: {
-													type: "string",
-												},
-												name: {
-													type: "string",
-												},
-												email: {
-													type: "string",
-												},
-												image: {
-													type: "string",
-												},
-												emailVerified: {
-													type: "boolean",
-												},
-											},
-											required: ["id", "emailVerified"],
-										},
-										data: {
-											type: "object",
-											properties: {},
-											additionalProperties: true,
-										},
-									},
-									required: ["user", "data"],
-									additionalProperties: false,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		body: z.object({
-			accountId: z.string().meta({
-				description:
-					"The provider given account id for which to get the account info",
-			}),
-		}),
-	},
-	async (ctx) => {
+export const accountInfo = () =>
+	implEndpoint(accountInfoDef, [sessionMiddleware], async (ctx) => {
 		const account = await ctx.context.internalAdapter.findAccount(
 			ctx.body.accountId,
 		);
@@ -789,5 +413,4 @@ export const accountInfo = createAuthEndpoint(
 			accessToken: tokens.accessToken as string,
 		});
 		return ctx.json(info);
-	},
-);
+	});

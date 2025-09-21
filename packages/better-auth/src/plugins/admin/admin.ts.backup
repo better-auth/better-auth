@@ -1,7 +1,27 @@
 import * as z from "zod";
-import { APIError, createAuthMiddleware, getSessionFromCtx } from "../../api";
+import {
+	APIError,
+	createAuthMiddleware,
+	getSessionFromCtx,
+} from "../../api";
 import { implEndpoint } from "../../better-call/server";
-import { setRoleDef, getUserDef } from "./shared";
+import {
+	setRoleDef,
+	getUserDef,
+	createUserDef,
+	adminUpdateUserDef,
+	listUsersDef,
+	listUserSessionsDef,
+	unbanUserDef,
+	banUserDef,
+	impersonateUserDef,
+	stopImpersonatingDef,
+	revokeUserSessionDef,
+	revokeUserSessionsDef,
+	removeUserDef,
+	setUserPasswordDef,
+	userHasPermissionDef
+} from "./shared";
 import { type BetterAuthPlugin, type Session, type Where } from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
@@ -184,84 +204,76 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-set-role)
 			 */
-			setRole: implEndpoint(
-				setRoleDef,
-				{
-					use: [adminMiddleware],
-					metadata: {
-						$Infer: {
-							body: {} as {
-								userId: string;
-								role:
-									| InferAdminRolesFromOption<O>
-									| InferAdminRolesFromOption<O>[];
-							},
+			setRole: implEndpoint(setRoleDef, {
+				use: [adminMiddleware],
+				metadata: {
+					$Infer: {
+						body: {} as {
+							userId: string;
+							role:
+								| InferAdminRolesFromOption<O>
+								| InferAdminRolesFromOption<O>[];
 						},
 					},
 				},
-				async (ctx) => {
-					const canSetRole = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: ctx.context.session.user.role,
-						options: opts,
-						permissions: {
-							user: ["set-role"],
-						},
+			}, async (ctx) => {
+				const canSetRole = hasPermission({
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["set-role"],
+					},
+				});
+				if (!canSetRole) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
 					});
-					if (!canSetRole) {
-						throw new APIError("FORBIDDEN", {
-							message:
-								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
-						});
-					}
+				}
 
-					const updatedUser = await ctx.context.internalAdapter.updateUser(
-						ctx.body.userId,
-						{
-							role: parseRoles(ctx.body.role),
-						},
-						ctx,
-					);
-					return ctx.json({
-						user: updatedUser as UserWithRole,
+				const updatedUser = await ctx.context.internalAdapter.updateUser(
+					ctx.body.userId,
+					{
+						role: parseRoles(ctx.body.role),
+					},
+					ctx,
+				);
+				return ctx.json({
+					user: updatedUser as UserWithRole,
+				});
+			}),
+			getUser: implEndpoint(getUserDef, {
+				use: [adminMiddleware],
+			}, async (ctx) => {
+				const { userId } = ctx.body;
+
+				const canGetUser = hasPermission({
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["get"],
+					},
+				});
+
+				if (!canGetUser) {
+					throw ctx.error("FORBIDDEN", {
+						message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_USER,
+						code: "YOU_ARE_NOT_ALLOWED_TO_GET_USER",
 					});
-				},
-			),
-			getUser: implEndpoint(
-				getUserDef,
-				{
-					use: [adminMiddleware],
-				},
-				async (ctx) => {
-					const { userId } = ctx.body;
+				}
 
-					const canGetUser = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: ctx.context.session.user.role,
-						options: opts,
-						permissions: {
-							user: ["get"],
-						},
+				const user = await ctx.context.internalAdapter.findUserById(userId);
+
+				if (!user) {
+					throw new APIError("NOT_FOUND", {
+						message: BASE_ERROR_CODES.USER_NOT_FOUND,
 					});
+				}
 
-					if (!canGetUser) {
-						throw ctx.error("FORBIDDEN", {
-							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_USER,
-							code: "YOU_ARE_NOT_ALLOWED_TO_GET_USER",
-						});
-					}
-
-					const user = await ctx.context.internalAdapter.findUserById(userId);
-
-					if (!user) {
-						throw new APIError("NOT_FOUND", {
-							message: BASE_ERROR_CODES.USER_NOT_FOUND,
-						});
-					}
-
-					return parseUserOutput(ctx.context.options, user);
-				},
-			),
+				return parseUserOutput(ctx.context.options, user);
+			}),
 			/**
 			 * ### Endpoint
 			 *

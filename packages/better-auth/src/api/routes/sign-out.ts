@@ -1,37 +1,11 @@
-import { createAuthEndpoint } from "../call";
+import { implEndpoint } from "../../better-call/server";
+import { signOutDef } from "./shared";
 import { deleteSessionCookie } from "../../cookies";
 import { APIError } from "better-call";
 import { BASE_ERROR_CODES } from "../../error/codes";
 
-export const signOut = createAuthEndpoint(
-	"/sign-out",
-	{
-		method: "POST",
-		requireHeaders: true,
-		metadata: {
-			openapi: {
-				description: "Sign out the current user",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										success: {
-											type: "boolean",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	},
-	async (ctx) => {
+export const signOut = () =>
+	implEndpoint(signOutDef, async (ctx) => {
 		const sessionCookieToken = await ctx.getSignedCookie(
 			ctx.context.authCookies.sessionToken.name,
 			ctx.context.secret,
@@ -47,5 +21,4 @@ export const signOut = createAuthEndpoint(
 		return ctx.json({
 			success: true,
 		});
-	},
-);
+	});

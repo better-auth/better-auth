@@ -1,9 +1,6 @@
-import {
-	APIError,
-	createAuthEndpoint,
-	createAuthMiddleware,
-	getSessionFromCtx,
-} from "../../api";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "../../api";
+import { implEndpoint } from "../../better-call/server";
+import { signInAnonymousDef } from "./shared";
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
@@ -87,101 +84,70 @@ export const anonymous = (options?: AnonymousOptions) => {
 	return {
 		id: "anonymous",
 		endpoints: {
-			signInAnonymous: createAuthEndpoint(
-				"/sign-in/anonymous",
-				{
-					method: "POST",
-					metadata: {
-						openapi: {
-							description: "Sign in anonymously",
-							responses: {
-								200: {
-									description: "Sign in anonymously",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													user: {
-														$ref: "#/components/schemas/User",
-													},
-													session: {
-														$ref: "#/components/schemas/Session",
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				async (ctx) => {
-					// If the current request already has a valid anonymous session, we should
-					// reject any further attempts to create another anonymous user. This
-					// prevents an anonymous user from signing in anonymously again while they
-					// are already authenticated.
-					const existingSession = await getSessionFromCtx<{
-						isAnonymous: boolean;
-					}>(ctx, { disableRefresh: true });
-					if (existingSession?.user.isAnonymous) {
-						throw new APIError("BAD_REQUEST", {
-							message:
-								ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
-						});
-					}
+			signInAnonymous: implEndpoint(signInAnonymousDef, async (ctx) => {
+				// If the current request already has a valid anonymous session, we should
+				// reject any further attempts to create another anonymous user. This
+				// prevents an anonymous user from signing in anonymously again while they
+				// are already authenticated.
+				const existingSession = await getSessionFromCtx<{
+					isAnonymous: boolean;
+				}>(ctx, { disableRefresh: true });
+				if (existingSession?.user.isAnonymous) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
+					});
+				}
 
-					const { emailDomainName = getOrigin(ctx.context.baseURL) } =
-						options || {};
-					const id = generateId();
-					const email = `temp-${id}@${emailDomainName}`;
-					const name = (await options?.generateName?.(ctx)) || "Anonymous";
-					const newUser = await ctx.context.internalAdapter.createUser(
-						{
-							email,
-							emailVerified: false,
-							isAnonymous: true,
-							name,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						},
-						ctx,
-					);
-					if (!newUser) {
-						throw ctx.error("INTERNAL_SERVER_ERROR", {
-							message: ERROR_CODES.FAILED_TO_CREATE_USER,
-						});
-					}
-					const session = await ctx.context.internalAdapter.createSession(
-						newUser.id,
-						ctx,
-					);
-					if (!session) {
-						return ctx.json(null, {
-							status: 400,
-							body: {
-								message: ERROR_CODES.COULD_NOT_CREATE_SESSION,
-							},
-						});
-					}
-					await setSessionCookie(ctx, {
-						session,
-						user: newUser,
+				const { emailDomainName = getOrigin(ctx.context.baseURL) } =
+					options || {};
+				const id = generateId();
+				const email = `temp-${id}@${emailDomainName}`;
+				const name = (await options?.generateName?.(ctx)) || "Anonymous";
+				const newUser = await ctx.context.internalAdapter.createUser(
+					{
+						email,
+						emailVerified: false,
+						isAnonymous: true,
+						name,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+					ctx,
+				);
+				if (!newUser) {
+					throw ctx.error("INTERNAL_SERVER_ERROR", {
+						message: ERROR_CODES.FAILED_TO_CREATE_USER,
 					});
-					return ctx.json({
-						token: session.token,
-						user: {
-							id: newUser.id,
-							email: newUser.email,
-							emailVerified: newUser.emailVerified,
-							name: newUser.name,
-							createdAt: newUser.createdAt,
-							updatedAt: newUser.updatedAt,
+				}
+				const session = await ctx.context.internalAdapter.createSession(
+					newUser.id,
+					ctx,
+				);
+				if (!session) {
+					return ctx.json(null, {
+						status: 400,
+						body: {
+							message: ERROR_CODES.COULD_NOT_CREATE_SESSION,
 						},
 					});
-				},
-			),
+				}
+				await setSessionCookie(ctx, {
+					session,
+					user: newUser,
+				});
+				return ctx.json({
+					token: session.token,
+					user: {
+						id: newUser.id,
+						email: newUser.email,
+						emailVerified: newUser.emailVerified,
+						name: newUser.name,
+						createdAt: newUser.createdAt,
+						updatedAt: newUser.updatedAt,
+					},
+				});
+			}),
 		},
 		hooks: {
 			after: [

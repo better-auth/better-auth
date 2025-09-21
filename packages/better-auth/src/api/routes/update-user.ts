@@ -1,5 +1,4 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "../call";
+import { implEndpoint } from "../../better-call/server";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import {
@@ -9,226 +8,72 @@ import {
 } from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
-import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
+import type { BetterAuthOptions } from "../../types";
 import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../middlewares";
+import {
+	updateUserDef,
+	changePasswordDef,
+	setPasswordDef,
+	deleteUserDef,
+	deleteUserCallbackDef,
+	changeEmailDef,
+} from "./shared";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
-	createAuthEndpoint(
-		"/update-user",
-		{
-			method: "POST",
-			body: z.record(
-				z.string().meta({
-					description: "Field name must be a string",
-				}),
-				z.any(),
-			),
-			use: [sessionMiddleware],
-			metadata: {
-				$Infer: {
-					body: {} as Partial<AdditionalUserFieldsInput<O>> & {
-						name?: string;
-						image?: string;
-					},
-				},
-				openapi: {
-					description: "Update the current user",
-					requestBody: {
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										name: {
-											type: "string",
-											description: "The name of the user",
-										},
-										image: {
-											type: "string",
-											description: "The image of the user",
-										},
-									},
-								},
-							},
-						},
-					},
-					responses: {
-						"200": {
-							description: "Success",
-							content: {
-								"application/json": {
-									schema: {
-										type: "object",
-										properties: {
-											status: {
-												type: "boolean",
-												description: "Indicates if the update was successful",
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		async (ctx) => {
-			const body = ctx.body as {
-				name?: string;
-				image?: string;
-				[key: string]: any;
-			};
+	implEndpoint(updateUserDef, [sessionMiddleware], async (ctx) => {
+		const body = ctx.body as {
+			name?: string;
+			image?: string;
+			[key: string]: any;
+		};
 
-			if (body.email) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.EMAIL_CAN_NOT_BE_UPDATED,
-				});
-			}
-			const { name, image, ...rest } = body;
-			const session = ctx.context.session;
-			if (
-				image === undefined &&
-				name === undefined &&
-				Object.keys(rest).length === 0
-			) {
-				return ctx.json({
-					status: true,
-				});
-			}
-			const additionalFields = parseUserInput(
-				ctx.context.options,
-				rest,
-				"update",
-			);
-			const user = await ctx.context.internalAdapter.updateUser(
-				session.user.id,
-				{
-					name,
-					image,
-					...additionalFields,
-				},
-				ctx,
-			);
-			/**
-			 * Update the session cookie with the new user data
-			 */
-			await setSessionCookie(ctx, {
-				session: session.session,
-				user,
+		if (body.email) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.EMAIL_CAN_NOT_BE_UPDATED,
 			});
+		}
+		const { name, image, ...rest } = body;
+		const session = ctx.context.session;
+		if (
+			image === undefined &&
+			name === undefined &&
+			Object.keys(rest).length === 0
+		) {
 			return ctx.json({
 				status: true,
 			});
-		},
-	);
-
-export const changePassword = createAuthEndpoint(
-	"/change-password",
-	{
-		method: "POST",
-		body: z.object({
-			/**
-			 * The new password to set
-			 */
-			newPassword: z.string().meta({
-				description: "The new password to set",
-			}),
-			/**
-			 * The current password of the user
-			 */
-			currentPassword: z.string().meta({
-				description: "The current password is required",
-			}),
-			/**
-			 * revoke all sessions that are not the
-			 * current one logged in by the user
-			 */
-			revokeOtherSessions: z
-				.boolean()
-				.meta({
-					description: "Must be a boolean value",
-				})
-				.optional(),
-		}),
-		use: [sensitiveSessionMiddleware],
-		metadata: {
-			openapi: {
-				description: "Change the password of the user",
-				responses: {
-					"200": {
-						description: "Password successfully changed",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										token: {
-											type: "string",
-											nullable: true, // Only present if revokeOtherSessions is true
-											description:
-												"New session token if other sessions were revoked",
-										},
-										user: {
-											type: "object",
-											properties: {
-												id: {
-													type: "string",
-													description: "The unique identifier of the user",
-												},
-												email: {
-													type: "string",
-													format: "email",
-													description: "The email address of the user",
-												},
-												name: {
-													type: "string",
-													description: "The name of the user",
-												},
-												image: {
-													type: "string",
-													format: "uri",
-													nullable: true,
-													description: "The profile image URL of the user",
-												},
-												emailVerified: {
-													type: "boolean",
-													description: "Whether the email has been verified",
-												},
-												createdAt: {
-													type: "string",
-													format: "date-time",
-													description: "When the user was created",
-												},
-												updatedAt: {
-													type: "string",
-													format: "date-time",
-													description: "When the user was last updated",
-												},
-											},
-											required: [
-												"id",
-												"email",
-												"name",
-												"emailVerified",
-												"createdAt",
-												"updatedAt",
-											],
-										},
-									},
-									required: ["user"],
-								},
-							},
-						},
-					},
-				},
+		}
+		const additionalFields = parseUserInput(
+			ctx.context.options,
+			rest,
+			"update",
+		);
+		const user = await ctx.context.internalAdapter.updateUser(
+			session.user.id,
+			{
+				name,
+				image,
+				...additionalFields,
 			},
-		},
-	},
-	async (ctx) => {
+			ctx,
+		);
+		/**
+		 * Update the session cookie with the new user data
+		 */
+		await setSessionCookie(ctx, {
+			session: session.session,
+			user,
+		});
+		return ctx.json({
+			status: true,
+		});
+	});
+
+export const changePassword = () =>
+	implEndpoint(changePasswordDef, [sensitiveSessionMiddleware], async (ctx) => {
 		const { newPassword, currentPassword, revokeOtherSessions } = ctx.body;
 		const session = ctx.context.session;
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
@@ -304,27 +149,10 @@ export const changePassword = createAuthEndpoint(
 				updatedAt: session.user.updatedAt,
 			},
 		});
-	},
-);
+	});
 
-export const setPassword = createAuthEndpoint(
-	"/set-password",
-	{
-		method: "POST",
-		body: z.object({
-			/**
-			 * The new password to set
-			 */
-			newPassword: z.string().meta({
-				description: "The new password to set is required",
-			}),
-		}),
-		metadata: {
-			SERVER_ONLY: true,
-		},
-		use: [sensitiveSessionMiddleware],
-	},
-	async (ctx) => {
+export const setPassword = () =>
+	implEndpoint(setPasswordDef, [sensitiveSessionMiddleware], async (ctx) => {
 		const { newPassword } = ctx.body;
 		const session = ctx.context.session;
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
@@ -368,78 +196,10 @@ export const setPassword = createAuthEndpoint(
 		throw new APIError("BAD_REQUEST", {
 			message: "user already has a password",
 		});
-	},
-);
+	});
 
-export const deleteUser = createAuthEndpoint(
-	"/delete-user",
-	{
-		method: "POST",
-		use: [sensitiveSessionMiddleware],
-		body: z.object({
-			/**
-			 * The callback URL to redirect to after the user is deleted
-			 * this is only used on delete user callback
-			 */
-			callbackURL: z
-				.string()
-				.meta({
-					description:
-						"The callback URL to redirect to after the user is deleted",
-				})
-				.optional(),
-			/**
-			 * The password of the user. If the password isn't provided, session freshness
-			 * will be checked.
-			 */
-			password: z
-				.string()
-				.meta({
-					description:
-						"The password of the user is required to delete the user",
-				})
-				.optional(),
-			/**
-			 * The token to delete the user. If the token is provided, the user will be deleted
-			 */
-			token: z
-				.string()
-				.meta({
-					description: "The token to delete the user is required",
-				})
-				.optional(),
-		}),
-		metadata: {
-			openapi: {
-				description: "Delete the user",
-				responses: {
-					"200": {
-						description: "User deletion processed successfully",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										success: {
-											type: "boolean",
-											description: "Indicates if the operation was successful",
-										},
-										message: {
-											type: "string",
-											enum: ["User deleted", "Verification email sent"],
-											description: "Status message of the deletion process",
-										},
-									},
-									required: ["success", "message"],
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	},
-	async (ctx) => {
+export const deleteUser = () =>
+	implEndpoint(deleteUserDef, [sensitiveSessionMiddleware], async (ctx) => {
 		if (!ctx.context.options.user?.deleteUser?.enabled) {
 			ctx.context.logger.error(
 				"Delete user is disabled. Enable it in the options",
@@ -549,170 +309,65 @@ export const deleteUser = createAuthEndpoint(
 			success: true,
 			message: "User deleted",
 		});
-	},
-);
+	});
 
-export const deleteUserCallback = createAuthEndpoint(
-	"/delete-user/callback",
-	{
-		method: "GET",
-		query: z.object({
-			token: z.string().meta({
-				description: "The token to verify the deletion request",
-			}),
-			callbackURL: z
-				.string()
-				.meta({
-					description: "The URL to redirect to after deletion",
-				})
-				.optional(),
-		}),
-		use: [originCheck((ctx) => ctx.query.callbackURL)],
-		metadata: {
-			openapi: {
-				description:
-					"Callback to complete user deletion with verification token",
-				responses: {
-					"200": {
-						description: "User successfully deleted",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										success: {
-											type: "boolean",
-											description: "Indicates if the deletion was successful",
-										},
-										message: {
-											type: "string",
-											enum: ["User deleted"],
-											description: "Confirmation message",
-										},
-									},
-									required: ["success", "message"],
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	},
-	async (ctx) => {
-		if (!ctx.context.options.user?.deleteUser?.enabled) {
-			ctx.context.logger.error(
-				"Delete user is disabled. Enable it in the options",
+export const deleteUserCallback = () =>
+	implEndpoint(
+		deleteUserCallbackDef,
+		[originCheck((ctx) => ctx.query.callbackURL)],
+		async (ctx) => {
+			if (!ctx.context.options.user?.deleteUser?.enabled) {
+				ctx.context.logger.error(
+					"Delete user is disabled. Enable it in the options",
+				);
+				throw new APIError("NOT_FOUND");
+			}
+			const session = await getSessionFromCtx(ctx);
+			if (!session) {
+				throw new APIError("NOT_FOUND", {
+					message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
+				});
+			}
+			const token = await ctx.context.internalAdapter.findVerificationValue(
+				`delete-account-${ctx.query.token}`,
 			);
-			throw new APIError("NOT_FOUND");
-		}
-		const session = await getSessionFromCtx(ctx);
-		if (!session) {
-			throw new APIError("NOT_FOUND", {
-				message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
-			});
-		}
-		const token = await ctx.context.internalAdapter.findVerificationValue(
-			`delete-account-${ctx.query.token}`,
-		);
-		if (!token || token.expiresAt < new Date()) {
-			throw new APIError("NOT_FOUND", {
-				message: BASE_ERROR_CODES.INVALID_TOKEN,
-			});
-		}
-		if (token.value !== session.user.id) {
-			throw new APIError("NOT_FOUND", {
-				message: BASE_ERROR_CODES.INVALID_TOKEN,
-			});
-		}
-		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
-		if (beforeDelete) {
-			await beforeDelete(session.user, ctx.request);
-		}
-		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id);
-		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
-		await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+			if (!token || token.expiresAt < new Date()) {
+				throw new APIError("NOT_FOUND", {
+					message: BASE_ERROR_CODES.INVALID_TOKEN,
+				});
+			}
+			if (token.value !== session.user.id) {
+				throw new APIError("NOT_FOUND", {
+					message: BASE_ERROR_CODES.INVALID_TOKEN,
+				});
+			}
+			const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
+			if (beforeDelete) {
+				await beforeDelete(session.user, ctx.request);
+			}
+			await ctx.context.internalAdapter.deleteUser(session.user.id);
+			await ctx.context.internalAdapter.deleteSessions(session.user.id);
+			await ctx.context.internalAdapter.deleteAccounts(session.user.id);
+			await ctx.context.internalAdapter.deleteVerificationValue(token.id);
 
-		deleteSessionCookie(ctx);
+			deleteSessionCookie(ctx);
 
-		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
-		if (afterDelete) {
-			await afterDelete(session.user, ctx.request);
-		}
-		if (ctx.query.callbackURL) {
-			throw ctx.redirect(ctx.query.callbackURL || "/");
-		}
-		return ctx.json({
-			success: true,
-			message: "User deleted",
-		});
-	},
-);
-
-export const changeEmail = createAuthEndpoint(
-	"/change-email",
-	{
-		method: "POST",
-		body: z.object({
-			newEmail: z.email().meta({
-				description:
-					"The new email address to set must be a valid email address",
-			}),
-			callbackURL: z
-				.string()
-				.meta({
-					description: "The URL to redirect to after email verification",
-				})
-				.optional(),
-		}),
-		use: [sensitiveSessionMiddleware],
-		metadata: {
-			openapi: {
-				responses: {
-					"200": {
-						description: "Email change request processed successfully",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: {
-											type: "boolean",
-											description: "Indicates if the request was successful",
-										},
-										message: {
-											type: "string",
-											enum: ["Email updated", "Verification email sent"],
-											description: "Status message of the email change process",
-											nullable: true,
-										},
-									},
-									required: ["status"],
-								},
-							},
-						},
-					},
-					"422": {
-						description: "Unprocessable Entity. Email already exists",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										message: {
-											type: "string",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
+			if (afterDelete) {
+				await afterDelete(session.user, ctx.request);
+			}
+			if (ctx.query.callbackURL) {
+				throw ctx.redirect(ctx.query.callbackURL || "/");
+			}
+			return ctx.json({
+				success: true,
+				message: "User deleted",
+			});
 		},
-	},
-	async (ctx) => {
+	);
+
+export const changeEmail = () =>
+	implEndpoint(changeEmailDef, [sensitiveSessionMiddleware], async (ctx) => {
 		if (!ctx.context.options.user?.changeEmail?.enabled) {
 			ctx.context.logger.error("Change email is disabled.");
 			throw new APIError("BAD_REQUEST", {
@@ -822,5 +477,4 @@ export const changeEmail = createAuthEndpoint(
 		return ctx.json({
 			status: true,
 		});
-	},
-);
+	});
