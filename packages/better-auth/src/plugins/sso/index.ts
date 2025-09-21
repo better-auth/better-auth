@@ -1,7 +1,10 @@
 import * as z from "zod";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
 import type { BetterAuthPlugin, User } from "../../types";
-import type { FieldAttribute, InferAdditionalFieldsFromPluginOptions } from "../../db/field";
+import type {
+	FieldAttribute,
+	InferAdditionalFieldsFromPluginOptions,
+} from "../../db/field";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -105,9 +108,15 @@ export type InferSSOProvider<
 	O extends SSOOptions | undefined,
 	isClientSide extends boolean = true,
 > = SSOProvider &
-	InferAdditionalFieldsFromPluginOptions<"ssoProvider", NonNullable<O>, isClientSide>;
+	InferAdditionalFieldsFromPluginOptions<
+		"ssoProvider",
+		NonNullable<O>,
+		isClientSide
+	>;
 
-export const sso = <O extends SSOOptions | undefined = undefined>(options?: O) => {
+export const sso = <O extends SSOOptions | undefined = undefined>(
+	options?: O,
+) => {
 	return {
 		id: "sso",
 		endpoints: {
