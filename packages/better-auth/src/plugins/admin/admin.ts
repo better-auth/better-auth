@@ -569,9 +569,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "GET",
 					use: [adminMiddleware],
 					query: z.object({
-						searchValue: z.string().optional().meta({
+						searchValue: z.string().meta({
 							description: 'The value to search for. Eg: "some name"',
-						}),
+						}).optional(),
 						searchField: z
 							.enum(["email", "name"])
 							.meta({
@@ -588,17 +588,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							.optional(),
 						limit: z
 							.string()
+							.or(z.number())
+							.default(10)
 							.meta({
 								description: "The number of users to return",
 							})
-							.or(z.number())
 							.optional(),
 						offset: z
 							.string()
+							.or(z.number())
+							.default(10)
 							.meta({
 								description: "The offset to start from",
 							})
-							.or(z.number())
 							.optional(),
 						sortBy: z
 							.string()
@@ -620,11 +622,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							.optional(),
 						filterValue: z
 							.string()
+							.or(z.number())
+							.or(z.boolean())
 							.meta({
 								description: "The value to filter by",
 							})
-							.or(z.number())
-							.or(z.boolean())
 							.optional(),
 						filterOperator: z
 							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
