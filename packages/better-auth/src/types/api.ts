@@ -25,9 +25,7 @@ export type FilterActions<API> = Omit<
 		: never
 >;
 
-export type InferSessionAPI<API> = API extends {
-	[key: string]: infer E;
-}
+export type InferSessionAPI<API> = API extends { [key: string]: infer E }
 	? UnionToIntersection<
 			E extends Endpoint
 				? E["path"] extends "/get-session"
@@ -44,17 +42,13 @@ export type InferSessionAPI<API> = API extends {
 								asResponse?: R;
 								returnHeaders?: H;
 							}) => false extends R
-								? H extends true
-									? Promise<{
-											headers: Headers;
-											response: PrettifyDeep<Awaited<ReturnType<E>>>;
-										}>
-									: Promise<
-											PrettifyDeep<Awaited<ReturnType<E>>> & {
+								? Promise<
+										| (PrettifyDeep<Awaited<ReturnType<E>>> & {
 												options: E["options"];
 												path: E["path"];
-											}
-										>
+										  } & (H extends true ? { headers: Headers } : {}))
+										| null
+									>
 								: Promise<Response>;
 						}
 					: never
