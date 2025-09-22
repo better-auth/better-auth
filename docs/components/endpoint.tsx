@@ -1,7 +1,5 @@
 "use client";
-import { Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "./ui/button";
 import { useState } from "react";
 
 function Method({ method }: { method: "POST" | "GET" | "DELETE" | "PUT" }) {
