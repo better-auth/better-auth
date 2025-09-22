@@ -29,6 +29,7 @@ import { kakao } from "./kakao";
 import { naver } from "./naver";
 import { line } from "./line";
 import { paypal } from "./paypal";
+import { strava } from "./strava";
 import type { OAuthProvider } from "../oauth2";
 
 export const socialProviders = {
@@ -62,6 +63,7 @@ export const socialProviders = {
 	naver,
 	line,
 	paypal,
+	strava,
 } satisfies {
 	[key: string]: (
 		// todo: fix any here
@@ -120,5 +122,6 @@ export * from "./kakao";
 export * from "./naver";
 export * from "./line";
 export * from "./paypal";
+export * from "./strava";
 
 export type SocialProviderList = typeof socialProviderList;
