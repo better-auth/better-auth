@@ -171,7 +171,7 @@ importers:
         version: 0.5.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@react-three/fiber':
         specifier: ^8.18.0
-        version: 8.18.0(de6zoezpf3ukbgngf33jdfxfpq)
+        version: 8.18.0(1a7d56a84bc02e5ad1bde2480f0aeeca)
       '@tanstack/react-query':
         specifier: ^5.85.9
         version: 5.85.9(react@19.1.1)
@@ -573,7 +573,7 @@ importers:
         version: 0.15.3(solid-js@1.9.9)
       '@solidjs/start':
         specifier: ^1.1.7
-        version: 1.1.7(ccvduuxloi3j37iwckcwkycibi)
+        version: 1.1.7(7c37fd26a8096bc07b4eef39619c825a)
       better-auth:
         specifier: workspace:*
         version: link:../../../packages/better-auth
@@ -646,6 +646,12 @@ importers:
 
   packages/better-auth:
     dependencies:
+      '@better-auth/client-core':
+        specifier: workspace:*
+        version: link:../client/core
+      '@better-auth/react':
+        specifier: workspace:*
+        version: link:../client/react
       '@better-auth/utils':
         specifier: 0.3.0
         version: 0.3.0
@@ -870,6 +876,50 @@ importers:
       tsx:
         specifier: ^4.20.5
         version: 4.20.5
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.2
+      unbuild:
+        specifier: 'catalog:'
+        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
+
+  packages/client/core:
+    dependencies:
+      '@better-fetch/fetch':
+        specifier: 'catalog:'
+        version: 1.1.18
+      nanostores:
+        specifier: ^1.0.1
+        version: 1.0.1
+      zod:
+        specifier: ^4.1.5
+        version: 4.1.5
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.2
+      unbuild:
+        specifier: 'catalog:'
+        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
+
+  packages/client/react:
+    dependencies:
+      '@better-auth/client-core':
+        specifier: workspace:*
+        version: link:../core
+      nanostores:
+        specifier: ^1.0.1
+        version: 1.0.1
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.23
+        version: 18.3.23
+      better-auth:
+        specifier: workspace:*
+        version: link:../../better-auth
+      react:
+        specifier: ^19.1.1
+        version: 19.1.1
       typescript:
         specifier: 'catalog:'
         version: 5.9.2
@@ -15930,7 +15980,9 @@ snapshots:
       metro-runtime: 0.83.1
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.79.6': {}
 
@@ -15956,7 +16008,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.12
 
-  '@react-three/fiber@8.18.0(de6zoezpf3ukbgngf33jdfxfpq)':
+  '@react-three/fiber@8.18.0(1a7d56a84bc02e5ad1bde2480f0aeeca)':
     dependencies:
       '@babel/runtime': 7.28.3
       '@types/react-reconciler': 0.26.7
@@ -16409,7 +16461,7 @@ snapshots:
     dependencies:
       solid-js: 1.9.9
 
-  '@solidjs/start@1.1.7(ccvduuxloi3j37iwckcwkycibi)':
+  '@solidjs/start@1.1.7(7c37fd26a8096bc07b4eef39619c825a)':
     dependencies:
       '@tanstack/server-functions-plugin': 1.121.21(vite@7.1.5(@types/node@24.4.0)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))
       '@vinxi/plugin-directives': 0.5.1(vinxi@0.5.8(@azure/identity@4.11.1)(@libsql/client@0.15.14)(@netlify/blobs@10.0.8)(@types/node@24.4.0)(better-sqlite3@12.2.0)(db0@0.3.2(@libsql/client@0.15.14)(better-sqlite3@12.2.0)(drizzle-orm@0.44.5(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(better-sqlite3@12.2.0)(bun-types@1.2.21(@types/react@19.1.12))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(prisma@5.22.0))(mysql2@3.14.4))(drizzle-orm@0.44.5(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(better-sqlite3@12.2.0)(bun-types@1.2.21(@types/react@19.1.12))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(prisma@5.22.0))(ioredis@5.7.0)(jiti@2.5.1)(less@4.4.1)(lightningcss@1.30.1)(mysql2@3.14.4)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))
@@ -17707,7 +17759,7 @@ snapshots:
 
   autoprefixer@10.4.21(postcss@8.5.6):
     dependencies:
-      browserslist: 4.25.4
+      browserslist: 4.26.0
       caniuse-lite: 1.0.30001741
       fraction.js: 4.3.7
       normalize-range: 0.1.2
@@ -18135,7 +18187,7 @@ snapshots:
 
   caniuse-api@3.0.0:
     dependencies:
-      browserslist: 4.25.4
+      browserslist: 4.26.0
       caniuse-lite: 1.0.30001741
       lodash.memoize: 4.1.2
       lodash.uniq: 4.5.0
@@ -18576,7 +18628,7 @@ snapshots:
 
   cssnano-preset-default@7.0.7(postcss@8.5.6):
     dependencies:
-      browserslist: 4.25.4
+      browserslist: 4.26.0
       css-declaration-sorter: 7.2.0(postcss@8.5.6)
       cssnano-utils: 5.0.1(postcss@8.5.6)
       postcss: 8.5.6
@@ -22671,7 +22723,7 @@ snapshots:
 
   postcss-colormin@7.0.3(postcss@8.5.6):
     dependencies:
-      browserslist: 4.25.4
+      browserslist: 4.26.0
       caniuse-api: 3.0.0
       colord: 2.9.3
       postcss: 8.5.6
@@ -22679,7 +22731,7 @@ snapshots:
 
   postcss-convert-values@7.0.5(postcss@8.5.6):
     dependencies:
-      browserslist: 4.25.4
+      browserslist: 4.26.0
       postcss: 8.5.6
       postcss-value-parser: 4.2.0
 
@@ -22708,7 +22760,7 @@ snapshots:
 
   postcss-merge-rules@7.0.5(postcss@8.5.6):
     dependencies:
-      browserslist: 4.25.4
+      browserslist: 4.26.0
       caniuse-api: 3.0.0
       cssnano-utils: 5.0.1(postcss@8.5.6)
       postcss: 8.5.6
@@ -22728,7 +22780,7 @@ snapshots:
 
   postcss-minify-params@7.0.3(postcss@8.5.6):
     dependencies:
-      browserslist: 4.25.4
+      browserslist: 4.26.0
       cssnano-utils: 5.0.1(postcss@8.5.6)
       postcss: 8.5.6
       postcss-value-parser: 4.2.0
@@ -22775,7 +22827,7 @@ snapshots:
 
   postcss-normalize-unicode@7.0.3(postcss@8.5.6):
     dependencies:
-      browserslist: 4.25.4
+      browserslist: 4.26.0
       postcss: 8.5.6
       postcss-value-parser: 4.2.0
 
@@ -22797,7 +22849,7 @@ snapshots:
 
   postcss-reduce-initial@7.0.3(postcss@8.5.6):
     dependencies:
-      browserslist: 4.25.4
+      browserslist: 4.26.0
       caniuse-api: 3.0.0
       postcss: 8.5.6
 
@@ -24188,7 +24240,7 @@ snapshots:
 
   stylehacks@7.0.5(postcss@8.5.6):
     dependencies:
-      browserslist: 4.25.4
+      browserslist: 4.26.0
       postcss: 8.5.6
       postcss-selector-parser: 7.1.0
 

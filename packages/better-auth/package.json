@@ -696,6 +696,8 @@
     }
   },
   "dependencies": {
+    "@better-auth/client-core": "workspace:*",
+    "@better-auth/react": "workspace:*",
     "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.0.0",

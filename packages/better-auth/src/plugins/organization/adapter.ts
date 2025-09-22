@@ -16,7 +16,7 @@ import type {
 } from "./schema";
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../init";
-import parseJSON from "../../client/parser";
+import parseJSON from "../../utils/parser";
 import { type InferAdditionalFieldsFromPluginOptions } from "../../db";
 import { getCurrentAdapter } from "../../context/transaction";
 

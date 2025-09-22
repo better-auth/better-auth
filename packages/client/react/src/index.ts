@@ -1,5 +1,8 @@
-import { getClientConfig } from "./config";
-import { capitalizeFirstLetter } from "../utils/misc";
+import {
+	getClientConfig,
+	createDynamicPathProxy,
+	BASE_ERROR_CODES,
+} from "@better-auth/client-core";
 import type {
 	BetterAuthClientPlugin,
 	ClientOptions,
@@ -7,15 +10,21 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
-} from "./types";
-import { createDynamicPathProxy } from "./proxy";
-import type { PrettifyDeep, UnionToIntersection } from "../types/helper";
-import type { Atom } from "nanostores";
-import type {
+	SessionQueryParams,
+	PrettifyDeep,
+	UnionToIntersection,
 	BetterFetchError,
 	BetterFetchResponse,
-} from "@better-fetch/fetch";
-import type { BASE_ERROR_CODES } from "../error/codes";
+} from "@better-auth/client-core";
+import { useStore } from "./react-store";
+
+function getAtomKey(str: string) {
+	return `use${capitalizeFirstLetter(str)}`;
+}
+
+export function capitalizeFirstLetter(str: string) {
+	return str.charAt(0).toUpperCase() + str.slice(1);
+}
 
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin
@@ -28,7 +37,7 @@ type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 							? never
 							: key extends string
 								? `use${Capitalize<key>}`
-								: never]: Atoms[key];
+								: never]: () => ReturnType<Atoms[key]["get"]>;
 					}
 				: {}
 			: {}
@@ -43,13 +52,14 @@ export function createAuthClient<Option extends ClientOptions>(
 		pluginsActions,
 		pluginsAtoms,
 		$fetch,
-		atomListeners,
 		$store,
+		atomListeners,
 	} = getClientConfig(options);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
-		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = value;
+		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
+
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
@@ -63,31 +73,35 @@ export function createAuthClient<Option extends ClientOptions>(
 		pluginsAtoms,
 		atomListeners,
 	);
+
 	type ClientAPI = InferClientAPI<Option>;
 	type Session = ClientAPI extends {
 		getSession: () => Promise<infer Res>;
 	}
 		? Res extends BetterFetchResponse<infer S>
 			? S
-			: Res extends Record<string, any>
-				? Res
-				: never
+			: Res
 		: never;
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		ClientAPI &
 		InferActions<Option> & {
-			useSession: Atom<{
+			useSession: () => {
 				data: Session;
-				error: BetterFetchError | null;
 				isPending: boolean;
-			}>;
-			$fetch: typeof $fetch;
-			$store: typeof $store;
+				error: BetterFetchError | null;
+				refetch: (queryParams?: { query?: SessionQueryParams }) => void;
+			};
 			$Infer: {
 				Session: NonNullable<Session>;
 			};
+			$fetch: typeof $fetch;
+			$store: typeof $store;
 			$ERROR_CODES: PrettifyDeep<
 				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
 			>;
 		};
 }
+
+export { useStore };
+export type * from "@better-fetch/fetch";
+export type * from "nanostores";

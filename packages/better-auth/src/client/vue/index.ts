@@ -1,7 +1,10 @@
 import { useStore } from "./vue-store";
 import type { DeepReadonly, Ref } from "vue";
-import { getClientConfig } from "../config";
-import { capitalizeFirstLetter } from "../../utils/misc";
+import {
+	getClientConfig,
+	createDynamicPathProxy,
+	BASE_ERROR_CODES,
+} from "@better-auth/client-core";
 import type {
 	BetterAuthClientPlugin,
 	ClientOptions,
@@ -9,14 +12,12 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
-} from "../types";
-import { createDynamicPathProxy } from "../proxy";
-import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
-import type {
+	PrettifyDeep,
+	UnionToIntersection,
 	BetterFetchError,
 	BetterFetchResponse,
-} from "@better-fetch/fetch";
-import type { BASE_ERROR_CODES } from "../../error/codes";
+} from "@better-auth/client-core";
+import { capitalizeFirstLetter } from "../../utils/misc";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;

@@ -1,5 +1,5 @@
 import type { AuthPluginSchema } from "..";
-import parseJSON from "../../client/parser";
+import parseJSON from "../../utils/parser";
 
 export const apiKeySchema = ({
 	timeWindow,
