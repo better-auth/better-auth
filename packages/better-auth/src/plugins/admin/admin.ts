@@ -686,7 +686,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_USERS,
 						});
 					}
-
+					const offset = Number(ctx.query?.offset),
+						limit = Number(undefined);
+					if (limit <= 0) {
+						return {
+							offset,
+							limit,
+							total: 0,
+							users: [],
+						};
+					}
 					const where: Where[] = [];
 
 					if (ctx.query?.searchValue) {
@@ -707,8 +716,8 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 					try {
 						const users = await ctx.context.internalAdapter.listUsers(
-							Number(ctx.query?.limit) || undefined,
-							Number(ctx.query?.offset) || undefined,
+							limit,
+							offset,
 							ctx.query?.sortBy
 								? {
 										field: ctx.query.sortBy,
@@ -720,16 +729,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						const total = await ctx.context.internalAdapter.countTotalUsers(
 							where.length ? where : undefined,
 						);
+
 						return ctx.json({
-							users: users as UserWithRole[],
+							offset,
+							limit,
 							total: total,
-							limit: Number(ctx.query?.limit) || undefined,
-							offset: Number(ctx.query?.offset) || undefined,
+							users: users as UserWithRole[],
 						});
 					} catch (e) {
 						return ctx.json({
-							users: [],
+							offset,
+							limit,
 							total: 0,
+							users: [],
 						});
 					}
 				},
