@@ -21,7 +21,8 @@
   "scripts": {
     "build": "unbuild --clean",
     "dev": "unbuild --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -46,9 +47,11 @@
   },
   "devDependencies": {
     "@types/react": "^18.3.23",
+    "happy-dom": "^18.0.1",
     "react": "^19.1.1",
     "typescript": "catalog:",
-    "unbuild": "catalog:"
+    "unbuild": "catalog:",
+    "vitest": "catalog:"
   },
   "files": [
     "dist"
