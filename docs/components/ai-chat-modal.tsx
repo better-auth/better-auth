@@ -10,11 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-<<<<<<< HEAD
 import { Send, Bot, User, AlertCircle } from "lucide-react";
-=======
-import { Send, Loader2, Bot, User, AlertCircle } from "lucide-react";
->>>>>>> 7df69c23b (docs: add ai chat assistant for better-auth docs (#4735))
 import { MarkdownRenderer } from "./markdown-renderer";
 import { betterFetch } from "@better-fetch/fetch";
 import { atom } from "jotai";
