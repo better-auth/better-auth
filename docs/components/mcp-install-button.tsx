@@ -24,7 +24,7 @@ export function McpInstallButton({
 				window.open(installUrl, "_blank");
 			}}
 		>
-			<span className="underline-offset-0">Add to Cursor (MCP)</span>
+			Add to Cursor (MCP)
 		</Button>
 	);
 }
