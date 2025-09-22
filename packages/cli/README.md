@@ -35,6 +35,17 @@ The CLI also provides a way to generate a secret key for your Better Auth instan
 npx @better-auth/cli@latest secret
 ```
 
+### **MCP**
+
+The `mcp` command helps you add Better Auth as an MCP server, allowing you to use Better Auth features directly in your IDE.
+
+```bash title="terminal"
+npx @better-auth/cli@latest mcp
+```
+
+Options:
+- `--cursor`: Automatically open Cursor with the MCP configuration
+
 
 ## License
 

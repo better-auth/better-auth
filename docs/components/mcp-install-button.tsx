@@ -1,4 +1,4 @@
-"use clien
+"use client";
 
 import { Button } from "./ui/button";
 
@@ -7,10 +7,9 @@ interface McpInstallButtonProps {
 	config?: string;
 	className?: string;
 }
-
 export function McpInstallButton({
 	name = "better-auth",
-	config = "eyJ1cmwiOiJodHRwczovL2h0dHBzOi8vYnQtbWNwLXZlcmNlbC52ZXJjZWwuYXBwL2FwaS9tY3AifQ%3D%3D",
+	config = "eyJ1cmwiOiJodHRwczovL2J0LW1jcC12ZXJjZWwudmVyY2VsLmFwcC9hcGkvbWNwIn0%3D",
 	className = "",
 }: McpInstallButtonProps) {
 	const installUrl = `cursor://anysphere.cursor-deeplink/mcp/install?name=${name}&config=${config}`;
