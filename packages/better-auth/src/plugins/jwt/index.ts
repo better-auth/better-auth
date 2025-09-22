@@ -3,13 +3,13 @@ import {
 	customJwtClaimsSchema,
 	jwkExportedSchema,
 	jwkOptionsSchema,
-	verifyJwtOptionsSchema,
+	JwtVerifyOptionsSchema,
 	type CustomJwtClaims,
 	type Jwk,
 	type JwkOptions,
 	type JwksOptions,
 	type JwtPluginOptions,
-	type VerifyJwtOptions,
+	type JwtVerifyOptions,
 } from "./types";
 import { schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
@@ -20,12 +20,13 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import { mergeSchema } from "../../db/schema";
-import { createJwkInternal, getJwk } from "./jwk";
+import { createJwkInternal, getJwk, revokeJwk } from "./jwk";
 import { getSessionJwtInternal, signJwtInternal } from "./sign";
 import { verifyJwtInternal, verifyJwtWithKeyInternal } from "./verify";
 import { type JSONWebKeySet, type JWK } from "jose";
 import * as z from "zod/v4";
 import { getPublicJwk, parseJwk } from "./utils";
+import { BetterAuthError } from "../../error";
 export type * from "./types";
 export { createJwk, getJwk, importJwk } from "./jwk";
 export { getSessionJwt, signJwt } from "./sign";
@@ -208,7 +209,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 							description: "Signed JWT to verify",
 						}),
 						jwk: jwkExportedSchema.optional(),
-						options: verifyJwtOptionsSchema.optional(),
+						options: JwtVerifyOptionsSchema.optional(),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -216,7 +217,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 							body: {} as {
 								jwt: string;
 								jwk?: string | JWK;
-								options?: VerifyJwtOptions;
+								options?: JwtVerifyOptions;
 							},
 						},
 						openapi: {

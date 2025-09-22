@@ -68,7 +68,7 @@ async function signJwtPayload(
 		typ: "JWT",
 	});
 
-	jwt.setIssuedAt();
+	jwt.setIssuedAt(payload.iat);
 	jwt.setIssuer(pluginOpts?.jwt?.issuer ?? ctx.context.options.baseURL!);
 	jwt.setExpirationTime(
 		payload.exp ?? pluginOpts?.jwt?.expirationTime ?? "15m",
@@ -121,7 +121,7 @@ export async function signJwtInternal(
 	if (options?.claims?.iat) {
 		const iat = toJwtTime(options.claims.iat);
 		const allowedClockSkew: number = pluginOpts?.jwt?.allowedClockSkew ?? 60;
-		const now = new Date().getTime() / 1000;
+		const now = Math.floor(new Date().getTime() / 1000);
 		if (iat > now + allowedClockSkew)
 			throw new BetterAuthError(
 				`Requested "Issued At" Claim is in the future ${iat} > ${now} and it exceeds allowed leeway of ${allowedClockSkew} seconds`,

@@ -226,6 +226,9 @@ export interface CustomJwtClaims {
 	 * Unless provided here it will default to the **plugin configuration**.
 	 */
 	sub?: string;
+	/**
+	 * @todo Add type
+	 */
 }
 
 export const customJwtClaimsSchema = z
@@ -266,7 +269,7 @@ export const customJwtClaimsSchema = z
 	})
 	.describe("Custom JWT claims that override or add to standard claims.");
 
-export interface VerifyJwtOptions {
+export interface JwtVerifyOptions {
 	/**
 	 * Maximum time in **seconds** from payload's `iat` (**"Issued At" Claim**). Consider it a maximum `exp` (**"Expiration Time" Claim**) the payload can have. If present, `iat` is necessary in the payload.
 	 */
@@ -280,7 +283,7 @@ export interface VerifyJwtOptions {
 	 */
 	allowedIssuers?: string[];
 	/**
-	 * Array of allowed payload's `aud` (**"Audience" Claim**). If provided, `aud` presence is necessary in the payload.
+	 * Array of allowed payload's `aud` (**"Audience" Claim**). If provided, `aud` presence is necessary in the payload and the payload **must have at least one audience** from this array.
 	 *
 	 * ⚠ Might be necessary to set to an **empty array** and not `undefined` when dealing with JWTs issued by external systems that do not set `aud` at all.
 	 *
@@ -315,6 +318,9 @@ export interface VerifyJwtOptions {
 	 * @default getJwtPluginOptions(ctx.context)?.jwt?.allowedClockSkew // 60 if not defined
 	 */
 	allowedClockSkew?: number;
+	/**
+	 * @todo add jti check
+	 */
 }
 
 // todo: add describe() to fields
@@ -336,7 +342,7 @@ export type CryptoKeyIdAlg = {
 	/**
 	 * Optional ID identifying a **key pair** (**public key** and **private key**).
 	 *
-	 * If provided, JWT's **"kid" (Key ID)** Header Parameter will be checked to match this when **verifying** unless `allowNoKeyId` is `true` in **`verifyJwtOptions`** or this field will be added to the **JWT Protected Header** when **signing**.
+	 * If provided, JWT's **"kid" (Key ID)** Header Parameter will be checked to match this when **verifying** unless `allowNoKeyId` is `true` in **`JwtVerifyOptions`** or this field will be added to the **JWT Protected Header** when **signing**.
 	 */
 	id?: string;
 	/**
@@ -347,7 +353,7 @@ export type CryptoKeyIdAlg = {
 };
 
 // todo: add describe() to fields
-export const verifyJwtOptionsSchema = z
+export const JwtVerifyOptionsSchema = z
 	.object({
 		maxExpirationTime: z.string().optional(),
 		allowedIssuers: z.array(z.string()).optional(),

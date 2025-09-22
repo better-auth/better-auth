@@ -1,9 +1,14 @@
 import type { GenericEndpointContext } from "../../types";
-import type { JWTPayload, JWTVerifyGetKey, JWTVerifyResult } from "jose";
+import type {
+	JWTPayload,
+	JWTVerifyGetKey,
+	JWTVerifyOptions,
+	JWTVerifyResult,
+} from "jose";
 import type {
 	CryptoKeyIdAlg,
 	JwtPluginOptions,
-	VerifyJwtOptions,
+	JwtVerifyOptions,
 } from "./types";
 import { BetterAuthError } from "../../error";
 import { getJwksAdapter } from "./adapter";
@@ -36,13 +41,17 @@ async function verifyJwtJose(
 	jwt: string,
 	jwk: CryptoKey | JWTVerifyGetKey,
 	pluginOpts?: JwtPluginOptions,
-	options?: VerifyJwtOptions,
+	options?: JwtVerifyOptions,
 ): Promise<JWTVerifyResult<JWTPayload>> {
-	const parsedOptions = {
+	const audiences = options?.allowedAudiences;
+	const parsedOptions: JWTVerifyOptions = {
 		typ: options?.expectedType === "" ? undefined : "JWT",
 		maxTokenAge: options?.maxExpirationTime,
 		issuer: options?.allowedIssuers ?? [ctx.context.options.baseURL!],
-		audience: options?.allowedAudiences ?? [ctx.context.options.baseURL!],
+		audience:
+			audiences && audiences.length === 0
+				? undefined
+				: (audiences ?? [ctx.context.options.baseURL!]),
 		subject: options?.expectedSubject,
 		requiredClaims: ["iat", "exp"],
 	};
@@ -79,7 +88,7 @@ export async function verifyJwtInternal(
 	ctx: GenericEndpointContext,
 	jwt: string,
 	pluginOpts?: JwtPluginOptions,
-	options?: VerifyJwtOptions,
+	options?: JwtVerifyOptions,
 ): Promise<JWTPayload> {
 	const adapter = getJwksAdapter(ctx.context.adapter);
 	const jwks = await ctx.json({
@@ -118,7 +127,7 @@ export async function verifyJwtInternal(
 export async function verifyJwt(
 	ctx: GenericEndpointContext,
 	jwt: string,
-	options?: VerifyJwtOptions,
+	options?: JwtVerifyOptions,
 ): Promise<JWTPayload> {
 	return verifyJwtInternal(ctx, jwt, getJwtPluginOptions(ctx.context), options);
 }
@@ -148,7 +157,7 @@ export async function verifyJwtWithKeyInternal(
 	jwt: string,
 	jwk: string | CryptoKeyIdAlg,
 	pluginOpts?: JwtPluginOptions,
-	options?: VerifyJwtOptions,
+	options?: JwtVerifyOptions,
 ): Promise<JWTPayload | null> {
 	if (!jwt) return null;
 
@@ -200,7 +209,7 @@ export async function verifyJwtWithKey(
 	ctx: GenericEndpointContext,
 	jwt: string,
 	jwk: string | CryptoKeyIdAlg,
-	options?: VerifyJwtOptions,
+	options?: JwtVerifyOptions,
 ): Promise<JWTPayload | null> {
 	return verifyJwtWithKeyInternal(
 		ctx,
