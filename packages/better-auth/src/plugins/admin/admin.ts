@@ -589,22 +589,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									'The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. Eg: "contains"',
 							})
 							.optional(),
-						limit: z
-							.string()
-							.or(z.number())
-							.default(10)
-							.meta({
-								description: "The number of users to return",
-							})
-							.optional(),
-						offset: z
-							.string()
-							.or(z.number())
-							.default(0)
-							.meta({
-								description: "The offset to start from",
-							})
-							.optional(),
+						limit: z.string().regex(/^\d+$/).or(z.number()).default(10).meta({
+							description: "The number of users to return",
+						}),
+						offset: z.string().regex(/^\d+$/).or(z.number()).default(0).meta({
+							description: "The offset to start from",
+						}),
 						sortBy: z
 							.string()
 							.meta({
