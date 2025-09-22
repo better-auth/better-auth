@@ -474,8 +474,6 @@ describe("oauth - prompt", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
-		// authorize should not have cookies (no user logged in)
-		expect(newHeaders.get("cookie")).toBeNull();
 	});
 
 	it("consent - should sign in", async ({ expect }) => {

@@ -68,13 +68,8 @@ export async function authorizeEndpoint(
 		});
 	}
 
+	// Check request
 	const query: OAuthAuthorizationQuery = ctx.query;
-	const session = await getSessionFromCtx(ctx);
-	if (!session || query.prompt === "login") {
-		const reqestUrl = new URL(ctx.request.url);
-		return handleRedirect(ctx, `${opts.loginPage}?${reqestUrl.search}`);
-	}
-
 	if (!query.client_id) {
 		const errorURL = getErrorURL(
 			ctx,
@@ -102,7 +97,7 @@ export async function authorizeEndpoint(
 		throw ctx.redirect(errorURL);
 	}
 
-	/** Check client */
+	// Check client
 	const client = await getClient(ctx, opts, query.client_id);
 	if (!client) {
 		const errorURL = getErrorURL(
@@ -174,6 +169,21 @@ export async function authorizeEndpoint(
 				query.state,
 			),
 		);
+	}
+
+	// Check for session
+	const session = await getSessionFromCtx(ctx);
+	if (!session || query.prompt === "login") {
+		const { name: cookieName, attributes: cookieAttributes } =
+			ctx.context.createAuthCookie("oauth_login_prompt");
+		await ctx.setSignedCookie(
+			cookieName,
+			JSON.stringify(ctx.query),
+			ctx.context.secret,
+			cookieAttributes,
+		);
+		const reqestUrl = new URL(ctx.request.url);
+		return handleRedirect(ctx, `${opts.loginPage}?${reqestUrl.search}`);
 	}
 
 	// Force consent screen

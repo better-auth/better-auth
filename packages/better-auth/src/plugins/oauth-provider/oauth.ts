@@ -1,6 +1,12 @@
 import { z } from "zod";
-import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
+import {
+	APIError,
+	createAuthEndpoint,
+	createAuthMiddleware,
+	sessionMiddleware,
+} from "../../api";
 import type { BetterAuthPlugin } from "../../types";
+import { parseSetCookieHeader } from "../../cookies";
 import { schema } from "./schema";
 import type { OAuthOptions } from "./types";
 import { authorizeEndpoint } from "./authorize";
@@ -180,6 +186,56 @@ export const oauthProvider = (options: OAuthOptions) => {
 					);
 				}
 			}
+		},
+		hooks: {
+			after: [
+				/**
+				 * If a session cookie is being set (ie user has logged in)
+				 * complete response with /authorize request.
+				 */
+				{
+					matcher(ctx) {
+						return parseSetCookieHeader(
+							ctx.context.responseHeaders?.get("set-cookie") || "",
+						).has(ctx.context.authCookies.sessionToken.name);
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						// Obtain original prompt
+						const { name: loginPromptCookieName } =
+							ctx.context.createAuthCookie("oauth_login_prompt");
+						const cookie = await ctx.getSignedCookie(
+							loginPromptCookieName,
+							ctx.context.secret,
+						);
+
+						// Check if session cookie is being set and obtain its session (needed in context)
+						const cookieName = ctx.context.authCookies.sessionToken.name;
+						const parsedSetCookieHeader = parseSetCookieHeader(
+							ctx.context.responseHeaders?.get("set-cookie") || "",
+						);
+						const sessionToken = parsedSetCookieHeader
+							.get(cookieName)
+							?.value?.split(".")[0];
+						if (!cookie || !sessionToken) return;
+						const session =
+							await ctx.context.internalAdapter.findSession(sessionToken);
+						if (!session) return;
+						ctx.context.session = session;
+
+						// Continue with authorization request by using the initial prompt
+						// but clearing the login prompt cookie if forced login prompt
+						ctx.query = JSON.parse(cookie);
+						if (ctx.query?.prompt === "login") {
+							ctx.query!.prompt = undefined; // clear login prompt parameter
+						}
+						ctx.setCookie(loginPromptCookieName, "", {
+							maxAge: 0,
+						});
+						const response = await authorizeEndpoint(ctx, opts);
+						return response;
+					}),
+				},
+			],
 		},
 		endpoints: {
 			/**
