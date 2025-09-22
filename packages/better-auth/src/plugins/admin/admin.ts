@@ -689,7 +689,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 					const offset = Number(ctx.query?.offset),
-						limit = Number(undefined);
+						limit = Number(ctx.query?.limit);
 					if (limit <= 0) {
 						return {
 							offset,
