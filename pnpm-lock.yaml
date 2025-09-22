@@ -17198,9 +17198,9 @@ snapshots:
     transitivePeerDependencies:
       - '@babel/core'
       - bufferutil
+      - bufferutil
       - supports-color
       - utf-8-validate
-    optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
 
