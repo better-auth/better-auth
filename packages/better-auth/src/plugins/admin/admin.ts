@@ -597,7 +597,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						offset: z
 							.string()
 							.or(z.number())
-							.default(10)
+							.default(0)
 							.meta({
 								description: "The offset to start from",
 							})
