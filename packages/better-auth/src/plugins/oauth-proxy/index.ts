@@ -153,16 +153,20 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 							}
 							const locationURL = new URL(location);
 							const origin = locationURL.origin;
-							/**
-							 * We don't want to redirect to the proxy URL if the origin is the same
-							 * as the current URL
-							 */
-							if (origin === getOrigin(ctx.context.baseURL)) {
+							const productionURL = opts?.productionURL || env.BETTER_AUTH_URL || ctx.context.baseURL;
+							if (origin === getOrigin(productionURL)) {
 								const newLocation = locationURL.searchParams.get("callbackURL");
+								const originalOrigin = locationURL.searchParams.get("originalOrigin");
 								if (!newLocation) {
 									return;
 								}
-								ctx.setHeader("location", newLocation);
+
+								let finalLocation = newLocation;
+								if (!newLocation.startsWith("http")) {
+									finalLocation = `${originalOrigin}${newLocation}`;
+								}
+
+								ctx.setHeader("location", finalLocation);
 								return;
 							}
 
@@ -192,21 +196,24 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						// if skip proxy header is set, we don't need to proxy
 						const skipProxy = ctx.request?.headers.get("x-skip-oauth-proxy");
 						if (skipProxy) {
 							return;
 						}
 						const url = resolveCurrentURL(ctx);
 						const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
-						if (productionURL === ctx.context.options.baseURL) {
+						if (
+							(opts?.productionURL && productionURL === ctx.context.options.baseURL) ||
+							(!opts?.productionURL && !env.BETTER_AUTH_URL && url.origin === ctx.context.baseURL)
+						) {
 							return;
 						}
-						ctx.body.callbackURL = `${url.origin}${
+						const redirectURIOrigin = productionURL && productionURL.trim() ? getOrigin(productionURL) : url.origin;
+						ctx.body.callbackURL = `${redirectURIOrigin}${
 							ctx.context.options.basePath || "/api/auth"
 						}/oauth-proxy-callback?callbackURL=${encodeURIComponent(
 							ctx.body.callbackURL || ctx.context.baseURL,
-						)}`;
+						)}&originalOrigin=${encodeURIComponent(url.origin)}`;
 						return {
 							context: ctx,
 						};
