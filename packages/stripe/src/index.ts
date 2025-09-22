@@ -1026,8 +1026,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						if (stripeSubscription) {
 							const plan = await getPlanByPriceInfo(
 								options,
-								stripeSubscription.items.data[0]?.price.id,
-								stripeSubscription.items.data[0]?.price.lookup_key,
+								stripeSubscription.items.data[0]?.price.id!,
+								stripeSubscription.items.data[0]?.price.lookup_key!,
 							);
 
 							if (plan && subscription) {
@@ -1038,11 +1038,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										seats: stripeSubscription.items.data[0]?.quantity || 1,
 										plan: plan.name.toLowerCase(),
 										periodEnd: new Date(
-											stripeSubscription.items.data[0]?.current_period_end *
+											stripeSubscription.items.data[0]?.current_period_end! *
 												1000,
 										),
 										periodStart: new Date(
-											stripeSubscription.items.data[0]?.current_period_start *
+											stripeSubscription.items.data[0]?.current_period_start! *
 												1000,
 										),
 										stripeSubscriptionId: stripeSubscription.id,

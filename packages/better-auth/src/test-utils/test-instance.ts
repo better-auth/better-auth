@@ -115,7 +115,7 @@ export async function getTestInstance<
 			...options?.advanced,
 		},
 		plugins: [bearer(), ...(options?.plugins || [])],
-	} as unknown as O extends undefined ? typeof opts : O & typeof opts);
+	} as unknown as O);
 
 	const testUser = {
 		email: "test@test.com",

@@ -24,8 +24,8 @@
   "scripts": {
     "test": "vitest",
     "build": "unbuild",
-    "typecheck": "tsc --noEmit",
-    "dev": "unbuild --watch"
+    "dev": "unbuild --watch",
+    "typecheck": "tsc --project tsconfig.json"
   },
   "exports": {
     ".": {
