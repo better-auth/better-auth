@@ -38,7 +38,7 @@
       "outputs": []
     },
     "typecheck": {
-      "outputs": [".tsbuildinfo", "dist/**/!(*.test|*.spec).d.ts"],
+      "outputs": [".tsbuildinfo", "dist/**"],
       "cache": true
     },
     "deploy": {
