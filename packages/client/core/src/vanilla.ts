@@ -15,7 +15,7 @@ import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import { BASE_ERROR_CODES } from "./types";
+import { BASE_ERROR_CODES } from "@better-auth/core";
 
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin

@@ -14,7 +14,6 @@ import type {
 	StripEmptyObjects as CoreStripEmptyObjects,
 	LiteralUnion as CoreLiteralUnion,
 	HasRequiredKeys as CoreHasRequiredKeys,
-	BASE_ERROR_CODES,
 	InputContext as CoreInputContext,
 	Endpoint as CoreEndpoint,
 	StandardSchemaV1 as CoreStandardSchemaV1,
@@ -42,7 +41,6 @@ export type StandardSchemaV1<
 	Output = unknown,
 > = CoreStandardSchemaV1<Input, Output>;
 export type EndpointOptions = CoreEndpointOptions;
-export { BASE_ERROR_CODES };
 
 // Additional client-specific types
 export type Primitive =
@@ -134,14 +132,16 @@ export interface ClientOptions {
 	baseURL?: string;
 	basePath?: string;
 	disableDefaultFetchPlugins?: boolean;
-	$InferAuth?: any; // We don't have BetterAuthOptions here
+	$InferAuth?: any; // This will contain the auth configuration
 }
 
 // Inference types
-// This type will be properly resolved when the auth instance is passed
-// It's kept as 'any' here to avoid circular dependencies
-// The actual type resolution happens in the client creation
-export type InferClientAPI<O extends ClientOptions> = any;
+export type InferClientAPI<O extends ClientOptions> =
+	O["$InferAuth"] extends { api: infer API }
+		? API extends Record<string, Endpoint>
+			? InferRoutes<API, O>
+			: {}
+		: {};
 
 export type InferActions<O extends ClientOptions> = (O["plugins"] extends Array<
 	infer Plugin
