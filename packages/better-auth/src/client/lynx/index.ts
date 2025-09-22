@@ -1,4 +1,4 @@
-import { getClientConfig } from "../config";
+import { getClientConfig } from "@better-auth/client-core";
 import type {
 	BetterAuthClientPlugin,
 	ClientOptions,
@@ -6,8 +6,8 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
-} from "../types";
-import { createDynamicPathProxy } from "../proxy";
+} from "@better-auth/client-core";
+import { createDynamicPathProxy } from "@better-auth/client-core";
 import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
 import type {
 	BetterFetchError,
@@ -15,7 +15,7 @@ import type {
 } from "@better-fetch/fetch";
 import { useStore } from "./lynx-store";
 import type { BASE_ERROR_CODES } from "../../error/codes";
-import type { SessionQueryParams } from "../types";
+import type { SessionQueryParams } from "@better-auth/client-core";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
