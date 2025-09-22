@@ -34,6 +34,7 @@
   "exports": "./dist/index.mjs",
   "bin": "./dist/index.mjs",
   "devDependencies": {
+    "@types/semver": "^7.7.1",
     "tsx": "^4.20.5",
     "typescript": "catalog:",
     "unbuild": "catalog:"
