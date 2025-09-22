@@ -4,6 +4,7 @@ export * from "./types";
 export { getClientConfig } from "./config";
 export { createDynamicPathProxy } from "./proxy";
 export { parseJSON } from "./parser";
+export { capitalizeFirstLetter } from "./utils/misc";
 export { BASE_ERROR_CODES } from "./types";
 
 // Re-export types from dependencies

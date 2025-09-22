@@ -2,6 +2,7 @@ import {
 	getClientConfig,
 	createDynamicPathProxy,
 	BASE_ERROR_CODES,
+	capitalizeFirstLetter,
 } from "@better-auth/client-core";
 import type {
 	BetterAuthClientPlugin,
@@ -16,7 +17,6 @@ import type {
 	BetterFetchResponse,
 	Atom,
 } from "@better-auth/client-core";
-import { capitalizeFirstLetter } from "../../utils/misc";
 
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin

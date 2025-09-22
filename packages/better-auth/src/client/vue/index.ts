@@ -4,6 +4,7 @@ import {
 	getClientConfig,
 	createDynamicPathProxy,
 	BASE_ERROR_CODES,
+	capitalizeFirstLetter,
 } from "@better-auth/client-core";
 import type {
 	BetterAuthClientPlugin,
@@ -17,7 +18,6 @@ import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-auth/client-core";
-import { capitalizeFirstLetter } from "../../utils/misc";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
