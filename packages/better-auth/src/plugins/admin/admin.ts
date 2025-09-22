@@ -569,9 +569,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "GET",
 					use: [adminMiddleware],
 					query: z.object({
-						searchValue: z.string().meta({
-							description: 'The value to search for. Eg: "some name"',
-						}).optional(),
+						searchValue: z
+							.string()
+							.meta({
+								description: 'The value to search for. Eg: "some name"',
+							})
+							.optional(),
 						searchField: z
 							.enum(["email", "name"])
 							.meta({
@@ -717,20 +720,22 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 
 					try {
-						const users = await ctx.context.internalAdapter.listUsers(
-							limit,
-							offset,
-							ctx.query?.sortBy
-								? {
-										field: ctx.query.sortBy,
-										direction: ctx.query.sortDirection || "asc",
-									}
-								: undefined,
-							where.length ? where : undefined,
-						);
-						const total = await ctx.context.internalAdapter.countTotalUsers(
-							where.length ? where : undefined,
-						);
+						const [users, total] = await Promise.all([
+							ctx.context.internalAdapter.listUsers(
+								limit,
+								offset,
+								ctx.query?.sortBy
+									? {
+											field: ctx.query.sortBy,
+											direction: ctx.query.sortDirection || "asc",
+										}
+									: undefined,
+								where.length ? where : undefined,
+							),
+							ctx.context.internalAdapter.countTotalUsers(
+								where.length ? where : undefined,
+							),
+						]);
 
 						return ctx.json({
 							offset,
