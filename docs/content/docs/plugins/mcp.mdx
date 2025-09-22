@@ -55,6 +55,12 @@ The **MCP** plugin lets your app act as an OAuth provider for MCP clients. It ha
 
 ## Usage
 
+### Add to Cursor (MCP)
+
+If you're using Cursor, you can easily add Better Auth as an MCP server:
+
+<McpInstallButton />
+
 ### OAuth Discovery Metadata
 
 Better Auth already handles the `/api/auth/.well-known/oauth-authorization-server` route automatically but some client may fail to parse the `WWW-Authenticate` header and default to `/.well-known/oauth-authorization-server` (this can happen, for example, if your CORS configuration doesn't expose the `WWW-Authenticate`). For this reason it's better to add a route to expose OAuth metadata for MCP clients:

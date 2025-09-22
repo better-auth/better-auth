@@ -29,6 +29,7 @@ import { APIMethod } from "@/components/api-method";
 import { LLMCopyButton, ViewOptions } from "./page.client";
 import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
 import { Callout } from "@/components/ui/callout";
+import { McpInstallButton } from "@/components/mcp-install-button";
 export default async function Page({
 	params,
 }: {
@@ -125,6 +126,7 @@ export default async function Page({
 						AutoTypeTable,
 						GenerateSecret,
 						GenerateAppleJwt,
+						McpInstallButton,
 						AnimatePresence,
 						TypeTable,
 						Features,
