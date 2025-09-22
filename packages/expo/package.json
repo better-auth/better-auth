@@ -14,7 +14,8 @@
     "test": "vitest",
     "build": "unbuild --clean",
     "dev": "unbuild --watch",
-    "stub": "unbuild --stub"
+    "stub": "unbuild --stub",
+    "typecheck": "tsc --project tsconfig.json"
   },
   "exports": {
     ".": {

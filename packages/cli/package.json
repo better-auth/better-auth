@@ -15,7 +15,8 @@
     "stub": "unbuild --stub",
     "start": "node ./dist/index.mjs",
     "dev": "tsx ./src/index.ts",
-    "test": "vitest"
+    "test": "vitest",
+    "typecheck": "tsc --project tsconfig.json"
   },
   "publishConfig": {
     "access": "public",
