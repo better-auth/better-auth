@@ -1,5 +1,8 @@
 {
   "compilerOptions": {
+    "strict": true,
+    "target": "esnext",
+    "downlevelIteration": true,
     "baseUrl": ".",
     "strict": true,
     "target": "esnext",
@@ -7,11 +10,42 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "composite": true,
+    "incremental": true,
+    "noErrorTruncation": true,
+    "types": ["node"]
+  },
+  "references": [
+    {
+      "path": "./packages/better-auth"
+    },
+    {
+      "path": "./packages/cli"
+    },
+    {
+      "path": "./packages/expo"
+    },
+    {
+      "path": "./packages/sso"
+    },
+    {
+      "path": "./packages/stripe"
+    }
+  ],
+  "files": [],
+  "include": [],
     "exactOptionalPropertyTypes": false,
     "declaration": true,
     "emitDeclarationOnly": true,
