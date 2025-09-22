@@ -914,9 +914,6 @@ importers:
       '@types/react':
         specifier: ^18.3.23
         version: 18.3.23
-      better-auth:
-        specifier: workspace:*
-        version: link:../../better-auth
       react:
         specifier: ^19.1.1
         version: 19.1.1
