@@ -9,7 +9,8 @@ import type {
 } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
-	CreateAdapterOptions,
+	AdapterFactoryConfig,
+	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 	CleanedWhere,
 } from "./types";
@@ -54,8 +55,13 @@ const createAsIsTransaction =
 	<R>(fn: (trx: TransactionAdapter) => Promise<R>) =>
 		fn(adapter);
 
-export const createAdapter =
-	({ adapter: customAdapter, config: cfg }: CreateAdapterOptions) =>
+export type AdapterFactory = (options: BetterAuthOptions) => Adapter;
+
+export const createAdapterFactory =
+	({
+		adapter: customAdapter,
+		config: cfg,
+	}: AdapterFactoryOptions): AdapterFactory =>
 	(options: BetterAuthOptions): Adapter => {
 		const config = {
 			...cfg,
@@ -64,7 +70,8 @@ export const createAdapter =
 			supportsJSON: cfg.supportsJSON ?? false,
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
-		};
+			transaction: cfg.transaction ?? false,
+		} satisfies AdapterFactoryConfig;
 
 		if (
 			options.advanced?.database?.useNumberId === true &&
@@ -456,7 +463,8 @@ export const createAdapter =
 
 					if (originalKey === "id" || field.references?.field === "id") {
 						// Even if `useNumberId` is true, we must always return a string `id` output.
-						if (typeof newValue !== "undefined") newValue = String(newValue);
+						if (typeof newValue !== "undefined" && newValue !== null)
+							newValue = String(newValue);
 					} else if (
 						config.supportsJSON === false &&
 						typeof newValue === "string" &&
@@ -1054,3 +1062,8 @@ function formatMethod(method: string) {
 function formatAction(action: string) {
 	return `${colors.dim}(${action})${colors.reset}`;
 }
+
+/**
+ * @deprecated Use `createAdapterFactory` instead. This export will be removed in a future version.
+ */
+export const createAdapter = createAdapterFactory;

@@ -33,12 +33,12 @@ export type AdapterDebugLogs =
 			isRunningAdapterTests: boolean;
 	  };
 
-export type CreateAdapterOptions = {
-	config: AdapterConfig;
-	adapter: CreateCustomAdapter;
+export type AdapterFactoryOptions = {
+	config: AdapterFactoryConfig;
+	adapter: AdapterFactoryCustomizeAdapterCreator;
 };
 
-export interface AdapterConfig {
+export interface AdapterFactoryConfig {
 	/**
 	 * Use plural table names.
 	 *
@@ -100,6 +100,7 @@ export interface AdapterConfig {
 	 *
 	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
 	 *
+	 * @default false
 	 */
 	transaction?:
 		| false
@@ -240,13 +241,7 @@ export interface AdapterConfig {
 	customIdGenerator?: (props: { model: string }) => string;
 }
 
-export type CreateCustomAdapter = ({
-	options,
-	debugLog,
-	schema,
-	getDefaultModelName,
-	getDefaultFieldName,
-}: {
+export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	options: BetterAuthOptions;
 	/**
 	 * The schema of the user's Better-Auth instance.
@@ -396,3 +391,18 @@ export type AdapterTestDebugLogs = {
 	resetDebugLogs: () => void;
 	printDebugLogs: () => void;
 };
+
+/**
+ * @deprecated Use `AdapterFactoryOptions` instead. This export will be removed in a future version.
+ */
+export type CreateAdapterOptions = AdapterFactoryOptions;
+
+/**
+ * @deprecated Use `AdapterFactoryConfig` instead. This export will be removed in a future version.
+ */
+export type AdapterConfig = AdapterFactoryConfig;
+
+/**
+ * @deprecated Use `AdapterFactoryCustomizeAdapterCreator` instead. This export will be removed in a future version.
+ */
+export type CreateCustomAdapter = AdapterFactoryCustomizeAdapterCreator;

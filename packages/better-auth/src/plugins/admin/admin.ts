@@ -9,18 +9,19 @@ import { type BetterAuthPlugin, type Session, type Where } from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import { mergeSchema } from "../../db/schema";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
 import { type AccessControl } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
-import {
-	type AdminOptions,
-	type UserWithRole,
-	type SessionWithImpersonatedBy,
-	type InferAdminRolesFromOption,
-} from "./types";
+import { BASE_ERROR_CODES } from "../../error/codes";
 import { schema } from "./schema";
+import type {
+	AdminOptions,
+	InferAdminRolesFromOption,
+	SessionWithImpersonatedBy,
+	UserWithRole,
+} from "./types";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -272,6 +273,71 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					return ctx.json({
 						user: updatedUser as UserWithRole,
 					});
+				},
+			),
+			getUser: createAuthEndpoint(
+				"/admin/get-user",
+				{
+					method: "GET",
+					query: z.object({
+						id: z.string().meta({
+							description: "The id of the User",
+						}),
+					}),
+					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "getUser",
+							summary: "Get an existing user",
+							description: "Get an existing user",
+							responses: {
+								200: {
+									description: "User",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const { id } = ctx.query;
+
+					const canGetUser = hasPermission({
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permissions: {
+							user: ["get"],
+						},
+					});
+
+					if (!canGetUser) {
+						throw ctx.error("FORBIDDEN", {
+							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_USER,
+							code: "YOU_ARE_NOT_ALLOWED_TO_GET_USER",
+						});
+					}
+
+					const user = await ctx.context.internalAdapter.findUserById(id);
+
+					if (!user) {
+						throw new APIError("NOT_FOUND", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+
+					return parseUserOutput(ctx.context.options, user);
 				},
 			),
 			/**
@@ -906,6 +972,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					if (!canBanUser) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
+						});
+					}
+
+					const foundUser = await ctx.context.internalAdapter.findUserById(
+						ctx.body.userId,
+					);
+
+					if (!foundUser) {
+						throw new APIError("NOT_FOUND", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 
@@ -1553,20 +1629,22 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const session = await getSessionFromCtx(ctx);
 
-					if (
-						!session &&
-						(ctx.request || ctx.headers) &&
-						!ctx.body.userId &&
-						!ctx.body.role
-					) {
+					if (!session && (ctx.request || ctx.headers)) {
 						throw new APIError("UNAUTHORIZED");
+					}
+					if (!session && !ctx.body.userId && !ctx.body.role) {
+						throw new APIError("BAD_REQUEST", {
+							message: "user id or role is required",
+						});
 					}
 					const user =
 						session?.user ||
+						(ctx.body.role
+							? { id: ctx.body.userId || "", role: ctx.body.role }
+							: null) ||
 						((await ctx.context.internalAdapter.findUserById(
 							ctx.body.userId as string,
-						)) as { role?: string; id: string }) ||
-						(ctx.body.role ? { id: "", role: ctx.body.role } : null);
+						)) as { role?: string; id: string });
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: "user not found",
