@@ -20,6 +20,13 @@
     "downlevelIteration": true
   },
   "exclude": ["**/dist", "node_modules"],
-  "references": [],
+  "references": [
+    {
+      "path": "../client/core"
+    },
+    {
+      "path": "../client/react"
+    }
+  ],
   "include": ["src"]
 }

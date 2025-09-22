@@ -4,6 +4,8 @@ import type {
 	BetterFetchPlugin,
 } from "@better-fetch/fetch";
 import type { Atom, WritableAtom } from "nanostores";
+import type { InferRoutes } from './path-to-object'
+import type { Auth } from 'better-auth'
 
 // Helper types copied from better-auth to avoid circular dependency
 export type Primitive =
@@ -58,19 +60,50 @@ export type RequiredKeysOf<BaseType extends object> = Exclude<
 
 export type HasRequiredKeys<BaseType extends object> =
 	RequiredKeysOf<BaseType> extends never ? false : true;
-export type WithoutEmpty<T> = T extends T ? ({} extends T ? never : T) : never;
+
+// Types from better-call needed for client - keeping local copy to avoid dependency
+export interface InputContext<Path extends string = string, Input = any> {
+	path: Path;
+	method?: string;
+	body?: Input extends { body: infer B } ? B : any;
+	query?: Input extends { query: infer Q } ? Q : any;
+	params?: Input extends { params: infer P } ? P : any;
+	headers?: Record<string, string>;
+}
+
+export interface EndpointOptions {
+	metadata?: Record<string, any>;
+	error?: StandardSchemaV1;
+	[key: string]: any;
+}
+
+export interface Endpoint<
+	Path extends string = string,
+	Handler extends (...args: any[]) => any = (...args: any[]) => any
+> {
+	path: Path;
+	options: EndpointOptions;
+	handler?: Handler;
+	method?: string;
+}
+
+export interface StandardSchemaV1<Input = unknown, Output = unknown> {
+	readonly "~standard": {
+		readonly version: 1;
+		readonly vendor?: string;
+		readonly validate?: (value: unknown) => unknown;
+		readonly types?: {
+			readonly input?: Input;
+			readonly output?: Output;
+		};
+	};
+}
 
 export type StripEmptyObjects<T> = T extends { [K in keyof T]: never }
 	? never
 	: T extends object
 		? { [K in keyof T as T[K] extends never ? never : K]: T[K] }
 		: T;
-export type DeepPartial<T> = T extends Function
-	? T
-	: T extends object
-		? { [K in keyof T]?: DeepPartial<T[K]> }
-		: T;
-export type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
 
 // Base error codes copied from better-auth
 export const BASE_ERROR_CODES = {
@@ -183,8 +216,26 @@ export interface ClientOptions {
 	$InferAuth?: any; // We don't have BetterAuthOptions here
 }
 
-// Inference types
-export type InferClientAPI<O extends ClientOptions> = any; // This will be properly typed in the main package
+export type InferClientAPI<O extends ClientOptions> = InferRoutes<
+	O["plugins"] extends Array<any>
+		? Auth["api"] &
+		(O["plugins"] extends Array<infer Pl>
+			? UnionToIntersection<
+				Pl extends {
+						$InferServerPlugin: infer Plug;
+					}
+					? Plug extends {
+							endpoints: infer Endpoints;
+						}
+						? Endpoints
+						: {}
+					: {}
+			>
+			: {})
+		: Auth["api"],
+	O
+>;
+
 
 export type InferActions<O extends ClientOptions> = (O["plugins"] extends Array<
 	infer Plugin
@@ -228,6 +279,18 @@ export type InferSessionFromClient<O extends ClientOptions> = StripEmptyObjects<
 export type InferUserFromClient<O extends ClientOptions> = StripEmptyObjects<
 	User & any // Additional fields will be added by plugins
 >;
+
+export type InferAdditionalFromClient<
+	O extends ClientOptions,
+	Entity extends string = string,
+	Type extends "input" | "output" = "input"
+> = O["$InferAuth"] extends any
+	? O["$InferAuth"]["user"] extends Record<string, any>
+		? O["$InferAuth"]["user"]["additionalFields"] extends Record<string, any>
+			? O["$InferAuth"]["user"]["additionalFields"]
+			: {}
+		: {}
+	: {};
 
 export type SessionQueryParams = {
 	disableCookieCache?: boolean;
