@@ -9,7 +9,8 @@ import { parseJSON } from "./parser";
 export const getClientConfig = (options?: ClientOptions) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
-	const baseURL = getBaseURL(options?.baseURL, options?.basePath);
+	const baseURL =
+		getBaseURL(options?.baseURL, options?.basePath) ?? "/api/auth";
 	const pluginsFetchPlugins =
 		options?.plugins
 			?.flatMap((plugin) => plugin.fetchPlugins)
@@ -38,13 +39,7 @@ export const getClientConfig = (options?: ClientOptions) => {
 				strict: false,
 			});
 		},
-		customFetchImpl: async (input, init) => {
-			try {
-				return await fetch(input, init);
-			} catch (error) {
-				return Response.error();
-			}
-		},
+		customFetchImpl: fetch,
 		...restOfFetchOptions,
 		plugins: [
 			lifeCyclePlugin,
@@ -118,6 +113,9 @@ export const getClientConfig = (options?: ClientOptions) => {
 		}
 	}
 	return {
+		get baseURL() {
+			return baseURL;
+		},
 		pluginsActions,
 		pluginsAtoms,
 		pluginPathMethods,

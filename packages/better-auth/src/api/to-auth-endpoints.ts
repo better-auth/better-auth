@@ -19,6 +19,7 @@ type InternalContext = InputContext<string, any> &
       responseHeaders?: Headers;
     };
   };
+
 const defuReplaceArrays = createDefu((obj, key, value) => {
   if (Array.isArray(obj[key]) && Array.isArray(value)) {
     obj[key] = value;
@@ -56,10 +57,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
       };
       const { beforeHooks, afterHooks } = getHooks(authContext);
       const before = await runBeforeHooks(internalContext, beforeHooks);
-      /**
-       * If `before.context` is returned, it should
-       * get merged with the original context
-       */
+
       if (
         "context" in before &&
         before.context &&
@@ -68,11 +66,6 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
         const { headers, ...rest } = before.context as {
           headers: Headers;
         };
-        /**
-         * Headers should be merged differently
-         * so the hook doesn't override the whole
-         * header
-         */
         if (headers) {
           headers.forEach((value, key) => {
             (internalContext.headers as Headers).set(key, value);
@@ -80,18 +73,22 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
         }
         internalContext = defuReplaceArrays(rest, internalContext);
       } else if (before) {
-        /* Return before hook response if it's anything other than a context return */
-        return before;
+        return context?.asResponse
+          ? toResponse(before, {
+              headers: context?.headers,
+            })
+          : context?.returnHeaders
+            ? {
+                headers: context?.headers,
+                response: before,
+              }
+            : before;
       }
 
       internalContext.asResponse = false;
       internalContext.returnHeaders = true;
       const result = (await endpoint(internalContext as any).catch((e: any) => {
         if (e instanceof APIError) {
-          /**
-           * API Errors from response are caught
-           * and returned to hooks
-           */
           return {
             response: e,
             headers: e.headers ? new Headers(e.headers) : null,
@@ -103,7 +100,6 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
         response: any;
       };
 
-      //if response object is returned we skip after hooks and post processing
       if (result && result instanceof Response) {
         return result;
       }
@@ -121,7 +117,6 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
         result.response instanceof APIError &&
         shouldPublishLog(authContext.logger.level, "debug")
       ) {
-        // inherit stack from errorWithStack if debug mode is enabled
         if (result.response.errorWithStack?.stack) {
           result.response.stack = result.response.errorWithStack.stack;
         }
@@ -171,8 +166,9 @@ async function runBeforeHooks(
             e instanceof APIError &&
             shouldPublishLog(context.context.logger.level, "debug")
           ) {
-            // inherit stack from errorWithStack if debug mode is enabled
-            e.stack = e.errorWithStack.stack;
+            if (e.errorWithStack?.stack) {
+              e.stack = e.errorWithStack.stack;
+            }
           }
           throw e;
         });
@@ -191,7 +187,6 @@ async function runBeforeHooks(
             }
           }
           modifiedContext = defuReplaceArrays(rest, modifiedContext);
-
           continue;
         }
         return result;
@@ -213,8 +208,9 @@ async function runAfterHooks(
       const result = (await hook.handler(context).catch((e) => {
         if (e instanceof APIError) {
           if (shouldPublishLog(context.context.logger.level, "debug")) {
-            // inherit stack from errorWithStack if debug mode is enabled
-            e.stack = e.errorWithStack.stack;
+            if (e.errorWithStack?.stack) {
+              e.stack = e.errorWithStack.stack;
+            }
           }
           return {
             response: e,
@@ -275,25 +271,14 @@ function getHooks(authContext: AuthContext) {
     });
   }
   const pluginBeforeHooks = plugins
-    .map((plugin) => {
-      if (plugin.hooks?.before) {
-        return plugin.hooks.before;
-      }
-    })
+    .map((plugin) => plugin.hooks?.before)
     .filter((plugin) => plugin !== undefined)
     .flat();
   const pluginAfterHooks = plugins
-    .map((plugin) => {
-      if (plugin.hooks?.after) {
-        return plugin.hooks.after;
-      }
-    })
+    .map((plugin) => plugin.hooks?.after)
     .filter((plugin) => plugin !== undefined)
     .flat();
 
-  /**
-   * Add plugin added hooks at last
-   */
   pluginBeforeHooks.length && beforeHooks.push(...pluginBeforeHooks);
   pluginAfterHooks.length && afterHooks.push(...pluginAfterHooks);
 

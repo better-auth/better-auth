@@ -22,14 +22,14 @@ describe("Number Id Adapter Test", async () => {
 			});
 		});
 		console.log(`Now running Number ID Prisma adapter test...`);
-		await pushPrismaSchema("number-id");
+		pushPrismaSchema("number-id");
 		console.log(`Successfully pushed number id Prisma Schema using pnpm...`);
 		const { getAdapter } = await import("./get-adapter");
 		const { clearDb } = getAdapter();
 		await clearDb();
 	}, Number.POSITIVE_INFINITY);
 
-	await runNumberIdAdapterTest({
+	runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			const { getAdapter } = await import("./get-adapter");
 			const { adapter } = getAdapter();

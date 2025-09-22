@@ -1,6 +1,6 @@
 {
   "root": true,
-  "$schema": "https://biomejs.dev/schemas/2.2.0/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.2.4/schema.json",
   "formatter": {
     "enabled": true,
     "indentStyle": "tab"
@@ -12,7 +12,9 @@
       "recommended": false,
       "suspicious": {
         "noImplicitAnyLet": "warn",
-        "noDuplicateObjectKeys": "warn"
+        "noDuplicateObjectKeys": "warn",
+        "noTsIgnore": "error",
+        "noDebugger": "error"
       },
       "performance": {
         "noDelete": "error"
@@ -25,7 +27,8 @@
         "noUnusedImports": "warn"
       },
       "nursery": {
-        "noMisusedPromises": "error"
+        "noMisusedPromises": "error",
+        "noFloatingPromises": "error"
       }
     }
   },
@@ -61,7 +64,9 @@
       "!**/.source",
       "!**/.expo",
       "!**/.cache",
-      "!**/dev/cloudflare/drizzle"
+      "!**/dev/cloudflare/drizzle",
+      "!**/playwright-report",
+      "!**/.output"
     ]
   }
 }

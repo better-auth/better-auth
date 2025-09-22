@@ -12,7 +12,11 @@ export function convertToSnakeCase(str: string, camelCase?: boolean) {
 	if (camelCase) {
 		return str;
 	}
-	return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+	// Handle consecutive capitals (like ID, URL, API) by treating them as a single word
+	return str
+		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2") // Handle AABb -> AA_Bb
+		.replace(/([a-z\d])([A-Z])/g, "$1_$2") // Handle aBb -> a_Bb
+		.toLowerCase();
 }
 
 export const generateDrizzleSchema: SchemaGenerator = async ({
@@ -70,6 +74,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				| "number"
 				| "boolean"
 				| "date"
+				| "json"
 				| `${"string" | "number"}[]`;
 			const typeMap: Record<
 				typeof type,
@@ -117,6 +122,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					pg: `text('${name}').array()`,
 					mysql: `text('${name}').array()`,
 				},
+				json: {
+					sqlite: `text('${name}')`,
+					pg: `jsonb('${name}')`,
+					mysql: `json('${name}')`,
+				},
 			} as const;
 			return typeMap[type][databaseType];
 		}
@@ -126,6 +136,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		if (options.advanced?.database?.useNumberId) {
 			if (databaseType === "pg") {
 				id = `serial("id").primaryKey()`;
+			} else if (databaseType === "sqlite") {
+				id = `int("id").primaryKey()`;
 			} else {
 				id = `int("id").autoincrement().primaryKey()`;
 			}
@@ -153,11 +165,25 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 								typeof attr.defaultValue !== "undefined"
 							) {
 								if (typeof attr.defaultValue === "function") {
-									type += `.$defaultFn(${attr.defaultValue})`;
+									if (
+										attr.type === "date" &&
+										attr.defaultValue.toString().includes("new Date()")
+									) {
+										type += `.defaultNow()`;
+									} else {
+										type += `.$defaultFn(${attr.defaultValue})`;
+									}
 								} else if (typeof attr.defaultValue === "string") {
 									type += `.default("${attr.defaultValue}")`;
 								} else {
 									type += `.default(${attr.defaultValue})`;
+								}
+							}
+							// Add .$onUpdate() for fields with onUpdate property
+							// Supported for all database types: PostgreSQL, MySQL, and SQLite
+							if (attr.onUpdate && attr.type === "date") {
+								if (typeof attr.onUpdate === "function") {
+									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
 							return `${field}: ${type}${attr.required ? ".notNull()" : ""}${
@@ -165,7 +191,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}${
 								attr.references
 									? `.references(()=> ${getModelName(
-											attr.references.model,
+											tables[attr.references.model]?.modelName ||
+												attr.references.model,
 											adapter.options,
 										)}.${attr.references.field}, { onDelete: '${
 											attr.references.onDelete || "cascade"
@@ -198,9 +225,16 @@ function generateImport({
 }) {
 	let imports: string[] = [];
 
-	const hasBigint = Object.values(tables).some((table) =>
-		Object.values(table.fields).some((field) => field.bigint),
-	);
+	let hasBigint = false;
+	let hasJson = false;
+
+	for (const table of Object.values(tables)) {
+		for (const field of Object.values(table.fields)) {
+			if (field.bigint) hasBigint = true;
+			if (field.type === "json") hasJson = true;
+		}
+		if (hasJson && hasBigint) break;
+	}
 
 	const useNumberId = options.advanced?.database?.useNumberId;
 
@@ -252,6 +286,13 @@ function generateImport({
 		imports.push("integer");
 	}
 	imports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
+
+	//handle json last on the import order
+	if (hasJson) {
+		if (databaseType === "pg") imports.push("jsonb");
+		if (databaseType === "mysql") imports.push("json");
+		// sqlite uses text for JSON, so there's no need to handle this case
+	}
 
 	return `import { ${imports
 		.map((x) => x.trim())

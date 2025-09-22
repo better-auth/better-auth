@@ -15,6 +15,7 @@ import type {
 } from "@better-fetch/fetch";
 import { useStore } from "./react-store";
 import type { BASE_ERROR_CODES } from "../../error/codes";
+import type { SessionQueryParams } from "../types";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -87,7 +88,7 @@ export function createAuthClient<Option extends ClientOptions>(
 				data: Session;
 				isPending: boolean;
 				error: BetterFetchError | null;
-				refetch: () => void;
+				refetch: (queryParams?: { query?: SessionQueryParams }) => void;
 			};
 			$Infer: {
 				Session: NonNullable<Session>;

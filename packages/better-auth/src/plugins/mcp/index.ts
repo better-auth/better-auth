@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -16,7 +16,7 @@ import { APIError, getSessionFromCtx } from "../../api";
 import { base64 } from "@better-auth/utils/base64";
 import { generateRandomString } from "../../crypto";
 import { createHash } from "@better-auth/utils/hash";
-import { subtle } from "@better-auth/utils";
+import { getWebcryptoSubtle } from "@better-auth/utils";
 import { SignJWT } from "jose";
 import type { BetterAuthOptions, GenericEndpointContext } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
@@ -28,6 +28,7 @@ import { logger } from "../../utils";
 
 interface MCPOptions {
 	loginPage: string;
+	resource?: string;
 	oidcConfig?: OIDCOptions;
 }
 
@@ -80,6 +81,27 @@ export const getMCPProviderMetadata = (
 			"name",
 		],
 		...options?.metadata,
+	};
+};
+
+export const getMCPProtectedResourceMetadata = (
+	ctx: GenericEndpointContext,
+	options?: MCPOptions,
+) => {
+	const baseURL = ctx.context.baseURL;
+
+	return {
+		resource: options?.resource ?? new URL(baseURL).origin,
+		authorization_servers: [baseURL],
+		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
+		scopes_supported: options?.oidcConfig?.metadata?.scopes_supported ?? [
+			"openid",
+			"profile",
+			"email",
+			"offline_access",
+		],
+		bearer_methods_supported: ["header"],
+		resource_signing_alg_values_supported: ["RS256", "none"],
 	};
 };
 
@@ -166,6 +188,19 @@ export const mcp = (options: MCPOptions) => {
 						console.log(e);
 						return c.json(null);
 					}
+				},
+			),
+			getMCPProtectedResource: createAuthEndpoint(
+				"/.well-known/oauth-protected-resource",
+				{
+					method: "GET",
+					metadata: {
+						client: false,
+					},
+				},
+				async (c) => {
+					const metadata = getMCPProtectedResourceMetadata(c, options);
+					return c.json(metadata);
 				},
 			),
 			mcpOAuthAuthroize: createAuthEndpoint(
@@ -533,7 +568,7 @@ export const mcp = (options: MCPOptions) => {
 					}
 					let secretKey = {
 						alg: "HS256",
-						key: await subtle.generateKey(
+						key: await getWebcryptoSubtle().generateKey(
 							{
 								name: "HMAC",
 								hash: "SHA-256",
@@ -849,6 +884,7 @@ export const mcp = (options: MCPOptions) => {
 					return new Response(JSON.stringify(responseData), {
 						status: 201,
 						headers: {
+							"Content-Type": "application/json",
 							"Cache-Control": "no-store",
 							Pragma: "no-cache",
 						},
@@ -912,7 +948,7 @@ export const withMcpAuth = <
 		const session = await auth.api.getMcpSession({
 			headers: req.headers,
 		});
-		const wwwAuthenticateValue = `Bearer resource_metadata=${baseURL}/api/auth/.well-known/oauth-authorization-server`;
+		const wwwAuthenticateValue = `Bearer resource_metadata="${baseURL}/.well-known/oauth-protected-resource"`;
 		if (!session) {
 			return Response.json(
 				{
@@ -928,6 +964,8 @@ export const withMcpAuth = <
 					status: 401,
 					headers: {
 						"WWW-Authenticate": wwwAuthenticateValue,
+						// we also add this headers otherwise browser based clients will not be able to read the `www-authenticate` header
+						"Access-Control-Expose-Headers": "WWW-Authenticate",
 					},
 				},
 			);
@@ -947,6 +985,30 @@ export const oAuthDiscoveryMetadata = <
 ) => {
 	return async (request: Request) => {
 		const res = await auth.api.getMcpOAuthConfig();
+		return new Response(JSON.stringify(res), {
+			status: 200,
+			headers: {
+				"Content-Type": "application/json",
+				"Access-Control-Allow-Origin": "*",
+				"Access-Control-Allow-Methods": "POST, OPTIONS",
+				"Access-Control-Allow-Headers": "Content-Type, Authorization",
+				"Access-Control-Max-Age": "86400",
+			},
+		});
+	};
+};
+
+export const oAuthProtectedResourceMetadata = <
+	Auth extends {
+		api: {
+			getMCPProtectedResource: (...args: any) => any;
+		};
+	},
+>(
+	auth: Auth,
+) => {
+	return async (request: Request) => {
+		const res = await auth.api.getMCPProtectedResource();
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {

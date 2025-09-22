@@ -5,6 +5,7 @@ import type {
 	Models,
 	Where,
 } from "../types";
+import { getCurrentAdapter } from "../context/transaction";
 
 export function getWithHooks(
 	adapter: Adapter,
@@ -50,7 +51,7 @@ export function getWithHooks(
 			: null;
 		const created =
 			!customCreateFn || customCreateFn.executeMainFn
-				? await adapter.create<T>({
+				? await (await getCurrentAdapter(adapter)).create<T>({
 						model,
 						data: actualData as any,
 						forceAllowId: true,
@@ -97,7 +98,7 @@ export function getWithHooks(
 
 		const updated =
 			!customUpdateFn || customUpdateFn.executeMainFn
-				? await adapter.update<T>({
+				? await (await getCurrentAdapter(adapter)).update<T>({
 						model,
 						update: actualData,
 						where,
@@ -143,7 +144,7 @@ export function getWithHooks(
 
 		const updated =
 			!customUpdateFn || customUpdateFn.executeMainFn
-				? await adapter.updateMany({
+				? await (await getCurrentAdapter(adapter)).updateMany({
 						model,
 						update: actualData,
 						where,
