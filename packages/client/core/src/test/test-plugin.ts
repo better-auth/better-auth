@@ -1,62 +1,6 @@
 import { atom, computed } from "nanostores";
-import type { BetterAuthClientPlugin } from "./types";
-import type { BetterAuthPlugin } from "../types/plugins";
-import { createAuthEndpoint } from "../api/call";
-import { useAuthQuery } from "./query";
-import z from "zod";
-
-const serverPlugin = {
-	id: "test",
-	endpoints: {
-		test: createAuthEndpoint(
-			"/test",
-			{
-				method: "GET",
-				error: z.object({
-					code: z.number(),
-					message: z.string(),
-					test: z.boolean(),
-				}),
-			},
-			async (c) => {
-				return {
-					data: "test",
-				};
-			},
-		),
-		testSignOut2: createAuthEndpoint(
-			"/test-2/sign-out",
-			{
-				method: "POST",
-			},
-			async (c) => {
-				return null;
-			},
-		),
-	},
-	schema: {
-		user: {
-			fields: {
-				testField: {
-					type: "string",
-					required: false,
-				},
-				testField2: {
-					type: "number",
-					required: false,
-				},
-				testField3: {
-					type: "string",
-					returned: false,
-				},
-				testField4: {
-					type: "string",
-					defaultValue: "test",
-				},
-			},
-		},
-	},
-} satisfies BetterAuthPlugin;
+import type { BetterAuthClientPlugin } from "../types";
+import { useAuthQuery } from "../query";
 
 export const testClientPlugin = () => {
 	const $test = atom(false);
@@ -88,7 +32,7 @@ export const testClientPlugin = () => {
 				queryAtom,
 			};
 		},
-		$InferServerPlugin: {} as typeof serverPlugin,
+		$InferServerPlugin: {} as any,
 		atomListeners: [
 			{
 				matcher: (path) => path === "/test",
@@ -101,6 +45,7 @@ export const testClientPlugin = () => {
 		],
 	} satisfies BetterAuthClientPlugin;
 };
+
 export const testClientPlugin2 = () => {
 	const $test2 = atom(false);
 	let testValue = 0;

@@ -17,16 +17,10 @@
     "strict": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
-    "downlevelIteration": true
+    "downlevelIteration": true,
+    "jsx": "react-jsx"
   },
   "exclude": ["**/dist", "node_modules"],
-  "references": [
-    {
-      "path": "../client/core"
-    },
-    {
-      "path": "../client/react"
-    }
-  ],
+  "references": [],
   "include": ["src"]
 }

@@ -2,17 +2,17 @@ import type {
 	BetterFetchOption,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { InputContext, Endpoint, StandardSchemaV1 } from "better-call";
 import type {
+	StandardSchemaV1,
 	HasRequiredKeys,
 	Prettify,
 	UnionToIntersection,
-} from "../types/helper";
-import type {
 	ClientOptions,
 	InferAdditionalFromClient,
 	InferSessionFromClient,
 	InferUserFromClient,
+	InputContext,
+	Endpoint,
 } from "./types";
 
 export type CamelCase<S extends string> =

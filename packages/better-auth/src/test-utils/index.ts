@@ -1,7 +1,8 @@
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
-import { createAuthClient } from "../client/vanilla";
-import type { BetterAuthOptions, ClientOptions, Session, User } from "../types";
+import { createAuthClient } from "@better-auth/client-core";
+import type { BetterAuthOptions } from "../types";
+import type { ClientOptions, Session, User } from "@better-auth/client-core";
 import { getMigrations } from "../db/get-migration";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";

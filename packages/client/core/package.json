@@ -1,0 +1,56 @@
+{
+  "name": "@better-auth/client-core",
+  "version": "1.4.0-beta.2",
+  "description": "Core client utilities for Better Auth",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/client/core"
+  },
+  "keywords": [
+    "auth",
+    "client",
+    "authentication",
+    "typescript"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "unbuild --clean",
+    "dev": "unbuild --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "dependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-fetch/fetch": "catalog:",
+    "nanostores": "^1.0.1",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "happy-dom": "^18.0.1",
+    "typescript": "catalog:",
+    "unbuild": "catalog:",
+    "vitest": "catalog:"
+  },
+  "files": [
+    "dist"
+  ]
+}

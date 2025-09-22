@@ -1,5 +1,9 @@
-import { getClientConfig } from "../config";
-import { capitalizeFirstLetter } from "../../utils/misc";
+import {
+	getClientConfig,
+	createDynamicPathProxy,
+	BASE_ERROR_CODES,
+	capitalizeFirstLetter,
+} from "@better-auth/client-core";
 import type {
 	BetterAuthClientPlugin,
 	ClientOptions,
@@ -7,15 +11,12 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
-} from "../types";
-import { createDynamicPathProxy } from "../proxy";
-import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
-import type { Atom } from "nanostores";
-import type {
+	PrettifyDeep,
+	UnionToIntersection,
 	BetterFetchError,
 	BetterFetchResponse,
-} from "@better-fetch/fetch";
-import type { BASE_ERROR_CODES } from "../../error/codes";
+	Atom,
+} from "@better-auth/client-core";
 
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin

@@ -15,3 +15,5 @@ export class MissingDependencyError extends BetterAuthError {
 		);
 	}
 }
+
+export { BASE_ERROR_CODES } from "./codes";

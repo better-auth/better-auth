@@ -1,10 +1,7 @@
-import { useStore } from "./vue-store";
-import type { DeepReadonly, Ref } from "vue";
 import {
 	getClientConfig,
 	createDynamicPathProxy,
 	BASE_ERROR_CODES,
-	capitalizeFirstLetter,
 } from "@better-auth/client-core";
 import type {
 	BetterAuthClientPlugin,
@@ -13,14 +10,20 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SessionQueryParams,
 	PrettifyDeep,
 	UnionToIntersection,
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-auth/client-core";
+import { useStore } from "./react-store";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
+}
+
+export function capitalizeFirstLetter(str: string) {
+	return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
@@ -34,9 +37,7 @@ type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 							? never
 							: key extends string
 								? `use${Capitalize<key>}`
-								: never]: () => DeepReadonly<
-							Ref<ReturnType<Atoms[key]["get"]>>
-						>;
+								: never]: () => ReturnType<Atoms[key]["get"]>;
 					}
 				: {}
 			: {}
@@ -47,7 +48,6 @@ export function createAuthClient<Option extends ClientOptions>(
 	options?: Option,
 ) {
 	const {
-		baseURL,
 		pluginPathMethods,
 		pluginsActions,
 		pluginsAtoms,
@@ -60,62 +60,12 @@ export function createAuthClient<Option extends ClientOptions>(
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
 
-	type ClientAPI = InferClientAPI<Option>;
-	type Session = ClientAPI extends {
-		getSession: () => Promise<infer Res>;
-	}
-		? Res extends BetterFetchResponse<infer S>
-			? S
-			: Res extends Record<string, any>
-				? Res
-				: never
-		: never;
-
-	function useSession(): DeepReadonly<
-		Ref<{
-			data: Session;
-			isPending: boolean;
-			isRefetching: boolean;
-			error: BetterFetchError | null;
-		}>
-	>;
-	function useSession<F extends (...args: any) => any>(
-		useFetch: F,
-	): Promise<{
-		data: Ref<Session>;
-		isPending: false; //this is just to be consistent with the default hook
-		error: Ref<{
-			message?: string;
-			status: number;
-			statusText: string;
-		}>;
-	}>;
-	function useSession<UseFetch extends <T>(...args: any) => any>(
-		useFetch?: UseFetch,
-	) {
-		if (useFetch) {
-			const ref = useStore(pluginsAtoms.$sessionSignal);
-			return useFetch(`${baseURL}/get-session`, {
-				ref,
-			}).then((res: any) => {
-				return {
-					data: res.data,
-					isPending: false,
-					error: res.error,
-				};
-			});
-		}
-		return resolvedHooks.useSession();
-	}
-
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
-		useSession,
 		$fetch,
 		$store,
 	};
-
 	const proxy = createDynamicPathProxy(
 		routes,
 		$fetch,
@@ -124,10 +74,23 @@ export function createAuthClient<Option extends ClientOptions>(
 		atomListeners,
 	);
 
+	type ClientAPI = InferClientAPI<Option>;
+	type Session = ClientAPI extends {
+		getSession: () => Promise<infer Res>;
+	}
+		? Res extends BetterFetchResponse<infer S>
+			? S
+			: Res
+		: never;
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
-		InferClientAPI<Option> &
+		ClientAPI &
 		InferActions<Option> & {
-			useSession: typeof useSession;
+			useSession: () => {
+				data: Session;
+				isPending: boolean;
+				error: BetterFetchError | null;
+				refetch: (queryParams?: { query?: SessionQueryParams }) => void;
+			};
 			$Infer: {
 				Session: NonNullable<Session>;
 			};
@@ -139,5 +102,6 @@ export function createAuthClient<Option extends ClientOptions>(
 		};
 }
 
+export { useStore };
 export type * from "@better-fetch/fetch";
 export type * from "nanostores";

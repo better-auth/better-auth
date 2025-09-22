@@ -1,5 +1,5 @@
 import { createFetch } from "@better-fetch/fetch";
-import { getBaseURL } from "../utils/url";
+import { getBaseURL } from "./utils/url";
 import { type WritableAtom } from "nanostores";
 import type { AtomListener, ClientOptions } from "./types";
 import { redirectPlugin } from "./fetch-plugins";
