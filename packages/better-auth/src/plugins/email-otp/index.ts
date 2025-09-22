@@ -1120,6 +1120,15 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							ctx,
 						);
 					}
+					
+					if (ctx.context.options.emailAndPassword?.onPasswordReset) {
+						await ctx.context.options.emailAndPassword.onPasswordReset(
+						{
+							user: user.user,
+						},
+						ctx.request
+						);
+					}
 
 					if (!user.user.emailVerified) {
 						await ctx.context.internalAdapter.updateUser(
