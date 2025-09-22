@@ -2,11 +2,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "./index";
 import { testClientPlugin } from "./test/test-plugin";
-import type {
-	Session,
-	SessionQueryParams,
-	BetterFetchError,
-} from "@better-auth/client-core";
 
 describe("react client", () => {
 	it("should export the correct types", () => {

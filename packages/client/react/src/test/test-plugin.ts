@@ -1,8 +1,5 @@
 import { atom, computed } from "nanostores";
-import type {
-	BetterAuthClientPlugin,
-	useAuthQuery,
-} from "@better-auth/client-core";
+import type { BetterAuthClientPlugin } from "@better-auth/client-core";
 
 export const testClientPlugin = () => {
 	const $test = atom(false);
