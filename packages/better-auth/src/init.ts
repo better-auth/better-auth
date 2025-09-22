@@ -42,8 +42,12 @@ export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
+	const allPlugins = plugins.concat(internalPlugins);
 	const logger = createLogger(options.logger);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
+
+	// Validate required plugins
+	validateRequiredPlugins(allPlugins, logger);
 
 	const secret =
 		options.secret ||
@@ -248,6 +252,7 @@ export type AuthContext = {
 	tables: BetterAuthDbSchema;
 	runMigrations: () => Promise<void>;
 	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
+	destroy: () => Promise<void>;
 };
 
 async function runPluginInit(ctx: AuthContext) {
@@ -255,7 +260,23 @@ async function runPluginInit(ctx: AuthContext) {
 	const plugins = options.plugins || [];
 	let context: AuthContext = ctx;
 	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
+	const onInitHooks: Array<Required<BetterAuthPlugin>["onInit"]> = [];
+	const cleanupHooks: Array<Required<BetterAuthPlugin>["onDestroy"]> = [];
+
 	for (const plugin of plugins) {
+		// Collect database hooks from plugin definition
+		if (plugin.databaseHooks) {
+			dbHooks.push(plugin.databaseHooks);
+		}
+
+		// Collect onInit and cleanup hooks
+		if (plugin.onInit) {
+			onInitHooks.push(plugin.onInit);
+		}
+		if (plugin.onDestroy) {
+			cleanupHooks.push(plugin.onDestroy);
+		}
+		
 		if (plugin.init) {
 			let initPromise = plugin.init(context);
 			let result: ReturnType<Required<BetterAuthPlugin>["init"]>;
@@ -266,9 +287,9 @@ async function runPluginInit(ctx: AuthContext) {
 			}
 			if (typeof result === "object") {
 				if (result.options) {
-					const { databaseHooks, ...restOpts } = result.options;
-					if (databaseHooks) {
-						dbHooks.push(databaseHooks);
+					const { databaseHooks: pluginInitHooks, ...restOpts } = result.options;
+					if (pluginInitHooks) {
+						dbHooks.push(pluginInitHooks);
 					}
 					options = defu(options, restOpts);
 				}
@@ -290,6 +311,19 @@ async function runPluginInit(ctx: AuthContext) {
 		generateId: ctx.generateId,
 	});
 	context.options = options;
+
+	// Call onInit hooks
+	for (const onInitHook of onInitHooks) {
+		await onInitHook(context);
+	}
+
+	// Add cleanup function to context
+	context.destroy = async () => {
+		for (const cleanupHook of cleanupHooks) {
+			await cleanupHook(context);
+		}
+	};
+
 	return { context };
 }
 
@@ -320,4 +354,23 @@ function getTrustedOrigins(options: BetterAuthOptions) {
 		);
 	}
 	return trustedOrigins;
+}
+
+function validateRequiredPlugins(plugins: BetterAuthPlugin[], logger: ReturnType<typeof createLogger>) {
+	const pluginIds = plugins.map(p => p.id);
+	
+	for (const plugin of plugins) {
+		if (plugin.requires) {
+			for (const requiredId of plugin.requires) {
+				if (!pluginIds.includes(requiredId)) {
+					logger.error(
+						`Plugin "${plugin.id}" requires plugin "${requiredId}" but it is not included in the plugins list.`
+					);
+					throw new BetterAuthError(
+						`Plugin "${plugin.id}" requires plugin "${requiredId}" but it is not included in the plugins list.`
+					);
+				}
+			}
+		}
+	}
 }
