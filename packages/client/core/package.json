@@ -39,6 +39,7 @@
     }
   },
   "dependencies": {
+    "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "nanostores": "^1.0.1",
     "zod": "catalog:"

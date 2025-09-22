@@ -4,10 +4,47 @@ import type {
 	BetterFetchPlugin,
 } from "@better-fetch/fetch";
 import type { Atom, WritableAtom } from "nanostores";
-import type { InferRoutes } from './path-to-object'
-import type { Auth } from 'better-auth'
+import type { InferRoutes } from "./path-to-object";
+import type {
+	User as CoreUser,
+	Session as CoreSession,
+	Prettify as CorePrettify,
+	PrettifyDeep as CorePrettifyDeep,
+	UnionToIntersection as CoreUnionToIntersection,
+	StripEmptyObjects as CoreStripEmptyObjects,
+	LiteralUnion as CoreLiteralUnion,
+	HasRequiredKeys as CoreHasRequiredKeys,
+	BASE_ERROR_CODES,
+	InputContext as CoreInputContext,
+	Endpoint as CoreEndpoint,
+	StandardSchemaV1 as CoreStandardSchemaV1,
+	EndpointOptions as CoreEndpointOptions,
+} from "@better-auth/core";
 
-// Helper types copied from better-auth to avoid circular dependency
+// Re-export core types
+export type Prettify<T> = CorePrettify<T>;
+export type PrettifyDeep<T> = CorePrettifyDeep<T>;
+export type LiteralUnion<T extends U, U = string> = CoreLiteralUnion<T, U>;
+export type UnionToIntersection<U> = CoreUnionToIntersection<U>;
+export type HasRequiredKeys<BaseType extends object> =
+	CoreHasRequiredKeys<BaseType>;
+export type StripEmptyObjects<T> = CoreStripEmptyObjects<T>;
+export type InputContext<
+	Path extends string = string,
+	Input = any,
+> = CoreInputContext<Path, Input>;
+export type Endpoint<
+	Path extends string = string,
+	Handler extends (...args: any[]) => any = (...args: any[]) => any,
+> = CoreEndpoint<Path, Handler>;
+export type StandardSchemaV1<
+	Input = unknown,
+	Output = unknown,
+> = CoreStandardSchemaV1<Input, Output>;
+export type EndpointOptions = CoreEndpointOptions;
+export { BASE_ERROR_CODES };
+
+// Additional client-specific types
 export type Primitive =
 	| string
 	| number
@@ -22,32 +59,9 @@ export type LiteralNumber = 0 | (number & Record<never, never>);
 export type Awaitable<T> = Promise<T> | T;
 export type OmitId<T extends { id: unknown }> = Omit<T, "id">;
 
-export type Prettify<T> = Omit<T, never>;
 export type PreserveJSDoc<T> = {
 	[K in keyof T]: T[K];
 } & {};
-export type PrettifyDeep<T> = {
-	[K in keyof T]: T[K] extends (...args: any[]) => any
-		? T[K]
-		: T[K] extends object
-			? T[K] extends Array<any>
-				? T[K]
-				: T[K] extends Date
-					? T[K]
-					: PrettifyDeep<T[K]>
-			: T[K];
-} & {};
-export type LiteralUnion<LiteralType, BaseType extends Primitive> =
-	| LiteralType
-	| (BaseType & Record<never, never>);
-
-export type UnionToIntersection<U> = (
-	U extends any
-		? (k: U) => void
-		: never
-) extends (k: infer I) => void
-	? I
-	: never;
 
 export type RequiredKeysOf<BaseType extends object> = Exclude<
 	{
@@ -58,102 +72,9 @@ export type RequiredKeysOf<BaseType extends object> = Exclude<
 	undefined
 >;
 
-export type HasRequiredKeys<BaseType extends object> =
-	RequiredKeysOf<BaseType> extends never ? false : true;
-
-// Types from better-call needed for client - keeping local copy to avoid dependency
-export interface InputContext<Path extends string = string, Input = any> {
-	path: Path;
-	method?: string;
-	body?: Input extends { body: infer B } ? B : any;
-	query?: Input extends { query: infer Q } ? Q : any;
-	params?: Input extends { params: infer P } ? P : any;
-	headers?: Record<string, string>;
-}
-
-export interface EndpointOptions {
-	metadata?: Record<string, any>;
-	error?: StandardSchemaV1;
-	[key: string]: any;
-}
-
-export interface Endpoint<
-	Path extends string = string,
-	Handler extends (...args: any[]) => any = (...args: any[]) => any
-> {
-	path: Path;
-	options: EndpointOptions;
-	handler?: Handler;
-	method?: string;
-}
-
-export interface StandardSchemaV1<Input = unknown, Output = unknown> {
-	readonly "~standard": {
-		readonly version: 1;
-		readonly vendor?: string;
-		readonly validate?: (value: unknown) => unknown;
-		readonly types?: {
-			readonly input?: Input;
-			readonly output?: Output;
-		};
-	};
-}
-
-export type StripEmptyObjects<T> = T extends { [K in keyof T]: never }
-	? never
-	: T extends object
-		? { [K in keyof T as T[K] extends never ? never : K]: T[K] }
-		: T;
-
-// Base error codes copied from better-auth
-export const BASE_ERROR_CODES = {
-	INVALID_EMAIL_OR_PASSWORD: "Invalid email or password",
-	INVALID_PASSWORD: "Invalid password",
-	USER_NOT_FOUND: "User not found",
-	FAILED_TO_CREATE_USER: "Failed to create user",
-	REQUEST_LIMIT_EXCEEDED: "Too many requests. Please try again later",
-	INVALID_EMAIL: "Invalid email",
-	EMAIL_ALREADY_IN_USE: "Email already in use",
-	PASSWORD_TOO_SHORT: "Password must be at least 8 characters",
-	PASSWORD_TOO_LONG: "Password must be at most 256 characters",
-	INVALID_SESSION: "Invalid session",
-	CREDENTIAL_ACCOUNT_NOT_FOUND: "Credential account not found",
-	INVALID_CREDENTIALS: "Invalid credentials",
-	SESSION_NOT_FOUND: "Session not found",
-	MULTIPLE_CREDENTIALS_ACCOUNT: "Multiple credentials account",
-	INVALID_CODE: "Invalid code",
-	UNABLE_TO_VERIFY_EMAIL: "Unable to verify email. Invalid code",
-	USER_ALREADY_EXISTS: "User already exists",
-	ACCESS_DENIED: "Access denied",
-	FORBIDDEN: "Forbidden",
-	SOCIAL_ACCOUNT_ALREADY_LINKED: "Social account already linked",
-	PROVIDER_NOT_FOUND: "Provider not found",
-	INVALID_TOKEN: "Invalid token",
-	SOCIAL_LOGIN_FAILED: "Social login failed",
-	SIGN_UP_DISABLED: "Sign up is disabled",
-	INVALID_FIELDS: "Invalid fields",
-	NOT_FOUND: "Not found",
-	METHOD_NOT_ALLOWED: "Method not allowed",
-} as const;
-
-// Core types for better-auth client
-export type Session = {
-	id: string;
-	userId: string;
-	expiresAt: Date;
-	ipAddress?: string;
-	userAgent?: string;
-};
-
-export type User = {
-	id: string;
-	email: string;
-	emailVerified: boolean;
-	name: string;
-	image?: string | null;
-	createdAt: Date;
-	updatedAt: Date;
-};
+// Re-export User and Session from core
+export type User = CoreUser;
+export type Session = CoreSession;
 
 // Client plugin types
 export type AtomListener = {
@@ -216,26 +137,11 @@ export interface ClientOptions {
 	$InferAuth?: any; // We don't have BetterAuthOptions here
 }
 
-export type InferClientAPI<O extends ClientOptions> = InferRoutes<
-	O["plugins"] extends Array<any>
-		? Auth["api"] &
-		(O["plugins"] extends Array<infer Pl>
-			? UnionToIntersection<
-				Pl extends {
-						$InferServerPlugin: infer Plug;
-					}
-					? Plug extends {
-							endpoints: infer Endpoints;
-						}
-						? Endpoints
-						: {}
-					: {}
-			>
-			: {})
-		: Auth["api"],
-	O
->;
-
+// Inference types
+// This type will be properly resolved when the auth instance is passed
+// It's kept as 'any' here to avoid circular dependencies
+// The actual type resolution happens in the client creation
+export type InferClientAPI<O extends ClientOptions> = any;
 
 export type InferActions<O extends ClientOptions> = (O["plugins"] extends Array<
 	infer Plugin
@@ -283,7 +189,7 @@ export type InferUserFromClient<O extends ClientOptions> = StripEmptyObjects<
 export type InferAdditionalFromClient<
 	O extends ClientOptions,
 	Entity extends string = string,
-	Type extends "input" | "output" = "input"
+	Type extends "input" | "output" = "input",
 > = O["$InferAuth"] extends any
 	? O["$InferAuth"]["user"] extends Record<string, any>
 		? O["$InferAuth"]["user"]["additionalFields"] extends Record<string, any>
