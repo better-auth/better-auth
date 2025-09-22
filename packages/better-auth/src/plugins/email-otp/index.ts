@@ -1120,13 +1120,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							ctx,
 						);
 					}
-					
+
 					if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 						await ctx.context.options.emailAndPassword.onPasswordReset(
-						{
-							user: user.user,
-						},
-						ctx.request
+							{
+								user: user.user,
+							},
+							ctx.request,
 						);
 					}
 
