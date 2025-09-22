@@ -74,7 +74,7 @@ describe("oauth-proxy", async () => {
 					throw new Error("Location header not found");
 				}
 				expect(location).toContain(
-					"http://preview-localhost:3000/api/auth/oauth-proxy-callback?callbackURL=%2Fdashboard",
+					"http://preview-localhost:3000/api/auth/oauth-proxy-callback?callbackURL=%2Fdashboard&originalOrigin=http%3A%2F%2Fpreview-localhost%3A3000",
 				);
 				const cookies = new URL(location).searchParams.get("cookies");
 				expect(cookies).toBeTruthy();
@@ -113,4 +113,5 @@ describe("oauth-proxy", async () => {
 			},
 		});
 	});
+
 });
