@@ -160,9 +160,86 @@ export function getWithHooks(
 
 		return updated;
 	}
+
+	async function deleteWithHooks<T extends Record<string, any>>(
+		where: Where[],
+		model: BaseModels,
+		context?: GenericEndpointContext,
+	) {
+		const item = await (await getCurrentAdapter(adapter)).findOne<T>({
+			model,
+			where,
+		});
+
+		if (!item) {
+			return;
+		}
+
+		for (const hook of hooks || []) {
+			const toRun = hook[model]?.delete?.before;
+			if (toRun) {
+				const result = await toRun(item as any, context);
+				if (result === false) {
+					return;
+				}
+			}
+		}
+
+		await (await getCurrentAdapter(adapter)).delete<T>({
+			model,
+			where,
+		});
+
+		for (const hook of hooks || []) {
+			const toRun = hook[model]?.delete?.after;
+			if (toRun) {
+				await toRun(item as any, context);
+			}
+		}
+	}
+
+	async function deleteManyWithHooks<T extends Record<string, any>>(
+		where: Where[],
+		model: BaseModels,
+		context?: GenericEndpointContext,
+	) {
+		const items = await (await getCurrentAdapter(adapter)).findMany<T>({
+			model,
+			where,
+		});
+
+		for (const item of items) {
+			for (const hook of hooks || []) {
+				const toRun = hook[model]?.delete?.before;
+				if (toRun) {
+					const result = await toRun(item as any, context);
+					if (result === false) {
+						return;
+					}
+				}
+			}
+		}
+
+		await (await getCurrentAdapter(adapter)).deleteMany({
+			model,
+			where,
+		});
+
+		for (const item of items) {
+			for (const hook of hooks || []) {
+				const toRun = hook[model]?.delete?.after;
+				if (toRun) {
+					await toRun(item as any, context);
+				}
+			}
+		}
+	}
+
 	return {
 		createWithHooks,
 		updateWithHooks,
 		updateManyWithHooks,
+		deleteWithHooks,
+		deleteManyWithHooks,
 	};
 }
