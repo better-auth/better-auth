@@ -860,6 +860,16 @@ export type BetterAuthOptions = {
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
+			delete?: {
+				before?: (
+					user: User & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<boolean | void>;
+				after?: (
+					user: User & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
+			};
 		};
 		/**
 		 * Session Hook
@@ -911,6 +921,16 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a session is updated.
 				 */
+				after?: (
+					session: Session & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
+			};
+			delete?: {
+				before?: (
+					session: Session & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<boolean | void>;
 				after?: (
 					session: Session & Record<string, unknown>,
 					context?: GenericEndpointContext,
@@ -972,6 +992,16 @@ export type BetterAuthOptions = {
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
+			delete?: {
+				before?: (
+					account: Account & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<boolean | void>;
+				after?: (
+					account: Account & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
+			};
 		};
 		/**
 		 * Verification Hook
@@ -1020,6 +1050,16 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a verification is updated.
 				 */
+				after?: (
+					verification: Verification & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
+			};
+			delete?: {
+				before?: (
+					verification: Verification & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<boolean | void>;
 				after?: (
 					verification: Verification & Record<string, unknown>,
 					context?: GenericEndpointContext,
