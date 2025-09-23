@@ -11,7 +11,6 @@ import {
   customSession,
   deviceAuthorization,
   lastLoginMethod,
-  deviceBinding,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -141,13 +140,6 @@ export const auth = betterAuth({
     },
   },
   plugins: [
-    deviceBinding({
-      strictMode: true,
-      trustDuration: 30,
-      maxTrustedDevices: 3,
-      requireDeviceVerification: true,
-      autoRegisterDevice: true,
-    }),
     organization({
       async sendInvitationEmail(data) {
         await resend.emails.send({
