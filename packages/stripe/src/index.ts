@@ -132,17 +132,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					/**
 					 * The name of the plan to subscribe
 					 */
-					plan: z.string().meta({
-						description: 'The name of the plan to upgrade to. Eg: "pro"',
-					}),
+					plan: z.string().describe("The name of the plan to upgrade to"),
 					/**
 					 * If annual plan should be applied.
 					 */
 					annual: z
 						.boolean()
-						.meta({
-							description: "Whether to upgrade to an annual plan. Eg: true",
-						})
+						.describe("Whether to upgrade to an annual plan")
 						.optional(),
 					/**
 					 * Reference id of the subscription to upgrade
@@ -151,10 +147,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					referenceId: z
 						.string()
-						.meta({
-							description:
-								'Reference id of the subscription to upgrade. Eg: "123"',
-						})
+						.describe("Reference id of the subscription to upgrade")
 						.optional(),
 					/**
 					 * This is to allow a specific subscription to be upgrade.
@@ -163,10 +156,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					subscriptionId: z
 						.string()
-						.meta({
-							description:
-								'The id of the subscription to upgrade. Eg: "sub_123"',
-						})
+						.describe("The id of the subscription to upgrade")
 						.optional(),
 					/**
 					 * Any additional data you want to store in your database
@@ -178,50 +168,41 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					seats: z
 						.number()
-						.meta({
-							description:
-								"Number of seats to upgrade to (if applicable). Eg: 1",
-						})
+						.describe("Number of seats to upgrade to (if applicable)")
 						.optional(),
 					/**
 					 * Success URL to redirect back after successful subscription
 					 */
 					successUrl: z
 						.string()
-						.meta({
-							description:
-								'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
-						})
+						.describe(
+							"Callback URL to redirect back after successful subscription",
+						)
 						.default("/"),
 					/**
 					 * Cancel URL
 					 */
 					cancelUrl: z
 						.string()
-						.meta({
-							description:
-								'If set, checkout shows a back button and customers will be directed here if they cancel payment. Eg: "https://example.com/pricing"',
-						})
+						.describe(
+							"If set, checkout shows a back button and customers will be directed here if they cancel payment",
+						)
 						.default("/"),
 					/**
 					 * Return URL
 					 */
 					returnUrl: z
 						.string()
-						.meta({
-							description:
-								'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
-						})
+						.describe(
+							"URL to take customers to when they click on the billing portal’s link to return to your website",
+						)
 						.optional(),
 					/**
 					 * Disable Redirect
 					 */
 					disableRedirect: z
 						.boolean()
-						.meta({
-							description:
-								"Disable redirect after successful subscription. Eg: true",
-						})
+						.describe("Disable redirect after successful subscription")
 						.default(false),
 				}),
 				use: [
@@ -654,22 +635,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				body: z.object({
 					referenceId: z
 						.string()
-						.meta({
-							description:
-								"Reference id of the subscription to cancel. Eg: '123'",
-						})
+						.describe("Reference id of the subscription to cancel")
 						.optional(),
 					subscriptionId: z
 						.string()
-						.meta({
-							description:
-								"The id of the subscription to cancel. Eg: 'sub_123'",
-						})
+						.describe("The id of the subscription to cancel")
 						.optional(),
-					returnUrl: z.string().meta({
-						description:
-							'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
-					}),
+					returnUrl: z
+						.string()
+						.describe(
+							"URL to take customers to when they click on the billing portal’s link to return to your website",
+						),
 				}),
 				use: [
 					sessionMiddleware,
@@ -798,17 +774,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				body: z.object({
 					referenceId: z
 						.string()
-						.meta({
-							description:
-								"Reference id of the subscription to restore. Eg: '123'",
-						})
+						.describe("Reference id of the subscription to restore")
 						.optional(),
 					subscriptionId: z
 						.string()
-						.meta({
-							description:
-								"The id of the subscription to restore. Eg: 'sub_123'",
-						})
+						.describe("The id of the subscription to restore")
 						.optional(),
 				}),
 				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
@@ -932,10 +902,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					z.object({
 						referenceId: z
 							.string()
-							.meta({
-								description:
-									"Reference id of the subscription to list. Eg: '123'",
-							})
+							.describe("Reference id of the subscription to list")
 							.optional(),
 					}),
 				),
