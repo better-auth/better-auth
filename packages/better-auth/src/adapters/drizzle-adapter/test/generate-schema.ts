@@ -6,7 +6,7 @@ import * as sqlite from "drizzle-orm/sqlite-core";
 
 /**
  * generates a drizzle schema based on BetterAuthOptions & a given dialect.
- * 
+ *
  * Useful for testing the Drizzle adapter.
  */
 export const generateDrizzleSchema = (

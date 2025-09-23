@@ -19,11 +19,11 @@ export const testAdapter = ({
 	additionalCleanups,
 	tests,
 	prefixTests,
-	onFinish
+	onFinish,
 }: {
 	/**
 	 * A function that will return the adapter instance to test with.
-	 * 
+	 *
 	 * @example
 	 * ```ts
 	 * testAdapter({
@@ -32,7 +32,9 @@ export const testAdapter = ({
 	 *   }),
 	 * })
 	 */
-	adapter: (options: BetterAuthOptions) => (options: BetterAuthOptions) => Adapter;
+	adapter: (
+		options: BetterAuthOptions,
+	) => (options: BetterAuthOptions) => Adapter;
 	/**
 	 * A function that will run the database migrations.
 	 */
@@ -76,7 +78,7 @@ export const testAdapter = ({
 
 	const adapter = () => {
 		return getAdapter(betterAuthOptions)(betterAuthOptions);
-	}
+	};
 
 	const adapterName = adapter().options?.adapterConfig.adapterName;
 	const adapterId = adapter().options?.adapterConfig.adapterId || adapter().id;
@@ -177,7 +179,7 @@ export const testAdapter = ({
 					beforeAll(async () => {
 						await migrate();
 					});
-	
+
 					for (const testSuite of tests) {
 						await testSuite({
 							adapter,
@@ -200,14 +202,14 @@ export const testAdapter = ({
 							runMigrations: migrate,
 						});
 					}
-	
+
 					afterAll(async () => {
 						await cleanup();
 						await onFinish?.();
 						resolve(void 0);
 					});
 				});
-			})
+			});
 		},
 	};
 };
