@@ -27,7 +27,7 @@ export interface AsgardeoProfile {
 	gender?: string;
 	email_verified?: boolean;
 	phone_number_verified?: boolean;
-	address: {
+	address?: {
 		street_address?: string;
 		locality?: string;
 		region?: string;
