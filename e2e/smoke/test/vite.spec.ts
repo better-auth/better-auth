@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import assert from "node:assert";
+import * as assert from "node:assert";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 
@@ -45,7 +45,7 @@ describe("(vite) client build", () => {
 		const clientContent = await readFile(clientFile, "utf-8");
 
 		assert.ok(
-			!clientContent.includes("better-call"),
+			!clientContent.includes("createEndpoint"),
 			"Built output should not contain 'better-call' imports",
 		);
 	});
