@@ -227,6 +227,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
 			},
 		} as const;
+
 		if (fieldName === "id" || field.references?.field === "id") {
 			return typeMap.id[dbType!];
 		}
@@ -238,6 +239,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 		if (Array.isArray(type)) {
 			return "text";
+		}
+
+		if (!(type in typeMap)) {
+			throw new Error(
+				`Unsupported field type '${String(type)}' for field '${fieldName}'.`,
+			);
 		}
 		return typeMap[type][dbType || "sqlite"];
 	}
