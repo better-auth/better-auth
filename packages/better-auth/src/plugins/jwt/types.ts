@@ -307,10 +307,6 @@ export interface JwtVerifyOptions {
 	 */
 	allowedAudiences?: string[];
 	/**
-	 * Expected `jti` (**"JWT ID" Claim**). If provided, `jti` presence is necessary in the payload.
-	 */
-	expectedJti?: string;
-	/**
 	 * Expected `sub` (**"Subject" Claim**). If provided, `sub` presence is necessary in the payload.
 	 */
 	expectedSubject?: string;
@@ -346,7 +342,6 @@ export const JwtVerifyOptionsSchema = z
 		maxExpirationTime: z.string().optional(),
 		allowedIssuers: z.array(z.string()).optional(),
 		allowedAudiences: z.array(z.string()).optional(),
-		expectedJti: z.string().optional(),
 		expectedSubject: z.string().optional(),
 		expectedType: z.string().optional(),
 		allowNoKeyId: z.boolean().optional(),
