@@ -1,0 +1,21 @@
+{
+  "name": "@better-auth/core",
+  "version": "0.0.1",
+  "description": "The most comprehensive authentication library for TypeScript.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "unbuild --clean",
+    "stub": "unbuild --stub",
+    "test": "vitest",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "devDependencies": {
+    "unbuild": "catalog:"
+  }
+}

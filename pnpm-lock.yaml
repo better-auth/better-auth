@@ -646,6 +646,9 @@ importers:
 
   packages/better-auth:
     dependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
       '@better-auth/utils':
         specifier: 0.3.0
         version: 0.3.0
@@ -879,6 +882,12 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.2
+      unbuild:
+        specifier: 'catalog:'
+        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
+
+  packages/core:
+    devDependencies:
       unbuild:
         specifier: 'catalog:'
         version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
@@ -15968,9 +15977,7 @@ snapshots:
       metro-runtime: 0.83.1
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.79.6': {}
