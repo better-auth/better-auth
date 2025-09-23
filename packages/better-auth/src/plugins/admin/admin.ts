@@ -1196,7 +1196,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const [adminSessionToken, dontRememberMeCookie] =
 						adminCookie?.split(":");
 					const adminSession =
-						await ctx.context.internalAdapter.findSession(adminSessionToken);
+						await ctx.context.internalAdapter.findSession(adminSessionToken!);
 					if (!adminSession || adminSession.session.userId !== user.id) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: "Failed to find admin session",
