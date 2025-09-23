@@ -1,0 +1,289 @@
+import type { BetterAuthClientPlugin } from "../../client/types";
+  
+interface DeviceInfo {
+  userAgent?: string;
+  screenResolution?: string;
+  timezone?: string;
+  language?: string;
+  platform?: string;
+  cookiesEnabled?: boolean;
+  doNotTrack?: boolean;
+  hardwareConcurrency?: number;
+  maxTouchPoints?: number;
+  colorDepth?: number;
+  pixelRatio?: number;
+  canvas?: string;
+  webgl?: string;
+}
+
+// Enhanced device fingerprinting for browsers with canvas and WebGL
+function generateDeviceInfo(): DeviceInfo {
+  
+
+  const deviceInfo: DeviceInfo = {
+    userAgent: navigator.userAgent,
+    screenResolution: `${screen.width}x${screen.height}`,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    language: navigator.language,
+    platform: navigator.platform,
+    cookiesEnabled: navigator.cookieEnabled,
+    doNotTrack: navigator.doNotTrack === "1",
+    hardwareConcurrency: navigator.hardwareConcurrency,
+    maxTouchPoints: navigator.maxTouchPoints,
+    colorDepth: screen.colorDepth,
+    pixelRatio: window.devicePixelRatio,
+  };
+
+ 
+
+  return deviceInfo;
+}
+
+export const deviceBindingClient = (options?: {
+  /**
+   * Auto-register device on successful login (disabled by default for strict mode)
+   * @default false
+   */
+  autoRegisterDevice?: boolean;
+  /**
+   * Callback when device verification is required
+   */
+  onDeviceVerificationRequired?: (data: {
+    isFirstDevice?: boolean;
+    isNewDevice?: boolean;
+    deviceId?: string;
+    message?: string;
+  }) => void | Promise<void>;
+  /**
+   * Callback when OTP is required
+   */
+  onOTPRequired?: (data: {
+    deviceId: string;
+    expiresIn: number;
+    message: string;
+  }) => void | Promise<void>;
+  /**
+   * Custom device info generator
+   */
+  generateDeviceInfo?: () => DeviceInfo;
+  /**
+   * Enable strict mode (blocks new devices by default)
+   * @default true
+   */
+  strictMode?: boolean;
+}) => {
+  const opts = {
+    autoRegisterDevice: options?.autoRegisterDevice ?? false,
+    strictMode: options?.strictMode ?? true,
+    generateDeviceInfo: options?.generateDeviceInfo ?? generateDeviceInfo,
+  };
+
+  return {
+    id: "device-binding",
+    pathMethods: {
+      "/device-binding/register": "POST",
+      "/device-binding/request-otp": "POST",
+      "/device-binding/verify-otp": "POST",
+      "/device-binding/trust": "POST",
+      "/device-binding/list": "GET",
+      "/device-binding/remove": "POST",
+      "/device-binding/status": "GET",
+    },
+    fetchPlugins: [
+      {
+        id: "device-binding",
+        name: "device-binding",
+        hooks: {
+          async onSuccess(context: any) {
+            // Auto-register device on successful login (first device only)
+            if (opts.autoRegisterDevice && 
+                (context.path.includes("/sign-in/") || context.path.includes("/sign-up/"))) {
+              try {
+                const deviceInfo = opts.generateDeviceInfo();
+                const response = await context.client.deviceBinding.register({
+                  deviceInfo,
+                  isFirstDevice: true,
+                });
+                
+                if (response.requiresVerification && options?.onDeviceVerificationRequired) {
+                  await options.onDeviceVerificationRequired({
+                    isNewDevice: response.isNewDevice,
+                    message: "Device registration required",
+                  });
+                }
+              } catch (error) {
+                console.warn("Failed to auto-register device:", error);
+              }
+            }
+
+            // Handle device verification requirement
+            if (context.data?.deviceVerificationRequired) {
+              if (options?.onDeviceVerificationRequired) {
+                await options.onDeviceVerificationRequired({
+                  isFirstDevice: context.data.isFirstDevice,
+                  isNewDevice: context.data.isNewDevice,
+                  deviceId: context.data.deviceId,
+                  message: context.data.message,
+                });
+              }
+            }
+          },
+          
+          async onError(context: any) {
+            // Handle device verification errors
+            if (context.responseData?.deviceVerificationRequired) {
+              if (options?.onDeviceVerificationRequired) {
+                await options.onDeviceVerificationRequired({
+                  isFirstDevice: context.responseData.isFirstDevice,
+                  isNewDevice: context.responseData.isNewDevice,
+                  deviceId: context.responseData.deviceId,
+                  message: context.responseData.message,
+                });
+              }
+            }
+          },
+        },
+      },
+    ],
+    atomListeners: [
+      {
+        matcher: (path) => path.startsWith("/device-binding/"),
+        signal: "$sessionSignal",
+      },
+    ],
+  } satisfies BetterAuthClientPlugin;
+};
+
+// Enhanced helper functions for manual device management
+export const deviceBindingHelpers = {
+  /**
+   * Register current device (first device only in strict mode)
+   */
+  async registerDevice(
+    client: any,
+    options?: {
+      deviceName?: string;
+      deviceInfo?: DeviceInfo;
+      isFirstDevice?: boolean;
+    }
+  ) {
+    const deviceInfo = options?.deviceInfo ?? generateDeviceInfo();
+    
+    return await client.deviceBinding.register({
+      deviceInfo,
+      deviceName: options?.deviceName,
+      isFirstDevice: options?.isFirstDevice,
+    });
+  },
+
+  /**
+   * Quick register with OTP (unprotected)
+   */
+  async quickRegisterWithOTP(
+    client: any,
+    data: {
+      email: string;
+      step: "request" | "verify";
+      otp?: string;
+      deviceName?: string;
+      trustDevice?: boolean;
+      deviceInfo?: DeviceInfo;
+    }
+  ) {
+    const deviceInfo = data.deviceInfo ?? generateDeviceInfo();
+    
+    return await client.$fetch("/device-binding/quick-register", {
+      method: "POST",
+      body: {
+        ...data,
+        deviceInfo,
+      },
+    });
+  },
+
+  /**
+   * Request OTP for device verification
+   */
+  async requestDeviceOTP(
+    client: any,
+    email: string,
+    deviceInfo?: DeviceInfo
+  ) {
+    const info = deviceInfo ?? generateDeviceInfo();
+    
+    return await client.deviceBinding.requestOTP({
+      email,
+      deviceInfo: info,
+    });
+  },
+
+  /**
+   * Verify device with OTP
+   */
+  async verifyDeviceOTP(
+    client: any,
+    deviceId: string,
+    otp: string,
+    options?: {
+      trustDevice?: boolean;
+      deviceInfo?: DeviceInfo;
+    }
+  ) {
+    const deviceInfo = options?.deviceInfo ?? generateDeviceInfo();
+    
+    return await client.deviceBinding.verifyOTP({
+      deviceId,
+      otp,
+      deviceInfo,
+      trustDevice: options?.trustDevice,
+    });
+  },
+
+  /**
+   * Trust current device with 2FA
+   */
+  async trustDevice(
+    client: any,
+    deviceId: string,
+    verificationCode: string,
+    isTotp: boolean = true
+  ) {
+    return await client.deviceBinding.trust({
+      deviceId,
+      ...(isTotp ? { totpCode: verificationCode } : { otpCode: verificationCode }),
+    });
+  },
+
+  /**
+   * Get list of user's devices
+   */
+  async getDevices(client: any) {
+    return await client.deviceBinding.list();
+  },
+
+  /**
+   * Remove a device
+   */
+  async removeDevice(client: any, deviceId: string) {
+    return await client.deviceBinding.remove({ deviceId });
+  },
+
+  /**
+   * Check current device status
+   */
+  async checkDeviceStatus(client: any) {
+    return await client.deviceBinding.status();
+  },
+
+  /**
+   * Get current device fingerprint
+   */
+  getCurrentDeviceFingerprint(): string {
+    const deviceInfo = generateDeviceInfo();
+    return btoa(JSON.stringify(deviceInfo)).replace(/[+/=]/g, '');
+  },
+};
+
+export * from "./types";
+export * from "./schema";
+export { deviceBinding } from "./index";
