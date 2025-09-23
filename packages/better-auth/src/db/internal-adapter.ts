@@ -54,13 +54,7 @@ export const createInternalAdapter = (
 				if (!parsed) return;
 
 				const sessionTTL = Math.max(
-<<<<<<< HEAD
 					Math.floor(new Date(parsed.session.expiresAt).getTime() - now) / 1000,
-=======
-					Math.floor(
-						(new Date(parsed.session.expiresAt).getTime() - now) / 1000,
-					),
->>>>>>> b0fd881f954dfdd9e048b6fbc1eb1e1dca341d78
 					0,
 				);
 
