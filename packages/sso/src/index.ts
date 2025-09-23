@@ -284,95 +284,62 @@ export const sso = (options?: SSOOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						providerId: z.string({}).meta({
-							description:
+						providerId: z
+							.string({})
+							.describe(
 								"The ID of the provider. This is used to identify the provider during login and callback",
-						}),
-						issuer: z.string({}).meta({
-							description: "The issuer of the provider",
-						}),
-						domain: z.string({}).meta({
-							description:
+							),
+						issuer: z.string({}).describe("The issuer of the provider"),
+						domain: z
+							.string({})
+							.describe(
 								"The domain of the provider. This is used for email matching",
-						}),
+							),
 						oidcConfig: z
 							.object({
-								clientId: z.string({}).meta({
-									description: "The client ID",
-								}),
-								clientSecret: z.string({}).meta({
-									description: "The client secret",
-								}),
+								clientId: z.string({}).describe("The client ID"),
+								clientSecret: z.string({}).describe("The client secret"),
 								authorizationEndpoint: z
 									.string({})
-									.meta({
-										description: "The authorization endpoint",
-									})
+									.describe("The authorization endpoint")
 									.optional(),
 								tokenEndpoint: z
 									.string({})
-									.meta({
-										description: "The token endpoint",
-									})
+									.describe("The token endpoint")
 									.optional(),
 								userInfoEndpoint: z
 									.string({})
-									.meta({
-										description: "The user info endpoint",
-									})
+									.describe("The user info endpoint")
 									.optional(),
 								tokenEndpointAuthentication: z
 									.enum(["client_secret_post", "client_secret_basic"])
 									.optional(),
 								jwksEndpoint: z
 									.string({})
-									.meta({
-										description: "The JWKS endpoint",
-									})
+									.describe("The JWKS endpoint")
 									.optional(),
 								discoveryEndpoint: z.string().optional(),
 								scopes: z
 									.array(z.string(), {})
-									.meta({
-										description:
-											"The scopes to request. Defaults to ['openid', 'email', 'profile', 'offline_access']",
-									})
+									.describe("The scopes to request. ")
 									.optional(),
 								pkce: z
 									.boolean({})
-									.meta({
-										description:
-											"Whether to use PKCE for the authorization flow",
-									})
+									.describe("Whether to use PKCE for the authorization flow")
 									.default(true)
 									.optional(),
 								mapping: z
 									.object({
-										id: z.string({}).meta({
-											description:
-												"Field mapping for user ID (defaults to 'sub')",
-										}),
-										email: z.string({}).meta({
-											description:
-												"Field mapping for email (defaults to 'email')",
-										}),
+										id: z.string({}).describe("Field mapping for user ID ("),
+										email: z.string({}).describe("Field mapping for email ("),
 										emailVerified: z
 											.string({})
-											.meta({
-												description:
-													"Field mapping for email verification (defaults to 'email_verified')",
-											})
+											.describe("Field mapping for email verification (")
 											.optional(),
-										name: z.string({}).meta({
-											description:
-												"Field mapping for name (defaults to 'name')",
-										}),
+										name: z.string({}).describe("Field mapping for name ("),
 										image: z
 											.string({})
-											.meta({
-												description:
-													"Field mapping for image (defaults to 'picture')",
-											})
+											.describe("Field mapping for image (")
 											.optional(),
 										extraFields: z.record(z.string(), z.any()).optional(),
 									})
@@ -381,15 +348,13 @@ export const sso = (options?: SSOOptions) => {
 							.optional(),
 						samlConfig: z
 							.object({
-								entryPoint: z.string({}).meta({
-									description: "The entry point of the provider",
-								}),
-								cert: z.string({}).meta({
-									description: "The certificate of the provider",
-								}),
-								callbackUrl: z.string({}).meta({
-									description: "The callback URL of the provider",
-								}),
+								entryPoint: z
+									.string({})
+									.describe("The entry point of the provider"),
+								cert: z.string({}).describe("The certificate of the provider"),
+								callbackUrl: z
+									.string({})
+									.describe("The callback URL of the provider"),
 								audience: z.string().optional(),
 								idpMetadata: z
 									.object({
@@ -404,18 +369,16 @@ export const sso = (options?: SSOOptions) => {
 										singleSignOnService: z
 											.array(
 												z.object({
-													Binding: z.string().meta({
-														description: "The binding type for the SSO service",
-													}),
-													Location: z.string().meta({
-														description: "The URL for the SSO service",
-													}),
+													Binding: z
+														.string()
+														.describe("The binding type for the SSO service"),
+													Location: z
+														.string()
+														.describe("The URL for the SSO service"),
 												}),
 											)
 											.optional()
-											.meta({
-												description: "Single Sign-On service configuration",
-											}),
+											.describe("Single Sign-On service configuration"),
 									})
 									.optional(),
 								spMetadata: z.object({
@@ -437,37 +400,20 @@ export const sso = (options?: SSOOptions) => {
 								additionalParams: z.record(z.string(), z.any()).optional(),
 								mapping: z
 									.object({
-										id: z.string({}).meta({
-											description:
-												"Field mapping for user ID (defaults to 'nameID')",
-										}),
-										email: z.string({}).meta({
-											description:
-												"Field mapping for email (defaults to 'email')",
-										}),
+										id: z.string({}).describe("Field mapping for user ID ("),
+										email: z.string({}).describe("Field mapping for email ("),
 										emailVerified: z
 											.string({})
-											.meta({
-												description: "Field mapping for email verification",
-											})
+											.describe("Field mapping for email verification")
 											.optional(),
-										name: z.string({}).meta({
-											description:
-												"Field mapping for name (defaults to 'displayName')",
-										}),
+										name: z.string({}).describe("Field mapping for name ("),
 										firstName: z
 											.string({})
-											.meta({
-												description:
-													"Field mapping for first name (defaults to 'givenName')",
-											})
+											.describe("Field mapping for first name (")
 											.optional(),
 										lastName: z
 											.string({})
-											.meta({
-												description:
-													"Field mapping for last name (defaults to 'surname')",
-											})
+											.describe("Field mapping for last name (")
 											.optional(),
 										extraFields: z.record(z.string(), z.any()).optional(),
 									})
@@ -476,17 +422,15 @@ export const sso = (options?: SSOOptions) => {
 							.optional(),
 						organizationId: z
 							.string({})
-							.meta({
-								description:
-									"If organization plugin is enabled, the organization id to link the provider to",
-							})
+							.describe(
+								"If organization plugin is enabled, the organization id to link the provider to",
+							)
 							.optional(),
 						overrideUserInfo: z
 							.boolean({})
-							.meta({
-								description:
-									"Override user info with the provider info. Defaults to false",
-							})
+							.describe(
+								"Override user info with the provider info. Defaults to false",
+							)
 							.default(false)
 							.optional(),
 					}),
@@ -801,58 +745,44 @@ export const sso = (options?: SSOOptions) => {
 					body: z.object({
 						email: z
 							.string({})
-							.meta({
-								description:
-									"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
-							})
+							.describe(
+								"The email address to sign in with. This is used to identify the issuer to sign in with",
+							)
 							.optional(),
 						organizationSlug: z
 							.string({})
-							.meta({
-								description: "The slug of the organization to sign in with",
-							})
+							.describe("The slug of the organization to sign in with")
 							.optional(),
 						providerId: z
 							.string({})
-							.meta({
-								description:
-									"The ID of the provider to sign in with. This can be provided instead of email or issuer",
-							})
+							.describe(
+								"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+							)
 							.optional(),
 						domain: z
 							.string({})
-							.meta({
-								description: "The domain of the provider.",
-							})
+							.describe("The domain of the provider.")
 							.optional(),
-						callbackURL: z.string({}).meta({
-							description: "The URL to redirect to after login",
-						}),
+						callbackURL: z
+							.string({})
+							.describe("The URL to redirect to after login"),
 						errorCallbackURL: z
 							.string({})
-							.meta({
-								description: "The URL to redirect to after login",
-							})
+							.describe("The URL to redirect to after login")
 							.optional(),
 						newUserCallbackURL: z
 							.string({})
-							.meta({
-								description:
-									"The URL to redirect to after login if the user is new",
-							})
+							.describe("The URL to redirect to after login if the user is new")
 							.optional(),
 						scopes: z
 							.array(z.string(), {})
-							.meta({
-								description: "Scopes to request from the provider.",
-							})
+							.describe("Scopes to request from the provider.")
 							.optional(),
 						requestSignUp: z
 							.boolean({})
-							.meta({
-								description:
-									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
-							})
+							.describe(
+								"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+							)
 							.optional(),
 						providerType: z.enum(["oidc", "saml"]).optional(),
 					}),

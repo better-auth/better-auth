@@ -131,10 +131,10 @@ export const otp2fa = (options?: OTPOptions) => {
 					 * for 30 days. It'll be refreshed on
 					 * every sign in request within this time.
 					 */
-					trustDevice: z.boolean().optional().meta({
-						description:
-							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-					}),
+					trustDevice: z
+						.boolean()
+						.optional()
+						.describe("If true, the device will be trusted for 30 days. It"),
 				})
 				.optional(),
 			metadata: {
@@ -199,18 +199,16 @@ export const otp2fa = (options?: OTPOptions) => {
 		{
 			method: "POST",
 			body: z.object({
-				code: z.string().meta({
-					description: 'The otp code to verify. Eg: "012345"',
-				}),
+				code: z.string().describe("The otp code to verify. Eg: "),
 				/**
 				 * if true, the device will be trusted
 				 * for 30 days. It'll be refreshed on
 				 * every sign in request within this time.
 				 */
-				trustDevice: z.boolean().optional().meta({
-					description:
-						"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-				}),
+				trustDevice: z
+					.boolean()
+					.optional()
+					.describe("If true, the device will be trusted for 30 days. It"),
 			}),
 			metadata: {
 				openapi: {
