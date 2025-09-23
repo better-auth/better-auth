@@ -49,7 +49,7 @@ const issuerToEndpoints = (issuer: string) => ({
 
 export const asgardeo = (options: AsgardeoOptions) => {
 	const { authorizationEndpoint, tokenEndpoint, userInfoEndpoint } =
-		issuerToEndpoints(options.issuer);
+		issuerToEndpoints(options.issuer.replace(/\/+$/, ""));
 
 	const issuerId = "asgardeo";
 	const issuerName = "Asgardeo";
