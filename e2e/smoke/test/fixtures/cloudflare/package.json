@@ -1,5 +1,5 @@
 {
-  "name": "cloudflare",
+  "name": "@better-auth/cloudflare",
   "private": true,
   "dependencies": {
     "better-auth": "workspace:*",
