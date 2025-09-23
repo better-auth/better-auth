@@ -205,7 +205,7 @@ function safeParseJSON<T>(value: any): T | null {
 		try {
 			return JSON.parse(value) as T;
 		} catch (error) {
-			console.error('Failed to parse JSON:', error, 'Value:', value);
+			console.error('Failed to parse JSON:', error);
 			return null;
 		}
 	}
@@ -707,12 +707,27 @@ export const sso = (options?: SSOOptions) => {
 							providerId: body.providerId,
 						},
 					});
-					return ctx.json({
+					// Construct the response object that matches the OpenAPI schema
+					const parsedOidcConfig = safeParseOIDCConfig(provider.oidcConfig);
+					const parsedSamlConfig = safeParseSAMLConfig(provider.samlConfig);
+					
+					// Create the response object with only defined properties
+					const responseObject: Record<string, any> = {
 						...provider,
-						oidcConfig: safeParseOIDCConfig(provider.oidcConfig),
-						samlConfig: safeParseSAMLConfig(provider.samlConfig),
 						redirectURI: `${ctx.context.baseURL}/sso/callback/${provider.providerId}`,
-					});
+					};
+					
+					// Only include non-null configs in the response
+					// Per the OpenAPI schema, if a required field has a null value, we should omit it entirely
+					if (parsedOidcConfig) {
+						responseObject.oidcConfig = parsedOidcConfig;
+					}
+					
+					if (parsedSamlConfig) {
+						responseObject.samlConfig = parsedSamlConfig;
+					}
+					
+					return ctx.json(responseObject);
 				},
 			),
 			signInSSO: createAuthEndpoint(
@@ -1441,7 +1456,11 @@ export const sso = (options?: SSOOptions) => {
 								.join(" ") || parsedResponse.extract.attributes?.displayName,
 						attributes: parsedResponse.extract.attributes,
 						emailVerified: options?.trustEmailVerified
-							? (mapping.emailVerified && attributes?.[mapping.emailVerified] ? attributes[mapping.emailVerified] as boolean : false)
+							? (mapping.emailVerified && attributes?.[mapping.emailVerified] 
+								? String(attributes[mapping.emailVerified]).toLowerCase() === 'true' || 
+								  String(attributes[mapping.emailVerified]) === '1' || 
+								  Boolean(attributes[mapping.emailVerified]) === true
+								: false)
 							: false,
 					};
 
