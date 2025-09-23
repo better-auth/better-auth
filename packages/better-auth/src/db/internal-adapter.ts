@@ -32,7 +32,7 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
-	const { createWithHooks, updateWithHooks, updateManyWithHooks } =
+	const { createWithHooks, updateWithHooks, updateManyWithHooks, deleteWithHooks, deleteManyWithHooks } =
 		getWithHooks(adapter, ctx);
 
 	async function refreshUserSessions(user: User) {
@@ -228,35 +228,35 @@ export const createInternalAdapter = (
 			}
 
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-				await (await getCurrentAdapter(adapter)).deleteMany({
-					model: "session",
-					where: [
+				await deleteManyWithHooks(
+					[
 						{
 							field: "userId",
 							value: userId,
 						},
 					],
-				});
+					"session"
+				);
 			}
 
-			await (await getCurrentAdapter(adapter)).deleteMany({
-				model: "account",
-				where: [
+			await deleteManyWithHooks(
+				[
 					{
 						field: "userId",
 						value: userId,
 					},
 				],
-			});
-			await (await getCurrentAdapter(adapter)).delete({
-				model: "user",
-				where: [
+				"account"
+			);
+			await deleteWithHooks(
+				[
 					{
 						field: "id",
 						value: userId,
 					},
 				],
-			});
+				"user"
+			);
 		},
 		createSession: async (
 			userId: string,
@@ -557,37 +557,37 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-			await (await getCurrentAdapter(adapter)).delete<Session>({
-				model: "session",
-				where: [
+			await deleteWithHooks(
+				[
 					{
 						field: "token",
 						value: token,
 					},
 				],
-			});
+				"session"
+			);
 		},
 		deleteAccounts: async (userId: string) => {
-			await (await getCurrentAdapter(adapter)).deleteMany({
-				model: "account",
-				where: [
+			await deleteManyWithHooks(
+				[
 					{
 						field: "userId",
 						value: userId,
 					},
 				],
-			});
+				"account"
+			);
 		},
 		deleteAccount: async (accountId: string) => {
-			await (await getCurrentAdapter(adapter)).delete({
-				model: "account",
-				where: [
+			await deleteWithHooks(
+				[
 					{
 						field: "id",
 						value: accountId,
 					},
 				],
-			});
+				"account"
+			);
 		},
 		deleteSessions: async (userIdOrSessionTokens: string | string[]) => {
 			if (secondaryStorage) {
@@ -618,16 +618,16 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-			await (await getCurrentAdapter(adapter)).deleteMany({
-				model: "session",
-				where: [
+			await deleteManyWithHooks(
+				[
 					{
 						field: Array.isArray(userIdOrSessionTokens) ? "token" : "userId",
 						value: userIdOrSessionTokens,
 						operator: Array.isArray(userIdOrSessionTokens) ? "in" : undefined,
 					},
 				],
-			});
+				"session"
+			);
 		},
 		findOAuthUser: async (
 			email: string,
@@ -967,26 +967,26 @@ export const createInternalAdapter = (
 			return lastVerification as Verification | null;
 		},
 		deleteVerificationValue: async (id: string) => {
-			await (await getCurrentAdapter(adapter)).delete<Verification>({
-				model: "verification",
-				where: [
+			await deleteWithHooks(
+				[
 					{
 						field: "id",
 						value: id,
 					},
 				],
-			});
+				"verification"
+			);
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
-			await (await getCurrentAdapter(adapter)).delete<Verification>({
-				model: "verification",
-				where: [
+			await deleteWithHooks(
+				[
 					{
 						field: "identifier",
 						value: identifier,
 					},
 				],
-			});
+				"verification"
+			);
 		},
 		updateVerificationValue: async (
 			id: string,
