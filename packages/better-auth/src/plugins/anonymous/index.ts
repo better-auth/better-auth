@@ -211,7 +211,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						 */
 						const sessionCookie = parseSetCookieHeader(setCookie || "")
 							.get(sessionTokenName)
-							?.value.split(".")[0];
+							?.value.split(".")[0]!;
 
 						if (!sessionCookie) {
 							return;

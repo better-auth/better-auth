@@ -98,7 +98,7 @@ describe("passkey", async () => {
 		const passkeys = await auth.api.listPasskeys({
 			headers: headers,
 		});
-		const passkey = passkeys[0];
+		const passkey = passkeys[0]!;
 		const updateResult = await auth.api.updatePasskey({
 			headers: headers,
 			body: {
