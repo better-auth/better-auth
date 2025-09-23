@@ -93,7 +93,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		useFetch?: UseFetch,
 	) {
 		if (useFetch) {
-			const ref = useStore(pluginsAtoms.$sessionSignal);
+			const ref = useStore(pluginsAtoms.$sessionSignal!);
 			return useFetch(`${baseURL}/get-session`, {
 				ref,
 			}).then((res: any) => {

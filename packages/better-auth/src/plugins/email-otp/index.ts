@@ -44,7 +44,7 @@ export interface EmailOTPOptions {
 			type: "sign-in" | "email-verification" | "forget-password";
 		},
 		request?: Request,
-	) => string;
+	) => string | undefined;
 	/**
 	 * Send email verification on sign-up
 	 *
@@ -88,11 +88,13 @@ export interface EmailOTPOptions {
 
 const types = ["email-verification", "sign-in", "forget-password"] as const;
 const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const defaultOTPGenerator = (options: EmailOTPOptions) =>
+	generateRandomString(options.otpLength ?? 6, "0-9");
 
 export const emailOTP = (options: EmailOTPOptions) => {
 	const opts = {
 		expiresIn: 5 * 60,
-		generateOTP: () => generateRandomString(options.otpLength ?? 6, "0-9"),
+		generateOTP: () => defaultOTPGenerator(options),
 		storeOTP: "plain",
 		...options,
 	} satisfies EmailOTPOptions;
@@ -173,12 +175,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			{
 				method: "POST",
 				body: z.object({
-					email: z.string({}).meta({
-						description: "Email address to send the OTP",
-					}),
-					type: z.enum(types).meta({
-						description: "Type of the OTP",
-					}),
+					email: z.string({}).describe("Email address to send the OTP"),
+					type: z.enum(types).describe("Type of the OTP"),
 				}),
 				metadata: {
 					openapi: {
@@ -233,7 +231,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 				}
-				let otp = opts.generateOTP({ email, type: ctx.body.type }, ctx.request);
+				let otp =
+					opts.generateOTP({ email, type: ctx.body.type }, ctx.request) ||
+					defaultOTPGenerator(opts);
 
 				let storedOTP = await storeOTP(ctx, otp);
 
@@ -308,13 +308,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({}).meta({
-							description: "Email address to send the OTP",
-						}),
-						type: z.enum(types).meta({
-							required: true,
-							description: "Type of the OTP",
-						}),
+						email: z.string({}).describe("Email address to send the OTP"),
+						type: z.enum(types).describe("Type of the OTP"),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -337,10 +332,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					const otp = opts.generateOTP(
-						{ email, type: ctx.body.type },
-						ctx.request,
-					);
+					const otp =
+						opts.generateOTP({ email, type: ctx.body.type }, ctx.request) ||
+						defaultOTPGenerator(opts);
 					let storedOTP = await storeOTP(ctx, otp);
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
@@ -370,13 +364,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						email: z.string({}).meta({
-							description: "Email address the OTP was sent to",
-						}),
-						type: z.enum(types).meta({
-							required: true,
-							description: "Type of the OTP",
-						}),
+						email: z.string({}).describe("Email address the OTP was sent to"),
+						type: z.enum(types).describe("Type of the OTP"),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -464,17 +453,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string().meta({
-							description: "Email address the OTP was sent to",
-						}),
-						type: z.enum(types).meta({
-							required: true,
-							description: "Type of the OTP",
-						}),
-						otp: z.string().meta({
-							required: true,
-							description: "OTP to verify",
-						}),
+						email: z.string().describe("Email address the OTP was sent to"),
+						type: z.enum(types).describe("Type of the OTP"),
+						otp: z.string().describe("OTP to verify"),
 					}),
 					metadata: {
 						openapi: {
@@ -579,13 +560,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({}).meta({
-							description: "Email address to verify",
-						}),
-						otp: z.string().meta({
-							required: true,
-							description: "OTP to verify",
-						}),
+						email: z.string({}).describe("Email address to verify"),
+						otp: z.string().describe("OTP to verify"),
 					}),
 					metadata: {
 						openapi: {
@@ -753,13 +729,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({}).meta({
-							description: "Email address to sign in",
-						}),
-						otp: z.string().meta({
-							required: true,
-							description: "OTP sent to the email",
-						}),
+						email: z.string({}).describe("Email address to sign in"),
+						otp: z.string().describe("OTP sent to the email"),
 					}),
 					metadata: {
 						openapi: {
@@ -922,9 +893,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string().meta({
-							description: "Email address to send the OTP",
-						}),
+						email: z.string().describe("Email address to send the OTP"),
 					}),
 					metadata: {
 						openapi: {
@@ -959,10 +928,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
-					const otp = opts.generateOTP(
-						{ email, type: "forget-password" },
-						ctx.request,
-					);
+					const otp =
+						opts.generateOTP({ email, type: "forget-password" }, ctx.request) ||
+						defaultOTPGenerator(opts);
 					let storedOTP = await storeOTP(ctx, otp);
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
@@ -1005,15 +973,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string().meta({
-							description: "Email address to reset the password",
-						}),
-						otp: z.string().meta({
-							description: "OTP sent to the email",
-						}),
-						password: z.string().meta({
-							description: "New password",
-						}),
+						email: z.string().describe("Email address to reset the password"),
+						otp: z.string().describe("OTP sent to the email"),
+						password: z.string().describe("New password"),
 					}),
 					metadata: {
 						openapi: {
@@ -1150,10 +1112,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						}>(ctx);
 						const email = response?.user.email;
 						if (email) {
-							const otp = opts.generateOTP(
-								{ email, type: ctx.body.type },
-								ctx.request,
-							);
+							const otp =
+								opts.generateOTP({ email, type: ctx.body.type }, ctx.request) ||
+								defaultOTPGenerator(opts);
 							let storedOTP = await storeOTP(ctx, otp);
 							await ctx.context.internalAdapter.createVerificationValue(
 								{

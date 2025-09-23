@@ -159,8 +159,8 @@ describe("jwt", async () => {
 			const jwks = await client.jwks();
 
 			expect(jwks.data?.keys).length.above(0);
-			expect(jwks.data?.keys[0].alg).toBe("EdDSA");
-			expect(jwks.data?.keys[0]).toStrictEqual(jwk.key);
+			expect(jwks.data?.keys[0]!.alg).toBe("EdDSA");
+			expect(jwks.data?.keys[0]!).toStrictEqual(jwk.key);
 		});
 
 		it("Should be able to validate signed tokens with the JWKS manually", async () => {

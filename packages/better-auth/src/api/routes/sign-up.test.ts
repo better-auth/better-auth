@@ -77,8 +77,11 @@ describe("sign-up with custom fields", async (it) => {
 		});
 	});
 
-	it("should rollback when session creation fails", async () => {
+	it("should rollback when session creation fails", async ({ skip }) => {
 		const ctx = await auth.$context;
+		if (!ctx.adapter.options?.adapterConfig.transaction) {
+			skip();
+		}
 		const originalCreateSession = ctx.internalAdapter.createSession;
 		ctx.internalAdapter.createSession = vi
 			.fn()

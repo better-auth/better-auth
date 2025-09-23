@@ -60,7 +60,7 @@ export const kyselyAdapter = (
 					await builder.execute();
 					const field = values.id
 						? "id"
-						: where.length > 0 && where[0].field
+						: where.length > 0 && where[0]?.field
 							? where[0].field
 							: "id";
 
@@ -74,7 +74,7 @@ export const kyselyAdapter = (
 						return res;
 					}
 
-					const value = values[field] || where[0].value;
+					const value = values[field] || where[0]?.value;
 					res = await db
 						.selectFrom(model)
 						.selectAll()
@@ -102,14 +102,14 @@ export const kyselyAdapter = (
 					f = Object.values(schema).find((f) => f.modelName === model)!;
 				}
 				if (
-					f.type === "boolean" &&
+					f!.type === "boolean" &&
 					(type === "sqlite" || type === "mssql") &&
 					value !== null &&
 					value !== undefined
 				) {
 					return value ? 1 : 0;
 				}
-				if (f.type === "date" && value && value instanceof Date) {
+				if (f!.type === "date" && value && value instanceof Date) {
 					return type === "sqlite" ? value.toISOString() : value;
 				}
 				return value;
@@ -326,7 +326,7 @@ export const kyselyAdapter = (
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					const res = await query.execute();
-					return res[0].count as number;
+					return res[0]!.count as number;
 				},
 				async delete({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -372,7 +372,7 @@ export const kyselyAdapter = (
 					: true,
 			supportsJSON: false,
 			transaction:
-				(config?.transaction ?? true)
+				(config?.transaction ?? false)
 					? (cb) =>
 							db.transaction().execute((trx) => {
 								const adapter = createAdapterFactory({

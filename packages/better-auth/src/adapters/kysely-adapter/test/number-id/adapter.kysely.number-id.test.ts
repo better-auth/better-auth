@@ -18,29 +18,28 @@ export const opts = ({
 }: {
 	database: BetterAuthOptions["database"];
 	isNumberIdTest: boolean;
-}) =>
-	({
-		database: database,
-		user: {
-			fields: {
-				email: "email_address",
-			},
-			additionalFields: {
-				test: {
-					type: "string",
-					defaultValue: "test",
-				},
+}): BetterAuthOptions => ({
+	database: database,
+	user: {
+		fields: {
+			email: "email_address",
+		},
+		additionalFields: {
+			test: {
+				type: "string",
+				defaultValue: "test",
 			},
 		},
-		session: {
-			modelName: "sessions",
+	},
+	session: {
+		modelName: "sessions",
+	},
+	advanced: {
+		database: {
+			useNumberId: isNumberIdTest,
 		},
-		advanced: {
-			database: {
-				useNumberId: isNumberIdTest,
-			},
-		},
-	}) satisfies BetterAuthOptions;
+	},
+});
 
 const sqlite = new Database(path.join(__dirname, "test.db"));
 const mysql = createPool("mysql://user:password@localhost:3306/better_auth");
@@ -102,7 +101,7 @@ describe("Number ID Adapter tests", async () => {
 			isRunningAdapterTests: false,
 		},
 	});
-	await runNumberIdAdapterTest({
+	runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			const merged = merge(customOptions, mysqlOptions);
 			return mysqlAdapter(merged);
@@ -117,7 +116,7 @@ describe("Number ID Adapter tests", async () => {
 		},
 	});
 
-	await runNumberIdAdapterTest({
+	runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return sqliteAdapter(merge(customOptions, sqliteOptions));
 		},

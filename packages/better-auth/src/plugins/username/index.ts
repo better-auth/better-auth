@@ -4,11 +4,11 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
-import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { getSchema, type UsernameSchema } from "./schema";
 import { mergeSchema } from "../../db/schema";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
+import { createEmailVerificationToken } from "../../api";
 export * from "./error-codes";
 export type UsernameOptions = {
 	schema?: InferOptionSchema<UsernameSchema>;
@@ -156,23 +156,15 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z
-							.string()
-							.meta({ description: "The username of the user" }),
-						password: z
-							.string()
-							.meta({ description: "The password of the user" }),
+						username: z.string().describe("The username of the user"),
+						password: z.string().describe("The password of the user"),
 						rememberMe: z
 							.boolean()
-							.meta({
-								description: "Remember the user session",
-							})
+							.describe("Remember the user session")
 							.optional(),
 						callbackURL: z
 							.string()
-							.meta({
-								description: "The URL to redirect to after email verification",
-							})
+							.describe("The URL to redirect to after email verification")
 							.optional(),
 					}),
 					metadata: {
@@ -287,10 +279,37 @@ export const username = (options?: UsernameOptions) => {
 					}
 
 					if (
-						!user.emailVerified &&
-						ctx.context.options.emailAndPassword?.requireEmailVerification
+						ctx.context.options?.emailAndPassword?.requireEmailVerification &&
+						!user.emailVerified
 					) {
-						await sendVerificationEmailFn(ctx, user);
+						if (
+							!ctx.context.options?.emailVerification?.sendVerificationEmail
+						) {
+							throw new APIError("FORBIDDEN", {
+								message: ERROR_CODES.EMAIL_NOT_VERIFIED,
+							});
+						}
+
+						if (ctx.context.options?.emailVerification?.sendOnSignIn) {
+							const token = await createEmailVerificationToken(
+								ctx.context.secret,
+								user.email,
+								undefined,
+								ctx.context.options.emailVerification?.expiresIn,
+							);
+							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
+								ctx.body.callbackURL || "/"
+							}`;
+							await ctx.context.options.emailVerification.sendVerificationEmail(
+								{
+									user: user,
+									url,
+									token,
+								},
+								ctx.request,
+							);
+						}
+
 						throw new APIError("FORBIDDEN", {
 							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
 						});
@@ -372,9 +391,7 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string().meta({
-							description: "The username to check",
-						}),
+						username: z.string().describe("The username to check"),
 					}),
 				},
 				async (ctx) => {

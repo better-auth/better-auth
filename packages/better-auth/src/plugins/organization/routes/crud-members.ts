@@ -20,26 +20,23 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 		isClientSide: true,
 	});
 	const baseSchema = z.object({
-		userId: z.coerce.string().meta({
-			description:
-				'The user Id which represents the user to be added as a member. If `null` is provided, then it\'s expected to provide session headers. Eg: "user-id"',
-		}),
-		role: z.union([z.string(), z.array(z.string())]).meta({
-			description:
-				'The role(s) to assign to the new member. Eg: ["admin", "sale"]',
-		}),
+		userId: z.coerce
+			.string()
+			.describe(
+				"The user Id which represents the user to be added as a member",
+			),
+		role: z
+			.union([z.string(), z.array(z.string())])
+			.describe("The role(s) to assign to the new member"),
 		organizationId: z
 			.string()
-			.meta({
-				description:
-					'An optional organization ID to pass. If not provided, will default to the user\'s active organization. Eg: "org-id"',
-			})
+			.describe(
+				"An optional organization ID to pass. If not provided, will default to the user",
+			)
 			.optional(),
 		teamId: z
 			.string()
-			.meta({
-				description: 'An optional team ID to add the member to. Eg: "team-id"',
-			})
+			.describe("An optional team ID to add the member to")
 			.optional(),
 	});
 	return createAuthEndpoint(
@@ -212,18 +209,17 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				memberIdOrEmail: z.string().meta({
-					description: "The ID or email of the member to remove",
-				}),
+				memberIdOrEmail: z
+					.string()
+					.describe("The ID or email of the member to remove"),
 				/**
 				 * If not provided, the active organization will be used
 				 */
 				organizationId: z
 					.string()
-					.meta({
-						description:
-							'The ID of the organization to remove the member from. If not provided, the active organization will be used. Eg: "org-id"',
-					})
+					.describe(
+						"The ID of the organization to remove the member from. If not provided, the active organization will be used",
+					)
 					.optional(),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
@@ -384,7 +380,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				session.session.activeOrganizationId ===
 					toBeRemovedMember.organizationId
 			) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 
 			// Run afterRemoveMember hook
@@ -408,20 +404,19 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				role: z.union([z.string(), z.array(z.string())]).meta({
-					description:
-						'The new role to be applied. This can be a string or array of strings representing the roles. Eg: ["admin", "sale"]',
-				}),
-				memberId: z.string().meta({
-					description:
-						'The member id to apply the role update to. Eg: "member-id"',
-				}),
+				role: z
+					.union([z.string(), z.array(z.string())])
+					.describe(
+						"The new role to be applied. This can be a string or array of strings representing the roles. Eg: [",
+					),
+				memberId: z
+					.string()
+					.describe("The member id to apply the role update to"),
 				organizationId: z
 					.string()
-					.meta({
-						description:
-							'An optional organization ID which the member is a part of to apply the role update. If not provided, you must provide session headers to get the active organization. Eg: "organization-id"',
-					})
+					.describe(
+						"An optional organization ID which the member is a part of to apply the role update. If not provided, you must provide session headers to get the active organization",
+					)
 					.optional(),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
@@ -750,10 +745,9 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				organizationId: z.string().meta({
-					description:
-						'The organization Id for the member to leave. Eg: "organization-id"',
-				}),
+				organizationId: z
+					.string()
+					.describe("The organization Id for the member to leave"),
 			}),
 			requireHeaders: true,
 			use: [sessionMiddleware, orgMiddleware],
@@ -794,7 +788,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			}
 			await adapter.deleteMember(member.id);
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 			return ctx.json(member);
 		},
@@ -809,56 +803,35 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 				.object({
 					limit: z
 						.string()
-						.meta({
-							description: "The number of users to return",
-						})
+						.describe("The number of users to return")
 						.or(z.number())
 						.optional(),
 					offset: z
 						.string()
-						.meta({
-							description: "The offset to start from",
-						})
+						.describe("The offset to start from")
 						.or(z.number())
 						.optional(),
-					sortBy: z
-						.string()
-						.meta({
-							description: "The field to sort by",
-						})
-						.optional(),
+					sortBy: z.string().describe("The field to sort by").optional(),
 					sortDirection: z
 						.enum(["asc", "desc"])
-						.meta({
-							description: "The direction to sort by",
-						})
+						.describe("The direction to sort by")
 						.optional(),
-					filterField: z
-						.string()
-						.meta({
-							description: "The field to filter by",
-						})
-						.optional(),
+					filterField: z.string().describe("The field to filter by").optional(),
 					filterValue: z
 						.string()
-						.meta({
-							description: "The value to filter by",
-						})
+						.describe("The value to filter by")
 						.or(z.number())
 						.or(z.boolean())
 						.optional(),
 					filterOperator: z
 						.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
-						.meta({
-							description: "The operator to use for the filter",
-						})
+						.describe("The operator to use for the filter")
 						.optional(),
 					organizationId: z
 						.string()
-						.meta({
-							description:
-								'The organization ID to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-id"',
-						})
+						.describe(
+							"The organization ID to list members for. If not provided, will default to the user",
+						)
 						.optional(),
 				})
 				.optional(),
@@ -916,17 +889,15 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 				.object({
 					userId: z
 						.string()
-						.meta({
-							description:
-								"The user ID to get the role for. If not provided, will default to the current user's",
-						})
+						.describe(
+							"The user ID to get the role for. If not provided, will default to the current user",
+						)
 						.optional(),
 					organizationId: z
 						.string()
-						.meta({
-							description:
-								'The organization ID to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-id"',
-						})
+						.describe(
+							"The organization ID to list members for. If not provided, will default to the user",
+						)
 						.optional(),
 				})
 				.optional(),
