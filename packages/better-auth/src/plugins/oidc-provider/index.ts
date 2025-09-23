@@ -1144,17 +1144,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 							.optional(),
 						jwks: z
 							.record(z.any(), z.any())
-							.meta({
-								description:
-									'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
-							})
+							.describe(
+								'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
+							)
 							.optional(),
 						metadata: z
 							.record(z.any(), z.any())
-							.meta({
-								description:
-									'The metadata of the application. Eg: {"key": "value"}',
-							})
+							.describe(
+								'The metadata of the application. Eg: {"key": "value"}',
+							)
 							.optional(),
 						software_id: z
 							.string()
