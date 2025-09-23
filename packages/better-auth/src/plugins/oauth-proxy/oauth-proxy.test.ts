@@ -113,4 +113,77 @@ describe("oauth-proxy", async () => {
 			},
 		});
 	});
+
+	it("should proxy to the original request url", async () => {
+		const { client } = await getTestInstance({
+			baseURL: "https://myapp.com",
+			plugins: [
+				oAuthProxy({
+					productionURL: "https://login.myapp.com",
+				}),
+			],
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const res = await client.signIn.social(
+			{
+				provider: "google",
+				callbackURL: "/dashboard",
+			},
+			{
+				throw: true,
+			},
+		);
+		const state = new URL(res.url!).searchParams.get("state");
+		await client.$fetch(`/callback/google?code=test&state=${state}`, {
+			onError(context) {
+				const location = context.response.headers.get("location");
+				if (!location) {
+					throw new Error("Location header not found");
+				}
+				expect(location).toContain(
+					"https://myapp.com/api/auth/oauth-proxy-callback?callbackURL=%2Fdashboard",
+				);
+				const cookies = new URL(location).searchParams.get("cookies");
+				expect(cookies).toBeTruthy();
+			},
+		});
+	});
+
+	it("shouldn't redirect to proxy url on same origin", async () => {
+		const { client } = await getTestInstance({
+			baseURL: "https://myapp.com",
+			plugins: [oAuthProxy()],
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const res = await client.signIn.social(
+			{
+				provider: "google",
+				callbackURL: "/dashboard",
+			},
+			{
+				throw: true,
+			},
+		);
+		const state = new URL(res.url!).searchParams.get("state");
+		await client.$fetch(`/callback/google?code=test&state=${state}`, {
+			onError(context) {
+				const location = context.response.headers.get("location");
+				if (!location) {
+					throw new Error("Location header not found");
+				}
+				expect(location).not.toContain("/api/auth/oauth-proxy-callback");
+				expect(location).toContain("/dashboard");
+			},
+		});
+	});
 });
