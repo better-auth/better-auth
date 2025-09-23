@@ -904,7 +904,7 @@ describe("jwt", async () => {
 						claimsDateTime,
 					),
 				).toStrictEqual(
-					await verify(
+					await testJwtVerification(
 						(
 							await auth.api.customSignJwt({
 								body: {
