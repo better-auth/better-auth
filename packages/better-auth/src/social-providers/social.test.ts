@@ -75,7 +75,11 @@ vi.mock("../oauth2", async (importOriginal) => {
 			const { refreshToken, options, tokenEndpoint } = args;
 			expect(refreshToken).toBeDefined();
 			expect(options.clientId).toBe("test-client-id");
-			expect(options.clientSecret).toBe("test-client-secret");
+			expect(
+				typeof options.clientSecret === "string"
+					? options.clientSecret
+					: await options.clientSecret(),
+			).toBe("test-client-secret");
 			expect(tokenEndpoint).toBe(`http://localhost:${port}/token`);
 
 			const data: GoogleProfile = {
@@ -413,6 +417,7 @@ describe("Social Providers", async (c) => {
 		});
 	});
 });
+
 describe("Redirect URI", async () => {
 	it("should infer redirect uri", async () => {
 		const { client } = await getTestInstance({
