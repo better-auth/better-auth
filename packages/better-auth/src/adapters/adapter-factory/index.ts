@@ -112,7 +112,7 @@ export const createAdapterFactory =
 
 			let f = schema[model]?.fields[field];
 			if (!f) {
-				f = Object.values(schema[model]?.fields || {}).find(
+				f = Object.values(schema[model]?.fields!).find(
 					(f) => f.fieldName === field,
 				);
 			}
@@ -542,7 +542,10 @@ export const createAdapterFactory =
 					model: defaultModelName,
 				});
 
-				if (defaultFieldName === "id" || fieldAttr!.references?.field === "id") {
+				if (
+					defaultFieldName === "id" ||
+					fieldAttr!.references?.field === "id"
+				) {
 					if (options.advanced?.database?.useNumberId) {
 						if (Array.isArray(value)) {
 							return {
