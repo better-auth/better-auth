@@ -6,13 +6,9 @@ import type { AuthContext } from "../types";
 import { symmetricDecrypt, symmetricEncrypt } from "../crypto";
 
 export async function toClientSecret(
-	clientSecret?: ProviderOptions["clientSecret"],
+	clientSecret: NonNullable<ProviderOptions["clientSecret"]>,
 ) {
-	return clientSecret
-		? typeof clientSecret === "string"
-			? clientSecret
-			: await clientSecret()
-		: "";
+	return typeof clientSecret === "string" ? clientSecret : await clientSecret();
 }
 
 export async function createBasicHeader(
@@ -21,7 +17,9 @@ export async function createBasicHeader(
 ) {
 	return (
 		"Basic " +
-		base64.encode(`${clientId}:${await toClientSecret(clientSecret)}`)
+		base64.encode(
+			`${clientId}:${clientSecret ? await toClientSecret(clientSecret) : ""}`,
+		)
 	);
 }
 
