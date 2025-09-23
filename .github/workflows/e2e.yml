@@ -116,7 +116,7 @@ jobs:
       - name: Stop Docker Containers
         run: docker compose down
   size-limit:
-    name: Smoke test
+    name: Size Limit
     if: github.repository == 'better-auth/better-auth'
     runs-on: ubuntu-latest
     steps:
@@ -144,7 +144,7 @@ jobs:
         run: pnpm install
 
       - name: Run vite fixture build
-        run: turbo --filter @better-auth/vite-fixture build
+        run: pnpm exec turbo --filter @better-auth/vite-fixture build
 
       - uses: andresz1/size-limit-action@v1
         with:
