@@ -368,8 +368,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									config: adapterOptions!.config,
 									adapter: createCustomAdapter(tx),
 								})(lazyOptions!);
-								const r = await cb(adapter);
-								console.log(123123123123, r)
+								const r = cb(adapter);
 								return r;
 							})
 					: false,

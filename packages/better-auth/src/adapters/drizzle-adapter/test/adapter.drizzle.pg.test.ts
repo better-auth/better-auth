@@ -67,5 +67,5 @@ const { execute } = testAdapter({
 	},
 });
 
-// biome-ignore lint/nursery/noFloatingPromises: - yes
+// biome-ignore lint/nursery/noFloatingPromises: awaiting this will block vitest from starting
 execute();
