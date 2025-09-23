@@ -70,15 +70,15 @@ export function matchType(
 	dbType: KyselyDatabaseType,
 ) {
 	function normalize(type: string) {
-		return type.toLowerCase().split("(")[0].trim();
+		return type.toLowerCase().split("(")[0]!.trim();
 	}
 	if (fieldType === "string[]" || fieldType === "number[]") {
 		return columnDataType.toLowerCase().includes("json");
 	}
-	const types = map[dbType];
+	const types = map[dbType]!;
 	const expected = Array.isArray(fieldType)
 		? types["string"].map((t) => t.toLowerCase())
-		: types[fieldType].map((t) => t.toLowerCase());
+		: types[fieldType]!.map((t) => t.toLowerCase());
 	return expected.includes(normalize(columnDataType));
 }
 
@@ -131,8 +131,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 				if (tIndex === -1) {
 					toBeCreated.push(tableData);
 				} else {
-					toBeCreated[tIndex].fields = {
-						...toBeCreated[tIndex].fields,
+					toBeCreated[tIndex]!.fields = {
+						...toBeCreated[tIndex]!.fields,
 						...value.fields,
 					};
 				}
@@ -239,7 +239,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		if (Array.isArray(type)) {
 			return "text";
 		}
-		return typeMap[type][dbType || "sqlite"];
+		return typeMap[type]![dbType || "sqlite"];
 	}
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
