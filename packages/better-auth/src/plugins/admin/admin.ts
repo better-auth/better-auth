@@ -262,7 +262,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
 						});
 					}
-
+					const roles = opts.roles;
+					if (roles && !roles[ctx.body.role as keyof typeof roles]) {
+						throw new APIError("BAD_REQUEST", {
+							message:ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
+						});
+					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						{
