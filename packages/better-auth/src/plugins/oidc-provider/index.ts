@@ -1150,9 +1150,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							.optional(),
 						metadata: z
 							.record(z.any(), z.any())
-							.describe(
-								'The metadata of the application. Eg: {"key": "value"}',
-							)
+							.describe('The metadata of the application. Eg: {"key": "value"}')
 							.optional(),
 						software_id: z
 							.string()

@@ -68,7 +68,10 @@ export const sendVerificationEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			email: z.string().email().describe("The email to send the verification email to"),
+			email: z
+				.string()
+				.email()
+				.describe("The email to send the verification email to"),
 			callbackURL: z
 				.string()
 				.describe("The URL to use for email verification callback")
