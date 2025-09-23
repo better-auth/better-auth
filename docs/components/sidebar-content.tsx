@@ -493,6 +493,32 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "Asgardeo",
+				href: "/docs/authentication/asgardeo",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 20 20"
+					>
+						<path
+							fill="currentColor"
+							d="m14.282 1 1.837 3.184-2.035 3.523h4.07L20 10.892H8.573L14.282 1Z"
+						/>
+						<path
+							fill="currentColor"
+							d="m0 10.892 1.846-3.185h4.07L3.881 4.184 5.718 1l5.71 9.892H0Z"
+						/>
+						<path
+							fill="currentColor"
+							d="m12.03 18.315-2.035-3.523-2.035 3.523H4.286l5.709-9.892 5.718 9.892H12.03Z"
+						/>
+					</svg>
+				),
+			},
+			{
 				title: "Atlassian",
 				href: "/docs/authentication/atlassian",
 				isNew: true,
