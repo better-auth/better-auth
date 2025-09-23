@@ -1,10 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { jwtVerify } from "jose";
 import type { ProviderOptions } from "./types";
-import { getOAuth2Tokens } from "./utils";
-import { base64 } from "@better-auth/utils/base64";
+import { createBasicHeader, getOAuth2Tokens, toClientSecret } from "./utils";
 
-export function createAuthorizationCodeRequest({
+export async function createAuthorizationCodeRequest({
 	code,
 	codeVerifier,
 	redirectURI,
@@ -53,17 +52,17 @@ export function createAuthorizationCodeRequest({
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
-		const encodedCredentials = base64.encode(
-			`${primaryClientId}:${options.clientSecret ?? ""}`,
+		requestHeaders["authorization"] = await createBasicHeader(
+			primaryClientId,
+			options.clientSecret,
 		);
-		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
 		body.set("client_id", primaryClientId);
 		if (options.clientSecret) {
-			body.set("client_secret", options.clientSecret);
+			body.set("client_secret", await toClientSecret(options.clientSecret));
 		}
 	}
 
@@ -100,17 +99,18 @@ export async function validateAuthorizationCode({
 	additionalParams?: Record<string, string>;
 	resource?: string | string[];
 }) {
-	const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
-		code,
-		codeVerifier,
-		redirectURI,
-		options,
-		authentication,
-		deviceId,
-		headers,
-		additionalParams,
-		resource,
-	});
+	const { body, headers: requestHeaders } =
+		await createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI,
+			options,
+			authentication,
+			deviceId,
+			headers,
+			additionalParams,
+			resource,
+		});
 
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",

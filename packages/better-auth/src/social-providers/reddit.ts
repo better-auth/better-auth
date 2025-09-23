@@ -2,10 +2,10 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	createBasicHeader,
 	getOAuth2Tokens,
 	refreshAccessToken,
 } from "../oauth2";
-import { base64 } from "@better-auth/utils/base64";
 
 export interface RedditProfile {
 	id: string;
@@ -49,9 +49,10 @@ export const reddit = (options: RedditOptions) => {
 				"content-type": "application/x-www-form-urlencoded",
 				accept: "text/plain",
 				"user-agent": "better-auth",
-				Authorization: `Basic ${base64.encode(
-					`${options.clientId}:${options.clientSecret}`,
-				)}`,
+				Authorization: await createBasicHeader(
+					options.clientId,
+					options.clientSecret,
+				),
 			};
 
 			const { data, error } = await betterFetch<object>(

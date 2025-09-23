@@ -1,9 +1,29 @@
-import type { OAuth2Tokens } from "./types";
+import type { OAuth2Tokens, ProviderOptions } from "./types";
 import { getDate } from "../utils/date";
 import { createHash } from "@better-auth/utils/hash";
-import { base64Url } from "@better-auth/utils/base64";
+import { base64, base64Url } from "@better-auth/utils/base64";
 import type { AuthContext } from "../types";
 import { symmetricDecrypt, symmetricEncrypt } from "../crypto";
+
+export async function toClientSecret(
+	clientSecret?: ProviderOptions["clientSecret"],
+) {
+	return clientSecret
+		? typeof clientSecret === "string"
+			? clientSecret
+			: await clientSecret()
+		: "";
+}
+
+export async function createBasicHeader(
+	clientId: ProviderOptions["clientId"],
+	clientSecret?: ProviderOptions["clientSecret"],
+) {
+	return (
+		"Basic " +
+		base64.encode(`${clientId}:${await toClientSecret(clientSecret)}`)
+	);
+}
 
 export async function generateCodeChallenge(codeVerifier: string) {
 	const codeChallengeBytes = await createHash("SHA-256").digest(codeVerifier);
