@@ -47,13 +47,14 @@ export type InferSessionAPI<API> = API extends {
 								? H extends true
 									? Promise<{
 											headers: Headers;
-											response: PrettifyDeep<Awaited<ReturnType<E>>>;
+											response: PrettifyDeep<Awaited<ReturnType<E>>> | null;
 										}>
 									: Promise<
-											PrettifyDeep<Awaited<ReturnType<E>>> & {
-												options: E["options"];
-												path: E["path"];
-											}
+											| (PrettifyDeep<Awaited<ReturnType<E>>> & {
+													options: E["options"];
+													path: E["path"];
+											  })
+											| null
 										>
 								: Promise<Response>;
 						}
