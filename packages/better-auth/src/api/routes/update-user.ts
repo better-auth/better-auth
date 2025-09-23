@@ -634,6 +634,7 @@ export const changeEmail = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			newEmail: z
+				.string()
 				.email()
 				.describe("The new email address to set must be a valid email address"),
 			callbackURL: z
