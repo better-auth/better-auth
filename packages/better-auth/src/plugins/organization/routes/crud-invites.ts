@@ -601,6 +601,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					const updatedSession = await adapter.setActiveTeam(
 						session.session.token,
 						teamId,
+						ctx,
 					);
 
 					await setSessionCookie(ctx, {
@@ -620,6 +621,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			await adapter.setActiveOrganization(
 				session.session.token,
 				invitation.organizationId,
+				ctx,
 			);
 			if (!acceptedI) {
 				return ctx.json(null, {

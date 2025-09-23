@@ -1,9 +1,11 @@
-import type { Adapter } from "../../../types";
+import type { Adapter, BetterAuthAdvancedOptions } from "../../../types";
 import type { BetterAuthOptions } from "../../../types";
 
 export const createTestOptions = (
 	adapter: (options: BetterAuthOptions) => Adapter,
-	useNumberId = false,
+	databaseAdvancedOptions: Required<BetterAuthAdvancedOptions>["database"] = {
+		useNumberId: false,
+	},
 ) =>
 	({
 		database: adapter,
@@ -20,8 +22,6 @@ export const createTestOptions = (
 			modelName: "sessions",
 		},
 		advanced: {
-			database: {
-				useNumberId,
-			},
+			database: databaseAdvancedOptions,
 		},
 	}) satisfies BetterAuthOptions;

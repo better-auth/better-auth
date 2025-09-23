@@ -65,7 +65,7 @@ const numberIdAdapterTests = {
 // biome-ignore lint/performance/noDelete: testing propose
 delete numberIdAdapterTests.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND;
 
-async function adapterTest(
+function adapterTest(
 	{ getAdapter, disableTests: disabledTests, testPrefix }: AdapterTestOptions,
 	internalOptions?: {
 		predefinedOptions: Omit<BetterAuthOptions, "database">;
@@ -1045,11 +1045,11 @@ async function adapterTest(
 	);
 }
 
-export async function runAdapterTest(opts: AdapterTestOptions) {
+export function runAdapterTest(opts: AdapterTestOptions) {
 	return adapterTest(opts);
 }
 
-export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
+export function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 	const cleanup: { modelName: string; id: string }[] = [];
 
 	// Generate unique test identifier for this test run to avoid conflicts
