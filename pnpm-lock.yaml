@@ -644,6 +644,16 @@ importers:
         specifier: 4.33.2
         version: 4.33.2(@cloudflare/workers-types@4.20250903.0)
 
+  e2e/smoke/test/fixtures/vite:
+    dependencies:
+      better-auth:
+        specifier: workspace:*
+        version: link:../../../../../packages/better-auth
+    devDependencies:
+      vite:
+        specifier: ^7.1.5
+        version: 7.1.5(@types/node@24.4.0)(jiti@2.6.0)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)
+
   packages/better-auth:
     dependencies:
       '@better-auth/utils':
@@ -15971,9 +15981,7 @@ snapshots:
       metro-runtime: 0.83.1
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.79.6': {}
