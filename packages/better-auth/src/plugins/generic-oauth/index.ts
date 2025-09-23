@@ -16,6 +16,7 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
+import { normalizeEmail } from "../../utils/email";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -662,8 +663,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								? await provider.mapProfileToUser(userInfo)
 								: userInfo;
 							const email = mapUser.email
-								? mapUser.email.toLowerCase()
-								: userInfo.email?.toLowerCase();
+								? normalizeEmail(mapUser.email, ctx.context.options)
+								: normalizeEmail(userInfo.email ?? "", ctx.context.options);
 							if (!email) {
 								ctx.context.logger.error("Unable to get user info", userInfo);
 								throw redirectOnError("email_is_missing");

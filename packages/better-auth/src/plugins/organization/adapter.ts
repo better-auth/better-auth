@@ -19,6 +19,7 @@ import type { AuthContext } from "../../init";
 import parseJSON from "../../client/parser";
 import { type InferAdditionalFieldsFromPluginOptions } from "../../db";
 import { getCurrentAdapter } from "../../context/transaction";
+import { normalizeEmail } from "../../utils/email";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
@@ -77,7 +78,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				where: [
 					{
 						field: "email",
-						value: data.email.toLowerCase(),
+						value: normalizeEmail(data.email, context.options),
 					},
 				],
 			});
@@ -850,7 +851,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
-				where: [{ field: "email", value: email.toLowerCase() }],
+				where: [
+					{ field: "email", value: normalizeEmail(email, context.options) },
+				],
 			});
 			return invitations;
 		},
@@ -912,7 +915,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				where: [
 					{
 						field: "email",
-						value: data.email.toLowerCase(),
+						value: normalizeEmail(data.email, context.options),
 					},
 					{
 						field: "organizationId",

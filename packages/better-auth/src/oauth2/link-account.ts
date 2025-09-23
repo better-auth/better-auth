@@ -2,6 +2,7 @@ import { APIError, createEmailVerificationToken } from "../api";
 import type { Account } from "../types";
 import type { GenericEndpointContext, User } from "../types";
 import { logger } from "../utils";
+import { normalizeEmail } from "../utils/email";
 import { isDevelopment } from "../utils/env";
 import { setTokenUtil } from "./utils";
 
@@ -21,12 +22,10 @@ export async function handleOAuthUserInfo(
 		overrideUserInfo?: boolean;
 	},
 ) {
+	userInfo.email = normalizeEmail(userInfo.email, c.context.options);
+
 	const dbUser = await c.context.internalAdapter
-		.findOAuthUser(
-			userInfo.email.toLowerCase(),
-			account.accountId,
-			account.providerId,
-		)
+		.findOAuthUser(userInfo.email, account.accountId, account.providerId)
 		.catch((e) => {
 			logger.error(
 				"Better auth was unable to query your database.\nError: ",
@@ -91,7 +90,7 @@ export async function handleOAuthUserInfo(
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
-				userInfo.email.toLowerCase() === dbUser.user.email
+				userInfo.email === dbUser.user.email
 			) {
 				await c.context.internalAdapter.updateUser(dbUser.user.id, {
 					emailVerified: true,
@@ -122,7 +121,7 @@ export async function handleOAuthUserInfo(
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
-				userInfo.email.toLowerCase() === dbUser.user.email
+				userInfo.email === dbUser.user.email
 			) {
 				await c.context.internalAdapter.updateUser(dbUser.user.id, {
 					emailVerified: true,
@@ -134,9 +133,9 @@ export async function handleOAuthUserInfo(
 			// update user info from the provider if overrideUserInfo is true
 			await c.context.internalAdapter.updateUser(dbUser.user.id, {
 				...restUserInfo,
-				email: userInfo.email.toLowerCase(),
+				email: userInfo.email,
 				emailVerified:
-					userInfo.email.toLowerCase() === dbUser.user.email
+					userInfo.email === dbUser.user.email
 						? dbUser.user.emailVerified || userInfo.emailVerified
 						: userInfo.emailVerified,
 			});
@@ -155,7 +154,7 @@ export async function handleOAuthUserInfo(
 				.createOAuthUser(
 					{
 						...restUserInfo,
-						email: userInfo.email.toLowerCase(),
+						email: userInfo.email,
 					},
 					{
 						accessToken: await setTokenUtil(account.accessToken, c.context),

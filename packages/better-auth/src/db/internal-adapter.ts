@@ -18,6 +18,7 @@ import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId, type InternalLogger } from "../utils";
 import { getCurrentAdapter, runWithTransaction } from "../context/transaction";
+import { normalizeEmail } from "../utils/email";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -80,6 +81,8 @@ export const createInternalAdapter = (
 			context?: GenericEndpointContext,
 		) => {
 			return runWithTransaction(adapter, async () => {
+				user.email = normalizeEmail(user.email, ctx.options);
+
 				const createdUser = await createWithHooks(
 					{
 						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
@@ -121,7 +124,9 @@ export const createInternalAdapter = (
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...user,
-					email: user.email?.toLowerCase(),
+					email: user.email
+						? normalizeEmail(user.email, ctx.options)
+						: undefined,
 				},
 				"user",
 				undefined,
@@ -668,7 +673,7 @@ export const createInternalAdapter = (
 						model: "user",
 						where: [
 							{
-								value: email.toLowerCase(),
+								value: normalizeEmail(email, ctx.options),
 								field: "email",
 							},
 						],
@@ -686,7 +691,7 @@ export const createInternalAdapter = (
 					model: "user",
 					where: [
 						{
-							value: email.toLowerCase(),
+							value: normalizeEmail(email, ctx.options),
 							field: "email",
 						},
 					],
@@ -720,7 +725,7 @@ export const createInternalAdapter = (
 				model: "user",
 				where: [
 					{
-						value: email.toLowerCase(),
+						value: normalizeEmail(email, ctx.options),
 						field: "email",
 					},
 				],
@@ -808,7 +813,7 @@ export const createInternalAdapter = (
 				[
 					{
 						field: "email",
-						value: email.toLowerCase(),
+						value: normalizeEmail(email, ctx.options),
 					},
 				],
 				"user",

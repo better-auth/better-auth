@@ -462,6 +462,12 @@ export type BetterAuthOptions = {
 			[key: string]: FieldAttribute;
 		};
 		/**
+		 * Normalize email subaddressing by removing + aliases
+		 * When enabled, user@gmail.com and user+test@gmail.com are treated as the same email
+		 * @default false
+		 */
+		normalizeEmailSubaddressing?: boolean;
+		/**
 		 * Changing email configuration
 		 */
 		changeEmail?: {

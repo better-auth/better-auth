@@ -14,6 +14,7 @@ import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../middlewares";
+import { normalizeEmail } from "../../utils/email";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -720,7 +721,7 @@ export const changeEmail = createAuthEndpoint(
 			});
 		}
 
-		const newEmail = ctx.body.newEmail.toLowerCase();
+		const newEmail = normalizeEmail(ctx.body.newEmail, ctx.context.options);
 
 		if (newEmail === ctx.context.session.user.email) {
 			ctx.context.logger.error("Email is the same");

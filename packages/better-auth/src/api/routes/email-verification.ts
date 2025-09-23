@@ -23,7 +23,7 @@ export async function createEmailVerificationToken(
 ) {
 	const token = await signJWT(
 		{
-			email: email.toLowerCase(),
+			email: email,
 			updateTo,
 		},
 		secret,
