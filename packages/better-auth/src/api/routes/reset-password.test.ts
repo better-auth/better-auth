@@ -12,7 +12,7 @@ describe("forget password", async (it) => {
 			emailAndPassword: {
 				enabled: true,
 				async sendResetPassword({ url }) {
-					token = url.split("?")[0].split("/").pop() || "";
+					token = url.split("?")[0]!.split("/").pop() || "";
 					await mockSendEmail();
 				},
 				onPasswordReset: async ({ user }) => {
@@ -271,7 +271,7 @@ describe("revoke sessions on password reset", async (it) => {
 			emailAndPassword: {
 				enabled: true,
 				async sendResetPassword({ url }) {
-					token = url.split("?")[0].split("/").pop() || "";
+					token = url.split("?")[0]!.split("/").pop() || "";
 					await mockSendEmail();
 				},
 				revokeSessionsOnPasswordReset: true,
@@ -313,7 +313,7 @@ describe("revoke sessions on password reset", async (it) => {
 				emailAndPassword: {
 					enabled: true,
 					async sendResetPassword({ url }) {
-						token = url.split("?")[0].split("/").pop() || "";
+						token = url.split("?")[0]!.split("/").pop() || "";
 						await mockSendEmail();
 					},
 				},
