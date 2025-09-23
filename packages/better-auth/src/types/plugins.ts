@@ -24,8 +24,6 @@ export type AuthPluginSchema = {
 
 export type BetterAuthPlugin = {
 	id: LiteralString;
-	requires?: LiteralString[];
-	databaseHooks?: BetterAuthOptions["databaseHooks"];
 	init?: (ctx: AuthContext) =>
 		| Awaitable<{
 				context?: DeepPartial<Omit<AuthContext, "options">>;
@@ -33,8 +31,6 @@ export type BetterAuthPlugin = {
 		  }>
 		| void
 		| Promise<void>;
-	onInit?: (ctx: AuthContext) => Awaitable<void>;
-	onDestroy?: (ctx: AuthContext) => Awaitable<void>;
 	endpoints?: {
 		[key: string]: Endpoint;
 	};
