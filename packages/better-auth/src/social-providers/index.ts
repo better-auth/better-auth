@@ -1,5 +1,6 @@
 import * as z from "zod";
 import { apple } from "./apple";
+import { asgardeo } from "./asgardeo";
 import { atlassian } from "./atlassian";
 import { cognito } from "./cognito";
 import { discord } from "./discord";
@@ -32,6 +33,7 @@ import { paypal } from "./paypal";
 
 export const socialProviders = {
 	apple,
+	asgardeo,
 	atlassian,
 	cognito,
 	discord,
@@ -83,6 +85,7 @@ export type SocialProviders = {
 };
 
 export * from "./apple";
+export * from "./asgardeo";
 export * from "./atlassian";
 export * from "./cognito";
 export * from "./discord";
