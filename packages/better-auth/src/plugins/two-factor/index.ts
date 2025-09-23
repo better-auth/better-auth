@@ -309,6 +309,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 								"base64urlnopad",
 							).sign(ctx.context.secret, `${data.user.id}!${sessionToken}`);
 
+							// Checks if the token is signed correctly, not that its the current session token
 							if (token === expectedToken) {
 								// Trust device cookie is valid, refresh it and skip 2FA
 								const newToken = await createHMAC(
