@@ -98,5 +98,18 @@ export const getJwksAdapter = (adapter: Adapter) => {
 
 			return jwk;
 		},
+		revokeKey: async (keyId: string) => {
+			const key = await adapter.findOne<Jwk>({
+				model: "jwks",
+				where: [{ field: "id", value: keyId }],
+			});
+			if (key === null) return undefined;
+			key.id = keyId + " revoked";
+			return await adapter.update({
+				model: "jwks",
+				where: [{ field: "id", value: keyId }],
+				update: key,
+			});
+		},
 	};
 };

@@ -94,7 +94,7 @@ export async function getJwk(
 	const alg = publicKeyJSON.alg;
 	if (!alg)
 		throw new BetterAuthError(
-			"Failed to create JWK: public key does not contain its algorithm name",
+			"Failed to create JWK: the public key does not contain its algorithm name",
 			keyFromDb.publicKey,
 		);
 
@@ -196,4 +196,30 @@ export async function importJwk(
 		publicKey: JSON.stringify(getPublicJwk(exportedPrivateKey)),
 		privateKey: JSON.stringify(exportedPrivateKey),
 	} as Jwk);
+}
+
+/**
+ * Revokes **JWK pair**, it is still kept in the database with different `id` for transparency.
+ *
+ * @param ctx - Endpoint context.
+ * @param keyId - **Key Id** of the pair to be revoked.
+ *
+ * @throws {Error} - If the database update fails.
+ *
+ * @returns The revoked **JWK** in the database.
+ */
+export async function revokeJwk(
+	ctx: GenericEndpointContext,
+	keyId: string,
+): Promise<Jwk> {
+	const adapter = getJwksAdapter(ctx.context.adapter);
+
+	const revokedKey = await adapter.revokeKey(keyId);
+	if (!revokedKey)
+		throw new BetterAuthError(
+			`Failed to revoke a JWK: No such key found with id "${keyId}"`,
+			keyId,
+		);
+
+	return revokedKey as Jwk;
 }

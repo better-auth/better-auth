@@ -15,7 +15,7 @@ export const getJwtPluginOptions = (
 	const plugin = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
 	if (plugin === undefined)
 		throw new BetterAuthError(
-			'You need to initialize "jwt" plugin before calling JWT related functions!',
+			'Failed to get "jwt" plugin options: The "jwt" plugin needs to be initialized before calling JWT related functions',
 		);
 	return plugin.options;
 };
@@ -53,7 +53,10 @@ export async function decryptPrivateKey(
 		data: JSON.parse(privateKey),
 	}).catch(() => {
 		throw new BetterAuthError(
-			"Failed to decrypt private private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either cleanup your jwks or disable private key encryption.",
+			"Failed to decrypt the private key: Make sure current secret is the same as the one used to encrypt the private key. " +
+				'If you are using a different secret, either cleanup your "jwks" table in the database or provide the old secret temporalily ' +
+				"and disable private key encryption then restart server with the new secret and enabled encryption",
+			privateKey,
 		);
 	});
 }
@@ -73,7 +76,7 @@ export function isJwkAlgValid(jwkAlgorithm: string): boolean {
 export async function parseJwk(key: JWK): Promise<CryptoKeyIdAlg> {
 	if (!isJwkAlgValid(key.alg!))
 		throw new BetterAuthError(
-			`Invalid JWK algorithm: "${key.alg}"`,
+			`Failed to parse JWKK: Invalid JWK algorithm: "${key.alg}"`,
 			JSON.stringify(key),
 		);
 
@@ -123,7 +126,7 @@ export function removeJwtClaims(
 					' If you need to edit this JWT Claim, provide its override in "signJwt" function\'s "options.claims" argument.';
 			else
 				warn +=
-					' If you need to edit this field (unrecommended), sign payload yourself with a key from "getJwk".';
+					' If you need to edit this field (unrecommended), sign the payload yourself with a key from "getJwk".';
 			logger?.warn(warn);
 			delete data[claim];
 		}

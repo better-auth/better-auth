@@ -38,6 +38,11 @@ async function signJwtPayload(
 	pluginOpts?: JwtPluginOptions,
 	jwk?: string | CryptoKeyIdAlg,
 ): Promise<string> {
+	if (typeof jwk === "string" && jwk.endsWith(" revoked"))
+		throw new BetterAuthError(
+			`Failed to sign a JWT: Cannot sign the JWT using a revoked JWK with id "${jwk}"`,
+			jwk,
+		);
 	let privateKey = await getJwk(ctx, true, jwk);
 	if (!privateKey) {
 		// This happens only if there are no JWKs in the database, so create one
@@ -46,7 +51,7 @@ async function signJwtPayload(
 		const alg = JSON.parse(newKey.publicKey).alg;
 		if (!alg)
 			throw new BetterAuthError(
-				"Failed to create JWK: public key does not contain its algorithm name",
+				"Failed to create a JWK: public key does not contain its algorithm name",
 				newKey.publicKey,
 			);
 
@@ -55,6 +60,7 @@ async function signJwtPayload(
 				? await decryptPrivateKey(ctx.context.secret, newKey.privateKey)
 				: newKey.privateKey,
 		);
+
 		privateKey = {
 			id: newKey.id,
 			alg: alg,
@@ -62,6 +68,11 @@ async function signJwtPayload(
 		};
 	}
 
+	if (privateKey.id && privateKey.id.endsWith(" revoked"))
+		throw new BetterAuthError(
+			`Failed to sign a JWT: Cannot sign the JWT using a revoked JWK with id "${privateKey.id}"`,
+			privateKey.id,
+		);
 	const jwt = new SignJWT(payload).setProtectedHeader({
 		alg: privateKey.alg,
 		kid: privateKey.id,

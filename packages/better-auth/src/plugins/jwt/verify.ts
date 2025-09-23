@@ -99,13 +99,20 @@ export async function verifyJwtInternal(
 	});
 	const localJwks = createLocalJWKSet(jwks);
 
-	const { payload } = await verifyJwtJose(
+	const { payload, protectedHeader } = await verifyJwtJose(
 		ctx,
 		jwt,
 		localJwks,
 		pluginOpts,
 		options,
 	);
+
+	if (protectedHeader.kid?.endsWith(" revoked"))
+		throw new BetterAuthError(
+			`Failed to verify a JWT: Cannot verify the JWT using a revoked JWK with id "${protectedHeader.kid}"`,
+			protectedHeader.kid,
+		);
+
 	return payload;
 }
 
@@ -165,7 +172,7 @@ export async function verifyJwtWithKeyInternal(
 
 	if (privateKey === undefined)
 		throw new BetterAuthError(
-			`Failed to sign JWT: Could not find a JWK with provided ID: "${jwk}"`,
+			`Failed to sign JWT: Could not find a JWK with id "${jwk}"`,
 		);
 
 	const { payload, protectedHeader } = await verifyJwtJose(

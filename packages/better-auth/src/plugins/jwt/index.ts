@@ -547,6 +547,120 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 					return ctx.json({ key: key });
 				},
 			),
+			revokeJwk: createAuthEndpoint(
+				"/revoke-jwk",
+				{
+					method: "POST",
+					metadata: {
+						SERVER_ONLY: true,
+						$Infer: {
+							body: {} as {
+								keyId: string;
+							},
+						},
+						openapi: {
+							description:
+								"Revokes a JWK pair, but keeps it in the database for transparency",
+							responses: {
+								200: {
+									description: "JSON Web Key revoked successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													key: {
+														description: "The newly created JSON Web Key",
+														type: "object",
+														properties: {
+															kid: {
+																type: "string",
+																description:
+																	"Key ID uniquely identifying the key, corresponds to the 'id' from the stored Jwk",
+															},
+															kty: {
+																type: "string",
+																description:
+																	"Key type (e.g., 'RSA', 'EC', 'OKP')",
+															},
+															alg: {
+																type: "string",
+																description:
+																	"Algorithm intended for use with the key (e.g., 'EdDSA', 'RS256')",
+															},
+															use: {
+																type: "string",
+																description:
+																	"Intended use of the public key (e.g., 'sig' for signature)",
+																enum: ["sig"],
+																nullable: true,
+															},
+															n: {
+																type: "string",
+																description:
+																	"Modulus for RSA keys (base64url-encoded)",
+																nullable: true,
+															},
+															e: {
+																type: "string",
+																description:
+																	"Exponent for RSA keys (base64url-encoded)",
+																nullable: true,
+															},
+															crv: {
+																type: "string",
+																description:
+																	"Curve name for elliptic curve keys (e.g., 'Ed25519', 'P-256')",
+																nullable: true,
+															},
+															x: {
+																type: "string",
+																description:
+																	"X coordinate for elliptic curve keys (base64url-encoded)",
+																nullable: true,
+															},
+															y: {
+																type: "string",
+																description:
+																	"Y coordinate for elliptic curve keys (base64url-encoded)",
+																nullable: true,
+															},
+														},
+														required: ["kid", "kty", "alg"],
+													},
+												},
+											},
+										},
+									},
+								},
+								400: {
+									description: "Could not find the JWK pair to revoke",
+								},
+							},
+						},
+					},
+					body: z.object({
+						keyId: z.string(),
+					}),
+				},
+				async (ctx) => {
+					const keyId = ctx.body.keyId;
+					try {
+						return ctx.json({ key: await revokeJwk(ctx, keyId) });
+					} catch (error: unknown) {
+						if (error instanceof BetterAuthError) {
+							if (error.cause === keyId)
+								throw new APIError("BAD_REQUEST", {
+									message: "Could not find the JWK pair to revoke",
+								});
+						}
+						ctx.context.logger.error(`Could not revoke the JWK: ${error}`);
+						throw new APIError("BAD_REQUEST", {
+							message: "Could not revoke the JWK",
+						});
+					}
+				},
+			),
 		},
 		hooks: {
 			after: [
