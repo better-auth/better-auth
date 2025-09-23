@@ -492,6 +492,21 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/update-user`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.adminUpdateUser`
+			 *
+			 * **client:**
+			 * `authClient.admin.updateUser`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-update-user)
+			 */
 			adminUpdateUser: createAuthEndpoint(
 				"/admin/update-user",
 				{
