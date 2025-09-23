@@ -56,6 +56,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 
 	return {
 		id: "oauth-proxy",
+		options: opts,
 		endpoints: {
 			oAuthProxy: createAuthEndpoint(
 				"/oauth-proxy-callback",
@@ -157,7 +158,11 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 							 * We don't want to redirect to the proxy URL if the origin is the same
 							 * as the current URL
 							 */
-							if (origin === getOrigin(ctx.context.baseURL)) {
+							const productionURL =
+								opts?.productionURL ||
+								ctx.context.options.baseURL ||
+								ctx.context.baseURL;
+							if (origin === getOrigin(productionURL)) {
 								const newLocation = locationURL.searchParams.get("callbackURL");
 								if (!newLocation) {
 									return;

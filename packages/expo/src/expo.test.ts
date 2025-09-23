@@ -127,7 +127,7 @@ describe("expo", async () => {
 			provider: "google",
 			callbackURL: "/dashboard",
 		});
-		const stateId = res?.url?.split("state=")[1].split("&")[0];
+		const stateId = res?.url?.split("state=")[1]!.split("&")[0];
 		const ctx = await auth.$context;
 		if (!stateId) {
 			throw new Error("State ID not found");
@@ -157,9 +157,9 @@ describe("expo", async () => {
 	});
 
 	it("should preserve unchanged client store session properties on signout", async () => {
-		const before = client.$store.atoms.session.get();
+		const before = client.$store.atoms.session!.get();
 		await client.signOut();
-		const after = client.$store.atoms.session.get();
+		const after = client.$store.atoms.session!.get();
 
 		expect(after).toMatchObject({
 			...before,
