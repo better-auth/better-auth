@@ -90,7 +90,8 @@ jobs:
         run: pnpm install
 
       - name: Install Playwright Browsers
-        run: pnpx playwright install --with-deps
+        run: pnpm exec playwright install
+        working-directory:  e2e/integration
 
       - name: Build
         env:
