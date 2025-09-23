@@ -43,7 +43,8 @@ async function signJwtPayload(
 			`Failed to sign a JWT: Cannot sign the JWT using a revoked JWK with id "${jwk}"`,
 			jwk,
 		);
-	let privateKey = await getJwk(ctx, true, jwk);
+
+	let privateKey = await getJwk(ctx, true, jwk ?? pluginOpts?.jwks?.defaultKeyId);
 	if (!privateKey) {
 		// This happens only if there are no JWKs in the database, so create one
 		const newKey = await createJwkInternal(ctx, pluginOpts?.jwks);
@@ -73,6 +74,7 @@ async function signJwtPayload(
 			`Failed to sign a JWT: Cannot sign the JWT using a revoked JWK with id "${privateKey.id}"`,
 			privateKey.id,
 		);
+
 	const jwt = new SignJWT(payload).setProtectedHeader({
 		alg: privateKey.alg,
 		kid: privateKey.id,
