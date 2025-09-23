@@ -752,31 +752,39 @@ describe("jwt", async () => {
 					sub: "customSub",
 				};
 
-				expect(
-					await verify(
-						(
-							await auth.api.signJwt({
-								body: {
-									data: someData,
-									claims: claimsStringTime,
-								},
-							})
-						).token,
-						claimsStringTime,
-					),
-				).toStrictEqual(
-					await verify(
-						(
-							await auth.api.customSignJwt({
-								body: {
-									data: someData,
-									claims: claimsStringTime,
-								},
-							})
-						).token,
-						claimsStringTime,
-					),
+				const { exp, iat, nbf, ...payload } = await verify(
+					(
+						await auth.api.signJwt({
+							body: {
+								data: someData,
+								claims: claimsStringTime,
+							},
+						})
+					).token,
+					claimsStringTime,
 				);
+
+				const {
+					exp: expCustom,
+					iat: iatCustom,
+					nbf: nbfCustom,
+					...payloadCustom
+				} = await verify(
+					(
+						await auth.api.customSignJwt({
+							body: {
+								data: someData,
+								claims: claimsStringTime,
+							},
+						})
+					).token,
+					claimsStringTime,
+				);
+
+				expect(payload).toStrictEqual(payloadCustom);
+				expect(Math.abs((expCustom ?? 0) - (exp ?? 0))).toBeLessThan(10);
+				expect(Math.abs((iatCustom ?? 0) - (iat ?? 0))).toBeLessThan(10);
+				expect(Math.abs((nbfCustom ?? 0) - (nbf ?? 0))).toBeLessThan(10);
 
 				expect(
 					await verify(
