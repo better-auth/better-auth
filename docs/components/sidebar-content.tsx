@@ -1674,6 +1674,17 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/plugins/bearer",
 			},
 			{
+				title: "Device Binding",
+				icon: () => (
+					<svg xmlns="http://www.w3.org/2000/svg" width="1.2em" height="1.2em" viewBox="0 0 24 24">
+					<path fill="currentColor" d="M21 4H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h6v-2H3V6h18v12h-6v2h6c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-7 10h-1v-1c0-1.1-.9-2-2-2s-2 .9-2 2v1h-1c-.55 0-1 .45-1 1v4c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-4c0-.55-.45-1-1-1zm-2 0h-2v-1c0-.55.45-1 1-1s1 .45 1 1v1z"/>
+				  </svg>
+				  
+				),
+				href: "/docs/plugins/device-binding",
+				isNew: true,
+			},
+			{
 				title: "Device Authorization",
 				icon: () => (
 					<svg
