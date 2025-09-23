@@ -63,15 +63,40 @@ export interface OIDCConfig {
 export interface SAMLConfig {
 	issuer: string;
 	entryPoint: string;
-	signingKey: string;
-	certificate: string;
-	attributeConsumingServiceIndex: number;
+	cert: string;
+	callbackUrl: string;
+	audience?: string;
+	idpMetadata?: {
+		metadata: string;
+		privateKey?: string;
+		privateKeyPass?: string;
+		isAssertionEncrypted?: boolean;
+		encPrivateKey?: string;
+		encPrivateKeyPass?: string;
+	};
+	spMetadata: {
+		metadata: string;
+		binding?: string;
+		privateKey?: string;
+		privateKeyPass?: string;
+		isAssertionEncrypted?: boolean;
+		encPrivateKey?: string;
+		encPrivateKeyPass?: string;
+	};
+	wantAssertionsSigned?: boolean;
+	signatureAlgorithm?: string;
+	digestAlgorithm?: string;
+	identifierFormat?: string;
+	privateKey?: string;
+	decryptionPvk?: string;
+	additionalParams?: Record<string, any>;
 	mapping?: {
 		id?: string;
 		email?: string;
 		name?: string;
 		firstName?: string;
 		lastName?: string;
+		emailVerified?: string;
 		extraFields?: Record<string, string>;
 	};
 }
@@ -164,6 +189,38 @@ export interface SSOOptions {
 	trustEmailVerified?: boolean;
 }
 
+// Helper functions for safe JSON parsing
+function safeParseJSON<T>(value: any): T | null {
+	if (value === null || value === undefined) {
+		return null;
+	}
+	
+	// If it's already an object, return it as is
+	if (typeof value === 'object') {
+		return value as T;
+	}
+	
+	// If it's a string, try to parse it
+	if (typeof value === 'string') {
+		try {
+			return JSON.parse(value) as T;
+		} catch (error) {
+			console.error('Failed to parse JSON:', error, 'Value:', value);
+			return null;
+		}
+	}
+	
+	return null;
+}
+
+function safeParseOIDCConfig(value: any): OIDCConfig | null {
+	return safeParseJSON<OIDCConfig>(value);
+}
+
+function safeParseSAMLConfig(value: any): SAMLConfig | null {
+	return safeParseJSON<SAMLConfig>(value);
+}
+
 export const sso = (options?: SSOOptions) => {
 	return {
 		id: "sso",
@@ -206,7 +263,12 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 
-					const parsedSamlConfig = JSON.parse(provider.samlConfig);
+					const parsedSamlConfig = safeParseSAMLConfig(provider.samlConfig);
+					if (!parsedSamlConfig) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid SAML configuration",
+						});
+					}
 					const sp = saml.ServiceProvider({
 						metadata: parsedSamlConfig.spMetadata.metadata,
 					});
@@ -647,12 +709,8 @@ export const sso = (options?: SSOOptions) => {
 					});
 					return ctx.json({
 						...provider,
-						oidcConfig: JSON.parse(
-							provider.oidcConfig as unknown as string,
-						) as OIDCConfig,
-						samlConfig: JSON.parse(
-							provider.samlConfig as unknown as string,
-						) as SAMLConfig,
+						oidcConfig: safeParseOIDCConfig(provider.oidcConfig),
+						samlConfig: safeParseSAMLConfig(provider.samlConfig),
 						redirectURI: `${ctx.context.baseURL}/sso/callback/${provider.providerId}`,
 					});
 				},
@@ -844,7 +902,8 @@ export const sso = (options?: SSOOptions) => {
 							}
 							return {
 								...res,
-								oidcConfig: JSON.parse(res.oidcConfig as unknown as string),
+								oidcConfig: safeParseOIDCConfig(res.oidcConfig),
+								samlConfig: safeParseSAMLConfig(res.samlConfig),
 							};
 						});
 					if (!provider) {
@@ -865,17 +924,48 @@ export const sso = (options?: SSOOptions) => {
 						}
 					}
 					if (provider.oidcConfig && body.providerType !== "saml") {
+						let config = provider.oidcConfig;
+						
+						// Try to discover endpoints if not configured
+						if (!config.authorizationEndpoint && config.discoveryEndpoint) {
+							try {
+								const discovery = await betterFetch<{
+									authorization_endpoint: string;
+									token_endpoint: string;
+									userinfo_endpoint: string;
+								}>(config.discoveryEndpoint);
+
+								if (discovery.data) {
+									config = {
+										...config,
+										authorizationEndpoint: discovery.data.authorization_endpoint,
+										tokenEndpoint: discovery.data.token_endpoint,
+										userInfoEndpoint: discovery.data.userinfo_endpoint,
+									};
+								}
+							} catch (error) {
+								// Discovery failed, continue with configured values
+								console.warn('OIDC discovery failed:', error);
+							}
+						}
+
+						if (!config.authorizationEndpoint) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Authorization endpoint not configured and discovery failed",
+							});
+						}
+
 						const state = await generateState(ctx);
 						const redirectURI = `${ctx.context.baseURL}/sso/callback/${provider.providerId}`;
 						const authorizationURL = await createAuthorizationURL({
 							id: provider.issuer,
 							options: {
-								clientId: provider.oidcConfig.clientId,
-								clientSecret: provider.oidcConfig.clientSecret,
+								clientId: config.clientId,
+								clientSecret: config.clientSecret,
 							},
 							redirectURI,
 							state: state.state,
-							codeVerifier: provider.oidcConfig.pkce
+							codeVerifier: config.pkce
 								? state.codeVerifier
 								: undefined,
 							scopes: ctx.body.scopes || [
@@ -884,7 +974,7 @@ export const sso = (options?: SSOOptions) => {
 								"profile",
 								"offline_access",
 							],
-							authorizationEndpoint: provider.oidcConfig.authorizationEndpoint,
+							authorizationEndpoint: config.authorizationEndpoint,
 						});
 						return ctx.json({
 							url: authorizationURL.toString(),
@@ -892,9 +982,12 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 					if (provider.samlConfig) {
-						const parsedSamlConfig = JSON.parse(
-							provider.samlConfig as unknown as string,
-						);
+						const parsedSamlConfig = provider.samlConfig;
+						if (!parsedSamlConfig.spMetadata || !parsedSamlConfig.idpMetadata) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid SAML configuration - missing metadata",
+							});
+						}
 						const sp = saml.ServiceProvider({
 							metadata: parsedSamlConfig.spMetadata.metadata,
 							allowCreate: true,
@@ -983,7 +1076,7 @@ export const sso = (options?: SSOOptions) => {
 							}
 							return {
 								...res,
-								oidcConfig: JSON.parse(res.oidcConfig),
+								oidcConfig: safeParseOIDCConfig(res.oidcConfig),
 							} as SSOProvider;
 						});
 					if (!provider) {
@@ -1296,9 +1389,12 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 
-					const parsedSamlConfig = JSON.parse(
-						provider.samlConfig as unknown as string,
-					);
+					const parsedSamlConfig = safeParseSAMLConfig(provider.samlConfig);
+					if (!parsedSamlConfig || !parsedSamlConfig.idpMetadata || !parsedSamlConfig.spMetadata) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid SAML configuration",
+						});
+					}
 					const idp = saml.IdentityProvider({
 						metadata: parsedSamlConfig.idpMetadata.metadata,
 					});
@@ -1331,21 +1427,21 @@ export const sso = (options?: SSOOptions) => {
 								extract.attributes[value as string],
 							]),
 						),
-						id: attributes[mapping.id] || attributes["nameID"],
+						id: mapping.id ? attributes[mapping.id] : attributes["nameID"],
 						email:
-							attributes[mapping.email] ||
+							(mapping.email && attributes[mapping.email]) ||
 							attributes["nameID"] ||
 							attributes["email"],
 						name:
 							[
-								attributes[mapping.firstName] || attributes["givenName"],
-								attributes[mapping.lastName] || attributes["surname"],
+								(mapping.firstName ? attributes[mapping.firstName] : undefined) || attributes["givenName"],
+								(mapping.lastName ? attributes[mapping.lastName] : undefined) || attributes["surname"],
 							]
 								.filter(Boolean)
 								.join(" ") || parsedResponse.extract.attributes?.displayName,
 						attributes: parsedResponse.extract.attributes,
 						emailVerified: options?.trustEmailVerified
-							? ((attributes?.[mapping.emailVerified] || false) as boolean)
+							? (mapping.emailVerified && attributes?.[mapping.emailVerified] ? attributes[mapping.emailVerified] as boolean : false)
 							: false,
 					};
 
