@@ -11,6 +11,7 @@ export default defineConfig({
 				entryFileNames: "[name].js",
 				format: "es",
 			},
+			treeshake: false,
 		},
 		minify: false,
 		sourcemap: "inline",
