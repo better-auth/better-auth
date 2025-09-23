@@ -411,4 +411,68 @@ describe("adapter test", async () => {
 		expect(finalTTL).toBeLessThanOrEqual(7199);
 		expect(finalTTL).toBeGreaterThanOrEqual(7198); // Allow for test execution time
 	});
+
+	it("should remove subaddressing if option is true in createUser", async () => {
+		const optsWithSubaddressing = {
+			...opts,
+			user: {
+				...opts.user,
+				normalizeEmailSubaddressing: true,
+			},
+		} satisfies BetterAuthOptions;
+		const ctxSubaddressing = await init(optsWithSubaddressing);
+		const internalAdapterSubaddressing = ctxSubaddressing.internalAdapter;
+		
+		const user = await internalAdapterSubaddressing.createUser({
+			email: "user+tag@example.com",
+			name: "name",
+		});
+		expect(user.email).toBe("user@example.com");
+
+		const fetchedUser = await internalAdapterSubaddressing.findUserByEmail("user+someothertag@example.com");
+		expect(fetchedUser?.user.id).toBe(user.id);
+		expect(fetchedUser?.user.email).toBe("user@example.com");
+
+		const updatedUser = await internalAdapterSubaddressing.updateUserByEmail("user+someothertag@example.com", {
+			name: "new name",
+		});
+		expect(updatedUser?.email).toBe("user@example.com");
+	});
+
+	it("should create and find oauth user with subaddressing normalized email", async () => {
+		const optsWithSubaddressing = {
+			...opts,
+			user: {
+				...opts.user,
+				normalizeEmailSubaddressing: true,
+			},
+		} satisfies BetterAuthOptions;
+		const ctxSubaddressing = await init(optsWithSubaddressing);
+		const internalAdapterSubaddressing = ctxSubaddressing.internalAdapter;
+
+		const user = await internalAdapterSubaddressing.createOAuthUser(
+			{
+				email: "user+tag@example.com",
+				name: "name",
+				emailVerified: false,
+			},
+			{
+				providerId: "provider",
+				accountId: "account",
+				accessTokenExpiresAt: new Date(),
+				refreshTokenExpiresAt: new Date(),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		);
+		expect(user.user.email).toBe("user@example.com")
+
+		const fetchedUser = await internalAdapterSubaddressing.findUserByEmail("user+tag@example.com");
+		expect(fetchedUser?.user.id).toBe(user.user.id);
+		expect(fetchedUser?.user.email).toBe("user@example.com");
+
+		const fetchedUser2 = await internalAdapterSubaddressing.findUserByEmail("user@example.com");
+		expect(fetchedUser2?.user.id).toBe(user.user.id);
+		expect(fetchedUser2?.user.email).toBe("user@example.com");
+	});
 });

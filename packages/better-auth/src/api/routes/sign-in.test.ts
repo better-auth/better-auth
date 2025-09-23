@@ -108,4 +108,26 @@ describe("sign-in", async (it) => {
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
+
+	it("should allow sign in with subaddressed email when normalization is enabled", async () => {
+		const { auth } = await getTestInstance({
+			user: { normalizeEmailSubaddressing: true }
+		});
+		
+		await auth.api.signUpEmail({
+			body: {
+				email: "user@example.com",
+				password: "password123",
+				name: "Test User"
+			}
+		});
+		
+		const result = await auth.api.signInEmail({
+			body: {
+				email: "user+tag@example.com",
+				password: "password123"
+			}
+		});
+		expect(result.user.email).toBe("user@example.com");
+	});
 });
