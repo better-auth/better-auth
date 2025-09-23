@@ -160,7 +160,7 @@ describe("jwt", async () => {
 
 			expect(jwks.data?.keys).length.above(0);
 			expect(jwks.data?.keys[0]!.alg).toBe("EdDSA");
-			expect(jwks.data?.keys[0]!).toStrictEqual(jwk.key);
+			expect(jwks.data?.keys[0]).toStrictEqual(jwk.key);
 		});
 
 		it("Should be able to validate signed tokens with the JWKS manually", async () => {
@@ -490,38 +490,40 @@ describe("jwt", async () => {
 		] as JwksOptions[])("Algorithm: $keyPairConfig.alg", async (jwksOpts) => {
 			const pluginOpts: JwtPluginOptions = { jwks: jwksOpts };
 
-			const expectedOutcome =
-				expectedOutcomes[
-					jwksOpts.keyPairConfig!.alg +
-						("crv" in jwksOpts.keyPairConfig!
-							? (jwksOpts.keyPairConfig!.crv ?? "")
-							: "")
-				];
 			it("Should generate a JWK pair", async () => {
+				const expectedOutcome =
+					expectedOutcomes[
+						jwksOpts.keyPairConfig!.alg +
+							("crv" in jwksOpts.keyPairConfig!
+								? (jwksOpts.keyPairConfig!.crv ?? "")
+								: "")
+					];
+				expect(expectedOutcome).toBeDefined();
+
 				const { auth } = await createTestCase(pluginOpts);
 				// Unit test (JWS Supported key)
 				const { publicKey, privateKey } = await generateExportedKeyPair(
 					pluginOpts?.jwks?.keyPairConfig,
 				);
 				for (const key of [publicKey, privateKey]) {
-					expect(key.kty).toBe(expectedOutcome.ec);
-					if (key.x) expect(key.x).toHaveLength(expectedOutcome.length);
-					if (key.y) expect(key.y).toHaveLength(expectedOutcome.length);
-					if (key.n) expect(key.n).toHaveLength(expectedOutcome.length);
+					expect(key.kty).toBe(expectedOutcome!.ec);
+					if (key.x) expect(key.x).toHaveLength(expectedOutcome!.length);
+					if (key.y) expect(key.y).toHaveLength(expectedOutcome!.length);
+					if (key.n) expect(key.n).toHaveLength(expectedOutcome!.length);
 				}
 
 				// Functional test (JWKS)
 				const jwks = await auth.api.getJwks();
-				expect(jwks.keys.at(0)?.kty).toBe(expectedOutcome.ec);
+				expect(jwks.keys.at(0)?.kty).toBe(expectedOutcome!.ec);
 				if (jwks.keys.at(0)?.crv)
-					expect(jwks.keys.at(0)?.crv).toBe(expectedOutcome.crv);
-				expect(jwks.keys.at(0)?.alg).toBe(expectedOutcome.alg);
+					expect(jwks.keys.at(0)?.crv).toBe(expectedOutcome!.crv);
+				expect(jwks.keys.at(0)?.alg).toBe(expectedOutcome!.alg);
 				if (jwks.keys.at(0)?.x)
-					expect(jwks.keys.at(0)?.x).toHaveLength(expectedOutcome.length);
+					expect(jwks.keys.at(0)?.x).toHaveLength(expectedOutcome!.length);
 				if (jwks.keys.at(0)?.y)
-					expect(jwks.keys.at(0)?.y).toHaveLength(expectedOutcome.length);
+					expect(jwks.keys.at(0)?.y).toHaveLength(expectedOutcome!.length);
 				if (jwks.keys.at(0)?.n)
-					expect(jwks?.keys.at(0)?.n).toHaveLength(expectedOutcome.length);
+					expect(jwks?.keys.at(0)?.n).toHaveLength(expectedOutcome!.length);
 			});
 
 			it("Client should sign in", async () => {
@@ -798,7 +800,7 @@ describe("jwt", async () => {
 					expect(protectedHeader).toMatchObject({
 						typ: claims?.typ,
 						alg: jwksOpts.keyPairConfig!.alg,
-						kid: jwks.data!.keys[0].kid,
+						kid: jwks.data!.keys[0]!.kid,
 					});
 					return payload!;
 				}
@@ -990,7 +992,7 @@ describe("jwt", async () => {
 					typ: null,
 				};
 
-				expect(
+				await expect(
 					auth.api.signJwt({
 						body: {
 							data: someData,
@@ -1011,7 +1013,7 @@ describe("jwt", async () => {
 				).token;
 				expect(jwt.length).toBeGreaterThan(10);
 
-				expect(
+				await expect(
 					auth.api.verifyJwt({
 						body: {
 							jwt,
