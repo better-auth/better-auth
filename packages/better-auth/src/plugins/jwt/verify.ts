@@ -49,22 +49,22 @@ async function verifyJwtJose(
 			audiences && audiences.length === 0
 				? undefined
 				: (audiences ?? [ctx.context.options.baseURL!]),
-		clockTolerance: options?.maxClockSkew ?? pluginOpts?.jwt?.allowedClockSkew ?? 60,
+		clockTolerance:
+			options?.maxClockSkew ?? pluginOpts?.jwt?.maxClockSkew ?? 60,
 		issuer:
 			options?.allowedIssuers && options?.allowedIssuers.length === 0
 				? undefined
 				: (options?.allowedIssuers ?? [ctx.context.options.baseURL!]),
 		maxTokenAge: options?.maxExpirationTime,
 		subject: options?.expectedSubject,
-		typ: (options?.expectedType === "") ? undefined : (options?.expectedType ?? "JWT"),
+		typ:
+			options?.expectedType === ""
+				? undefined
+				: (options?.expectedType ?? "JWT"),
 	};
 
 	// This check is needed to differentiate between function overloads
-	if (jwk instanceof CryptoKey)
-		return jwtVerify(jwt, jwk, {
-			clockTolerance: pluginOpts?.jwt?.allowedClockSkew ?? 60,
-			...parsedOptions,
-		});
+	if (jwk instanceof CryptoKey) return jwtVerify(jwt, jwk, parsedOptions);
 
 	return jwtVerify(jwt, jwk, parsedOptions);
 }

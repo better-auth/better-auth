@@ -165,13 +165,18 @@ export interface JwtOptions {
 	 */
 	expirationTime?: number | string | Date;
 	/**
-	 * The amount of time in seconds, the requested `iat` ("Issued At" Claim) can be "into the future" because of the clock differences from different machines within the request chain.
+	 * The time in seconds.
 	 *
-	 * Also leeway for `exp` ("Expiration Time" Claim) and `nbf` ("Not Before" Claim). It effectively extends allowed `exp` and lower `nbf` requirement by this amount.
+	 * @description **When signing JWT**: Tells how far the requested `iat` ("Issued At" Claim) can be "into the past" or "into the future"
+	 * because of the clock differences of different machines within the request chain and processing time.
+	 *
+	 * **When veryfing JWT**: Tells how much leeway is there for `exp` ("Expiration Time" Claim) and `nbf` ("Not Before" Claim)
+	 * because of the clock differences of **this machine (veryfing one)** and **the one that signed JWT**.
+	 * It effectively extends allowed `exp` and lowers `nbf` requirement by this amount.
 	 *
 	 * @default 60
 	 */
-	allowedClockSkew?: number;
+	maxClockSkew?: number;
 	/**
 	 * A function that is called to define the data of the **JWT** in the `getSessionJwt` function.
 	 *
@@ -287,6 +292,14 @@ export const customJwtClaimsSchema = z
 
 export interface JwtVerifyOptions {
 	/**
+	 * The amount of time in seconds, the requested `iat` ("Issued At" Claim) can be "into the future" because of the clock differences from different machines within the request chain.
+	 *
+	 * Also leeway for `exp` ("Expiration Time" Claim) and `nbf` ("Not Before" Claim). It effectively extends allowed `exp` and lower `nbf` requirement by this amount.
+	 *
+	 * @default getJwtPluginOptions(ctx.context)?.jwt?.allowedClockSkew // 60 if not defined
+	 */
+	maxClockSkew?: number;
+	/**
 	 * Maximum time in **seconds** from payload's `iat` (**"Issued At" Claim**). Consider it a maximum `exp` (**"Expiration Time" Claim**) the payload can have. If present, `iat` is necessary in the payload.
 	 */
 	maxExpirationTime?: string;
@@ -326,26 +339,18 @@ export interface JwtVerifyOptions {
 	 * @default false
 	 */
 	allowNoKeyId?: boolean;
-	/**
-	 * The amount of time in seconds, the requested `iat` ("Issued At" Claim) can be "into the future" because of the clock differences from different machines within the request chain.
-	 *
-	 * Also leeway for `exp` ("Expiration Time" Claim) and `nbf` ("Not Before" Claim). It effectively extends allowed `exp` and lower `nbf` requirement by this amount.
-	 *
-	 * @default getJwtPluginOptions(ctx.context)?.jwt?.allowedClockSkew // 60 if not defined
-	 */
-	allowedClockSkew?: number;
 }
 
 // todo: add describe() to fields
 export const JwtVerifyOptionsSchema = z
 	.object({
+		maxClockSkew: z.number().optional(),
 		maxExpirationTime: z.string().optional(),
 		allowedIssuers: z.array(z.string()).optional(),
 		allowedAudiences: z.array(z.string()).optional(),
 		expectedSubject: z.string().optional(),
 		expectedType: z.string().optional(),
 		allowNoKeyId: z.boolean().optional(),
-		allowedClockSkew: z.number().optional(),
 	})
 	.describe("Strictness of verification");
 
