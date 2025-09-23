@@ -239,6 +239,18 @@ export interface AdapterFactoryConfig {
 	 * ```
 	 */
 	customIdGenerator?: (props: { model: string }) => string;
+	/**
+	 * Whether to disable the transform output.
+	 * Do not use this option unless you know what you are doing.
+	 * @default false
+	 */
+	disableTransformOutput?: boolean;
+	/**
+	 * Whether to disable the transform input.
+	 * Do not use this option unless you know what you are doing.
+	 * @default false
+	 */
+	disableTransformInput?: boolean;
 }
 
 export type AdapterFactoryCustomizeAdapterCreator = (config: {
@@ -304,6 +316,26 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 		model: string;
 		field: string;
 	}) => FieldAttribute;
+
+	// The following functions are exposed primarily for the purpose of having wrapper adapters.
+	transformInput: (
+		data: Record<string, any>,
+		defaultModelName: string,
+		action: "create" | "update",
+		forceAllowId?: boolean,
+	) => Promise<Record<string, any>>;
+	transformOutput: (
+		data: Record<string, any>,
+		defaultModelName: string,
+		select?: string[],
+	) => Promise<Record<string, any>>;
+	transformWhereClause: <W extends Where[] | undefined>({
+		model,
+		where,
+	}: {
+		where: W;
+		model: string;
+	}) => W extends undefined ? undefined : CleanedWhere[];
 }) => CustomAdapter;
 
 export interface CustomAdapter {

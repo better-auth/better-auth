@@ -1,0 +1,455 @@
+import { expect } from "vitest";
+import { createTestSuite } from "../create-test-suite";
+import type { Session, User } from "../../types";
+
+/**
+ * This test suite tests the basic CRUD operations of the adapter.
+ */
+export const normalTestSuite = createTestSuite(
+	"normal",
+	(
+		{ adapter, generate, insertRandom, modifyBetterAuthOptions, sortModels },
+		additionalHelpers?: { showDB?: () => void },
+	) => ({
+		"create - should create a model": async () => {
+			const user = generate("user");
+			const result = await adapter.create<User>({
+				model: "user",
+				data: user,
+				forceAllowId: true,
+			});
+			expect(result).toEqual(user);
+		},
+		"create - should always return an id": async () => {
+			const { id: _, ...user } = generate("user");
+			const res = await adapter.create<User>({
+				model: "user",
+				data: user,
+			});
+			expect(res).toHaveProperty("id");
+			expect(typeof res.id).toEqual("string");
+		},
+		"create - should use generateId if provided": async () => {
+			await modifyBetterAuthOptions(
+				{
+					advanced: {
+						database: {
+							generateId: () => "MOCK-ID",
+						},
+					},
+				},
+				false,
+			);
+			const { id: _, ...user } = generate("user");
+			const res = await adapter.create<User>({
+				model: "user",
+				data: user,
+			});
+			expect(res.id).toEqual("MOCK-ID");
+			const findResult = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: res.id }],
+			});
+			expect(findResult).toEqual(res);
+		},
+		"findOne - should find a model": async () => {
+			const [user] = await insertRandom("user");
+			const result = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+			});
+			expect(result).toEqual(user);
+		},
+		"findOne - should not throw on record not found": async () => {
+			const result = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: "100000" }],
+			});
+			expect(result).toBeNull();
+		},
+		"findOne - should find a model without id": async () => {
+			const [user] = await insertRandom("user");
+			const result = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: user.email }],
+			});
+			expect(result).toEqual(user);
+		},
+		"findOne - should find a model with modified field name": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						fields: {
+							email: "email_address",
+						},
+					},
+				},
+				true,
+			);
+			const [user] = await insertRandom("user");
+			const result = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: user.email }],
+			});
+			expect(result).toEqual(user);
+			expect(result?.email).toEqual(user.email);
+		},
+		"findOne - should select fields": async () => {
+			const [user] = await insertRandom("user");
+			const result = await adapter.findOne<Pick<User, "email" | "name">>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				select: ["email", "name"],
+			});
+			expect(result).toEqual({ email: user.email, name: user.name });
+		},
+		"findOne - should work with reference fields": async () => {
+			const [user, session] = await insertRandom("session");
+			const result = await adapter.findOne<Session>({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			});
+			expect(result).toEqual(session);
+		},
+		"findMany - should find many models": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+			});
+			expect(sortModels(result)).toEqual(sortModels(users));
+		},
+		"findMany - should return an empty array when no models are found":
+			async () => {
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "id", value: "100000" }],
+				});
+				expect(result).toEqual([]);
+			},
+		"findMany - should find many models with starts_with operator":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "name", value: "user", operator: "starts_with" }],
+				});
+				expect(sortModels(result)).toEqual(sortModels(users));
+			},
+		"findMany - should find many models with ends_with operator": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "name",
+						value: users[0].name.slice(-1),
+						operator: "ends_with",
+					},
+				],
+			});
+			const expectedResult = sortModels(
+				users.filter((user) => user.name.endsWith(users[0].name.slice(-1))),
+			);
+			expect(sortModels(result)).toEqual(sortModels(expectedResult));
+		},
+		"findMany - should find many models with contains operator": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [{ field: "email", value: "@", operator: "contains" }],
+			});
+			expect(sortModels(result)).toEqual(sortModels(users));
+		},
+		"findMany - should find many models with eq operator": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [{ field: "email", value: users[0].email, operator: "eq" }],
+			});
+			expect(sortModels(result)).toEqual(sortModels([users[0]]));
+		},
+		"findMany - should find many models with ne operator": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [{ field: "email", value: users[0].email, operator: "ne" }],
+			});
+			expect(sortModels(result)).toEqual(sortModels(users.slice(1)));
+		},
+		"findMany - should find many models with gt operator": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{ field: "createdAt", value: users[0].createdAt, operator: "gt" },
+				],
+			});
+			const expectedResult = users.filter(
+				(user) => user.createdAt > users[0].createdAt,
+			);
+			expect(sortModels(result)).toEqual(sortModels(expectedResult));
+		},
+		"findMany - should find many models with gte operator": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{ field: "createdAt", value: users[0].createdAt, operator: "gte" },
+				],
+			});
+			const expectedResult = users.filter(
+				(user) => user.createdAt >= users[0].createdAt,
+			);
+			expect(sortModels(result)).toEqual(sortModels(expectedResult));
+		},
+		"findMany - should find many models with lte operator": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{ field: "createdAt", value: users[0].createdAt, operator: "lte" },
+				],
+			});
+			const expectedResult = users.filter(
+				(user) => user.createdAt <= users[0].createdAt,
+			);
+			expect(sortModels(result)).toEqual(sortModels(expectedResult));
+		},
+		"findMany - should find many models with lt operator": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{ field: "createdAt", value: users[0].createdAt, operator: "lt" },
+				],
+			});
+			const expectedResult = users.filter(
+				(user) => user.createdAt < users[0].createdAt,
+			);
+			expect(sortModels(result)).toEqual(sortModels(expectedResult));
+		},
+		"findMany - should find many models with in operator": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{ field: "id", value: [users[0].id, users[1].id], operator: "in" },
+				],
+			});
+			const expectedResult = users.filter(
+				(user) => user.id === users[0].id || user.id === users[1].id,
+			);
+			expect(sortModels(result)).toEqual(sortModels(expectedResult));
+		},
+		"findMany - should find many models with not_in operator": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: [users[0].id, users[1].id],
+						operator: "not_in",
+					},
+				],
+			});
+			expect(sortModels(result)).toEqual([users[2]]);
+		},
+		"findMany - should find many models with sortBy": async () => {
+			const users = (await insertRandom("user", 5)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				sortBy: { field: "name", direction: "asc" },
+			});
+			expect(result).toEqual(
+				users.sort((a, b) => (a["name"] > b["name"] ? 1 : -1)),
+			);
+		},
+		"findMany - should find many models with limit": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				limit: 1,
+			});
+			expect(sortModels(result)).toEqual([users[0]]);
+		},
+		"findMany - should find many models with offset": async () => {
+			const users = (await insertRandom("user", 5)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				offset: 2,
+			});
+			expect(result).toEqual(users.slice(2));
+		},
+		"findMany - should find many models with limit and offset": async () => {
+			const users = (await insertRandom("user", 5)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				limit: 2,
+				offset: 2,
+			});
+			expect(result).toEqual(users.slice(2, 4));
+		},
+		"findMany - should find many models with sortBy and offset": async () => {
+			const users = (await insertRandom("user", 5)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				sortBy: { field: "name", direction: "asc" },
+				offset: 2,
+			});
+			expect(result).toHaveLength(3);
+			expect(result).toEqual(
+				users.sort((a, b) => (a["name"] > b["name"] ? 1 : -1)).slice(2),
+			);
+		},
+		"findMany - should find many models with sortBy and limit": async () => {
+			const users = (await insertRandom("user", 5)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				sortBy: { field: "name", direction: "asc" },
+				limit: 2,
+			});
+			expect(result).toEqual(
+				users.sort((a, b) => (a["name"] > b["name"] ? 1 : -1)).slice(0, 2),
+			);
+		},
+		"findMany - should find many models with sortBy and limit and offset":
+			async () => {
+				const users = (await insertRandom("user", 5)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					sortBy: { field: "name", direction: "asc" },
+					limit: 2,
+					offset: 2,
+				});
+				expect(result).toEqual(
+					users.sort((a, b) => (a["name"] > b["name"] ? 1 : -1)).slice(2, 4),
+				);
+			},
+		"findMany - should find many models with sortBy and limit and offset and where":
+			async () => {
+				const users = (await insertRandom("user", 5)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					sortBy: { field: "name", direction: "asc" },
+					limit: 2,
+					offset: 2,
+					where: [{ field: "name", value: "user", operator: "starts_with" }],
+				});
+				expect(result).toEqual(
+					users.sort((a, b) => (a["name"] > b["name"] ? 1 : -1)).slice(2, 4),
+				);
+			},
+		"update - should update a model": async () => {
+			const [user] = await insertRandom("user");
+			const result = await adapter.update<User>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				update: { name: "test-name" },
+			});
+			const expectedResult = {
+				...user,
+				name: "test-name",
+			};
+			// because of `onUpdate` hook, the updatedAt field will be different
+			result!.updatedAt = user.updatedAt;
+			expect(result).toEqual(expectedResult);
+			const findResult = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+			});
+			// because of `onUpdate` hook, the updatedAt field will be different
+			findResult!.updatedAt = user.updatedAt;
+			expect(findResult).toEqual(expectedResult);
+		},
+		"updateMany - should update all models when where is empty": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			await adapter.updateMany({
+				model: "user",
+				where: [],
+				update: { name: "test-name" },
+			});
+			const result = await adapter.findMany<User>({
+				model: "user",
+			});
+			expect(sortModels(result)).toEqual(
+				sortModels(users).map((user, i) => ({
+					...user,
+					name: "test-name",
+					updatedAt: sortModels(result)[i].updatedAt,
+				})),
+			);
+		},
+		"updateMany - should update many models with a specific where":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				await adapter.updateMany({
+					model: "user",
+					where: [{ field: "id", value: users[0].id }],
+					update: { name: "test-name" },
+				});
+				const result = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: users[0].id }],
+				});
+				expect(result).toEqual({
+					...users[0],
+					name: "test-name",
+					updatedAt: result!.updatedAt,
+				});
+			},
+		"updateMany - should update many models with a multiple where":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				await adapter.updateMany({
+					model: "user",
+					where: [
+						{ field: "id", value: users[0].id, connector: "OR" },
+						{ field: "id", value: users[1].id, connector: "OR" },
+					],
+					update: { name: "test-name" },
+				});
+				const result = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: users[0].id }],
+				});
+				expect(result).toEqual({
+					...users[0],
+					name: "test-name",
+					updatedAt: result!.updatedAt,
+				});
+			},
+		"delete - should delete a model": async () => {
+			const [user] = await insertRandom("user");
+			await adapter.delete({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+			});
+			const result = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+			});
+			expect(result).toBeNull();
+		},
+		"delete - should not throw on record not found": async () => {
+			await adapter.delete({
+				model: "user",
+				where: [{ field: "id", value: "100000" }],
+			});
+		},
+		"deleteMany - should delete many models": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			await adapter.deleteMany({
+				model: "user",
+				where: [
+					{ field: "id", value: users[0].id, connector: "OR" },
+					{ field: "id", value: users[1].id, connector: "OR" },
+				],
+			});
+			const result = await adapter.findMany<User>({
+				model: "user",
+			});
+			expect(sortModels(result)).toEqual(sortModels(users.slice(2)));
+		},
+	}),
+);

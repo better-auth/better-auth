@@ -363,12 +363,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
-							db.transaction((tx: DB) => {
+							db.transaction(async (tx: DB) => {
 								const adapter = createAdapterFactory({
 									config: adapterOptions!.config,
 									adapter: createCustomAdapter(tx),
 								})(lazyOptions!);
-								return cb(adapter);
+								const r = await cb(adapter);
+								console.log(123123123123, r)
+								return r;
 							})
 					: false,
 		},

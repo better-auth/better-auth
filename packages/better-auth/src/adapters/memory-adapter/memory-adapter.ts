@@ -35,13 +35,14 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 			transaction: async (cb) => {
 				let clone = structuredClone(db);
 				try {
-					return cb(adapterCreator(lazyOptions!));
-				} catch {
+					const r = await cb(adapterCreator(lazyOptions!));
+					return r;
+				} catch (error) {
 					// Rollback changes
 					Object.keys(db).forEach((key) => {
 						db[key] = clone[key];
 					});
-					throw new Error("Transaction failed, rolling back changes");
+					throw error;
 				}
 			},
 		},
@@ -77,6 +78,16 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 							return record[field].startsWith(value);
 						case "ends_with":
 							return record[field].endsWith(value);
+						case "ne":
+							return record[field] !== value;
+						case "gt":
+							return Boolean(value && record[field] > value);
+						case "gte":
+							return Boolean(value && record[field] >= value);
+						case "lt":
+							return Boolean(value && record[field] < value);
+						case "lte":
+							return Boolean(value && record[field] <= value);
 						default:
 							return record[field] === value;
 					}
