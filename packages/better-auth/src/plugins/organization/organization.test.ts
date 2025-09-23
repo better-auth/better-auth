@@ -1869,9 +1869,7 @@ describe("Additional Fields", async () => {
 		expect(invitationWithFields.invitationRequiredField).toBe("hey");
 		expectTypeOf<string>().toEqualTypeOf<string>();
 		expect(invitationWithFields.invitationOptionalField).toBe("hey2");
-		expectTypeOf<string | undefined>().toEqualTypeOf<
-			string | undefined
-		>();
+		expectTypeOf<string | undefined>().toEqualTypeOf<string | undefined>();
 		const row = db.invitation.find((x) => x.id === invitation?.id)!;
 		expect(row).toBeDefined();
 		expect(row.invitationRequiredField).toBe("hey");

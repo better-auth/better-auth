@@ -471,7 +471,9 @@ describe("mulit team support", async (it) => {
 		});
 
 		expect(invitation.id).toBeDefined();
-		expect((invitation as any).teamId).toBe([team1Id, team2Id, team3Id].join(","));
+		expect((invitation as any).teamId).toBe(
+			[team1Id, team2Id, team3Id].join(","),
+		);
 
 		invitationId = invitation.id!;
 	});

@@ -33,7 +33,8 @@ describe("getAuthTables", () => {
 		const accountTable = tables.account;
 		const refreshTokenExpiresAtField =
 			accountTable!.fields.refreshTokenExpiresAt!;
-		const accessTokenExpiresAtField = accountTable!.fields.accessTokenExpiresAt!;
+		const accessTokenExpiresAtField =
+			accountTable!.fields.accessTokenExpiresAt!;
 
 		expect(refreshTokenExpiresAtField.fieldName).toBe(
 			"custom_refresh_token_expires_at",
@@ -52,7 +53,8 @@ describe("getAuthTables", () => {
 		const accountTable = tables.account;
 		const refreshTokenExpiresAtField =
 			accountTable!.fields.refreshTokenExpiresAt!;
-		const accessTokenExpiresAtField = accountTable!.fields.accessTokenExpiresAt!;
+		const accessTokenExpiresAtField =
+			accountTable!.fields.accessTokenExpiresAt!;
 
 		expect(refreshTokenExpiresAtField.fieldName).toBe("refreshTokenExpiresAt");
 		expect(accessTokenExpiresAtField.fieldName).toBe("accessTokenExpiresAt");
