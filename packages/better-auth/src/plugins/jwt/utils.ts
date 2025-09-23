@@ -102,7 +102,7 @@ export function toJwtTime(time: number | Date | string, iat?: number): number {
 	} else if (time instanceof Date) {
 		return Math.floor(time.getTime() / 1000);
 	} else {
-		return iat ?? Math.floor(Date.now() / 1000 + joseSecs(time));
+		return Math.floor((iat ?? (Date.now() / 1000)) + joseSecs(time));
 	}
 }
 
