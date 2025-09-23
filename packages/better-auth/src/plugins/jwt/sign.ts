@@ -25,6 +25,8 @@ import { importJWK, SignJWT } from "jose";
  * @param payload - Payload to sign. Can include JWT-specific fields like `exp` or `aud`.
  * @param jwtOpts - JWT signing options (e.g. issuer, expiration time, audience).
  * @param jwk - **ID** of the key in the database or the **private key** itself. If omitted, **latest JWK** will be used. If `id` in the **private key** is not provided, there will be no **"kid" (Key ID) Field** in the **JWT Protected Header**.
+ * @param skipClaims @todo
+ * @param customType @todo
  *
  * @throws {SyntaxError} - If a key (public or private) cannot be parsed as JSON.
  * @throws {Error} - If key retrieval (`getJwk`), creation (`createJwk`), or decryption fails.
@@ -37,6 +39,8 @@ async function signJwtPayload(
 	payload: JWTPayload,
 	pluginOpts?: JwtPluginOptions,
 	jwk?: string | CryptoKeyIdAlg,
+	skipClaims?: { aud?: boolean; iat?: boolean; iss?: boolean; exp?: boolean },
+	customType?: string,
 ): Promise<string> {
 	if (typeof jwk === "string" && jwk.endsWith(" revoked"))
 		throw new BetterAuthError(
@@ -82,17 +86,20 @@ async function signJwtPayload(
 	const jwt = new SignJWT(payload).setProtectedHeader({
 		alg: privateKey.alg,
 		kid: privateKey.id,
-		typ: "JWT",
+		typ: customType === "" ? undefined : (customType ?? "JWT"),
 	});
 
-	jwt.setIssuedAt(payload.iat);
-	jwt.setIssuer(pluginOpts?.jwt?.issuer ?? ctx.context.options.baseURL!);
-	jwt.setExpirationTime(
-		payload.exp ?? pluginOpts?.jwt?.expirationTime ?? "15m",
-	);
-	jwt.setAudience(
-		payload.aud ?? pluginOpts?.jwt?.audience ?? ctx.context.options.baseURL!,
-	);
+	if (!skipClaims?.iat) jwt.setIssuedAt(payload.iat);
+	if (!skipClaims?.iss)
+		jwt.setIssuer(pluginOpts?.jwt?.issuer ?? ctx.context.options.baseURL!);
+	if (!skipClaims?.exp)
+		jwt.setExpirationTime(
+			payload.exp ?? pluginOpts?.jwt?.expirationTime ?? "15m",
+		);
+	if (!skipClaims?.aud)
+		jwt.setAudience(
+			payload.aud ?? pluginOpts?.jwt?.audience ?? ctx.context.options.baseURL!,
+		);
 	return await jwt.sign(privateKey.key);
 }
 
@@ -129,28 +136,42 @@ export async function signJwtInternal(
 		claims?: CustomJwtClaims;
 	},
 ): Promise<string> {
+	const claims: CustomJwtClaims | undefined = options?.claims;
 	// Make sure user did not set any of the #RFC7519 JWT Claims in the data and remove them if present
 	removeJwtClaims(data, ctx.context.logger);
 
 	const payload: JWTPayload = data;
-	if (options?.claims?.aud) payload.aud = options.claims.aud;
-	if (options?.claims?.exp) payload.exp = toJwtTime(options.claims.exp);
-	if (options?.claims?.iat) {
-		const iat = toJwtTime(options.claims.iat);
+	if (claims?.aud) payload.aud = claims.aud;
+	if (claims?.exp) payload.exp = toJwtTime(claims.exp);
+	if (claims?.iat) {
+		const iat = toJwtTime(claims.iat);
 		const allowedClockSkew: number = pluginOpts?.jwt?.allowedClockSkew ?? 60;
 		const now = Math.floor(new Date().getTime() / 1000);
 		if (iat > now + allowedClockSkew)
 			throw new BetterAuthError(
-				`Requested "Issued At" Claim is in the future ${iat} > ${now} and it exceeds allowed leeway of ${allowedClockSkew} seconds`,
+				`Failed to sign a JWT: Requested "Issued At" Claim is in the future ${iat} > ${now} ` +
+					`and it exceeds allowed leeway of ${allowedClockSkew} seconds`,
 				iat.toString(),
 			);
 		payload.iat = iat;
 	}
-	if (options?.claims?.jti) payload.jti = options.claims.jti;
-	if (options?.claims?.nbf) payload.nbf = toJwtTime(options.claims.nbf);
-	if (options?.claims?.sub) payload.sub = options.claims.sub;
+	if (claims?.jti) payload.jti = claims.jti;
+	if (claims?.nbf) payload.nbf = toJwtTime(claims.nbf);
+	if (claims?.sub) payload.sub = claims.sub;
 
-	return await signJwtPayload(ctx, payload, pluginOpts, options?.jwk);
+	return await signJwtPayload(
+		ctx,
+		payload,
+		pluginOpts,
+		options?.jwk,
+		{
+			aud: claims?.aud === null,
+			iat: claims?.iat === null,
+			iss: claims?.iss === null,
+			exp: claims?.exp === null,
+		},
+		claims?.typ,
+	);
 }
 
 /**

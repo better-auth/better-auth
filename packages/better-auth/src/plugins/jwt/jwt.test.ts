@@ -20,7 +20,13 @@ import { jwtClient } from "./client";
 import { generateExportedKeyPair, getJwk } from "./jwk";
 import { signJwt } from "./sign";
 import { verifyJwt, verifyJwtWithKey } from "./verify";
-import { createLocalJWKSet, jwtVerify, type JWK, type JWTPayload } from "jose";
+import {
+	createLocalJWKSet,
+	jwtVerify,
+	type JWK,
+	type JWTPayload,
+	type JWTVerifyOptions,
+} from "jose";
 import { describe, expect, it } from "vitest";
 import z from "zod/v4";
 import { parseJwk, toJwtTime } from "./utils";
@@ -48,20 +54,29 @@ describe("jwt", async () => {
 
 	function checkPayloadClaims(
 		payload: JWTPayload,
-		claims?: CustomJwtClaims & { iss?: string },
+		claims?: CustomJwtClaims,
 		now?: number,
 	) {
-		expect(payload.iss).toBe(claims?.iss ?? "http://localhost:3000"); // The only non-mutable claim
+		if (claims?.iss === null) expect(payload.iss).toBeUndefined();
+		else expect(payload.iss).toBe("http://localhost:3000"); // The only non-mutable claim
 
-		if (claims?.aud) expect(payload.aud).toStrictEqual(claims.aud);
-		else expect(payload.aud).toBe("http://localhost:3000");
+		if (claims?.aud === null) expect(payload.aud).toBeUndefined();
+		else {
+			if (claims?.aud) expect(payload.aud).toStrictEqual(claims.aud);
+			else expect(payload.aud).toBe("http://localhost:3000");
+		}
 
-		expect(payload.exp).toBeTypeOf("number"); // "exp" should always be present
-		if (claims?.exp) expect(payload.exp).toBe(toJwtTime(claims.exp, now));
-		expect(payload.iat).toBeTypeOf("number");
+		if (claims?.exp === null) expect(payload.exp).toBeUndefined();
+		else {
+			expect(payload.exp).toBeTypeOf("number");
+			if (claims?.exp) expect(payload.exp).toBe(toJwtTime(claims.exp, now));
+		}
 
-		expect(payload.iat).toBeTypeOf("number"); // "iat" should always be present
-		if (claims?.iat) expect(payload.iat).toBe(toJwtTime(claims.iat, now));
+		if (claims?.iat === null) expect(payload.iat).toBeUndefined();
+		else {
+			expect(payload.iat).toBeTypeOf("number");
+			if (claims?.iat) expect(payload.iat).toBe(toJwtTime(claims.iat, now));
+		}
 
 		if (claims?.jti) expect(payload.jti).toBe(claims.jti);
 
@@ -387,7 +402,7 @@ describe("jwt", async () => {
 								message:
 									error instanceof APIError
 										? error.message
-										: `Could not verify JWT: ${error}`,
+										: `Failed to verify JWT: ${error}`,
 							});
 						}
 					},
@@ -647,7 +662,7 @@ describe("jwt", async () => {
 				);
 			});
 
-			it("Should sign JWT with custom claims via custom endpoint and be able to verify it", async () => {
+			it("Should sign JWT with custom claims via default and custom endpoint and be able to verify it", async () => {
 				const { auth, client } = await createPluginTestCase(pluginOpts);
 				const jwks = await client.jwks();
 				const localJwks = createLocalJWKSet(jwks.data!);
@@ -660,21 +675,23 @@ describe("jwt", async () => {
 					claims: CustomJwtClaims,
 					errorMargin?: number,
 				): Promise<JWTPayload> {
-					const token = (
-						await auth.api.customSignJwt({
-							body: {
-								data: someData,
-								claims,
-							},
-						})
-					).token;
-					expect(token.length).toBeGreaterThan(10);
+					expect(jwt.length).toBeGreaterThan(10);
 
 					const { payload } = await auth.api.customVerifyJwt({
 						body: {
-							jwt: token,
-							// todo: add custom jti
-							options: { allowedAudiences: [] },
+							jwt,
+							options: {
+								allowedAudiences:
+									typeof claims.aud === "string"
+										? [claims.aud]
+										: (claims.aud ?? []),
+								allowedIssuers: claims.iss === null ? [] : claims.iss,
+								expectedSubject: claims.sub,
+								expectedType: claims.typ,
+								maxExpirationTime: claims.exp
+									? toJwtTime(claims.exp, now) - now + "s"
+									: undefined,
+							},
 						},
 					});
 
@@ -683,8 +700,20 @@ describe("jwt", async () => {
 
 					// Check if manual verification gives the same result
 					const { payload: payload2, protectedHeader } = await jwtVerify(
-						token,
+						jwt,
 						localJwks,
+						{
+							audience:
+								typeof claims.aud === "string"
+									? [claims.aud]
+									: (claims.aud ?? undefined),
+							issuer: claims.iss === null ? [] : ["http://localhost:3000"],
+							maxTokenAge: claims.exp
+								? toJwtTime(claims.exp, now) - now + "s"
+								: undefined,
+							subject: claims.sub,
+							typ: claims.typ,
+						} satisfies JWTVerifyOptions,
 					);
 					expect(payload2).toStrictEqual(payload);
 
@@ -720,13 +749,13 @@ describe("jwt", async () => {
 					checkPayloadClaims(payload!, claimsToCheck);
 
 					expect(protectedHeader).toMatchObject({
+						typ: claims?.typ,
 						alg: jwksOpts.keyPairConfig!.alg,
 						kid: jwks.data!.keys[0].kid,
 					});
 					return payload!;
 				}
 
-				// todo: add custom type
 				const claimsStringTime = {
 					aud: "customAud",
 					exp: "5 min",
@@ -734,6 +763,7 @@ describe("jwt", async () => {
 					jti: "customJti",
 					nbf: "-2 min",
 					sub: "customSub",
+					typ: "customTyp",
 				};
 				const claimsNumberTime = {
 					aud: ["customAud", "customAud2"],
@@ -742,6 +772,7 @@ describe("jwt", async () => {
 					jti: "customJti",
 					nbf: now - 2 * 60,
 					sub: "customSub",
+					typ: "customTyp",
 				};
 				const claimsDateTime = {
 					aud: ["customAud"],
@@ -750,6 +781,7 @@ describe("jwt", async () => {
 					jti: "customJti",
 					nbf: new Date(1000 * (now - 2 * 60)),
 					sub: "customSub",
+					typ: "customTyp",
 				};
 
 				const { exp, iat, nbf, ...payload } = await verify(
@@ -839,7 +871,61 @@ describe("jwt", async () => {
 				);
 			});
 
-			it("Should sign JWT with all claims explicitely removed via custom endpoint and be able to verify it", async () => {});
+			it('Should sign JWT with claims removed via default (expect "exp") and custom endpoint and be able to verify it', async () => {
+				const { auth } = await createPluginTestCase(pluginOpts);
+				const someData = { answer: 42 };
+				const now = Math.floor(new Date().getTime() / 1000);
+
+				async function verify(jwt: string, claims: CustomJwtClaims) {
+					expect(jwt.length).toBeGreaterThan(10);
+
+					const { payload } = await auth.api.verifyJwt({
+						body: { jwt },
+					});
+
+					const { payload: payloadCustom } = await auth.api.customVerifyJwt({
+						body: { jwt },
+					});
+
+					expect(payload).toBeDefined();
+					expect(payloadCustom).toStrictEqual(payload); // make sure custom plugin works the same
+					checkPayloadClaims(payload!, claims);
+					expect(payload?.answer).toBe(42);
+				}
+
+				const claimsExpOnly: CustomJwtClaims = {
+					aud: null,
+					iat: null,
+					iss: null,
+					exp: now + 5 * 60,
+				};
+
+				expect(
+					await verify(
+						(
+							await auth.api.signJwt({
+								body: {
+									data: someData,
+									claims: claimsExpOnly,
+								},
+							})
+						).token,
+						claimsExpOnly,
+					),
+				).toStrictEqual(
+					await verify(
+						(
+							await auth.api.customSignJwt({
+								body: {
+									data: someData,
+									claims: claimsExpOnly,
+								},
+							})
+						).token,
+						claimsExpOnly,
+					),
+				);
+			});
 
 			it("Should drop claims from data when signing JWT", async () => {
 				const { auth } = await createTestCase(pluginOpts);
@@ -860,9 +946,9 @@ describe("jwt", async () => {
 					body: { jwt: jwt?.token },
 				});
 				expect(payload).toBeDefined();
-				// Should detect default claims, because the claims from data were removed
+				// Should detect default claims, because the claims from the data were removed
 				checkPayloadClaims(payload!);
-				// But not the data
+				// But the data should remain
 				expect(payload?.custom).toBe("custom");
 			});
 

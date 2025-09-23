@@ -196,24 +196,36 @@ export interface CustomJwtClaims {
 	/**
 	 * Changes **JWT "Audience" Claim**.
 	 *
+	 * ⚠ Undefined value or an empty array sets it to **default**, but only passing `null` sets it to no `aud` claim.
+	 *
 	 * @default getJWTPluginOptions(ctx)?.jwt?.audience // Plugin configuration
 	 */
-	aud?: string | string[];
+	aud?: string | string[] | null;
 	/**
 	 * Changes **JWT "Expiration Time" Claim**. Expects the same type as `expirationTime` in `JwtOptions` interface.
 	 *
+	 * ⚠ Undefined value sets it to **default**, but only passing `null` sets it to no `exp` claim.
+	 * @todo: test NaN
+	 *
 	 * @default getJWTPluginOptions(ctx)?.jwt?.expirationTime // Plugin configuration
 	 */
-	exp?: string | number | Date;
+	exp?: string | number | Date | null;
 	/**
 	 * Changes **JWT "Issued At" Claim**. Expects the same type as `expirationTime` in `JwtOptions` interface.
 	 *
+	 * ⚠ Undefined value sets it to **default**, but only passing `null` sets it to no `iat` claim.
+	 *
 	 * @default new Date() // Current local machine time
-	 * @todo: should {`string`} be allowed?
 	 */
-	iat?: string | number | Date;
+	iat?: string | number | Date | null;
 	/**
-	 * Sets **"JWT ID" Claim**. Useful when implementing JWT revocation list.
+	 * Disables **JWT "Issuer" Claim** when this is `null`.
+	 *
+	 * @default baseURL // Taken from `BetterAuthOptions` inside `AuthContext` if defined, otherwise `process.env.BETTER_AUTH_URL`
+	 */
+	iss?: null;
+	/**
+	 * Sets **JWT "JWT ID" Claim**. Used in JWT revocation list.
 	 */
 	jti?: string;
 	/**
@@ -221,53 +233,57 @@ export interface CustomJwtClaims {
 	 */
 	nbf?: string | number | Date;
 	/**
-	 * Changes "Subject" Claim.
-	 *
-	 * Unless provided here it will default to the **plugin configuration**.
+	 * Sets **JWT "Subject" Claim**.
 	 */
 	sub?: string;
 	/**
-	 * @todo Add type
+	 * Sets **"typ" (Type) JWT Protecter Header Parameter**.
+	 *
+	 * @description It is technically not a JWT Claim, but having it here is more convienient.
 	 */
+	typ?: string;
 }
 
 export const customJwtClaimsSchema = z
 	.object({
 		aud: z
-			.union([z.string(), z.array(z.string())])
+			.union([z.string(), z.array(z.string()), z.null()])
 			.optional()
-			.describe('Changes JWT "Audience" Claim.'),
+			.describe('Changes JWT "Audience" Claim'),
 
 		exp: z
-			.union([z.string(), z.number(), z.date()])
+			.union([z.string(), z.number(), z.date(), z.null()])
 			.optional()
-			.describe('Changes JWT "Expiration Time" Claim.'),
+			.describe('Changes JWT "Expiration Time" Claim'),
 
 		iat: z
-			.union([z.string(), z.number(), z.date()])
+			.union([z.string(), z.number(), z.date(), z.null()])
 			.optional()
-			.describe('Changes JWT "Issued At" Claim.'),
+			.describe('Changes JWT "Issued At" Claim'),
+
+		iss: z
+			.null()
+			.optional()
+			.describe('Disables **JWT "Issuer" Claim** when this is `null`'),
 
 		jti: z
 			.string()
 			.optional()
-			.describe(
-				'Sets "JWT ID" Claim. Useful when implementing JWT revocation list.',
-			),
+			.describe('Sets JWT "JWT ID" Claim. Used in JWT revocation list'),
 
 		nbf: z
 			.union([z.string(), z.number(), z.date()])
 			.optional()
-			.describe('Sets JWT "Not Before" Claim.'),
+			.describe('Sets JWT "Not Before" Claim'),
 
-		sub: z
+		sub: z.string().optional().describe('Sets JWT "Subject" Claim'),
+
+		typ: z
 			.string()
 			.optional()
-			.describe(
-				'Changes "Subject" Claim. Defaults to plugin configuration if omitted.',
-			),
+			.describe('Sets "typ" (Type) JWT Protecter Header Parameter'),
 	})
-	.describe("Custom JWT claims that override or add to standard claims.");
+	.describe("Custom JWT claims that override or add to standard claims");
 
 export interface JwtVerifyOptions {
 	/**
@@ -290,6 +306,10 @@ export interface JwtVerifyOptions {
 	 * @default [baseURL] // Taken from `BetterAuthOptions` inside `AuthContext` if defined, otherwise `process.env.BETTER_AUTH_URL`
 	 */
 	allowedAudiences?: string[];
+	/**
+	 * Expected `jti` (**"JWT ID" Claim**). If provided, `jti` presence is necessary in the payload.
+	 */
+	expectedJti?: string;
 	/**
 	 * Expected `sub` (**"Subject" Claim**). If provided, `sub` presence is necessary in the payload.
 	 */
@@ -318,10 +338,21 @@ export interface JwtVerifyOptions {
 	 * @default getJwtPluginOptions(ctx.context)?.jwt?.allowedClockSkew // 60 if not defined
 	 */
 	allowedClockSkew?: number;
-	/**
-	 * @todo add jti check
-	 */
 }
+
+// todo: add describe() to fields
+export const JwtVerifyOptionsSchema = z
+	.object({
+		maxExpirationTime: z.string().optional(),
+		allowedIssuers: z.array(z.string()).optional(),
+		allowedAudiences: z.array(z.string()).optional(),
+		expectedJti: z.string().optional(),
+		expectedSubject: z.string().optional(),
+		expectedType: z.string().optional(),
+		allowNoKeyId: z.boolean().optional(),
+		allowedClockSkew: z.number().optional(),
+	})
+	.describe("Strictness of verification");
 
 // todo: add describe() to fields
 export const jwkSchema = z
@@ -351,19 +382,6 @@ export type CryptoKeyIdAlg = {
 	alg: JwkAlgorithm;
 	key: CryptoKey;
 };
-
-// todo: add describe() to fields
-export const JwtVerifyOptionsSchema = z
-	.object({
-		maxExpirationTime: z.string().optional(),
-		allowedIssuers: z.array(z.string()).optional(),
-		allowedAudiences: z.array(z.string()).optional(),
-		expectedSubject: z.string().optional(),
-		expectedType: z.string().optional(),
-		allowNoKeyId: z.boolean().optional(),
-		allowedClockSkew: z.number().optional(),
-	})
-	.describe("Strictness of verification");
 
 // todo: add describe() to fields
 export const jwkParametersSchema = z.object({

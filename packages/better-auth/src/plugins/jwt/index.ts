@@ -23,7 +23,7 @@ import { mergeSchema } from "../../db/schema";
 import { createJwkInternal, getJwk, revokeJwk } from "./jwk";
 import { getSessionJwtInternal, signJwtInternal } from "./sign";
 import { verifyJwtInternal, verifyJwtWithKeyInternal } from "./verify";
-import { type JSONWebKeySet, type JWK } from "jose";
+import { type JSONWebKeySet, type JWK, type JWTPayload } from "jose";
 import * as z from "zod/v4";
 import { getPublicJwk, parseJwk } from "./utils";
 import { BetterAuthError } from "../../error";
@@ -234,7 +234,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 									},
 								},
 								400: {
-									description: "Could not verify the JWT",
+									description: "Failed to verify the JWT",
 								},
 							},
 						},
@@ -243,35 +243,37 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 				async (ctx) => {
 					try {
 						const { jwk, jwt, options } = ctx.body;
+						let payload: JWTPayload | null = null;
 						if (jwk) {
 							if (typeof jwk === "string")
-								return ctx.json({
-									payload: await verifyJwtWithKeyInternal(
-										ctx,
-										jwt,
-										jwk,
-										pluginOpts,
-										options,
-									),
-								});
-
-							const publicKey = await parseJwk(jwk);
-							return ctx.json({
-								payload: await verifyJwtWithKeyInternal(
+								payload = await verifyJwtWithKeyInternal(
 									ctx,
 									jwt,
-									publicKey,
+									jwk,
 									pluginOpts,
 									options,
-								),
+								);
+							else
+								payload = await verifyJwtWithKeyInternal(
+									ctx,
+									jwt,
+									await parseJwk(jwk),
+									pluginOpts,
+									options,
+								);
+						} else
+							payload = await verifyJwtInternal(ctx, jwt, pluginOpts, options);
+
+						if (payload && !payload.exp)
+							throw new APIError("BAD_REQUEST", {
+								message:
+									'Failed to verify the JWT: Token without "Expiration Time" Claim are not allowed',
 							});
-						}
-						return ctx.json({
-							payload: await verifyJwtInternal(ctx, jwt, pluginOpts, options),
-						});
+
+						return ctx.json({ payload });
 					} catch (error: unknown) {
 						throw new APIError("BAD_REQUEST", {
-							message: `Could not verify JWT: ${error}`,
+							message: `Failed to verify the JWT: ${error}`,
 						});
 					}
 				},
@@ -318,6 +320,12 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 				},
 				async (ctx) => {
 					const { data, jwk, claims } = ctx.body;
+					if (claims?.exp === null)
+						throw new APIError("BAD_REQUEST", {
+							message:
+								'Failed to sign the JWT: Token without "Expiration Time" Claim is not allowed, because it is dangerous. If you are sure you want to create such token, create your own endpoint',
+						});
+
 					if (jwk === undefined || typeof jwk === "string") {
 						const privateKey = await getJwk(ctx, true, jwk);
 						const jwt = await signJwtInternal(ctx, data, pluginOpts, {
