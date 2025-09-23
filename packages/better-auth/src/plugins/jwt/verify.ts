@@ -45,15 +45,18 @@ async function verifyJwtJose(
 ): Promise<JWTVerifyResult<JWTPayload>> {
 	const audiences = options?.allowedAudiences;
 	const parsedOptions: JWTVerifyOptions = {
-		typ: options?.expectedType === "" ? undefined : "JWT",
-		maxTokenAge: options?.maxExpirationTime,
-		issuer: options?.allowedIssuers ?? [ctx.context.options.baseURL!],
 		audience:
 			audiences && audiences.length === 0
 				? undefined
 				: (audiences ?? [ctx.context.options.baseURL!]),
+		clockTolerance: options?.maxClockSkew ?? pluginOpts?.jwt?.allowedClockSkew ?? 60,
+		issuer:
+			options?.allowedIssuers && options?.allowedIssuers.length === 0
+				? undefined
+				: (options?.allowedIssuers ?? [ctx.context.options.baseURL!]),
+		maxTokenAge: options?.maxExpirationTime,
 		subject: options?.expectedSubject,
-		requiredClaims: ["iat", "exp"],
+		typ: (options?.expectedType === "") ? undefined : (options?.expectedType ?? "JWT"),
 	};
 
 	// This check is needed to differentiate between function overloads
@@ -67,6 +70,7 @@ async function verifyJwtJose(
 }
 
 /**
+ * @todo update thrown errors
  * Verifies a **JWT**. Determines which **JWK** to use from the database based on **JWT "kty" (Key Type) Header Parameter** and **JWT (Key ID) JWT Header** fields.
  *
  * ⓘ **Internal use only**: This function is not exported in `index.ts` and is intended for use inside the **JWT plugin endpoint**. It is called before the plugin is initialized, at which point `getJwtPluginOptions` cannot access the plugin configuration, so the options are passed directly.

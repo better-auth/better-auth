@@ -759,7 +759,7 @@ describe("jwt", async () => {
 				const claimsStringTime = {
 					aud: "customAud",
 					exp: "5 min",
-					iat: "-2 min",
+					iat: "-10 s",
 					jti: "customJti",
 					nbf: "-2 min",
 					sub: "customSub",
@@ -768,7 +768,7 @@ describe("jwt", async () => {
 				const claimsNumberTime = {
 					aud: ["customAud", "customAud2"],
 					exp: now + 5 * 60,
-					iat: now - 2 * 60,
+					iat: now - 10,
 					jti: "customJti",
 					nbf: now - 2 * 60,
 					sub: "customSub",
@@ -777,7 +777,7 @@ describe("jwt", async () => {
 				const claimsDateTime = {
 					aud: ["customAud"],
 					exp: new Date(1000 * (now + 5 * 60)),
-					iat: new Date(1000 * (now - 2 * 60)),
+					iat: new Date(1000 * (now - 10)),
 					jti: "customJti",
 					nbf: new Date(1000 * (now - 2 * 60)),
 					sub: "customSub",
