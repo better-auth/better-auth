@@ -484,22 +484,22 @@ describe("delete user", async () => {
 });
 
 describe("changeEmail with email normalization", async () => {
-    it("should remove subaddressing when enabled", async () => {
-        const { client, signInWithTestUser } = await getTestInstance({
-            user: {
-                changeEmail: { enabled: true },
-                normalizeEmailSubaddressing: true,
-            },
-        });
-        const { runWithDefaultUser } = await signInWithTestUser();
-        
-        await runWithDefaultUser(async () => {
-            const res = await client.changeEmail({
-                newEmail: "USER+tag@example.com",
-            });
-            
-            const sessionRes = await client.getSession();
-            expect(sessionRes.data?.user.email).toBe("user@example.com");
-        });
-    });
+	it("should remove subaddressing when enabled", async () => {
+		const { client, signInWithTestUser } = await getTestInstance({
+			user: {
+				changeEmail: { enabled: true },
+				normalizeEmailSubaddressing: true,
+			},
+		});
+		const { runWithDefaultUser } = await signInWithTestUser();
+
+		await runWithDefaultUser(async () => {
+			const res = await client.changeEmail({
+				newEmail: "USER+tag@example.com",
+			});
+
+			const sessionRes = await client.getSession();
+			expect(sessionRes.data?.user.email).toBe("user@example.com");
+		});
+	});
 });

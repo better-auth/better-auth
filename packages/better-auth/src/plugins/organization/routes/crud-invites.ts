@@ -280,7 +280,10 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					{
 						id: updatedInvitation.id!,
 						role: updatedInvitation.role! as string,
-						email: normalizeEmail(updatedInvitation.email!, ctx.context.options),
+						email: normalizeEmail(
+							updatedInvitation.email!,
+							ctx.context.options,
+						),
 						organization: organization,
 						inviter: {
 							...member,

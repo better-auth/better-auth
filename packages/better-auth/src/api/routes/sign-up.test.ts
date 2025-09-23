@@ -110,9 +110,9 @@ describe("sign-up with custom fields", async (it) => {
 describe("Email normalization integration tests", (it) => {
 	it("should prevent duplicate accounts with subaddressing", async () => {
 		const { auth } = await getTestInstance({
-			user: { normalizeEmailSubaddressing: true }
+			user: { normalizeEmailSubaddressing: true },
 		});
-		
+
 		await auth.api.signUpEmail({
 			body: {
 				name: "User",
@@ -121,17 +121,17 @@ describe("Email normalization integration tests", (it) => {
 			},
 		});
 
-        try {
-            await auth.api.signUpEmail({
-                body: {
-                    name: "User2",
-                    email: "user+shopping@example.com",
-                    password: "password123",
-                },
-            });
-            expect.fail("Expected signup to throw an error");
-        } catch (error) {
-            expect(error).toBeDefined();
-        }
-  	});
+		try {
+			await auth.api.signUpEmail({
+				body: {
+					name: "User2",
+					email: "user+shopping@example.com",
+					password: "password123",
+				},
+			});
+			expect.fail("Expected signup to throw an error");
+		} catch (error) {
+			expect(error).toBeDefined();
+		}
+	});
 });

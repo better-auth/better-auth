@@ -422,20 +422,25 @@ describe("adapter test", async () => {
 		} satisfies BetterAuthOptions;
 		const ctxSubaddressing = await init(optsWithSubaddressing);
 		const internalAdapterSubaddressing = ctxSubaddressing.internalAdapter;
-		
+
 		const user = await internalAdapterSubaddressing.createUser({
 			email: "user+tag@example.com",
 			name: "name",
 		});
 		expect(user.email).toBe("user@example.com");
 
-		const fetchedUser = await internalAdapterSubaddressing.findUserByEmail("user+someothertag@example.com");
+		const fetchedUser = await internalAdapterSubaddressing.findUserByEmail(
+			"user+someothertag@example.com",
+		);
 		expect(fetchedUser?.user.id).toBe(user.id);
 		expect(fetchedUser?.user.email).toBe("user@example.com");
 
-		const updatedUser = await internalAdapterSubaddressing.updateUserByEmail("user+someothertag@example.com", {
-			name: "new name",
-		});
+		const updatedUser = await internalAdapterSubaddressing.updateUserByEmail(
+			"user+someothertag@example.com",
+			{
+				name: "new name",
+			},
+		);
 		expect(updatedUser?.email).toBe("user@example.com");
 	});
 
@@ -465,13 +470,16 @@ describe("adapter test", async () => {
 				updatedAt: new Date(),
 			},
 		);
-		expect(user.user.email).toBe("user@example.com")
+		expect(user.user.email).toBe("user@example.com");
 
-		const fetchedUser = await internalAdapterSubaddressing.findUserByEmail("user+tag@example.com");
+		const fetchedUser = await internalAdapterSubaddressing.findUserByEmail(
+			"user+tag@example.com",
+		);
 		expect(fetchedUser?.user.id).toBe(user.user.id);
 		expect(fetchedUser?.user.email).toBe("user@example.com");
 
-		const fetchedUser2 = await internalAdapterSubaddressing.findUserByEmail("user@example.com");
+		const fetchedUser2 =
+			await internalAdapterSubaddressing.findUserByEmail("user@example.com");
 		expect(fetchedUser2?.user.id).toBe(user.user.id);
 		expect(fetchedUser2?.user.email).toBe("user@example.com");
 	});

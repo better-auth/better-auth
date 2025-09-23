@@ -349,53 +349,53 @@ describe("revoke sessions on password reset", async (it) => {
 });
 
 describe("password reset with email normalization", async (it) => {
-  const mockSendEmail = vi.fn();
-  let resetToken = "";
+	const mockSendEmail = vi.fn();
+	let resetToken = "";
 
-  const { client, auth } = await getTestInstance({
-    user: { 
-      normalizeEmailSubaddressing: true 
-    },
-    emailAndPassword: {
-      enabled: true,
-      async sendResetPassword({ token }) {
-        resetToken = token;
-        await mockSendEmail();
-      }
-    }
-  });
+	const { client, auth } = await getTestInstance({
+		user: {
+			normalizeEmailSubaddressing: true,
+		},
+		emailAndPassword: {
+			enabled: true,
+			async sendResetPassword({ token }) {
+				resetToken = token;
+				await mockSendEmail();
+			},
+		},
+	});
 
-  it("should allow password reset with subaddressed email when normalization is enabled", async () => {
-    await auth.api.signUpEmail({
-      body: {
-        email: "reset-test@example.com",
-        password: "original-password",
-        name: "Reset Test User"
-      }
-    });
-    
-    const resetRequest = await client.requestPasswordReset({
-      email: "reset-test+subaddress@example.com",
-      redirectTo: "http://localhost:3000",
-    });
-    
-    expect(resetRequest.data?.status).toBe(true);
-    expect(mockSendEmail).toHaveBeenCalled();
-    expect(resetToken.length).toBeGreaterThan(10);
-    
-    const resetResult = await client.resetPassword({
-      newPassword: "new-normalized-password",
-      token: resetToken
-    });
-    
-    expect(resetResult.data?.status).toBe(true);
-    
-    const signInResult = await client.signIn.email({
-      email: "reset-test@example.com",
-      password: "new-normalized-password"
-    });
-    
-    expect(signInResult.data?.user).toBeDefined();
-    expect(signInResult.error).toBeNull();
-  });
+	it("should allow password reset with subaddressed email when normalization is enabled", async () => {
+		await auth.api.signUpEmail({
+			body: {
+				email: "reset-test@example.com",
+				password: "original-password",
+				name: "Reset Test User",
+			},
+		});
+
+		const resetRequest = await client.requestPasswordReset({
+			email: "reset-test+subaddress@example.com",
+			redirectTo: "http://localhost:3000",
+		});
+
+		expect(resetRequest.data?.status).toBe(true);
+		expect(mockSendEmail).toHaveBeenCalled();
+		expect(resetToken.length).toBeGreaterThan(10);
+
+		const resetResult = await client.resetPassword({
+			newPassword: "new-normalized-password",
+			token: resetToken,
+		});
+
+		expect(resetResult.data?.status).toBe(true);
+
+		const signInResult = await client.signIn.email({
+			email: "reset-test@example.com",
+			password: "new-normalized-password",
+		});
+
+		expect(signInResult.data?.user).toBeDefined();
+		expect(signInResult.error).toBeNull();
+	});
 });
