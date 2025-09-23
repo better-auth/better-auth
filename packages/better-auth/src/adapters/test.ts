@@ -1,5 +1,5 @@
 import { expect, test, describe, beforeAll } from "vitest";
-import type { Adapter, BetterAuthOptions, User } from "../types";
+import type { Adapter, BetterAuthOptions, Session, User } from "../types";
 import { generateId } from "../utils";
 
 interface AdapterTestOptions {
@@ -50,6 +50,9 @@ const adapterTests = {
 	SHOULD_ROLLBACK_FAILING_TRANSACTION: "should rollback failing transaction",
 	SHOULD_RETURN_TRANSACTION_RESULT: "should return transaction result",
 	SHOULD_FIND_MANY_WITH_CONNECTORS: "should find many with connectors",
+	SHOULD_SUCCESSFULLY_FIND_A_RECORD_WITH_MULTIPLE_WHERE_CLAUSES:
+		"should successfully find a record with multiple where clauses",
+	SHOULD_SUPPORT_INNER_JOIN: "should support inner join",
 } as const;
 
 const { ...numberIdAdapterTestsCopy } = adapterTests;
@@ -145,6 +148,46 @@ function adapterTest(
 			});
 			expect(res).toHaveProperty("id");
 			expect(typeof res?.id).toEqual("string");
+		},
+	);
+
+	test.skipIf(
+		disabledTests?.SHOULD_SUCCESSFULLY_FIND_A_RECORD_WITH_MULTIPLE_WHERE_CLAUSES,
+	)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_SUCCESSFULLY_FIND_A_RECORD_WITH_MULTIPLE_WHERE_CLAUSES
+		}`,
+		async ({ onTestFailed }) => {
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
+			});
+			const res = await (await adapter()).create({
+				model: "user",
+				data: {
+					name: "user-with-multiple-where-clauses2",
+					email: "user-with-multiple-where-clauses2@email.com",
+				},
+			});
+
+			const res2 = await (await adapter()).findOne<User>({
+				model: "user",
+				where: [
+					{ field: "id", value: res.id },
+					{ field: "email", value: res.email },
+					{ field: "name", value: res.name },
+				],
+			});
+
+			expect(res2?.name).toBe("user-with-multiple-where-clauses2");
+			expect(res2?.email).toBe("user-with-multiple-where-clauses2@email.com");
+
+			if (res) {
+				await (await adapter()).delete({
+					model: "user",
+					where: [{ field: "id", value: res.id }],
+				});
+			}
 		},
 	);
 
@@ -1043,6 +1086,65 @@ function adapterTest(
 			expect(orRes.length).toBe(2);
 		},
 	);
+
+	test.skipIf(disabledTests?.SHOULD_SUPPORT_INNER_JOIN)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_SUPPORT_INNER_JOIN
+		}`,
+		async ({ onTestFailed }) => {
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
+			});
+
+			const user = await (await adapter()).create<User>({
+				model: "user",
+				data: {
+					name: "inner-join-user",
+					email: getUniqueEmail("inner-join-user@email.com"),
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			const session = await (await adapter()).create<Session>({
+				model: "session",
+				data: {
+					createdAt: new Date(),
+					expiresAt: new Date(),
+					token: "123",
+					updatedAt: new Date(),
+					ipAddress: "127.0.0.1",
+					userAgent: "test",
+					userId: user.id,
+				},
+			});
+
+			const joinResult = await (await adapter()).findOne<{
+				user: User;
+				session: Session;
+			}>({
+				model: "user",
+				where: [
+					{
+						field: "name",
+						value: "inner-join-user",
+					},
+				],
+				join: {
+					session: {
+						on: ["id", "userId"],
+						type: "inner",
+					},
+				},
+			});
+
+			expect(joinResult?.user).toBeDefined();
+			expect(joinResult?.user).toEqual(user);
+			expect(joinResult?.session).toBeDefined();
+			expect(joinResult?.session).toEqual(session);
+		},
+	);
 }
 
 export function runAdapterTest(opts: AdapterTestOptions) {
@@ -1097,6 +1199,46 @@ export function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 				expect(typeof res.id).toBe("string"); // we forcefully return all `id`s as strings. this is intentional.
 				expect(parseInt(res.id)).toBeGreaterThan(0);
 				idNumber = parseInt(res.id);
+			},
+		);
+		test.skipIf(
+			opts.disableTests
+				?.SHOULD_SUCCESSFULLY_FIND_A_RECORD_WITH_MULTIPLE_WHERE_CLAUSES,
+		)(
+			`${opts.testPrefix ? `${opts.testPrefix} - ` : ""}${
+				numberIdAdapterTests.SHOULD_SUCCESSFULLY_FIND_A_RECORD_WITH_MULTIPLE_WHERE_CLAUSES
+			}`,
+			async ({ onTestFailed }) => {
+				await resetDebugLogs();
+				onTestFailed(async () => {
+					await printDebugLogs();
+				});
+				const res = await (await adapter()).create({
+					model: "user",
+					data: {
+						name: "user-with-multiple-where-clauses",
+						email: "user-with-multiple-where-clauses@email.com",
+					},
+				});
+				idNumber = parseInt(res.id);
+				const res2 = await (await adapter()).findOne<User>({
+					model: "user",
+					where: [
+						{ field: "id", value: res.id },
+						{ field: "email", value: res.email },
+						{ field: "name", value: res.name },
+					],
+				});
+
+				expect(res2?.name).toBe("user-with-multiple-where-clauses");
+				expect(res2?.email).toBe("user-with-multiple-where-clauses@email.com");
+
+				if (res2) {
+					await (await adapter()).delete({
+						model: "user",
+						where: [{ field: "id", value: res.id }],
+					});
+				}
 			},
 		);
 		test.skipIf(opts.disableTests?.SHOULD_INCREMENT_THE_ID_BY_1)(
