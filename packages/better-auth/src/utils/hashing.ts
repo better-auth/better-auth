@@ -15,10 +15,10 @@ export function toChecksumAddress(address: string) {
 	let ret = "0x";
 
 	for (let i = 0; i < 40; i++) {
-		if (parseInt(hash[i], 16) >= 8) {
-			ret += address[i].toUpperCase();
+		if (parseInt(hash[i]!, 16) >= 8) {
+			ret += address[i]!.toUpperCase();
 		} else {
-			ret += address[i];
+			ret += address[i]!;
 		}
 	}
 

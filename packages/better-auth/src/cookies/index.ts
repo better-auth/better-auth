@@ -240,7 +240,7 @@ export function parseCookies(cookieHeader: string) {
 
 	cookies.forEach((cookie) => {
 		const [name, value] = cookie.split("=");
-		cookieMap.set(name, value);
+		cookieMap.set(name!, value || "");
 	});
 	return cookieMap;
 }

@@ -112,8 +112,7 @@ export const createAdapterFactory =
 
 			let f = schema[model]?.fields[field];
 			if (!f) {
-				//@ts-expect-error
-				f = Object.values(schema[model]?.fields).find(
+				f = Object.values(schema[model]?.fields || {}).find(
 					(f) => f.fieldName === field,
 				);
 			}
@@ -181,8 +180,8 @@ export const createAdapterFactory =
 
 			if (useCustomModelName) {
 				return usePlural
-					? `${schema[defaultModelKey].modelName}s`
-					: schema[defaultModelKey].modelName;
+					? `${schema[defaultModelKey]!.modelName}s`
+					: schema[defaultModelKey]!.modelName;
 			}
 
 			return usePlural ? `${model}s` : model;
@@ -320,9 +319,9 @@ export const createAdapterFactory =
 				model: model,
 			});
 
-			const fields = schema[defaultModelName].fields;
+			const fields = schema[defaultModelName]!.fields;
 			fields.id = idField({ customModelName: defaultModelName });
-			return fields[defaultFieldName];
+			return fields[defaultFieldName]!;
 		};
 
 		const adapterInstance = customAdapter({
@@ -343,7 +342,7 @@ export const createAdapterFactory =
 			forceAllowId?: boolean,
 		) => {
 			const transformedData: Record<string, any> = {};
-			const fields = schema[unsafe_model].fields;
+			const fields = schema[unsafe_model]!.fields;
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
 			if (
 				!config.disableIdGeneration &&
@@ -359,27 +358,27 @@ export const createAdapterFactory =
 				const fieldAttributes = fields[field];
 
 				let newFieldName: string =
-					newMappedKeys[field] || fields[field].fieldName || field;
+					newMappedKeys[field] || fields[field]!.fieldName || field;
 				if (
 					value === undefined &&
-					((fieldAttributes.defaultValue === undefined &&
-						!fieldAttributes.transform?.input &&
-						!(action === "update" && fieldAttributes.onUpdate)) ||
-						(action === "update" && !fieldAttributes.onUpdate))
+					((fieldAttributes!.defaultValue === undefined &&
+						!fieldAttributes!.transform?.input &&
+						!(action === "update" && fieldAttributes!.onUpdate)) ||
+						(action === "update" && !fieldAttributes!.onUpdate))
 				) {
 					continue;
 				}
 				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
-				let newValue = withApplyDefault(value, fieldAttributes, action);
+				let newValue = withApplyDefault(value, fieldAttributes!, action);
 
 				// If the field attr provides a custom transform input, then we'll let it handle the value transformation.
 				// Afterwards, we'll continue to apply the default transformations just to make sure it saves in the correct format.
-				if (fieldAttributes.transform?.input) {
-					newValue = await fieldAttributes.transform.input(newValue);
+				if (fieldAttributes!.transform?.input) {
+					newValue = await fieldAttributes!.transform.input(newValue);
 				}
 
 				if (
-					fieldAttributes.references?.field === "id" &&
+					fieldAttributes!.references?.field === "id" &&
 					options.advanced?.database?.useNumberId
 				) {
 					if (Array.isArray(newValue)) {
@@ -390,13 +389,13 @@ export const createAdapterFactory =
 				} else if (
 					config.supportsJSON === false &&
 					typeof newValue === "object" &&
-					fieldAttributes.type === "json"
+					fieldAttributes!.type === "json"
 				) {
 					newValue = JSON.stringify(newValue);
 				} else if (
 					config.supportsDates === false &&
 					newValue instanceof Date &&
-					fieldAttributes.type === "date"
+					fieldAttributes!.type === "date"
 				) {
 					newValue = newValue.toISOString();
 				} else if (
@@ -411,7 +410,7 @@ export const createAdapterFactory =
 						data: newValue,
 						action,
 						field: newFieldName,
-						fieldAttributes: fieldAttributes,
+						fieldAttributes: fieldAttributes!,
 						model: unsafe_model,
 						schema,
 						options,
@@ -433,7 +432,7 @@ export const createAdapterFactory =
 			if (!data) return null;
 			const newMappedKeys = config.mapKeysTransformOutput ?? {};
 			const transformedData: Record<string, any> = {};
-			const tableSchema = schema[unsafe_model].fields;
+			const tableSchema = schema[unsafe_model]!.fields;
 			const idKey = Object.entries(newMappedKeys).find(
 				([_, v]) => v === "id",
 			)?.[0];
@@ -543,7 +542,7 @@ export const createAdapterFactory =
 					model: defaultModelName,
 				});
 
-				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
+				if (defaultFieldName === "id" || fieldAttr!.references?.field === "id") {
 					if (options.advanced?.database?.useNumberId) {
 						if (Array.isArray(value)) {
 							return {
@@ -1028,7 +1027,7 @@ export const createAdapterFactory =
 								let log: any[] = debugLogs
 									.reverse()
 									.map((log) => {
-										log[0] = `\n${log[0]}`;
+										log[0] = `\n${log[0]!}`;
 										return [...log, "\n"];
 									})
 									.reduce(
