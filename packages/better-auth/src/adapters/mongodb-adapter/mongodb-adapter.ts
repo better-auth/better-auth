@@ -67,7 +67,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				if (
 					field === "id" ||
 					field === "_id" ||
-					schema[model].fields[field]?.references?.field === "id"
+					schema[model]!.fields[field]?.references?.field === "id"
 				) {
 					if (typeof value !== "string") {
 						if (value instanceof ObjectId) {
@@ -176,7 +176,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return { condition, connector };
 				});
 				if (conditions.length === 1) {
-					return conditions[0].condition;
+					return conditions[0]!.condition;
 				}
 				const andConditions = conditions
 					.filter((c) => c.connector === "AND")

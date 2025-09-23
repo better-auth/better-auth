@@ -56,7 +56,7 @@ export async function authorizeMCPOAuth(
 				sameSite: "lax",
 			},
 		);
-		const queryFromURL = ctx.request.url?.split("?")[1];
+		const queryFromURL = ctx.request.url?.split("?")[1]!;
 		throw ctx.redirect(`${options.loginPage}?${queryFromURL}`);
 	}
 

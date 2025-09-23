@@ -449,7 +449,7 @@ describe("dynamic access control", async (it) => {
 		const res = await auth.api.listOrgRoles({ headers });
 		expect(res).not.toBeNull();
 		expect(res.length).toBeGreaterThan(0);
-		expect(typeof res[0].permission === "string").toBe(false);
+		expect(typeof res[0]!.permission === "string").toBe(false);
 		const foundRole = res.find((x) => x.role === "list-test-role");
 		expect(foundRole).not.toBeNull();
 		expect(foundRole?.permission).toEqual(permission);
