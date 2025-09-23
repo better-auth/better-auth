@@ -242,11 +242,12 @@ export interface CustomJwtClaims {
 	 */
 	sub?: string;
 	/**
-	 * Sets **"typ" (Type) JWT Protecter Header Parameter**.
+	 * Changes **"typ" (Type) JWT Protecter Header Parameter**.
 	 *
 	 * @description It is technically not a JWT Claim, but having it here is more convienient.
+	 * @default "JWT"
 	 */
-	typ?: string;
+	typ?: string | null;
 }
 
 export const customJwtClaimsSchema = z
@@ -284,7 +285,7 @@ export const customJwtClaimsSchema = z
 		sub: z.string().optional().describe('Sets JWT "Subject" Claim'),
 
 		typ: z
-			.string()
+			.union([z.string(), z.null()])
 			.optional()
 			.describe('Sets "typ" (Type) JWT Protecter Header Parameter'),
 	})
@@ -326,7 +327,7 @@ export interface JwtVerifyOptions {
 	/**
 	 * Expected **JWT "typ" (Type) Header Parameter** value. This option makes the **"typ"** presence required.
 	 *
-	 * ⚠ Might be necessary to set to an **empty string** when dealing with JWTs issued by external systems that do not set **JWT "typ" (Type) Header Parameter** at all.
+	 * ⚠ Might be necessary to set to an **empty string or `null`** when dealing with JWTs issued by external systems that do not set **JWT "typ" (Type) Header Parameter** at all.
 	 *
 	 * @default "JWT"
 	 */

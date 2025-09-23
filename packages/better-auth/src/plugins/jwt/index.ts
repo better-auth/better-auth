@@ -267,7 +267,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 						if (payload && !payload.exp)
 							throw new APIError("BAD_REQUEST", {
 								message:
-									'Failed to verify the JWT: Token without "Expiration Time" Claim are not allowed',
+									'Failed to verify the JWT: Tokens without "Expiration Time" Claim are not allowed, because they are dangerous. If you are sure you want to verify such tokens, create your own endpoint',
 							});
 
 						return ctx.json({ payload });
@@ -323,7 +323,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 					if (claims?.exp === null)
 						throw new APIError("BAD_REQUEST", {
 							message:
-								'Failed to sign the JWT: Token without "Expiration Time" Claim is not allowed, because it is dangerous. If you are sure you want to create such token, create your own endpoint',
+								'Failed to sign the JWT: Tokens without "Expiration Time" Claim are not allowed, because they are dangerous. If you are sure you want to create such tokens, create your own endpoint',
 						});
 
 					if (jwk === undefined || typeof jwk === "string") {

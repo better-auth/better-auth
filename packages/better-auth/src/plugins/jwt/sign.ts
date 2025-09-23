@@ -40,7 +40,7 @@ async function signJwtPayload(
 	pluginOpts?: JwtPluginOptions,
 	jwk?: string | CryptoKeyIdAlg,
 	skipClaims?: { aud?: boolean; iat?: boolean; iss?: boolean; exp?: boolean },
-	customType?: string,
+	customType?: string | null,
 ): Promise<string> {
 	if (typeof jwk === "string" && jwk.endsWith(" revoked"))
 		throw new BetterAuthError(
@@ -86,7 +86,10 @@ async function signJwtPayload(
 	const jwt = new SignJWT(payload).setProtectedHeader({
 		alg: privateKey.alg,
 		kid: privateKey.id,
-		typ: customType === "" ? undefined : (customType ?? "JWT"),
+		typ:
+			customType === null || customType === ""
+				? undefined
+				: (customType ?? "JWT"),
 	});
 
 	if (!skipClaims?.iat) jwt.setIssuedAt(payload.iat);
@@ -145,7 +148,7 @@ export async function signJwtInternal(
 	if (claims?.exp) payload.exp = toJwtTime(claims.exp);
 	if (claims?.iat) {
 		const iat = toJwtTime(claims.iat);
-		const allowedClockSkew: number = pluginOpts?.jwt?.allowedClockSkew ?? 60;
+		const allowedClockSkew: number = pluginOpts?.jwt?.maxClockSkew ?? 60;
 		const now = Math.floor(new Date().getTime() / 1000);
 		if (iat > now + allowedClockSkew)
 			throw new BetterAuthError(
