@@ -68,16 +68,16 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 		{
 			method: "POST",
 			body: z.object({
-				organizationId: z.string().optional().meta({
-					description:
-						"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
-				}),
-				role: z.string().meta({
-					description: "The name of the role to create",
-				}),
-				permission: z.record(z.string(), z.array(z.string())).meta({
-					description: "The permission to assign to the role",
-				}),
+				organizationId: z
+					.string()
+					.optional()
+					.describe(
+						"The id of the organization to create the role in. If not provided, the user",
+					),
+				role: z.string().describe("The name of the role to create"),
+				permission: z
+					.record(z.string(), z.array(z.string()))
+					.describe("The permission to assign to the role"),
 				additionalFields: z
 					.object({ ...additionalFieldsSchema.shape })
 					.optional(),
@@ -281,22 +281,20 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 			method: "POST",
 			body: z
 				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
-					}),
+					organizationId: z
+						.string()
+						.optional()
+						.describe(
+							"The id of the organization to create the role in. If not provided, the user",
+						),
 				})
 				.and(
 					z.union([
 						z.object({
-							roleName: z.string().meta({
-								description: "The name of the role to delete",
-							}),
+							roleName: z.string().describe("The name of the role to delete"),
 						}),
 						z.object({
-							roleId: z.string().meta({
-								description: "The id of the role to delete",
-							}),
+							roleId: z.string().describe("The id of the role to delete"),
 						}),
 					]),
 				),
@@ -488,10 +486,12 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 			use: [orgSessionMiddleware],
 			query: z
 				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to list roles for. If not provided, the user's active organization will be used.",
-					}),
+					organizationId: z
+						.string()
+						.optional()
+						.describe(
+							"The id of the organization to list roles for. If not provided, the user",
+						),
 				})
 				.optional(),
 		},
@@ -599,22 +599,20 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 			use: [orgSessionMiddleware],
 			query: z
 				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to read a role for. If not provided, the user's active organization will be used.",
-					}),
+					organizationId: z
+						.string()
+						.optional()
+						.describe(
+							"The id of the organization to read a role for. If not provided, the user",
+						),
 				})
 				.and(
 					z.union([
 						z.object({
-							roleName: z.string().meta({
-								description: "The name of the role to read",
-							}),
+							roleName: z.string().describe("The name of the role to read"),
 						}),
 						z.object({
-							roleId: z.string().meta({
-								description: "The id of the role to read",
-							}),
+							roleId: z.string().describe("The id of the role to read"),
 						}),
 					]),
 				)
@@ -759,34 +757,31 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			method: "POST",
 			body: z
 				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to update the role in. If not provided, the user's active organization will be used.",
-					}),
+					organizationId: z
+						.string()
+						.optional()
+						.describe(
+							"The id of the organization to update the role in. If not provided, the user",
+						),
 					data: z.object({
 						permission: z
 							.record(z.string(), z.array(z.string()))
 							.optional()
-							.meta({
-								description: "The permission to update the role with",
-							}),
-						roleName: z.string().optional().meta({
-							description: "The name of the role to update",
-						}),
+							.describe("The permission to update the role with"),
+						roleName: z
+							.string()
+							.optional()
+							.describe("The name of the role to update"),
 						...additionalFieldsSchema.shape,
 					}),
 				})
 				.and(
 					z.union([
 						z.object({
-							roleName: z.string().meta({
-								description: "The name of the role to update",
-							}),
+							roleName: z.string().describe("The name of the role to update"),
 						}),
 						z.object({
-							roleId: z.string().meta({
-								description: "The id of the role to update",
-							}),
+							roleId: z.string().describe("The id of the role to update"),
 						}),
 					]),
 				),
