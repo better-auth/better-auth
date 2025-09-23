@@ -46,7 +46,7 @@ export function convertToDB<T extends Record<string, any>>(
 			}
 		: {};
 	for (const key in fields) {
-		const field = fields[key];
+		const field = fields[key]!;
 		const value = values[key];
 		if (value === undefined) {
 			continue;

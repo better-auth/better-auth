@@ -511,7 +511,7 @@ function adapterTest(
 					direction: "asc",
 				},
 			});
-			expect(res[0].name).toBe("a");
+			expect(res[0]!.name).toBe("a");
 
 			const res2 = await (await adapter()).findMany<User>({
 				model: "user",
@@ -521,7 +521,7 @@ function adapterTest(
 				},
 			});
 
-			expect(res2[res2.length - 1].name).toBe("a");
+			expect(res2[res2.length - 1]!.name).toBe("a");
 		},
 	);
 

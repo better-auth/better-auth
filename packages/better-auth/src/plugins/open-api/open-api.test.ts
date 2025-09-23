@@ -31,7 +31,7 @@ describe("open-api", async (it) => {
 			string,
 			Record<string, any>
 		>;
-		expect(schemas["User"].properties.id).toEqual({
+		expect(schemas["User"]!.properties.id).toEqual({
 			type: "string",
 		});
 	});
@@ -43,16 +43,16 @@ describe("open-api", async (it) => {
 			Record<string, any>
 		>;
 
-		expect(schemas["User"].properties.role).toEqual({
+		expect(schemas["User"]!.properties.role).toEqual({
 			type: "string",
 			default: "user",
 		});
 
-		expect(schemas["User"].properties.preferences).toEqual({
+		expect(schemas["User"]!.properties.preferences).toEqual({
 			type: "string",
 		});
-		expect(schemas["User"].required).toContain("role");
-		expect(schemas["User"].required).not.toContain("preferences");
+		expect(schemas["User"]!.required).toContain("role");
+		expect(schemas["User"]!.required).not.toContain("preferences");
 	});
 
 	it("should properly handle nested objects in request body schema", async () => {

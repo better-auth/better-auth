@@ -11,7 +11,7 @@ export function getSchema(config: BetterAuthOptions) {
 		}
 	> = {};
 	for (const key in tables) {
-		const table = tables[key];
+		const table = tables[key]!;
 		const fields = table.fields;
 		let actualFields: Record<string, FieldAttribute> = {};
 		Object.entries(fields).forEach(([key, field]) => {
@@ -19,7 +19,7 @@ export function getSchema(config: BetterAuthOptions) {
 			if (field.references) {
 				const refTable = tables[field.references.model];
 				if (refTable) {
-					actualFields[field.fieldName || key].references = {
+					actualFields[field.fieldName || key]!.references = {
 						model: refTable.modelName,
 						field: field.references.field,
 					};
@@ -27,8 +27,8 @@ export function getSchema(config: BetterAuthOptions) {
 			}
 		});
 		if (schema[table.modelName]) {
-			schema[table.modelName].fields = {
-				...schema[table.modelName].fields,
+			schema[table.modelName]!.fields = {
+				...schema[table.modelName]!.fields,
 				...actualFields,
 			};
 			continue;

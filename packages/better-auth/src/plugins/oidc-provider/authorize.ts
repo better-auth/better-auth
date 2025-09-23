@@ -72,7 +72,7 @@ export async function authorize(
 				sameSite: "lax",
 			},
 		);
-		const queryFromURL = ctx.request.url?.split("?")[1];
+		const queryFromURL = ctx.request.url?.split("?")[1]!;
 		return handleRedirect(`${options.loginPage}?${queryFromURL}`);
 	}
 

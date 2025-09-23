@@ -41,10 +41,10 @@ describe("getEndpoints", () => {
 			context: { customProp: "value" },
 		};
 
-		await middlewares[0].middleware(testCtx);
+		await middlewares[0]!.middleware(testCtx);
 
 		expect(middlewareFn).toHaveBeenCalled();
-		const call = middlewareFn.mock.calls[0][0];
+		const call = middlewareFn.mock.calls[0]![0];
 		expect(call.context).toMatchObject({
 			baseURL: "http://localhost:3000",
 			options: {},

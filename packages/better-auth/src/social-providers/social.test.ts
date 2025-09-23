@@ -722,7 +722,7 @@ describe("updateAccountOnSignIn", async () => {
 		const userAccounts = await ctx.internalAdapter.findAccounts(
 			session.data?.user.id!,
 		);
-		await ctx.internalAdapter.updateAccount(userAccounts[0].id, {
+		await ctx.internalAdapter.updateAccount(userAccounts[0]!.id, {
 			accessToken: "new-access-token",
 		});
 
@@ -756,6 +756,6 @@ describe("updateAccountOnSignIn", async () => {
 		const userAccounts2 = await ctx.internalAdapter.findAccounts(
 			session2.data?.user.id!,
 		);
-		expect(userAccounts2[0].accessToken).toBe("new-access-token");
+		expect(userAccounts2[0]!.accessToken).toBe("new-access-token");
 	});
 });

@@ -7,7 +7,7 @@ export function detectPackageManager() {
 		return undefined;
 	}
 
-	const pmSpec = userAgent.split(" ")[0];
+	const pmSpec = userAgent.split(" ")[0]!;
 	const separatorPos = pmSpec.lastIndexOf("/");
 	const name = pmSpec.substring(0, separatorPos);
 

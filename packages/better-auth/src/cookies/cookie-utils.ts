@@ -19,7 +19,7 @@ export function parseSetCookieHeader(
 	cookieArray.forEach((cookieString) => {
 		const parts = cookieString.split(";").map((part) => part.trim());
 		const [nameValue, ...attributes] = parts;
-		const [name, ...valueParts] = nameValue.split("=");
+		const [name, ...valueParts] = (nameValue || "").split("=");
 
 		const value = valueParts.join("=");
 
@@ -30,10 +30,10 @@ export function parseSetCookieHeader(
 		const attrObj: CookieAttributes = { value };
 
 		attributes.forEach((attribute) => {
-			const [attrName, ...attrValueParts] = attribute.split("=");
+			const [attrName, ...attrValueParts] = attribute!.split("=");
 			const attrValue = attrValueParts.join("=");
 
-			const normalizedAttrName = attrName.trim().toLowerCase();
+			const normalizedAttrName = attrName!.trim().toLowerCase();
 
 			switch (normalizedAttrName) {
 				case "max-age":
@@ -85,7 +85,7 @@ export function setCookieToHeader(headers: Headers) {
 
 		const existingCookiesHeader = headers.get("cookie") || "";
 		existingCookiesHeader.split(";").forEach((cookie) => {
-			const [name, ...rest] = cookie.trim().split("=");
+			const [name, ...rest] = cookie!.trim().split("=");
 			if (name && rest.length > 0) {
 				cookieMap.set(name, rest.join("="));
 			}

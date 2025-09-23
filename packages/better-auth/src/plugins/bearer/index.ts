@@ -56,8 +56,8 @@ export const bearer = (options?: BearerOptions) => {
 								"base64urlnopad",
 							).verify(
 								c.context.secret,
-								decodedToken.split(".")[0],
-								decodedToken.split(".")[1],
+								decodedToken.split(".")[0]!,
+								decodedToken.split(".")[1]!,
 							);
 							if (!isValid) {
 								return;

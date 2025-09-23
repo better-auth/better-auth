@@ -267,7 +267,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							);
 
 							if (validSessions.length > 0) {
-								const nextSession = validSessions[0];
+								const nextSession = validSessions[0]!;
 								await setSessionCookie(ctx, nextSession);
 							} else {
 								deleteSessionCookie(ctx);
@@ -337,7 +337,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 											maxAge: 0,
 										},
 									);
-									const token = cookies[key].split(".")[0];
+									const token = cookies[key]!.split(".")[0]!;
 									return token;
 								}
 								return null;

@@ -26,7 +26,7 @@ export function getIp(
 	for (const key of ipHeaders) {
 		const value = "get" in headers ? headers.get(key) : headers[key];
 		if (typeof value === "string") {
-			const ip = value.split(",")[0].trim();
+			const ip = value.split(",")[0]!.trim();
 			if (isValidIP(ip)) {
 				return ip;
 			}

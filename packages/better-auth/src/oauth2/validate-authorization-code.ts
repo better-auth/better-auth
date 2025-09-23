@@ -146,7 +146,7 @@ export async function validateToken(token: string, jwksEndpoint: string) {
 		throw error;
 	}
 	const keys = data["keys"];
-	const header = JSON.parse(atob(token.split(".")[0]));
+	const header = JSON.parse(atob(token.split(".")[0]!));
 	const key = keys.find((key) => key.kid === header.kid);
 	if (!key) {
 		throw new Error("Key not found");
