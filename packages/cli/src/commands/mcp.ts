@@ -1,6 +1,8 @@
 import { Command } from "commander";
 import { execSync } from "child_process";
 import * as os from "os";
+import * as fs from "fs";
+import * as path from "path";
 import chalk from "chalk";
 import { base64 } from "@better-auth/utils/base64";
 
@@ -84,32 +86,34 @@ async function handleCursorAction(mcpUrl: string, mcpName: string) {
 }
 
 function handleClaudeCodeAction(mcpUrl: string) {
-	console.log(chalk.bold.blue("🤖 Claude Code MCP Configuration"));
-	console.log(chalk.gray("Run this command in your terminal:"));
-	console.log();
+	console.log(chalk.bold.blue("🤖 Adding Better Auth MCP to Claude Code..."));
+	
+	const command = `claude mcp add --transport http better-auth ${mcpUrl}`;
+	
+	try {
+		execSync(command, { stdio: "inherit" });
+		console.log(chalk.green("\n✓ Claude Code MCP installed successfully!"));
+	} catch (error) {
+		console.log(
+			chalk.yellow(
+				"\n⚠ Could not automatically add to Claude Code. Please run this command manually:",
+			),
+		);
+		console.log(chalk.cyan(command));
+	}
+	
+	console.log(chalk.bold.white("\n✨ Next Steps:"));
 	console.log(
-		chalk.cyan(`claude mcp add --transport http better-auth ${mcpUrl}`),
+		chalk.gray("• The MCP server will be added to your Claude Code configuration"),
 	);
-	console.log();
-	console.log(chalk.bold.white("✨ Next Steps:"));
-	console.log(chalk.gray("• Run the command above in your terminal"));
 	console.log(
-		chalk.gray(
-			"• The MCP server will be added to your Claude Code configuration",
-		),
-	);
-	console.log(
-		chalk.gray(
-			"• You can now use Better Auth features directly in Claude Code",
-		),
+		chalk.gray("• You can now use Better Auth features directly in Claude Code"),
 	);
 }
 
 function handleOpenCodeAction(mcpUrl: string) {
-	console.log(chalk.bold.blue("🔧 Open Code MCP Configuration"));
-	console.log(chalk.gray("Add this configuration to your opencode.json file:"));
-	console.log();
-
+	console.log(chalk.bold.blue("🔧 Adding Better Auth MCP to Open Code..."));
+	
 	const openCodeConfig = {
 		$schema: "https://opencode.ai/config.json",
 		mcp: {
@@ -121,12 +125,37 @@ function handleOpenCodeAction(mcpUrl: string) {
 		},
 	};
 
-	console.log(chalk.cyan(JSON.stringify(openCodeConfig, null, 2)));
-	console.log();
-	console.log(chalk.bold.white("✨ Next Steps:"));
-	console.log(
-		chalk.gray("• Add the configuration above to your opencode.json file"),
-	);
+	const configPath = path.join(process.cwd(), "opencode.json");
+	
+	try {
+		let existingConfig = {};
+		if (fs.existsSync(configPath)) {
+			const existingContent = fs.readFileSync(configPath, "utf8");
+			existingConfig = JSON.parse(existingContent);
+		}
+		
+		const mergedConfig = {
+			...existingConfig,
+			...openCodeConfig,
+			mcp: {
+				...(existingConfig as any).mcp,
+				...openCodeConfig.mcp,
+			},
+		};
+		
+		fs.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2));
+		console.log(chalk.green(`\n✓ Open Code configuration written to ${configPath}`));
+		console.log(chalk.green("✓ Better Auth MCP added successfully!"));
+	} catch (error) {
+		console.log(
+			chalk.yellow(
+				"\n⚠ Could not automatically write opencode.json. Please add this configuration manually:",
+			),
+		);
+		console.log(chalk.cyan(JSON.stringify(openCodeConfig, null, 2)));
+	}
+	
+	console.log(chalk.bold.white("\n✨ Next Steps:"));
 	console.log(chalk.gray("• Restart Open Code to load the new MCP server"));
 	console.log(
 		chalk.gray("• You can now use Better Auth features directly in Open Code"),
@@ -134,22 +163,41 @@ function handleOpenCodeAction(mcpUrl: string) {
 }
 
 function handleManualAction(mcpUrl: string, mcpName: string) {
-	console.log(chalk.bold.blue("📝 Manual MCP Configuration"));
-	console.log(chalk.gray("Add this configuration to your mcp.json file:"));
-	console.log();
-
+	console.log(chalk.bold.blue("📝 Adding Better Auth MCP Configuration..."));
+	
 	const manualConfig = {
 		[mcpName]: {
 			url: mcpUrl,
 		},
 	};
 
-	console.log(chalk.cyan(JSON.stringify(manualConfig, null, 2)));
-	console.log();
-	console.log(chalk.bold.white("✨ Next Steps:"));
-	console.log(
-		chalk.gray("• Add the configuration above to your mcp.json file"),
-	);
+	const configPath = path.join(process.cwd(), "mcp.json");
+	
+	try {
+		let existingConfig = {};
+		if (fs.existsSync(configPath)) {
+			const existingContent = fs.readFileSync(configPath, "utf8");
+			existingConfig = JSON.parse(existingContent);
+		}
+		
+		const mergedConfig = {
+			...existingConfig,
+			...manualConfig,
+		};
+		
+		fs.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2));
+		console.log(chalk.green(`\n✓ MCP configuration written to ${configPath}`));
+		console.log(chalk.green("✓ Better Auth MCP added successfully!"));
+	} catch (error) {
+		console.log(
+			chalk.yellow(
+				"\n⚠ Could not automatically write mcp.json. Please add this configuration manually:",
+			),
+		);
+		console.log(chalk.cyan(JSON.stringify(manualConfig, null, 2)));
+	}
+	
+	console.log(chalk.bold.white("\n✨ Next Steps:"));
 	console.log(chalk.gray("• Restart your MCP client to load the new server"));
 	console.log(
 		chalk.gray(
