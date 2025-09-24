@@ -21,21 +21,28 @@ function withPath(url: string, path = "/api/auth") {
 	return `${url.replace(/\/+$/, "")}${path}`;
 }
 
-export function getBaseURL(url?: string, path?: string, request?: Request) {
+export function getBaseURL(
+	url?: string,
+	path?: string,
+	request?: Request,
+	loadEnv?: boolean,
+) {
 	if (url) {
 		return withPath(url, path);
 	}
 
-	const fromEnv =
-		env.BETTER_AUTH_URL ||
-		env.NEXT_PUBLIC_BETTER_AUTH_URL ||
-		env.PUBLIC_BETTER_AUTH_URL ||
-		env.NUXT_PUBLIC_BETTER_AUTH_URL ||
-		env.NUXT_PUBLIC_AUTH_URL ||
-		(env.BASE_URL !== "/" ? env.BASE_URL : undefined);
+	if (loadEnv !== false) {
+		const fromEnv =
+			env.BETTER_AUTH_URL ||
+			env.NEXT_PUBLIC_BETTER_AUTH_URL ||
+			env.PUBLIC_BETTER_AUTH_URL ||
+			env.NUXT_PUBLIC_BETTER_AUTH_URL ||
+			env.NUXT_PUBLIC_AUTH_URL ||
+			(env.BASE_URL !== "/" ? env.BASE_URL : undefined);
 
-	if (fromEnv) {
-		return withPath(fromEnv, path);
+		if (fromEnv) {
+			return withPath(fromEnv, path);
+		}
 	}
 
 	const fromRequest = request?.headers.get("x-forwarded-host");
