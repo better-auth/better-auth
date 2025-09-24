@@ -252,6 +252,7 @@ export const sso = (options?: SSOOptions) => {
 				},
 				async (ctx) => {
 					const provider = await ctx.context.adapter.findOne<{
+						id: string;
 						samlConfig: string;
 					}>({
 						model: "ssoProvider",
@@ -268,10 +269,29 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 
-					const parsedSamlConfig = JSON.parse(provider.samlConfig);
-					const sp = saml.ServiceProvider({
-						metadata: parsedSamlConfig.spMetadata.metadata,
-					});
+					const parsedSamlConfig: SAMLConfig = JSON.parse(provider.samlConfig);
+					const sp = parsedSamlConfig.spMetadata.metadata
+						? saml.ServiceProvider({
+								metadata: parsedSamlConfig.spMetadata.metadata,
+							})
+						: saml.SPMetadata({
+								entityID:
+									parsedSamlConfig.spMetadata?.entityID ||
+									parsedSamlConfig.issuer,
+								assertionConsumerService: [
+									{
+										Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+										Location:
+											parsedSamlConfig.callbackUrl ||
+											`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.id}`,
+									},
+								],
+								wantMessageSigned:
+									parsedSamlConfig.wantAssertionsSigned || false,
+								nameIDFormat: parsedSamlConfig.identifierFormat
+									? [parsedSamlConfig.identifierFormat]
+									: undefined,
+							});
 					return new Response(sp.getMetadata(), {
 						headers: {
 							"Content-Type": "application/xml",
@@ -1004,7 +1024,7 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 					if (provider.samlConfig) {
-						const parsedSamlConfig =
+						const parsedSamlConfig: SAMLConfig =
 							typeof provider.samlConfig === "object"
 								? provider.samlConfig
 								: JSON.parse(provider.samlConfig as unknown as string);
@@ -1014,11 +1034,11 @@ export const sso = (options?: SSOOptions) => {
 						});
 
 						const idp = saml.IdentityProvider({
-							metadata: parsedSamlConfig.idpMetadata.metadata,
-							entityID: parsedSamlConfig.idpMetadata.entityID,
-							encryptCert: parsedSamlConfig.idpMetadata.cert,
+							metadata: parsedSamlConfig.idpMetadata?.metadata,
+							entityID: parsedSamlConfig.idpMetadata?.entityID,
+							encryptCert: parsedSamlConfig.idpMetadata?.cert,
 							singleSignOnService:
-								parsedSamlConfig.idpMetadata.singleSignOnService,
+								parsedSamlConfig.idpMetadata?.singleSignOnService,
 						});
 						const loginRequest = sp.createLoginRequest(
 							idp,
@@ -1507,6 +1527,9 @@ export const sso = (options?: SSOOptions) => {
 						encPrivateKey: spData?.encPrivateKey,
 						encPrivateKeyPass: spData?.encPrivateKeyPass,
 						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
+						nameIDFormat: parsedSamlConfig.identifierFormat
+							? [parsedSamlConfig.identifierFormat]
+							: undefined,
 					});
 
 					let parsedResponse: FlowResult;
@@ -1794,7 +1817,7 @@ export const sso = (options?: SSOOptions) => {
 								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
 								Location:
 									parsedSamlConfig.callbackUrl ||
-									`${ctx.context.baseURL}/sso/saml2/sp/acs`,
+									`${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`,
 							},
 						],
 						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
@@ -1803,6 +1826,9 @@ export const sso = (options?: SSOOptions) => {
 							parsedSamlConfig.spMetadata?.privateKey ||
 							parsedSamlConfig.privateKey,
 						privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
+						nameIDFormat: parsedSamlConfig.identifierFormat
+							? [parsedSamlConfig.identifierFormat]
+							: undefined,
 					});
 
 					// Update where we construct the IdP
