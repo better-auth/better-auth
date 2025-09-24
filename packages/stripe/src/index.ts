@@ -1242,21 +1242,19 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												userId: user.id,
 											},
 										});
-										const updatedUser =
-											await ctx.context.internalAdapter.updateUser(user.id, {
-												stripeCustomerId: stripeCustomer.id,
-											});
-										if (!updatedUser) {
-											logger.error("#BETTER_AUTH: Failed to create  customer");
-										} else {
-											await options.onCustomerCreate?.(
-												{
-													stripeCustomer,
-													user,
+										await ctx.context.internalAdapter.updateUser(user.id, {
+											stripeCustomerId: stripeCustomer.id,
+										});
+										await options.onCustomerCreate?.(
+											{
+												stripeCustomer,
+												user: {
+													...user,
+													stripeCustomerId: stripeCustomer.id,
 												},
-												ctx,
-											);
-										}
+											},
+											ctx,
+										);
 									}
 								},
 							},
