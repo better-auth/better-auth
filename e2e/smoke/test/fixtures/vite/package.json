@@ -8,6 +8,7 @@
     "better-auth": "workspace:*"
   },
   "devDependencies": {
+    "size-limit": "^11.2.0",
     "vite": "^7.1.5"
   }
 }
