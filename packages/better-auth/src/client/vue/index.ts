@@ -53,7 +53,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		$fetch,
 		$store,
 		atomListeners,
-	} = getClientConfig(options, false);
+	} = getClientConfig(options);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);

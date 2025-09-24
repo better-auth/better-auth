@@ -4,7 +4,7 @@ import { createAuthClient as createVueClient } from "./vue";
 
 it("should call '/api/auth' for vue client", async () => {
 	const customFetchImpl = vi.fn(async (url: string | Request | URL) => {
-		expect(url).toBe("/api/auth/get-session");
+		expect(url).toBe("http://localhost:3000/api/auth/get-session");
 		return new Response();
 	});
 	process.env.BETTER_AUTH_URL = "http://localhost:3000";
