@@ -262,7 +262,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
 						});
 					}
-					const roles = opts.roles
+					const roles = opts.roles;
 					if (roles) {
 						const inputRoles = Array.isArray(ctx.body.role)
 							? ctx.body.role
