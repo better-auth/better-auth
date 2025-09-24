@@ -12,10 +12,16 @@ export const authFlowTestSuite = createTestSuite(
 	) => ({
 		"should successfully sign up": async () => {
 			await modifyBetterAuthOptions(
-				{ emailAndPassword: { enabled: true } },
+				{
+					emailAndPassword: {
+						enabled: true,
+						password: { hash: async (password) => password },
+					},
+				},
 				false,
 			);
 			const user = generate("user");
+			const start = Date.now();
 			const result = await auth.api.signUpEmail({
 				body: {
 					email: user.email,
@@ -24,6 +30,8 @@ export const authFlowTestSuite = createTestSuite(
 					image: user.image || "",
 				},
 			});
+			const end = Date.now();
+			console.log(`signUpEmail took ${end - start}ms (without hashing)`);
 			expect(result.user).toBeDefined();
 			expect(result.user.email).toBe(user.email);
 			expect(result.user.name).toBe(user.name);
@@ -34,7 +42,17 @@ export const authFlowTestSuite = createTestSuite(
 		},
 		"should successfully sign in": async () => {
 			await modifyBetterAuthOptions(
-				{ emailAndPassword: { enabled: true } },
+				{
+					emailAndPassword: {
+						enabled: true,
+						password: {
+							hash: async (password) => password,
+							async verify(data) {
+								return data.hash === data.password;
+							},
+						},
+					},
+				},
 				false,
 			);
 			const user = generate("user");
@@ -47,10 +65,12 @@ export const authFlowTestSuite = createTestSuite(
 					image: user.image || "",
 				},
 			});
-
+			const start = Date.now();
 			const result = await auth.api.signInEmail({
 				body: { email: user.email, password: password },
 			});
+			const end = Date.now();
+			console.log(`signInEmail took ${end - start}ms (without hashing)`);
 			expect(result.user).toBeDefined();
 			expect(result.user.id).toBe(signUpResult.user.id);
 		},
@@ -59,6 +79,7 @@ export const authFlowTestSuite = createTestSuite(
 				{
 					emailAndPassword: {
 						enabled: true,
+						password: { hash: async (password) => password },
 					},
 				},
 				false,
@@ -83,9 +104,12 @@ export const authFlowTestSuite = createTestSuite(
 				modifiedHeaders.delete("set-cookie");
 			}
 
+			const start = Date.now();
 			const result = await auth.api.getSession({
 				headers: modifiedHeaders,
 			});
+			const end = Date.now();
+			console.log(`getSession took ${end - start}ms`);
 			expect(result?.user).toBeDefined();
 			expect(result?.user).toStrictEqual(signUpResult.user);
 			expect(result?.session).toBeDefined();
@@ -96,13 +120,11 @@ export const authFlowTestSuite = createTestSuite(
 				false,
 			);
 			const user = generate("user");
-			console.time("signInEmail");
 			const { data, error } = await tryCatch(
 				auth.api.signInEmail({
 					body: { email: user.email, password: crypto.randomUUID() },
 				}),
 			);
-			console.timeEnd("signInEmail");
 			expect(data).toBeNull();
 			expect(error).toBeDefined();
 		},
