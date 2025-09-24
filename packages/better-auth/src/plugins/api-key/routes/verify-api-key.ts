@@ -198,14 +198,10 @@ export function verifyApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				key: z.string().meta({
-					description: "The key to verify",
-				}),
+				key: z.string().describe("The key to verify"),
 				permissions: z
 					.record(z.string(), z.array(z.string()))
-					.meta({
-						description: "The permissions to verify.",
-					})
+					.describe("The permissions to verify.")
 					.optional(),
 			}),
 			metadata: {

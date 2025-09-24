@@ -113,9 +113,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z.string().meta({
-							description: "The session token to set as active",
-						}),
+						sessionToken: z
+							.string()
+							.describe("The session token to set as active"),
 					}),
 					requireHeaders: true,
 					use: [sessionMiddleware],
@@ -191,9 +191,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z.string().meta({
-							description: "The session token to revoke",
-						}),
+						sessionToken: z.string().describe("The session token to revoke"),
 					}),
 					requireHeaders: true,
 					use: [sessionMiddleware],
@@ -267,7 +265,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							);
 
 							if (validSessions.length > 0) {
-								const nextSession = validSessions[0];
+								const nextSession = validSessions[0]!;
 								await setSessionCookie(ctx, nextSession);
 							} else {
 								deleteSessionCookie(ctx);
@@ -337,7 +335,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 											maxAge: 0,
 										},
 									);
-									const token = cookies[key].split(".")[0];
+									const token = cookies[key]!.split(".")[0]!;
 									return token;
 								}
 								return null;

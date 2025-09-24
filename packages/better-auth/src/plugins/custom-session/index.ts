@@ -21,17 +21,14 @@ const getSessionQuerySchema = z.optional(
 		 */
 		disableCookieCache: z
 			.boolean()
-			.meta({
-				description: "Disable cookie cache and fetch session from database",
-			})
+			.describe("Disable cookie cache and fetch session from database")
 			.or(z.string().transform((v) => v === "true"))
 			.optional(),
 		disableRefresh: z
 			.boolean()
-			.meta({
-				description:
-					"Disable session refresh. Useful for checking session status, without updating the session",
-			})
+			.describe(
+				"Disable session refresh. Useful for checking session status, without updating the session",
+			)
 			.optional(),
 	}),
 );
