@@ -252,6 +252,7 @@ export const sso = (options?: SSOOptions) => {
 				},
 				async (ctx) => {
 					const provider = await ctx.context.adapter.findOne<{
+						id: string;
 						samlConfig: string;
 					}>({
 						model: "ssoProvider",
@@ -282,7 +283,7 @@ export const sso = (options?: SSOOptions) => {
 										Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
 										Location:
 											parsedSamlConfig.callbackUrl ||
-											`${ctx.context.baseURL}/sso/saml2/sp/acs`,
+											`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.id}`,
 									},
 								],
 								wantMessageSigned:
@@ -1473,7 +1474,7 @@ export const sso = (options?: SSOOptions) => {
 							message: "No provider found for the given providerId",
 						});
 					}
-					const parsedSamlConfig: SAMLConfig = JSON.parse(
+					const parsedSamlConfig = JSON.parse(
 						provider.samlConfig as unknown as string,
 					);
 					const idpData = parsedSamlConfig.idpMetadata;
@@ -1482,19 +1483,19 @@ export const sso = (options?: SSOOptions) => {
 					// Construct IDP with fallback to manual configuration
 					if (!idpData?.metadata) {
 						idp = saml.IdentityProvider({
-							entityID: idpData?.entityID || parsedSamlConfig.issuer,
+							entityID: idpData.entityID || parsedSamlConfig.issuer,
 							singleSignOnService: [
 								{
 									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
 									Location: parsedSamlConfig.entryPoint,
 								},
 							],
-							signingCert: idpData?.cert || parsedSamlConfig.cert,
+							signingCert: idpData.cert || parsedSamlConfig.cert,
 							wantAuthnRequestsSigned:
 								parsedSamlConfig.wantAssertionsSigned || false,
-							isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-							encPrivateKey: idpData?.encPrivateKey,
-							encPrivateKeyPass: idpData?.encPrivateKeyPass,
+							isAssertionEncrypted: idpData.isAssertionEncrypted || false,
+							encPrivateKey: idpData.encPrivateKey,
+							encPrivateKeyPass: idpData.encPrivateKeyPass,
 						});
 					} else {
 						idp = saml.IdentityProvider({
@@ -1816,7 +1817,7 @@ export const sso = (options?: SSOOptions) => {
 								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
 								Location:
 									parsedSamlConfig.callbackUrl ||
-									`${ctx.context.baseURL}/sso/saml2/sp/acs`,
+									`${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`,
 							},
 						],
 						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,

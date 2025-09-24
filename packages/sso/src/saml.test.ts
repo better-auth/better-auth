@@ -242,7 +242,7 @@ const certificate = `
     yyoWAJDUHiAmvFA=
     -----END CERTIFICATE-----
     `;
-const idpEncyptionKey = `
+const idpEncryptionKey = `
     -----BEGIN RSA PRIVATE KEY-----
     Proc-Type: 4,ENCRYPTED
     DEK-Info: DES-EDE3-CBC,860FDB9F3BE14699
@@ -274,7 +274,7 @@ const idpEncyptionKey = `
     ISbutnQPUN5fsaIsgKDIV3T7n6519t6brobcW5bdigmf5ebFeZJ16/lYy6V77UM5
     -----END RSA PRIVATE KEY-----
     `;
-const spEncyptionKey = `
+const spEncryptionKey = `
     -----BEGIN RSA PRIVATE KEY-----
     Proc-Type: 4,ENCRYPTED
     DEK-Info: DES-EDE3-CBC,860FDB9F3BE14699
@@ -698,7 +698,7 @@ describe("SAML SSO", async () => {
 						privateKey: idpPrivateKey,
 						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
 						isAssertionEncrypted: true,
-						encPrivateKey: idpEncyptionKey,
+						encPrivateKey: idpEncryptionKey,
 						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
 					},
 					spMetadata: {
@@ -707,7 +707,7 @@ describe("SAML SSO", async () => {
 						privateKey: spPrivateKey,
 						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 						isAssertionEncrypted: true,
-						encPrivateKey: spEncyptionKey,
+						encPrivateKey: spEncryptionKey,
 						encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
 					},
 					identifierFormat:
@@ -754,7 +754,7 @@ describe("SAML SSO", async () => {
 						privateKey: idpPrivateKey,
 						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
 						isAssertionEncrypted: true,
-						encPrivateKey: idpEncyptionKey,
+						encPrivateKey: idpEncryptionKey,
 						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
 					},
 					spMetadata: {
@@ -763,7 +763,7 @@ describe("SAML SSO", async () => {
 						privateKey: spPrivateKey,
 						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 						isAssertionEncrypted: true,
-						encPrivateKey: spEncyptionKey,
+						encPrivateKey: spEncryptionKey,
 						encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
 					},
 					identifierFormat:
@@ -806,7 +806,7 @@ describe("SAML SSO", async () => {
 						privateKey: idpPrivateKey,
 						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
 						isAssertionEncrypted: true,
-						encPrivateKey: idpEncyptionKey,
+						encPrivateKey: idpEncryptionKey,
 						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
 					},
 					spMetadata: {
@@ -814,7 +814,7 @@ describe("SAML SSO", async () => {
 						privateKey: spPrivateKey,
 						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 						isAssertionEncrypted: true,
-						encPrivateKey: spEncyptionKey,
+						encPrivateKey: spEncryptionKey,
 						encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
 					},
 					identifierFormat:
@@ -868,7 +868,7 @@ describe("SAML SSO", async () => {
 						privateKey: idpPrivateKey,
 						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
 						isAssertionEncrypted: true,
-						encPrivateKey: idpEncyptionKey,
+						encPrivateKey: idpEncryptionKey,
 						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
 					},
 					spMetadata: {
@@ -877,7 +877,7 @@ describe("SAML SSO", async () => {
 						privateKey: spPrivateKey,
 						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 						isAssertionEncrypted: true,
-						encPrivateKey: spEncyptionKey,
+						encPrivateKey: spEncryptionKey,
 						encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
 					},
 					identifierFormat:
