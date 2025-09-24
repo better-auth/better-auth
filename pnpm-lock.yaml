@@ -587,6 +587,9 @@ importers:
       next:
         specifier: catalog:nextjs
         version: 15.5.4(@babel/core@7.28.4)(@playwright/test@1.55.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.90.0)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
       react:
         specifier: catalog:nextjs
         version: 19.1.1
