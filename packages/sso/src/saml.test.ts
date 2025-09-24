@@ -782,6 +782,69 @@ describe("SAML SSO", async () => {
 		expect(spMetadataRes.status).toBe(200);
 		expect(spMetadataResResValue).toBe(spMetadata);
 	});
+	it("Should fetch sp metadata", async () => {
+		const headers = await getAuthHeaders();
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+		const issuer = "http://localhost:8081";
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider-1",
+				issuer: issuer,
+				domain: issuer,
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl,
+					cert: certificate,
+					callbackUrl: `${issuer}/api/sso/saml2/sp/acs`,
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+						privateKey: idpPrivateKey,
+						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
+						isAssertionEncrypted: true,
+						encPrivateKey: idpEncyptionKey,
+						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
+					},
+					spMetadata: {
+						binding: "post",
+						privateKey: spPrivateKey,
+						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
+						isAssertionEncrypted: true,
+						encPrivateKey: spEncyptionKey,
+						encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const spMetadataRes = await auth.api.spMetadata({
+			query: {
+				providerId: provider.providerId,
+			},
+		});
+		const spMetadataResResValue = await spMetadataRes.text();
+		expect(spMetadataRes.status).toBe(200);
+		expect(spMetadataResResValue).toBeDefined();
+		expect(spMetadataResResValue).toContain(
+			"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+		);
+		expect(spMetadataResResValue).toContain(
+			"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+		);
+		expect(spMetadataResResValue).toContain(
+			`<EntityDescriptor entityID="${issuer}"`,
+		);
+		expect(spMetadataResResValue).toContain(
+			`Location="${issuer}/api/sso/saml2/sp/acs"`,
+		);
+	});
 	it("should initiate SAML login and handle response", async () => {
 		const headers = await getAuthHeaders();
 		const res = await authClient.signIn.email(testUser, {
