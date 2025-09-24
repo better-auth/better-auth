@@ -169,7 +169,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 										attr.type === "date" &&
 										attr.defaultValue.toString().includes("new Date()")
 									) {
-										type += `.defaultNow()`;
+										if (databaseType === "sqlite") {
+											type += `.default(sql\`(current_timestamp)\`)`;
+										} else {
+											type += `.defaultNow()`;
+										}
 									} else {
 										type += `.$defaultFn(${attr.defaultValue})`;
 									}
@@ -223,7 +227,8 @@ function generateImport({
 	tables: BetterAuthDbSchema;
 	options: BetterAuthOptions;
 }) {
-	let imports: string[] = [];
+	const rootImports: string[] = [];
+	const coreImports: string[] = [];
 
 	let hasBigint = false;
 	let hasJson = false;
@@ -238,16 +243,16 @@ function generateImport({
 
 	const useNumberId = options.advanced?.database?.useNumberId;
 
-	imports.push(`${databaseType}Table`);
-	imports.push(
+	coreImports.push(`${databaseType}Table`);
+	coreImports.push(
 		databaseType === "mysql"
 			? "varchar, text"
 			: databaseType === "pg"
 				? "text"
 				: "text",
 	);
-	imports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");
-	imports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
+	coreImports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");
+	coreImports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
 	if (databaseType === "mysql") {
 		// Only include int for MySQL if actually needed
 		const hasNonBigintNumber = Object.values(tables).some((table) =>
@@ -259,7 +264,7 @@ function generateImport({
 		);
 		const needsInt = !!useNumberId || hasNonBigintNumber;
 		if (needsInt) {
-			imports.push("int");
+			coreImports.push("int");
 		}
 	} else if (databaseType === "pg") {
 		// Only include integer for PG if actually needed
@@ -280,21 +285,36 @@ function generateImport({
 			hasNonBigintNumber ||
 			(options.advanced?.database?.useNumberId && hasFkToId);
 		if (needsInteger) {
-			imports.push("integer");
+			coreImports.push("integer");
 		}
 	} else {
-		imports.push("integer");
+		coreImports.push("integer");
 	}
-	imports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
+	coreImports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
 
 	//handle json last on the import order
 	if (hasJson) {
-		if (databaseType === "pg") imports.push("jsonb");
-		if (databaseType === "mysql") imports.push("json");
+		if (databaseType === "pg") coreImports.push("jsonb");
+		if (databaseType === "mysql") coreImports.push("json");
 		// sqlite uses text for JSON, so there's no need to handle this case
 	}
 
-	return `import { ${imports
+	// Add sql import for SQLite timestamps with defaultNow
+	const hasSQLiteTimestamp = databaseType === "sqlite" &&
+		Object.values(tables).some(table =>
+			Object.values(table.fields).some(field =>
+				field.type === "date" &&
+				field.defaultValue &&
+				typeof field.defaultValue === "function" &&
+				field.defaultValue.toString().includes("new Date()")
+			)
+		);
+
+	if (hasSQLiteTimestamp) {
+		rootImports.push("sql");
+	}
+
+	return `${rootImports.length > 0 ? `import { ${rootImports.join(", ")} } from "drizzle-orm";\n` : ""}import { ${coreImports
 		.map((x) => x.trim())
 		.filter((x) => x !== "")
 		.join(", ")} } from "drizzle-orm/${databaseType}-core";\n`;
