@@ -40,6 +40,7 @@ export const requestPasswordReset = createAuthEndpoint(
 			 * The email address of the user to send a password reset email to.
 			 */
 			email: z
+				.string()
 				.email()
 				.describe(
 					"The email address of the user to send a password reset email to",
