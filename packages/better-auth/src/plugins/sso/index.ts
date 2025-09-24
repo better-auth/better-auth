@@ -1,10 +1,7 @@
 import * as z from "zod";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
-import type { BetterAuthPlugin, User } from "../../types";
-import type {
-	FieldAttribute,
-	InferAdditionalFieldsFromPluginOptions,
-} from "../../db/field";
+import type { BetterAuthPlugin, InferOptionSchema, User } from "../../types";
+import type { FieldAttribute } from "../../db/field";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -18,6 +15,8 @@ import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { setSessionCookie } from "../../cookies";
+import { mergeSchema } from "../../db";
+import { schema } from "./schema";
 
 export interface SSOOptions {
 	/**
@@ -84,39 +83,14 @@ export interface SSOOptions {
 	 *  - Add additional fields via `additionalFields`
 	 *  - Change the table/model name via `modelName`
 	 */
-	schema?: {
+	schema?: InferOptionSchema<ReturnType<typeof schema>> & {
 		ssoProvider?: {
-			modelName?: string;
-			fields?: Partial<
-				Record<
-					| "issuer"
-					| "oidcConfig"
-					| "samlConfig"
-					| "userId"
-					| "providerId"
-					| "organizationId"
-					| "domain",
-					string
-				>
-			>;
 			additionalFields?: Record<string, FieldAttribute>;
 		};
 	};
 }
 
-export type InferSSOProvider<
-	O extends SSOOptions | undefined,
-	isClientSide extends boolean = true,
-> = SSOProvider &
-	InferAdditionalFieldsFromPluginOptions<
-		"ssoProvider",
-		NonNullable<O>,
-		isClientSide
-	>;
-
-export const sso = <O extends SSOOptions | undefined = undefined>(
-	options?: O,
-) => {
+export const sso = (options?: SSOOptions) => {
 	return {
 		id: "sso",
 		endpoints: {
@@ -1048,57 +1022,8 @@ export const sso = <O extends SSOOptions | undefined = undefined>(
 				},
 			),
 		},
-		schema: {
-			ssoProvider: {
-				modelName: options?.schema?.ssoProvider?.modelName,
-				fields: {
-					issuer: {
-						type: "string",
-						required: true,
-						fieldName: options?.schema?.ssoProvider?.fields?.issuer,
-					},
-					oidcConfig: {
-						type: "string",
-						required: false,
-						fieldName: options?.schema?.ssoProvider?.fields?.oidcConfig,
-					},
-					samlConfig: {
-						type: "string",
-						required: false,
-						fieldName: options?.schema?.ssoProvider?.fields?.samlConfig,
-					},
-					userId: {
-						type: "string",
-						references: {
-							model: "user",
-							field: "id",
-						},
-						fieldName: options?.schema?.ssoProvider?.fields?.userId,
-					},
-					providerId: {
-						type: "string",
-						required: true,
-						unique: true,
-						fieldName: options?.schema?.ssoProvider?.fields?.providerId,
-					},
-					organizationId: {
-						type: "string",
-						required: false,
-						fieldName: options?.schema?.ssoProvider?.fields?.organizationId,
-					},
-					domain: {
-						type: "string",
-						required: true,
-						fieldName: options?.schema?.ssoProvider?.fields?.domain,
-					},
-					...(options?.schema?.ssoProvider?.additionalFields || {}),
-				},
-			},
-		},
-		$Infer: {
-			SSOProvider: {} as InferSSOProvider<O>,
-		},
-		options: options as O,
+		schema: mergeSchema(schema(options?.schema), options?.schema),
+		options: options,
 	} satisfies BetterAuthPlugin;
 };
 

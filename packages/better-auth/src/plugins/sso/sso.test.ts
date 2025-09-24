@@ -4,7 +4,6 @@ import { sso } from ".";
 import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
 import { organization } from "../organization";
-import type { FieldAttribute } from "../../db/field";
 
 let server = new OAuth2Server();
 
@@ -202,7 +201,7 @@ describe("SSO schema additionalFields", async () => {
 								type: "string",
 								required: true,
 								defaultValue: "prod",
-							} satisfies FieldAttribute,
+							},
 						},
 					},
 				},
