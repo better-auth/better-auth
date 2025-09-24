@@ -9,7 +9,7 @@ test.describe("postgres-js", async () => {
 	test("run migration", async () => {
 		const sql = postgres(
 			process.env.DATABASE_URL ||
-			'postgres://user:password@localhost:5432/better_auth',
+				"postgres://user:password@localhost:5432/better_auth",
 		);
 		const dialect = new PostgresJSDialect({
 			postgres: sql,
