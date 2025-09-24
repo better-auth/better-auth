@@ -6,10 +6,5 @@
   },
   "scripts": {
     "e2e:smoke": "node --test ./test/*.spec.ts"
-  },
-  "size-limit": [
-    {
-      "path": "dist/*.js"
-    }
-  ]
+  }
 }

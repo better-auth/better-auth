@@ -8,7 +8,13 @@
     "better-auth": "workspace:*"
   },
   "devDependencies": {
+    "@size-limit/preset-app": "^11.2.0",
     "size-limit": "^11.2.0",
     "vite": "^7.1.5"
-  }
+  },
+  "size-limit": [
+    {
+      "path": "dist/*.js"
+    }
+  ]
 }
