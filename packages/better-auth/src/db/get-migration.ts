@@ -207,7 +207,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			date: {
 				sqlite: "date",
 				postgres: "timestamptz",
-				mysql: "timestamp",
+				mysql: "timestamp(3)",
 				mssql: "datetime",
 			},
 			json: {
@@ -266,7 +266,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 								dbType === "mysql" ||
 								dbType === "mssql")
 						) {
-							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+							if (dbType === "mysql") {
+								col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
+							} else {
+								col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+							}
 						}
 						return col;
 					});
@@ -316,7 +320,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 						typeof field.defaultValue === "function" &&
 						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
 					) {
-						col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+						if (dbType === "mysql") {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
+						} else {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+						}
 					}
 					return col;
 				});

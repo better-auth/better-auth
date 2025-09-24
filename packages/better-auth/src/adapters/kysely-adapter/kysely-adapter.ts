@@ -44,7 +44,7 @@ export const kyselyAdapter = (
 	const createCustomAdapter = (
 		db: Kysely<any>,
 	): AdapterFactoryCustomizeAdapterCreator => {
-		return ({ getFieldName, schema }) => {
+		return ({ getFieldName, schema, getDefaultModelName }) => {
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -123,7 +123,7 @@ export const kyselyAdapter = (
 						const field = obj[key];
 
 						if (field instanceof Date && config?.type === "mysql") {
-							obj[key] = ensureUTC(field);
+							// obj[key] = ensureUTC(field);
 						} else if (typeof field === "object" && field !== null) {
 							transformObject(field);
 						}
@@ -232,10 +232,8 @@ export const kyselyAdapter = (
 			return {
 				async create({ data, model }) {
 					const builder = db.insertInto(model).values(data);
-
-					return transformValueFromDB(
-						await withReturning(data, builder, model, []),
-					) as any;
+					const returned = await withReturning(data, builder, model, []);
+					return transformValueFromDB(returned) as any;
 				},
 				async findOne({ model, where, select }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -363,7 +361,10 @@ export const kyselyAdapter = (
 			usePlural: config?.usePlural,
 			debugLogs: config?.debugLogs,
 			supportsBooleans:
-				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
+				config?.type === "sqlite" ||
+				config?.type === "mssql" ||
+				config?.type === "mysql" ||
+				!config?.type
 					? false
 					: true,
 			supportsDates:

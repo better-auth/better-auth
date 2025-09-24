@@ -1,4 +1,4 @@
-import { expect } from "vitest";
+import { expect, vi } from "vitest";
 import { createTestSuite } from "../create-test-suite";
 
 /**
@@ -6,7 +6,10 @@ import { createTestSuite } from "../create-test-suite";
  */
 export const authFlowTestSuite = createTestSuite(
 	"auth-flow",
-	({ generate, auth, modifyBetterAuthOptions, tryCatch }) => ({
+	(
+		{ generate, auth, modifyBetterAuthOptions, tryCatch },
+		debug?: { showDB?: () => Promise<void> },
+	) => ({
 		"should successfully sign up": async () => {
 			await modifyBetterAuthOptions(
 				{ emailAndPassword: { enabled: true } },
@@ -51,17 +54,55 @@ export const authFlowTestSuite = createTestSuite(
 			expect(result.user).toBeDefined();
 			expect(result.user.id).toBe(signUpResult.user.id);
 		},
+		"should successfully get session": async () => {
+			await modifyBetterAuthOptions(
+				{
+					emailAndPassword: {
+						enabled: true,
+					},
+				},
+				false,
+			);
+			const user = generate("user");
+			const password = crypto.randomUUID();
+
+			const { headers, response: signUpResult } = await auth.api.signUpEmail({
+				body: {
+					email: user.email,
+					password: password,
+					name: user.name,
+					image: user.image || "",
+				},
+				returnHeaders: true,
+			});
+
+			// Convert set-cookie header to cookie header for getSession call
+			const modifiedHeaders = new Headers(headers);
+			if (headers.has("set-cookie")) {
+				modifiedHeaders.set("cookie", headers.getSetCookie().join("; "));
+				modifiedHeaders.delete("set-cookie");
+			}
+
+			const result = await auth.api.getSession({
+				headers: modifiedHeaders,
+			});
+			expect(result?.user).toBeDefined();
+			expect(result?.user).toStrictEqual(signUpResult.user);
+			expect(result?.session).toBeDefined();
+		},
 		"should not sign in with invalid email": async () => {
 			await modifyBetterAuthOptions(
 				{ emailAndPassword: { enabled: true } },
 				false,
 			);
 			const user = generate("user");
+			console.time("signInEmail");
 			const { data, error } = await tryCatch(
 				auth.api.signInEmail({
 					body: { email: user.email, password: crypto.randomUUID() },
 				}),
 			);
+			console.timeEnd("signInEmail");
 			expect(data).toBeNull();
 			expect(error).toBeDefined();
 		},
@@ -87,10 +128,20 @@ export const authFlowTestSuite = createTestSuite(
 					body: { email: user.email, password: password },
 				});
 				process.env.TZ = "America/Los_Angeles";
-				expect(userSignUp.user.createdAt).toStrictEqual(
-					userSignIn.user.createdAt,
+				expect(userSignUp.user.createdAt.toISOString()).toStrictEqual(
+					userSignIn.user.createdAt.toISOString(),
 				);
 			},
+		// "test timestamps in different timezones": async () => {
+		// 	using _ = recoverProcessTZ();
+		// 	process.env.TZ = "Europe/London";
+		// 	const date1 = new Date();
+		// 	console.log(date1.toISOString());
+		// 	process.env.TZ = "America/Los_Angeles";
+		// 	const date2 = new Date();
+		// 	console.log(date2.toISOString());
+		// 	expect(date1).toStrictEqual(date2);
+		// },
 	}),
 );
 

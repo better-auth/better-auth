@@ -178,6 +178,7 @@ export const createTestSuite = <
 						id: string;
 					}
 				>,
+				by?: "id" | "createdAt",
 			) => (Record<string, any> & {
 				id: string;
 			})[];
@@ -353,8 +354,14 @@ export const createTestSuite = <
 
 			const sortModels = (
 				models: Array<Record<string, any> & { id: string }>,
+				by: "id" | "createdAt" = "id",
 			) => {
-				return models.sort((a, b) => a.id.localeCompare(b.id));
+				return models.sort((a, b) => {
+					if (by === "createdAt") {
+						return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+					}
+					return a.id.localeCompare(b.id);
+				});
 			};
 
 			const modifyBetterAuthOptions = async (
@@ -418,9 +425,10 @@ export const createTestSuite = <
 			});
 
 			for (let [testName, testFn] of Object.entries(fullTests)) {
+				const allDisabled: boolean = options?.disableTests?.ALL ?? false;
 				let shouldSkip =
-					(options?.disableTests?.ALL || options?.disableTests?.[testName]) ??
-					false;
+					(allDisabled && options?.disableTests?.[testName] !== false) ||
+					(options?.disableTests?.[testName] ?? false);
 				testName = testName.replace(
 					" - ",
 					` ${colors.dim}${dash}${colors.undim} `,
@@ -432,7 +440,7 @@ export const createTestSuite = <
 					await cleanupCreatedRows();
 					await resetBetterAuthOptions();
 				};
-				test.skipIf(shouldSkip)(testName, async ({ onTestFailed, skip }) => {
+				test.skipIf(shouldSkip)(testName, async ({ onTestFailed, skip, annotate }) => {
 					resetDebugLogs();
 					onTestFailed(async () => {
 						printDebugLogs();

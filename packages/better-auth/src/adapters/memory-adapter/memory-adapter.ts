@@ -137,11 +137,50 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 					if (sortBy) {
 						table = table.sort((a, b) => {
 							const field = getFieldName({ model, field: sortBy.field });
-							if (sortBy.direction === "asc") {
-								return a[field] > b[field] ? 1 : -1;
-							} else {
-								return a[field] < b[field] ? 1 : -1;
+							const aValue = a[field];
+							const bValue = b[field];
+
+							let comparison = 0;
+
+							// Handle null/undefined values
+							if (aValue == null && bValue == null) {
+								comparison = 0;
+							} else if (aValue == null) {
+								comparison = -1;
+							} else if (bValue == null) {
+								comparison = 1;
 							}
+							// Handle string comparison
+							else if (
+								typeof aValue === "string" &&
+								typeof bValue === "string"
+							) {
+								comparison = aValue.localeCompare(bValue);
+							}
+							// Handle date comparison
+							else if (aValue instanceof Date && bValue instanceof Date) {
+								comparison = aValue.getTime() - bValue.getTime();
+							}
+							// Handle numeric comparison
+							else if (
+								typeof aValue === "number" &&
+								typeof bValue === "number"
+							) {
+								comparison = aValue - bValue;
+							}
+							// Handle boolean comparison
+							else if (
+								typeof aValue === "boolean" &&
+								typeof bValue === "boolean"
+							) {
+								comparison = aValue === bValue ? 0 : aValue ? 1 : -1;
+							}
+							// Fallback to string comparison
+							else {
+								comparison = String(aValue).localeCompare(String(bValue));
+							}
+
+							return sortBy.direction === "asc" ? comparison : -comparison;
 						});
 					}
 					if (offset !== undefined) {

@@ -9,7 +9,10 @@ export const normalTestSuite = createTestSuite(
 	"normal",
 	(
 		{ adapter, generate, insertRandom, modifyBetterAuthOptions, sortModels },
-		additionalHelpers?: { showDB?: () => void },
+		additionalHelpers?: {
+			showDB?: () => void;
+			testFn?: () => void | Promise<void>;
+		},
 	) => ({
 		"create - should create a model": async () => {
 			const user = generate("user");
@@ -18,6 +21,8 @@ export const normalTestSuite = createTestSuite(
 				data: user,
 				forceAllowId: true,
 			});
+			console.log(result);
+			console.log(user);
 			expect(result).toEqual(user);
 		},
 		"create - should always return an id": async () => {
@@ -262,7 +267,7 @@ export const normalTestSuite = createTestSuite(
 				sortBy: { field: "name", direction: "asc" },
 			});
 			expect(result).toEqual(
-				users.sort((a, b) => (a["name"] > b["name"] ? 1 : -1)),
+				users.sort((a, b) => a["name"].localeCompare(b["name"])),
 			);
 		},
 		"findMany - should find many models with limit": async () => {
@@ -274,21 +279,33 @@ export const normalTestSuite = createTestSuite(
 			expect(sortModels(result)).toEqual([users[0]]);
 		},
 		"findMany - should find many models with offset": async () => {
-			const users = (await insertRandom("user", 5)).map((x) => x[0]);
+			// Note: The returned rows are ordered in no particular order
+			// This is because databases return rows in whatever order is fastest for the query.
+			const count = 10;
+			await insertRandom("user", count);
 			const result = await adapter.findMany<User>({
 				model: "user",
 				offset: 2,
 			});
-			expect(result).toEqual(users.slice(2));
+			expect(result.length).toEqual(count - 2);
 		},
 		"findMany - should find many models with limit and offset": async () => {
-			const users = (await insertRandom("user", 5)).map((x) => x[0]);
+			// Note: The returned rows are ordered in no particular order
+			// This is because databases return rows in whatever order is fastest for the query.
+			const count = 5;
+			await insertRandom("user", count);
 			const result = await adapter.findMany<User>({
 				model: "user",
 				limit: 2,
 				offset: 2,
 			});
-			expect(result).toEqual(users.slice(2, 4));
+			expect(result.length).toEqual(2);
+			expect(result).toBeInstanceOf(Array);
+			result.forEach((user) => {
+				expect(user).toHaveProperty("id");
+				expect(user).toHaveProperty("name");
+				expect(user).toHaveProperty("email");
+			});
 		},
 		"findMany - should find many models with sortBy and offset": async () => {
 			const users = (await insertRandom("user", 5)).map((x) => x[0]);
@@ -299,7 +316,7 @@ export const normalTestSuite = createTestSuite(
 			});
 			expect(result).toHaveLength(3);
 			expect(result).toEqual(
-				users.sort((a, b) => (a["name"] > b["name"] ? 1 : -1)).slice(2),
+				users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(2),
 			);
 		},
 		"findMany - should find many models with sortBy and limit": async () => {
@@ -310,7 +327,7 @@ export const normalTestSuite = createTestSuite(
 				limit: 2,
 			});
 			expect(result).toEqual(
-				users.sort((a, b) => (a["name"] > b["name"] ? 1 : -1)).slice(0, 2),
+				users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(0, 2),
 			);
 		},
 		"findMany - should find many models with sortBy and limit and offset":
@@ -323,7 +340,7 @@ export const normalTestSuite = createTestSuite(
 					offset: 2,
 				});
 				expect(result).toEqual(
-					users.sort((a, b) => (a["name"] > b["name"] ? 1 : -1)).slice(2, 4),
+					users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(2, 4),
 				);
 			},
 		"findMany - should find many models with sortBy and limit and offset and where":
@@ -337,7 +354,7 @@ export const normalTestSuite = createTestSuite(
 					where: [{ field: "name", value: "user", operator: "starts_with" }],
 				});
 				expect(result).toEqual(
-					users.sort((a, b) => (a["name"] > b["name"] ? 1 : -1)).slice(2, 4),
+					users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(2, 4),
 				);
 			},
 		"update - should update a model": async () => {
