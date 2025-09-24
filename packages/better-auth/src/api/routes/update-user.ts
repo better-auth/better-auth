@@ -20,6 +20,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		"/update-user",
 		{
 			method: "POST",
+			operationId: "updateUser",
 			body: z.record(
 				z.string().meta({
 					description: "Field name must be a string",
@@ -35,6 +36,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					},
 				},
 				openapi: {
+					operationId: "updateUser",
 					description: "Update the current user",
 					requestBody: {
 						content: {
@@ -63,9 +65,9 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 									schema: {
 										type: "object",
 										properties: {
-											status: {
-												type: "boolean",
-												description: "Indicates if the update was successful",
+											user: {
+												type: "object",
+												$ref: "#/components/schemas/User",
 											},
 										},
 									},
@@ -130,6 +132,7 @@ export const changePassword = createAuthEndpoint(
 	"/change-password",
 	{
 		method: "POST",
+		operationId: "changePassword",
 		body: z.object({
 			/**
 			 * The new password to set
@@ -157,6 +160,7 @@ export const changePassword = createAuthEndpoint(
 		use: [sensitiveSessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "changePassword",
 				description: "Change the password of the user",
 				responses: {
 					"200": {
@@ -411,7 +415,33 @@ export const deleteUser = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "deleteUser",
 				description: "Delete the user",
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									callbackURL: {
+										type: "string",
+										description:
+											"The callback URL to redirect to after the user is deleted",
+									},
+									password: {
+										type: "string",
+										description:
+											"The user's password. Required if session is not fresh",
+									},
+									token: {
+										type: "string",
+										description: "The deletion verification token",
+									},
+								},
+							},
+						},
+					},
+				},
 				responses: {
 					"200": {
 						description: "User deletion processed successfully",
@@ -669,6 +699,7 @@ export const changeEmail = createAuthEndpoint(
 		use: [sensitiveSessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "changeEmail",
 				responses: {
 					"200": {
 						description: "Email change request processed successfully",
@@ -677,6 +708,10 @@ export const changeEmail = createAuthEndpoint(
 								schema: {
 									type: "object",
 									properties: {
+										user: {
+											type: "object",
+											$ref: "#/components/schemas/User",
+										},
 										status: {
 											type: "boolean",
 											description: "Indicates if the request was successful",
