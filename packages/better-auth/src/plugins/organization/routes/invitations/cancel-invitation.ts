@@ -56,8 +56,8 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 				organizationId: invitation.organizationId,
 			});
 			if (!member) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				throw new APIError("FORBIDDEN", {
+					message: ORGANIZATION_ERROR_CODES.NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				});
 			}
 			const canCancel = await hasPermission(
