@@ -7,6 +7,13 @@ it("should call '/api/auth' for vue client", async () => {
 		expect(url).toBe("/api/auth/get-session");
 		return new Response();
 	});
+	process.env.BETTER_AUTH_URL = "http://localhost:3000";
+	// use DisposableStack when Node.js 24 is the minimum requirement
+	using _ = {
+		[Symbol.dispose]() {
+			process.env.BETTER_AUTH_URL = undefined;
+		},
+	};
 	const client = createVueClient({
 		fetchOptions: {
 			customFetchImpl,
