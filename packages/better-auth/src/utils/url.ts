@@ -31,7 +31,7 @@ export function getBaseURL(
 		return withPath(url, path);
 	}
 
-	if (loadEnv === false) {
+	if (loadEnv !== false) {
 		const fromEnv =
 			env.BETTER_AUTH_URL ||
 			env.NEXT_PUBLIC_BETTER_AUTH_URL ||
