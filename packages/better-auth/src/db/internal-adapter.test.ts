@@ -457,7 +457,7 @@ describe("adapter test", async () => {
 
 		const user = await internalAdapterSubaddressing.createOAuthUser(
 			{
-				email: "user+tag@example.com",
+				email: "oauthuser+tag@example.com",
 				name: "name",
 				emailVerified: false,
 			},
@@ -470,17 +470,18 @@ describe("adapter test", async () => {
 				updatedAt: new Date(),
 			},
 		);
-		expect(user.user.email).toBe("user@example.com");
+		expect(user.user.email).toBe("oauthuser@example.com");
 
 		const fetchedUser = await internalAdapterSubaddressing.findUserByEmail(
-			"user+tag@example.com",
+			"oauthuser+tag@example.com",
 		);
 		expect(fetchedUser?.user.id).toBe(user.user.id);
-		expect(fetchedUser?.user.email).toBe("user@example.com");
+		expect(fetchedUser?.user.email).toBe("oauthuser@example.com");
 
-		const fetchedUser2 =
-			await internalAdapterSubaddressing.findUserByEmail("user@example.com");
+		const fetchedUser2 = await internalAdapterSubaddressing.findUserByEmail(
+			"oauthuser@example.com",
+		);
 		expect(fetchedUser2?.user.id).toBe(user.user.id);
-		expect(fetchedUser2?.user.email).toBe("user@example.com");
+		expect(fetchedUser2?.user.email).toBe("oauthuser@example.com");
 	});
 });
