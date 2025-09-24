@@ -466,6 +466,16 @@
         "default": "./dist/plugins/organization/index.cjs"
       }
     },
+    "./plugins/organization-workspace": {
+      "import": {
+        "types": "./dist/plugins/organization-workspace/index.d.ts",
+        "default": "./dist/plugins/organization-workspace/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/organization-workspace/index.d.cts",
+        "default": "./dist/plugins/organization-workspace/index.cjs"
+      }
+    },
     "./plugins/organization/access": {
       "import": {
         "types": "./dist/plugins/organization/access/index.d.ts",
@@ -671,6 +681,9 @@
       ],
       "plugins/organization": [
         "./dist/plugins/organization/index.d.ts"
+      ],
+      "plugins/organization-workspace": [
+        "./dist/plugins/organization-workspace/index.d.ts"
       ],
       "plugins/organization/access": [
         "./dist/plugins/organization/access/index.d.ts"
