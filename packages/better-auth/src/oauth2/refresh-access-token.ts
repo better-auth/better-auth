@@ -27,16 +27,22 @@ export function createRefreshAccessTokenRequest({
 	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
 	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
-		if (options.clientId) {
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+		if (primaryClientId) {
 			headers["authorization"] =
 				"Basic " +
-				base64.encode(`${options.clientId}:${options.clientSecret ?? ""}`);
+				base64.encode(`${primaryClientId}:${options.clientSecret ?? ""}`);
 		} else {
 			headers["authorization"] =
 				"Basic " + base64.encode(`:${options.clientSecret ?? ""}`);
 		}
 	} else {
-		options.clientId && body.set("client_id", options.clientId);
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+		body.set("client_id", primaryClientId);
 		if (options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}

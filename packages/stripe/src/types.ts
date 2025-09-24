@@ -188,7 +188,7 @@ export interface StripeOptions {
 	onCustomerCreate?: (
 		data: {
 			stripeCustomer: Stripe.Customer;
-			user: User;
+			user: User & { stripeCustomerId: string };
 		},
 		ctx: GenericEndpointContext,
 	) => Promise<void>;

@@ -95,7 +95,9 @@ export interface TwitterProfile {
 	[claims: string]: unknown;
 }
 
-export interface TwitterOption extends ProviderOptions<TwitterProfile> {}
+export interface TwitterOption extends ProviderOptions<TwitterProfile> {
+	clientId: string;
+}
 
 export const twitter = (options: TwitterOption) => {
 	return {

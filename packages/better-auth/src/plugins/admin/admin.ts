@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -975,6 +975,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 
+					const foundUser = await ctx.context.internalAdapter.findUserById(
+						ctx.body.userId,
+					);
+
+					if (!foundUser) {
+						throw new APIError("NOT_FOUND", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+
 					if (ctx.body.userId === ctx.context.session.user.id) {
 						throw new APIError("BAD_REQUEST", {
 							message: ADMIN_ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
@@ -1619,20 +1629,22 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const session = await getSessionFromCtx(ctx);
 
-					if (
-						!session &&
-						(ctx.request || ctx.headers) &&
-						!ctx.body.userId &&
-						!ctx.body.role
-					) {
+					if (!session && (ctx.request || ctx.headers)) {
 						throw new APIError("UNAUTHORIZED");
+					}
+					if (!session && !ctx.body.userId && !ctx.body.role) {
+						throw new APIError("BAD_REQUEST", {
+							message: "user id or role is required",
+						});
 					}
 					const user =
 						session?.user ||
+						(ctx.body.role
+							? { id: ctx.body.userId || "", role: ctx.body.role }
+							: null) ||
 						((await ctx.context.internalAdapter.findUserById(
 							ctx.body.userId as string,
-						)) as { role?: string; id: string }) ||
-						(ctx.body.role ? { id: "", role: ctx.body.role } : null);
+						)) as { role?: string; id: string });
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: "user not found",

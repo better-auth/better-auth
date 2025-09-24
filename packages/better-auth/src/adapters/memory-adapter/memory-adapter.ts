@@ -1,9 +1,10 @@
 import { logger } from "../../utils";
 import {
-	createAdapter,
+	createAdapterFactory,
 	type AdapterDebugLogs,
 	type CleanedWhere,
-} from "../create-adapter";
+} from "../adapter-factory";
+import type { BetterAuthOptions } from "../../types";
 
 export interface MemoryDB {
 	[key: string]: any[];
@@ -13,8 +14,9 @@ export interface MemoryAdapterConfig {
 	debugLogs?: AdapterDebugLogs;
 }
 
-export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
-	createAdapter({
+export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
+	let lazyOptions: BetterAuthOptions | null = null;
+	let adapterCreator = createAdapterFactory({
 		config: {
 			adapterId: "memory",
 			adapterName: "Memory Adapter",
@@ -30,6 +32,18 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 				}
 				return props.data;
 			},
+			transaction: async (cb) => {
+				let clone = structuredClone(db);
+				try {
+					return cb(adapterCreator(lazyOptions!));
+				} catch {
+					// Rollback changes
+					Object.keys(db).forEach((key) => {
+						db[key] = clone[key];
+					});
+					throw new Error("Transaction failed, rolling back changes");
+				}
+			},
 		},
 		adapter: ({ getFieldName, options, debugLog }) => {
 			function convertWhereClause(where: CleanedWhere[], model: string) {
@@ -41,32 +55,50 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 					);
 					throw new Error(`Model ${model} not found`);
 				}
-				return table.filter((record) => {
-					return where.every((clause) => {
-						let { field, value, operator } = clause;
 
-						if (operator === "in") {
+				const evalClause = (record: any, clause: CleanedWhere): boolean => {
+					const { field, value, operator } = clause;
+					switch (operator) {
+						case "in":
 							if (!Array.isArray(value)) {
 								throw new Error("Value must be an array");
 							}
 							// @ts-expect-error
 							return value.includes(record[field]);
-						} else if (operator === "not_in") {
+						case "not_in":
 							if (!Array.isArray(value)) {
 								throw new Error("Value must be an array");
 							}
 							// @ts-expect-error
 							return !value.includes(record[field]);
-						} else if (operator === "contains") {
+						case "contains":
 							return record[field].includes(value);
-						} else if (operator === "starts_with") {
+						case "starts_with":
 							return record[field].startsWith(value);
-						} else if (operator === "ends_with") {
+						case "ends_with":
 							return record[field].endsWith(value);
-						} else {
+						default:
 							return record[field] === value;
+					}
+				};
+
+				return table.filter((record: any) => {
+					if (!where.length || where.length === 0) {
+						return true;
+					}
+
+					let result = evalClause(record, where[0]);
+					for (const clause of where) {
+						const clauseResult = evalClause(record, clause);
+
+						if (clause.connector === "OR") {
+							result = result || clauseResult;
+						} else {
+							result = result && clauseResult;
 						}
-					});
+					}
+
+					return result;
 				});
 			}
 			return {
@@ -147,3 +179,8 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 			};
 		},
 	});
+	return (options: BetterAuthOptions) => {
+		lazyOptions = options;
+		return adapterCreator(options);
+	};
+};

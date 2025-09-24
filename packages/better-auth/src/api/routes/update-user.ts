@@ -1,8 +1,12 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import { getSessionFromCtx, sessionMiddleware } from "./session";
+import {
+	getSessionFromCtx,
+	sensitiveSessionMiddleware,
+	sessionMiddleware,
+} from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
 import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
@@ -150,7 +154,7 @@ export const changePassword = createAuthEndpoint(
 				})
 				.optional(),
 		}),
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 		metadata: {
 			openapi: {
 				description: "Change the password of the user",
@@ -318,7 +322,7 @@ export const setPassword = createAuthEndpoint(
 		metadata: {
 			SERVER_ONLY: true,
 		},
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 	},
 	async (ctx) => {
 		const { newPassword } = ctx.body;
@@ -371,7 +375,7 @@ export const deleteUser = createAuthEndpoint(
 	"/delete-user",
 	{
 		method: "POST",
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 		body: z.object({
 			/**
 			 * The callback URL to redirect to after the user is deleted
@@ -662,7 +666,7 @@ export const changeEmail = createAuthEndpoint(
 				})
 				.optional(),
 		}),
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 		metadata: {
 			openapi: {
 				responses: {

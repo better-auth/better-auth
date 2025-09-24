@@ -1,7 +1,7 @@
 import { type GenericEndpointContext, logger } from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
-import { getPlanByPriceId } from "./utils";
+import { getPlanByPriceInfo } from "./utils";
 
 export async function onCheckoutSessionCompleted(
 	ctx: GenericEndpointContext,
@@ -18,7 +18,12 @@ export async function onCheckoutSessionCompleted(
 			checkoutSession.subscription as string,
 		);
 		const priceId = subscription.items.data[0]?.price.id;
-		const plan = await getPlanByPriceId(options, priceId as string);
+		const priceLookupKey = subscription.items.data[0]?.price.lookup_key || null;
+		const plan = await getPlanByPriceInfo(
+			options,
+			priceId as string,
+			priceLookupKey,
+		);
 		if (plan) {
 			const referenceId =
 				checkoutSession?.client_reference_id ||
@@ -102,7 +107,9 @@ export async function onSubscriptionUpdated(
 		}
 		const subscriptionUpdated = event.data.object as Stripe.Subscription;
 		const priceId = subscriptionUpdated.items.data[0].price.id;
-		const plan = await getPlanByPriceId(options, priceId);
+		const priceLookupKey =
+			subscriptionUpdated.items.data[0].price.lookup_key || null;
+		const plan = await getPlanByPriceInfo(options, priceId, priceLookupKey);
 
 		const subscriptionId = subscriptionUpdated.metadata?.subscriptionId;
 		const customerId = subscriptionUpdated.customer?.toString();

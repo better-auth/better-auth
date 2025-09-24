@@ -117,8 +117,7 @@ export interface TiktokProfile extends Record<string, any> {
 	};
 }
 
-export interface TiktokOptions
-	extends Omit<ProviderOptions, "clientId" | "clientSecret" | "clientKey"> {
+export interface TiktokOptions extends ProviderOptions {
 	// Client ID is not used in TikTok, we delete it from the options
 	clientId?: never;
 	clientSecret: string;
@@ -136,9 +135,7 @@ export const tiktok = (options: TiktokOptions) => {
 			return new URL(
 				`https://www.tiktok.com/v2/auth/authorize?scope=${_scopes.join(
 					",",
-				)}&response_type=code&client_key=${options.clientKey}&client_secret=${
-					options.clientSecret
-				}&redirect_uri=${encodeURIComponent(
+				)}&response_type=code&client_key=${options.clientKey}&redirect_uri=${encodeURIComponent(
 					options.redirectURI || redirectURI,
 				)}&state=${state}`,
 			);

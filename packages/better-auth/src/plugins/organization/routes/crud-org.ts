@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -156,7 +156,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				});
 			}
 
-			const {
+			let {
 				keepCurrentActiveOrganization: _,
 				userId: __,
 				...orgData
@@ -174,7 +174,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 					ctx.request,
 				);
 				if (response && typeof response === "object" && "data" in response) {
-					ctx.body = {
+					orgData = {
 						...ctx.body,
 						...response.data,
 					};
@@ -188,7 +188,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 						user,
 					});
 				if (response && typeof response === "object" && "data" in response) {
-					ctx.body = {
+					orgData = {
 						...ctx.body,
 						...response.data,
 					};
@@ -206,38 +206,79 @@ export const createOrganization = <O extends OrganizationOptions>(
 				| (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
 				| undefined;
 			let teamMember: TeamMember | null = null;
-
+			let data = {
+				userId: user.id,
+				organizationId: organization.id,
+				role: ctx.context.orgOptions.creatorRole || "owner",
+			};
+			if (options?.organizationHooks?.beforeAddMember) {
+				const response = await options?.organizationHooks.beforeAddMember({
+					member: {
+						userId: user.id,
+						organizationId: organization.id,
+						role: ctx.context.orgOptions.creatorRole || "owner",
+					},
+					user,
+					organization,
+				});
+				if (response && typeof response === "object" && "data" in response) {
+					data = {
+						...data,
+						...response.data,
+					};
+				}
+			}
+			member = await adapter.createMember(data);
+			if (options?.organizationHooks?.afterAddMember) {
+				await options?.organizationHooks.afterAddMember({
+					member,
+					user,
+					organization,
+				});
+			}
 			if (
 				options?.teams?.enabled &&
 				options.teams.defaultTeam?.enabled !== false
 			) {
+				let teamData = {
+					organizationId: organization.id,
+					name: `${organization.name}`,
+					createdAt: new Date(),
+				};
+				if (options?.organizationHooks?.beforeCreateTeam) {
+					const response = await options?.organizationHooks.beforeCreateTeam({
+						team: {
+							organizationId: organization.id,
+							name: `${organization.name}`,
+						},
+						user,
+						organization,
+					});
+					if (response && typeof response === "object" && "data" in response) {
+						teamData = {
+							...teamData,
+							...response.data,
+						};
+					}
+				}
 				const defaultTeam =
 					(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
 						organization,
 						ctx.request,
-					)) ||
-					(await adapter.createTeam({
-						organizationId: organization.id,
-						name: `${organization.name}`,
-						createdAt: new Date(),
-					}));
-
-				member = await adapter.createMember({
-					userId: user.id,
-					organizationId: organization.id,
-					role: ctx.context.orgOptions.creatorRole || "owner",
-				});
+					)) || (await adapter.createTeam(teamData));
 
 				teamMember = await adapter.findOrCreateTeamMember({
 					teamId: defaultTeam.id,
 					userId: user.id,
 				});
-			} else {
-				member = await adapter.createMember({
-					userId: user.id,
-					organizationId: organization.id,
-					role: ctx.context.orgOptions.creatorRole || "owner",
-				});
+
+				if (options?.organizationHooks?.afterCreateTeam) {
+					await options?.organizationHooks.afterCreateTeam({
+						team: defaultTeam,
+						user,
+						organization,
+					});
+				}
 			}
 
 			if (options.organizationCreation?.afterCreate) {
@@ -279,7 +320,10 @@ export const createOrganization = <O extends OrganizationOptions>(
 
 			return ctx.json({
 				...organization,
-				metadata: ctx.body.metadata,
+				metadata:
+					organization.metadata && typeof organization.metadata === "string"
+						? JSON.parse(organization.metadata)
+						: organization.metadata,
 				members: [member],
 			});
 		},
@@ -663,19 +707,15 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
-			const isMember = organization?.members.find(
-				(member) => member.userId === session.user.id,
-			);
+			const isMember = await adapter.checkMembership({
+				userId: session.user.id,
+				organizationId: organization.id,
+			});
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null);
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				});
-			}
-			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
 			type OrganizationReturn = O["teams"] extends { enabled: true }

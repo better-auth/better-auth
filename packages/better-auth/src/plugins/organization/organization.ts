@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import * as z from "zod/v4";
+import * as z from "zod";
 import type { AuthPluginSchema } from "../../types";
 import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
@@ -25,6 +25,7 @@ import {
 	listMembers,
 	removeMember,
 	updateMemberRole,
+	getActiveMemberRole,
 } from "./routes/crud-members";
 import {
 	checkOrganizationSlug,
@@ -405,6 +406,22 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		 * `authClient.organization.listMembers`
 		 */
 		listMembers: listMembers(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get-active-member-role`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getActiveMemberRole`
+		 *
+		 * **client:**
+		 * `authClient.organization.getActiveMemberRole`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-active-member-role)
+		 */
+		getActiveMemberRole: getActiveMemberRole(options as O),
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {

@@ -215,6 +215,29 @@ describe("Email Verification", async () => {
 			expect.any(Object),
 		);
 	});
+
+	it("should preserve encoded characters in callback URL", async () => {
+		const testEmail = "test+user@example.com";
+		const encodedEmail = encodeURIComponent(testEmail);
+		const callbackURL = `/sign-in?verifiedEmail=${encodedEmail}`;
+
+		await client.verifyEmail(
+			{
+				query: {
+					token,
+					callbackURL,
+				},
+			},
+			{
+				onError: (ctx) => {
+					const location = ctx.response.headers.get("location");
+					expect(location).toBe(`/sign-in?verifiedEmail=${encodedEmail}`);
+					const url = new URL(location!, "http://localhost:3000");
+					expect(url.searchParams.get("verifiedEmail")).toBe(testEmail);
+				},
+			},
+		);
+	});
 });
 
 describe("Email Verification Secondary Storage", async () => {
@@ -304,5 +327,64 @@ describe("Email Verification Secondary Storage", async () => {
 		});
 		expect(session.data?.user.email).toBe("new@email.com");
 		expect(session.data?.user.emailVerified).toBe(false);
+	});
+
+	it("should set emailVerified on all sessions", async () => {
+		const sampleUser = {
+			name: "sampler",
+			email: "sample@sample.com",
+			password: "samplesssss",
+		};
+
+		await client.signUp.email({
+			name: sampleUser.name,
+			email: sampleUser.email,
+			password: sampleUser.password,
+		});
+
+		const secondSignInHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: sampleUser.email,
+				password: sampleUser.password,
+			},
+			{
+				onSuccess: cookieSetter(secondSignInHeaders),
+			},
+		);
+
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: sampleUser.email,
+			},
+		});
+
+		const headers = new Headers();
+		await client.verifyEmail({
+			query: {
+				token,
+			},
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data?.user.email).toBe(sampleUser.email);
+		expect(session.data?.user.emailVerified).toBe(true);
+
+		const secondSignInSession = await client.getSession({
+			fetchOptions: {
+				headers: secondSignInHeaders,
+			},
+		});
+
+		expect(secondSignInSession.data?.user.email).toBe(sampleUser.email);
+		expect(secondSignInSession.data?.user.emailVerified).toBe(true);
 	});
 });
