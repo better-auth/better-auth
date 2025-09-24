@@ -208,7 +208,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 						jwt: z.string().meta({
 							description: "Signed JWT to verify",
 						}),
-						jwk: jwkExportedSchema.optional(),
+						jwk: jwkExportedSchema.or(z.string()).optional(),
 						options: JwtVerifyOptionsSchema.optional(),
 					}),
 					metadata: {
@@ -314,7 +314,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 					},
 					body: z.object({
 						data: z.record(z.string(), z.any()),
-						jwk: jwkExportedSchema.optional(),
+						jwk: jwkExportedSchema.or(z.string()).optional(),
 						claims: customJwtClaimsSchema.optional(),
 					}),
 				},
@@ -351,9 +351,11 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 					metadata: {
 						SERVER_ONLY: true,
 						$Infer: {
-							body: {} as {
-								jwkOptions?: JwkOptions;
-							},
+							body: {} as
+								| {
+										jwkOptions?: JwkOptions;
+								  }
+								| undefined,
 						},
 						openapi: {
 							description:
@@ -366,7 +368,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 											schema: {
 												type: "object",
 												properties: {
-													key: {
+													jwk: {
 														description:
 															"The public key from newly created JSON Web Key pair",
 														type: "object",
@@ -434,12 +436,14 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 							},
 						},
 					},
-					body: z.object({
-						jwkOptions: jwkOptionsSchema.optional(),
-					}),
+					body: z
+						.object({
+							jwkOptions: jwkOptionsSchema.optional(),
+						})
+						.optional(),
 				},
 				async (ctx) => {
-					const jwkOptions = ctx.body.jwkOptions;
+					const jwkOptions = ctx.body?.jwkOptions;
 					const jwksOptions: JwksOptions = {
 						...pluginOpts?.jwks,
 						keyPairConfig: jwkOptions ?? pluginOpts?.jwks?.keyPairConfig,
@@ -447,7 +451,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 					const key = await createJwkInternal(ctx, jwksOptions);
 
 					return ctx.json({
-						key: { ...(await JSON.parse(key.publicKey)), kid: key.id },
+						jwk: { ...(await JSON.parse(key.publicKey)), kid: key.id },
 					});
 				},
 			),
