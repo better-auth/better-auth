@@ -8,7 +8,7 @@ import type { BetterAuthOptions } from "../../../../types";
 import merge from "deepmerge";
 import type { DatabaseSync } from "node:sqlite";
 const nodeVersion = process.version;
-const nodeSqliteSupported = +nodeVersion.split(".")[0].slice(1) >= 22;
+const nodeSqliteSupported = +nodeVersion.split(".")[0]!.slice(1) >= 22;
 
 describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 	let db: DatabaseSync;
@@ -234,7 +234,7 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 			},
 		});
 
-		await runAdapterTest({
+		runAdapterTest({
 			getAdapter: async (customOptions = {}) => {
 				return adapter(merge(customOptions, opts));
 			},

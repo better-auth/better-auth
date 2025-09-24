@@ -22,7 +22,7 @@ const postgresMap = {
 		"double precision",
 	],
 	boolean: ["bool", "boolean"],
-	date: ["timestamp", "date"],
+	date: ["timestamptz", "timestamp", "date"],
 	json: ["json", "jsonb"],
 };
 const mysqlMap = {
@@ -70,15 +70,15 @@ export function matchType(
 	dbType: KyselyDatabaseType,
 ) {
 	function normalize(type: string) {
-		return type.toLowerCase().split("(")[0].trim();
+		return type.toLowerCase().split("(")[0]!.trim();
 	}
 	if (fieldType === "string[]" || fieldType === "number[]") {
 		return columnDataType.toLowerCase().includes("json");
 	}
-	const types = map[dbType];
+	const types = map[dbType]!;
 	const expected = Array.isArray(fieldType)
 		? types["string"].map((t) => t.toLowerCase())
-		: types[fieldType].map((t) => t.toLowerCase());
+		: types[fieldType]!.map((t) => t.toLowerCase());
 	return expected.includes(normalize(columnDataType));
 }
 
@@ -131,8 +131,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 				if (tIndex === -1) {
 					toBeCreated.push(tableData);
 				} else {
-					toBeCreated[tIndex].fields = {
-						...toBeCreated[tIndex].fields,
+					toBeCreated[tIndex]!.fields = {
+						...toBeCreated[tIndex]!.fields,
 						...value.fields,
 					};
 				}
@@ -206,13 +206,13 @@ export async function getMigrations(config: BetterAuthOptions) {
 			},
 			date: {
 				sqlite: "date",
-				postgres: "timestamp",
-				mysql: "datetime",
+				postgres: "timestamptz",
+				mysql: "timestamp",
 				mssql: "datetime",
 			},
 			json: {
 				sqlite: "text",
-				postgres: "json",
+				postgres: "jsonb",
 				mysql: "json",
 				mssql: "varchar(8000)",
 			},
@@ -239,7 +239,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		if (Array.isArray(type)) {
 			return "text";
 		}
-		return typeMap[type][dbType || "sqlite"];
+		return typeMap[type]![dbType || "sqlite"];
 	}
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {

@@ -30,7 +30,7 @@ describe("adapter test", async () => {
 		// MongoDB transactions require a replica set or a sharded cluster
 		// client,
 	});
-	await runAdapterTest({
+	runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return adapter({
 				user: {

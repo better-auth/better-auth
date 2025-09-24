@@ -9,18 +9,19 @@ import { type BetterAuthPlugin, type Session, type Where } from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import { mergeSchema } from "../../db/schema";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
 import { type AccessControl } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
-import {
-	type AdminOptions,
-	type UserWithRole,
-	type SessionWithImpersonatedBy,
-	type InferAdminRolesFromOption,
-} from "./types";
+import { BASE_ERROR_CODES } from "../../error/codes";
 import { schema } from "./schema";
+import type {
+	AdminOptions,
+	InferAdminRolesFromOption,
+	SessionWithImpersonatedBy,
+	UserWithRole,
+} from "./types";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -191,25 +192,21 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().meta({
-							description: "The user id",
-						}),
+						userId: z.coerce.string().describe("The user id"),
 						role: z
 							.union([
-								z.string().meta({
-									description: "The role to set. `admin` or `user` by default",
-								}),
+								z
+									.string()
+									.describe("The role to set. `admin` or `user` by default"),
 								z.array(
-									z.string().meta({
-										description:
-											"The roles to set. `admin` or `user` by default",
-									}),
+									z
+										.string()
+										.describe("The roles to set. `admin` or `user` by default"),
 								),
 							])
-							.meta({
-								description:
-									"The role to set, this can be a string or an array of strings. Eg: `admin` or `[admin, user]`",
-							}),
+							.describe(
+								"The role to set, this can be a string or an array of strings. Eg: `admin` or `[admin, user]`",
+							),
 					}),
 					requireHeaders: true,
 					use: [adminMiddleware],
@@ -274,6 +271,69 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			getUser: createAuthEndpoint(
+				"/admin/get-user",
+				{
+					method: "GET",
+					query: z.object({
+						id: z.string().describe("The id of the User"),
+					}),
+					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "getUser",
+							summary: "Get an existing user",
+							description: "Get an existing user",
+							responses: {
+								200: {
+									description: "User",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const { id } = ctx.query;
+
+					const canGetUser = hasPermission({
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permissions: {
+							user: ["get"],
+						},
+					});
+
+					if (!canGetUser) {
+						throw ctx.error("FORBIDDEN", {
+							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_USER,
+							code: "YOU_ARE_NOT_ALLOWED_TO_GET_USER",
+						});
+					}
+
+					const user = await ctx.context.internalAdapter.findUserById(id);
+
+					if (!user) {
+						throw new APIError("NOT_FOUND", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+
+					return parseUserOutput(ctx.context.options, user);
+				},
+			),
 			/**
 			 * ### Endpoint
 			 *
@@ -294,37 +354,27 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string().meta({
-							description: "The email of the user",
-						}),
-						password: z.string().meta({
-							description: "The password of the user",
-						}),
-						name: z.string().meta({
-							description: "The name of the user",
-						}),
+						email: z.string().describe("The email of the user"),
+						password: z.string().describe("The password of the user"),
+						name: z.string().describe("The name of the user"),
 						role: z
 							.union([
-								z.string().meta({
-									description: "The role of the user",
-								}),
-								z.array(
-									z.string().meta({
-										description: "The roles of user",
-									}),
-								),
+								z.string().describe("The role of the user"),
+								z.array(z.string().describe("The roles of user")),
 							])
 							.optional()
-							.meta({
-								description: `A string or array of strings representing the roles to apply to the new user. Eg: \"user\"`,
-							}),
+							.describe(
+								`A string or array of strings representing the roles to apply to the new user. Eg: \"user\"`,
+							),
 						/**
 						 * extra fields for user
 						 */
-						data: z.record(z.string(), z.any()).optional().meta({
-							description:
+						data: z
+							.record(z.string(), z.any())
+							.optional()
+							.describe(
 								"Extra fields for the user. Including custom additional fields.",
-						}),
+							),
 					}),
 					metadata: {
 						openapi: {
@@ -426,17 +476,30 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/update-user`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.adminUpdateUser`
+			 *
+			 * **client:**
+			 * `authClient.admin.updateUser`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-update-user)
+			 */
 			adminUpdateUser: createAuthEndpoint(
 				"/admin/update-user",
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().meta({
-							description: "The user id",
-						}),
-						data: z.record(z.any(), z.any()).meta({
-							description: "The user data to update",
-						}),
+						userId: z.coerce.string().describe("The user id"),
+						data: z
+							.record(z.any(), z.any())
+							.describe("The user data to update"),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -503,68 +566,50 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "GET",
 					use: [adminMiddleware],
 					query: z.object({
-						searchValue: z.string().optional().meta({
-							description: 'The value to search for. Eg: "some name"',
-						}),
+						searchValue: z
+							.string()
+							.optional()
+							.describe('The value to search for. Eg: "some name"'),
 						searchField: z
 							.enum(["email", "name"])
-							.meta({
-								description:
-									'The field to search in, defaults to email. Can be `email` or `name`. Eg: "name"',
-							})
+							.describe(
+								'The field to search in, defaults to email. Can be `email` or `name`. Eg: "name"',
+							)
 							.optional(),
 						searchOperator: z
 							.enum(["contains", "starts_with", "ends_with"])
-							.meta({
-								description:
-									'The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. Eg: "contains"',
-							})
+							.describe(
+								'The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. Eg: "contains"',
+							)
 							.optional(),
 						limit: z
 							.string()
-							.meta({
-								description: "The number of users to return",
-							})
+							.describe("The number of users to return")
 							.or(z.number())
 							.optional(),
 						offset: z
 							.string()
-							.meta({
-								description: "The offset to start from",
-							})
+							.describe("The offset to start from")
 							.or(z.number())
 							.optional(),
-						sortBy: z
-							.string()
-							.meta({
-								description: "The field to sort by",
-							})
-							.optional(),
+						sortBy: z.string().describe("The field to sort by").optional(),
 						sortDirection: z
 							.enum(["asc", "desc"])
-							.meta({
-								description: "The direction to sort by",
-							})
+							.describe("The direction to sort by")
 							.optional(),
 						filterField: z
 							.string()
-							.meta({
-								description: "The field to filter by",
-							})
+							.describe("The field to filter by")
 							.optional(),
 						filterValue: z
 							.string()
-							.meta({
-								description: "The value to filter by",
-							})
+							.describe("The value to filter by")
 							.or(z.number())
 							.or(z.boolean())
 							.optional(),
 						filterOperator: z
 							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
-							.meta({
-								description: "The operator to use for the filter",
-							})
+							.describe("The operator to use for the filter")
 							.optional(),
 					}),
 					metadata: {
@@ -689,9 +734,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					use: [adminMiddleware],
 					body: z.object({
-						userId: z.coerce.string().meta({
-							description: "The user id",
-						}),
+						userId: z.coerce.string().describe("The user id"),
 					}),
 					metadata: {
 						openapi: {
@@ -765,9 +808,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().meta({
-							description: "The user id",
-						}),
+						userId: z.coerce.string().describe("The user id"),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -845,26 +886,17 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().meta({
-							description: "The user id",
-						}),
+						userId: z.coerce.string().describe("The user id"),
 						/**
 						 * Reason for the ban
 						 */
-						banReason: z
-							.string()
-							.meta({
-								description: "The reason for the ban",
-							})
-							.optional(),
+						banReason: z.string().describe("The reason for the ban").optional(),
 						/**
 						 * Number of seconds until the ban expires
 						 */
 						banExpiresIn: z
 							.number()
-							.meta({
-								description: "The number of seconds until the ban expires",
-							})
+							.describe("The number of seconds until the ban expires")
 							.optional(),
 					}),
 					use: [adminMiddleware],
@@ -906,6 +938,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					if (!canBanUser) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
+						});
+					}
+
+					const foundUser = await ctx.context.internalAdapter.findUserById(
+						ctx.body.userId,
+					);
+
+					if (!foundUser) {
+						throw new APIError("NOT_FOUND", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 
@@ -956,9 +998,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().meta({
-							description: "The user id",
-						}),
+						userId: z.coerce.string().describe("The user id"),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -1119,8 +1159,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const [adminSessionToken, dontRememberMeCookie] =
 						adminCookie?.split(":");
-					const adminSession =
-						await ctx.context.internalAdapter.findSession(adminSessionToken);
+					const adminSession = await ctx.context.internalAdapter.findSession(
+						adminSessionToken!,
+					);
 					if (!adminSession || adminSession.session.userId !== user.id) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: "Failed to find admin session",
@@ -1153,9 +1194,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z.string().meta({
-							description: "The session token",
-						}),
+						sessionToken: z.string().describe("The session token"),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -1228,9 +1267,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().meta({
-							description: "The user id",
-						}),
+						userId: z.coerce.string().describe("The user id"),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -1301,9 +1338,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().meta({
-							description: "The user id",
-						}),
+						userId: z.coerce.string().describe("The user id"),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -1390,12 +1425,8 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						newPassword: z.string().meta({
-							description: "The new password",
-						}),
-						userId: z.coerce.string().meta({
-							description: "The user id",
-						}),
+						newPassword: z.string().describe("The new password"),
+						userId: z.coerce.string().describe("The user id"),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -1471,12 +1502,14 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					body: z
 						.object({
-							userId: z.coerce.string().optional().meta({
-								description: `The user id. Eg: "user-id"`,
-							}),
-							role: z.string().optional().meta({
-								description: `The role to check permission for. Eg: "admin"`,
-							}),
+							userId: z.coerce
+								.string()
+								.optional()
+								.describe(`The user id. Eg: "user-id"`),
+							role: z
+								.string()
+								.optional()
+								.describe(`The role to check permission for. Eg: "admin"`),
 						})
 						.and(
 							z.union([
@@ -1553,20 +1586,22 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const session = await getSessionFromCtx(ctx);
 
-					if (
-						!session &&
-						(ctx.request || ctx.headers) &&
-						!ctx.body.userId &&
-						!ctx.body.role
-					) {
+					if (!session && (ctx.request || ctx.headers)) {
 						throw new APIError("UNAUTHORIZED");
+					}
+					if (!session && !ctx.body.userId && !ctx.body.role) {
+						throw new APIError("BAD_REQUEST", {
+							message: "user id or role is required",
+						});
 					}
 					const user =
 						session?.user ||
+						(ctx.body.role
+							? { id: ctx.body.userId || "", role: ctx.body.role }
+							: null) ||
 						((await ctx.context.internalAdapter.findUserById(
 							ctx.body.userId as string,
-						)) as { role?: string; id: string }) ||
-						(ctx.body.role ? { id: "", role: ctx.body.role } : null);
+						)) as { role?: string; id: string });
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: "user not found",

@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
@@ -16,6 +17,11 @@ import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
 
 const cleanupSet = new Set<Function>();
+
+type CurrentUserContext = {
+	headers: Headers;
+};
+const currentUserContextStorage = new AsyncLocalStorage<CurrentUserContext>();
 
 afterAll(async () => {
 	for (const cleanup of cleanupSet) {
@@ -109,7 +115,7 @@ export async function getTestInstance<
 			...options?.advanced,
 		},
 		plugins: [bearer(), ...(options?.plugins || [])],
-	} as unknown as O extends undefined ? typeof opts : O & typeof opts);
+	} as unknown as O);
 
 	const testUser = {
 		email: "test@test.com",
@@ -168,6 +174,47 @@ export async function getTestInstance<
 	};
 	cleanupSet.add(cleanup);
 
+	const customFetchImpl = async (
+		url: string | URL | Request,
+		init?: RequestInit,
+	) => {
+		const headers = init?.headers || {};
+		const storageHeaders = currentUserContextStorage.getStore()?.headers;
+		return auth.handler(
+			new Request(
+				url,
+				init
+					? {
+							...init,
+							headers: new Headers({
+								...(storageHeaders
+									? Object.fromEntries(storageHeaders.entries())
+									: {}),
+								...(headers instanceof Headers
+									? Object.fromEntries(headers.entries())
+									: typeof headers === "object"
+										? headers
+										: {}),
+							}),
+						}
+					: {
+							headers,
+						},
+			),
+		);
+	};
+
+	const client = createAuthClient({
+		...(config?.clientOptions as C extends undefined ? {} : C),
+		baseURL: getBaseURL(
+			options?.baseURL || "http://localhost:" + (config?.port || 3000),
+			options?.basePath || "/api/auth",
+		),
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
 	async function signInWithTestUser() {
 		if (config?.disableTestUser) {
 			throw new Error("Test user is disabled");
@@ -196,10 +243,15 @@ export async function getTestInstance<
 			user: data.user as User,
 			headers,
 			setCookie,
+			runWithDefaultUser: async (fn: (headers: Headers) => Promise<void>) => {
+				return currentUserContextStorage.run({ headers }, async () => {
+					await fn(headers);
+				});
+			},
 		};
 	}
 	async function signInWithUser(email: string, password: string) {
-		let headers = new Headers();
+		const headers = new Headers();
 		//@ts-expect-error
 		const { data } = await client.signIn.email({
 			email,
@@ -223,13 +275,6 @@ export async function getTestInstance<
 		};
 	}
 
-	const customFetchImpl = async (
-		url: string | URL | Request,
-		init?: RequestInit,
-	) => {
-		return auth.handler(new Request(url, init));
-	};
-
 	function sessionSetter(headers: Headers) {
 		return (context: SuccessContext) => {
 			const header = context.response.headers.get("set-cookie");
@@ -241,16 +286,6 @@ export async function getTestInstance<
 		};
 	}
 
-	const client = createAuthClient({
-		...(config?.clientOptions as C extends undefined ? {} : C),
-		baseURL: getBaseURL(
-			options?.baseURL || "http://localhost:" + (config?.port || 3000),
-			options?.basePath || "/api/auth",
-		),
-		fetchOptions: {
-			customFetchImpl,
-		},
-	});
 	return {
 		auth,
 		client,
@@ -261,5 +296,15 @@ export async function getTestInstance<
 		customFetchImpl,
 		sessionSetter,
 		db: await getAdapter(auth.options),
+		runWithUser: async (
+			email: string,
+			password: string,
+			fn: (headers: Headers) => Promise<void>,
+		) => {
+			const { headers } = await signInWithUser(email, password);
+			return currentUserContextStorage.run({ headers }, async () => {
+				await fn(headers);
+			});
+		},
 	};
 }

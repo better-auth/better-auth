@@ -21,15 +21,12 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 		isClientSide: true,
 	});
 	const baseSchema = z.object({
-		name: z.string().meta({
-			description: 'The name of the team. Eg: "my-team"',
-		}),
+		name: z.string().describe("The name of the team. Eg: "),
 		organizationId: z
 			.string()
-			.meta({
-				description:
-					'The organization ID which the team will be created in. Defaults to the active organization. Eg: "organization-id"',
-			})
+			.describe(
+				"The organization ID which the team will be created in. Defaults to the active organization. Eg: ",
+			)
 			.optional(),
 	});
 	return createAuthEndpoint(
@@ -217,14 +214,14 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				teamId: z.string().meta({
-					description: `The team ID of the team to remove. Eg: "team-id"`,
-				}),
+				teamId: z
+					.string()
+					.describe(`The team ID of the team to remove. Eg: "team-id"`),
 				organizationId: z
 					.string()
-					.meta({
-						description: `The organization ID which the team falls under. If not provided, it will default to the user's active organization. Eg: "organization-id"`,
-					})
+					.describe(
+						`The organization ID which the team falls under. If not provided, it will default to the user's active organization. Eg: "organization-id"`,
+					)
 					.optional(),
 			}),
 			use: [orgMiddleware],
@@ -374,9 +371,9 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 		{
 			method: "POST",
 			body: z.object({
-				teamId: z.string().meta({
-					description: `The ID of the team to be updated. Eg: "team-id"`,
-				}),
+				teamId: z
+					.string()
+					.describe(`The ID of the team to be updated. Eg: "team-id"`),
 				data: z
 					.object({
 						...teamSchema.shape,
@@ -562,9 +559,9 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 				z.object({
 					organizationId: z
 						.string()
-						.meta({
-							description: `The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organziation-id"`,
-						})
+						.describe(
+							`The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organziation-id"`,
+						)
 						.optional(),
 				}),
 			),
@@ -659,10 +656,9 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 			body: z.object({
 				teamId: z
 					.string()
-					.meta({
-						description:
-							"The team id to set as active. It can be null to unset the active team",
-					})
+					.describe(
+						"The team id to set as active. It can be null to unset the active team",
+					)
 					.nullable()
 					.optional(),
 			}),
@@ -700,6 +696,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 				const updatedSession = await adapter.setActiveTeam(
 					session.session.token,
 					null,
+					ctx,
 				);
 
 				await setSessionCookie(ctx, {
@@ -745,6 +742,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 			const updatedSession = await adapter.setActiveTeam(
 				session.session.token,
 				team.id,
+				ctx,
 			);
 
 			await setSessionCookie(ctx, {
@@ -805,10 +803,12 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 			method: "GET",
 			query: z.optional(
 				z.object({
-					teamId: z.string().optional().meta({
-						description:
+					teamId: z
+						.string()
+						.optional()
+						.describe(
 							"The team whose members we should return. If this is not provided the members of the current active team get returned.",
-					}),
+						),
 				}),
 			),
 			metadata: {
@@ -889,14 +889,13 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				teamId: z.string().meta({
-					description: "The team the user should be a member of.",
-				}),
+				teamId: z.string().describe("The team the user should be a member of."),
 
-				userId: z.coerce.string().meta({
-					description:
+				userId: z.coerce
+					.string()
+					.describe(
 						"The user Id which represents the user to be added as a member.",
-				}),
+					),
 			}),
 			metadata: {
 				openapi: {
@@ -1063,13 +1062,13 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				teamId: z.string().meta({
-					description: "The team the user should be removed from.",
-				}),
+				teamId: z
+					.string()
+					.describe("The team the user should be removed from."),
 
-				userId: z.coerce.string().meta({
-					description: "The user which should be removed from the team.",
-				}),
+				userId: z.coerce
+					.string()
+					.describe("The user which should be removed from the team."),
 			}),
 			metadata: {
 				openapi: {

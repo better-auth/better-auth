@@ -9,7 +9,8 @@ import { parseJSON } from "./parser";
 export const getClientConfig = (options?: ClientOptions) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
-	const baseURL = getBaseURL(options?.baseURL, options?.basePath);
+	const baseURL =
+		getBaseURL(options?.baseURL, options?.basePath) ?? "/api/auth";
 	const pluginsFetchPlugins =
 		options?.plugins
 			?.flatMap((plugin) => plugin.fetchPlugins)
@@ -90,15 +91,15 @@ export const getClientConfig = (options?: ClientOptions) => {
 
 	const $store = {
 		notify: (signal?: Omit<string, "$sessionSignal"> | "$sessionSignal") => {
-			pluginsAtoms[signal as keyof typeof pluginsAtoms].set(
-				!pluginsAtoms[signal as keyof typeof pluginsAtoms].get(),
+			pluginsAtoms[signal as keyof typeof pluginsAtoms]!.set(
+				!pluginsAtoms[signal as keyof typeof pluginsAtoms]!.get(),
 			);
 		},
 		listen: (
 			signal: Omit<string, "$sessionSignal"> | "$sessionSignal",
 			listener: (value: boolean, oldValue?: boolean | undefined) => void,
 		) => {
-			pluginsAtoms[signal as keyof typeof pluginsAtoms].subscribe(listener);
+			pluginsAtoms[signal as keyof typeof pluginsAtoms]!.subscribe(listener);
 		},
 		atoms: pluginsAtoms,
 	};
