@@ -15,11 +15,10 @@ export const normalTestSuite = createTestSuite(
 		},
 	) => {
 		/**
-		 * Some databases (such as SQLite) check row order using raw byte values
-		 * Meaning that capitalization goes before the rest of the alphabet
-		 * and same with numbers
+		 * Some databases (such as SQLite) sort rows orders using raw byte values
+		 * Meaning that capitalization, numbers and others goes before the rest of the alphabet
 		 * Because of the inconsistency, as a bare minimum for testing sorting functionality, we should
-		 * remove all capitalizations and numbers from the names
+		 * remove all capitalizations and numbers from the `name` field
 		 */
 		const createBinarySortFriendlyUsers = async (count: number) => {
 			let users: User[] = [];
@@ -496,6 +495,13 @@ export const normalTestSuite = createTestSuite(
 					model: "user",
 				});
 				expect(sortModels(result)).toEqual(sortModels(users.slice(2)));
+			},
+			"count - should count many models": async () => {
+				const users = await insertRandom("user", 15);
+				const result = await adapter.count({
+					model: "user",
+				});
+				expect(result).toEqual(users.length);
 			},
 		};
 	},

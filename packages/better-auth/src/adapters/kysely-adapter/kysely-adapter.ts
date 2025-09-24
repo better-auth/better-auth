@@ -324,7 +324,13 @@ export const kyselyAdapter = (
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					const res = await query.execute();
-					return res[0].count as number;
+					if (typeof res[0].count === "number") {
+						return res[0].count;
+					}
+					if (typeof res[0].count === "bigint") {
+						return Number(res[0].count);
+					}
+					return parseInt(res[0].count);
 				},
 				async delete({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);

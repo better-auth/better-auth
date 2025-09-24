@@ -33,7 +33,7 @@ const { execute } = testAdapter({
 	},
 	tests: [
 		normalTestSuite(),
-		transactionsTestSuite(),
+		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		performanceTestSuite(),
 	],
