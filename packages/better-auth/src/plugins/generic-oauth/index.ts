@@ -687,7 +687,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						if (
 							ctx.context.options.account?.accountLinking
 								?.allowDifferentEmails !== true &&
-							link.email !== userInfo.email
+								(normalizeEmail(link.email, ctx.context.options) !==
+  							normalizeEmail(userInfo.email, ctx.context.options))
 						) {
 							return redirectOnError("email_doesn't_match");
 						}
