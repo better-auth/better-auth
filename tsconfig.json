@@ -1,19 +1,42 @@
 {
-	"compilerOptions": {
-		"esModuleInterop": true,
-		"skipLibCheck": true,
-		"target": "es2022",
-		"allowJs": true,
-		"resolveJsonModule": true,
-		"module": "Preserve",
-		"noEmit": true,
-		"moduleDetection": "force",
-		"isolatedModules": true,
-		"verbatimModuleSyntax": true,
-		"strict": true,
-		"noUncheckedIndexedAccess": true,
-		"noImplicitOverride": true,
-		"noFallthroughCasesInSwitch": true
-	},
-	"exclude": ["**/dist/**", "**/node_modules/**", "**/examples/**"]
+  "compilerOptions": {
+    "strict": true,
+    "target": "esnext",
+    "downlevelIteration": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "composite": true,
+    "incremental": true,
+    "noErrorTruncation": true,
+    "types": ["node"]
+  },
+  "references": [
+    {
+      "path": "./packages/better-auth"
+    },
+    {
+      "path": "./packages/cli"
+    },
+    {
+      "path": "./packages/expo"
+    },
+    {
+      "path": "./packages/sso"
+    },
+    {
+      "path": "./packages/stripe"
+    }
+  ],
+  "files": [],
+  "include": [],
+  "exclude": ["**/dist/**", "**/node_modules/**", "**/examples/**"]
 }

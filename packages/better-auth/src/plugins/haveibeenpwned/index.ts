@@ -37,7 +37,7 @@ async function checkPasswordCompromise(
 		}
 		const lines = data.split("\n");
 		const found = lines.some(
-			(line) => line.split(":")[0].toUpperCase() === suffix.toUpperCase(),
+			(line) => line.split(":")[0]!.toUpperCase() === suffix.toUpperCase(),
 		);
 
 		if (found) {

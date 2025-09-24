@@ -1,5 +1,5 @@
 import { generateRandomString } from "../../../crypto/random";
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
@@ -166,17 +166,13 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						code: z.string().meta({
-							description: `A backup code to verify. Eg: "123456"`,
-						}),
+						code: z.string().describe(`A backup code to verify. Eg: "123456"`),
 						/**
 						 * Disable setting the session cookie
 						 */
 						disableSession: z
 							.boolean()
-							.meta({
-								description: "If true, the session cookie will not be set.",
-							})
+							.describe("If true, the session cookie will not be set.")
 							.optional(),
 						/**
 						 * if true, the device will be trusted
@@ -185,10 +181,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						 */
 						trustDevice: z
 							.boolean()
-							.meta({
-								description:
-									"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-							})
+							.describe("If true, the device will be trusted for 30 days. It")
 							.optional(),
 					}),
 					metadata: {
@@ -390,9 +383,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string().meta({
-							description: "The users password.",
-						}),
+						password: z.string().describe("The users password."),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -483,9 +474,9 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				{
 					method: "GET",
 					body: z.object({
-						userId: z.coerce.string().meta({
-							description: `The user ID to view all backup codes. Eg: "user-id"`,
-						}),
+						userId: z.coerce
+							.string()
+							.describe(`The user ID to view all backup codes. Eg: "user-id"`),
 					}),
 					metadata: {
 						SERVER_ONLY: true,

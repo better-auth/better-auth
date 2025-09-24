@@ -165,12 +165,12 @@ describe("listMembers", async () => {
 				sortDirection: "asc",
 			},
 		});
-		expect(members.data?.members[0].id).not.toBe(firstMember.id);
-		expect(members.data?.members[members.data?.members.length - 1].id).not.toBe(
-			lastMember.id,
-		);
-		expect(members.data?.members[0].id).toBe(secondMember.id);
-		expect(members.data?.members[members.data?.members.length - 1].id).toBe(
+		expect(members.data?.members[0]!.id).not.toBe(firstMember.id);
+		expect(
+			members.data?.members[members.data?.members.length - 1]!.id,
+		).not.toBe(lastMember.id);
+		expect(members.data?.members[0]!.id).toBe(secondMember.id);
+		expect(members.data?.members[members.data?.members.length - 1]!.id).toBe(
 			oneBeforeLastMember.id,
 		);
 	});
@@ -331,5 +331,102 @@ describe("updateMemberRole", async () => {
 		expect(updatedMember.error?.message).toBe(
 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
 		);
+	});
+});
+
+describe("activeMemberRole", async () => {
+	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
+		plugins: [organization()],
+	});
+	const ctx = await auth.$context;
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+	const org = await client.organization.create({
+		name: "test",
+		slug: "test",
+		metadata: {
+			test: "test",
+		},
+		fetchOptions: {
+			headers,
+		},
+	});
+	const secondOrg = await client.organization.create({
+		name: "test-second",
+		slug: "test-second",
+		metadata: {
+			test: "second-org",
+		},
+		fetchOptions: {
+			headers,
+		},
+	});
+
+	let selectedUserId = "";
+	for (let i = 0; i < 10; i++) {
+		const user = await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: `test${i}@test.com`,
+				name: `test${i}`,
+			},
+		});
+
+		if (i == 0) {
+			selectedUserId = user.id;
+		}
+
+		await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: user.id,
+				role: "member",
+			},
+		});
+	}
+
+	it("should return the active member role on active organization", async () => {
+		await client.organization.setActive({
+			organizationId: org.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const activeMember = await client.organization.getActiveMemberRole({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(activeMember.data?.role).toBe("owner");
+	});
+
+	it("should return active member role on organization", async () => {
+		await client.organization.setActive({
+			organizationId: org.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const activeMember = await client.organization.getActiveMemberRole({
+			query: {
+				userId: selectedUserId,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(activeMember.data?.role).toBe("member");
 	});
 });

@@ -15,7 +15,10 @@ export async function createTelemetry(
 	options: BetterAuthOptions,
 	context?: TelemetryContext,
 ) {
-	const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
+	const debugEnabled =
+		options.telemetry?.debug ||
+		getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
+
 	const TELEMETRY_ENDPOINT = ENV.BETTER_AUTH_TELEMETRY_ENDPOINT;
 	const track = async (event: TelemetryEvent) => {
 		try {
@@ -40,32 +43,38 @@ export async function createTelemetry(
 		const telemetryEnabled =
 			options.telemetry?.enabled !== undefined
 				? options.telemetry.enabled
-				: true;
-		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", true);
+				: false;
+		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", false);
 		return (
-			envEnabled && telemetryEnabled && (context?.skipTestCheck || !isTest())
+			(envEnabled || telemetryEnabled) && (context?.skipTestCheck || !isTest())
 		);
 	};
 
-	const anonymousId = await getProjectId(options.baseURL);
-
-	const payload = {
-		config: getTelemetryAuthConfig(options),
-		runtime: detectRuntime(),
-		database: await detectDatabase(),
-		framework: await detectFramework(),
-		environment: detectEnvironment(),
-		systemInfo: await detectSystemInfo(),
-		packageManager: detectPackageManager(),
-	};
 	const enabled = await isEnabled();
+	let anonymousId: string | undefined;
+
 	if (enabled) {
+		anonymousId = await getProjectId(options.baseURL);
+
+		const payload = {
+			config: getTelemetryAuthConfig(options),
+			runtime: detectRuntime(),
+			database: await detectDatabase(),
+			framework: await detectFramework(),
+			environment: detectEnvironment(),
+			systemInfo: await detectSystemInfo(),
+			packageManager: detectPackageManager(),
+		};
+
 		void track({ type: "init", payload, anonymousId });
 	}
 
 	return {
 		publish: async (event: TelemetryEvent) => {
 			if (!enabled) return;
+			if (!anonymousId) {
+				anonymousId = await getProjectId(options.baseURL);
+			}
 			await track({
 				type: event.type,
 				payload: event.payload,

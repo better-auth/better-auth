@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -21,15 +21,12 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 		isClientSide: true,
 	});
 	const baseSchema = z.object({
-		name: z.string().meta({
-			description: 'The name of the team. Eg: "my-team"',
-		}),
+		name: z.string().describe("The name of the team. Eg: "),
 		organizationId: z
 			.string()
-			.meta({
-				description:
-					'The organization ID which the team will be created in. Defaults to the active organization. Eg: "organization-id"',
-			})
+			.describe(
+				"The organization ID which the team will be created in. Defaults to the active organization. Eg: ",
+			)
 			.optional(),
 	});
 	return createAuthEndpoint(
@@ -120,13 +117,18 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
 					});
 				}
-				const canCreate = hasPermission({
-					role: member.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						team: ["create"],
+				const canCreate = await hasPermission(
+					{
+						role: member.role,
+						options: ctx.context.orgOptions,
+						permissions: {
+							team: ["create"],
+						},
+						organizationId,
 					},
-				});
+					ctx,
+				);
+
 				if (!canCreate) {
 					throw new APIError("FORBIDDEN", {
 						message:
@@ -155,13 +157,52 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 			const { name, organizationId: _, ...additionalFields } = ctx.body;
-			const createdTeam = await adapter.createTeam({
+
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			let teamData = {
 				name,
 				organizationId,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				...additionalFields,
-			});
+			};
+
+			// Run beforeCreateTeam hook
+			if (options?.organizationHooks?.beforeCreateTeam) {
+				const response = await options?.organizationHooks.beforeCreateTeam({
+					team: {
+						name,
+						organizationId,
+						...additionalFields,
+					},
+					user: session?.user,
+					organization,
+				});
+				if (response && typeof response === "object" && "data" in response) {
+					teamData = {
+						...teamData,
+						...response.data,
+					};
+				}
+			}
+
+			const createdTeam = await adapter.createTeam(teamData);
+
+			// Run afterCreateTeam hook
+			if (options?.organizationHooks?.afterCreateTeam) {
+				await options?.organizationHooks.afterCreateTeam({
+					team: createdTeam,
+					user: session?.user,
+					organization,
+				});
+			}
+
 			return ctx.json(createdTeam);
 		},
 	);
@@ -173,14 +214,14 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				teamId: z.string().meta({
-					description: `The team ID of the team to remove. Eg: "team-id"`,
-				}),
+				teamId: z
+					.string()
+					.describe(`The team ID of the team to remove. Eg: "team-id"`),
 				organizationId: z
 					.string()
-					.meta({
-						description: `The organization ID which the team falls under. If not provided, it will default to the user's active organization. Eg: "organization-id"`,
-					})
+					.describe(
+						`The organization ID which the team falls under. If not provided, it will default to the user's active organization. Eg: "organization-id"`,
+					)
 					.optional(),
 			}),
 			use: [orgMiddleware],
@@ -240,13 +281,18 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 
-				const canRemove = hasPermission({
-					role: member.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						team: ["delete"],
+				const canRemove = await hasPermission(
+					{
+						role: member.role,
+						options: ctx.context.orgOptions,
+						permissions: {
+							team: ["delete"],
+						},
+						organizationId,
 					},
-				});
+					ctx,
+				);
+
 				if (!canRemove) {
 					throw new APIError("FORBIDDEN", {
 						message:
@@ -273,7 +319,33 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 				}
 			}
 
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			// Run beforeDeleteTeam hook
+			if (options?.organizationHooks?.beforeDeleteTeam) {
+				await options?.organizationHooks.beforeDeleteTeam({
+					team,
+					user: session?.user,
+					organization,
+				});
+			}
+
 			await adapter.deleteTeam(team.id);
+
+			// Run afterDeleteTeam hook
+			if (options?.organizationHooks?.afterDeleteTeam) {
+				await options?.organizationHooks.afterDeleteTeam({
+					team,
+					user: session?.user,
+					organization,
+				});
+			}
+
 			return ctx.json({ message: "Team removed successfully." });
 		},
 	);
@@ -299,9 +371,9 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 		{
 			method: "POST",
 			body: z.object({
-				teamId: z.string().meta({
-					description: `The ID of the team to be updated. Eg: "team-id"`,
-				}),
+				teamId: z
+					.string()
+					.describe(`The ID of the team to be updated. Eg: "team-id"`),
 				data: z
 					.object({
 						...teamSchema.shape,
@@ -387,13 +459,18 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const canUpdate = hasPermission({
-				role: member.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					team: ["update"],
+			const canUpdate = await hasPermission(
+				{
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						team: ["update"],
+					},
+					organizationId,
 				},
-			});
+				ctx,
+			);
+
 			if (!canUpdate) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -414,10 +491,57 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 
 			const { name, organizationId: __, ...additionalFields } = ctx.body.data;
 
-			const updatedTeam = await adapter.updateTeam(team.id, {
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			const updates = {
 				name,
 				...additionalFields,
-			});
+			};
+
+			// Run beforeUpdateTeam hook
+			if (options?.organizationHooks?.beforeUpdateTeam) {
+				const response = await options?.organizationHooks.beforeUpdateTeam({
+					team,
+					updates,
+					user: session.user,
+					organization,
+				});
+				if (response && typeof response === "object" && "data" in response) {
+					// Allow the hook to modify the updates
+					const modifiedUpdates = response.data;
+					const updatedTeam = await adapter.updateTeam(
+						team.id,
+						modifiedUpdates,
+					);
+
+					// Run afterUpdateTeam hook
+					if (options?.organizationHooks?.afterUpdateTeam) {
+						await options?.organizationHooks.afterUpdateTeam({
+							team: updatedTeam,
+							user: session.user,
+							organization,
+						});
+					}
+
+					return ctx.json(updatedTeam);
+				}
+			}
+
+			const updatedTeam = await adapter.updateTeam(team.id, updates);
+
+			// Run afterUpdateTeam hook
+			if (options?.organizationHooks?.afterUpdateTeam) {
+				await options?.organizationHooks.afterUpdateTeam({
+					team: updatedTeam,
+					user: session.user,
+					organization,
+				});
+			}
 
 			return ctx.json(updatedTeam);
 		},
@@ -435,9 +559,9 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 				z.object({
 					organizationId: z
 						.string()
-						.meta({
-							description: `The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organziation-id"`,
-						})
+						.describe(
+							`The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organziation-id"`,
+						)
 						.optional(),
 				}),
 			),
@@ -532,10 +656,9 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 			body: z.object({
 				teamId: z
 					.string()
-					.meta({
-						description:
-							"The team id to set as active. It can be null to unset the active team",
-					})
+					.describe(
+						"The team id to set as active. It can be null to unset the active team",
+					)
 					.nullable()
 					.optional(),
 			}),
@@ -573,6 +696,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 				const updatedSession = await adapter.setActiveTeam(
 					session.session.token,
 					null,
+					ctx,
 				);
 
 				await setSessionCookie(ctx, {
@@ -618,6 +742,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 			const updatedSession = await adapter.setActiveTeam(
 				session.session.token,
 				team.id,
+				ctx,
 			);
 
 			await setSessionCookie(ctx, {
@@ -678,10 +803,12 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 			method: "GET",
 			query: z.optional(
 				z.object({
-					teamId: z.string().optional().meta({
-						description:
+					teamId: z
+						.string()
+						.optional()
+						.describe(
 							"The team whose members we should return. If this is not provided the members of the current active team get returned.",
-					}),
+						),
 				}),
 			),
 			metadata: {
@@ -762,14 +889,13 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				teamId: z.string().meta({
-					description: "The team the user should be a member of.",
-				}),
+				teamId: z.string().describe("The team the user should be a member of."),
 
-				userId: z.coerce.string().meta({
-					description:
+				userId: z.coerce
+					.string()
+					.describe(
 						"The user Id which represents the user to be added as a member.",
-				}),
+					),
 			}),
 			metadata: {
 				openapi: {
@@ -835,13 +961,17 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const canUpdateMember = hasPermission({
-				role: currentMember.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					member: ["update"],
+			const canUpdateMember = await hasPermission(
+				{
+					role: currentMember.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						member: ["update"],
+					},
+					organizationId: session.session.activeOrganizationId,
 				},
-			});
+				ctx,
+			);
 
 			if (!canUpdateMember) {
 				throw new APIError("FORBIDDEN", {
@@ -862,10 +992,65 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
+			const team = await adapter.findTeamById({
+				teamId: ctx.body.teamId,
+				organizationId: session.session.activeOrganizationId,
+			});
+
+			if (!team) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				});
+			}
+
+			const organization = await adapter.findOrganizationById(
+				session.session.activeOrganizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			const userBeingAdded = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (!userBeingAdded) {
+				throw new APIError("BAD_REQUEST", {
+					message: "User not found",
+				});
+			}
+
+			// Run beforeAddTeamMember hook
+			if (options?.organizationHooks?.beforeAddTeamMember) {
+				const response = await options?.organizationHooks.beforeAddTeamMember({
+					teamMember: {
+						teamId: ctx.body.teamId,
+						userId: ctx.body.userId,
+					},
+					team,
+					user: userBeingAdded,
+					organization,
+				});
+				if (response && typeof response === "object" && "data" in response) {
+					// Allow the hook to modify the data
+				}
+			}
+
 			const teamMember = await adapter.findOrCreateTeamMember({
 				teamId: ctx.body.teamId,
 				userId: ctx.body.userId,
 			});
+
+			// Run afterAddTeamMember hook
+			if (options?.organizationHooks?.afterAddTeamMember) {
+				await options?.organizationHooks.afterAddTeamMember({
+					teamMember,
+					team,
+					user: userBeingAdded,
+					organization,
+				});
+			}
 
 			return ctx.json(teamMember);
 		},
@@ -877,13 +1062,13 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				teamId: z.string().meta({
-					description: "The team the user should be removed from.",
-				}),
+				teamId: z
+					.string()
+					.describe("The team the user should be removed from."),
 
-				userId: z.coerce.string().meta({
-					description: "The user which should be removed from the team.",
-				}),
+				userId: z.coerce
+					.string()
+					.describe("The user which should be removed from the team."),
 			}),
 			metadata: {
 				openapi: {
@@ -935,13 +1120,17 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const canDeleteMember = hasPermission({
-				role: currentMember.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					member: ["delete"],
+			const canDeleteMember = await hasPermission(
+				{
+					role: currentMember.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						member: ["delete"],
+					},
+					organizationId: session.session.activeOrganizationId,
 				},
-			});
+				ctx,
+			);
 
 			if (!canDeleteMember) {
 				throw new APIError("FORBIDDEN", {
@@ -962,10 +1151,70 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
+			const team = await adapter.findTeamById({
+				teamId: ctx.body.teamId,
+				organizationId: session.session.activeOrganizationId,
+			});
+
+			if (!team) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				});
+			}
+
+			const organization = await adapter.findOrganizationById(
+				session.session.activeOrganizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			const userBeingRemoved = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (!userBeingRemoved) {
+				throw new APIError("BAD_REQUEST", {
+					message: "User not found",
+				});
+			}
+
+			const teamMember = await adapter.findTeamMember({
+				teamId: ctx.body.teamId,
+				userId: ctx.body.userId,
+			});
+
+			if (!teamMember) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
+				});
+			}
+
+			// Run beforeRemoveTeamMember hook
+			if (options?.organizationHooks?.beforeRemoveTeamMember) {
+				await options?.organizationHooks.beforeRemoveTeamMember({
+					teamMember,
+					team,
+					user: userBeingRemoved,
+					organization,
+				});
+			}
+
 			await adapter.removeTeamMember({
 				teamId: ctx.body.teamId,
 				userId: ctx.body.userId,
 			});
+
+			// Run afterRemoveTeamMember hook
+			if (options?.organizationHooks?.afterRemoveTeamMember) {
+				await options?.organizationHooks.afterRemoveTeamMember({
+					teamMember,
+					team,
+					user: userBeingRemoved,
+					organization,
+				});
+			}
 
 			return ctx.json({ message: "Team member removed successfully." });
 		},

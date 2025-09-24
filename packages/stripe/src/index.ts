@@ -5,6 +5,7 @@ import {
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
+import { type Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
 import {
 	sessionMiddleware,
@@ -23,7 +24,7 @@ import type {
 	StripePlan,
 	Subscription,
 } from "./types";
-import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
+import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
 import { getSchema } from "./schema";
 
 const STRIPE_ERROR_CODES = {
@@ -131,17 +132,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					/**
 					 * The name of the plan to subscribe
 					 */
-					plan: z.string().meta({
-						description: 'The name of the plan to upgrade to. Eg: "pro"',
-					}),
+					plan: z.string().describe("The name of the plan to upgrade to"),
 					/**
 					 * If annual plan should be applied.
 					 */
 					annual: z
 						.boolean()
-						.meta({
-							description: "Whether to upgrade to an annual plan. Eg: true",
-						})
+						.describe("Whether to upgrade to an annual plan")
 						.optional(),
 					/**
 					 * Reference id of the subscription to upgrade
@@ -150,10 +147,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					referenceId: z
 						.string()
-						.meta({
-							description:
-								'Reference id of the subscription to upgrade. Eg: "123"',
-						})
+						.describe("Reference id of the subscription to upgrade")
 						.optional(),
 					/**
 					 * This is to allow a specific subscription to be upgrade.
@@ -162,10 +156,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					subscriptionId: z
 						.string()
-						.meta({
-							description:
-								'The id of the subscription to upgrade. Eg: "sub_123"',
-						})
+						.describe("The id of the subscription to upgrade")
 						.optional(),
 					/**
 					 * Any additional data you want to store in your database
@@ -177,50 +168,41 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					seats: z
 						.number()
-						.meta({
-							description:
-								"Number of seats to upgrade to (if applicable). Eg: 1",
-						})
+						.describe("Number of seats to upgrade to (if applicable)")
 						.optional(),
 					/**
 					 * Success URL to redirect back after successful subscription
 					 */
 					successUrl: z
 						.string()
-						.meta({
-							description:
-								'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
-						})
+						.describe(
+							"Callback URL to redirect back after successful subscription",
+						)
 						.default("/"),
 					/**
 					 * Cancel URL
 					 */
 					cancelUrl: z
 						.string()
-						.meta({
-							description:
-								'If set, checkout shows a back button and customers will be directed here if they cancel payment. Eg: "https://example.com/pricing"',
-						})
+						.describe(
+							"If set, checkout shows a back button and customers will be directed here if they cancel payment",
+						)
 						.default("/"),
 					/**
 					 * Return URL
 					 */
 					returnUrl: z
 						.string()
-						.meta({
-							description:
-								'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
-						})
+						.describe(
+							"URL to take customers to when they click on the billing portal’s link to return to your website",
+						)
 						.optional(),
 					/**
 					 * Disable Redirect
 					 */
 					disableRedirect: z
 						.boolean()
-						.meta({
-							description:
-								"Disable redirect after successful subscription. Eg: true",
-						})
+						.describe("Disable redirect after successful subscription")
 						.default(false),
 				}),
 				use: [
@@ -264,7 +246,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 						})
-					: null;
+					: referenceId
+						? await ctx.context.adapter.findOne<Subscription>({
+								model: "subscription",
+								where: [{ field: "referenceId", value: referenceId }],
+							})
+						: null;
 
 				if (ctx.body.subscriptionId && !subscriptionToUpdate) {
 					throw new APIError("BAD_REQUEST", {
@@ -328,12 +315,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							(sub) => sub.status === "active" || sub.status === "trialing",
 						),
 					);
+
 				const activeSubscription = activeSubscriptions.find((sub) =>
 					subscriptionToUpdate?.stripeSubscriptionId || ctx.body.subscriptionId
 						? sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
 							sub.id === ctx.body.subscriptionId
-						: true,
+						: false,
 				);
+
 				const subscriptions = subscriptionToUpdate
 					? [subscriptionToUpdate]
 					: await ctx.context.adapter.findMany<Subscription>({
@@ -346,15 +335,20 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							],
 						});
 
-				const existingSubscription = subscriptions.find(
+				const activeOrTrialingSubscription = subscriptions.find(
 					(sub) => sub.status === "active" || sub.status === "trialing",
 				);
 
+				// Also find any incomplete subscription that we can reuse
+				const incompleteSubscription = subscriptions.find(
+					(sub) => sub.status === "incomplete",
+				);
+
 				if (
-					existingSubscription &&
-					existingSubscription.status === "active" &&
-					existingSubscription.plan === ctx.body.plan &&
-					existingSubscription.seats === (ctx.body.seats || 1)
+					activeOrTrialingSubscription &&
+					activeOrTrialingSubscription.status === "active" &&
+					activeOrTrialingSubscription.plan === ctx.body.plan &&
+					activeOrTrialingSubscription.seats === (ctx.body.seats || 1)
 				) {
 					throw new APIError("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
@@ -400,9 +394,32 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					});
 				}
 
-				const subscription =
-					existingSubscription ||
-					(await ctx.context.adapter.create<InputSubscription, Subscription>({
+				let subscription: Subscription | undefined =
+					activeOrTrialingSubscription || incompleteSubscription;
+
+				if (incompleteSubscription && !activeOrTrialingSubscription) {
+					const updated = await ctx.context.adapter.update<InputSubscription>({
+						model: "subscription",
+						update: {
+							plan: plan.name.toLowerCase(),
+							seats: ctx.body.seats || 1,
+							updatedAt: new Date(),
+						},
+						where: [
+							{
+								field: "id",
+								value: incompleteSubscription.id,
+							},
+						],
+					});
+					subscription = (updated as Subscription) || incompleteSubscription;
+				}
+
+				if (!subscription) {
+					subscription = await ctx.context.adapter.create<
+						InputSubscription,
+						Subscription
+					>({
 						model: "subscription",
 						data: {
 							plan: plan.name.toLowerCase(),
@@ -411,7 +428,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							referenceId,
 							seats: ctx.body.seats || 1,
 						},
-					}));
+					});
+				}
 
 				if (!subscription) {
 					ctx.context.logger.error("Subscription ID not found");
@@ -430,12 +448,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					ctx,
 				);
 
-				const alreadyHasTrial = subscription.status === "trialing";
+				const hasEverTrialed = subscriptions.some((s) => {
+					// Check if user has ever had a trial for any plan (not just the same plan)
+					// This prevents users from getting multiple trials by switching plans
+					const hadTrial =
+						!!(s.trialStart || s.trialEnd) || s.status === "trialing";
+					return hadTrial;
+				});
+
 				const freeTrial =
-					!alreadyHasTrial && plan.freeTrial
-						? {
-								trial_period_days: plan.freeTrial.days,
-							}
+					!hasEverTrialed && plan.freeTrial
+						? { trial_period_days: plan.freeTrial.days }
 						: undefined;
 
 				let priceIdToUse: string | undefined = undefined;
@@ -612,22 +635,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				body: z.object({
 					referenceId: z
 						.string()
-						.meta({
-							description:
-								"Reference id of the subscription to cancel. Eg: '123'",
-						})
+						.describe("Reference id of the subscription to cancel")
 						.optional(),
 					subscriptionId: z
 						.string()
-						.meta({
-							description:
-								"The id of the subscription to cancel. Eg: 'sub_123'",
-						})
+						.describe("The id of the subscription to cancel")
 						.optional(),
-					returnUrl: z.string().meta({
-						description:
-							'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
-					}),
+					returnUrl: z
+						.string()
+						.describe(
+							"URL to take customers to when they click on the billing portal’s link to return to your website",
+						),
 				}),
 				use: [
 					sessionMiddleware,
@@ -756,17 +774,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				body: z.object({
 					referenceId: z
 						.string()
-						.meta({
-							description:
-								"Reference id of the subscription to restore. Eg: '123'",
-						})
+						.describe("Reference id of the subscription to restore")
 						.optional(),
 					subscriptionId: z
 						.string()
-						.meta({
-							description:
-								"The id of the subscription to restore. Eg: 'sub_123'",
-						})
+						.describe("The id of the subscription to restore")
 						.optional(),
 				}),
 				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
@@ -890,10 +902,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					z.object({
 						referenceId: z
 							.string()
-							.meta({
-								description:
-									"Reference id of the subscription to list. Eg: '123'",
-							})
+							.describe("Reference id of the subscription to list")
 							.optional(),
 					}),
 				),
@@ -982,9 +991,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							.then((res) => res.data[0]);
 
 						if (stripeSubscription) {
-							const plan = await getPlanByPriceId(
+							const plan = await getPlanByPriceInfo(
 								options,
-								stripeSubscription.items.data[0]?.plan.id,
+								stripeSubscription.items.data[0]?.price.id!,
+								stripeSubscription.items.data[0]?.price.lookup_key!,
 							);
 
 							if (plan && subscription) {
@@ -995,11 +1005,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										seats: stripeSubscription.items.data[0]?.quantity || 1,
 										plan: plan.name.toLowerCase(),
 										periodEnd: new Date(
-											stripeSubscription.items.data[0]?.current_period_end *
+											stripeSubscription.items.data[0]?.current_period_end! *
 												1000,
 										),
 										periodStart: new Date(
-											stripeSubscription.items.data[0]?.current_period_start *
+											stripeSubscription.items.data[0]?.current_period_start! *
 												1000,
 										),
 										stripeSubscriptionId: stripeSubscription.id,
@@ -1039,6 +1049,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "POST",
 				body: z.object({
+					locale: z
+						.custom<StripeType.Checkout.Session.Locale>((localization) => {
+							return typeof localization === "string";
+						})
+						.optional(),
 					referenceId: z.string().optional(),
 					returnUrl: z.string().default("/"),
 				}),
@@ -1082,6 +1097,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				try {
 					const { url } = await client.billingPortal.sessions.create({
+						locale: ctx.body.locale,
 						customer: customerId,
 						return_url: getUrl(ctx, ctx.body.returnUrl),
 					});
@@ -1113,6 +1129,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						isAction: false,
 					},
 					cloneRequest: true,
+					//don't parse the body
+					disableBody: true,
 				},
 				async (ctx) => {
 					if (!ctx.request?.body) {
@@ -1191,21 +1209,19 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												userId: user.id,
 											},
 										});
-										const updatedUser =
-											await ctx.context.internalAdapter.updateUser(user.id, {
-												stripeCustomerId: stripeCustomer.id,
-											});
-										if (!updatedUser) {
-											logger.error("#BETTER_AUTH: Failed to create  customer");
-										} else {
-											await options.onCustomerCreate?.(
-												{
-													stripeCustomer,
-													user,
+										await ctx.context.internalAdapter.updateUser(user.id, {
+											stripeCustomerId: stripeCustomer.id,
+										});
+										await options.onCustomerCreate?.(
+											{
+												stripeCustomer,
+												user: {
+													...user,
+													stripeCustomerId: stripeCustomer.id,
 												},
-												ctx,
-											);
-										}
+											},
+											ctx,
+										);
 									}
 								},
 							},

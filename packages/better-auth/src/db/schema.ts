@@ -1,12 +1,17 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import type { FieldAttribute } from ".";
 import type { AuthPluginSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
 
-export const accountSchema = z.object({
+export const coreSchema = z.object({
 	id: z.string(),
+	createdAt: z.date().default(() => new Date()),
+	updatedAt: z.date().default(() => new Date()),
+});
+
+export const accountSchema = coreSchema.extend({
 	providerId: z.string(),
 	accountId: z.string(),
 	userId: z.coerce.string(),
@@ -29,36 +34,25 @@ export const accountSchema = z.object({
 	 * Password is only stored in the credential provider
 	 */
 	password: z.string().nullish(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
 });
 
-export const userSchema = z.object({
-	id: z.string(),
+export const userSchema = coreSchema.extend({
 	email: z.string().transform((val) => val.toLowerCase()),
 	emailVerified: z.boolean().default(false),
 	name: z.string(),
 	image: z.string().nullish(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
 });
 
-export const sessionSchema = z.object({
-	id: z.string(),
+export const sessionSchema = coreSchema.extend({
 	userId: z.coerce.string(),
 	expiresAt: z.date(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
 	token: z.string(),
 	ipAddress: z.string().nullish(),
 	userAgent: z.string().nullish(),
 });
 
-export const verificationSchema = z.object({
-	id: z.string(),
+export const verificationSchema = coreSchema.extend({
 	value: z.string(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
 	expiresAt: z.date(),
 	identifier: z.string(),
 });
@@ -134,31 +128,31 @@ export function parseInputData<T extends Record<string, any>>(
 	const parsedData: Record<string, any> = {};
 	for (const key in fields) {
 		if (key in data) {
-			if (fields[key].input === false) {
-				if (fields[key].defaultValue) {
-					parsedData[key] = fields[key].defaultValue;
+			if (fields[key]!.input === false) {
+				if (fields[key]!.defaultValue) {
+					parsedData[key] = fields[key]!.defaultValue;
 					continue;
 				}
 				continue;
 			}
-			if (fields[key].validator?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key].validator.input.parse(data[key]);
+			if (fields[key]!.validator?.input && data[key] !== undefined) {
+				parsedData[key] = fields[key]!.validator.input.parse(data[key]);
 				continue;
 			}
-			if (fields[key].transform?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key].transform?.input(data[key]);
+			if (fields[key]!.transform?.input && data[key] !== undefined) {
+				parsedData[key] = fields[key]!.transform?.input(data[key]);
 				continue;
 			}
 			parsedData[key] = data[key];
 			continue;
 		}
 
-		if (fields[key].defaultValue && action === "create") {
-			parsedData[key] = fields[key].defaultValue;
+		if (fields[key]!.defaultValue && action === "create") {
+			parsedData[key] = fields[key]!.defaultValue;
 			continue;
 		}
 
-		if (fields[key].required && action === "create") {
+		if (fields[key]!.required && action === "create") {
 			throw new APIError("BAD_REQUEST", {
 				message: `${key} is required`,
 			});
@@ -217,14 +211,14 @@ export function mergeSchema<S extends AuthPluginSchema>(
 	for (const table in newSchema) {
 		const newModelName = newSchema[table]?.modelName;
 		if (newModelName) {
-			schema[table].modelName = newModelName;
+			schema[table]!.modelName = newModelName;
 		}
-		for (const field in schema[table].fields) {
+		for (const field in schema[table]!.fields) {
 			const newField = newSchema[table]?.fields?.[field];
 			if (!newField) {
 				continue;
 			}
-			schema[table].fields[field].fieldName = newField;
+			schema[table]!.fields[field]!.fieldName = newField;
 		}
 	}
 	return schema;

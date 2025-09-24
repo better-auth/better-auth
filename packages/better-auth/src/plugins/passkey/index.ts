@@ -12,7 +12,7 @@ import type {
 } from "@simplewebauthn/server";
 import { APIError } from "better-call";
 import { generateRandomString } from "../../crypto/random";
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
@@ -61,7 +61,7 @@ export interface PasskeyOptions {
 	 * if this isn't provided. The client itself will
 	 * pass this value.
 	 */
-	origin?: string | null;
+	origin?: string | string[] | null;
 
 	/**
 	 * Allow customization of the authenticatorSelection options
@@ -146,13 +146,13 @@ export const passkey = (options?: PasskeyOptions) => {
 									parameters: {
 										query: {
 											authenticatorAttachment: {
-												description: `Type of authenticator to use for registration. 
-                          "platform" for device-specific authenticators, 
+												description: `Type of authenticator to use for registration.
+                          "platform" for device-specific authenticators,
                           "cross-platform" for authenticators that can be used across devices.`,
 												required: false,
 											},
 											name: {
-												description: `Optional custom name for the passkey. 
+												description: `Optional custom name for the passkey.
                           This can help identify the passkey when managing multiple credentials.`,
 												required: false,
 											},
@@ -332,16 +332,6 @@ export const passkey = (options?: PasskeyOptions) => {
 				"/passkey/generate-authenticate-options",
 				{
 					method: "POST",
-					body: z
-						.object({
-							email: z
-								.string()
-								.meta({
-									description: "The email address of the user",
-								})
-								.optional(),
-						})
-						.optional(),
 					metadata: {
 						openapi: {
 							description: "Generate authentication options for a passkey",
@@ -499,12 +489,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					method: "POST",
 					body: z.object({
 						response: z.any(),
-						name: z
-							.string()
-							.meta({
-								description: "Name of the passkey",
-							})
-							.optional(),
+						name: z.string().describe("Name of the passkey").optional(),
 					}),
 					use: [freshSessionMiddleware],
 					metadata: {
@@ -859,10 +844,7 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						id: z.string().meta({
-							description:
-								'The ID of the passkey to delete. Eg: "some-passkey-id"',
-						}),
+						id: z.string().describe("The ID of the passkey to delete. Eg: "),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -926,12 +908,16 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						id: z.string().meta({
-							description: `The ID of the passkey which will be updated. Eg: \"passkey-id\"`,
-						}),
-						name: z.string().meta({
-							description: `The new name which the passkey will be updated to. Eg: \"my-new-passkey-name\"`,
-						}),
+						id: z
+							.string()
+							.describe(
+								`The ID of the passkey which will be updated. Eg: \"passkey-id\"`,
+							),
+						name: z
+							.string()
+							.describe(
+								`The new name which the passkey will be updated to. Eg: \"my-new-passkey-name\"`,
+							),
 					}),
 					use: [sessionMiddleware],
 					metadata: {

@@ -1,14 +1,14 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
-import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { getSchema, type UsernameSchema } from "./schema";
 import { mergeSchema } from "../../db/schema";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
+import { createEmailVerificationToken } from "../../api";
 export * from "./error-codes";
 export type UsernameOptions = {
 	schema?: InferOptionSchema<UsernameSchema>;
@@ -156,23 +156,15 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z
-							.string()
-							.meta({ description: "The username of the user" }),
-						password: z
-							.string()
-							.meta({ description: "The password of the user" }),
+						username: z.string().describe("The username of the user"),
+						password: z.string().describe("The password of the user"),
 						rememberMe: z
 							.boolean()
-							.meta({
-								description: "Remember the user session",
-							})
+							.describe("Remember the user session")
 							.optional(),
 						callbackURL: z
 							.string()
-							.meta({
-								description: "The URL to redirect to after email verification",
-							})
+							.describe("The URL to redirect to after email verification")
 							.optional(),
 					}),
 					metadata: {
@@ -197,6 +189,21 @@ export const username = (options?: UsernameOptions) => {
 													},
 												},
 												required: ["token", "user"],
+											},
+										},
+									},
+								},
+								422: {
+									description: "Unprocessable Entity. Validation error",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													message: {
+														type: "string",
+													},
+												},
 											},
 										},
 									},
@@ -249,13 +256,13 @@ export const username = (options?: UsernameOptions) => {
 					}
 
 					const user = await ctx.context.adapter.findOne<
-						User & { username: string }
+						User & { username: string; displayUsername: string }
 					>({
 						model: "user",
 						where: [
 							{
 								field: "username",
-								value: username,
+								value: normalizer(username),
 							},
 						],
 					});
@@ -272,10 +279,37 @@ export const username = (options?: UsernameOptions) => {
 					}
 
 					if (
-						!user.emailVerified &&
-						ctx.context.options.emailAndPassword?.requireEmailVerification
+						ctx.context.options?.emailAndPassword?.requireEmailVerification &&
+						!user.emailVerified
 					) {
-						await sendVerificationEmailFn(ctx, user);
+						if (
+							!ctx.context.options?.emailVerification?.sendVerificationEmail
+						) {
+							throw new APIError("FORBIDDEN", {
+								message: ERROR_CODES.EMAIL_NOT_VERIFIED,
+							});
+						}
+
+						if (ctx.context.options?.emailVerification?.sendOnSignIn) {
+							const token = await createEmailVerificationToken(
+								ctx.context.secret,
+								user.email,
+								undefined,
+								ctx.context.options.emailVerification?.expiresIn,
+							);
+							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
+								ctx.body.callbackURL || "/"
+							}`;
+							await ctx.context.options.emailVerification.sendVerificationEmail(
+								{
+									user: user,
+									url,
+									token,
+								},
+								ctx.request,
+							);
+						}
+
 						throw new APIError("FORBIDDEN", {
 							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
 						});
@@ -343,6 +377,7 @@ export const username = (options?: UsernameOptions) => {
 							email: user.email,
 							emailVerified: user.emailVerified,
 							username: user.username,
+							displayUsername: user.displayUsername,
 							name: user.name,
 							image: user.image,
 							createdAt: user.createdAt,
@@ -356,9 +391,7 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string().meta({
-							description: "The username to check",
-						}),
+						username: z.string().describe("The username to check"),
 					}),
 				},
 				async (ctx) => {
@@ -368,12 +401,36 @@ export const username = (options?: UsernameOptions) => {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
 					}
+
+					const minUsernameLength = options?.minUsernameLength || 3;
+					const maxUsernameLength = options?.maxUsernameLength || 30;
+
+					if (username.length < minUsernameLength) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_SHORT,
+						});
+					}
+
+					if (username.length > maxUsernameLength) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_LONG,
+						});
+					}
+
+					const validator =
+						options?.usernameValidator || defaultUsernameValidator;
+
+					if (!(await validator(username))) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
 					const user = await ctx.context.adapter.findOne<User>({
 						model: "user",
 						where: [
 							{
 								field: "username",
-								value: username.toLowerCase(),
+								value: normalizer(username),
 							},
 						],
 					});
@@ -488,8 +545,12 @@ export const username = (options?: UsernameOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						ctx.body.displayUsername ||= ctx.body.username;
-						ctx.body.username ||= ctx.body.displayUsername;
+						if (ctx.body.username && !ctx.body.displayUsername) {
+							ctx.body.displayUsername = ctx.body.username;
+						}
+						if (ctx.body.displayUsername && !ctx.body.username) {
+							ctx.body.username = ctx.body.displayUsername;
+						}
 					}),
 				},
 			],

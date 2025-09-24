@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { getDate } from "../../../utils/date";
@@ -24,22 +24,17 @@ export function createApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/create",
 		{
 			method: "POST",
 			body: z.object({
-				name: z
-					.string()
-					.meta({ description: "Name of the Api Key" })
-					.optional(),
+				name: z.string().describe("Name of the Api Key").optional(),
 				expiresIn: z
 					.number()
-					.meta({
-						description: "Expiration time of the Api Key in seconds",
-					})
+					.describe("Expiration time of the Api Key in seconds")
 					.min(1)
 					.optional()
 					.nullable()
@@ -47,14 +42,13 @@ export function createApiKey({
 
 				userId: z.coerce
 					.string()
-					.meta({
-						description:
-							'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
-					})
+					.describe(
+						"User Id of the user that the Api Key belongs to. server-only",
+					)
 					.optional(),
 				prefix: z
 					.string()
-					.meta({ description: "Prefix of the Api Key" })
+					.describe("Prefix of the Api Key")
 					.regex(/^[a-zA-Z0-9_-]+$/, {
 						message:
 							"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
@@ -62,9 +56,7 @@ export function createApiKey({
 					.optional(),
 				remaining: z
 					.number()
-					.meta({
-						description: "Remaining number of requests. Server side only",
-					})
+					.describe("Remaining number of requests. Server side only")
 					.min(0)
 					.optional()
 					.nullable()
@@ -72,45 +64,36 @@ export function createApiKey({
 				metadata: z.any().optional(),
 				refillAmount: z
 					.number()
-					.meta({
-						description:
-							"Amount to refill the remaining count of the Api Key. server-only. Eg: 100",
-					})
+					.describe(
+						"Amount to refill the remaining count of the Api Key. server-only",
+					)
 					.min(1)
 					.optional(),
 				refillInterval: z
 					.number()
-					.meta({
-						description:
-							"Interval to refill the Api Key in milliseconds. server-only. Eg: 1000",
-					})
+					.describe(
+						"Interval to refill the Api Key in milliseconds. server-only",
+					)
 					.optional(),
 				rateLimitTimeWindow: z
 					.number()
-					.meta({
-						description:
-							"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
-					})
+					.describe(
+						"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only",
+					)
 					.optional(),
 				rateLimitMax: z
 					.number()
-					.meta({
-						description:
-							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
-					})
+					.describe(
+						"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only",
+					)
 					.optional(),
 				rateLimitEnabled: z
 					.boolean()
-					.meta({
-						description:
-							"Whether the key has rate limiting enabled. server-only. Eg: true",
-					})
+					.describe("Whether the key has rate limiting enabled. server-only")
 					.optional(),
 				permissions: z
 					.record(z.string(), z.array(z.string()))
-					.meta({
-						description: "Permissions of the Api Key.",
-					})
+					.describe("Permissions of the Api Key.")
 					.optional(),
 			}),
 			metadata: {
@@ -429,7 +412,7 @@ export function createApiKey({
 						? (opts.rateLimit.enabled ?? true)
 						: rateLimitEnabled,
 				requestCount: 0,
-				//@ts-ignore - we intentionally save the permissions as string on DB.
+				//@ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 			};
 
@@ -451,10 +434,7 @@ export function createApiKey({
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
-					? safeJSONParse(
-							//@ts-ignore - from DB, this value is always a string
-							apiKey.permissions,
-						)
+					? safeJSONParse(apiKey.permissions)
 					: null,
 			});
 		},

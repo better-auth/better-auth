@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { APIError, createAuthEndpoint } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
@@ -75,10 +75,7 @@ export async function validateApiKey({
 		const apiKeyPermissions = apiKey.permissions
 			? safeJSONParse<{
 					[key: string]: string[];
-				}>(
-					//@ts-ignore - from DB, this value is always a string
-					apiKey.permissions,
-				)
+				}>(apiKey.permissions)
 			: null;
 
 		if (!apiKeyPermissions) {
@@ -194,21 +191,17 @@ export function verifyApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/verify",
 		{
 			method: "POST",
 			body: z.object({
-				key: z.string().meta({
-					description: "The key to verify",
-				}),
+				key: z.string().describe("The key to verify"),
 				permissions: z
 					.record(z.string(), z.array(z.string()))
-					.meta({
-						description: "The permissions to verify.",
-					})
+					.describe("The permissions to verify.")
 					.optional(),
 			}),
 			metadata: {
@@ -295,10 +288,7 @@ export function verifyApiKey({
 			returningApiKey.permissions = returningApiKey.permissions
 				? safeJSONParse<{
 						[key: string]: string[];
-					}>(
-						//@ts-ignore - from DB, this value is always a string
-						returningApiKey.permissions,
-					)
+					}>(returningApiKey.permissions)
 				: null;
 
 			return ctx.json({

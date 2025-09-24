@@ -1,9 +1,12 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { type InferOrganizationRolesFromOption } from "../schema";
+import {
+	type InferOrganizationRolesFromOption,
+	type Invitation,
+} from "../schema";
 import { APIError } from "better-call";
 import { parseRoles } from "../organization";
 import { type OrganizationOptions } from "../types";
@@ -14,6 +17,7 @@ import {
 	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
+import { getDate } from "../../../utils/date";
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -22,50 +26,30 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	});
 
 	const baseSchema = z.object({
-		email: z.string().meta({
-			description: "The email address of the user to invite",
-		}),
+		email: z.string().describe("The email address of the user to invite"),
 		role: z
 			.union([
-				z.string().meta({
-					description: "The role to assign to the user",
-				}),
-				z.array(
-					z.string().meta({
-						description: "The roles to assign to the user",
-					}),
-				),
+				z.string().describe("The role to assign to the user"),
+				z.array(z.string().describe("The roles to assign to the user")),
 			])
-			.meta({
-				description:
-					'The role(s) to assign to the user. It can be `admin`, `member`, or `guest`. Eg: "member"',
-			}),
+			.describe(
+				"The role(s) to assign to the user. It can be `admin`, `member`, or `guest`. Eg: ",
+			),
 		organizationId: z
 			.string()
-			.meta({
-				description: "The organization ID to invite the user to",
-			})
+			.describe("The organization ID to invite the user to")
 			.optional(),
 		resend: z
 			.boolean()
-			.meta({
-				description:
-					"Resend the invitation email, if the user is already invited. Eg: true",
-			})
+			.describe(
+				"Resend the invitation email, if the user is already invited. Eg: true",
+			)
 			.optional(),
 		teamId: z.union([
+			z.string().describe("The team ID to invite the user to").optional(),
 			z
-				.string()
-				.meta({
-					description: "The team ID to invite the user to",
-				})
-				.optional(),
-			z
-				.array(
-					z.string().meta({
-						description: "The team ID to invite the user to",
-					}),
-				)
+				.array(z.string())
+				.describe("The team IDs to invite the user to")
 				.optional(),
 		]),
 	});
@@ -182,13 +166,18 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const canInvite = hasPermission({
-				role: member.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					invitation: ["create"],
+			const canInvite = await hasPermission(
+				{
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						invitation: ["create"],
+					},
+					organizationId,
 				},
-			});
+				ctx,
+			);
+
 			if (!canInvite) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -230,19 +219,68 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
 				});
 			}
+
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			// If resend is true and there's an existing invitation, reuse it
+			if (alreadyInvited.length && ctx.body.resend) {
+				const existingInvitation = alreadyInvited[0];
+
+				// Update the invitation's expiration date using the same logic as createInvitation
+				const defaultExpiration = 60 * 60 * 48; // 48 hours in seconds
+				const newExpiresAt = getDate(
+					ctx.context.orgOptions.invitationExpiresIn || defaultExpiration,
+					"sec",
+				);
+
+				await ctx.context.adapter.update({
+					model: "invitation",
+					where: [
+						{
+							field: "id",
+							value: existingInvitation!.id,
+						},
+					],
+					update: {
+						expiresAt: newExpiresAt,
+					},
+				});
+
+				const updatedInvitation = {
+					...existingInvitation,
+					expiresAt: newExpiresAt,
+				};
+
+				await ctx.context.orgOptions.sendInvitationEmail?.(
+					{
+						id: updatedInvitation.id!,
+						role: updatedInvitation.role! as string,
+						email: updatedInvitation.email!.toLowerCase(),
+						organization: organization,
+						inviter: {
+							...member,
+							user: session.user,
+						},
+						invitation: updatedInvitation as unknown as Invitation,
+					},
+					ctx.request,
+				);
+
+				return ctx.json(updatedInvitation);
+			}
+
 			if (
 				alreadyInvited.length &&
 				ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
 			) {
 				await adapter.updateInvitation({
-					invitationId: alreadyInvited[0].id,
+					invitationId: alreadyInvited[0]!.id,
 					status: "canceled",
-				});
-			}
-			const organization = await adapter.findOrganizationById(organizationId);
-			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
 
@@ -326,14 +364,37 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				...additionalFields
 			} = ctx.body;
 
+			let invitationData = {
+				role: roles,
+				email: ctx.body.email.toLowerCase(),
+				organizationId: organizationId,
+				teamIds,
+				...(additionalFields ? additionalFields : {}),
+			};
+
+			// Run beforeCreateInvitation hook
+			if (option?.organizationHooks?.beforeCreateInvitation) {
+				const response = await option?.organizationHooks.beforeCreateInvitation(
+					{
+						invitation: {
+							...invitationData,
+							inviterId: session.user.id,
+							teamId: teamIds.length > 0 ? teamIds[0] : undefined,
+						},
+						inviter: session.user,
+						organization,
+					},
+				);
+				if (response && typeof response === "object" && "data" in response) {
+					invitationData = {
+						...invitationData,
+						...response.data,
+					};
+				}
+			}
+
 			const invitation = await adapter.createInvitation({
-				invitation: {
-					role: roles,
-					email: ctx.body.email.toLowerCase(),
-					organizationId: organizationId,
-					teamIds,
-					...(additionalFields ? additionalFields : {}),
-				},
+				invitation: invitationData,
 				user: session.user,
 			});
 
@@ -353,6 +414,15 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				ctx.request,
 			);
 
+			// Run afterCreateInvitation hook
+			if (option?.organizationHooks?.afterCreateInvitation) {
+				await option?.organizationHooks.afterCreateInvitation({
+					invitation: invitation as unknown as Invitation,
+					inviter: session.user,
+					organization,
+				});
+			}
+
 			return ctx.json(invitation);
 		},
 	);
@@ -364,9 +434,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				invitationId: z.string().meta({
-					description: "The ID of the invitation to accept",
-				}),
+				invitationId: z.string().describe("The ID of the invitation to accept"),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
@@ -440,17 +508,34 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 				});
 			}
+
+			const organization = await adapter.findOrganizationById(
+				invitation.organizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			// Run beforeAcceptInvitation hook
+			if (options?.organizationHooks?.beforeAcceptInvitation) {
+				await options?.organizationHooks.beforeAcceptInvitation({
+					invitation: invitation as unknown as Invitation,
+					user: session.user,
+					organization,
+				});
+			}
+
 			const acceptedI = await adapter.updateInvitation({
 				invitationId: ctx.body.invitationId,
 				status: "accepted",
 			});
-
 			if (!acceptedI) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
 				});
 			}
-
 			if (
 				ctx.context.orgOptions.teams &&
 				ctx.context.orgOptions.teams.enabled &&
@@ -491,10 +576,11 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				}
 
 				if (onlyOne) {
-					const teamId = teamIds[0];
+					const teamId = teamIds[0]!;
 					const updatedSession = await adapter.setActiveTeam(
 						session.session.token,
 						teamId,
+						ctx,
 					);
 
 					await setSessionCookie(ctx, {
@@ -514,8 +600,8 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			await adapter.setActiveOrganization(
 				session.session.token,
 				invitation.organizationId,
+				ctx,
 			);
-
 			if (!acceptedI) {
 				return ctx.json(null, {
 					status: 400,
@@ -524,7 +610,14 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					},
 				});
 			}
-
+			if (options?.organizationHooks?.afterAcceptInvitation) {
+				await options?.organizationHooks.afterAcceptInvitation({
+					invitation: acceptedI as unknown as Invitation,
+					member,
+					user: session.user,
+					organization,
+				});
+			}
 			return ctx.json({
 				invitation: acceptedI,
 				member,
@@ -538,9 +631,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				invitationId: z.string().meta({
-					description: "The ID of the invitation to reject",
-				}),
+				invitationId: z.string().describe("The ID of the invitation to reject"),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
@@ -601,10 +692,37 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
+			const organization = await adapter.findOrganizationById(
+				invitation.organizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			// Run beforeRejectInvitation hook
+			if (options?.organizationHooks?.beforeRejectInvitation) {
+				await options?.organizationHooks.beforeRejectInvitation({
+					invitation: invitation as unknown as Invitation,
+					user: session.user,
+					organization,
+				});
+			}
+
 			const rejectedI = await adapter.updateInvitation({
 				invitationId: ctx.body.invitationId,
 				status: "rejected",
 			});
+
+			// Run afterRejectInvitation hook
+			if (options?.organizationHooks?.afterRejectInvitation) {
+				await options?.organizationHooks.afterRejectInvitation({
+					invitation: rejectedI || (invitation as unknown as Invitation),
+					user: session.user,
+					organization,
+				});
+			}
 
 			return ctx.json({
 				invitation: rejectedI,
@@ -619,9 +737,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				invitationId: z.string().meta({
-					description: "The ID of the invitation to cancel",
-				}),
+				invitationId: z.string().describe("The ID of the invitation to cancel"),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			openapi: {
@@ -665,23 +781,57 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const canCancel = hasPermission({
-				role: member.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					invitation: ["cancel"],
+			const canCancel = await hasPermission(
+				{
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						invitation: ["cancel"],
+					},
+					organizationId: invitation.organizationId,
 				},
-			});
+				ctx,
+			);
+
 			if (!canCancel) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION,
 				});
 			}
+
+			const organization = await adapter.findOrganizationById(
+				invitation.organizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			// Run beforeCancelInvitation hook
+			if (options?.organizationHooks?.beforeCancelInvitation) {
+				await options?.organizationHooks.beforeCancelInvitation({
+					invitation: invitation as unknown as Invitation,
+					cancelledBy: session.user,
+					organization,
+				});
+			}
+
 			const canceledI = await adapter.updateInvitation({
 				invitationId: ctx.body.invitationId,
 				status: "canceled",
 			});
+
+			// Run afterCancelInvitation hook
+			if (options?.organizationHooks?.afterCancelInvitation) {
+				await options?.organizationHooks.afterCancelInvitation({
+					invitation: (canceledI as unknown as Invitation) || invitation,
+					cancelledBy: session.user,
+					organization,
+				});
+			}
+
 			return ctx.json(canceledI);
 		},
 	);
@@ -694,9 +844,7 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 			use: [orgMiddleware],
 			requireHeaders: true,
 			query: z.object({
-				id: z.string().meta({
-					description: "The ID of the invitation to get",
-				}),
+				id: z.string().describe("The ID of the invitation to get"),
 			}),
 			metadata: {
 				openapi: {
@@ -822,9 +970,7 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 				.object({
 					organizationId: z
 						.string()
-						.meta({
-							description: "The ID of the organization to list invitations for",
-						})
+						.describe("The ID of the organization to list invitations for")
 						.optional(),
 				})
 				.optional(),
@@ -875,10 +1021,9 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 				.object({
 					email: z
 						.string()
-						.meta({
-							description:
-								"The email of the user to list invitations for. This only works for server side API calls.",
-						})
+						.describe(
+							"The email of the user to list invitations for. This only works for server side API calls.",
+						)
 						.optional(),
 				})
 				.optional(),

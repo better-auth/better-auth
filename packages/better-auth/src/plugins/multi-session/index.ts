@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -113,9 +113,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z.string().meta({
-							description: "The session token to set as active",
-						}),
+						sessionToken: z
+							.string()
+							.describe("The session token to set as active"),
 					}),
 					requireHeaders: true,
 					use: [sessionMiddleware],
@@ -191,9 +191,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z.string().meta({
-							description: "The session token to revoke",
-						}),
+						sessionToken: z.string().describe("The session token to revoke"),
 					}),
 					requireHeaders: true,
 					use: [sessionMiddleware],
@@ -267,7 +265,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							);
 
 							if (validSessions.length > 0) {
-								const nextSession = validSessions[0];
+								const nextSession = validSessions[0]!;
 								await setSessionCookie(ctx, nextSession);
 							} else {
 								deleteSessionCookie(ctx);
@@ -329,11 +327,15 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						const ids = Object.keys(cookies)
 							.map((key) => {
 								if (isMultiSessionCookie(key)) {
-									ctx.setCookie(key.toLowerCase(), "", {
-										...ctx.context.authCookies.sessionToken.options,
-										maxAge: 0,
-									});
-									const token = cookies[key].split(".")[0];
+									ctx.setCookie(
+										key.toLowerCase().replace("__secure-", "__Secure-"),
+										"",
+										{
+											...ctx.context.authCookies.sessionToken.options,
+											maxAge: 0,
+										},
+									);
+									const token = cookies[key]!.split(".")[0]!;
 									return token;
 								}
 								return null;

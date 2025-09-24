@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
@@ -107,35 +107,27 @@ export const magicLink = (options: MagicLinkopts) => {
 					body: z.object({
 						email: z
 							.string()
-							.meta({
-								description: "Email address to send the magic link",
-							})
+							.describe("Email address to send the magic link")
 							.email(),
 						name: z
 							.string()
-							.meta({
-								description:
-									'User display name. Only used if the user is registering for the first time. Eg: "my-name"',
-							})
+							.describe(
+								"User display name. Only used if the user is registering for the first time. Eg: ",
+							)
 							.optional(),
 						callbackURL: z
 							.string()
-							.meta({
-								description: "URL to redirect after magic link verification",
-							})
+							.describe("URL to redirect after magic link verification")
 							.optional(),
 						newUserCallbackURL: z
 							.string()
-							.meta({
-								description:
-									"URL to redirect after new user signup. Only used if the user is registering for the first time.",
-							})
+							.describe(
+								"URL to redirect after new user signup. Only used if the user is registering for the first time.",
+							)
 							.optional(),
 						errorCallbackURL: z
 							.string()
-							.meta({
-								description: "URL to redirect after error.",
-							})
+							.describe("URL to redirect after error.")
 							.optional(),
 					}),
 					metadata: {
@@ -241,28 +233,22 @@ export const magicLink = (options: MagicLinkopts) => {
 				{
 					method: "GET",
 					query: z.object({
-						token: z.string().meta({
-							description: "Verification token",
-						}),
+						token: z.string().describe("Verification token"),
 						callbackURL: z
 							.string()
-							.meta({
-								description:
-									'URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: "/dashboard"',
-							})
+							.describe(
+								"URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: ",
+							)
 							.optional(),
 						errorCallbackURL: z
 							.string()
-							.meta({
-								description: "URL to redirect after error.",
-							})
+							.describe("URL to redirect after error.")
 							.optional(),
 						newUserCallbackURL: z
 							.string()
-							.meta({
-								description:
-									"URL to redirect after new user signup. Only used if the user is registering for the first time.",
-							})
+							.describe(
+								"URL to redirect after new user signup. Only used if the user is registering for the first time.",
+							)
 							.optional(),
 					}),
 					use: [

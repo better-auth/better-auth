@@ -1,3 +1,4 @@
+export { getCurrentAdapter } from "./context/transaction";
 export * from "./auth";
 export * from "./types";
 export * from "./error";
@@ -15,3 +16,4 @@ export type * from "./oauth2/types";
 export { createTelemetry } from "./telemetry";
 export { getTelemetryAuthConfig } from "./telemetry/detectors/detect-auth-config";
 export type { TelemetryEvent } from "./telemetry/types";
+export { APIError } from "./api";

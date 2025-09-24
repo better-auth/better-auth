@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "../../error/codes";
@@ -10,6 +10,7 @@ import {
 	validateAuthorizationCode,
 	type OAuth2Tokens,
 	type OAuthProvider,
+	type OAuth2UserInfo,
 } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { refreshAccessToken } from "../../oauth2/refresh-access-token";
@@ -87,27 +88,13 @@ export interface GenericOAuthConfig {
 	 * @param tokens - The OAuth tokens received after successful authentication
 	 * @returns A promise that resolves to a User object or null
 	 */
-	getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
+	getUserInfo?: (tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>;
 	/**
 	 * Custom function to map the user profile to a User object.
 	 */
-	mapProfileToUser?: (profile: Record<string, any>) =>
-		| {
-				id?: string;
-				name?: string;
-				email?: string;
-				image?: string;
-				emailVerified?: boolean;
-				[key: string]: any;
-		  }
-		| Promise<{
-				id?: string;
-				name?: string;
-				email?: string;
-				image?: string;
-				emailVerified?: boolean;
-				[key: string]: any;
-		  }>;
+	mapProfileToUser?: (
+		profile: Record<string, any>,
+	) => Partial<Partial<User>> | Promise<Partial<User>>;
 	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
@@ -163,7 +150,7 @@ interface GenericOAuthOptions {
 async function getUserInfo(
 	tokens: OAuth2Tokens,
 	finalUserInfoUrl: string | undefined,
-) {
+): Promise<OAuth2UserInfo | null> {
 	if (tokens.idToken) {
 		const decoded = decodeJwt(tokens.idToken) as {
 			sub: string;
@@ -201,8 +188,9 @@ async function getUserInfo(
 		},
 	});
 	return {
+		// @ts-expect-error sub is optional in the type
 		id: userInfo.data?.sub,
-		emailVerified: userInfo.data?.email_verified,
+		emailVerified: userInfo.data?.email_verified ?? false,
 		email: userInfo.data?.email,
 		image: userInfo.data?.picture,
 		name: userInfo.data?.name,
@@ -353,47 +341,38 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						providerId: z.string().meta({
-							description: "The provider ID for the OAuth provider",
-						}),
+						providerId: z
+							.string()
+							.describe("The provider ID for the OAuth provider"),
 						callbackURL: z
 							.string()
-							.meta({
-								description: "The URL to redirect to after sign in",
-							})
+							.describe("The URL to redirect to after sign in")
 							.optional(),
 						errorCallbackURL: z
 							.string()
-							.meta({
-								description: "The URL to redirect to if an error occurs",
-							})
+							.describe("The URL to redirect to if an error occurs")
 							.optional(),
 						newUserCallbackURL: z
 							.string()
-							.meta({
-								description:
-									'The URL to redirect to after login if the user is new. Eg: "/welcome"',
-							})
+							.describe(
+								"The URL to redirect to after login if the user is new. Eg: ",
+							)
 							.optional(),
 						disableRedirect: z
 							.boolean()
-							.meta({
-								description: "Disable redirect",
-							})
+							.describe("Disable redirect")
 							.optional(),
 						scopes: z
 							.array(z.string())
-							.meta({
-								description:
-									"Scopes to be passed to the provider authorization request.",
-							})
+							.describe(
+								"Scopes to be passed to the provider authorization request.",
+							)
 							.optional(),
 						requestSignUp: z
 							.boolean()
-							.meta({
-								description:
-									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: false",
-							})
+							.describe(
+								"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: false",
+							)
 							.optional(),
 					}),
 					metadata: {
@@ -515,29 +494,15 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						code: z
-							.string()
-							.meta({
-								description: "The OAuth2 code",
-							})
-							.optional(),
-						error: z
-							.string()
-							.meta({
-								description: "The error message, if any",
-							})
-							.optional(),
+						code: z.string().describe("The OAuth2 code").optional(),
+						error: z.string().describe("The error message, if any").optional(),
 						error_description: z
 							.string()
-							.meta({
-								description: "The error description, if any",
-							})
+							.describe("The error description, if any")
 							.optional(),
 						state: z
 							.string()
-							.meta({
-								description: "The state parameter from the OAuth2 request",
-							})
+							.describe("The state parameter from the OAuth2 request")
 							.optional(),
 					}),
 					metadata: {
@@ -660,32 +625,51 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							message: "Invalid OAuth configuration.",
 						});
 					}
-					const userInfo = (
-						provider.getUserInfo
-							? await provider.getUserInfo(tokens)
-							: await getUserInfo(tokens, finalUserInfoUrl)
-					) as User | null;
-					if (!userInfo) {
-						throw redirectOnError("user_info_is_missing");
-					}
-					const mapUser = provider.mapProfileToUser
-						? await provider.mapProfileToUser(userInfo)
-						: userInfo;
-					if (!mapUser?.email) {
-						ctx.context.logger.error("Unable to get user info", userInfo);
-						throw redirectOnError("email_is_missing");
-					}
+					const userInfo: Omit<User, "createdAt" | "updatedAt"> =
+						await (async function handleUserInfo() {
+							const userInfo = (
+								provider.getUserInfo
+									? await provider.getUserInfo(tokens)
+									: await getUserInfo(tokens, finalUserInfoUrl)
+							) as OAuth2UserInfo | null;
+							if (!userInfo) {
+								throw redirectOnError("user_info_is_missing");
+							}
+							const mapUser = provider.mapProfileToUser
+								? await provider.mapProfileToUser(userInfo)
+								: userInfo;
+							const email = mapUser.email
+								? mapUser.email.toLowerCase()
+								: userInfo.email?.toLowerCase();
+							if (!email) {
+								ctx.context.logger.error("Unable to get user info", userInfo);
+								throw redirectOnError("email_is_missing");
+							}
+							const id = mapUser.id ? String(mapUser.id) : String(userInfo.id);
+							const name = mapUser.name ? mapUser.name : userInfo.name;
+							if (!name) {
+								ctx.context.logger.error("Unable to get user info", userInfo);
+								throw redirectOnError("name_is_missing");
+							}
+							return {
+								...userInfo,
+								...mapUser,
+								email,
+								id,
+								name,
+							};
+						})();
 					if (link) {
 						if (
 							ctx.context.options.account?.accountLinking
 								?.allowDifferentEmails !== true &&
-							link.email !== mapUser.email.toLowerCase()
+							link.email !== userInfo.email
 						) {
 							return redirectOnError("email_doesn't_match");
 						}
 						const existingAccount =
 							await ctx.context.internalAdapter.findAccountByProviderId(
-								userInfo.id,
+								String(userInfo.id),
 								provider.providerId,
 							);
 						if (existingAccount) {
@@ -713,7 +697,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								await ctx.context.internalAdapter.createAccount({
 									userId: link.userId,
 									providerId: provider.providerId,
-									accountId: mapUser.id ?? userInfo.id,
+									accountId: userInfo.id,
 									accessToken: tokens.accessToken,
 									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
@@ -736,10 +720,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 
 					const result = await handleOAuthUserInfo(ctx, {
-						userInfo: {
-							...userInfo,
-							...mapUser,
-						},
+						userInfo,
 						account: {
 							providerId: provider.providerId,
 							accountId: userInfo.id,
@@ -807,20 +788,16 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						 */
 						scopes: z
 							.array(z.string())
-							.meta({
-								description:
-									"Additional scopes to request when linking the account",
-							})
+							.describe("Additional scopes to request when linking the account")
 							.optional(),
 						/**
 						 * The URL to redirect to if there is an error during the link process.
 						 */
 						errorCallbackURL: z
 							.string()
-							.meta({
-								description:
-									"The URL to redirect to if there is an error during the link process",
-							})
+							.describe(
+								"The URL to redirect to if there is an error during the link process",
+							)
 							.optional(),
 					}),
 					use: [sessionMiddleware],
