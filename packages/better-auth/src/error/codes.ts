@@ -1,5 +1,6 @@
-// NOTE: Error code const must be all capital of string (ref https://github.com/better-auth/better-auth/issues/4386)
-export const BASE_ERROR_CODES = {
+import { defineErrorCodes } from "../utils/error-codes";
+
+export const BASE_ERROR_CODES = defineErrorCodes({
 	USER_NOT_FOUND: "User not found",
 	FAILED_TO_CREATE_USER: "Failed to create user",
 	FAILED_TO_CREATE_SESSION: "Failed to create session",
@@ -27,4 +28,4 @@ export const BASE_ERROR_CODES = {
 	ACCOUNT_NOT_FOUND: "Account not found",
 	USER_ALREADY_HAS_PASSWORD:
 		"User already has a password. Provide that to delete the account.",
-};
+});

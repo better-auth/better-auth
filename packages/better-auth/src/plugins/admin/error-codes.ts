@@ -1,5 +1,7 @@
 // NOTE: Error code const must be all capital of string (ref https://github.com/better-auth/better-auth/issues/4386)
-export const ADMIN_ERROR_CODES = {
+import { defineErrorCodes } from "../../utils/error-codes";
+
+export const ADMIN_ERROR_CODES = defineErrorCodes({
 	FAILED_TO_CREATE_USER: "Failed to create user",
 	USER_ALREADY_EXISTS: "User already exists.",
 	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
@@ -24,4 +26,4 @@ export const ADMIN_ERROR_CODES = {
 	NO_DATA_TO_UPDATE: "No data to update",
 	YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS: "You are not allowed to update users",
 	YOU_CANNOT_REMOVE_YOURSELF: "You cannot remove yourself",
-} as const;
+});
