@@ -1,3 +1,4 @@
+// NOTE: Error code const must be all capital of string (ref https://github.com/better-auth/better-auth/issues/4386)
 export const BASE_ERROR_CODES = {
 	USER_NOT_FOUND: "User not found",
 	FAILED_TO_CREATE_USER: "Failed to create user",
@@ -16,7 +17,8 @@ export const BASE_ERROR_CODES = {
 	EMAIL_NOT_VERIFIED: "Email not verified",
 	PASSWORD_TOO_SHORT: "Password too short",
 	PASSWORD_TOO_LONG: "Password too long",
-	USER_ALREADY_EXISTS: "User already exists. Use another email.",
+	USER_ALREADY_EXISTS: "User already exists.",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "User already exists. Use another email.",
 	EMAIL_CAN_NOT_BE_UPDATED: "Email can not be updated",
 	CREDENTIAL_ACCOUNT_NOT_FOUND: "Credential account not found",
 	SESSION_EXPIRED: "Session expired. Re-authenticate to perform this action.",
