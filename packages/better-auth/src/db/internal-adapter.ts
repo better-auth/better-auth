@@ -320,22 +320,17 @@ export const createInternalAdapter = (
 									list = list.filter((session) => session.expiresAt > now);
 								}
 
-								const filtered: { token: string; expiresAt: number }[] = [];
-								let furthestSessionExp = now;
-								for (const item of list) {
-									if (item.expiresAt > now) {
-										filtered.push(item);
-										if (furthestSessionExp < item.expiresAt) {
-											furthestSessionExp = item.expiresAt;
-										}
-									}
-								}
+								const sorted = list.sort((a, b) => a.expiresAt - b.expiresAt);
+								let furthestSessionExp = sorted.at(-1)?.expiresAt;
 
-								filtered.push({
+								sorted.push({
 									token: data.token,
 									expiresAt: data.expiresAt.getTime(),
 								});
-								if (furthestSessionExp < data.expiresAt.getTime()) {
+								if (
+									!furthestSessionExp ||
+									furthestSessionExp < data.expiresAt.getTime()
+								) {
 									furthestSessionExp = data.expiresAt.getTime();
 								}
 								const furthestSessionTTL = Math.max(
@@ -345,7 +340,7 @@ export const createInternalAdapter = (
 								if (furthestSessionTTL > 0) {
 									await secondaryStorage.set(
 										`active-sessions-${userId}`,
-										JSON.stringify(filtered),
+										JSON.stringify(sorted),
 										furthestSessionTTL,
 									);
 								}
@@ -586,26 +581,21 @@ export const createInternalAdapter = (
 							safeJSONParse(currentList) || [];
 						const now = Date.now();
 
-						const filtered = [];
-						let furthestSessionExp = now;
-						for (const item of list) {
-							if (item.expiresAt > now && item.token !== token) {
-								filtered.push(item);
-								if (furthestSessionExp < item.expiresAt) {
-									furthestSessionExp = item.expiresAt;
-								}
-							}
-						}
-
-						const furthestSessionTTL = Math.max(
-							Math.floor((furthestSessionExp - now) / 1000),
-							0,
+						const filtered = list.filter(
+							(session) => session.expiresAt > now && session.token !== token,
 						);
-						if (filtered.length > 0 && furthestSessionTTL > 0) {
+						const sorted = filtered.sort((a, b) => a.expiresAt - b.expiresAt);
+						const furthestSessionExp = sorted.at(-1)?.expiresAt;
+
+						if (
+							filtered.length > 0 &&
+							furthestSessionExp &&
+							furthestSessionExp > Date.now()
+						) {
 							await secondaryStorage.set(
 								`active-sessions-${userId}`,
 								JSON.stringify(filtered),
-								furthestSessionTTL,
+								Math.floor((furthestSessionExp - now) / 1000),
 							);
 						} else {
 							await secondaryStorage.delete(`active-sessions-${userId}`);
