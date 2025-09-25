@@ -34,7 +34,7 @@ function normalizeAuthPath(baseURL?: string): string {
 
 	try {
 		// Absolute URL → use only pathname so Nuxt treats it as same-origin and forwards cookies.
-		if (baseURL.startsWith("http://") || baseURL.startsWith("https://")) {
+		if (baseURL.toLowerCase().startsWith("http://") || baseURL.toLowerCase().startsWith("https://")) {
 			const u = new URL(baseURL);
 			return (u.pathname || fallback).replace(/\/+$/, "") || fallback;
 		}
