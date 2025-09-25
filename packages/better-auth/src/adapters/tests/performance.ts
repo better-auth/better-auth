@@ -58,7 +58,7 @@ export const performanceTestSuite = createTestSuite(
 					const start = performance.now();
 					await adapter.update({
 						model: "user",
-						where: [{ field: "id", value: users[i].id }],
+						where: [{ field: "id", value: users[i]!.id }],
 						update: {
 							name: `user-${i}`,
 						},
@@ -73,7 +73,7 @@ export const performanceTestSuite = createTestSuite(
 					const start = performance.now();
 					await adapter.delete({
 						model: "user",
-						where: [{ field: "id", value: users[i].id }],
+						where: [{ field: "id", value: users[i]!.id }],
 					});
 					const end = performance.now();
 					tests.delete.push(end - start);
@@ -97,7 +97,7 @@ export const performanceTestSuite = createTestSuite(
 					const start = performance.now();
 					await adapter.findOne({
 						model: "user",
-						where: [{ field: "id", value: users[i].id }],
+						where: [{ field: "id", value: users[i]!.id }],
 					});
 					const end = performance.now();
 					tests.findOne.push(end - start);

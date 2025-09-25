@@ -170,13 +170,13 @@ export const normalTestSuite = createTestSuite(
 						where: [
 							{
 								field: "name",
-								value: users[0].name.slice(-1),
+								value: users[0]!.name.slice(-1),
 								operator: "ends_with",
 							},
 						],
 					});
 					const expectedResult = sortModels(
-						users.filter((user) => user.name.endsWith(users[0].name.slice(-1))),
+						users.filter((user) => user.name.endsWith(users[0]!.name.slice(-1))),
 					);
 					expect(sortModels(result)).toEqual(sortModels(expectedResult));
 				},
@@ -192,15 +192,15 @@ export const normalTestSuite = createTestSuite(
 				const users = (await insertRandom("user", 3)).map((x) => x[0]);
 				const result = await adapter.findMany<User>({
 					model: "user",
-					where: [{ field: "email", value: users[0].email, operator: "eq" }],
+					where: [{ field: "email", value: users[0]!.email, operator: "eq" }],
 				});
-				expect(sortModels(result)).toEqual(sortModels([users[0]]));
+				expect(sortModels(result)).toEqual(sortModels([users[0]!]));
 			},
 			"findMany - should find many models with ne operator": async () => {
 				const users = (await insertRandom("user", 3)).map((x) => x[0]);
 				const result = await adapter.findMany<User>({
 					model: "user",
-					where: [{ field: "email", value: users[0].email, operator: "ne" }],
+					where: [{ field: "email", value: users[0]!.email, operator: "ne" }],
 				});
 				expect(sortModels(result)).toEqual(sortModels(users.slice(1)));
 			},
@@ -209,11 +209,11 @@ export const normalTestSuite = createTestSuite(
 				const result = await adapter.findMany<User>({
 					model: "user",
 					where: [
-						{ field: "createdAt", value: users[0].createdAt, operator: "gt" },
+						{ field: "createdAt", value: users[0]!.createdAt, operator: "gt" },
 					],
 				});
 				const expectedResult = users.filter(
-					(user) => user.createdAt > users[0].createdAt,
+					(user) => user.createdAt > users[0]!.createdAt,
 				);
 				expect(sortModels(result)).toEqual(sortModels(expectedResult));
 			},
@@ -222,11 +222,11 @@ export const normalTestSuite = createTestSuite(
 				const result = await adapter.findMany<User>({
 					model: "user",
 					where: [
-						{ field: "createdAt", value: users[0].createdAt, operator: "gte" },
+						{ field: "createdAt", value: users[0]!.createdAt, operator: "gte" },
 					],
 				});
 				const expectedResult = users.filter(
-					(user) => user.createdAt >= users[0].createdAt,
+					(user) => user.createdAt >= users[0]!.createdAt,
 				);
 				expect(sortModels(result)).toEqual(sortModels(expectedResult));
 			},
@@ -235,11 +235,11 @@ export const normalTestSuite = createTestSuite(
 				const result = await adapter.findMany<User>({
 					model: "user",
 					where: [
-						{ field: "createdAt", value: users[0].createdAt, operator: "lte" },
+						{ field: "createdAt", value: users[0]!.createdAt, operator: "lte" },
 					],
 				});
 				const expectedResult = users.filter(
-					(user) => user.createdAt <= users[0].createdAt,
+					(user) => user.createdAt <= users[0]!.createdAt,
 				);
 				expect(sortModels(result)).toEqual(sortModels(expectedResult));
 			},
@@ -248,11 +248,11 @@ export const normalTestSuite = createTestSuite(
 				const result = await adapter.findMany<User>({
 					model: "user",
 					where: [
-						{ field: "createdAt", value: users[0].createdAt, operator: "lt" },
+						{ field: "createdAt", value: users[0]!.createdAt, operator: "lt" },
 					],
 				});
 				const expectedResult = users.filter(
-					(user) => user.createdAt < users[0].createdAt,
+					(user) => user.createdAt < users[0]!.createdAt,
 				);
 				expect(sortModels(result)).toEqual(sortModels(expectedResult));
 			},
@@ -261,11 +261,11 @@ export const normalTestSuite = createTestSuite(
 				const result = await adapter.findMany<User>({
 					model: "user",
 					where: [
-						{ field: "id", value: [users[0].id, users[1].id], operator: "in" },
+						{ field: "id", value: [users[0]!.id, users[1]!.id], operator: "in" },
 					],
 				});
 				const expectedResult = users.filter(
-					(user) => user.id === users[0].id || user.id === users[1].id,
+					(user) => user.id === users[0]!.id || user.id === users[1]!.id,
 				);
 				expect(sortModels(result)).toEqual(sortModels(expectedResult));
 			},
@@ -276,7 +276,7 @@ export const normalTestSuite = createTestSuite(
 					where: [
 						{
 							field: "id",
-							value: [users[0].id, users[1].id],
+							value: [users[0]!.id, users[1]!.id],
 							operator: "not_in",
 						},
 					],
@@ -300,7 +300,7 @@ export const normalTestSuite = createTestSuite(
 					limit: 1,
 				});
 				expect(result.length).toEqual(1);
-				expect(users.find((x) => x.id === result[0].id)).not.toBeNull();
+				expect(users.find((x) => x.id === result[0]!.id)).not.toBeNull();
 			},
 			"findMany - should find many models with offset": async () => {
 				// Note: The returned rows are ordered in no particular order
@@ -421,7 +421,7 @@ export const normalTestSuite = createTestSuite(
 					sortModels(users).map((user, i) => ({
 						...user,
 						name: "test-name",
-						updatedAt: sortModels(result)[i].updatedAt,
+						updatedAt: sortModels(result)[i]!.updatedAt,
 					})),
 				);
 			},
@@ -430,12 +430,12 @@ export const normalTestSuite = createTestSuite(
 					const users = (await insertRandom("user", 3)).map((x) => x[0]);
 					await adapter.updateMany({
 						model: "user",
-						where: [{ field: "id", value: users[0].id }],
+						where: [{ field: "id", value: users[0]!.id }],
 						update: { name: "test-name" },
 					});
 					const result = await adapter.findOne<User>({
 						model: "user",
-						where: [{ field: "id", value: users[0].id }],
+						where: [{ field: "id", value: users[0]!.id }],
 					});
 					expect(result).toEqual({
 						...users[0],
@@ -449,14 +449,14 @@ export const normalTestSuite = createTestSuite(
 					await adapter.updateMany({
 						model: "user",
 						where: [
-							{ field: "id", value: users[0].id, connector: "OR" },
-							{ field: "id", value: users[1].id, connector: "OR" },
+							{ field: "id", value: users[0]!.id, connector: "OR" },
+							{ field: "id", value: users[1]!.id, connector: "OR" },
 						],
 						update: { name: "test-name" },
 					});
 					const result = await adapter.findOne<User>({
 						model: "user",
-						where: [{ field: "id", value: users[0].id }],
+						where: [{ field: "id", value: users[0]!.id }],
 					});
 					expect(result).toEqual({
 						...users[0],
@@ -489,8 +489,8 @@ export const normalTestSuite = createTestSuite(
 				await adapter.deleteMany({
 					model: "user",
 					where: [
-						{ field: "id", value: users[0].id, connector: "OR" },
-						{ field: "id", value: users[1].id, connector: "OR" },
+						{ field: "id", value: users[0]!.id, connector: "OR" },
+						{ field: "id", value: users[1]!.id, connector: "OR" },
 					],
 				});
 				const result = await adapter.findMany<User>({
@@ -516,8 +516,8 @@ export const normalTestSuite = createTestSuite(
 				const result = await adapter.count({
 					model: "user",
 					where: [
-						{ field: "id", value: users[2].id, connector: "OR" },
-						{ field: "id", value: users[3].id, connector: "OR" },
+						{ field: "id", value: users[2]!.id, connector: "OR" },
+						{ field: "id", value: users[3]!.id, connector: "OR" },
 					],
 				});
 				expect(result).toEqual(2);

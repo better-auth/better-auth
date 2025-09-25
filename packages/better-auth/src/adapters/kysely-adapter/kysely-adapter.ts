@@ -327,7 +327,7 @@ export const kyselyAdapter = (
 					if (typeof res[0]!.count === "number") {
 						return res[0]!.count;
 					}
-					if (typeof res[0].count === "bigint") {
+					if (typeof res[0]!.count === "bigint") {
 						return Number(res[0]!.count);
 					}
 					return parseInt(res[0]!.count);

@@ -1,4 +1,4 @@
-import { expect, vi } from "vitest";
+import { expect } from "vitest";
 import { createTestSuite } from "../create-test-suite";
 
 /**
