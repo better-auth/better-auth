@@ -22,6 +22,31 @@ function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
 }
 
+/**
+ * Normalize baseURL to a *relative* path for SSR `useFetch` in Nuxt.
+ * - If baseURL is absolute (http/https), strip the origin and keep only pathname.
+ * - If baseURL is relative or a bare path, ensure it starts with a single "/" and no trailing "/".
+ * - Fallback to "/api/auth" if nothing is provided or parsing fails.
+ */
+function normalizeAuthPath(baseURL?: string): string {
+	const fallback = "/api/auth";
+	if (!baseURL || typeof baseURL !== "string") return fallback;
+
+	try {
+		// Absolute URL → use only pathname so Nuxt treats it as same-origin and forwards cookies.
+		if (baseURL.startsWith("http://") || baseURL.startsWith("https://")) {
+			const u = new URL(baseURL);
+			return (u.pathname || fallback).replace(/\/+$/, "") || fallback;
+		}
+
+		// Relative/bare path
+		const withLeading = baseURL.startsWith("/") ? baseURL : `/${baseURL}`;
+		return withLeading.replace(/\/+$/, "") || fallback;
+	} catch {
+		return fallback;
+	}
+}
+
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin
 >
@@ -53,7 +78,8 @@ export function createAuthClient<Option extends ClientOptions>(
 		$fetch,
 		$store,
 		atomListeners,
-	} = getClientConfig(options, false);
+	} = getClientConfig(options);
+
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
@@ -94,7 +120,12 @@ export function createAuthClient<Option extends ClientOptions>(
 	) {
 		if (useFetch) {
 			const ref = useStore(pluginsAtoms.$sessionSignal!);
-			return useFetch(`${baseURL}/get-session`, {
+
+			// Ensure we pass a relative path to useFetch so Nuxt SSR forwards cookies.
+			const authPath = normalizeAuthPath(baseURL as string | undefined);
+			const url = `${authPath}/get-session`;
+
+			return useFetch(url, {
 				ref,
 			}).then((res: any) => {
 				return {
