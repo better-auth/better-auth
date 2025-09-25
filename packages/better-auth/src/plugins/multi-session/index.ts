@@ -113,9 +113,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z
-							.string()
-							.describe("The session token to set as active"),
+						sessionToken: z.string().meta({
+							description: "The session token to set as active",
+						}),
 					}),
 					requireHeaders: true,
 					use: [sessionMiddleware],
@@ -191,7 +191,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z.string().describe("The session token to revoke"),
+						sessionToken: z.string().meta({
+							description: "The session token to revoke",
+						}),
 					}),
 					requireHeaders: true,
 					use: [sessionMiddleware],
