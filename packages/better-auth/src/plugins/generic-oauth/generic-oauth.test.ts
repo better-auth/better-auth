@@ -274,6 +274,43 @@ describe("oauth2", async () => {
 		expect(callbackURL).toBe("http://localhost:3000/new_user");
 	});
 
+	it("should use social provider login", async () => {
+		const { customFetchImpl, auth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test3",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const res = await authClient.signIn.social({
+			provider: "test3",
+		});
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		const headers = new Headers();
+		const { callbackURL } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toBe("http://localhost:3000");
+	});
+
 	it("should not create user when sign ups are disabled", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
