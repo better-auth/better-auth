@@ -804,27 +804,27 @@ describe("jwt", async () => {
 						jti: claims.jti,
 						sub: claims.sub,
 					};
-					if (typeof payload?.exp === "string" && claims.exp) {
-						expect(payload?.exp).toBeGreaterThan(
+					if (typeof claims?.exp === "string") {
+						expect(payload!.exp).toBeGreaterThan(
 							toJwtTime(claims.exp, now) - (errorMargin ?? 60),
 						);
-						expect(payload?.exp).toBeLessThan(
+						expect(payload!.exp).toBeLessThan(
 							toJwtTime(claims.exp, now) + (errorMargin ?? 60),
 						);
 					} else claimsToCheck.exp = claims.exp;
-					if (typeof payload?.iat === "string" && claims.iat) {
-						expect(payload?.iat).toBeGreaterThan(
+					if (typeof claims?.iat === "string") {
+						expect(payload!.iat).toBeGreaterThan(
 							toJwtTime(claims.iat, now) - (errorMargin ?? 60),
 						);
-						expect(payload?.iat).toBeLessThan(
+						expect(payload!.iat).toBeLessThan(
 							toJwtTime(claims.iat, now) + (errorMargin ?? 60),
 						);
 					} else claimsToCheck.iat = claims.iat;
-					if (typeof payload?.nbf === "string" && claims.nbf) {
-						expect(payload?.nbf).toBeGreaterThan(
+					if (typeof claims?.nbf === "string") {
+						expect(payload!.nbf).toBeGreaterThan(
 							toJwtTime(claims.nbf, now) - (errorMargin ?? 60),
 						);
-						expect(payload?.nbf).toBeLessThan(
+						expect(payload!.nbf).toBeLessThan(
 							toJwtTime(claims.nbf, now) + (errorMargin ?? 60),
 						);
 					} else claimsToCheck.nbf = claims.nbf;
