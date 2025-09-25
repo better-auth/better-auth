@@ -1,7 +1,12 @@
 import { type GenericEndpointContext, logger } from "better-auth";
 import type Stripe from "stripe";
-import type { InputSubscription, StripeOptions, Subscription } from "./types";
-import { getPlanByPriceInfo } from "./utils";
+import type {
+	InputSubscription,
+	Payment,
+	StripeOptions,
+	Subscription,
+} from "./types";
+import { getPlanByPriceInfo, getProductByName } from "./utils";
 
 export async function onCheckoutSessionCompleted(
 	ctx: GenericEndpointContext,
@@ -11,84 +16,131 @@ export async function onCheckoutSessionCompleted(
 	try {
 		const client = options.stripeClient;
 		const checkoutSession = event.data.object as Stripe.Checkout.Session;
-		if (checkoutSession.mode === "setup" || !options.subscription?.enabled) {
+		if (checkoutSession.mode === "setup") {
 			return;
 		}
-		const subscription = await client.subscriptions.retrieve(
-			checkoutSession.subscription as string,
-		);
-		const priceId = subscription.items.data[0]?.price.id;
-		const priceLookupKey = subscription.items.data[0]?.price.lookup_key || null;
-		const plan = await getPlanByPriceInfo(
-			options,
-			priceId as string,
-			priceLookupKey,
-		);
-		if (plan) {
-			const referenceId =
-				checkoutSession?.client_reference_id ||
-				checkoutSession?.metadata?.referenceId;
-			const subscriptionId = checkoutSession?.metadata?.subscriptionId;
-			const seats = subscription.items.data[0]!.quantity;
-			if (referenceId && subscriptionId) {
-				const trial =
-					subscription.trial_start && subscription.trial_end
-						? {
-								trialStart: new Date(subscription.trial_start * 1000),
-								trialEnd: new Date(subscription.trial_end * 1000),
-							}
-						: {};
 
-				let dbSubscription =
-					await ctx.context.adapter.update<InputSubscription>({
-						model: "subscription",
-						update: {
-							plan: plan.name.toLowerCase(),
-							status: subscription.status,
-							updatedAt: new Date(),
-							periodStart: new Date(
-								subscription.items.data[0]!.current_period_start * 1000,
-							),
-							periodEnd: new Date(
-								subscription.items.data[0]!.current_period_end * 1000,
-							),
-							stripeSubscriptionId: checkoutSession.subscription as string,
-							seats,
-							...trial,
+		if (
+			checkoutSession.mode === "subscription" &&
+			options.subscription?.enabled
+		) {
+			const subscription = await client.subscriptions.retrieve(
+				checkoutSession.subscription as string,
+			);
+			const priceId = subscription.items.data[0]?.price.id;
+			const priceLookupKey =
+				subscription.items.data[0]?.price.lookup_key || null;
+			const plan = await getPlanByPriceInfo(
+				options,
+				priceId as string,
+				priceLookupKey,
+			);
+			if (plan) {
+				const referenceId =
+					checkoutSession?.client_reference_id ||
+					checkoutSession?.metadata?.referenceId;
+				const subscriptionId = checkoutSession?.metadata?.subscriptionId;
+				const seats = subscription.items.data[0]!.quantity;
+				if (referenceId && subscriptionId) {
+					const trial =
+						subscription.trial_start && subscription.trial_end
+							? {
+									trialStart: new Date(subscription.trial_start * 1000),
+									trialEnd: new Date(subscription.trial_end * 1000),
+								}
+							: {};
+
+					let dbSubscription =
+						await ctx.context.adapter.update<InputSubscription>({
+							model: "subscription",
+							update: {
+								plan: plan.name.toLowerCase(),
+								status: subscription.status,
+								updatedAt: new Date(),
+								periodStart: new Date(
+									subscription.items.data[0]!.current_period_start * 1000,
+								),
+								periodEnd: new Date(
+									subscription.items.data[0]!.current_period_end * 1000,
+								),
+								stripeSubscriptionId: checkoutSession.subscription as string,
+								seats,
+								...trial,
+							},
+							where: [
+								{
+									field: "id",
+									value: subscriptionId,
+								},
+							],
+						});
+
+					if (trial.trialStart && plan.freeTrial?.onTrialStart) {
+						await plan.freeTrial.onTrialStart(dbSubscription as Subscription);
+					}
+
+					if (!dbSubscription) {
+						dbSubscription = await ctx.context.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "id",
+									value: subscriptionId,
+								},
+							],
+						});
+					}
+					await options.subscription?.onSubscriptionComplete?.(
+						{
+							event,
+							subscription: dbSubscription as Subscription,
+							stripeSubscription: subscription,
+							plan,
 						},
-						where: [
-							{
-								field: "id",
-								value: subscriptionId,
-							},
-						],
-					});
-
-				if (trial.trialStart && plan.freeTrial?.onTrialStart) {
-					await plan.freeTrial.onTrialStart(dbSubscription as Subscription);
+						ctx,
+					);
+					return;
 				}
+			}
+		}
 
-				if (!dbSubscription) {
-					dbSubscription = await ctx.context.adapter.findOne<Subscription>({
-						model: "subscription",
-						where: [
-							{
-								field: "id",
-								value: subscriptionId,
-							},
-						],
-					});
-				}
-				await options.subscription?.onSubscriptionComplete?.(
-					{
-						event,
-						subscription: dbSubscription as Subscription,
-						stripeSubscription: subscription,
-						plan,
+		if (
+			checkoutSession.mode === "payment" &&
+			options.oneTimePayments?.enabled
+		) {
+			const paymentId = checkoutSession.metadata?.paymentId;
+
+			if (paymentId && checkoutSession.payment_status === "paid") {
+				await ctx.context.adapter.update({
+					model: "payment",
+					update: {
+						status: "succeeded",
+						stripePaymentIntentId: checkoutSession.payment_intent as string,
+						amount: checkoutSession.amount_total,
+						currency: checkoutSession.currency,
 					},
-					ctx,
-				);
-				return;
+					where: [{ field: "id", value: paymentId }],
+				});
+
+				const payment = await ctx.context.adapter.findOne<Payment>({
+					model: "payment",
+					where: [{ field: "id", value: paymentId }],
+				});
+
+				if (payment) {
+					const product = await getProductByName(options, payment.product);
+					if (product?.onPaymentComplete) {
+						await product.onPaymentComplete(
+							{
+								event,
+								stripeSession: checkoutSession,
+								payment,
+								product,
+							},
+							ctx,
+						);
+					}
+				}
 			}
 		}
 	} catch (e: any) {

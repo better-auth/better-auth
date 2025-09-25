@@ -61,6 +61,7 @@ describe("stripe", async () => {
 		account: [],
 		customer: [],
 		subscription: [],
+		payment: [],
 	};
 	const memory = memoryAdapter(data);
 	const stripeOptions = {
@@ -82,6 +83,21 @@ describe("stripe", async () => {
 				},
 			],
 		},
+		oneTimePayments: {
+			enabled: true,
+			products: [
+				{
+					priceId: process.env.STRIPE_PRICE_ID_1!,
+					name: "Ebook",
+					lookupKey: "ebook_lookup_key",
+				},
+				{
+					priceId: process.env.STRIPE_PRICE_ID_2!,
+					name: "Course",
+					lookupKey: "course_lookup_key",
+				},
+			],
+		},
 	} satisfies StripeOptions;
 	const auth = betterAuth({
 		database: memory,
@@ -99,6 +115,7 @@ describe("stripe", async () => {
 			bearer(),
 			stripeClient({
 				subscription: true,
+				oneTimePayments: true,
 			}),
 		],
 		fetchOptions: {
@@ -121,6 +138,7 @@ describe("stripe", async () => {
 		data.account = [];
 		data.customer = [];
 		data.subscription = [];
+		data.payment = [];
 
 		vi.clearAllMocks();
 	});
@@ -1090,7 +1108,6 @@ describe("stripe", async () => {
 			referenceId: orgId,
 			fetchOptions: { headers },
 		});
-		console.log(upgradeRes);
 
 		// // It should NOT go through billing portal (which would update the personal sub)
 		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
@@ -1738,5 +1755,405 @@ describe("stripe", async () => {
 				},
 			});
 		});
+	});
+
+	it("should create a payment session for one-time payment", async () => {
+		await authClient.signUp.email(testUser, {
+			throw: true,
+		});
+
+		const headers = new Headers();
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		const res = await authClient.payment.createSession({
+			productName: "Ebook",
+			quantity: 1,
+			fetchOptions: { headers },
+		});
+
+		expect(res.data?.url).toBeDefined();
+	});
+
+	it("should handle payment webhook - checkout.session.completed with payment mode", async () => {
+		const userRes = await authClient.signUp.email(testUser, {
+			throw: true,
+		});
+
+		const headers = new Headers();
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		const paymentSession = await authClient.payment.createSession({
+			productName: "Ebook",
+			quantity: 1,
+			fetchOptions: { headers },
+		});
+
+		// Get the actual payment ID from the created payment
+		const paymentsRes = await authClient.payment.list({
+			query: {
+				referenceId: userRes.user.id,
+			},
+			fetchOptions: { headers },
+		});
+		const paymentId = paymentsRes.data?.payments?.[0]?.id;
+
+		const mockEvent = {
+			type: "checkout.session.completed",
+			data: {
+				object: {
+					mode: "payment",
+					payment_status: "paid",
+					payment_intent: "pi_12345",
+					amount_total: 5000,
+					currency: "usd",
+					metadata: {
+						paymentId: paymentId,
+					},
+				},
+			},
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		} as unknown as StripeOptions;
+
+		const testAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memory,
+			emailAndPassword: { enabled: true },
+			plugins: [stripe(testOptions)],
+		});
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(mockEvent),
+			},
+		);
+		const response = await testAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		const res = await authClient.payment.list({
+			query: {
+				referenceId: userRes.user.id,
+			},
+			fetchOptions: { headers },
+		});
+
+		expect(res.data?.payments?.length).toBe(1);
+		expect(res.data?.payments?.[0]).toMatchObject({
+			referenceId: userRes.user.id,
+			product: "Ebook",
+			amount: 5000,
+			currency: "usd",
+			status: "succeeded",
+		});
+	});
+
+	it("should list payments for a user", async () => {
+		const userRes = await authClient.signUp.email(testUser, {
+			throw: true,
+		});
+
+		const headers = new Headers();
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		await authClient.payment.createSession({
+			productName: "Ebook",
+			quantity: 1,
+			fetchOptions: { headers },
+		});
+
+		const payments = await authClient.payment.list({
+			query: {},
+			fetchOptions: { headers },
+		});
+
+		expect(payments.data?.payments?.length).toBe(1);
+		expect(payments.data?.payments?.[0]).toMatchObject({
+			referenceId: userRes.user.id,
+			product: "Ebook",
+		});
+	});
+
+	it("should execute product onPaymentComplete callback", async () => {
+		const onPaymentComplete = vi.fn();
+		const testOptions = {
+			...stripeOptions,
+			oneTimePayments: {
+				enabled: true,
+				products: [
+					{
+						name: "Ebook",
+						price: 5000,
+						currency: "usd",
+						onPaymentComplete,
+					},
+				],
+			},
+		} as unknown as StripeOptions;
+
+		const testAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memory,
+			emailAndPassword: { enabled: true },
+			plugins: [stripe(testOptions)],
+		});
+
+		const testCtx = await testAuth.$context;
+
+		const testAuthClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				bearer(),
+				stripeClient({
+					subscription: true,
+					oneTimePayments: true,
+				}),
+			],
+			fetchOptions: {
+				customFetchImpl: async (url, init) =>
+					testAuth.handler(new Request(url, init)),
+			},
+		});
+
+		const userRes = await testAuthClient.signUp.email(testUser, {
+			throw: true,
+		});
+
+		const headers = new Headers();
+		await testAuthClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		const paymentSession = await testAuthClient.payment.createSession({
+			productName: "Ebook",
+			quantity: 1,
+			fetchOptions: { headers },
+		});
+
+		expect(paymentSession.data?.id).toBeDefined();
+
+		const paymentsRes = await testAuthClient.payment.list({
+			query: {
+				referenceId: userRes.user.id,
+			},
+			fetchOptions: { headers },
+		});
+		const paymentId = paymentsRes.data?.payments?.[0]?.id;
+
+		expect(paymentId).toBeDefined();
+
+		const mockEvent = {
+			type: "checkout.session.completed",
+			data: {
+				object: {
+					mode: "payment",
+					payment_status: "paid",
+					payment_intent: "pi_12345",
+					amount_total: 5000,
+					currency: "usd",
+					metadata: {
+						paymentId: paymentId,
+					},
+				},
+			},
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
+			},
+		};
+
+		const eventTestOptions = {
+			...testOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		} as unknown as StripeOptions;
+
+		const eventTestAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memory,
+			emailAndPassword: { enabled: true },
+			plugins: [stripe(eventTestOptions)],
+		});
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(mockEvent),
+			},
+		);
+		const response = await eventTestAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		const res = await testAuthClient.payment.list({
+			query: {
+				referenceId: userRes.user.id,
+			},
+			fetchOptions: { headers },
+		});
+
+		expect(res.data?.payments?.length).toBe(1);
+		expect(res.data?.payments?.[0]).toMatchObject({
+			referenceId: userRes.user.id,
+			product: "Ebook",
+			amount: 5000,
+			currency: "usd",
+			status: "succeeded",
+		});
+
+		expect(onPaymentComplete).toHaveBeenCalledWith(
+			expect.objectContaining({
+				payment: expect.objectContaining({
+					id: paymentId,
+					referenceId: userRes.user.id,
+					product: "Ebook",
+					amount: 5000,
+					currency: "usd",
+					status: "succeeded",
+				}),
+			}),
+			expect.objectContaining({
+				context: expect.any(Object),
+				_flag: expect.any(String),
+			}),
+		);
+	});
+
+	it("should handle payment creation when oneTimePayments is disabled", async () => {
+		const testOptions = {
+			...stripeOptions,
+			oneTimePayments: {
+				enabled: false,
+			},
+		} as unknown as StripeOptions;
+
+		const testAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memory,
+			emailAndPassword: { enabled: true },
+			plugins: [stripe(testOptions)],
+		});
+
+		const testAuthClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				bearer(),
+				stripeClient({
+					subscription: true,
+					oneTimePayments: true,
+				}),
+			],
+			fetchOptions: {
+				customFetchImpl: async (url, init) =>
+					testAuth.handler(new Request(url, init)),
+			},
+		});
+
+		await testAuthClient.signUp.email(testUser, { throw: true });
+		const headers = new Headers();
+		await testAuthClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		const res = await testAuthClient.payment.createSession({
+			productName: "Ebook",
+			quantity: 1,
+			fetchOptions: { headers },
+		});
+
+		expect(res.error?.status).toBe(404);
+	});
+
+	it("should handle invalid product name", async () => {
+		const userRes = await authClient.signUp.email(testUser, {
+			throw: true,
+		});
+
+		const headers = new Headers();
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+		const res = await authClient.payment.createSession({
+			productName: "InvalidProduct",
+			quantity: 1,
+			fetchOptions: { headers },
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toBe("Product not found");
+	});
+
+	it("should filter payments by status", async () => {
+		const userRes = await authClient.signUp.email(testUser, {
+			throw: true,
+		});
+
+		const headers = new Headers();
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		await authClient.payment.createSession({
+			productName: "Ebook",
+			quantity: 1,
+			fetchOptions: { headers },
+		});
+
+		await ctx.adapter.create({
+			model: "payment",
+			data: {
+				referenceId: userRes.user.id,
+				product: "Course",
+				amount: 3000,
+				currency: "usd",
+				status: "succeeded",
+				quantity: 1,
+			},
+		});
+
+		const succeededPayments = await authClient.payment.list({
+			query: {
+				status: "succeeded",
+			},
+			fetchOptions: { headers },
+		});
+
+		expect(
+			succeededPayments.data?.payments?.every((p) => p.status === "succeeded"),
+		).toBe(true);
 	});
 });
