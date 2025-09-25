@@ -146,7 +146,7 @@ export async function signJwtInternal(
 	if (claims?.iat) {
 		const iat = toJwtTime(claims.iat);
 		const allowedClockSkew: number = pluginOpts?.jwt?.maxClockSkew ?? 60;
-		const now = Math.floor(new Date().getTime() / 1000);
+		const now = Math.floor(Date.now() / 1000);
 		if (iat > now + allowedClockSkew)
 			throw new BetterAuthError(
 				`Failed to sign a JWT: Requested "Issued At" Claim is in the future ${iat} > ${now} ` +
