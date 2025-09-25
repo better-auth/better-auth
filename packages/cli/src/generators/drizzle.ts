@@ -251,7 +251,9 @@ function generateImport({
 				? "text"
 				: "text",
 	);
-	coreImports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");
+	coreImports.push(
+		hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "",
+	);
 	coreImports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
 	if (databaseType === "mysql") {
 		// Only include int for MySQL if actually needed
@@ -300,14 +302,16 @@ function generateImport({
 	}
 
 	// Add sql import for SQLite timestamps with defaultNow
-	const hasSQLiteTimestamp = databaseType === "sqlite" &&
-		Object.values(tables).some(table =>
-			Object.values(table.fields).some(field =>
-				field.type === "date" &&
-				field.defaultValue &&
-				typeof field.defaultValue === "function" &&
-				field.defaultValue.toString().includes("new Date()")
-			)
+	const hasSQLiteTimestamp =
+		databaseType === "sqlite" &&
+		Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) =>
+					field.type === "date" &&
+					field.defaultValue &&
+					typeof field.defaultValue === "function" &&
+					field.defaultValue.toString().includes("new Date()"),
+			),
 		);
 
 	if (hasSQLiteTimestamp) {
