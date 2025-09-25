@@ -2,7 +2,8 @@
 export const ADMIN_ERROR_CODES = {
 	FAILED_TO_CREATE_USER: "Failed to create user",
 	USER_ALREADY_EXISTS: "User already exists.",
-	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "User already exists. Use another email.",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+		"User already exists. Use another email.",
 	YOU_CANNOT_BAN_YOURSELF: "You cannot ban yourself",
 	YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE:
 		"You are not allowed to change users role",
