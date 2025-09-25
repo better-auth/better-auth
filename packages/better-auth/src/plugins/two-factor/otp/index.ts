@@ -131,10 +131,10 @@ export const otp2fa = (options?: OTPOptions) => {
 					 * for 30 days. It'll be refreshed on
 					 * every sign in request within this time.
 					 */
-					trustDevice: z.boolean().optional().meta({
-						description:
-							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-					}),
+					trustDevice: z
+						.boolean()
+						.optional()
+						.describe("If true, the device will be trusted for 30 days. It"),
 				})
 				.optional(),
 			metadata: {
@@ -199,18 +199,16 @@ export const otp2fa = (options?: OTPOptions) => {
 		{
 			method: "POST",
 			body: z.object({
-				code: z.string().meta({
-					description: 'The otp code to verify. Eg: "012345"',
-				}),
+				code: z.string().describe("The otp code to verify. Eg: "),
 				/**
 				 * if true, the device will be trusted
 				 * for 30 days. It'll be refreshed on
 				 * every sign in request within this time.
 				 */
-				trustDevice: z.boolean().optional().meta({
-					description:
-						"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-				}),
+				trustDevice: z
+					.boolean()
+					.optional()
+					.describe("If true, the device will be trusted for 30 days. It"),
 			}),
 			metadata: {
 				openapi: {
@@ -290,7 +288,7 @@ export const otp2fa = (options?: OTPOptions) => {
 					`2fa-otp-${key}`,
 				);
 			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
-			const decryptedOtp = await decryptOTP(ctx, otp);
+			const decryptedOtp = await decryptOTP(ctx, otp!);
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				if (toCheckOtp) {
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -302,7 +300,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				});
 			}
 			const allowedAttempts = options?.allowedAttempts || 5;
-			if (parseInt(counter) >= allowedAttempts) {
+			if (parseInt(counter!) >= allowedAttempts) {
 				await ctx.context.internalAdapter.deleteVerificationValue(
 					toCheckOtp.id,
 				);
@@ -354,7 +352,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				await ctx.context.internalAdapter.updateVerificationValue(
 					toCheckOtp.id,
 					{
-						value: `${otp}:${(parseInt(counter, 10) || 0) + 1}`,
+						value: `${otp}:${(parseInt(counter!, 10) || 0) + 1}`,
 					},
 				);
 				return invalid("INVALID_CODE");

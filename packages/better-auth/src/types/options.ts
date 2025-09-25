@@ -168,8 +168,6 @@ export type BetterAuthOptions = {
 	 * the system will check the following environment variable:
 	 *
 	 * process.env.BETTER_AUTH_URL
-	 *
-	 * If not set it will throw an error.
 	 */
 	baseURL?: string;
 	/**
@@ -860,6 +858,23 @@ export type BetterAuthOptions = {
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
+			delete?: {
+				/**
+				 * Hook that is called before a user is deleted.
+				 * if the hook returns false, the user will not be deleted.
+				 */
+				before?: (
+					user: User & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<boolean | void>;
+				/**
+				 * Hook that is called after a user is deleted.
+				 */
+				after?: (
+					user: User & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
+			};
 		};
 		/**
 		 * Session Hook
@@ -910,6 +925,23 @@ export type BetterAuthOptions = {
 				>;
 				/**
 				 * Hook that is called after a session is updated.
+				 */
+				after?: (
+					session: Session & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
+			};
+			delete?: {
+				/**
+				 * Hook that is called before a session is deleted.
+				 * if the hook returns false, the session will not be deleted.
+				 */
+				before?: (
+					session: Session & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<boolean | void>;
+				/**
+				 * Hook that is called after a session is deleted.
 				 */
 				after?: (
 					session: Session & Record<string, unknown>,
@@ -972,6 +1004,23 @@ export type BetterAuthOptions = {
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
+			delete?: {
+				/**
+				 * Hook that is called before an account is deleted.
+				 * if the hook returns false, the account will not be deleted.
+				 */
+				before?: (
+					account: Account & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<boolean | void>;
+				/**
+				 * Hook that is called after an account is deleted.
+				 */
+				after?: (
+					account: Account & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
+			};
 		};
 		/**
 		 * Verification Hook
@@ -1019,6 +1068,23 @@ export type BetterAuthOptions = {
 				>;
 				/**
 				 * Hook that is called after a verification is updated.
+				 */
+				after?: (
+					verification: Verification & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
+			};
+			delete?: {
+				/**
+				 * Hook that is called before a verification is deleted.
+				 * if the hook returns false, the verification will not be deleted.
+				 */
+				before?: (
+					verification: Verification & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<boolean | void>;
+				/**
+				 * Hook that is called after a verification is deleted.
 				 */
 				after?: (
 					verification: Verification & Record<string, unknown>,

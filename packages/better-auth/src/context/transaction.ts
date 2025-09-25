@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "node:async_hooks";
+import type { AsyncLocalStorage } from "node:async_hooks";
 import type { Adapter } from "../types";
 
 /**
@@ -14,6 +14,9 @@ const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage> = import(
 )
 	.then((mod) => mod.AsyncLocalStorage)
 	.catch((err) => {
+		if ("AsyncLocalStorage" in globalThis) {
+			return (globalThis as any).AsyncLocalStorage;
+		}
 		console.warn(
 			"[better-auth] Warning: AsyncLocalStorage is not available in this environment. Some features may not work as expected.",
 		);

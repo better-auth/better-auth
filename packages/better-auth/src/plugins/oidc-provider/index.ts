@@ -252,7 +252,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							maxAge: 0,
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-						const sessionToken = sessionCookie?.split(".")[0];
+						const sessionToken = sessionCookie?.split(".")[0]!;
 						if (!sessionToken) {
 							return;
 						}
@@ -782,8 +782,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const profile = {
-						given_name: user.name.split(" ")[0],
-						family_name: user.name.split(" ")[1],
+						given_name: user.name.split(" ")[0]!,
+						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
 						updated_at: new Date(user.updatedAt).toISOString(),
@@ -1034,10 +1034,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 							? user.image
 							: undefined,
 						given_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[0]
+							? user.name.split(" ")[0]!
 							: undefined,
 						family_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[1]
+							? user.name.split(" ")[1]!
 							: undefined,
 						email_verified: requestedScopes.includes("email")
 							? user.emailVerified
@@ -1076,16 +1076,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						redirect_uris: z.array(z.string()).meta({
-							description:
-								'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
-						}),
+						redirect_uris: z
+							.array(z.string())
+							.describe("A list of redirect URIs. Eg: ["),
 						token_endpoint_auth_method: z
 							.enum(["none", "client_secret_basic", "client_secret_post"])
-							.meta({
-								description:
-									'The authentication method for the token endpoint. Eg: "client_secret_basic"',
-							})
+							.describe(
+								"The authentication method for the token endpoint. Eg: ",
+							)
 							.default("client_secret_basic")
 							.optional(),
 						grant_types: z
@@ -1100,108 +1098,71 @@ export const oidcProvider = (options: OIDCOptions) => {
 									"urn:ietf:params:oauth:grant-type:saml2-bearer",
 								]),
 							)
-							.meta({
-								description:
-									'The grant types supported by the application. Eg: ["authorization_code"]',
-							})
+							.describe("The grant types supported by the application. Eg: [")
 							.default(["authorization_code"])
 							.optional(),
 						response_types: z
 							.array(z.enum(["code", "token"]))
-							.meta({
-								description:
-									'The response types supported by the application. Eg: ["code"]',
-							})
+							.describe(
+								"The response types supported by the application. Eg: [",
+							)
 							.default(["code"])
 							.optional(),
 						client_name: z
 							.string()
-							.meta({
-								description: 'The name of the application. Eg: "My App"',
-							})
+							.describe("The name of the application. Eg: ")
 							.optional(),
 						client_uri: z
 							.string()
-							.meta({
-								description:
-									'The URI of the application. Eg: "https://client.example.com"',
-							})
+							.describe("The URI of the application. Eg: ")
 							.optional(),
 						logo_uri: z
 							.string()
-							.meta({
-								description:
-									'The URI of the application logo. Eg: "https://client.example.com/logo.png"',
-							})
+							.describe("The URI of the application logo. Eg: ")
 							.optional(),
 						scope: z
 							.string()
-							.meta({
-								description:
-									'The scopes supported by the application. Separated by spaces. Eg: "profile email"',
-							})
+							.describe(
+								"The scopes supported by the application. Separated by spaces. Eg: ",
+							)
 							.optional(),
 						contacts: z
 							.array(z.string())
-							.meta({
-								description:
-									'The contact information for the application. Eg: ["admin@example.com"]',
-							})
+							.describe("The contact information for the application. Eg: [")
 							.optional(),
 						tos_uri: z
 							.string()
-							.meta({
-								description:
-									'The URI of the application terms of service. Eg: "https://client.example.com/tos"',
-							})
+							.describe("The URI of the application terms of service. Eg: ")
 							.optional(),
 						policy_uri: z
 							.string()
-							.meta({
-								description:
-									'The URI of the application privacy policy. Eg: "https://client.example.com/policy"',
-							})
+							.describe("The URI of the application privacy policy. Eg: ")
 							.optional(),
 						jwks_uri: z
 							.string()
-							.meta({
-								description:
-									'The URI of the application JWKS. Eg: "https://client.example.com/jwks"',
-							})
+							.describe("The URI of the application JWKS. Eg: ")
 							.optional(),
 						jwks: z
 							.record(z.any(), z.any())
-							.meta({
-								description:
-									'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
-							})
+							.describe(
+								'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
+							)
 							.optional(),
 						metadata: z
 							.record(z.any(), z.any())
-							.meta({
-								description:
-									'The metadata of the application. Eg: {"key": "value"}',
-							})
+							.describe('The metadata of the application. Eg: {"key": "value"}')
 							.optional(),
 						software_id: z
 							.string()
-							.meta({
-								description:
-									'The software ID of the application. Eg: "my-software"',
-							})
+							.describe("The software ID of the application. Eg: ")
 							.optional(),
 						software_version: z
 							.string()
-							.meta({
-								description:
-									'The software version of the application. Eg: "1.0.0"',
-							})
+							.describe("The software version of the application. Eg: ")
 							.optional(),
 						software_statement: z
 							.string()
-							.meta({
-								description: "The software statement of the application.",
-							})
+							.describe("The software statement of the application.")
 							.optional(),
 					}),
 					metadata: {
