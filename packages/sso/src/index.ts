@@ -356,7 +356,7 @@ export const sso = (options?: SSOOptions) => {
 							.string({})
 							.describe(
 								"The domain of the provider. This is used for email matching",
-						  ),
+							),
 						useHttps: z.boolean({}).optional().meta({
 							description:
 								"Whether to use HTTPS for the provider domain. Defaults to true if not specified.",
