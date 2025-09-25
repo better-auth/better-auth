@@ -276,7 +276,7 @@ export const createTestSuite = <
 
 			const cleanupCreatedRows = async () => {
 				for (const model of Object.keys(createdRows)) {
-					for (const row of createdRows[model]) {
+					for (const row of createdRows[model]!) {
 						try {
 							await adapter().delete({
 								model,
@@ -285,7 +285,7 @@ export const createTestSuite = <
 						} catch (error) {
 							// We ignore any failed attempts to delete the created rows.
 						}
-						if (createdRows[model].length === 1) {
+						if (createdRows[model]!.length === 1) {
 							delete createdRows[model];
 						}
 					}
@@ -341,7 +341,7 @@ export const createTestSuite = <
 						i++;
 						modelResults.push(
 							await wrapperAdapter().create({
-								model: models[i],
+								model: models[i]!,
 								data,
 								forceAllowId: true,
 							}),

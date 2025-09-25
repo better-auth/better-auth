@@ -89,8 +89,8 @@ export const createAdapterFactory =
 
 			let f = schema[model]?.fields[field];
 			if (!f) {
-				const result = Object.entries(schema[model]?.fields!).find(
-					(f) => f.fieldName === field,
+				const result = Object.entries(schema[model]!.fields!).find(
+					([_, f]) => f.fieldName === field,
 				);
 				if (result) {
 					f = result[1];
@@ -312,7 +312,7 @@ export const createAdapterFactory =
 			forceAllowId?: boolean,
 		) => {
 			const transformedData: Record<string, any> = {};
-			const fields = schema[defaultModelName].fields;
+			const fields = schema[defaultModelName]!.fields;
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
 			if (
 				!config.disableIdGeneration &&

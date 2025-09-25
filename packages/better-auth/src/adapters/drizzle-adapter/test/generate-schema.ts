@@ -32,7 +32,7 @@ export const generateDrizzleSchema = (
 			table.id = sqlite.text("id").primaryKey();
 		}
 		for (const defaultFieldName in fields) {
-			const field = fields[defaultFieldName];
+			const field = fields[defaultFieldName]!;
 			const fieldName = field?.fieldName || defaultFieldName;
 			const key = fieldName;
 
