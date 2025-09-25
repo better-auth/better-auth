@@ -172,9 +172,9 @@ export async function verifyJwtWithKeyInternal(
 ): Promise<JWTPayload | null> {
 	if (!jwt) return null;
 
-	let privateKey = await getJwk(ctx, true, jwk);
+	let publicKey = await getJwk(ctx, false, jwk);
 
-	if (privateKey === undefined)
+	if (publicKey === undefined)
 		throw new BetterAuthError(
 			`Failed to sign JWT: Could not find a JWK with id "${jwk}"`,
 		);
@@ -182,17 +182,17 @@ export async function verifyJwtWithKeyInternal(
 	const { payload, protectedHeader } = await verifyJwtJose(
 		ctx,
 		jwt,
-		privateKey.key,
+		publicKey.key,
 		pluginOpts,
 		options,
 	);
 
-	if (protectedHeader.kid !== privateKey.id) {
+	if (protectedHeader.kid !== publicKey.id) {
 		if (options?.allowNoKeyId && protectedHeader.kid === undefined)
 			return payload;
 
 		throw new BetterAuthError(
-			`JWT has invalid "kid" field in the protected header ("${protectedHeader.kid}" !== "${privateKey.id}")`,
+			`JWT has invalid "kid" field in the protected header ("${protectedHeader.kid}" !== "${publicKey.id}")`,
 			jwt,
 		);
 	}
