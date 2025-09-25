@@ -60,12 +60,11 @@ const { execute } = testAdapter({
 		}),
 		transactionsTestSuite(),
 		authFlowTestSuite(),
-		performanceTestSuite(),
+		performanceTestSuite({ dialect: "pg" }),
 	],
 	async onFinish() {
 		await cleanupDatabase(true);
 	},
 });
 
-// biome-ignore lint/nursery/noFloatingPromises: awaiting this will block vitest from starting
 execute();

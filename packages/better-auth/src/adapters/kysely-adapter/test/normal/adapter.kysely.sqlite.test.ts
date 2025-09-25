@@ -38,12 +38,11 @@ const { execute } = testAdapter({
 		normalTestSuite(),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
-		performanceTestSuite(),
+		performanceTestSuite({ dialect: "sqlite" }),
 	],
 	async onFinish() {
 		database.close();
 	},
 });
 
-// biome-ignore lint/nursery/noFloatingPromises: awaiting this will block vitest from starting
 execute();

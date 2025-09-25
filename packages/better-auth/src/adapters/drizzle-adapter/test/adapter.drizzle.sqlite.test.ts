@@ -50,9 +50,8 @@ const { execute } = testAdapter({
 		}),
 		transactionsTestSuite({ disableTests: { ALL: true } }), // Transactions are not supported for SQLite
 		authFlowTestSuite(),
-		performanceTestSuite(),
+		performanceTestSuite({ dialect: "sqlite" }),
 	],
 });
 
-// biome-ignore lint/nursery/noFloatingPromises: awaiting this will block vitest from starting
 execute();

@@ -477,10 +477,12 @@ export const normalTestSuite = createTestSuite(
 				expect(result).toBeNull();
 			},
 			"delete - should not throw on record not found": async () => {
-				await adapter.delete({
-					model: "user",
-					where: [{ field: "id", value: "100000" }],
-				});
+				await expect(
+					adapter.delete({
+						model: "user",
+						where: [{ field: "id", value: "100000" }],
+					}),
+				).resolves.not.toThrow();
 			},
 			"deleteMany - should delete many models": async () => {
 				const users = (await insertRandom("user", 3)).map((x) => x[0]);
@@ -502,6 +504,23 @@ export const normalTestSuite = createTestSuite(
 					model: "user",
 				});
 				expect(result).toEqual(users.length);
+			},
+			"count - should return 0 with no rows to count": async () => {
+				const result = await adapter.count({
+					model: "user",
+				});
+				expect(result).toEqual(0);
+			},
+			"count - should count with where clause": async () => {
+				const users = (await insertRandom("user", 15)).map((x) => x[0]);
+				const result = await adapter.count({
+					model: "user",
+					where: [
+						{ field: "id", value: users[2].id, connector: "OR" },
+						{ field: "id", value: users[3].id, connector: "OR" },
+					],
+				});
+				expect(result).toEqual(2);
 			},
 		};
 	},

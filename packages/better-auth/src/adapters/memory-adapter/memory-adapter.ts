@@ -191,7 +191,11 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 					}
 					return table || [];
 				},
-				count: async ({ model }) => {
+				count: async ({ model, where }) => {
+					if (where) {
+						const filteredRecords = convertWhereClause(where, model);
+						return filteredRecords.length;
+					}
 					return db[model]!.length;
 				},
 				update: async ({ model, where, update }) => {

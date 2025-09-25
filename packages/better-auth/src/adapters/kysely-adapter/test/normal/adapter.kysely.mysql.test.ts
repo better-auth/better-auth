@@ -52,7 +52,7 @@ const { execute } = testAdapter({
 		}),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite({ showDB }),
-		performanceTestSuite(),
+		performanceTestSuite({ dialect: "mysql" }),
 	],
 	async onFinish() {
 		await mysqlDB.end();

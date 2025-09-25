@@ -9,6 +9,7 @@ import {
 	transactionsTestSuite,
 } from "../../../tests";
 import { getMigrations } from "../../../../db";
+import type { BetterAuthOptions } from "../../../../types";
 
 const pgDB = new Pool({
 	connectionString: "postgres://user:password@localhost:5432/better_auth",
@@ -27,7 +28,9 @@ const { execute } = testAdapter({
 	prefixTests: "pg",
 	async runMigrations(betterAuthOptions) {
 		await cleanupDatabase();
-		const opts = Object.assign(betterAuthOptions, { database: pgDB });
+		const opts = Object.assign(betterAuthOptions, {
+			database: pgDB,
+		} satisfies BetterAuthOptions);
 		const { runMigrations } = await getMigrations(opts);
 		await runMigrations();
 	},
@@ -35,7 +38,7 @@ const { execute } = testAdapter({
 		normalTestSuite(),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
-		performanceTestSuite(),
+		performanceTestSuite({ dialect: "pg" }),
 	],
 	async onFinish() {
 		await pgDB.end();

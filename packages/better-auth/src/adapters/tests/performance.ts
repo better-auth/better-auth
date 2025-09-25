@@ -8,7 +8,7 @@ export const performanceTestSuite = createTestSuite(
 	"performance",
 	(
 		{ adapter, generate, cleanup },
-		config?: { iterations?: number; userSeedCount?: number },
+		config?: { iterations?: number; userSeedCount?: number; dialect?: string },
 	) => {
 		const tests = {
 			create: [] as number[],
@@ -145,6 +145,7 @@ export const performanceTestSuite = createTestSuite(
 					iterations,
 					userSeedCount,
 					adapter: adapter.options?.adapterConfig.adapterId,
+					...(config?.dialect ? { dialect: config.dialect } : {}),
 				});
 				expect(1).toBe(1);
 			},
