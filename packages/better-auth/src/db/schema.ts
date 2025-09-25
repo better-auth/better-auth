@@ -128,31 +128,31 @@ export function parseInputData<T extends Record<string, any>>(
 	const parsedData: Record<string, any> = {};
 	for (const key in fields) {
 		if (key in data) {
-			if (fields[key].input === false) {
-				if (fields[key].defaultValue) {
-					parsedData[key] = fields[key].defaultValue;
+			if (fields[key]!.input === false) {
+				if (fields[key]!.defaultValue) {
+					parsedData[key] = fields[key]!.defaultValue;
 					continue;
 				}
 				continue;
 			}
-			if (fields[key].validator?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key].validator.input.parse(data[key]);
+			if (fields[key]!.validator?.input && data[key] !== undefined) {
+				parsedData[key] = fields[key]!.validator.input.parse(data[key]);
 				continue;
 			}
-			if (fields[key].transform?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key].transform?.input(data[key]);
+			if (fields[key]!.transform?.input && data[key] !== undefined) {
+				parsedData[key] = fields[key]!.transform?.input(data[key]);
 				continue;
 			}
 			parsedData[key] = data[key];
 			continue;
 		}
 
-		if (fields[key].defaultValue && action === "create") {
-			parsedData[key] = fields[key].defaultValue;
+		if (fields[key]!.defaultValue && action === "create") {
+			parsedData[key] = fields[key]!.defaultValue;
 			continue;
 		}
 
-		if (fields[key].required && action === "create") {
+		if (fields[key]!.required && action === "create") {
 			throw new APIError("BAD_REQUEST", {
 				message: `${key} is required`,
 			});
@@ -211,14 +211,14 @@ export function mergeSchema<S extends AuthPluginSchema>(
 	for (const table in newSchema) {
 		const newModelName = newSchema[table]?.modelName;
 		if (newModelName) {
-			schema[table].modelName = newModelName;
+			schema[table]!.modelName = newModelName;
 		}
-		for (const field in schema[table].fields) {
+		for (const field in schema[table]!.fields) {
 			const newField = newSchema[table]?.fields?.[field];
 			if (!newField) {
 				continue;
 			}
-			schema[table].fields[field].fieldName = newField;
+			schema[table]!.fields[field]!.fieldName = newField;
 		}
 	}
 	return schema;

@@ -54,14 +54,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string().meta({
-							description: "User password",
-						}),
+						password: z.string().describe("User password"),
 						issuer: z
 							.string()
-							.meta({
-								description: "Custom issuer for the TOTP URI",
-							})
+							.describe("Custom issuer for the TOTP URI")
 							.optional(),
 					}),
 					use: [sessionMiddleware],
@@ -192,9 +188,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string().meta({
-							description: "User password",
-						}),
+						password: z.string().describe("User password"),
 					}),
 					use: [sessionMiddleware],
 					metadata: {

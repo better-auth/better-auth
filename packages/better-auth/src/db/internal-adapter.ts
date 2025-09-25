@@ -32,8 +32,13 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
-	const { createWithHooks, updateWithHooks, updateManyWithHooks } =
-		getWithHooks(adapter, ctx);
+	const {
+		createWithHooks,
+		updateWithHooks,
+		updateManyWithHooks,
+		deleteWithHooks,
+		deleteManyWithHooks,
+	} = getWithHooks(adapter, ctx);
 
 	async function refreshUserSessions(user: User) {
 		if (!secondaryStorage) return;
@@ -222,21 +227,23 @@ export const createInternalAdapter = (
 			}
 			return total;
 		},
-		deleteUser: async (userId: string) => {
+		deleteUser: async (userId: string, context?: GenericEndpointContext) => {
 			if (secondaryStorage) {
 				await secondaryStorage.delete(`active-sessions-${userId}`);
 			}
 
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-				await (await getCurrentAdapter(adapter)).deleteMany({
-					model: "session",
-					where: [
+				await deleteManyWithHooks(
+					[
 						{
 							field: "userId",
 							value: userId,
 						},
 					],
-				});
+					"session",
+					undefined,
+					context,
+				);
 			}
 
 			await (await getCurrentAdapter(adapter)).deleteMany({
@@ -248,15 +255,17 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			await (await getCurrentAdapter(adapter)).delete({
-				model: "user",
-				where: [
+			await deleteWithHooks(
+				[
 					{
 						field: "id",
 						value: userId,
 					},
 				],
-			});
+				"user",
+				undefined,
+				context,
+			);
 		},
 		createSession: async (
 			userId: string,
@@ -311,16 +320,59 @@ export const createInternalAdapter = (
 									list = list.filter((session) => session.expiresAt > now);
 								}
 
-								list.push({
-									token: data.token,
-									expiresAt: now + sessionExpiration * 1000,
-								});
+								const filtered: { token: string; expiresAt: number }[] = [];
+								let furthestSessionExp = now;
+								for (const item of list) {
+									if (item.expiresAt > now) {
+										filtered.push(item);
+										if (furthestSessionExp < item.expiresAt) {
+											furthestSessionExp = item.expiresAt;
+										}
+									}
+								}
 
-								await secondaryStorage.set(
-									`active-sessions-${userId}`,
-									JSON.stringify(list),
-									sessionExpiration,
+								filtered.push({
+									token: data.token,
+									expiresAt: data.expiresAt.getTime(),
+								});
+								if (furthestSessionExp < data.expiresAt.getTime()) {
+									furthestSessionExp = data.expiresAt.getTime();
+								}
+								const furthestSessionTTL = Math.max(
+									Math.floor((furthestSessionExp - now) / 1000),
+									0,
 								);
+								if (furthestSessionTTL > 0) {
+									await secondaryStorage.set(
+										`active-sessions-${userId}`,
+										JSON.stringify(filtered),
+										furthestSessionTTL,
+									);
+								}
+
+								const user = await adapter.findOne<User>({
+									model: "user",
+									where: [
+										{
+											field: "id",
+											value: userId,
+										},
+									],
+								});
+								const sessionTTL = Math.max(
+									Math.floor((data.expiresAt.getTime() - now) / 1000),
+									0,
+								);
+								if (sessionTTL > 0) {
+									await secondaryStorage.set(
+										data.token,
+										JSON.stringify({
+											session: sessionData,
+											user,
+										}),
+										sessionTTL,
+									);
+								}
 
 								return sessionData;
 							},
@@ -532,13 +584,28 @@ export const createInternalAdapter = (
 					if (currentList) {
 						let list: { token: string; expiresAt: number }[] =
 							safeJSONParse(currentList) || [];
-						list = list.filter((s) => s.token !== token);
+						const now = Date.now();
 
-						if (list.length > 0) {
+						const filtered = [];
+						let furthestSessionExp = now;
+						for (const item of list) {
+							if (item.expiresAt > now && item.token !== token) {
+								filtered.push(item);
+								if (furthestSessionExp < item.expiresAt) {
+									furthestSessionExp = item.expiresAt;
+								}
+							}
+						}
+
+						const furthestSessionTTL = Math.max(
+							Math.floor((furthestSessionExp - now) / 1000),
+							0,
+						);
+						if (filtered.length > 0 && furthestSessionTTL > 0) {
 							await secondaryStorage.set(
 								`active-sessions-${userId}`,
-								JSON.stringify(list),
-								sessionExpiration,
+								JSON.stringify(filtered),
+								furthestSessionTTL,
 							);
 						} else {
 							await secondaryStorage.delete(`active-sessions-${userId}`);
@@ -589,7 +656,10 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		deleteSessions: async (userIdOrSessionTokens: string | string[]) => {
+		deleteSessions: async (
+			userIdOrSessionTokens: string | string[],
+			context?: GenericEndpointContext,
+		) => {
 			if (secondaryStorage) {
 				if (typeof userIdOrSessionTokens === "string") {
 					const activeSession = await secondaryStorage.get(
@@ -618,16 +688,18 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-			await (await getCurrentAdapter(adapter)).deleteMany({
-				model: "session",
-				where: [
+			await deleteManyWithHooks(
+				[
 					{
 						field: Array.isArray(userIdOrSessionTokens) ? "token" : "userId",
 						value: userIdOrSessionTokens,
 						operator: Array.isArray(userIdOrSessionTokens) ? "in" : undefined,
 					},
 				],
-			});
+				"session",
+				undefined,
+				context,
+			);
 		},
 		findOAuthUser: async (
 			email: string,
@@ -966,7 +1038,10 @@ export const createInternalAdapter = (
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;
 		},
-		deleteVerificationValue: async (id: string) => {
+		deleteVerificationValue: async (
+			id: string,
+			context?: GenericEndpointContext,
+		) => {
 			await (await getCurrentAdapter(adapter)).delete<Verification>({
 				model: "verification",
 				where: [
@@ -977,7 +1052,10 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		deleteVerificationByIdentifier: async (identifier: string) => {
+		deleteVerificationByIdentifier: async (
+			identifier: string,
+			context?: GenericEndpointContext,
+		) => {
 			await (await getCurrentAdapter(adapter)).delete<Verification>({
 				model: "verification",
 				where: [
