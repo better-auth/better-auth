@@ -53,7 +53,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		$fetch,
 		$store,
 		atomListeners,
-	} = getClientConfig(options);
+	} = getClientConfig(options, false);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
@@ -93,7 +93,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		useFetch?: UseFetch,
 	) {
 		if (useFetch) {
-			const ref = useStore(pluginsAtoms.$sessionSignal);
+			const ref = useStore(pluginsAtoms.$sessionSignal!);
 			return useFetch(`${baseURL}/get-session`, {
 				ref,
 			}).then((res: any) => {

@@ -347,7 +347,7 @@ describe("session", async () => {
 		});
 
 		const signInHeaders = new Headers();
-		signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]);
+		signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]!);
 
 		const sessionResWithoutHeaders = await auth.api.getSession({
 			headers: signInHeaders,

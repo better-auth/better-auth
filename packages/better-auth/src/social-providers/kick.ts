@@ -75,7 +75,7 @@ export const kick = (options: KickOptions) => {
 				return null;
 			}
 
-			const profile = data.data[0];
+			const profile = data.data[0]!;
 
 			const userMap = await options.mapProfileToUser?.(profile);
 
