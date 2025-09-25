@@ -1,4 +1,4 @@
-import { logger } from "../../utils";
+import { globalLog } from "../../utils";
 import {
 	createAdapterFactory,
 	type AdapterDebugLogs,
@@ -49,8 +49,10 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 			function convertWhereClause(where: CleanedWhere[], model: string) {
 				const table = db[model];
 				if (!table) {
-					logger.error(
+					globalLog(
+						"error",
 						`[MemoryAdapter] Model ${model} not found in the DB`,
+						options,
 						Object.keys(db),
 					);
 					throw new Error(`Model ${model} not found`);

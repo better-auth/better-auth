@@ -1,3 +1,4 @@
+import type { BetterAuthOptions } from "../types";
 import { getColorDepth } from "./color-depth";
 
 export type LogLevel = "info" | "success" | "warn" | "error" | "debug";
@@ -141,4 +142,22 @@ export const createLogger = (options?: Logger): InternalLogger => {
 	};
 };
 
-export const logger = createLogger();
+const logger = createLogger();
+
+export const globalLog = (
+	level: Exclude<LogLevel, "success">,
+	message: string,
+	options: BetterAuthOptions | null,
+	...args: any[]
+): boolean => {
+	const logOpts = options?.logger;
+	if (
+		logOpts?.disabled ||
+		(logOpts?.level && !shouldPublishLog(level, logOpts.level))
+	)
+		return false;
+
+	if (logOpts?.log) logOpts.log(level, message, ...args);
+	else logger[level](message, ...args);
+	return true;
+};

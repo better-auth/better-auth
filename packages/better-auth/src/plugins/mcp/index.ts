@@ -24,7 +24,7 @@ import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
 import { getBaseURL } from "../../utils/url";
 import { isProduction } from "../../utils/env";
-import { logger } from "../../utils";
+import { globalLog } from "../../utils";
 
 interface MCPOptions {
 	loginPage: string;
@@ -943,7 +943,11 @@ export const withMcpAuth = <
 	return async (req: Request) => {
 		const baseURL = getBaseURL(auth.options.baseURL, auth.options.basePath);
 		if (!baseURL && !isProduction) {
-			logger.warn("Unable to get the baseURL, please check your config!");
+			globalLog(
+				"warn",
+				"Unable to get the baseURL, please check your config!",
+				auth.options,
+			);
 		}
 		const session = await auth.api.getMcpSession({
 			headers: req.headers,

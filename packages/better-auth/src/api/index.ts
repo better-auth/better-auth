@@ -36,7 +36,7 @@ import {
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
-import { type InternalLogger, logger } from "../utils/logger";
+import { type InternalLogger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
@@ -310,7 +310,7 @@ export const router = <Option extends BetterAuthOptions>(
 				optLogLevel === "error" ||
 				optLogLevel === "warn" ||
 				optLogLevel === "debug"
-					? logger
+					? ctx.logger
 					: undefined;
 			if (options.logger?.disabled !== true) {
 				if (
@@ -326,7 +326,7 @@ export const router = <Option extends BetterAuthOptions>(
 						e.message.includes("table") ||
 						e.message.includes("does not exist")
 					) {
-						ctx.logger?.error(e.message);
+						ctx.logger.error(e.message);
 						return;
 					}
 				}
@@ -337,7 +337,7 @@ export const router = <Option extends BetterAuthOptions>(
 					}
 					log?.error(e.message);
 				} else {
-					ctx.logger?.error(
+					ctx.logger.error(
 						e && typeof e === "object" && "name" in e ? (e.name as string) : "",
 						e,
 					);

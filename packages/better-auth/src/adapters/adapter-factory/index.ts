@@ -7,7 +7,7 @@ import type {
 	TransactionAdapter,
 	Where,
 } from "../../types";
-import { generateId as defaultGenerateId, logger } from "../../utils";
+import { generateId as defaultGenerateId, globalLog } from "../../utils";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
@@ -256,9 +256,9 @@ export const createAdapterFactory =
 							return;
 						}
 					}
-					logger.info(`[${config.adapterName}]`, ...args);
+					globalLog("info", `[${config.adapterName}]`, options, ...args);
 				} else {
-					logger.info(`[${config.adapterName}]`, ...args);
+					globalLog("info", `[${config.adapterName}]`, options, ...args);
 				}
 			}
 		};
@@ -285,8 +285,10 @@ export const createAdapterFactory =
 								const useNumberId = options.advanced?.database?.useNumberId;
 								let generateId = options.advanced?.database?.generateId;
 								if (options.advanced?.generateId !== undefined) {
-									logger.warn(
+									globalLog(
+										"warn",
 										"Your Better Auth config includes advanced.generateId which is deprecated. Please use advanced.database.generateId instead. This will be removed in future releases.",
+										options,
 									);
 									generateId = options.advanced?.generateId;
 								}
@@ -578,13 +580,17 @@ export const createAdapterFactory =
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
-						logger.warn(
+						globalLog(
+							"warn",
 							`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
+							options,
 						);
 						lazyLoadTransaction = createAsIsTransaction(adapter);
 					} else {
-						logger.debug(
+						globalLog(
+							"debug",
 							`[${config.adapterName}] - Using provided transaction implementation.`,
+							options,
 						);
 						lazyLoadTransaction = config.transaction;
 					}
@@ -607,8 +613,10 @@ export const createAdapterFactory =
 				const model = getModelName(unsafeModel);
 
 				if ("id" in unsafeData && !forceAllowId) {
-					logger.warn(
+					globalLog(
+						"warn",
 						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you, unless you pass in the \`forceAllowId\` parameter. The id will be ignored.`,
+						options,
 					);
 					const err = new Error();
 					const stack = err.stack

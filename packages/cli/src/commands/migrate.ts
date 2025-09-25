@@ -5,7 +5,11 @@ import path from "path";
 import yoctoSpinner from "yocto-spinner";
 import chalk from "chalk";
 import prompts from "prompts";
-import { logger, createTelemetry, getTelemetryAuthConfig } from "better-auth";
+import {
+	globalLog,
+	createTelemetry,
+	getTelemetryAuthConfig,
+} from "better-auth";
 import { getAdapter, getMigrations } from "better-auth/db";
 import { getConfig } from "../utils/get-config";
 
@@ -21,7 +25,7 @@ export async function migrateAction(opts: any) {
 
 	const cwd = path.resolve(options.cwd);
 	if (!existsSync(cwd)) {
-		logger.error(`The directory "${cwd}" does not exist.`);
+		globalLog("error", `The directory "${cwd}" does not exist.`, null); // Can't set the better auth's logger options here!
 		process.exit(1);
 	}
 
@@ -30,26 +34,32 @@ export async function migrateAction(opts: any) {
 		configPath: options.config,
 	});
 	if (!config) {
-		logger.error(
+		globalLog(
+			"error",
 			"No configuration file found. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
-		);
+			null,
+		); // Can't set the better auth's logger options here!
 		return;
 	}
 
 	const db = await getAdapter(config);
 
 	if (!db) {
-		logger.error(
+		globalLog(
+			"error",
 			"Invalid database configuration. Make sure you're not using adapters. Migrate command only works with built-in Kysely adapter.",
-		);
+			null,
+		); // Can't set the better auth's logger options here!
 		process.exit(1);
 	}
 
 	if (db.id !== "kysely") {
 		if (db.id === "prisma") {
-			logger.error(
+			globalLog(
+				"error",
 				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx @better-auth/cli generate` to create the schema, then use Prisma’s migrate or push to apply it.",
-			);
+				null,
+			); // Can't set the better auth's logger options here!
 			try {
 				const telemetry = await createTelemetry(config);
 				await telemetry.publish({
@@ -64,9 +74,11 @@ export async function migrateAction(opts: any) {
 			process.exit(0);
 		}
 		if (db.id === "drizzle") {
-			logger.error(
+			globalLog(
+				"error",
 				"The migrate command only works with the built-in Kysely adapter. For Drizzle, run `npx @better-auth/cli generate` to create the schema, then use Drizzle’s migrate or push to apply it.",
-			);
+				null,
+			); // Can't set the better auth's logger options here!
 			try {
 				const telemetry = await createTelemetry(config);
 				await telemetry.publish({
@@ -80,7 +92,11 @@ export async function migrateAction(opts: any) {
 			} catch {}
 			process.exit(0);
 		}
-		logger.error("Migrate command isn't supported for this adapter.");
+		globalLog(
+			"error",
+			"Migrate command isn't supported for this adapter.",
+			null,
+		); // Can't set the better auth's logger options here!
 		try {
 			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
@@ -101,7 +117,7 @@ export async function migrateAction(opts: any) {
 
 	if (!toBeAdded.length && !toBeCreated.length) {
 		spinner.stop();
-		logger.info("🚀 No migrations needed.");
+		globalLog("info", "🚀 No migrations needed.", null); // Can't set the better auth's logger options here!
 		try {
 			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
@@ -116,7 +132,7 @@ export async function migrateAction(opts: any) {
 	}
 
 	spinner.stop();
-	logger.info(`🔑 The migration will affect the following:`);
+	globalLog("info", `🔑 The migration will affect the following:`, null); // Can't set the better auth's logger options here!
 
 	for (const table of [...toBeCreated, ...toBeAdded]) {
 		console.log(
@@ -145,7 +161,7 @@ export async function migrateAction(opts: any) {
 	}
 
 	if (!migrate) {
-		logger.info("Migration cancelled.");
+		globalLog("info", "Migration cancelled.", null); // Can't set the better auth's logger options here!
 		try {
 			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
@@ -159,7 +175,7 @@ export async function migrateAction(opts: any) {
 	spinner?.start("migrating...");
 	await runMigrations();
 	spinner.stop();
-	logger.info("🚀 migration was completed successfully!");
+	globalLog("info", "🚀 migration was completed successfully!", null); // Can't set the better auth's logger options here!
 	try {
 		const telemetry = await createTelemetry(config);
 		await telemetry.publish({
