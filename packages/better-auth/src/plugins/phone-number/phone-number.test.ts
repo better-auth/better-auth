@@ -89,6 +89,84 @@ describe("phone-number", async (it) => {
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
 	});
 
+	it("should call callbackOnVerification when updatePhoneNumber is enabled", async () => {
+		const callbackOnVerification = vi.fn();
+		const { customFetchImpl: testFetchImpl, sessionSetter: testSessionSetter } = await getTestInstance({
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					callbackOnVerification,
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		});
+
+		const testClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [phoneNumberClient()],
+			fetchOptions: {
+				customFetchImpl: testFetchImpl,
+			},
+		});
+
+		const testHeaders = new Headers();
+		const testPhoneNumber = "+251911121314";
+		const newPhoneNumber = "+0123456789";
+
+		// First, create a user with initial phone number
+		await testClient.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+		await testClient.phoneNumber.verify(
+			{
+				phoneNumber: testPhoneNumber,
+				code: otp,
+			},
+			{
+				onSuccess: testSessionSetter(testHeaders),
+			},
+		);
+
+		// Clear the callback mock to focus on the updatePhoneNumber call
+		callbackOnVerification.mockClear();
+
+		// Now test updatePhoneNumber with callbackOnVerification
+		await testClient.phoneNumber.sendOtp({
+			phoneNumber: newPhoneNumber,
+			fetchOptions: {
+				headers: testHeaders,
+			},
+		});
+		const res = await testClient.phoneNumber.verify({
+			phoneNumber: newPhoneNumber,
+			updatePhoneNumber: true,
+			code: otp,
+			fetchOptions: {
+				headers: testHeaders,
+			},
+		});
+
+		expect(res.error).toBe(null);
+		expect(res.data?.status).toBe(true);
+		expect(callbackOnVerification).toHaveBeenCalledTimes(1);
+		expect(callbackOnVerification).toHaveBeenCalledWith(
+			expect.objectContaining({
+				phoneNumber: newPhoneNumber,
+				user: expect.objectContaining({
+					phoneNumber: newPhoneNumber,
+					phoneNumberVerified: true,
+				}),
+			}),
+			expect.any(Object) // request object
+		);
+	});
+
 	it("should not verify if code expired", async () => {
 		vi.useFakeTimers();
 		await client.phoneNumber.sendOtp({
