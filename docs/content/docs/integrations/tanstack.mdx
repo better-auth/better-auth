@@ -14,30 +14,36 @@ Create a new file: `/src/routes/api/auth/$.ts`
 
 ```ts title="src/routes/api/auth/$.ts"
 import { auth } from '@/lib/auth' // import your auth instance
-import { createServerFileRoute } from '@tanstack/react-start/server'
+import { createFileRoute } from '@tanstack/react-router';
 
-export const ServerRoute = createServerFileRoute('/api/auth/$').methods({
-  GET: ({ request }) => {
-    return auth.handler(request)
+export const Route = createFileRoute('/api/auth/$')({
+  server: {
+    handlers: {
+      GET: async ({ request }) => {
+        return auth.handler(request);
+      },
+      POST: async ({ request }) => {
+        return auth.handler(request);
+      },
+    },
   },
-  POST: ({ request }) => {
-    return auth.handler(request)
-  },
-})
+});
 ```
 
 If you haven't created your server route handler yet, you can do so by creating a file: `/src/server.ts`
 
 ```ts title="src/server.ts"
-import {
-  createStartHandler,
-  defaultStreamHandler,
-} from '@tanstack/react-start/server'
-import { createRouter } from './router'
+import { createStartHandler, defaultRenderHandler } from '@tanstack/react-start/server';
 
-export default createStartHandler({
-  createRouter,
-})(defaultStreamHandler)
+const handler = createStartHandler(async ({ request, router, responseHeaders }) => {
+  return defaultRenderHandler({ request, router, responseHeaders });
+});
+
+export default {
+  async fetch(req: Request): Promise<Response> {
+    return await handler(req);
+  },
+};
 ```
 
 ### Usage tips
@@ -47,11 +53,11 @@ export default createStartHandler({
 
 ```ts title="src/lib/auth.ts"
 import { betterAuth } from "better-auth";
-import { reactStartCookies } from "better-auth/react-start";
+import { reactStartCookies } from "better-auth/react-start"; // This not being exported and does not seem to be needed. Deprecated?
 
 export const auth = betterAuth({
     //...your config
-    plugins: [reactStartCookies()] // make sure this is the last plugin in the array
+    plugins: [reactStartCookies()] // make sure this is the last plugin in the array. See import above as this may be deprecated
 })
 ```
 
