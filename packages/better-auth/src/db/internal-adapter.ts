@@ -320,7 +320,7 @@ export const createInternalAdapter = (
 									list = list.filter((session) => session.expiresAt > now);
 								}
 
-								const filtered = [];
+								const filtered: { token: string; expiresAt: number }[] = [];
 								let furthestSessionExp = now;
 								for (const item of list) {
 									if (item.expiresAt > now) {
