@@ -120,6 +120,13 @@ export const customSession = <
 						return ctx.json(null);
 					}
 					const fnResult = await fn(session.response as any, ctx);
+
+					const setCookie = session.headers.get("set-cookie");
+					if (setCookie) {
+						ctx.setHeader("set-cookie", setCookie);
+						session.headers.delete("set-cookie");
+					}
+
 					session.headers.forEach((value, key) => {
 						ctx.setHeader(key, value);
 					});
