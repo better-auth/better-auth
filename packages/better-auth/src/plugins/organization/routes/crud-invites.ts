@@ -18,6 +18,7 @@ import {
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
 import { getDate } from "../../../utils/date";
+import { normalizeEmail } from "../../../utils/email";
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -260,7 +261,10 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					{
 						id: updatedInvitation.id!,
 						role: updatedInvitation.role! as string,
-						email: updatedInvitation.email!.toLowerCase(),
+						email: normalizeEmail(
+							updatedInvitation.email!,
+							ctx.context.options,
+						),
 						organization: organization,
 						inviter: {
 							...member,
@@ -366,7 +370,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 			let invitationData = {
 				role: roles,
-				email: ctx.body.email.toLowerCase(),
+				email: normalizeEmail(ctx.body.email, ctx.context.options),
 				organizationId: organizationId,
 				teamIds,
 				...(additionalFields ? additionalFields : {}),
@@ -402,7 +406,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				{
 					id: invitation.id,
 					role: invitation.role as string,
-					email: invitation.email.toLowerCase(),
+					email: normalizeEmail(invitation.email, ctx.context.options),
 					organization: organization,
 					inviter: {
 						...member,
@@ -480,7 +484,10 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+			if (
+				normalizeEmail(invitation.email, ctx.context.options) !==
+				normalizeEmail(session.user.email, ctx.context.options)
+			) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
@@ -675,7 +682,10 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: "Invitation not found!",
 				});
 			}
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+			if (
+				normalizeEmail(invitation.email, ctx.context.options) !==
+				normalizeEmail(session.user.email, ctx.context.options)
+			) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
@@ -926,7 +936,10 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: "Invitation not found!",
 				});
 			}
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+			if (
+				normalizeEmail(invitation.email, ctx.context.options) !==
+				normalizeEmail(session.user.email, ctx.context.options)
+			) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,

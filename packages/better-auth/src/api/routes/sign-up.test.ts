@@ -106,3 +106,29 @@ describe("sign-up with custom fields", async (it) => {
 		ctx.internalAdapter.createSession = originalCreateSession;
 	});
 });
+
+describe("Email normalization integration tests", (it) => {
+	it("should prevent duplicate accounts with subaddressing", async () => {
+		const { auth } = await getTestInstance({
+			user: { normalizeEmailSubaddressing: true },
+		});
+
+		await auth.api.signUpEmail({
+			body: {
+				name: "User",
+				email: "user@example.com",
+				password: "password123",
+			},
+		});
+
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					name: "User2",
+					email: "user+shopping@example.com",
+					password: "password123",
+				},
+			}),
+		).rejects.toThrowError();
+	});
+});
