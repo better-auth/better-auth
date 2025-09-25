@@ -156,15 +156,23 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string().describe("The username of the user"),
-						password: z.string().describe("The password of the user"),
+						username: z
+							.string()
+							.meta({ description: "The username of the user" }),
+						password: z
+							.string()
+							.meta({ description: "The password of the user" }),
 						rememberMe: z
 							.boolean()
-							.describe("Remember the user session")
+							.meta({
+								description: "Remember the user session",
+							})
 							.optional(),
 						callbackURL: z
 							.string()
-							.describe("The URL to redirect to after email verification")
+							.meta({
+								description: "The URL to redirect to after email verification",
+							})
 							.optional(),
 					}),
 					metadata: {
@@ -391,7 +399,9 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string().describe("The username to check"),
+						username: z.string().meta({
+							description: "The username to check",
+						}),
 					}),
 				},
 				async (ctx) => {

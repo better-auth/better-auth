@@ -164,11 +164,17 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string().describe("Phone number to sign in. Eg: "),
-						password: z.string().describe("Password to use for sign in."),
+						phoneNumber: z.string().meta({
+							description: 'Phone number to sign in. Eg: "+1234567890"',
+						}),
+						password: z.string().meta({
+							description: "Password to use for sign in.",
+						}),
 						rememberMe: z
 							.boolean()
-							.describe("Remember the session. Eg: true")
+							.meta({
+								description: "Remember the session. Eg: true",
+							})
 							.optional(),
 					}),
 					metadata: {
@@ -338,7 +344,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string().describe("Phone number to send OTP. Eg: "),
+						phoneNumber: z.string().meta({
+							description: 'Phone number to send OTP. Eg: "+1234567890"',
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -426,20 +434,25 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						/**
 						 * Phone number
 						 */
-						phoneNumber: z.string().describe("Phone number to verify. Eg: "),
+						phoneNumber: z.string().meta({
+							description: 'Phone number to verify. Eg: "+1234567890"',
+						}),
 						/**
 						 * OTP code
 						 */
-						code: z.string().describe("OTP code. Eg: "),
+						code: z.string().meta({
+							description: 'OTP code. Eg: "123456"',
+						}),
 						/**
 						 * Disable session creation after verification
 						 * @default false
 						 */
 						disableSession: z
 							.boolean()
-							.describe(
-								"Disable session creation after verification. Eg: false",
-							)
+							.meta({
+								description:
+									"Disable session creation after verification. Eg: false",
+							})
 							.optional(),
 						/**
 						 * This checks if there is a session already
@@ -448,9 +461,10 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						 */
 						updatePhoneNumber: z
 							.boolean()
-							.describe(
-								"Check if there is a session and update the phone number. Eg: true",
-							)
+							.meta({
+								description:
+									"Check if there is a session and update the phone number. Eg: true",
+							})
 							.optional(),
 					}),
 					metadata: {
@@ -744,11 +758,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z
-							.string()
-							.describe(
-								`The phone number which is associated with the user. Eg: "+1234567890"`,
-							),
+						phoneNumber: z.string().meta({
+							description: `The phone number which is associated with the user. Eg: "+1234567890"`,
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -888,17 +900,17 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						otp: z
-							.string()
-							.describe("The one time password to reset the password. Eg: "),
-						phoneNumber: z
-							.string()
-							.describe(
-								"The phone number to the account which intends to reset the password for. Eg: ",
-							),
-						newPassword: z
-							.string()
-							.describe(`The new password. Eg: "new-and-secure-password"`),
+						otp: z.string().meta({
+							description:
+								'The one time password to reset the password. Eg: "123456"',
+						}),
+						phoneNumber: z.string().meta({
+							description:
+								'The phone number to the account which intends to reset the password for. Eg: "+1234567890"',
+						}),
+						newPassword: z.string().meta({
+							description: `The new password. Eg: "new-and-secure-password"`,
+						}),
 					}),
 					metadata: {
 						openapi: {

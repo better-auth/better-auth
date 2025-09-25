@@ -30,13 +30,16 @@ export const getSessionQuerySchema = z.optional(
 		 */
 		disableCookieCache: z.coerce
 			.boolean()
-			.describe("Disable cookie cache and fetch session from database")
+			.meta({
+				description: "Disable cookie cache and fetch session from database",
+			})
 			.optional(),
 		disableRefresh: z.coerce
 			.boolean()
-			.describe(
-				"Disable session refresh. Useful for checking session status, without updating the session",
-			)
+			.meta({
+				description:
+					"Disable session refresh. Useful for checking session status, without updating the session",
+			})
 			.optional(),
 	}),
 );
@@ -416,7 +419,9 @@ export const revokeSession = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			token: z.string().describe("The token to revoke"),
+			token: z.string().meta({
+				description: "The token to revoke",
+			}),
 		}),
 		use: [sensitiveSessionMiddleware],
 		requireHeaders: true,

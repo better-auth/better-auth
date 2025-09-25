@@ -166,13 +166,17 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						code: z.string().describe(`A backup code to verify. Eg: "123456"`),
+						code: z.string().meta({
+							description: `A backup code to verify. Eg: "123456"`,
+						}),
 						/**
 						 * Disable setting the session cookie
 						 */
 						disableSession: z
 							.boolean()
-							.describe("If true, the session cookie will not be set.")
+							.meta({
+								description: "If true, the session cookie will not be set.",
+							})
 							.optional(),
 						/**
 						 * if true, the device will be trusted
@@ -181,7 +185,10 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						 */
 						trustDevice: z
 							.boolean()
-							.describe("If true, the device will be trusted for 30 days. It")
+							.meta({
+								description:
+									"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+							})
 							.optional(),
 					}),
 					metadata: {
@@ -383,7 +390,9 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string().describe("The users password."),
+						password: z.string().meta({
+							description: "The users password.",
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -474,9 +483,9 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				{
 					method: "GET",
 					body: z.object({
-						userId: z.coerce
-							.string()
-							.describe(`The user ID to view all backup codes. Eg: "user-id"`),
+						userId: z.coerce.string().meta({
+							description: `The user ID to view all backup codes. Eg: "user-id"`,
+						}),
 					}),
 					metadata: {
 						SERVER_ONLY: true,

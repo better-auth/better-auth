@@ -107,27 +107,35 @@ export const magicLink = (options: MagicLinkopts) => {
 					body: z.object({
 						email: z
 							.string()
-							.describe("Email address to send the magic link")
+							.meta({
+								description: "Email address to send the magic link",
+							})
 							.email(),
 						name: z
 							.string()
-							.describe(
-								"User display name. Only used if the user is registering for the first time. Eg: ",
-							)
+							.meta({
+								description:
+									'User display name. Only used if the user is registering for the first time. Eg: "my-name"',
+							})
 							.optional(),
 						callbackURL: z
 							.string()
-							.describe("URL to redirect after magic link verification")
+							.meta({
+								description: "URL to redirect after magic link verification",
+							})
 							.optional(),
 						newUserCallbackURL: z
 							.string()
-							.describe(
-								"URL to redirect after new user signup. Only used if the user is registering for the first time.",
-							)
+							.meta({
+								description:
+									"URL to redirect after new user signup. Only used if the user is registering for the first time.",
+							})
 							.optional(),
 						errorCallbackURL: z
 							.string()
-							.describe("URL to redirect after error.")
+							.meta({
+								description: "URL to redirect after error.",
+							})
 							.optional(),
 					}),
 					metadata: {
@@ -233,22 +241,28 @@ export const magicLink = (options: MagicLinkopts) => {
 				{
 					method: "GET",
 					query: z.object({
-						token: z.string().describe("Verification token"),
+						token: z.string().meta({
+							description: "Verification token",
+						}),
 						callbackURL: z
 							.string()
-							.describe(
-								"URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: ",
-							)
+							.meta({
+								description:
+									'URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: "/dashboard"',
+							})
 							.optional(),
 						errorCallbackURL: z
 							.string()
-							.describe("URL to redirect after error.")
+							.meta({
+								description: "URL to redirect after error.",
+							})
 							.optional(),
 						newUserCallbackURL: z
 							.string()
-							.describe(
-								"URL to redirect after new user signup. Only used if the user is registering for the first time.",
-							)
+							.meta({
+								description:
+									"URL to redirect after new user signup. Only used if the user is registering for the first time.",
+							})
 							.optional(),
 					}),
 					use: [
