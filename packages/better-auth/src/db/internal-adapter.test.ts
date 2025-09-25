@@ -426,6 +426,7 @@ describe("adapter test", async () => {
 	it("should create on secondary storage", async () => {
 		// Create session
 		const now = Date.now();
+		const expiresAt = new Date(now + 60 * 60 * 24 * 7 * 1000);
 		const user = await internalAdapter.createUser(
 			{
 				name: "test-user",
@@ -452,8 +453,9 @@ describe("adapter test", async () => {
 		const expectedExp = Math.floor(
 			(lastExpiration.expiresAt - Date.now()) / 1000,
 		);
-		expect(actualExp - expectedExp).toBeLessThanOrEqual(1); // max 1s clock drift between check and set
-		expect(actualExp - expectedExp).toBeGreaterThanOrEqual(0); // max 1s clock drift between check and set
+		// max 1s clock drift between check and set
+		expect(actualExp - expectedExp).toBeLessThanOrEqual(1);
+		expect(actualExp - expectedExp).toBeGreaterThanOrEqual(0);
 
 		const storedSession = safeJSONParse<{
 			session: Session;
@@ -464,11 +466,13 @@ describe("adapter test", async () => {
 			...session,
 			activeOrganizationId: "1",
 		});
-		const expectedTokenExp = 60 * 60 * 24 * 7;
-		expect(expirationMap.get(token) - expectedTokenExp).toBeLessThanOrEqual(1);
-		expect(expirationMap.get(token) - expectedTokenExp).toBeGreaterThanOrEqual(
-			0,
+		const actualTokenExp = expirationMap.get(token);
+		const expectedTokenExp = Math.floor(
+			(expiresAt.getTime() - Date.now()) / 1000,
 		);
+		// max 1s clock drift between check and set
+		expect(actualTokenExp - expectedTokenExp).toBeLessThanOrEqual(1);
+		expect(actualTokenExp - expectedTokenExp).toBeGreaterThanOrEqual(0);
 	});
 
 	it("should delete on secondary storage", async () => {
