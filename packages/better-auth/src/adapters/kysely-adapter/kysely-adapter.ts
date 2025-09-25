@@ -7,7 +7,6 @@ import {
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
-import { ensureUTC } from "../../utils/ensure-utc";
 
 interface KyselyAdapterConfig {
 	/**

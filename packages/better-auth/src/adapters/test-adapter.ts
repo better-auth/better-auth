@@ -172,46 +172,38 @@ export const testAdapter = ({
 		);
 	};
 
-	return {
-		cleanup,
-		execute: () => {
-			return new Promise((resolve) => {
-				describe(adapterDisplayName, async () => {
-					beforeAll(async () => {
-						await migrate();
-					});
+	describe(adapterDisplayName, async () => {
+		beforeAll(async () => {
+			await migrate();
+		});
 
-					afterAll(async () => {
-						await cleanup();
-						await onFinish?.();
-						resolve(void 0);
-					});
+		afterAll(async () => {
+			await cleanup();
+			await onFinish?.();
+		});
 
-					for (const testSuite of tests) {
-						await testSuite({
-							adapter,
-							adapterDisplayName,
-							log,
-							getBetterAuthOptions: () => betterAuthOptions,
-							modifyBetterAuthOptions: (options) => {
-								const newOptions = {
-									...defaultBAOptions,
-									...options,
-								};
-								betterAuthOptions = {
-									...newOptions,
-									...(overrideBetterAuthOptions?.(newOptions) || {}),
-								};
-								return betterAuthOptions;
-							},
-							cleanup,
-							prefixTests,
-							runMigrations: migrate,
-							onTestFinish: async () => {},
-						});
-					}
-				});
+		for (const testSuite of tests) {
+			await testSuite({
+				adapter,
+				adapterDisplayName,
+				log,
+				getBetterAuthOptions: () => betterAuthOptions,
+				modifyBetterAuthOptions: (options) => {
+					const newOptions = {
+						...defaultBAOptions,
+						...options,
+					};
+					betterAuthOptions = {
+						...newOptions,
+						...(overrideBetterAuthOptions?.(newOptions) || {}),
+					};
+					return betterAuthOptions;
+				},
+				cleanup,
+				prefixTests,
+				runMigrations: migrate,
+				onTestFinish: async () => {},
 			});
-		},
-	};
+		}
+	});
 };

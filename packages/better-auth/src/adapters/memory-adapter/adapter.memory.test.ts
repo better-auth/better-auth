@@ -1,56 +1,37 @@
-import { describe } from "vitest";
+import { getAuthTables } from "../../db";
+import { testAdapter } from "../test-adapter";
 import { memoryAdapter } from "./memory-adapter";
-import { runAdapterTest, runNumberIdAdapterTest } from "../test";
+import {
+	performanceTestSuite,
+	normalTestSuite,
+	transactionsTestSuite,
+	authFlowTestSuite,
+} from "../tests";
+import { waitForTestPermission } from "../../test/adapter-test-setup";
 
-describe("adapter test", async () => {
-	const db = {
-		user: [],
-		session: [],
-		account: [],
-	};
-	const adapter = memoryAdapter(db, {
-		debugLogs: {
-			isRunningAdapterTests: true,
-		},
-	});
-	runAdapterTest({
-		getAdapter: async (customOptions = {}) => {
-			return adapter({
-				user: {
-					fields: {
-						email: "email_address",
-					},
-				},
-				...customOptions,
-			});
-		},
-		disableTests: {
-			SHOULD_ROLLBACK_FAILING_TRANSACTION: true,
-			SHOULD_RETURN_TRANSACTION_RESULT: true,
-		},
-	});
-});
+const { done } = await waitForTestPermission("memory");
+let db: Record<string, any[]> = {};
 
-describe("Number Id Adapter Test", async () => {
-	const db = {
-		user: [],
-		session: [],
-		account: [],
-	};
-	const adapter = memoryAdapter(db, {
-		debugLogs: {
-			isRunningAdapterTests: true,
-		},
-	});
-	runNumberIdAdapterTest({
-		getAdapter: async (customOptions = {}) => {
-			return adapter({
-				...customOptions,
-			});
-		},
-		disableTests: {
-			SHOULD_ROLLBACK_FAILING_TRANSACTION: true,
-			SHOULD_RETURN_TRANSACTION_RESULT: true,
-		},
-	});
+testAdapter({
+	adapter: () => {
+		return memoryAdapter(db);
+	},
+	runMigrations: (options) => {
+		db = {};
+		const allModels = Object.keys(getAuthTables(options));
+		for (const model of allModels) {
+			db[model] = [];
+		}
+	},
+	tests: [
+		normalTestSuite({
+			showDB: () => console.log(db),
+		}),
+		transactionsTestSuite(),
+		authFlowTestSuite(),
+		performanceTestSuite(),
+	],
+	async onFinish() {
+		await done();
+	},
 });

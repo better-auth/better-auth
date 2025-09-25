@@ -213,7 +213,6 @@ export const canRunTest = async (testName: string): Promise<boolean> => {
 					if (result.waitingFor) {
 						console.log(`Waiting for ${result.waitingFor} to complete...`);
 					}
-					// Wait 100ms and check again
 					setTimeout(checkCanRun, 1000);
 				}
 			} catch (error) {
@@ -247,11 +246,24 @@ export const markTestCompleted = async (testName: string): Promise<void> => {
 	}
 };
 
+// we type out every test so that any new tests is forced to update this list.
+// NOTE: If you're here to add a new test, make sure to check if any other databases will not run into
+// migration conflicts. If so, please update the `conflictingTests` array at the top of this file.
+type allAdapterTests =
+	| "kysely-mysql"
+	| "kysely-pg"
+	| "kysely-sqlite"
+	| "kysely-mssql"
+	| "memory"
+	| "drizzle-mysql"
+	| "drizzle-pg"
+	| "drizzle-sqlite";
+
 /**
  * Waits for permission to run a test and returns a cleanup function.
  */
 export const waitForTestPermission = async (
-	testName: string,
+	testName: allAdapterTests,
 ): Promise<{ done: () => Promise<void> }> => {
 	const start = Date.now();
 

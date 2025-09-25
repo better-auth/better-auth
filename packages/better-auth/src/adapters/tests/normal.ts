@@ -176,7 +176,9 @@ export const normalTestSuite = createTestSuite(
 						],
 					});
 					const expectedResult = sortModels(
-						users.filter((user) => user.name.endsWith(users[0]!.name.slice(-1))),
+						users.filter((user) =>
+							user.name.endsWith(users[0]!.name.slice(-1)),
+						),
 					);
 					expect(sortModels(result)).toEqual(sortModels(expectedResult));
 				},
@@ -261,7 +263,11 @@ export const normalTestSuite = createTestSuite(
 				const result = await adapter.findMany<User>({
 					model: "user",
 					where: [
-						{ field: "id", value: [users[0]!.id, users[1]!.id], operator: "in" },
+						{
+							field: "id",
+							value: [users[0]!.id, users[1]!.id],
+							operator: "in",
+						},
 					],
 				});
 				const expectedResult = users.filter(

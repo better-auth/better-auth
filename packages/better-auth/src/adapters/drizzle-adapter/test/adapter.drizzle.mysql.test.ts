@@ -20,7 +20,7 @@ const mysqlDB = createPool({
 	timezone: "Z",
 });
 
-const { execute } = testAdapter({
+testAdapter({
 	adapter: (options) => {
 		return drizzleAdapter(drizzle(mysqlDB), {
 			debugLogs: { isRunningAdapterTests: true },
@@ -72,6 +72,3 @@ const { execute } = testAdapter({
 		await done();
 	},
 });
-
-// biome-ignore lint/nursery/noFloatingPromises: awaiting this will block vitest from starting
-execute();

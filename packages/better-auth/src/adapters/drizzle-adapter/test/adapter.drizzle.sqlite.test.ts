@@ -19,13 +19,12 @@ const { done } = await waitForTestPermission("drizzle-sqlite");
 const dbFilePath = path.join(__dirname, "test.db");
 let sqliteDB = new Database(dbFilePath);
 
-const { execute } = testAdapter({
+testAdapter({
 	adapter: (options) => {
 		return drizzleAdapter(drizzle(sqliteDB), {
 			debugLogs: { isRunningAdapterTests: true },
 			schema: generateDrizzleSchema(options, "sqlite"),
 			provider: "sqlite",
-			// transaction: true
 		});
 	},
 	async runMigrations(betterAuthOptions) {
@@ -59,5 +58,3 @@ const { execute } = testAdapter({
 		await done();
 	},
 });
-
-execute();

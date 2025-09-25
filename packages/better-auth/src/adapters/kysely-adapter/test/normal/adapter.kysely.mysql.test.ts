@@ -34,8 +34,12 @@ const showDB = async () => {
 	console.log(`DB`, DB);
 };
 
-const { execute } = testAdapter({
-	adapter: () => kyselyAdapter(kyselyDB, { type: "mysql" }),
+testAdapter({
+	adapter: () =>
+		kyselyAdapter(kyselyDB, {
+			type: "mysql",
+			debugLogs: { isRunningAdapterTests: true },
+		}),
 	async runMigrations(betterAuthOptions) {
 		await mysqlDB.query("DROP DATABASE IF EXISTS better_auth");
 		await mysqlDB.query("CREATE DATABASE better_auth");
@@ -76,5 +80,3 @@ const { execute } = testAdapter({
 		await done();
 	},
 });
-
-execute();
