@@ -12,7 +12,6 @@
   "scripts": {
     "build": "unbuild --clean",
     "stub": "unbuild --stub",
-    "test": "vitest",
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
