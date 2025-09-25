@@ -145,7 +145,7 @@ export const createLogger = (options?: Logger): InternalLogger => {
 const logger = createLogger();
 
 export const globalLog = (
-	level: Exclude<LogLevel, "success">,
+	level: LogLevel,
 	message: string,
 	options: BetterAuthOptions | null,
 	...args: any[]
@@ -157,7 +157,8 @@ export const globalLog = (
 	)
 		return false;
 
-	if (logOpts?.log) logOpts.log(level, message, ...args);
+	if (logOpts?.log)
+		logOpts.log(level === "success" ? "info" : level, message, ...args);
 	else logger[level](message, ...args);
 	return true;
 };

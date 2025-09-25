@@ -276,6 +276,7 @@ export async function getConfig({
 					globalLog(
 						"error",
 						"[#better-auth]: Couldn't read your auth config.",
+						null,
 						e,
 					);
 					process.exit(1);
