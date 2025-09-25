@@ -437,7 +437,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					);
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS,
+							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 						});
 					}
 					const user =
