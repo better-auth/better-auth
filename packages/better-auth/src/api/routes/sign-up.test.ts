@@ -121,12 +121,14 @@ describe("Email normalization integration tests", (it) => {
 			},
 		});
 
-		await expect(auth.api.signUpEmail({
+		await expect(
+			auth.api.signUpEmail({
 				body: {
 					name: "User2",
 					email: "user+shopping@example.com",
 					password: "password123",
 				},
-			})).rejects.toThrowError();
+			}),
+		).rejects.toThrowError();
 	});
 });
