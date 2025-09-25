@@ -91,21 +91,22 @@ describe("phone-number", async (it) => {
 
 	it("should call callbackOnVerification when updatePhoneNumber is enabled", async () => {
 		const callbackOnVerification = vi.fn();
-		const { customFetchImpl: testFetchImpl, sessionSetter: testSessionSetter } = await getTestInstance({
-			plugins: [
-				phoneNumber({
-					async sendOTP({ code }) {
-						otp = code;
-					},
-					callbackOnVerification,
-					signUpOnVerification: {
-						getTempEmail(phoneNumber) {
-							return `temp-${phoneNumber}`;
+		const { customFetchImpl: testFetchImpl, sessionSetter: testSessionSetter } =
+			await getTestInstance({
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							otp = code;
 						},
-					},
-				}),
-			],
-		});
+						callbackOnVerification,
+						signUpOnVerification: {
+							getTempEmail(phoneNumber) {
+								return `temp-${phoneNumber}`;
+							},
+						},
+					}),
+				],
+			});
 
 		const testClient = createAuthClient({
 			baseURL: "http://localhost:3000",
@@ -119,7 +120,6 @@ describe("phone-number", async (it) => {
 		const testPhoneNumber = "+251911121314";
 		const newPhoneNumber = "+0123456789";
 
-		// First, create a user with initial phone number
 		await testClient.phoneNumber.sendOtp({
 			phoneNumber: testPhoneNumber,
 		});
@@ -133,10 +133,8 @@ describe("phone-number", async (it) => {
 			},
 		);
 
-		// Clear the callback mock to focus on the updatePhoneNumber call
 		callbackOnVerification.mockClear();
 
-		// Now test updatePhoneNumber with callbackOnVerification
 		await testClient.phoneNumber.sendOtp({
 			phoneNumber: newPhoneNumber,
 			fetchOptions: {
@@ -163,7 +161,7 @@ describe("phone-number", async (it) => {
 					phoneNumberVerified: true,
 				}),
 			}),
-			expect.any(Object) // request object
+			expect.any(Object),
 		);
 	});
 
