@@ -4,7 +4,7 @@ import type { stripe } from "./index";
 export const stripeClient = <
 	O extends {
 		subscription: boolean;
-		oneTimePayments?: boolean;
+		payments?: boolean;
 	},
 >(
 	options?: O,
@@ -19,9 +19,7 @@ export const stripeClient = <
 				} & (O["subscription"] extends true
 					? { subscription: { enabled: true; plans: [] } }
 					: {}) &
-					(O["oneTimePayments"] extends true
-						? { oneTimePayments: { enabled: true } }
-						: {})
+					(O["payments"] extends true ? { payments: { enabled: true } } : {})
 			>
 		>,
 		pathMethods: {

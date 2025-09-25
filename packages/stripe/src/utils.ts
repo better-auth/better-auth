@@ -32,9 +32,9 @@ export async function getPlanByName(options: StripeOptions, name: string) {
 export async function getProducts(
 	options: StripeOptions,
 ): Promise<StripeProduct[]> {
-	if (!options.oneTimePayments?.products) return [];
+	if (!options.payments?.products) return [];
 
-	const products = options.oneTimePayments.products;
+	const products = options.payments.products;
 	return typeof products === "function" ? await products() : products;
 }
 

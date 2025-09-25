@@ -116,7 +116,7 @@ export const user = {
 export const getSchema = (options: StripeOptions) => {
 	let baseSchema = {};
 
-	if (options.subscription?.enabled || options.oneTimePayments?.enabled) {
+	if (options.subscription?.enabled || options.payments?.enabled) {
 		baseSchema = {
 			...user,
 		};
@@ -129,7 +129,7 @@ export const getSchema = (options: StripeOptions) => {
 		};
 	}
 
-	if (options.oneTimePayments?.enabled) {
+	if (options.payments?.enabled) {
 		baseSchema = {
 			...baseSchema,
 			...payments,
@@ -138,7 +138,7 @@ export const getSchema = (options: StripeOptions) => {
 
 	if (
 		options.schema &&
-		!options.oneTimePayments?.enabled &&
+		!options.payments?.enabled &&
 		"payment" in options.schema
 	) {
 		const { payment, ...restSchema } = options.schema;
