@@ -1,10 +1,10 @@
 import type { BetterAuthPlugin } from "../../types";
 import {
-	customJwtClaimsSchema,
+	jwtCustomClaimsSchema,
 	jwkExportedSchema,
 	jwkOptionsSchema,
 	JwtVerifyOptionsSchema,
-	type CustomJwtClaims,
+	type JwtCustomClaims,
 	type Jwk,
 	type JwkOptions,
 	type JwksOptions,
@@ -288,7 +288,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 							body: {} as {
 								data: Record<string, any>;
 								jwk?: string | JWK;
-								claims?: CustomJwtClaims;
+								claims?: JwtCustomClaims;
 							},
 						},
 						openapi: {
@@ -315,7 +315,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 					body: z.object({
 						data: z.record(z.string(), z.any()),
 						jwk: jwkExportedSchema.or(z.string()).optional(),
-						claims: customJwtClaimsSchema.optional(),
+						claims: jwtCustomClaimsSchema.optional(),
 					}),
 				},
 				async (ctx) => {

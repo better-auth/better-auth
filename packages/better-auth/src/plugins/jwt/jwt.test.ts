@@ -1,13 +1,13 @@
 import type { BetterAuthPlugin } from "..";
 import type {
-	CustomJwtClaims,
+	JwtCustomClaims,
 	JwkOptions,
 	JwksOptions,
 	JwtPluginOptions,
 	JwtVerifyOptions,
 } from "./types";
 import {
-	customJwtClaimsSchema,
+	jwtCustomClaimsSchema,
 	jwkExportedSchema,
 	jwkOptionsSchema,
 	JwtVerifyOptionsSchema,
@@ -33,6 +33,7 @@ import { describe, expect, it } from "vitest";
 import z from "zod/v4";
 import { parseJwk, toJwtTime } from "./utils";
 import { APIError } from "../../api";
+import { BetterAuthError } from "../../error";
 
 describe("jwt", async () => {
 	type IsEqual<T, U> = (<G>() => G extends T ? 1 : 2) extends <
@@ -51,12 +52,12 @@ describe("jwt", async () => {
 	type Eq3 = IsEqual<z.infer<typeof jwkOptionsSchema>, JwkOptions>;
 	const typeCheck3: Eq3 = true;
 
-	type Eq4 = IsEqual<z.infer<typeof customJwtClaimsSchema>, CustomJwtClaims>;
+	type Eq4 = IsEqual<z.infer<typeof jwtCustomClaimsSchema>, JwtCustomClaims>;
 	const typeCheck4: Eq4 = true;
 
 	function checkPayloadClaims(
 		payload: JWTPayload,
-		claims?: CustomJwtClaims,
+		claims?: JwtCustomClaims,
 		now?: number,
 	) {
 		if (claims?.iss === null) expect(payload.iss).toBeUndefined();
@@ -328,14 +329,14 @@ describe("jwt", async () => {
 								body: {} as {
 									data: Record<string, any>;
 									jwk?: string | JWK;
-									claims?: CustomJwtClaims;
+									claims?: JwtCustomClaims;
 								},
 							},
 						},
 						body: z.object({
 							data: z.record(z.string(), z.any()),
-							jwk: jwkExportedSchema.optional(),
-							claims: customJwtClaimsSchema.optional(),
+							jwk: jwkExportedSchema.or(z.string()).optional(),
+							claims: jwtCustomClaimsSchema.optional(),
 						}),
 					},
 					async (ctx) => {
@@ -677,9 +678,9 @@ describe("jwt", async () => {
 			async function verifyJwt(
 				auth: TestInstancePlugin,
 				jwt: string,
-				claims: CustomJwtClaims,
 				localJwks: JWTVerifyGetKey,
 				now: number,
+				claims: JwtCustomClaims,
 			): Promise<{
 				payload: JWTPayload | null;
 				payloadCustom: JWTPayload | null;
@@ -753,7 +754,7 @@ describe("jwt", async () => {
 
 				async function testJwtVerification(
 					jwt: string,
-					claims: CustomJwtClaims,
+					claims: JwtCustomClaims,
 					errorMargin?: number,
 				): Promise<JWTPayload> {
 					expect(jwt.length).toBeGreaterThan(10);
@@ -766,7 +767,7 @@ describe("jwt", async () => {
 					expect(payloadCustom).toStrictEqual(payload); // make sure custom plugin works the same
 					expect(payloadManual).toStrictEqual(payload); // make sure manual verification works the same
 
-					let claimsToCheck: CustomJwtClaims = {
+					let claimsToCheck: JwtCustomClaims = {
 						aud: claims.aud,
 						jti: claims.jti,
 						sub: claims.sub,
@@ -805,7 +806,7 @@ describe("jwt", async () => {
 					return payload!;
 				}
 
-				const claimsStringTime = {
+				const claimsStringTime: JwtCustomClaims = {
 					aud: "customAud",
 					exp: "5 min",
 					iat: "-10 s",
@@ -814,7 +815,7 @@ describe("jwt", async () => {
 					sub: "customSub",
 					typ: "customTyp",
 				};
-				const claimsNumberTime = {
+				const claimsNumberTime: JwtCustomClaims = {
 					aud: ["customAud", "customAud2"],
 					exp: now + 5 * 60,
 					iat: now - 10,
@@ -823,7 +824,7 @@ describe("jwt", async () => {
 					sub: "customSub",
 					typ: "customTyp",
 				};
-				const claimsDateTime = {
+				const claimsDateTime: JwtCustomClaims = {
 					aud: ["customAud"],
 					exp: new Date(1000 * (now + 5 * 60)),
 					iat: new Date(1000 * (now - 10)),
@@ -930,7 +931,7 @@ describe("jwt", async () => {
 
 				async function testJwtVerification(
 					jwt: string,
-					claims: CustomJwtClaims,
+					claims: JwtCustomClaims,
 				): Promise<JWTPayload> {
 					expect(jwt.length).toBeGreaterThan(10);
 
@@ -951,7 +952,7 @@ describe("jwt", async () => {
 					return payload!;
 				}
 
-				const claimsExpOnly: CustomJwtClaims = {
+				const claimsExpOnly: JwtCustomClaims = {
 					aud: null,
 					iat: null,
 					iss: null,
@@ -984,7 +985,7 @@ describe("jwt", async () => {
 					),
 				);
 
-				const claimsEmpty: CustomJwtClaims = {
+				const claimsEmpty: JwtCustomClaims = {
 					aud: null,
 					iat: null,
 					iss: null,

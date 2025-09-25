@@ -17,7 +17,9 @@ export interface JwtPluginOptions {
 	 * @default false
 	 */
 	disableSettingJwtHeader?: boolean;
-
+	/**
+	 * @todo maxExpirationTime?
+	 */
 	/**
 	 * Custom schema for the admin plugin
 	 */
@@ -197,7 +199,7 @@ export interface JwtOptions {
 	}) => Awaitable<string>;
 }
 
-export interface CustomJwtClaims {
+export interface JwtCustomClaims {
 	/**
 	 * Changes **JWT "Audience" Claim**.
 	 *
@@ -250,7 +252,7 @@ export interface CustomJwtClaims {
 	typ?: string | null;
 }
 
-export const customJwtClaimsSchema = z
+export const jwtCustomClaimsSchema = z
 	.object({
 		aud: z
 			.union([z.string(), z.array(z.string()), z.null()])

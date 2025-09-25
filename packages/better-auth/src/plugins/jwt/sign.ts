@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "../../types";
 import type {
 	CryptoKeyIdAlg,
-	CustomJwtClaims,
+	JwtCustomClaims,
 	JwtPluginOptions,
 } from "./types";
 import type { JWTPayload } from "jose";
@@ -40,7 +40,7 @@ async function signJwtPayload(
 	pluginOpts?: JwtPluginOptions,
 	jwk?: string | CryptoKeyIdAlg,
 	skipClaims?: { aud?: boolean; iat?: boolean; iss?: boolean; exp?: boolean },
-	customType?: string | null,
+	customType?: string,
 ): Promise<string> {
 	if (typeof jwk === "string" && jwk.endsWith(" revoked"))
 		throw new BetterAuthError(
@@ -86,10 +86,7 @@ async function signJwtPayload(
 	const jwt = new SignJWT(payload).setProtectedHeader({
 		alg: privateKey.alg,
 		kid: privateKey.id,
-		typ:
-			customType === null || customType === ""
-				? undefined
-				: (customType ?? "JWT"),
+		typ: customType === "" ? undefined : (customType ?? "JWT"),
 	});
 
 	if (!skipClaims?.iat) jwt.setIssuedAt(payload.iat);
@@ -136,10 +133,10 @@ export async function signJwtInternal(
 	pluginOpts?: JwtPluginOptions,
 	options?: {
 		jwk?: string | CryptoKeyIdAlg;
-		claims?: CustomJwtClaims;
+		claims?: JwtCustomClaims;
 	},
 ): Promise<string> {
-	const claims: CustomJwtClaims | undefined = options?.claims;
+	const claims: JwtCustomClaims | undefined = options?.claims;
 	// Make sure user did not set any of the #RFC7519 JWT Claims in the data and remove them if present
 	removeJwtClaims(data, ctx.context.logger);
 
@@ -173,7 +170,7 @@ export async function signJwtInternal(
 			iss: claims?.iss === null,
 			exp: claims?.exp === null,
 		},
-		claims?.typ,
+		claims?.typ === null ? "" : claims?.typ,
 	);
 }
 
@@ -203,7 +200,7 @@ export async function signJwt(
 	data: Record<string, unknown>,
 	options?: {
 		jwk?: string | CryptoKeyIdAlg;
-		claims?: CustomJwtClaims;
+		claims?: JwtCustomClaims;
 	},
 ): Promise<string> {
 	return await signJwtInternal(
