@@ -104,10 +104,7 @@ export async function onCheckoutSessionCompleted(
 			}
 		}
 
-		if (
-			checkoutSession.mode === "payment" &&
-			options.oneTimePayments?.enabled
-		) {
+		if (checkoutSession.mode === "payment" && options.payments?.enabled) {
 			const paymentId = checkoutSession.metadata?.paymentId;
 
 			if (paymentId && checkoutSession.payment_status === "paid") {

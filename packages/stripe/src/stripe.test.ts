@@ -83,7 +83,7 @@ describe("stripe", async () => {
 				},
 			],
 		},
-		oneTimePayments: {
+		payments: {
 			enabled: true,
 			products: [
 				{
@@ -115,7 +115,7 @@ describe("stripe", async () => {
 			bearer(),
 			stripeClient({
 				subscription: true,
-				oneTimePayments: true,
+				payments: true,
 			}),
 		],
 		fetchOptions: {
@@ -1902,7 +1902,7 @@ describe("stripe", async () => {
 		const onPaymentComplete = vi.fn();
 		const testOptions = {
 			...stripeOptions,
-			oneTimePayments: {
+			payments: {
 				enabled: true,
 				products: [
 					{
@@ -1930,7 +1930,7 @@ describe("stripe", async () => {
 				bearer(),
 				stripeClient({
 					subscription: true,
-					oneTimePayments: true,
+					payments: true,
 				}),
 			],
 			fetchOptions: {
@@ -2050,10 +2050,10 @@ describe("stripe", async () => {
 		);
 	});
 
-	it("should handle payment creation when oneTimePayments is disabled", async () => {
+	it("should handle payment creation when payments is disabled", async () => {
 		const testOptions = {
 			...stripeOptions,
-			oneTimePayments: {
+			payments: {
 				enabled: false,
 			},
 		} as unknown as StripeOptions;
@@ -2071,7 +2071,7 @@ describe("stripe", async () => {
 				bearer(),
 				stripeClient({
 					subscription: true,
-					oneTimePayments: true,
+					payments: true,
 				}),
 			],
 			fetchOptions: {

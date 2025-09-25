@@ -111,12 +111,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					});
 				}
 
-				if (
-					!isSubscriptionAction &&
-					!options.oneTimePayments?.authorizeReference
-				) {
+				if (!isSubscriptionAction && !options.payments?.authorizeReference) {
 					logger.error(
-						`Passing referenceId into a payment action isn't allowed if oneTimePayments.authorizeReference isn't defined in your stripe plugin config.`,
+						`Passing referenceId into a payment action isn't allowed if payments.authorizeReference isn't defined in your stripe plugin config.`,
 					);
 					throw new APIError("BAD_REQUEST", {
 						message:
@@ -136,7 +133,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							},
 							ctx,
 						)
-					: await options.oneTimePayments?.authorizeReference?.(
+					: await options.payments?.authorizeReference?.(
 							{
 								user: session.user,
 								session: session.session,
@@ -1274,7 +1271,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		 * `auth.api.createPaymentSession`
 		 *
 		 * **client:**
-		 * `authClient.oneTimePayments.createSession`
+		 * `authClient.payments.createSession`
 		 */
 		createPaymentSession: createAuthEndpoint(
 			"/payment/create-session",
@@ -1314,10 +1311,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			},
 			async (ctx) => {
 				const { user, session } = ctx.context.session;
-				if (
-					options.oneTimePayments?.requireEmailVerification &&
-					!user.emailVerified
-				) {
+				if (options.payments?.requireEmailVerification && !user.emailVerified) {
 					throw new APIError("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
 					});
@@ -1408,8 +1402,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					},
 				);
 
-				const params = options.oneTimePayments?.getCheckoutSessionParams
-					? await options.oneTimePayments.getCheckoutSessionParams(
+				const params = options.payments?.getCheckoutSessionParams
+					? await options.payments.getCheckoutSessionParams(
 							{ user, session, product, payment },
 							ctx,
 						)
@@ -1430,11 +1424,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							}),
 					success_url: getUrl(
 						ctx,
-						ctx.body.successUrl || options.oneTimePayments?.successUrl || "/",
+						ctx.body.successUrl || options.payments?.successUrl || "/",
 					),
 					cancel_url: getUrl(
 						ctx,
-						ctx.body.cancelUrl || options.oneTimePayments?.cancelUrl || "/",
+						ctx.body.cancelUrl || options.payments?.cancelUrl || "/",
 					),
 					line_items: [
 						{
@@ -1444,10 +1438,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					],
 					mode: "payment",
 					client_reference_id: referenceId,
-					automatic_tax: options.oneTimePayments?.automaticTax
+					automatic_tax: options.payments?.automaticTax
 						? { enabled: true }
 						: undefined,
-					allow_promotion_codes: options.oneTimePayments?.allowPromotionCodes,
+					allow_promotion_codes: options.payments?.allowPromotionCodes,
 					...params.params,
 					metadata: {
 						userId: user.id,
@@ -1493,7 +1487,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		 * `auth.api.getPaymentStatus`
 		 *
 		 * **client:**
-		 * `authClient.oneTimePayments.getStatus`
+		 * `authClient.payments.status`
 		 */
 		getPaymentStatus: createAuthEndpoint(
 			"/payment/status",
@@ -1625,7 +1619,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		 * `auth.api.listPayments`
 		 *
 		 * **client:**
-		 * `authClient.oneTimePayments.list`
+		 * `authClient.payments.list`
 		 */
 		listPayments: createAuthEndpoint(
 			"/payment/list",
@@ -1760,9 +1754,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			}
 				? typeof subscriptionEndpoints
 				: {}),
-			...((options.oneTimePayments?.enabled
+			...((options.payments?.enabled
 				? oneTimePaymentEndpoints
-				: {}) as O["oneTimePayments"] extends {
+				: {}) as O["payments"] extends {
 				enabled: boolean;
 			}
 				? typeof oneTimePaymentEndpoints

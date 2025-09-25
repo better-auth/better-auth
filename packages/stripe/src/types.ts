@@ -417,7 +417,7 @@ export interface StripeOptions {
 	/**
 	 * One-time payments
 	 */
-	oneTimePayments?: {
+	payments?: {
 		enabled: boolean;
 		/**
 		 * List of products available for one-time purchase
