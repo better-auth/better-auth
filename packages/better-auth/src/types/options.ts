@@ -152,15 +152,7 @@ export type BetterAuthAdvancedOptions = {
 		| false;
 };
 
-export type BetterAuthOptions = {
-	/**
-	 * The name of the application
-	 *
-	 * process.env.APP_NAME
-	 *
-	 * @default "Better Auth"
-	 */
-	appName?: string;
+export type BetterAuthSharedOptions = {
 	/**
 	 * Base URL for the Better Auth. This is typically the
 	 * root URL where your application server is hosted.
@@ -180,6 +172,17 @@ export type BetterAuthOptions = {
 	 * @default "/api/auth"
 	 */
 	basePath?: string;
+};
+
+export type BetterAuthOptions = BetterAuthSharedOptions & {
+	/**
+	 * The name of the application
+	 *
+	 * process.env.APP_NAME
+	 *
+	 * @default "Better Auth"
+	 */
+	appName?: string;
 	/**
 	 * The secret to use for encryption,
 	 * signing and hashing.
