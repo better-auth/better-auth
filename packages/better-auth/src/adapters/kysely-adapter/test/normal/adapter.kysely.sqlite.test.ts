@@ -11,12 +11,9 @@ import {
 import path from "path";
 import { getMigrations } from "../../../../db";
 import fs from "fs/promises";
-import { waitUntilTestsAreDone } from "../../../../test/adapter-test-setup";
+import { waitForTestPermission } from "../../../../test/adapter-test-setup";
 
-const { done } = await waitUntilTestsAreDone({
-	thisTest: "kysely-sqlite",
-	waitForTests: [],
-});
+const { done } = await waitForTestPermission("kysely-sqlite");
 
 const dbPath = path.join(__dirname, "test.db");
 let database = new Database(dbPath);

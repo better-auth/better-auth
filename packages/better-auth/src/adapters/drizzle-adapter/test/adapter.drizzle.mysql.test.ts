@@ -11,12 +11,9 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { generateDrizzleSchema } from "./generate-schema";
 import { createPool } from "mysql2/promise";
 import { assert } from "vitest";
-import { waitUntilTestsAreDone } from "../../../test/adapter-test-setup";
+import { waitForTestPermission } from "../../../test/adapter-test-setup";
 
-const { done } = await waitUntilTestsAreDone({
-	thisTest: "drizzle-mysql",
-	waitForTests: [],
-});
+const { done } = await waitForTestPermission("drizzle-mysql");
 
 const mysqlDB = createPool({
 	uri: "mysql://user:password@localhost:3306/better_auth",

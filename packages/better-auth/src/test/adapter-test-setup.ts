@@ -3,6 +3,11 @@ import { createServer } from "http";
 
 const PORT = 7789;
 
+const conflictingTests = [
+	["drizzle-mysql", "kysely-mysql"],
+	["drizzle-pg", "kysely-pg"],
+];
+
 /**
  * This file is used to setup adapter unit tests.
  * Since test database migrations are ran in `beforeAll` hooks, it's possible
@@ -11,123 +16,253 @@ const PORT = 7789;
  * race conditions.
  *
  * Since there is no way to share state across tests,
- * we use a server to store the active tests.
- * This acts as a tracker to avoid race conditions,
+ * we use a server to coordinate conflicting tests.
+ * This acts as a coordinator to avoid race conditions,
  * ensuring each adapter tests that could collide run sequentially.
  *
  * WARNING: Do not change the name or path of this file.
  * If you do, you will need to update the `globalSetup` in `vitest.config.ts`.
  */
 export default async function setup(project: TestProject) {
-	let activeTests: string[] = [];
+	// Track currently running tests
+	const runningTests = new Set<string>();
+	// Track completed tests for this session
+	const completedTests = new Set<string>();
 
 	project.onTestsRerun(async () => {
-		// on test rerun, we reset the active tests
-		activeTests.length = 0;
+		// on test rerun, we reset the state
+		runningTests.clear();
+		completedTests.clear();
 	});
 
 	const server = createServer((req, res) => {
-		if (req.url === "/add-test") {
+		const setCorsHeaders = () => {
+			res.setHeader("Access-Control-Allow-Origin", "*");
+			res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+			res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+		};
+
+		if (req.method === "OPTIONS") {
+			setCorsHeaders();
+			res.writeHead(200);
+			res.end();
+			return;
+		}
+
+		if (req.url === "/can-run-test") {
 			let body = "";
 			req.on("data", (chunk) => {
 				body += chunk.toString();
 			});
 			req.on("end", () => {
-				const test = body;
-				activeTests.push(test);
-				res.writeHead(200, { "Content-Type": "application/json" });
-				res.end(JSON.stringify(activeTests));
+				try {
+					const { testName } = JSON.parse(body);
+
+					// Check if this test is in any conflicting group
+					const conflictingGroup = conflictingTests.find((group) =>
+						group.includes(testName),
+					);
+
+					if (!conflictingGroup) {
+						// Not a conflicting test, allow it to run
+						runningTests.add(testName);
+						setCorsHeaders();
+						res.writeHead(200, { "Content-Type": "application/json" });
+						res.end(
+							JSON.stringify({ canRun: true, reason: "not-conflicting" }),
+						);
+						return;
+					}
+
+					// Check if any other test in the same conflicting group is currently running
+					const hasConflictingTestRunning = conflictingGroup.some(
+						(test) => test !== testName && runningTests.has(test),
+					);
+
+					if (hasConflictingTestRunning) {
+						// Another conflicting test is running, deny this one
+						setCorsHeaders();
+						res.writeHead(200, { "Content-Type": "application/json" });
+						res.end(
+							JSON.stringify({
+								canRun: false,
+								reason: "conflicting-test-running",
+								conflictingGroup,
+							}),
+						);
+						return;
+					}
+
+					// Check if this is the first test in the conflicting group to run
+					const isFirstInGroup = conflictingGroup[0] === testName;
+
+					if (isFirstInGroup) {
+						// This is the first test in the group, allow it to run
+						runningTests.add(testName);
+						setCorsHeaders();
+						res.writeHead(200, { "Content-Type": "application/json" });
+						res.end(JSON.stringify({ canRun: true, reason: "first-in-group" }));
+						return;
+					}
+
+					// Check if the previous test in the group has completed
+					const testIndex = conflictingGroup.indexOf(testName);
+					const previousTest = conflictingGroup[testIndex - 1];
+					const previousTestCompleted = completedTests.has(previousTest || "");
+
+					if (previousTestCompleted) {
+						// Previous test completed, allow this one to run
+						runningTests.add(testName);
+						setCorsHeaders();
+						res.writeHead(200, { "Content-Type": "application/json" });
+						res.end(
+							JSON.stringify({ canRun: true, reason: "previous-completed" }),
+						);
+						return;
+					}
+
+					// Previous test hasn't completed yet, deny this one
+					setCorsHeaders();
+					res.writeHead(200, { "Content-Type": "application/json" });
+					res.end(
+						JSON.stringify({
+							canRun: false,
+							reason: "waiting-for-previous",
+							waitingFor: previousTest,
+							conflictingGroup,
+						}),
+					);
+				} catch (error) {
+					setCorsHeaders();
+					res.writeHead(400, { "Content-Type": "application/json" });
+					res.end(JSON.stringify({ error: "Invalid JSON body" }));
+				}
 			});
-		} else if (req.url === "/get-tests") {
-			res.writeHead(200, { "Content-Type": "application/json" });
-			res.end(JSON.stringify(activeTests));
-		} else if (req.url === "/reset-tests") {
-			activeTests.length = 0;
-			res.writeHead(200, { "Content-Type": "application/json" });
-			res.end(JSON.stringify(activeTests));
-		} else if (req.url === "/remove-test") {
+		} else if (req.url === "/test-completed") {
 			let body = "";
 			req.on("data", (chunk) => {
 				body += chunk.toString();
 			});
 			req.on("end", () => {
-				const test = body;
-				activeTests = activeTests.filter((t) => t !== test);
-				res.writeHead(200, { "Content-Type": "application/json" });
-				res.end(JSON.stringify(activeTests));
+				try {
+					const { testName } = JSON.parse(body);
+
+					// Mark test as completed and remove from running
+					runningTests.delete(testName);
+					completedTests.add(testName);
+
+					setCorsHeaders();
+					res.writeHead(200, { "Content-Type": "application/json" });
+					res.end(
+						JSON.stringify({
+							success: true,
+							runningTests: Array.from(runningTests),
+							completedTests: Array.from(completedTests),
+						}),
+					);
+				} catch (error) {
+					setCorsHeaders();
+					res.writeHead(400, { "Content-Type": "application/json" });
+					res.end(JSON.stringify({ error: "Invalid JSON body" }));
+				}
 			});
+		} else if (req.url === "/status") {
+			// Debug endpoint to check current state
+			setCorsHeaders();
+			res.writeHead(200, { "Content-Type": "application/json" });
+			res.end(
+				JSON.stringify({
+					runningTests: Array.from(runningTests),
+					completedTests: Array.from(completedTests),
+					conflictingGroups: conflictingTests,
+				}),
+			);
+		} else {
+			setCorsHeaders();
+			res.writeHead(404, { "Content-Type": "application/json" });
+			res.end(JSON.stringify({ error: "Endpoint not found" }));
 		}
 	});
 
 	server.listen(PORT, () => {
-		console.log(`Adapter unit tests server running on port ${PORT}`);
+		console.log(`Adapter test coordinator server running on port ${PORT}`);
 	});
 }
 
-const addTest = async (test: string) => {
-	const response = await fetch(`http://localhost:${PORT}/add-test`, {
-		method: "POST",
-		body: test,
-	});
-	return response.json();
-};
+/**
+ * Checks if a test can run by querying the coordinator server.
+ * Returns a promise that resolves when the test is allowed to run.
+ */
+export const canRunTest = async (testName: string): Promise<boolean> => {
+	return new Promise((resolve) => {
+		const checkCanRun = async () => {
+			try {
+				const response = await fetch(`http://localhost:${PORT}/can-run-test`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ testName }),
+				});
 
-const resetTests = async () => {
-	const response = await fetch(`http://localhost:${PORT}/reset-tests`, {
-		method: "POST",
-	});
-	return response.json();
-};
+				const result = await response.json();
 
-const removeTest = async (test: string) => {
-	const response = await fetch(`http://localhost:${PORT}/remove-test`, {
-		method: "POST",
-		body: test,
+				if (result.canRun) {
+					console.log(`Test ${testName} can run: ${result.reason}`);
+					resolve(true);
+				} else {
+					console.log(`Test ${testName} cannot run: ${result.reason}`);
+					if (result.waitingFor) {
+						console.log(`Waiting for ${result.waitingFor} to complete...`);
+					}
+					// Wait 100ms and check again
+					setTimeout(checkCanRun, 1000);
+				}
+			} catch (error) {
+				console.error(`Error checking if test ${testName} can run:`, error);
+				// On error, allow the test to run to avoid blocking
+				resolve(true);
+			}
+		};
+		// biome-ignore lint/nursery/noFloatingPromises: -
+		checkCanRun();
 	});
-	return response.json();
-};
-
-const getTests = async () => {
-	const response = await fetch(`http://localhost:${PORT}/get-tests`, {
-		method: "GET",
-	});
-	return response.json();
 };
 
 /**
- * Waits for other adapter tests to complete before starting this test.
- * This is used to coordinate adapter tests that may interfere with each other
- * when running in parallel, such as tests that use the same database instance.
+ * Marks a test as completed in the coordinator server.
  */
-export const waitUntilTestsAreDone = async ({
-	thisTest,
-	waitForTests,
-}: {
-	thisTest: string;
-	waitForTests: string[];
-}): Promise<{ done: () => Promise<void> }> => {
-	let start = Date.now();
-	await addTest(thisTest);
-	return new Promise((r) => {
-		const check = async () => {
-			const tests = await getTests();
-			const hasWaitingTests = waitForTests.some((test) => tests.includes(test));
-			if (!hasWaitingTests) {
-				clearInterval(i);
-				r({
-					done: async () => {
-						await removeTest(thisTest);
-					},
-				});
-				console.log(
-					`starting test ${thisTest}... (waited ${Date.now() - start}ms)`,
-				);
-			}
-		};
-		// biome-ignore lint/nursery/noFloatingPromises: we need to check the tests immediately
-		check();
-		let i = setInterval(async () => {
-			await check();
-		}, 100);
-	});
+export const markTestCompleted = async (testName: string): Promise<void> => {
+	try {
+		const response = await fetch(`http://localhost:${PORT}/test-completed`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ testName }),
+		});
+
+		const result = await response.json();
+		if (result.success) {
+			console.log(`Test ${testName} marked as completed`);
+		}
+	} catch (error) {
+		console.error(`Error marking test ${testName} as completed:`, error);
+	}
+};
+
+/**
+ * Waits for permission to run a test and returns a cleanup function.
+ */
+export const waitForTestPermission = async (
+	testName: string,
+): Promise<{ done: () => Promise<void> }> => {
+	const start = Date.now();
+
+	// Wait for permission to run
+	await canRunTest(testName);
+
+	console.log(`Test ${testName} starting... (waited ${Date.now() - start}ms)`);
+
+	return {
+		done: async () => {
+			await markTestCompleted(testName);
+		},
+	};
 };

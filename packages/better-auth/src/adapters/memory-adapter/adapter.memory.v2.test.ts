@@ -7,8 +7,11 @@ import {
 	transactionsTestSuite,
 	authFlowTestSuite,
 } from "../tests";
+import { waitForTestPermission } from "../../test/adapter-test-setup";
 
 let db: Record<string, any[]> = {};
+
+const { done } = await waitForTestPermission("memory");
 
 const { execute } = testAdapter({
 	adapter: () => {
@@ -29,6 +32,9 @@ const { execute } = testAdapter({
 		authFlowTestSuite({}),
 		performanceTestSuite({}),
 	],
+	async onFinish() {
+		await done();
+	},
 });
 
 execute();

@@ -10,12 +10,9 @@ import {
 } from "../../../tests";
 import { getMigrations } from "../../../../db";
 import { assert } from "vitest";
-import { waitUntilTestsAreDone } from "../../../../test/adapter-test-setup";
+import { waitForTestPermission } from "../../../../test/adapter-test-setup";
 
-const { done } = await waitUntilTestsAreDone({
-	thisTest: "kysely-mysql",
-	waitForTests: ["drizzle-mysql"],
-});
+const { done } = await waitForTestPermission("kysely-mysql");
 
 const mysqlDB = createPool({
 	uri: "mysql://user:password@localhost:3306/better_auth",

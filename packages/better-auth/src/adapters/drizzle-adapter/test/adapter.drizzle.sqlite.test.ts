@@ -12,12 +12,9 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import path from "path";
 import { generateDrizzleSchema } from "./generate-schema";
 import fs from "fs/promises";
-import { waitUntilTestsAreDone } from "../../../test/adapter-test-setup";
+import { waitForTestPermission } from "../../../test/adapter-test-setup";
 
-const { done } = await waitUntilTestsAreDone({
-	thisTest: "drizzle-sqlite",
-	waitForTests: [],
-});
+const { done } = await waitForTestPermission("drizzle-sqlite");
 
 const dbFilePath = path.join(__dirname, "test.db");
 let sqliteDB = new Database(dbFilePath);
