@@ -121,6 +121,24 @@ export default async function setup(project: TestProject) {
 						return;
 					}
 
+					// Check if the previous test is running or if we should wait
+					// If the previous test is not running and not completed, 
+					// and no other test in the group is running, allow this one to run
+					const previousTestRunning = runningTests.has(previousTest || "");
+					const anyTestInGroupRunning = conflictingGroup.some(test => 
+						test !== testName && runningTests.has(test)
+					);
+
+					if (!previousTestRunning && !previousTestCompleted && !anyTestInGroupRunning) {
+						// Previous test is not running and not completed, and no other test is running
+						// This means the previous test is not part of this test run, so allow this one
+						runningTests.add(testName);
+						setCorsHeaders();
+						res.writeHead(200, { "Content-Type": "application/json" });
+						res.end(JSON.stringify({ canRun: true, reason: "previous-test-not-running" }));
+						return;
+					}
+
 					// Previous test hasn't completed yet, deny this one
 					setCorsHeaders();
 					res.writeHead(200, { "Content-Type": "application/json" });
