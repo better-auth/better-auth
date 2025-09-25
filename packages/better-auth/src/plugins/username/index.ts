@@ -286,43 +286,6 @@ export const username = (options?: UsernameOptions) => {
 						});
 					}
 
-					if (
-						ctx.context.options?.emailAndPassword?.requireEmailVerification &&
-						!user.emailVerified
-					) {
-						if (
-							!ctx.context.options?.emailVerification?.sendVerificationEmail
-						) {
-							throw new APIError("FORBIDDEN", {
-								message: ERROR_CODES.EMAIL_NOT_VERIFIED,
-							});
-						}
-
-						if (ctx.context.options?.emailVerification?.sendOnSignIn) {
-							const token = await createEmailVerificationToken(
-								ctx.context.secret,
-								user.email,
-								undefined,
-								ctx.context.options.emailVerification?.expiresIn,
-							);
-							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
-								ctx.body.callbackURL || "/"
-							}`;
-							await ctx.context.options.emailVerification.sendVerificationEmail(
-								{
-									user: user,
-									url,
-									token,
-								},
-								ctx.request,
-							);
-						}
-
-						throw new APIError("FORBIDDEN", {
-							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
-						});
-					}
-
 					const account = await ctx.context.adapter.findOne<Account>({
 						model: "account",
 						where: [
@@ -360,6 +323,44 @@ export const username = (options?: UsernameOptions) => {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
+
+					if (
+						ctx.context.options?.emailAndPassword?.requireEmailVerification &&
+						!user.emailVerified
+					) {
+						if (
+							!ctx.context.options?.emailVerification?.sendVerificationEmail
+						) {
+							throw new APIError("FORBIDDEN", {
+								message: ERROR_CODES.EMAIL_NOT_VERIFIED,
+							});
+						}
+
+						if (ctx.context.options?.emailVerification?.sendOnSignIn) {
+							const token = await createEmailVerificationToken(
+								ctx.context.secret,
+								user.email,
+								undefined,
+								ctx.context.options.emailVerification?.expiresIn,
+							);
+							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
+								ctx.body.callbackURL || "/"
+							}`;
+							await ctx.context.options.emailVerification.sendVerificationEmail(
+								{
+									user: user,
+									url,
+									token,
+								},
+								ctx.request,
+							);
+						}
+
+						throw new APIError("FORBIDDEN", {
+							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
+						});
+					}
+
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
 						ctx,
