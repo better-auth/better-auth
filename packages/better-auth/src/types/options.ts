@@ -168,8 +168,6 @@ export type BetterAuthOptions = {
 	 * the system will check the following environment variable:
 	 *
 	 * process.env.BETTER_AUTH_URL
-	 *
-	 * If not set it will throw an error.
 	 */
 	baseURL?: string;
 	/**
