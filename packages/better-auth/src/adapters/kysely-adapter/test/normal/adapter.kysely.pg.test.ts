@@ -10,6 +10,12 @@ import {
 } from "../../../tests";
 import { getMigrations } from "../../../../db";
 import type { BetterAuthOptions } from "../../../../types";
+import { waitUntilTestsAreDone } from "../../../../test/adapter-test-setup";
+
+const { done } = await waitUntilTestsAreDone({
+	thisTest: "kysely-pg",
+	waitForTests: ["drizzle-pg"],
+});
 
 const pgDB = new Pool({
 	connectionString: "postgres://user:password@localhost:5432/better_auth",
@@ -42,6 +48,7 @@ const { execute } = testAdapter({
 	],
 	async onFinish() {
 		await pgDB.end();
+		await done();
 	},
 });
 

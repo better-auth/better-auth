@@ -11,9 +11,14 @@ import {
 import path from "path";
 import { getMigrations } from "../../../../db";
 import fs from "fs/promises";
+import { waitUntilTestsAreDone } from "../../../../test/adapter-test-setup";
+
+const { done } = await waitUntilTestsAreDone({
+	thisTest: "kysely-sqlite",
+	waitForTests: [],
+});
 
 const dbPath = path.join(__dirname, "test.db");
-
 let database = new Database(dbPath);
 
 let kyselyDB = new Kysely({
@@ -42,6 +47,7 @@ const { execute } = testAdapter({
 	],
 	async onFinish() {
 		database.close();
+		await done();
 	},
 });
 

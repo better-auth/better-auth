@@ -10,6 +10,12 @@ import { getMigrations } from "../../../db";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { generateDrizzleSchema } from "./generate-schema";
 import { Pool } from "pg";
+import { waitUntilTestsAreDone } from "../../../test/adapter-test-setup";
+
+const { done } = await waitUntilTestsAreDone({
+	thisTest: "drizzle-pg",
+	waitForTests: [],
+});
 
 const pgDB = new Pool({
 	connectionString: "postgres://user:password@localhost:5432/better_auth",
@@ -64,6 +70,7 @@ const { execute } = testAdapter({
 	],
 	async onFinish() {
 		await cleanupDatabase(true);
+		await done();
 	},
 });
 

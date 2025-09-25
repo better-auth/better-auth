@@ -10,6 +10,13 @@ import { getMigrations } from "../../../db";
 import { drizzle } from "drizzle-orm/mysql2";
 import { generateDrizzleSchema } from "./generate-schema";
 import { createPool } from "mysql2/promise";
+import { assert } from "vitest";
+import { waitUntilTestsAreDone } from "../../../test/adapter-test-setup";
+
+const { done } = await waitUntilTestsAreDone({
+	thisTest: "drizzle-mysql",
+	waitForTests: [],
+});
 
 const mysqlDB = createPool({
 	uri: "mysql://user:password@localhost:3306/better_auth",
@@ -31,6 +38,19 @@ const { execute } = testAdapter({
 		const opts = Object.assign(betterAuthOptions, { database: mysqlDB });
 		const { runMigrations } = await getMigrations(opts);
 		await runMigrations();
+
+		// ensure migrations were run successfully
+		const [tables_result] = (await mysqlDB.query("SHOW TABLES")) as unknown as [
+			{ Tables_in_better_auth: string }[],
+		];
+		const tables = tables_result.map((table) => table.Tables_in_better_auth);
+		assert(tables.length > 0, "No tables found");
+		assert(
+			!["user", "session", "account", "verification"].find(
+				(x) => !tables.includes(x),
+			),
+			"No tables found",
+		);
 	},
 	prefixTests: "mysql",
 	tests: [
@@ -50,6 +70,10 @@ const { execute } = testAdapter({
 		authFlowTestSuite(),
 		performanceTestSuite({ dialect: "mysql" }),
 	],
+	async onFinish() {
+		await mysqlDB.end();
+		await done();
+	},
 });
 
 // biome-ignore lint/nursery/noFloatingPromises: awaiting this will block vitest from starting

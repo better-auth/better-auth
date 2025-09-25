@@ -157,6 +157,7 @@ export const testAdapter = ({
 	 */
 	const migrate = async () => {
 		const start = performance.now();
+
 		try {
 			await runMigrations(betterAuthOptions);
 		} catch (error) {
@@ -180,6 +181,12 @@ export const testAdapter = ({
 						await migrate();
 					});
 
+					afterAll(async () => {
+						await cleanup();
+						await onFinish?.();
+						resolve(void 0);
+					});
+
 					for (const testSuite of tests) {
 						await testSuite({
 							adapter,
@@ -200,14 +207,9 @@ export const testAdapter = ({
 							cleanup,
 							prefixTests,
 							runMigrations: migrate,
+							onTestFinish: async () => {},
 						});
 					}
-
-					afterAll(async () => {
-						await cleanup();
-						await onFinish?.();
-						resolve(void 0);
-					});
 				});
 			});
 		},

@@ -204,12 +204,12 @@ export const createTestSuite = <
 			cleanup: () => Promise<void>;
 			runMigrations: () => Promise<void>;
 			prefixTests?: string;
+			onTestFinish: () => Promise<void>;
 		}) => {
 			const createdRows: Record<string, any[]> = {};
 
 			const adapter = helpers.adapter;
 			const wrapperAdapter = () => {
-				let transactionAdapter = adapter();
 				const options = helpers.getBetterAuthOptions();
 				let adapter_ = adapter();
 				const adapterConfig = {
@@ -358,7 +358,9 @@ export const createTestSuite = <
 			) => {
 				return models.sort((a, b) => {
 					if (by === "createdAt") {
-						return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+						return (
+							new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+						);
 					}
 					return a.id.localeCompare(b.id);
 				});
@@ -439,8 +441,19 @@ export const createTestSuite = <
 				const onFinish = async () => {
 					await cleanupCreatedRows();
 					await resetBetterAuthOptions();
+					// Check if this is the last test by comparing current test index with total tests
+					const testEntries = Object.entries(fullTests);
+					const currentTestIndex = testEntries.findIndex(
+						([name]) =>
+							name === testName.replace(/\[.*?\] /, "").replace(/ ─ /g, " - "),
+					);
+					const isLastTest = currentTestIndex === testEntries.length - 1;
+
+					if (isLastTest) {
+						await helpers.onTestFinish();
+					}
 				};
-				test.skipIf(shouldSkip)(testName, async ({ onTestFailed, skip, annotate }) => {
+				test.skipIf(shouldSkip)(testName, async ({ onTestFailed, skip }) => {
 					resetDebugLogs();
 					onTestFailed(async () => {
 						printDebugLogs();

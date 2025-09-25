@@ -12,6 +12,12 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import path from "path";
 import { generateDrizzleSchema } from "./generate-schema";
 import fs from "fs/promises";
+import { waitUntilTestsAreDone } from "../../../test/adapter-test-setup";
+
+const { done } = await waitUntilTestsAreDone({
+	thisTest: "drizzle-sqlite",
+	waitForTests: [],
+});
 
 const dbFilePath = path.join(__dirname, "test.db");
 let sqliteDB = new Database(dbFilePath);
@@ -52,6 +58,9 @@ const { execute } = testAdapter({
 		authFlowTestSuite(),
 		performanceTestSuite({ dialect: "sqlite" }),
 	],
+	async onFinish() {
+		await done();
+	},
 });
 
 execute();

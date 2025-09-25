@@ -1,4 +1,4 @@
-// import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // import * as schema from "./schema.mysql";
 // import {
 // 	recoverProcessTZ,
@@ -13,6 +13,12 @@
 // import { Kysely, MysqlDialect } from "kysely";
 // import { betterAuth } from "../../../auth";
 // import merge from "deepmerge";
+
+describe("no", () => {
+	it("nothing", () => {
+		expect(true).toBe(true);
+	});
+});
 
 // const TEST_DB_MYSQL_URL = "mysql://user:password@localhost:3306/better_auth";
 

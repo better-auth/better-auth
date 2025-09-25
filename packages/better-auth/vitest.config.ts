@@ -7,5 +7,6 @@ export default defineConfig({
 				execArgv: ["--expose-gc"],
 			},
 		},
+		globalSetup: "./src/test/adapter-test-setup.ts",
 	},
 });
