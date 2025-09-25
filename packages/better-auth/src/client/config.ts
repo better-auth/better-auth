@@ -6,11 +6,12 @@ import { redirectPlugin } from "./fetch-plugins";
 import { getSessionAtom } from "./session-atom";
 import { parseJSON } from "./parser";
 
-export const getClientConfig = (options?: ClientOptions) => {
+export const getClientConfig = (options?: ClientOptions, loadEnv?: boolean) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
 	const baseURL =
-		getBaseURL(options?.baseURL, options?.basePath) ?? "/api/auth";
+		getBaseURL(options?.baseURL, options?.basePath, undefined, loadEnv) ??
+		"/api/auth";
 	const pluginsFetchPlugins =
 		options?.plugins
 			?.flatMap((plugin) => plugin.fetchPlugins)
