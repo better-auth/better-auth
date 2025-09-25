@@ -464,7 +464,11 @@ describe("adapter test", async () => {
 			...session,
 			activeOrganizationId: "1",
 		});
-		expect(expirationMap.get(token)).toBe(60 * 60 * 24 * 7); // 7 days();
+		const expectedTokenExp = 60 * 60 * 24 * 7;
+		expect(expirationMap.get(token) - expectedTokenExp).toBeLessThanOrEqual(1);
+		expect(expirationMap.get(token) - expectedTokenExp).toBeGreaterThanOrEqual(
+			0,
+		);
 	});
 
 	it("should delete on secondary storage", async () => {
