@@ -128,8 +128,8 @@ describe("Custom Session Plugin Tests", async () => {
 			expect(memoryIncreasePerPlugin).toBeLessThan(5 * 1024);
 			// Verify that plugins are still functional
 			expect(pluginInstances).toHaveLength(sessionCount);
-			expect(pluginInstances[0].id).toBe("custom-session");
-			expect(pluginInstances[sessionCount - 1].id).toBe("custom-session");
+			expect(pluginInstances[0]!.id).toBe("custom-session");
+			expect(pluginInstances[sessionCount - 1]!.id).toBe("custom-session");
 		},
 	);
 });
