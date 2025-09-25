@@ -4,6 +4,7 @@ import type { stripe } from "./index";
 export const stripeClient = <
 	O extends {
 		subscription: boolean;
+		oneTimePayments?: boolean;
 	},
 >(
 	options?: O,
@@ -12,19 +13,15 @@ export const stripeClient = <
 		id: "stripe-client",
 		$InferServerPlugin: {} as ReturnType<
 			typeof stripe<
-				O["subscription"] extends true
-					? {
-							stripeClient: any;
-							stripeWebhookSecret: string;
-							subscription: {
-								enabled: true;
-								plans: [];
-							};
-						}
-					: {
-							stripeClient: any;
-							stripeWebhookSecret: string;
-						}
+				{
+					stripeClient: any;
+					stripeWebhookSecret: string;
+				} & (O["subscription"] extends true
+					? { subscription: { enabled: true; plans: [] } }
+					: {}) &
+					(O["oneTimePayments"] extends true
+						? { oneTimePayments: { enabled: true } }
+						: {})
 			>
 		>,
 		pathMethods: {

@@ -5,7 +5,7 @@ import type {
 	User,
 } from "better-auth";
 import type Stripe from "stripe";
-import type { subscriptions, user } from "./schema";
+import type { payments, subscriptions, user } from "./schema";
 
 export type StripePlan = {
 	/**
@@ -164,6 +164,110 @@ export interface Subscription {
 	seats?: number;
 }
 
+export type StripeProduct = {
+	/**
+	 * Product price id
+	 */
+	priceId?: string;
+	/**
+	 * To use lookup key instead of price id
+	 *
+	 * https://docs.stripe.com/products-prices/manage-prices#lookup-keys
+	 */
+	lookupKey?: string;
+	/**
+	 * Product name
+	 */
+	name: string;
+	/**
+	 * Product description
+	 */
+	description?: string;
+	/**
+	 * Product group name
+	 *
+	 * useful when you want to group products or
+	 * categorize different types of payments
+	 */
+	group?: string;
+	/**
+	 * Product metadata
+	 */
+	metadata?: Record<string, any>;
+	/**
+	 * A callback to run after a payment is completed
+	 */
+	onPaymentComplete?: (
+		data: {
+			event: Stripe.Event;
+			stripeSession: Stripe.Checkout.Session;
+			payment: Payment;
+			product: StripeProduct;
+		},
+		ctx: GenericEndpointContext,
+	) => Promise<void>;
+};
+
+export interface Payment {
+	/**
+	 * Database identifier
+	 */
+	id: string;
+	/**
+	 * The product name
+	 */
+	product: string;
+	/**
+	 * Stripe customer id
+	 */
+	stripeCustomerId?: string;
+	/**
+	 * Stripe checkout session id
+	 */
+	stripeSessionId?: string;
+	/**
+	 * Stripe payment intent id
+	 */
+	stripePaymentIntentId?: string;
+	/**
+	 * Price Id for the payment
+	 */
+	priceId?: string;
+	/**
+	 * To what reference id the payment belongs to
+	 * @example
+	 * - userId for a user
+	 * - workspace id for a saas platform
+	 * - website id for a hosting platform
+	 *
+	 * @default - userId
+	 */
+	referenceId: string;
+	/**
+	 * Payment status
+	 */
+	status:
+		| "requires_payment_method"
+		| "requires_confirmation"
+		| "requires_action"
+		| "processing"
+		| "requires_capture"
+		| "canceled"
+		| "succeeded";
+	/**
+	 * Amount paid (in cents)
+	 */
+	amount?: number;
+	/**
+	 * Currency code
+	 */
+	currency?: string;
+	/**
+	 * Additional metadata
+	 */
+	metadata?: string; // JSON string
+}
+
 export interface StripeOptions {
 	/**
 	 * Stripe Client
@@ -267,12 +371,7 @@ export interface StripeOptions {
 				user: User & Record<string, any>;
 				session: Session & Record<string, any>;
 				referenceId: string;
-				action:
-					| "upgrade-subscription"
-					| "list-subscription"
-					| "cancel-subscription"
-					| "restore-subscription"
-					| "billing-portal";
+				action: SubscriptionAction;
 			},
 			ctx: GenericEndpointContext,
 		) => Promise<boolean>;
@@ -316,6 +415,77 @@ export interface StripeOptions {
 		};
 	};
 	/**
+	 * One-time payments
+	 */
+	oneTimePayments?: {
+		enabled: boolean;
+		/**
+		 * List of products available for one-time purchase
+		 */
+		products:
+			| StripeProduct[]
+			| (() => StripeProduct[] | Promise<StripeProduct[]>);
+		/**
+		 * Require email verification before a user is allowed to make payments
+		 *
+		 * @default false
+		 */
+		requireEmailVerification?: boolean;
+		/**
+		 * Default success URL for checkout sessions
+		 */
+		successUrl?: string;
+		/**
+		 * Default cancel URL for checkout sessions
+		 */
+		cancelUrl?: string;
+		/**
+		 * Allow promotion codes in checkout
+		 *
+		 * @default false
+		 */
+		allowPromotionCodes?: boolean;
+		/**
+		 * Enable automatic tax calculation
+		 *
+		 * @default false
+		 */
+		automaticTax?: boolean;
+		/**
+		 * A function to check if the reference id is valid
+		 * and belongs to the user
+		 */
+		authorizeReference?: (
+			data: {
+				user: User & Record<string, any>;
+				session: Session & Record<string, any>;
+				referenceId: string;
+				action: PaymentAction;
+			},
+			ctx: GenericEndpointContext,
+		) => Promise<boolean>;
+		/**
+		 * Custom parameters for checkout session creation
+		 */
+		getCheckoutSessionParams?: (
+			data: {
+				user: User & Record<string, any>;
+				session: Session & Record<string, any>;
+				product: StripeProduct;
+				payment: Payment;
+			},
+			ctx: GenericEndpointContext,
+		) =>
+			| Promise<{
+					params?: Stripe.Checkout.SessionCreateParams;
+					options?: Stripe.RequestOptions;
+			  }>
+			| {
+					params?: Stripe.Checkout.SessionCreateParams;
+					options?: Stripe.RequestOptions;
+			  };
+	};
+	/**
 	 * A callback to run after a stripe event is received
 	 * @param event - Stripe Event
 	 * @returns
@@ -324,7 +494,18 @@ export interface StripeOptions {
 	/**
 	 * Schema for the stripe plugin
 	 */
-	schema?: InferOptionSchema<typeof subscriptions & typeof user>;
+	schema?: InferOptionSchema<
+		typeof subscriptions & typeof user & typeof payments
+	>; // Add payments here
 }
 
+export type SubscriptionAction =
+	| "upgrade-subscription"
+	| "list-subscription"
+	| "cancel-subscription"
+	| "restore-subscription"
+	| "billing-portal";
+export type PaymentAction = "create-payment" | "view-payment" | "list-payments";
+
 export interface InputSubscription extends Omit<Subscription, "id"> {}
+export interface InputPayment extends Omit<Payment, "id"> {}

@@ -19,12 +19,22 @@ import {
 	onSubscriptionUpdated,
 } from "./hooks";
 import type {
+	InputPayment,
 	InputSubscription,
+	Payment,
+	PaymentAction,
 	StripeOptions,
 	StripePlan,
+	StripeProduct,
 	Subscription,
+	SubscriptionAction,
 } from "./types";
-import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
+import {
+	getPlanByName,
+	getPlanByPriceInfo,
+	getPlans,
+	getProductByName,
+} from "./utils";
 import { getSchema } from "./schema";
 import { defu } from "defu";
 import { defineErrorCodes } from "@better-auth/core/utils";
@@ -40,7 +50,9 @@ const STRIPE_ERROR_CODES = defineErrorCodes({
 	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
 	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
 		"Subscription is not scheduled for cancellation",
-});
+	PRODUCT_NOT_FOUND: "Product not found",
+	PAYMENT_NOT_FOUND: "Payment not found",
+} as const;
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
 	if (url.startsWith("http")) {
@@ -67,42 +79,75 @@ async function resolvePriceIdFromLookupKey(
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
 
-	const referenceMiddleware = (
-		action:
-			| "upgrade-subscription"
-			| "list-subscription"
-			| "cancel-subscription"
-			| "restore-subscription"
-			| "billing-portal",
-	) =>
+	const referenceMiddleware = (action: SubscriptionAction | PaymentAction) =>
 		createAuthMiddleware(async (ctx) => {
 			const session = ctx.context.session;
 			if (!session) {
 				throw new APIError("UNAUTHORIZED");
 			}
+
 			const referenceId =
 				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
 
-			if (ctx.body?.referenceId && !options.subscription?.authorizeReference) {
-				logger.error(
-					`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
-				);
-				throw new APIError("BAD_REQUEST", {
-					message:
-						"Reference id is not allowed. Read server logs for more details.",
-				});
+			const subscriptionActions: SubscriptionAction[] = [
+				"upgrade-subscription",
+				"list-subscription",
+				"cancel-subscription",
+				"restore-subscription",
+				"billing-portal",
+			];
+
+			const isSubscriptionAction = subscriptionActions.includes(
+				action as SubscriptionAction,
+			);
+
+			if (ctx.body?.referenceId) {
+				if (isSubscriptionAction && !options.subscription?.authorizeReference) {
+					logger.error(
+						`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
+					);
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"Reference id is not allowed. Read server logs for more details.",
+					});
+				}
+
+				if (
+					!isSubscriptionAction &&
+					!options.oneTimePayments?.authorizeReference
+				) {
+					logger.error(
+						`Passing referenceId into a payment action isn't allowed if oneTimePayments.authorizeReference isn't defined in your stripe plugin config.`,
+					);
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"Reference id is not allowed. Read server logs for more details.",
+					});
+				}
 			}
+
 			const isAuthorized = ctx.body?.referenceId
-				? await options.subscription?.authorizeReference?.(
-						{
-							user: session.user,
-							session: session.session,
-							referenceId,
-							action,
-						},
-						ctx,
-					)
+				? isSubscriptionAction
+					? await options.subscription?.authorizeReference?.(
+							{
+								user: session.user,
+								session: session.session,
+								referenceId,
+								action: action as SubscriptionAction,
+							},
+							ctx,
+						)
+					: await options.oneTimePayments?.authorizeReference?.(
+							{
+								user: session.user,
+								session: session.session,
+								referenceId,
+								action: action as PaymentAction,
+							},
+							ctx,
+						)
 				: true;
+
 			if (!isAuthorized) {
 				throw new APIError("UNAUTHORIZED", {
 					message: "Unauthorized",
@@ -1217,6 +1262,430 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			},
 		),
 	} as const;
+
+	const oneTimePaymentEndpoints = {
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/payment/create-session`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.createPaymentSession`
+		 *
+		 * **client:**
+		 * `authClient.oneTimePayments.createSession`
+		 */
+		createPaymentSession: createAuthEndpoint(
+			"/payment/create-session",
+			{
+				method: "POST",
+				body: z.object({
+					productName: z.string().describe("Product name to purchase"),
+					referenceId: z
+						.string()
+						.optional()
+						.describe("Reference ID (defaults to userId)"),
+					quantity: z
+						.number()
+						.min(1)
+						.default(1)
+						.describe("Quantity to purchase"),
+					successUrl: z.string().optional().describe("Success redirect URL"),
+					cancelUrl: z.string().optional().describe("Cancel redirect URL"),
+					disableRedirect: z
+						.boolean()
+						.describe("Disable redirect after session creation")
+						.default(false),
+					metadata: z
+						.record(z.string(), z.any())
+						.optional()
+						.describe("Additional metadata"),
+				}),
+				use: [
+					sessionMiddleware,
+					referenceMiddleware("create-payment"),
+					originCheck((c) => {
+						return [c.body.successUrl, c.body.cancelUrl].filter(
+							Boolean,
+						) as string[];
+					}),
+				],
+			},
+			async (ctx) => {
+				const { user, session } = ctx.context.session;
+				if (
+					options.oneTimePayments?.requireEmailVerification &&
+					!user.emailVerified
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
+					});
+				}
+
+				const referenceId = ctx.body.referenceId || user.id;
+				const product = await getProductByName(options, ctx.body.productName);
+				if (!product) {
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.PRODUCT_NOT_FOUND,
+					});
+				}
+
+				let customerId = user.stripeCustomerId;
+
+				if (!customerId) {
+					try {
+						const existingCustomers = await client.customers.list({
+							email: user.email,
+							limit: 1,
+						});
+
+						let stripeCustomer = existingCustomers.data[0];
+
+						if (!stripeCustomer) {
+							stripeCustomer = await client.customers.create({
+								email: user.email,
+								name: user.name,
+								metadata: {
+									...ctx.body.metadata,
+									userId: user.id,
+								},
+							});
+						}
+
+						// Update local DB with Stripe customer ID
+						await ctx.context.adapter.update({
+							model: "user",
+							update: {
+								stripeCustomerId: stripeCustomer.id,
+							},
+							where: [
+								{
+									field: "id",
+									value: user.id,
+								},
+							],
+						});
+
+						customerId = stripeCustomer.id;
+					} catch (e: any) {
+						ctx.context.logger.error(e);
+						throw new APIError("BAD_REQUEST", {
+							message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+						});
+					}
+				}
+
+				// Resolve price ID from lookup key if needed
+				let priceId = product.priceId;
+				if (product.lookupKey) {
+					priceId = await resolvePriceIdFromLookupKey(
+						client,
+						product.lookupKey,
+					);
+					if (!priceId) {
+						throw new APIError("BAD_REQUEST", {
+							message: STRIPE_ERROR_CODES.PRODUCT_NOT_FOUND,
+						});
+					}
+				}
+
+				// Create payment record
+				const payment = await ctx.context.adapter.create<InputPayment, Payment>(
+					{
+						model: "payment",
+						data: {
+							product: product.name,
+							referenceId,
+							stripeCustomerId: customerId,
+							priceId,
+							status: "requires_payment_method",
+							stripeSessionId: "", // Will be updated after checkout session creation
+							metadata: ctx.body.metadata
+								? JSON.stringify(ctx.body.metadata)
+								: undefined,
+						},
+					},
+				);
+
+				const params = options.oneTimePayments?.getCheckoutSessionParams
+					? await options.oneTimePayments.getCheckoutSessionParams(
+							{ user, session, product, payment },
+							ctx,
+						)
+					: {};
+
+				// Create Stripe checkout session
+				const checkoutSessionParams: Stripe.Checkout.SessionCreateParams = {
+					...(customerId
+						? {
+								customer: customerId,
+								customer_update: {
+									name: "auto",
+									address: "auto",
+								},
+							}
+						: {
+								customer_email: session.user.email,
+							}),
+					success_url: getUrl(
+						ctx,
+						ctx.body.successUrl || options.oneTimePayments?.successUrl || "/",
+					),
+					cancel_url: getUrl(
+						ctx,
+						ctx.body.cancelUrl || options.oneTimePayments?.cancelUrl || "/",
+					),
+					line_items: [
+						{
+							price: priceId,
+							quantity: ctx.body.quantity,
+						},
+					],
+					mode: "payment",
+					client_reference_id: referenceId,
+					automatic_tax: options.oneTimePayments?.automaticTax
+						? { enabled: true }
+						: undefined,
+					allow_promotion_codes: options.oneTimePayments?.allowPromotionCodes,
+					...params.params,
+					metadata: {
+						userId: user.id,
+						referenceId,
+						paymentId: payment.id,
+						...params.params?.metadata,
+					},
+				};
+
+				const checkoutSession = await client.checkout.sessions
+					.create(checkoutSessionParams, params.options)
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+
+				// Update payment record with session ID
+				await ctx.context.adapter.update({
+					model: "payment",
+					update: {
+						stripeSessionId: checkoutSession.id,
+					},
+					where: [{ field: "id", value: payment.id }],
+				});
+
+				return ctx.json({
+					...checkoutSession,
+					redirect: !ctx.body.disableRedirect,
+				});
+			},
+		),
+
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/payment/status`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getPaymentStatus`
+		 *
+		 * **client:**
+		 * `authClient.oneTimePayments.getStatus`
+		 */
+		getPaymentStatus: createAuthEndpoint(
+			"/payment/status",
+			{
+				method: "GET",
+				query: z.object({
+					paymentId: z.string().optional(),
+					sessionId: z.string().optional(),
+					referenceId: z.string().optional(),
+				}),
+				use: [sessionMiddleware, referenceMiddleware("view-payment")],
+			},
+			async (ctx) => {
+				const { user } = ctx.context.session;
+				const referenceId = ctx.query.referenceId || user.id;
+
+				if (!ctx.query.paymentId && !ctx.query.sessionId) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Either paymentId or sessionId is required",
+					});
+				}
+
+				const whereConditions = ctx.query.paymentId
+					? [
+							{ field: "id", value: ctx.query.paymentId },
+							{ field: "referenceId", value: referenceId },
+						]
+					: [
+							{ field: "stripeSessionId", value: ctx.query.sessionId! },
+							{ field: "referenceId", value: referenceId },
+						];
+
+				const payment = await ctx.context.adapter.findOne<Payment>({
+					model: "payment",
+					where: whereConditions,
+				});
+
+				if (!payment) {
+					throw new APIError("NOT_FOUND", {
+						message: STRIPE_ERROR_CODES.PAYMENT_NOT_FOUND,
+					});
+				}
+
+				// Get latest status from Stripe if we have a session ID
+				let stripeSession: Stripe.Checkout.Session | null = null;
+				if (payment.stripeSessionId) {
+					try {
+						stripeSession = await client.checkout.sessions.retrieve(
+							payment.stripeSessionId,
+						);
+
+						// Update local status if different
+						let newStatus: Payment["status"];
+						if (stripeSession.payment_intent) {
+							const pi = await client.paymentIntents.retrieve(
+								stripeSession.payment_intent as string,
+							);
+
+							newStatus = pi.status;
+						} else {
+							if (stripeSession.payment_status === "paid") {
+								newStatus = "succeeded";
+							} else if (
+								stripeSession.payment_status === "no_payment_required"
+							) {
+								newStatus = "succeeded";
+							} else if (stripeSession.status === "expired") {
+								newStatus = "canceled";
+							} else {
+								newStatus = "requires_payment_method";
+							}
+						}
+
+						if (newStatus !== payment.status) {
+							await ctx.context.adapter.update({
+								model: "payment",
+								update: { status: newStatus },
+								where: [{ field: "id", value: payment.id }],
+							});
+							payment.status = newStatus;
+						}
+
+						// Update amount and currency if not set
+						if (!payment.amount && stripeSession.amount_total) {
+							await ctx.context.adapter.update({
+								model: "payment",
+								update: {
+									amount: stripeSession.amount_total,
+									currency: stripeSession.currency,
+								},
+								where: [{ field: "id", value: payment.id }],
+							});
+						}
+					} catch (error) {
+						ctx.context.logger.warn(
+							"Failed to retrieve Stripe session:",
+							error,
+						);
+					}
+				}
+
+				return ctx.json({
+					id: payment.id,
+					product: payment.product,
+					status: payment.status,
+					amount: payment.amount,
+					currency: payment.currency,
+					referenceId: payment.referenceId,
+					stripeSessionId: payment.stripeSessionId,
+					metadata: payment.metadata ? JSON.parse(payment.metadata) : undefined,
+					stripe: stripeSession
+						? {
+								status: stripeSession.status,
+								paymentStatus: stripeSession.payment_status,
+							}
+						: undefined,
+				});
+			},
+		),
+
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/payment/list`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listPayments`
+		 *
+		 * **client:**
+		 * `authClient.oneTimePayments.list`
+		 */
+		listPayments: createAuthEndpoint(
+			"/payment/list",
+			{
+				method: "GET",
+				query: z.object({
+					referenceId: z.string().optional(),
+					status: z
+						.enum([
+							"requires_payment_method",
+							"requires_confirmation",
+							"requires_action",
+							"processing",
+							"requires_capture",
+							"canceled",
+							"succeeded",
+						])
+						.optional(),
+					limit: z.number().min(1).max(100).default(10),
+					offset: z.number().min(0).default(0),
+				}),
+				use: [sessionMiddleware, referenceMiddleware("list-payments")],
+			},
+			async (ctx) => {
+				const { user } = ctx.context.session;
+				const referenceId = ctx.query.referenceId || user.id;
+
+				const whereConditions: Array<{ field: string; value: any }> = [
+					{ field: "referenceId", value: referenceId },
+				];
+
+				if (ctx.query.status) {
+					whereConditions.push({ field: "status", value: ctx.query.status });
+				}
+
+				const payments = await ctx.context.adapter.findMany<Payment>({
+					model: "payment",
+					where: whereConditions,
+					limit: ctx.query.limit,
+					offset: ctx.query.offset,
+				});
+
+				return ctx.json({
+					payments: payments.map((payment) => ({
+						id: payment.id,
+						product: payment.product,
+						status: payment.status,
+						amount: payment.amount,
+						currency: payment.currency,
+						referenceId: payment.referenceId,
+						metadata: payment.metadata
+							? JSON.parse(payment.metadata)
+							: undefined,
+					})),
+				});
+			},
+		),
+	} as const;
+
 	return {
 		id: "stripe",
 		endpoints: {
@@ -1296,6 +1765,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				enabled: boolean;
 			}
 				? typeof subscriptionEndpoints
+				: {}),
+			...((options.oneTimePayments?.enabled
+				? oneTimePaymentEndpoints
+				: {}) as O["oneTimePayments"] extends {
+				enabled: boolean;
+			}
+				? typeof oneTimePaymentEndpoints
 				: {}),
 		},
 		init(ctx) {
@@ -1402,4 +1878,4 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export type { Subscription, StripePlan };
+export type { Subscription, StripePlan, Payment, StripeProduct };

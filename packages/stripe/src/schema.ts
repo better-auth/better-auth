@@ -54,6 +54,54 @@ export const subscriptions = {
 	},
 } satisfies BetterAuthPluginDBSchema;
 
+export const payments = {
+	payment: {
+		fields: {
+			product: {
+				type: "string",
+				required: true,
+			},
+			referenceId: {
+				type: "string",
+				required: true,
+			},
+			stripeCustomerId: {
+				type: "string",
+				required: false,
+			},
+			stripeSessionId: {
+				type: "string",
+				required: false,
+			},
+			stripePaymentIntentId: {
+				type: "string",
+				required: false,
+			},
+			priceId: {
+				type: "string",
+				required: false,
+			},
+			status: {
+				type: "string",
+				defaultValue: "requires_payment_method",
+			},
+			amount: {
+				type: "number",
+				required: false,
+			},
+			currency: {
+				type: "string",
+				required: false,
+				defaultValue: "usd",
+			},
+			metadata: {
+				type: "string",
+				required: false,
+			},
+		},
+	},
+} satisfies AuthPluginSchema;
+
 export const user = {
 	user: {
 		fields: {
@@ -68,15 +116,33 @@ export const user = {
 export const getSchema = (options: StripeOptions) => {
 	let baseSchema = {};
 
+	if (options.subscription?.enabled || options.oneTimePayments?.enabled) {
+		baseSchema = {
+			...user,
+		};
+	}
+
 	if (options.subscription?.enabled) {
 		baseSchema = {
+			...baseSchema,
 			...subscriptions,
-			...user,
 		};
-	} else {
+	}
+
+	if (options.oneTimePayments?.enabled) {
 		baseSchema = {
-			...user,
+			...baseSchema,
+			...payments,
 		};
+	}
+
+	if (
+		options.schema &&
+		!options.oneTimePayments?.enabled &&
+		"payment" in options.schema
+	) {
+		const { payment, ...restSchema } = options.schema;
+		return mergeSchema(baseSchema, restSchema);
 	}
 
 	if (
