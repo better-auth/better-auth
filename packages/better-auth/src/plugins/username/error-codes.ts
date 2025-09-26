@@ -1,4 +1,6 @@
-export const USERNAME_ERROR_CODES = {
+import { defineErrorCodes } from "../../utils/error-codes";
+
+export const USERNAME_ERROR_CODES = defineErrorCodes({
 	INVALID_USERNAME_OR_PASSWORD: "Invalid username or password",
 	EMAIL_NOT_VERIFIED: "Email not verified",
 	UNEXPECTED_ERROR: "Unexpected error",
@@ -7,4 +9,4 @@ export const USERNAME_ERROR_CODES = {
 	USERNAME_TOO_LONG: "Username is too long",
 	INVALID_USERNAME: "Username is invalid",
 	INVALID_DISPLAY_USERNAME: "Display username is invalid",
-};
+});

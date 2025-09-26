@@ -623,7 +623,7 @@ describe("oauth2", async () => {
 
 		const accountsAfterSecond = await ctx.internalAdapter.findAccounts(userId);
 		expect(accountsAfterSecond).toHaveLength(1);
-		expect(accountsAfterSecond[0].accountId).toBe(String(numericAccountId));
+		expect(accountsAfterSecond[0]!.accountId).toBe(String(numericAccountId));
 	});
 
 	it("should handle custom getUserInfo returning numeric ID", async () => {
@@ -688,7 +688,7 @@ describe("oauth2", async () => {
 			session.data?.user.id!,
 		);
 
-		expect(accounts[0].accountId).toBe(String(numericId));
+		expect(accounts[0]!.accountId).toBe(String(numericId));
 	});
 
 	it("should handle mapProfileToUser returning numeric ID", async () => {
@@ -763,7 +763,7 @@ describe("oauth2", async () => {
 			session.data?.user.id!,
 		);
 
-		expect(accounts[0].accountId).toBe(String(numericProfileId));
+		expect(accounts[0]!.accountId).toBe(String(numericProfileId));
 	});
 
 	it("should handle Strava OAuth with custom mapProfileToUser", async () => {
