@@ -18,7 +18,11 @@
     "composite": true,
     "incremental": true,
     "noErrorTruncation": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "better-auth": ["./packages/better-auth/src"],
+      "better-auth/*": ["./packages/better-auth/src/*"]
+    }
   },
   "references": [
     {
@@ -26,6 +30,9 @@
     },
     {
       "path": "./packages/cli"
+    },
+    {
+      "path": "./packages/cli/tsconfig.test.json"
     },
     {
       "path": "./packages/expo"
