@@ -292,7 +292,7 @@ describe("account", async () => {
 			},
 		});
 		expect(previousAccounts.data?.length).toBe(3);
-		const unlinkAccountId = previousAccounts.data![1].accountId;
+		const unlinkAccountId = previousAccounts.data![1]!.accountId;
 		const unlinkRes = await client.unlinkAccount({
 			providerId: "google",
 			accountId: unlinkAccountId!,
@@ -325,7 +325,7 @@ describe("account", async () => {
 				},
 			],
 		});
-		const unlinkAccountId = previousAccounts.data![0].accountId;
+		const unlinkAccountId = previousAccounts.data![0]!.accountId;
 		const unlinkRes = await client.unlinkAccount({
 			providerId: "credential",
 			accountId: unlinkAccountId,
@@ -347,7 +347,7 @@ describe("account", async () => {
 		});
 		expect(previousAccounts.data?.length).toBeGreaterThan(0);
 
-		const accountToUnlink = previousAccounts.data![0];
+		const accountToUnlink = previousAccounts.data![0]!;
 		const unlinkAccountId = accountToUnlink.accountId;
 		const providerId = accountToUnlink.providerId;
 		const accountsWithSameProvider = previousAccounts.data!.filter(
@@ -419,7 +419,7 @@ describe("account", async () => {
 		for (let i = 0; i < googleAccounts.length - 1; i++) {
 			const unlinkRes = await client.unlinkAccount({
 				providerId: "google",
-				accountId: googleAccounts[i].accountId!,
+				accountId: googleAccounts[i]!.accountId!,
 				fetchOptions: {
 					headers,
 				},

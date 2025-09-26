@@ -8,5 +8,6 @@
     "strict": true,
     "skipLibCheck": true,
     "moduleResolution": "node16"
-  }
+  },
+  "include": ["./test/**/*"]
 }

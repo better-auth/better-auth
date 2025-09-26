@@ -131,6 +131,49 @@ describe("email-otp", async () => {
 		expect(data?.user).toBeDefined();
 	});
 
+	it("should call onPasswordReset callback when resetting password", async () => {
+		const onPasswordResetMock = vi.fn();
+		const { client, testUser } = await getTestInstance(
+			{
+				plugins: [
+					bearer(),
+					emailOTP({
+						async sendVerificationOTP({ email, otp: _otp, type }) {
+							otp = _otp;
+							otpFn(email, _otp, type);
+						},
+						sendVerificationOnSignUp: true,
+					}),
+				],
+				emailAndPassword: {
+					enabled: true,
+					onPasswordReset: onPasswordResetMock,
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "forget-password",
+		});
+
+		await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp,
+			password: "new-password",
+		});
+
+		expect(onPasswordResetMock).toHaveBeenCalledWith(
+			{ user: expect.objectContaining({ email: testUser.email }) },
+			expect.any(Object),
+		);
+	});
+
 	it("should reset password and create credential account", async () => {
 		const testUser2 = {
 			email: "test-email@domain.com",

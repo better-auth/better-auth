@@ -34,7 +34,7 @@ const getAdditionalFields = <
 		options?.schema?.organizationRole?.additionalFields || {};
 	if (shouldBePartial) {
 		for (const key in additionalFields) {
-			additionalFields[key].required = false;
+			additionalFields[key]!.required = false;
 		}
 	}
 	const additionalFieldsSchema = toZodSchema({
@@ -1079,8 +1079,8 @@ async function checkIfMemberHasPermission({
 	const missingPermissions = hasNecessaryPermissions
 		.filter((x) => x.hasPermission === false)
 		.map((x) => {
-			const key = Object.keys(x.resource)[0];
-			return `${key}:${x.resource[key][0]}` as const;
+			const key = Object.keys(x.resource)[0]!;
+			return `${key}:${x.resource[key]![0]}` as const;
 		});
 	if (missingPermissions.length > 0) {
 		ctx.context.logger.error(

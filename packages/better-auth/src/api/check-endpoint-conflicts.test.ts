@@ -229,7 +229,7 @@ describe("checkEndpointConflicts", () => {
 		checkEndpointConflicts(options, mockLogger);
 
 		expect(mockLogger.error).toHaveBeenCalledTimes(1);
-		const errorCall = mockLogger.error.mock.calls[0][0];
+		const errorCall = mockLogger.error.mock.calls[0]![0];
 		expect(errorCall).toContain(
 			'"/api/conflict" [GET] used by plugins: plugin1, plugin2',
 		);
