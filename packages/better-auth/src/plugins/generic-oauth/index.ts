@@ -227,16 +227,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								finalAuthUrl = discovery.data.authorization_endpoint;
 							}
 						}
-						if (c.authorizationUrlParams && finalAuthUrl) {
-							const withAdditionalParams = new URL(finalAuthUrl);
-							for (const [paramName, paramValue] of Object.entries(
-								c.authorizationUrlParams,
-							)) {
-								withAdditionalParams.searchParams.set(paramName, paramValue);
-							}
-							finalAuthUrl = withAdditionalParams.toString();
-						}
-						return createAuthorizationURL({
+						const authUrl = createAuthorizationURL({
 							id: c.providerId,
 							options: {
 								clientId: c.clientId,
@@ -248,7 +239,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							codeVerifier: c.pkce ? data.codeVerifier : undefined,
 							scopes: c.scopes || [],
 							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
+							additionalParams: c.authorizationUrlParams,
 						});
+						return authUrl;
 					},
 					async validateAuthorizationCode(data) {
 						let finalTokenUrl = c.tokenUrl;
@@ -481,15 +474,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 						});
-					}
-					if (authorizationUrlParams) {
-						const withAdditionalParams = new URL(finalAuthUrl);
-						for (const [paramName, paramValue] of Object.entries(
-							authorizationUrlParams,
-						)) {
-							withAdditionalParams.searchParams.set(paramName, paramValue);
-						}
-						finalAuthUrl = withAdditionalParams.toString();
 					}
 
 					const { state, codeVerifier } = await generateState(ctx);
