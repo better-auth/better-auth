@@ -245,7 +245,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						// integrator can perform any additional logic such as transferring data
 						// from the anonymous user to the new user.
 						if (options?.onLinkAccount) {
-							await options?.onLinkAccount?.({
+							await options.onLinkAccount?.({
 								anonymousUser: session,
 								newUser: newSession,
 							});
