@@ -225,10 +225,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				try {
 					createdUser = await ctx.context.internalAdapter.createUser(
 						{
+							...rest,
 							email: email.toLowerCase(),
 							name,
 							image,
-							...rest,
 							emailVerified: false,
 						},
 						ctx,

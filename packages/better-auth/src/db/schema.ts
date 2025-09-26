@@ -57,6 +57,12 @@ export const verificationSchema = coreSchema.extend({
 	identifier: z.string(),
 });
 
+// Cache for parsed schemas to avoid reparsing on every request
+const cache = new WeakMap<
+	BetterAuthOptions,
+	Map<string, Record<string, DBFieldAttribute>>
+>();
+
 function parseOutputData<T extends Record<string, any>>(
 	data: T,
 	schema: {
@@ -80,6 +86,13 @@ function parseOutputData<T extends Record<string, any>>(
 }
 
 function getAllFields(options: BetterAuthOptions, table: string) {
+	if (!cache.has(options)) {
+		cache.set(options, new Map());
+	}
+	const tableCache = cache.get(options)!;
+	if (tableCache.has(table)) {
+		return tableCache.get(table)!;
+	}
 	let schema: Record<string, DBFieldAttribute> = {
 		...(table === "user" ? options.user?.additionalFields : {}),
 		...(table === "session" ? options.session?.additionalFields : {}),
@@ -92,6 +105,7 @@ function getAllFields(options: BetterAuthOptions, table: string) {
 			};
 		}
 	}
+	cache.get(options)!.set(table, schema);
 	return schema;
 }
 
@@ -167,7 +181,7 @@ export function parseInputData<T extends Record<string, any>>(
 export function parseUserInput(
 	options: BetterAuthOptions,
 	user: Record<string, any> = {},
-	action?: "create" | "update",
+	action: "create" | "update",
 ) {
 	const schema = getAllFields(options, "user");
 	return parseInputData(user, { fields: schema, action });
