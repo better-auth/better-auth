@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.4.0-beta.3",
+  "version": "1.4.0-beta.5",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -692,6 +692,7 @@
     }
   },
   "dependencies": {
+    "@better-auth/core": "workspace:*",
     "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.0.0",

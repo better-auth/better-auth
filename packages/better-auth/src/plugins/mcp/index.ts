@@ -203,7 +203,7 @@ export const mcp = (options: MCPOptions) => {
 					return c.json(metadata);
 				},
 			),
-			mcpOAuthAuthroize: createAuthEndpoint(
+			mcpOAuthAuthorize: createAuthEndpoint(
 				"/mcp/authorize",
 				{
 					method: "GET",
