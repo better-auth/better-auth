@@ -706,7 +706,7 @@
     "nanostores": "^1.0.1",
     "zod": "^4.1.5"
   },
-  "peerDependencies": {
+  "peerDependenciesOptional": {
     "@lynx-js/react": "*",
     "@sveltejs/kit": "^2.0.0",
     "next": "^14.0.0 || ^15.0.0",

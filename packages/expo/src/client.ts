@@ -221,7 +221,8 @@ export const expoClient = (opts: ExpoClientOptions) => {
 									},
 								);
 							}
-							const result = await Browser.openAuthSessionAsync(signInURL, to);
+							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;
+							const result = await Browser.openAuthSessionAsync(proxyURL, to);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
 							const cookie = String(url.searchParams.get("cookie"));
