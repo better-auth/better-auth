@@ -1,6 +1,5 @@
 import type { Migration } from "kysely";
 import { type AuthMiddleware } from "../api/call";
-import type { FieldAttribute } from "../db/field";
 import type { HookEndpointContext } from ".";
 import type {
 	Awaitable,
@@ -11,11 +10,12 @@ import type {
 
 import type { AuthContext, BetterAuthOptions } from ".";
 import type { Endpoint, Middleware } from "better-call";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 
 export type AuthPluginSchema = {
 	[table in string]: {
 		fields: {
-			[field in string]: FieldAttribute;
+			[field in string]: DBFieldAttribute;
 		};
 		disableMigration?: boolean;
 		modelName?: string;

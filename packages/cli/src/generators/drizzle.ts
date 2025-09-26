@@ -1,7 +1,7 @@
 import {
 	getAuthTables,
-	type BetterAuthDbSchema,
-	type FieldAttribute,
+	type BetterAuthDBSchema,
+	type DBFieldAttribute,
 } from "better-auth/db";
 import type { BetterAuthOptions } from "better-auth/types";
 import { existsSync } from "fs";
@@ -43,7 +43,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		const modelName = getModelName(table.modelName, adapter.options);
 		const fields = table.fields;
 
-		function getType(name: string, field: FieldAttribute) {
+		function getType(name: string, field: DBFieldAttribute) {
 			// Not possible to reach, it's here to make typescript happy
 			if (!databaseType) {
 				throw new Error(
@@ -224,7 +224,7 @@ function generateImport({
 	options,
 }: {
 	databaseType: "sqlite" | "mysql" | "pg";
-	tables: BetterAuthDbSchema;
+	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
 }) {
 	const rootImports: string[] = [];

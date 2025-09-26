@@ -6,13 +6,13 @@ import type {
 } from "better-call";
 import * as z from "zod";
 import { getEndpoints } from "../../api";
-import {
-	type FieldAttributeConfig,
-	type FieldType,
-	getAuthTables,
-} from "../../db";
+import { getAuthTables } from "../../db";
 import type { AuthContext, BetterAuthOptions } from "../../types";
-import type { FieldAttribute } from "../../db";
+import type {
+	DBFieldAttribute,
+	DBFieldAttributeConfig,
+	DBFieldType,
+} from "@better-auth/core/db";
 
 export interface Path {
 	get?: {
@@ -81,8 +81,8 @@ function getTypeFromZodType(zodType: z.ZodType<any>) {
 }
 
 type FieldSchema = {
-	type: FieldType;
-	default?: FieldAttributeConfig["defaultValue"] | "Generated at runtime";
+	type: DBFieldType;
+	default?: DBFieldAttributeConfig["defaultValue"] | "Generated at runtime";
 	readOnly?: boolean;
 };
 
@@ -92,7 +92,7 @@ type OpenAPIModelSchema = {
 	required?: string[];
 };
 
-function getFieldSchema(field: FieldAttribute) {
+function getFieldSchema(field: DBFieldAttribute) {
 	const schema: FieldSchema = {
 		type: field.type === "date" ? "string" : field.type,
 	};

@@ -6,7 +6,7 @@ import { inferOrgAdditionalFields, organizationClient } from "../client";
 import { createAccessControl } from "../../access";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "../access";
 import { parseSetCookieHeader } from "../../../cookies";
-import type { FieldAttribute } from "../../../db";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 
 describe("dynamic access control", async (it) => {
@@ -43,7 +43,7 @@ describe("dynamic access control", async (it) => {
 			input: false,
 			required: true,
 		},
-	} satisfies Record<string, FieldAttribute>;
+	} satisfies Record<string, DBFieldAttribute>;
 
 	const { auth, customFetchImpl, sessionSetter, signInWithTestUser } =
 		await getTestInstance({

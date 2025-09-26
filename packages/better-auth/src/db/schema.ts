@@ -1,9 +1,9 @@
 import * as z from "zod";
-import type { FieldAttribute } from ".";
 import type { AuthPluginSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 
 export const coreSchema = z.object({
 	id: z.string(),
@@ -60,7 +60,7 @@ export const verificationSchema = coreSchema.extend({
 export function parseOutputData<T extends Record<string, any>>(
 	data: T,
 	schema: {
-		fields: Record<string, FieldAttribute>;
+		fields: Record<string, DBFieldAttribute>;
 	},
 ) {
 	const fields = schema.fields;
@@ -80,7 +80,7 @@ export function parseOutputData<T extends Record<string, any>>(
 }
 
 export function getAllFields(options: BetterAuthOptions, table: string) {
-	let schema: Record<string, FieldAttribute> = {
+	let schema: Record<string, DBFieldAttribute> = {
 		...(table === "user" ? options.user?.additionalFields : {}),
 		...(table === "session" ? options.session?.additionalFields : {}),
 	};
@@ -119,7 +119,7 @@ export function parseSessionOutput(
 export function parseInputData<T extends Record<string, any>>(
 	data: T,
 	schema: {
-		fields: Record<string, FieldAttribute>;
+		fields: Record<string, DBFieldAttribute>;
 		action?: "create" | "update";
 	},
 ) {

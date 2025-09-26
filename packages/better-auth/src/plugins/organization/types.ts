@@ -1,4 +1,4 @@
-import type { FieldAttribute } from "../../db";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { User, Session, AuthContext } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type {
@@ -257,7 +257,7 @@ export interface OrganizationOptions {
 				[key in keyof Omit<Organization, "id">]?: string;
 			};
 			additionalFields?: {
-				[key in string]: FieldAttribute;
+				[key in string]: DBFieldAttribute;
 			};
 		};
 		member?: {
@@ -266,7 +266,7 @@ export interface OrganizationOptions {
 				[key in keyof Omit<Member, "id">]?: string;
 			};
 			additionalFields?: {
-				[key in string]: FieldAttribute;
+				[key in string]: DBFieldAttribute;
 			};
 		};
 		invitation?: {
@@ -275,7 +275,7 @@ export interface OrganizationOptions {
 				[key in keyof Omit<Invitation, "id">]?: string;
 			};
 			additionalFields?: {
-				[key in string]: FieldAttribute;
+				[key in string]: DBFieldAttribute;
 			};
 		};
 		team?: {
@@ -284,7 +284,7 @@ export interface OrganizationOptions {
 				[key in keyof Omit<Team, "id">]?: string;
 			};
 			additionalFields?: {
-				[key in string]: FieldAttribute;
+				[key in string]: DBFieldAttribute;
 			};
 		};
 		teamMember?: {
@@ -299,7 +299,7 @@ export interface OrganizationOptions {
 				[key in keyof Omit<OrganizationRole, "id">]?: string;
 			};
 			additionalFields?: {
-				[key in string]: FieldAttribute;
+				[key in string]: DBFieldAttribute;
 			};
 		};
 	};
