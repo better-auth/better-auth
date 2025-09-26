@@ -489,7 +489,12 @@ export const passkey = (options?: PasskeyOptions) => {
 					method: "POST",
 					body: z.object({
 						response: z.any(),
-						name: z.string().describe("Name of the passkey").optional(),
+						name: z
+							.string()
+							.meta({
+								description: "Name of the passkey",
+							})
+							.optional(),
 					}),
 					use: [freshSessionMiddleware],
 					metadata: {
@@ -844,7 +849,10 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						id: z.string().describe("The ID of the passkey to delete. Eg: "),
+						id: z.string().meta({
+							description:
+								'The ID of the passkey to delete. Eg: "some-passkey-id"',
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -908,16 +916,12 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						id: z
-							.string()
-							.describe(
-								`The ID of the passkey which will be updated. Eg: \"passkey-id\"`,
-							),
-						name: z
-							.string()
-							.describe(
-								`The new name which the passkey will be updated to. Eg: \"my-new-passkey-name\"`,
-							),
+						id: z.string().meta({
+							description: `The ID of the passkey which will be updated. Eg: \"passkey-id\"`,
+						}),
+						name: z.string().meta({
+							description: `The new name which the passkey will be updated to. Eg: \"my-new-passkey-name\"`,
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
