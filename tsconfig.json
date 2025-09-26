@@ -32,6 +32,9 @@
       "path": "./packages/cli"
     },
     {
+      "path": "./packages/cli/tsconfig.test.json"
+    },
+    {
       "path": "./packages/expo"
     },
     {
