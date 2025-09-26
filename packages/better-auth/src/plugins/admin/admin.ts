@@ -192,21 +192,25 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().describe("The user id"),
+						userId: z.coerce.string().meta({
+							description: "The user id",
+						}),
 						role: z
 							.union([
-								z
-									.string()
-									.describe("The role to set. `admin` or `user` by default"),
+								z.string().meta({
+									description: "The role to set. `admin` or `user` by default",
+								}),
 								z.array(
-									z
-										.string()
-										.describe("The roles to set. `admin` or `user` by default"),
+									z.string().meta({
+										description:
+											"The roles to set. `admin` or `user` by default",
+									}),
 								),
 							])
-							.describe(
-								"The role to set, this can be a string or an array of strings. Eg: `admin` or `[admin, user]`",
-							),
+							.meta({
+								description:
+									"The role to set, this can be a string or an array of strings. Eg: `admin` or `[admin, user]`",
+							}),
 					}),
 					requireHeaders: true,
 					use: [adminMiddleware],
@@ -276,7 +280,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "GET",
 					query: z.object({
-						id: z.string().describe("The id of the User"),
+						id: z.string().meta({
+							description: "The id of the User",
+						}),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -354,27 +360,37 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string().describe("The email of the user"),
-						password: z.string().describe("The password of the user"),
-						name: z.string().describe("The name of the user"),
+						email: z.string().meta({
+							description: "The email of the user",
+						}),
+						password: z.string().meta({
+							description: "The password of the user",
+						}),
+						name: z.string().meta({
+							description: "The name of the user",
+						}),
 						role: z
 							.union([
-								z.string().describe("The role of the user"),
-								z.array(z.string().describe("The roles of user")),
+								z.string().meta({
+									description: "The role of the user",
+								}),
+								z.array(
+									z.string().meta({
+										description: "The roles of user",
+									}),
+								),
 							])
 							.optional()
-							.describe(
-								`A string or array of strings representing the roles to apply to the new user. Eg: \"user\"`,
-							),
+							.meta({
+								description: `A string or array of strings representing the roles to apply to the new user. Eg: \"user\"`,
+							}),
 						/**
 						 * extra fields for user
 						 */
-						data: z
-							.record(z.string(), z.any())
-							.optional()
-							.describe(
+						data: z.record(z.string(), z.any()).optional().meta({
+							description:
 								"Extra fields for the user. Including custom additional fields.",
-							),
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -437,7 +453,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					);
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS,
+							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 						});
 					}
 					const user =
@@ -496,10 +512,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().describe("The user id"),
-						data: z
-							.record(z.any(), z.any())
-							.describe("The user data to update"),
+						userId: z.coerce.string().meta({
+							description: "The user id",
+						}),
+						data: z.record(z.any(), z.any()).meta({
+							description: "The user data to update",
+						}),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -566,50 +584,68 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "GET",
 					use: [adminMiddleware],
 					query: z.object({
-						searchValue: z
-							.string()
-							.optional()
-							.describe('The value to search for. Eg: "some name"'),
+						searchValue: z.string().optional().meta({
+							description: 'The value to search for. Eg: "some name"',
+						}),
 						searchField: z
 							.enum(["email", "name"])
-							.describe(
-								'The field to search in, defaults to email. Can be `email` or `name`. Eg: "name"',
-							)
+							.meta({
+								description:
+									'The field to search in, defaults to email. Can be `email` or `name`. Eg: "name"',
+							})
 							.optional(),
 						searchOperator: z
 							.enum(["contains", "starts_with", "ends_with"])
-							.describe(
-								'The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. Eg: "contains"',
-							)
+							.meta({
+								description:
+									'The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. Eg: "contains"',
+							})
 							.optional(),
 						limit: z
 							.string()
-							.describe("The number of users to return")
+							.meta({
+								description: "The number of users to return",
+							})
 							.or(z.number())
 							.optional(),
 						offset: z
 							.string()
-							.describe("The offset to start from")
+							.meta({
+								description: "The offset to start from",
+							})
 							.or(z.number())
 							.optional(),
-						sortBy: z.string().describe("The field to sort by").optional(),
+						sortBy: z
+							.string()
+							.meta({
+								description: "The field to sort by",
+							})
+							.optional(),
 						sortDirection: z
 							.enum(["asc", "desc"])
-							.describe("The direction to sort by")
+							.meta({
+								description: "The direction to sort by",
+							})
 							.optional(),
 						filterField: z
 							.string()
-							.describe("The field to filter by")
+							.meta({
+								description: "The field to filter by",
+							})
 							.optional(),
 						filterValue: z
 							.string()
-							.describe("The value to filter by")
+							.meta({
+								description: "The value to filter by",
+							})
 							.or(z.number())
 							.or(z.boolean())
 							.optional(),
 						filterOperator: z
 							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
-							.describe("The operator to use for the filter")
+							.meta({
+								description: "The operator to use for the filter",
+							})
 							.optional(),
 					}),
 					metadata: {
@@ -734,7 +770,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					use: [adminMiddleware],
 					body: z.object({
-						userId: z.coerce.string().describe("The user id"),
+						userId: z.coerce.string().meta({
+							description: "The user id",
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -808,7 +846,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().describe("The user id"),
+						userId: z.coerce.string().meta({
+							description: "The user id",
+						}),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -886,17 +926,26 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().describe("The user id"),
+						userId: z.coerce.string().meta({
+							description: "The user id",
+						}),
 						/**
 						 * Reason for the ban
 						 */
-						banReason: z.string().describe("The reason for the ban").optional(),
+						banReason: z
+							.string()
+							.meta({
+								description: "The reason for the ban",
+							})
+							.optional(),
 						/**
 						 * Number of seconds until the ban expires
 						 */
 						banExpiresIn: z
 							.number()
-							.describe("The number of seconds until the ban expires")
+							.meta({
+								description: "The number of seconds until the ban expires",
+							})
 							.optional(),
 					}),
 					use: [adminMiddleware],
@@ -998,7 +1047,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().describe("The user id"),
+						userId: z.coerce.string().meta({
+							description: "The user id",
+						}),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -1194,7 +1245,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z.string().describe("The session token"),
+						sessionToken: z.string().meta({
+							description: "The session token",
+						}),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -1267,7 +1320,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().describe("The user id"),
+						userId: z.coerce.string().meta({
+							description: "The user id",
+						}),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -1338,7 +1393,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string().describe("The user id"),
+						userId: z.coerce.string().meta({
+							description: "The user id",
+						}),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -1425,8 +1482,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						newPassword: z.string().describe("The new password"),
-						userId: z.coerce.string().describe("The user id"),
+						newPassword: z.string().meta({
+							description: "The new password",
+						}),
+						userId: z.coerce.string().meta({
+							description: "The user id",
+						}),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -1502,14 +1563,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					body: z
 						.object({
-							userId: z.coerce
-								.string()
-								.optional()
-								.describe(`The user id. Eg: "user-id"`),
-							role: z
-								.string()
-								.optional()
-								.describe(`The role to check permission for. Eg: "admin"`),
+							userId: z.coerce.string().optional().meta({
+								description: `The user id. Eg: "user-id"`,
+							}),
+							role: z.string().optional().meta({
+								description: `The role to check permission for. Eg: "admin"`,
+							}),
 						})
 						.and(
 							z.union([

@@ -129,7 +129,9 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						token: z.string().describe("The token to verify. Eg: "),
+						token: z.string().meta({
+							description: 'The token to verify. Eg: "some-token"',
+						}),
 					}),
 				},
 				async (c) => {
