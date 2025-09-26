@@ -381,6 +381,50 @@ describe("oauth2", async () => {
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
 	});
 
+	it.each([{
+		description: "record", params: { custom: "test-value" },
+	}, {
+		description: "function", params: () => {
+			return { custom: "test-value"}
+		}
+	}])("should pass authorization url parameters in oAuth2Callback with type $description", async ({ description, params }) => {
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test3",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							authorizationUrlParams: params,
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test3",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+		
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expect(res.data?.url).toContain("custom=test-value")
+		const headers = new Headers();
+		await simulateOAuthFlow(res.data?.url || "", headers, customFetchImpl);
+	});
+
 	it("should pass authorization headers in oAuth2Callback", async () => {
 		const customHeaders = {
 			"X-Custom-Header": "test-value",
