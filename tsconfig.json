@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
     "strict": true,
     "target": "esnext",
     "downlevelIteration": true,
@@ -17,13 +18,7 @@
     "composite": true,
     "incremental": true,
     "noErrorTruncation": true,
-    "types": ["node"],
-    "paths": {
-      "better-auth": ["./packages/better-auth/src"],
-      "better-auth/*": ["./packages/better-auth/src/*"],
-      "@better-auth/core": ["./packages/core/src"],
-      "@better-auth/core/*": ["./packages/core/src/*"]
-    }
+    "types": ["node"]
   },
   "references": [
     {
