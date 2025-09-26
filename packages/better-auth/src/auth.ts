@@ -7,10 +7,10 @@ import type {
 	InferSession,
 	InferUser,
 	AuthContext,
+	InferAPI,
 } from "./types";
 import type { PrettifyDeep, Expand } from "./types/helper";
 import { getBaseURL, getOrigin } from "./utils/url";
-import type { FilterActions } from "./types";
 import { BASE_ERROR_CODES } from "./error/codes";
 import { BetterAuthError } from "./error";
 import { runWithAdapter } from "./context/transaction";
@@ -59,7 +59,7 @@ export const betterAuth = <Options extends BetterAuthOptions>(
 			const { handler } = router(ctx, options);
 			return runWithAdapter(ctx.adapter, () => handler(request));
 		},
-		api,
+		api: api as never,
 		options: options as Options,
 		$context: authContext,
 		$Infer: {} as {
@@ -77,7 +77,7 @@ export const betterAuth = <Options extends BetterAuthOptions>(
 
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	handler: (request: Request) => Promise<Response>;
-	api: FilterActions<ReturnType<typeof router<Options>>["endpoints"]>;
+	api: InferAPI<ReturnType<typeof router<Options>>["endpoints"]>;
 	options: Options;
 	$ERROR_CODES: InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES;
 	$context: Promise<AuthContext>;

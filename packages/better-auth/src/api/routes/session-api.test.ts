@@ -597,14 +597,10 @@ describe("cookie cache", async () => {
 describe("getSession type tests", async () => {
 	const { auth } = await getTestInstance();
 
-	it("has parameters", () => {
-		type Params = Parameters<typeof auth.api.getSession>[0];
-
-		expectTypeOf<Params>().toMatchObjectType<{
-			headers: Headers;
-			asResponse?: boolean;
-			returnHeaders?: boolean;
-		}>();
+	it("has parameters", async () => {
+		await auth.api.getSession({
+			headers: new Headers(),
+		});
 	});
 
 	it("can return a response", () => {

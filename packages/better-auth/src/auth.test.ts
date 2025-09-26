@@ -1,5 +1,6 @@
 import { describe, expectTypeOf, test } from "vitest";
 import { betterAuth, type Auth } from "./auth";
+import { createAuthEndpoint, router } from "better-auth/api";
 
 describe("auth type", () => {
 	test("default auth type should be okay", () => {
@@ -24,5 +25,36 @@ describe("auth type", () => {
 		expectTypeOf<T>().toEqualTypeOf<
 			{ CUSTOM_ERROR: string } & typeof import("./error/codes").BASE_ERROR_CODES
 		>();
+	});
+
+	test("plugin endpoints", () => {
+		const endpoints = {
+			getSession: createAuthEndpoint(
+				"/get-session",
+				{ method: "GET" },
+				async () => {
+					return {
+						data: {
+							message: "Hello, World!",
+						},
+					};
+				},
+			),
+		};
+
+		const auth = betterAuth({
+			plugins: [
+				{
+					id: "custom-plugin",
+					endpoints,
+				},
+			],
+		});
+
+		type T = typeof auth;
+		type E = ReturnType<typeof router<T["options"]>>["endpoints"];
+		type G = E["getSession"];
+		type R = Awaited<ReturnType<G>>;
+		expectTypeOf<R>().toEqualTypeOf<{ data: { message: string } }>();
 	});
 });
