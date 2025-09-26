@@ -274,6 +274,20 @@ describe("oauth2", async () => {
 		expect(callbackURL).toBe("http://localhost:3000/new_user");
 	});
 
+	it("should use social provider login", async () => {
+		const res = await authClient.signIn.social({
+			provider: providerId,
+		});
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		const headers = new Headers();
+		const { callbackURL } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toBe("http://localhost:3000");
+	});
+
 	it("should not create user when sign ups are disabled", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {

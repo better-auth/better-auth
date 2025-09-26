@@ -207,26 +207,41 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 	} as const;
 	return {
 		id: "generic-oauth",
-		init: (ctx) => {
+		init: async (ctx) => {
 			const genericProviders = options.config.map((c) => {
 				let finalUserInfoUrl = c.userInfoUrl;
 				return {
 					id: c.providerId,
 					name: c.providerId,
-					createAuthorizationURL(data) {
-						return createAuthorizationURL({
+					async createAuthorizationURL(data) {
+						let finalAuthUrl = c.authorizationUrl;
+						if (c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								token_endpoint: string;
+								authorization_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+								headers: c.discoveryHeaders,
+							});
+							if (discovery.data) {
+								finalAuthUrl = discovery.data.authorization_endpoint;
+							}
+						}
+						const authUrl = createAuthorizationURL({
 							id: c.providerId,
 							options: {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
 								redirectURI: c.redirectURI,
 							},
-							authorizationEndpoint: c.authorizationUrl!,
+							authorizationEndpoint: finalAuthUrl!,
 							state: data.state,
 							codeVerifier: c.pkce ? data.codeVerifier : undefined,
 							scopes: c.scopes || [],
 							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
+							additionalParams: c.authorizationUrlParams,
 						});
+						return authUrl;
 					},
 					async validateAuthorizationCode(data) {
 						let finalTokenUrl = c.tokenUrl;
@@ -292,7 +307,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: finalTokenUrl,
 						});
 					},
-
 					async getUserInfo(tokens) {
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
@@ -460,15 +474,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 						});
-					}
-					if (authorizationUrlParams) {
-						const withAdditionalParams = new URL(finalAuthUrl);
-						for (const [paramName, paramValue] of Object.entries(
-							authorizationUrlParams,
-						)) {
-							withAdditionalParams.searchParams.set(paramName, paramValue);
-						}
-						finalAuthUrl = withAdditionalParams.toString();
 					}
 
 					const { state, codeVerifier } = await generateState(ctx);
