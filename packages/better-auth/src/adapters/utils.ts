@@ -1,8 +1,8 @@
-import type { FieldAttribute } from "../db";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 
 export function withApplyDefault(
 	value: any,
-	field: FieldAttribute,
+	field: DBFieldAttribute,
 	action: "create" | "update",
 ) {
 	if (action === "update") {
