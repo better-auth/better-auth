@@ -8,7 +8,6 @@ import type {
 	BetterAuthOptions,
 	User,
 } from "../../types";
-import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
 import { runWithTransaction } from "../../context/transaction";
@@ -179,7 +178,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					image,
 					callbackURL,
 					rememberMe,
-					...additionalFields
+					...rest
 				} = body;
 				const isValidEmail = z.email().safeParse(email);
 
@@ -213,11 +212,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 					});
 				}
-
-				const additionalData = parseUserInput(
-					ctx.context.options,
-					additionalFields as any,
-				);
 				/**
 				 * Hash the password
 				 *
@@ -234,7 +228,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 							email: email.toLowerCase(),
 							name,
 							image,
-							...additionalData,
+							...rest,
 							emailVerified: false,
 						},
 						ctx,

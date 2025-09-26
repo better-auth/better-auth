@@ -15,6 +15,7 @@ import type {
 	CleanedWhere,
 } from "./types";
 import type { DBFieldAttribute } from "@better-auth/core/db";
+import { parseUserInput } from "better-auth/db";
 export * from "./types";
 
 let debugLogs: any[] = [];
@@ -343,6 +344,11 @@ export const createAdapterFactory =
 		) => {
 			const transformedData: Record<string, any> = {};
 			const fields = schema[unsafe_model]!.fields;
+			switch (unsafe_model) {
+				case "user": {
+					data = parseUserInput(options, data, action);
+				}
+			}
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
 			if (
 				!config.disableIdGeneration &&

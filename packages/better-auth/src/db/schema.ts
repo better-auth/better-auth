@@ -57,7 +57,7 @@ export const verificationSchema = coreSchema.extend({
 	identifier: z.string(),
 });
 
-export function parseOutputData<T extends Record<string, any>>(
+function parseOutputData<T extends Record<string, any>>(
 	data: T,
 	schema: {
 		fields: Record<string, DBFieldAttribute>;
@@ -79,7 +79,7 @@ export function parseOutputData<T extends Record<string, any>>(
 	return parsedData as T;
 }
 
-export function getAllFields(options: BetterAuthOptions, table: string) {
+function getAllFields(options: BetterAuthOptions, table: string) {
 	let schema: Record<string, DBFieldAttribute> = {
 		...(table === "user" ? options.user?.additionalFields : {}),
 		...(table === "session" ? options.session?.additionalFields : {}),
@@ -163,11 +163,11 @@ export function parseInputData<T extends Record<string, any>>(
 
 export function parseUserInput(
 	options: BetterAuthOptions,
-	user?: Record<string, any>,
+	user: Record<string, any> = {},
 	action?: "create" | "update",
 ) {
 	const schema = getAllFields(options, "user");
-	return parseInputData(user || {}, { fields: schema, action });
+	return parseInputData(user, { fields: schema, action });
 }
 
 export function parseAdditionalUserInput(
