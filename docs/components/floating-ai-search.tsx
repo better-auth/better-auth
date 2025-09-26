@@ -10,51 +10,33 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Loader2, RefreshCw, SearchIcon, Send, X } from 'lucide-react';
+import { Loader2, SearchIcon, Send, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from 'fumadocs-ui/components/ui/button';
 import Link from 'fumadocs-core/link';
-import { type UIMessage, useChat, type UseChatHelpers } from '@ai-sdk/react';
-import type { ProvideLinksToolSchema } from '@/lib/inkeep-schema';
-import type { z } from 'zod';
-import { DefaultChatTransport } from 'ai';
 import { Markdown } from './markdown';
 import { Presence } from '@radix-ui/react-presence';
 
 const Context = createContext<{
   open: boolean;
   setOpen: (open: boolean) => void;
-  chat: UseChatHelpers<UIMessage>;
+  messages: Array<{id: string, role: 'user' | 'assistant', content: string}>;
+  isLoading: boolean;
+  sendMessage: (text: string) => void;
+  clearMessages: () => void;
 } | null>(null);
 
 function useChatContext() {
-  return use(Context)!.chat;
+  return use(Context)!;
 }
 
 function SearchAIActions() {
-  const { messages, status, setMessages, regenerate } = useChatContext();
-  const isLoading = status === 'streaming';
+  const { messages, isLoading, clearMessages } = useChatContext();
 
   if (messages.length === 0) return null;
 
   return (
     <>
-      {!isLoading && messages.at(-1)?.role === 'assistant' && (
-        <button
-          type="button"
-          className={cn(
-            buttonVariants({
-              color: 'secondary',
-              size: 'sm',
-              className: 'rounded-full gap-1.5',
-            }),
-          )}
-          onClick={() => regenerate()}
-        >
-          <RefreshCw className="size-4" />
-          Retry
-        </button>
-      )}
       <button
         type="button"
         className={cn(
@@ -64,7 +46,7 @@ function SearchAIActions() {
             className: 'rounded-full',
           }),
         )}
-        onClick={() => setMessages([])}
+        onClick={clearMessages}
       >
         Clear Chat
       </button>
@@ -73,13 +55,15 @@ function SearchAIActions() {
 }
 
 function SearchAIInput(props: ComponentProps<'form'>) {
-  const { status, sendMessage, stop } = useChatContext();
+  const { sendMessage, isLoading } = useChatContext();
   const [input, setInput] = useState('');
-  const isLoading = status === 'streaming' || status === 'submitted';
+  
   const onStart = (e?: SyntheticEvent) => {
     e?.preventDefault();
-    void sendMessage({ text: input });
-    setInput('');
+    if (input.trim()) {
+      sendMessage(input.trim());
+      setInput('');
+    }
   };
 
   useEffect(() => {
@@ -107,36 +91,23 @@ function SearchAIInput(props: ComponentProps<'form'>) {
           }
         }}
       />
-      {isLoading ? (
-        <button
-          key="bn"
-          type="button"
-          className={cn(
-            buttonVariants({
-              color: 'secondary',
-              className: 'transition-all rounded-full mt-2 gap-2',
-            }),
-          )}
-          onClick={stop}
-        >
-          <Loader2 className="size-4 animate-spin text-fd-muted-foreground" />
-          Abort Answer
-        </button>
-      ) : (
-        <button
-          key="bn"
-          type="submit"
-          className={cn(
-            buttonVariants({
-              color: 'secondary',
-              className: 'transition-all rounded-full mt-2',
-            }),
-          )}
-          disabled={input.length === 0}
-        >
+      <button
+        key="bn"
+        type="submit"
+        className={cn(
+          buttonVariants({
+            color: 'secondary',
+            className: 'transition-all rounded-full mt-2',
+          }),
+        )}
+        disabled={input.length === 0 || isLoading}
+      >
+        {isLoading ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
           <Send className="size-4" />
-        </button>
-      )}
+        )}
+      </button>
     </form>
   );
 }
@@ -207,27 +178,13 @@ function Input(props: ComponentProps<'textarea'>) {
 
 const roleName: Record<string, string> = {
   user: 'you',
-  assistant: 'fumadocs',
+  assistant: 'better-auth bot',
 };
 
 function Message({
   message,
   ...props
-}: { message: UIMessage } & ComponentProps<'div'>) {
-  let markdown = '';
-  let links: z.infer<typeof ProvideLinksToolSchema>['links'] = [];
-
-  for (const part of message.parts ?? []) {
-    if (part.type === 'text') {
-      markdown += part.text;
-      continue;
-    }
-
-    if (part.type === 'tool-provideLinks' && part.input) {
-      links = (part.input as z.infer<typeof ProvideLinksToolSchema>).links;
-    }
-  }
-
+}: { message: {id: string, role: 'user' | 'assistant', content: string, references?: Array<{link: string, title: string, icon?: string}>, isStreaming?: boolean} } & ComponentProps<'div'>) {
   return (
     <div {...props}>
       <p
@@ -239,34 +196,166 @@ function Message({
         {roleName[message.role] ?? 'unknown'}
       </p>
       <div className="prose text-sm">
-        <Markdown text={markdown} />
+        <Markdown text={message.content} />
+        {message.isStreaming && (
+          <span className="inline-block w-2 h-4 bg-fd-primary ml-1 animate-pulse" />
+        )}
       </div>
-      {links && links.length > 0 ? (
-        <div className="mt-2 flex flex-row flex-wrap items-center gap-1">
-          {links.map((item, i) => (
-            <Link
-              key={i}
-              href={item.url}
-              className="block text-xs rounded-lg border p-3 hover:bg-fd-accent hover:text-fd-accent-foreground"
-            >
-              <p className="font-medium">{item.title}</p>
-              <p className="text-fd-muted-foreground">Reference {item.label}</p>
-            </Link>
-          ))}
+      {message.references && message.references.length > 0 && !message.isStreaming && (
+        <div className="mt-3 flex flex-col gap-2">
+          <p className="text-xs font-medium text-fd-muted-foreground">References:</p>
+          <div className="flex flex-col gap-1">
+            {message.references.map((ref, i) => (
+              <Link
+                key={i}
+                href={ref.link}
+                className="flex items-center gap-2 text-xs rounded-lg border p-2 hover:bg-fd-accent hover:text-fd-accent-foreground transition-colors"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {ref.icon && (
+                  <img 
+                    src={ref.icon} 
+                    alt="" 
+                    className="w-4 h-4 flex-shrink-0"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                )}
+                <span className="truncate">{ref.title}</span>
+              </Link>
+            ))}
+          </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
 
 export function AISearchTrigger() {
   const [open, setOpen] = useState(false);
-  const chat = useChat({
-    id: 'search',
-    transport: new DefaultChatTransport({
-      api: '/api/chat',
-    }),
-  });
+  const [messages, setMessages] = useState<Array<{id: string, role: 'user' | 'assistant', content: string, references?: Array<{link: string, title: string, icon?: string}>, isStreaming?: boolean}>>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [input, setInput] = useState('');
+  const [sessionId, setSessionId] = useState<string>('');
+
+  const streamText = (messageId: string, fullText: string, references?: Array<{link: string, title: string, icon?: string}>) => {
+    const words = fullText.split(' ');
+    let currentText = '';
+    let wordIndex = 0;
+
+    const streamInterval = setInterval(() => {
+      if (wordIndex < words.length) {
+        currentText += (wordIndex > 0 ? ' ' : '') + words[wordIndex];
+        wordIndex++;
+        
+        setMessages(prev => prev.map(msg => 
+          msg.id === messageId 
+            ? { ...msg, content: currentText, isStreaming: wordIndex < words.length }
+            : msg
+        ));
+      } else {
+        setMessages(prev => prev.map(msg => 
+          msg.id === messageId 
+            ? { ...msg, isStreaming: false }
+            : msg
+        ));
+        clearInterval(streamInterval);
+      }
+    }, 30); 
+
+    return () => clearInterval(streamInterval);
+  };
+
+  const sendMessage = async (text: string) => {
+    if (!text.trim()) return;
+    
+    const userMessage = {
+      id: Date.now().toString(),
+      role: 'user' as const,
+      content: text
+    };
+    
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+    
+    try {
+      const requestBody: any = {
+        question: text,
+        stream: false,
+        external_user_id: 'floating-ai-user',
+      };
+
+      if (sessionId) {
+        requestBody.session_id = sessionId;
+      }
+
+
+      const response = await fetch('/api/ai-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('API Response:', data);
+      
+      // Extract session_id from response if present
+      if (data.session_id) {
+        console.log('Received session_id:', data.session_id);
+        setSessionId(data.session_id);
+      }
+      
+      // Handle different response formats
+      let responseContent = '';
+      if (data.content) {
+        responseContent = data.content;
+      } else if (data.answer) {
+        responseContent = data.answer;
+      } else if (data.error) {
+        responseContent = data.error;
+      } else {
+        responseContent = 'No response received';
+      }
+      
+      const messageId = (Date.now() + 1).toString();
+      const assistantMessage = {
+        id: messageId,
+        role: 'assistant' as const,
+        content: '', 
+        references: data.references || undefined,
+        isStreaming: true
+      };
+      
+      
+      setMessages(prev => [...prev, assistantMessage]);
+      
+      
+      streamText(messageId, responseContent, data.references);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      const errorMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant' as const,
+        content: 'Sorry, there was an error processing your request. Please try again.'
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clearMessages = () => {
+    setMessages([]);
+    setSessionId(''); 
+  };
 
   const onKeyPress = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && open) {
@@ -289,7 +378,7 @@ export function AISearchTrigger() {
   }, []);
 
   return (
-    <Context value={useMemo(() => ({ chat, open, setOpen }), [chat, open])}>
+    <Context value={useMemo(() => ({ messages, isLoading, sendMessage, clearMessages, open, setOpen }), [messages, isLoading, open])}>
       <RemoveScroll enabled={open}>
         <Presence present={open}>
           <div
@@ -306,7 +395,6 @@ export function AISearchTrigger() {
           >
             <div className="sticky top-0 flex gap-2 items-center py-2 w-full max-w-[600px]">
               <p className="text-xs flex-1 text-fd-muted-foreground">
-                Powered by Inkeep AI
               </p>
               <button
                 aria-label="Close"
@@ -331,11 +419,15 @@ export function AISearchTrigger() {
               }}
             >
               <div className="flex flex-col gap-4">
-                {chat.messages
-                  .filter((msg) => msg.role !== 'system')
-                  .map((item) => (
-                    <Message key={item.id} message={item} />
-                  ))}
+                {messages.map((item) => (
+                  <Message key={item.id} message={item} />
+                ))}
+                {isLoading && (
+                  <div className="flex items-center gap-2 text-sm text-fd-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    AI is thinking...
+                  </div>
+                )}
               </div>
             </List>
           </div>
