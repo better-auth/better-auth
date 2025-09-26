@@ -2,7 +2,7 @@ import type {
 	AlterTableColumnAlteringBuilder,
 	CreateTableBuilder,
 } from "kysely";
-import type { FieldAttribute, FieldType } from ".";
+import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
 import { sql } from "kysely";
 import { createLogger } from "../utils/logger";
 import type { BetterAuthOptions } from "../types";
@@ -66,7 +66,7 @@ const map = {
 
 export function matchType(
 	columnDataType: string,
-	fieldType: FieldType,
+	fieldType: DBFieldType,
 	dbType: KyselyDatabaseType,
 ) {
 	function normalize(type: string) {
@@ -104,12 +104,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 	const tableMetadata = await db.introspection.getTables();
 	const toBeCreated: {
 		table: string;
-		fields: Record<string, FieldAttribute>;
+		fields: Record<string, DBFieldAttribute>;
 		order: number;
 	}[] = [];
 	const toBeAdded: {
 		table: string;
-		fields: Record<string, FieldAttribute>;
+		fields: Record<string, DBFieldAttribute>;
 		order: number;
 	}[] = [];
 
@@ -141,7 +141,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 			continue;
 		}
-		let toBeAddedFields: Record<string, FieldAttribute> = {};
+		let toBeAddedFields: Record<string, DBFieldAttribute> = {};
 		for (const [fieldName, field] of Object.entries(value.fields)) {
 			const column = table.columns.find((c) => c.name === fieldName);
 			if (!column) {
@@ -171,7 +171,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| CreateTableBuilder<string, string>
 	)[] = [];
 
-	function getType(field: FieldAttribute, fieldName: string) {
+	function getType(field: DBFieldAttribute, fieldName: string) {
 		const type = field.type;
 		const typeMap = {
 			string: {
