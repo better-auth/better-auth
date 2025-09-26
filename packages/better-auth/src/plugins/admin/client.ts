@@ -70,6 +70,7 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 				) => {
 					const isAuthorized = hasPermission({
 						role: data.role as string,
+						email: undefined,
 						options: {
 							ac: options?.ac,
 							roles: roles,
