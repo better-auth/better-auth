@@ -17,7 +17,11 @@
     "composite": true,
     "incremental": true,
     "noErrorTruncation": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@better-auth/core": ["./packages/core/src"],
+      "@better-auth/core/*": ["./packages/core/src/*"]
+    }
   },
   "references": [
     {
