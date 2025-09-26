@@ -175,8 +175,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			{
 				method: "POST",
 				body: z.object({
-					email: z.string({}).describe("Email address to send the OTP"),
-					type: z.enum(types).describe("Type of the OTP"),
+					email: z.string({}).meta({
+						description: "Email address to send the OTP",
+					}),
+					type: z.enum(types).meta({
+						description: "Type of the OTP",
+					}),
 				}),
 				metadata: {
 					openapi: {
@@ -308,8 +312,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({}).describe("Email address to send the OTP"),
-						type: z.enum(types).describe("Type of the OTP"),
+						email: z.string({}).meta({
+							description: "Email address to send the OTP",
+						}),
+						type: z.enum(types).meta({
+							required: true,
+							description: "Type of the OTP",
+						}),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -364,8 +373,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						email: z.string({}).describe("Email address the OTP was sent to"),
-						type: z.enum(types).describe("Type of the OTP"),
+						email: z.string({}).meta({
+							description: "Email address the OTP was sent to",
+						}),
+						type: z.enum(types).meta({
+							required: true,
+							description: "Type of the OTP",
+						}),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -453,9 +467,17 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string().describe("Email address the OTP was sent to"),
-						type: z.enum(types).describe("Type of the OTP"),
-						otp: z.string().describe("OTP to verify"),
+						email: z.string().meta({
+							description: "Email address the OTP was sent to",
+						}),
+						type: z.enum(types).meta({
+							required: true,
+							description: "Type of the OTP",
+						}),
+						otp: z.string().meta({
+							required: true,
+							description: "OTP to verify",
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -560,8 +582,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({}).describe("Email address to verify"),
-						otp: z.string().describe("OTP to verify"),
+						email: z.string({}).meta({
+							description: "Email address to verify",
+						}),
+						otp: z.string().meta({
+							required: true,
+							description: "OTP to verify",
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -729,8 +756,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({}).describe("Email address to sign in"),
-						otp: z.string().describe("OTP sent to the email"),
+						email: z.string({}).meta({
+							description: "Email address to sign in",
+						}),
+						otp: z.string().meta({
+							required: true,
+							description: "OTP sent to the email",
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -893,7 +925,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string().describe("Email address to send the OTP"),
+						email: z.string().meta({
+							description: "Email address to send the OTP",
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -973,9 +1007,15 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string().describe("Email address to reset the password"),
-						otp: z.string().describe("OTP sent to the email"),
-						password: z.string().describe("New password"),
+						email: z.string().meta({
+							description: "Email address to reset the password",
+						}),
+						otp: z.string().meta({
+							description: "OTP sent to the email",
+						}),
+						password: z.string().meta({
+							description: "New password",
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -1078,6 +1118,15 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							user.user.id,
 							passwordHash,
 							ctx,
+						);
+					}
+
+					if (ctx.context.options.emailAndPassword?.onPasswordReset) {
+						await ctx.context.options.emailAndPassword.onPasswordReset(
+							{
+								user: user.user,
+							},
+							ctx.request,
 						);
 					}
 

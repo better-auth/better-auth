@@ -665,6 +665,9 @@ importers:
 
   packages/better-auth:
     dependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
       '@better-auth/utils':
         specifier: 0.3.0
         version: 0.3.0
@@ -898,6 +901,19 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.2
+      unbuild:
+        specifier: 'catalog:'
+        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
+
+  packages/core:
+    dependencies:
+      better-call:
+        specifier: 'catalog:'
+        version: 1.0.19
+      zod:
+        specifier: ^4.1.5
+        version: 4.1.5
+    devDependencies:
       unbuild:
         specifier: 'catalog:'
         version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
