@@ -15,7 +15,7 @@ import type {
 	CleanedWhere,
 } from "./types";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import { parseUserInput } from "better-auth/db";
+import { parseUserInput } from "../../db";
 export * from "./types";
 
 let debugLogs: any[] = [];

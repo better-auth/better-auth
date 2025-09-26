@@ -125,7 +125,10 @@ export function parseInputData<T extends Record<string, any>>(
 ) {
 	const action = schema.action || "create";
 	const fields = schema.fields;
-	const parsedData: Record<string, any> = {};
+	const parsedData: Record<string, any> = Object.assign(
+		Object.create(null),
+		data,
+	);
 	for (const key in fields) {
 		if (key in data) {
 			if (fields[key]!.input === false) {
