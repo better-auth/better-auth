@@ -598,9 +598,11 @@ describe("getSession type tests", async () => {
 	const { auth } = await getTestInstance();
 
 	it("has parameters", async () => {
-		await auth.api.getSession({
-			headers: new Headers(),
-		});
+		type Params = Parameters<typeof auth.api.getSession>[0]["headers"];
+
+		expectTypeOf<Params>().toEqualTypeOf<
+			[string, string][] | Record<string, string> | Headers
+		>();
 	});
 
 	it("can return a response", () => {
