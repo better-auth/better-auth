@@ -597,7 +597,7 @@ describe("cookie cache", async () => {
 describe("getSession type tests", async () => {
 	const { auth } = await getTestInstance();
 
-	it("has parameters", async () => {
+	it("has parameters", () => {
 		type Params = Parameters<typeof auth.api.getSession>[0]["headers"];
 
 		expectTypeOf<Params>().toEqualTypeOf<
