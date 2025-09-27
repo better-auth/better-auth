@@ -1,19 +1,50 @@
 {
   "compilerOptions": {
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "target": "es2022",
-    "allowJs": true,
-    "resolveJsonModule": true,
-    "module": "Preserve",
-    "noEmit": true,
-    "moduleDetection": "force",
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
+    "baseUrl": ".",
     "strict": true,
+    "target": "esnext",
+    "downlevelIteration": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "noFallthroughCasesInSwitch": true
+    "exactOptionalPropertyTypes": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "composite": true,
+    "incremental": true,
+    "noErrorTruncation": true,
+    "types": ["node"],
+    "paths": {
+      "better-auth": ["./packages/better-auth/src"],
+      "better-auth/*": ["./packages/better-auth/src/*"]
+    }
   },
+  "references": [
+    {
+      "path": "./packages/better-auth"
+    },
+    {
+      "path": "./packages/cli"
+    },
+    {
+      "path": "./packages/cli/tsconfig.test.json"
+    },
+    {
+      "path": "./packages/expo"
+    },
+    {
+      "path": "./packages/sso"
+    },
+    {
+      "path": "./packages/stripe"
+    }
+  ],
+  "files": [],
+  "include": [],
   "exclude": ["**/dist/**", "**/node_modules/**", "**/examples/**"]
 }

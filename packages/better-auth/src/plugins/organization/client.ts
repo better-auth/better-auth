@@ -19,7 +19,7 @@ import {
 	ownerAc,
 	defaultRoles,
 } from "./access";
-import type { FieldAttribute } from "../../db";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 import type { OrganizationOptions } from "./types";
 import type { HasPermissionBaseInput } from "./permission";
@@ -47,27 +47,27 @@ interface OrganizationClientOptions {
 	schema?: {
 		organization?: {
 			additionalFields?: {
-				[key: string]: FieldAttribute;
+				[key: string]: DBFieldAttribute;
 			};
 		};
 		member?: {
 			additionalFields?: {
-				[key: string]: FieldAttribute;
+				[key: string]: DBFieldAttribute;
 			};
 		};
 		invitation?: {
 			additionalFields?: {
-				[key: string]: FieldAttribute;
+				[key: string]: DBFieldAttribute;
 			};
 		};
 		team?: {
 			additionalFields?: {
-				[key: string]: FieldAttribute;
+				[key: string]: DBFieldAttribute;
 			};
 		};
 		organizationRole?: {
 			additionalFields?: {
-				[key: string]: FieldAttribute;
+				[key: string]: DBFieldAttribute;
 			};
 		};
 	};

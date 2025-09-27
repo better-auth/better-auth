@@ -2,7 +2,7 @@ import type {
 	AlterTableColumnAlteringBuilder,
 	CreateTableBuilder,
 } from "kysely";
-import type { FieldAttribute, FieldType } from ".";
+import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
 import { sql } from "kysely";
 import { createLogger } from "../utils/logger";
 import type { BetterAuthOptions } from "../types";
@@ -66,19 +66,19 @@ const map = {
 
 export function matchType(
 	columnDataType: string,
-	fieldType: FieldType,
+	fieldType: DBFieldType,
 	dbType: KyselyDatabaseType,
 ) {
 	function normalize(type: string) {
-		return type.toLowerCase().split("(")[0].trim();
+		return type.toLowerCase().split("(")[0]!.trim();
 	}
 	if (fieldType === "string[]" || fieldType === "number[]") {
 		return columnDataType.toLowerCase().includes("json");
 	}
-	const types = map[dbType];
+	const types = map[dbType]!;
 	const expected = Array.isArray(fieldType)
 		? types["string"].map((t) => t.toLowerCase())
-		: types[fieldType].map((t) => t.toLowerCase());
+		: types[fieldType]!.map((t) => t.toLowerCase());
 	return expected.includes(normalize(columnDataType));
 }
 
@@ -104,12 +104,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 	const tableMetadata = await db.introspection.getTables();
 	const toBeCreated: {
 		table: string;
-		fields: Record<string, FieldAttribute>;
+		fields: Record<string, DBFieldAttribute>;
 		order: number;
 	}[] = [];
 	const toBeAdded: {
 		table: string;
-		fields: Record<string, FieldAttribute>;
+		fields: Record<string, DBFieldAttribute>;
 		order: number;
 	}[] = [];
 
@@ -131,8 +131,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 				if (tIndex === -1) {
 					toBeCreated.push(tableData);
 				} else {
-					toBeCreated[tIndex].fields = {
-						...toBeCreated[tIndex].fields,
+					toBeCreated[tIndex]!.fields = {
+						...toBeCreated[tIndex]!.fields,
 						...value.fields,
 					};
 				}
@@ -141,7 +141,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 			continue;
 		}
-		let toBeAddedFields: Record<string, FieldAttribute> = {};
+		let toBeAddedFields: Record<string, DBFieldAttribute> = {};
 		for (const [fieldName, field] of Object.entries(value.fields)) {
 			const column = table.columns.find((c) => c.name === fieldName);
 			if (!column) {
@@ -171,7 +171,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| CreateTableBuilder<string, string>
 	)[] = [];
 
-	function getType(field: FieldAttribute, fieldName: string) {
+	function getType(field: DBFieldAttribute, fieldName: string) {
 		const type = field.type;
 		const typeMap = {
 			string: {
@@ -239,7 +239,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		if (Array.isArray(type)) {
 			return "text";
 		}
-		return typeMap[type][dbType || "sqlite"];
+		return typeMap[type]![dbType || "sqlite"];
 	}
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {

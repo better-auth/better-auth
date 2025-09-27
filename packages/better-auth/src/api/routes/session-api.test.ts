@@ -347,7 +347,7 @@ describe("session", async () => {
 		});
 
 		const signInHeaders = new Headers();
-		signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]);
+		signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]!);
 
 		const sessionResWithoutHeaders = await auth.api.getSession({
 			headers: signInHeaders,
@@ -598,13 +598,11 @@ describe("getSession type tests", async () => {
 	const { auth } = await getTestInstance();
 
 	it("has parameters", () => {
-		type Params = Parameters<typeof auth.api.getSession>[0];
+		type Params = Parameters<typeof auth.api.getSession>[0]["headers"];
 
-		expectTypeOf<Params>().toMatchObjectType<{
-			headers: Headers;
-			asResponse?: boolean;
-			returnHeaders?: boolean;
-		}>();
+		expectTypeOf<Params>().toEqualTypeOf<
+			[string, string][] | Record<string, string> | Headers
+		>();
 	});
 
 	it("can return a response", () => {
