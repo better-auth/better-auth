@@ -262,7 +262,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					where: [
 						{
 							field: "id",
-							value: existingInvitation.id,
+							value: existingInvitation!.id,
 						},
 					],
 					update: {
@@ -277,9 +277,9 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 				await ctx.context.orgOptions.sendInvitationEmail?.(
 					{
-						id: updatedInvitation.id,
-						role: updatedInvitation.role as string,
-						email: updatedInvitation.email.toLowerCase(),
+						id: updatedInvitation.id!,
+						role: updatedInvitation.role! as string,
+						email: updatedInvitation.email!.toLowerCase(),
 						organization: organization,
 						inviter: {
 							...member,
@@ -298,7 +298,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
 			) {
 				await adapter.updateInvitation({
-					invitationId: alreadyInvited[0].id,
+					invitationId: alreadyInvited[0]!.id,
 					status: "canceled",
 				});
 			}
@@ -597,7 +597,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				}
 
 				if (onlyOne) {
-					const teamId = teamIds[0];
+					const teamId = teamIds[0]!;
 					const updatedSession = await adapter.setActiveTeam(
 						session.session.token,
 						teamId,

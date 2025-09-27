@@ -11,8 +11,8 @@ export function constantTimeEqual(
 	const length = Math.max(aBuffer.length, bBuffer.length);
 	for (let i = 0; i < length; i++) {
 		c |=
-			(i < aBuffer.length ? aBuffer[i] : 0) ^
-			(i < bBuffer.length ? bBuffer[i] : 0);
+			(i < aBuffer.length ? aBuffer[i]! : 0) ^
+			(i < bBuffer.length ? bBuffer[i]! : 0);
 	}
 	return c === 0;
 }

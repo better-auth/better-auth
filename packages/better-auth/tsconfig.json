@@ -4,8 +4,8 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "lib": ["esnext", "dom", "dom.iterable"],
-    "noUncheckedIndexedAccess": false,
     "types": ["node", "bun"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [{ "path": "../core" }]
 }

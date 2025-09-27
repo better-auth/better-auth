@@ -466,7 +466,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					);
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS,
+							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 						});
 					}
 					const user =
@@ -505,6 +505,21 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/update-user`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.adminUpdateUser`
+			 *
+			 * **client:**
+			 * `authClient.admin.updateUser`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-update-user)
+			 */
 			adminUpdateUser: createAuthEndpoint(
 				"/admin/update-user",
 				{
@@ -1208,8 +1223,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const [adminSessionToken, dontRememberMeCookie] =
 						adminCookie?.split(":");
-					const adminSession =
-						await ctx.context.internalAdapter.findSession(adminSessionToken);
+					const adminSession = await ctx.context.internalAdapter.findSession(
+						adminSessionToken!,
+					);
 					if (!adminSession || adminSession.session.userId !== user.id) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: "Failed to find admin session",
