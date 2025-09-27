@@ -10,6 +10,7 @@ on:
 jobs:
   benchmark:
     name: Run TypeScript compilation benchmarks
+    if: github.repository == 'better-auth/better-auth'
     runs-on: ubuntu-latest
 
     steps:
