@@ -4,14 +4,13 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 function extractMetricsFromTrace(tracePath) {
-	const traceFile = path.join(tracePath, "trace.json");
+	const traceFile = path.join(
+		tracePath,
+		fs
+			.readdirSync(tracePath)
+			.find((f) => f.startsWith("trace.") && f.endsWith(".json")),
+	);
 	const traceData = JSON.parse(fs.readFileSync(traceFile, "utf8"));
-
-	const typesFile = path.join(tracePath, "types.json");
-	let typesData = null;
-	if (fs.existsSync(typesFile)) {
-		typesData = JSON.parse(fs.readFileSync(typesFile, "utf8"));
-	}
 
 	const metrics = [];
 
@@ -152,34 +151,6 @@ function extractMetricsFromTrace(tracePath) {
 			unit: "count",
 			value: moduleResolutionEvents.length,
 		});
-	}
-
-	if (typesData) {
-		if (typesData.length) {
-			metrics.push({
-				name: "Total Types",
-				unit: "count",
-				value: typesData.length,
-			});
-
-			const typeKinds: Record<string, number> = {};
-			for (const type of typesData) {
-				const kind = type.kind || "unknown";
-				typeKinds[kind] = (typeKinds[kind] || 0) + 1;
-			}
-
-			const sortedKinds = Object.entries(typeKinds)
-				.sort((a, b) => b[1] - a[1])
-				.slice(0, 5);
-
-			for (const [kind, count] of sortedKinds) {
-				metrics.push({
-					name: `Type Kind: ${kind}`,
-					unit: "count",
-					value: count,
-				});
-			}
-		}
 	}
 
 	if (totalDuration > 0) {
