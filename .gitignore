@@ -199,3 +199,4 @@ playwright-report/
 test-results/
 
 state.txt
+/packages/better-auth/benchmark-results
