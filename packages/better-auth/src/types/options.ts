@@ -454,7 +454,7 @@ export type BetterAuthOptions = {
 		 */
 		fields?: Partial<Record<keyof OmitId<User>, string>>;
 		/**
-		 * Additional fields for the session
+		 * Additional fields for the user
 		 */
 		additionalFields?: {
 			[key: string]: DBFieldAttribute;
@@ -630,6 +630,12 @@ export type BetterAuthOptions = {
 		 * Map fields
 		 */
 		fields?: Partial<Record<keyof OmitId<Account>, string>>;
+		/**
+		 * Additional fields for the user
+		 */
+		additionalFields?: {
+			[key: string]: FieldAttribute;
+		};
 		/**
 		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 		 * will be updated on sign in with the latest data from the provider.
