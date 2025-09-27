@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -384,7 +384,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				session.session.activeOrganizationId ===
 					toBeRemovedMember.organizationId
 			) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 
 			// Run afterRemoveMember hook
@@ -794,7 +794,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			}
 			await adapter.deleteMember(member.id);
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 			return ctx.json(member);
 		},

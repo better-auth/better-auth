@@ -11,7 +11,7 @@
     "clean": "turbo --filter \"./packages/*\" clean && rm -rf node_modules",
     "format": "biome format . --write",
     "lint": "biome check .",
-    "lint:fix": "biome check . --fix",
+    "lint:fix": "biome check . --fix --unsafe",
     "release": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --no-git-checks",
     "release:no-build": "bumpp && pnpm -r publish --access public --no-git-checks --tag next",
     "release:canary": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
@@ -19,11 +19,11 @@
     "test": "turbo --filter \"./packages/*\" test",
     "e2e:smoke": "turbo --filter \"./e2e/*\" e2e:smoke",
     "e2e:integration": "turbo --filter \"./e2e/*\" e2e:integration",
-    "typecheck": "turbo --filter \"./packages/*\" typecheck"
+    "typecheck": "tsc -b --verbose --diagnostics"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.2.3",
-    "@types/node": "^24.3.1",
+    "@biomejs/biome": "2.2.4",
+    "@types/node": "^24.4.0",
     "bumpp": "^10.2.3",
     "tinyglobby": "^0.2.15",
     "turbo": "^2.5.6",

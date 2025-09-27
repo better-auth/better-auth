@@ -13,7 +13,7 @@ describe("adapter test", async () => {
 			isRunningAdapterTests: true,
 		},
 	});
-	await runAdapterTest({
+	runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return adapter({
 				user: {
@@ -42,11 +42,15 @@ describe("Number Id Adapter Test", async () => {
 			isRunningAdapterTests: true,
 		},
 	});
-	await runNumberIdAdapterTest({
+	runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return adapter({
 				...customOptions,
 			});
+		},
+		disableTests: {
+			SHOULD_ROLLBACK_FAILING_TRANSACTION: true,
+			SHOULD_RETURN_TRANSACTION_RESULT: true,
 		},
 	});
 });

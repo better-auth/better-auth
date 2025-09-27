@@ -1,11 +1,6 @@
 import { defu } from "defu";
 import { hashPassword, verifyPassword } from "./crypto/password";
-import {
-	type BetterAuthDbSchema,
-	createInternalAdapter,
-	getAuthTables,
-	getMigrations,
-} from "./db";
+import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
 import type { Entries } from "type-fest";
 import { getAdapter } from "./db/utils";
 import type {
@@ -36,6 +31,8 @@ import { createTelemetry } from "./telemetry";
 import type { TelemetryEvent } from "./telemetry/types";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
+import { isPromise } from "./utils/is-promise";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -177,7 +174,13 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 		publishTelemetry: publish,
 	};
-	let { context } = runPluginInit(ctx);
+	const initOrPromise = runPluginInit(ctx);
+	let context: AuthContext;
+	if (isPromise(initOrPromise)) {
+		({ context } = await initOrPromise);
+	} else {
+		({ context } = initOrPromise);
+	}
 	return context;
 };
 
@@ -238,19 +241,25 @@ export type AuthContext = {
 		};
 		checkPassword: typeof checkPassword;
 	};
-	tables: BetterAuthDbSchema;
+	tables: BetterAuthDBSchema;
 	runMigrations: () => Promise<void>;
 	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
 };
 
-function runPluginInit(ctx: AuthContext) {
+async function runPluginInit(ctx: AuthContext) {
 	let options = ctx.options;
 	const plugins = options.plugins || [];
 	let context: AuthContext = ctx;
 	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
-			const result = plugin.init(context);
+			let initPromise = plugin.init(context);
+			let result: ReturnType<Required<BetterAuthPlugin>["init"]>;
+			if (isPromise(initPromise)) {
+				result = await initPromise;
+			} else {
+				result = initPromise;
+			}
 			if (typeof result === "object") {
 				if (result.options) {
 					const { databaseHooks, ...restOpts } = result.options;

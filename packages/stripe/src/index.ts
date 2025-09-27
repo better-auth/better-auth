@@ -468,10 +468,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				);
 
 				const hasEverTrialed = subscriptions.some((s) => {
-					const samePlan = s.plan?.toLowerCase() === plan.name.toLowerCase();
+					// Check if user has ever had a trial for any plan (not just the same plan)
+					// This prevents users from getting multiple trials by switching plans
 					const hadTrial =
 						!!(s.trialStart || s.trialEnd) || s.status === "trialing";
-					return samePlan && hadTrial;
+					return hadTrial;
 				});
 
 				const freeTrial =
@@ -1025,8 +1026,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						if (stripeSubscription) {
 							const plan = await getPlanByPriceInfo(
 								options,
-								stripeSubscription.items.data[0]?.price.id,
-								stripeSubscription.items.data[0]?.price.lookup_key,
+								stripeSubscription.items.data[0]?.price.id!,
+								stripeSubscription.items.data[0]?.price.lookup_key!,
 							);
 
 							if (plan && subscription) {
@@ -1037,11 +1038,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										seats: stripeSubscription.items.data[0]?.quantity || 1,
 										plan: plan.name.toLowerCase(),
 										periodEnd: new Date(
-											stripeSubscription.items.data[0]?.current_period_end *
+											stripeSubscription.items.data[0]?.current_period_end! *
 												1000,
 										),
 										periodStart: new Date(
-											stripeSubscription.items.data[0]?.current_period_start *
+											stripeSubscription.items.data[0]?.current_period_start! *
 												1000,
 										),
 										stripeSubscriptionId: stripeSubscription.id,
@@ -1241,21 +1242,19 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												userId: user.id,
 											},
 										});
-										const updatedUser =
-											await ctx.context.internalAdapter.updateUser(user.id, {
-												stripeCustomerId: stripeCustomer.id,
-											});
-										if (!updatedUser) {
-											logger.error("#BETTER_AUTH: Failed to create  customer");
-										} else {
-											await options.onCustomerCreate?.(
-												{
-													stripeCustomer,
-													user,
+										await ctx.context.internalAdapter.updateUser(user.id, {
+											stripeCustomerId: stripeCustomer.id,
+										});
+										await options.onCustomerCreate?.(
+											{
+												stripeCustomer,
+												user: {
+													...user,
+													stripeCustomerId: stripeCustomer.id,
 												},
-												ctx,
-											);
-										}
+											},
+											ctx,
+										);
 									}
 								},
 							},

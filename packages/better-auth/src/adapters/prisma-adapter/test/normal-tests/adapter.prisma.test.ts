@@ -7,7 +7,7 @@ import { setState } from "../state";
 describe("Adapter tests", async () => {
 	beforeAll(async () => {
 		setState("RUNNING");
-		await pushPrismaSchema("normal");
+		pushPrismaSchema("normal");
 		console.log("Successfully pushed normal Prisma Schema using pnpm...");
 		const { getAdapter } = await import("./get-adapter");
 		const { clearDb } = getAdapter();
@@ -20,7 +20,7 @@ describe("Adapter tests", async () => {
 		};
 	});
 
-	await runAdapterTest({
+	runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			const { getAdapter } = await import("./get-adapter");
 			const { adapter } = getAdapter();

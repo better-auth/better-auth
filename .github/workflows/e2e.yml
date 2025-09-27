@@ -2,6 +2,7 @@ name: E2E
 on:
   push:
     branches: [ main, canary ]
+  merge_group:
   pull_request:
 jobs:
   smoke:
@@ -89,7 +90,8 @@ jobs:
         run: pnpm install
 
       - name: Install Playwright Browsers
-        run: pnpx playwright install --with-deps
+        run: pnpm exec playwright install --with-deps
+        working-directory:  e2e/integration
 
       - name: Build
         env:

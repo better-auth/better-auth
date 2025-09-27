@@ -1,4 +1,9 @@
-import { APIError, type Middleware, createRouter } from "better-call";
+import {
+	APIError,
+	type Middleware,
+	createRouter,
+	type Endpoint,
+} from "better-call";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions } from "../types";
 import type { UnionToIntersection } from "../types/helper";
@@ -47,7 +52,7 @@ export function checkEndpointConflicts(
 ) {
 	const endpointRegistry = new Map<
 		string,
-		{ pluginId: string; endpointKey: string }[]
+		{ pluginId: string; endpointKey: string; methods: string[] }[]
 	>();
 
 	options.plugins?.forEach((plugin) => {
@@ -55,26 +60,80 @@ export function checkEndpointConflicts(
 			for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
 				if (endpoint && "path" in endpoint) {
 					const path = endpoint.path;
+					let methods: string[] = [];
+					if (endpoint.options && "method" in endpoint.options) {
+						if (Array.isArray(endpoint.options.method)) {
+							methods = endpoint.options.method;
+						} else if (typeof endpoint.options.method === "string") {
+							methods = [endpoint.options.method];
+						}
+					}
+					if (methods.length === 0) {
+						methods = ["*"];
+					}
+
 					if (!endpointRegistry.has(path)) {
 						endpointRegistry.set(path, []);
 					}
 					endpointRegistry.get(path)!.push({
 						pluginId: plugin.id,
 						endpointKey: key,
+						methods,
 					});
 				}
 			}
 		}
 	});
 
-	const conflicts: { path: string; plugins: string[] }[] = [];
+	const conflicts: {
+		path: string;
+		plugins: string[];
+		conflictingMethods: string[];
+	}[] = [];
 	for (const [path, entries] of endpointRegistry.entries()) {
 		if (entries.length > 1) {
-			const uniquePlugins = [...new Set(entries.map((e) => e.pluginId))];
-			conflicts.push({
-				path,
-				plugins: uniquePlugins,
-			});
+			const methodMap = new Map<string, string[]>();
+			let hasConflict = false;
+
+			for (const entry of entries) {
+				for (const method of entry.methods) {
+					if (!methodMap.has(method)) {
+						methodMap.set(method, []);
+					}
+					methodMap.get(method)!.push(entry.pluginId);
+
+					if (methodMap.get(method)!.length > 1) {
+						hasConflict = true;
+					}
+
+					if (method === "*" && entries.length > 1) {
+						hasConflict = true;
+					} else if (method !== "*" && methodMap.has("*")) {
+						hasConflict = true;
+					}
+				}
+			}
+
+			if (hasConflict) {
+				const uniquePlugins = [...new Set(entries.map((e) => e.pluginId))];
+				const conflictingMethods: string[] = [];
+
+				for (const [method, plugins] of methodMap.entries()) {
+					if (
+						plugins.length > 1 ||
+						(method === "*" && entries.length > 1) ||
+						(method !== "*" && methodMap.has("*"))
+					) {
+						conflictingMethods.push(method);
+					}
+				}
+
+				conflicts.push({
+					path,
+					plugins: uniquePlugins,
+					conflictingMethods,
+				});
+			}
 		}
 	}
 
@@ -82,34 +141,33 @@ export function checkEndpointConflicts(
 		const conflictMessages = conflicts
 			.map(
 				(conflict) =>
-					`  - "${conflict.path}" used by plugins: ${conflict.plugins.join(", ")}`,
+					`  - "${conflict.path}" [${conflict.conflictingMethods.join(", ")}] used by plugins: ${conflict.plugins.join(", ")}`,
 			)
 			.join("\n");
 		logger.error(
-			`Endpoint path conflicts detected! Multiple plugins are trying to use the same endpoint paths:
+			`Endpoint path conflicts detected! Multiple plugins are trying to use the same endpoint paths with conflicting HTTP methods:
 ${conflictMessages}
 
 To resolve this, you can:
 	1. Use only one of the conflicting plugins
 	2. Configure the plugins to use different paths (if supported)
+	3. Ensure plugins use different HTTP methods for the same path
 `,
 		);
 	}
 }
 
-export function getEndpoints<
-	C extends AuthContext,
-	Option extends BetterAuthOptions,
->(ctx: Promise<C> | C, options: Option) {
-	const pluginEndpoints = options.plugins?.reduce(
-		(acc, plugin) => {
+export function getEndpoints<Option extends BetterAuthOptions>(
+	ctx: Promise<AuthContext> | AuthContext,
+	options: Option,
+) {
+	const pluginEndpoints =
+		options.plugins?.reduce<Record<string, Endpoint>>((acc, plugin) => {
 			return {
 				...acc,
 				...plugin.endpoints,
 			};
-		},
-		{} as Record<string, any>,
-	);
+		}, {}) ?? {};
 
 	type PluginEndpoint = UnionToIntersection<
 		Option["plugins"] extends Array<infer T>
@@ -183,15 +241,15 @@ export function getEndpoints<
 		...pluginEndpoints,
 		ok,
 		error,
-	};
+	} as const;
 	const api = toAuthEndpoints(endpoints, ctx);
 	return {
 		api: api as typeof endpoints & PluginEndpoint,
 		middlewares,
 	};
 }
-export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
-	ctx: C,
+export const router = <Option extends BetterAuthOptions>(
+	ctx: AuthContext,
 	options: Option,
 ) => {
 	const { api, middlewares } = getEndpoints(ctx, options);

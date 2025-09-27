@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -537,8 +537,8 @@ export const deleteUser = createAuthEndpoint(
 		if (beforeDelete) {
 			await beforeDelete(session.user, ctx.request);
 		}
-		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		await ctx.context.internalAdapter.deleteUser(session.user.id, ctx);
+		await ctx.context.internalAdapter.deleteSessions(session.user.id, ctx);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		deleteSessionCookie(ctx);
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
@@ -629,10 +629,10 @@ export const deleteUserCallback = createAuthEndpoint(
 		if (beforeDelete) {
 			await beforeDelete(session.user, ctx.request);
 		}
-		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		await ctx.context.internalAdapter.deleteUser(session.user.id, ctx);
+		await ctx.context.internalAdapter.deleteSessions(session.user.id, ctx);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
-		await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+		await ctx.context.internalAdapter.deleteVerificationValue(token.id, ctx);
 
 		deleteSessionCookie(ctx);
 
@@ -744,7 +744,7 @@ export const changeEmail = createAuthEndpoint(
 				await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (existing) {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
+					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				});
 			}
 			await ctx.context.internalAdapter.updateUserByEmail(

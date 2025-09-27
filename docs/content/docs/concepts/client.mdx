@@ -154,7 +154,7 @@ In addition to the standard methods, the client provides hooks to easily access 
                         {$session?.data?.user.email}
                     </p>
                     <button
-                        on:click={async () => {
+                        onclick={async () => {
                         await authClient.signOut();
                         }}
                     >
@@ -163,7 +163,7 @@ In addition to the standard methods, the client provides hooks to easily access 
                     </div>
                 {:else}
                     <button
-                    on:click={async () => {
+                    onclick={async () => {
                         await authClient.signIn.social({
                         provider: "github",
                         });

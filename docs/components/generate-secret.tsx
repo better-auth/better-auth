@@ -12,7 +12,7 @@ export const GenerateSecret = () => {
 				size="sm"
 				disabled={generated}
 				onClick={() => {
-					const elements = document.getElementsByTagName("code"); // or any other selector
+					const elements = document.querySelectorAll("pre code span.line span");
 					for (let i = 0; i < elements.length; i++) {
 						if (elements[i].textContent === "BETTER_AUTH_SECRET=") {
 							elements[i].textContent =

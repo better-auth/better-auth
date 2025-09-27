@@ -1,5 +1,5 @@
-import type { FieldAttribute } from "../../db";
-import type { BetterAuthDbSchema } from "../../db/get-tables";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import type {
 	AdapterSchemaCreation,
 	BetterAuthOptions,
@@ -33,12 +33,12 @@ export type AdapterDebugLogs =
 			isRunningAdapterTests: boolean;
 	  };
 
-export type CreateAdapterOptions = {
-	config: AdapterConfig;
-	adapter: CreateCustomAdapter;
+export type AdapterFactoryOptions = {
+	config: AdapterFactoryConfig;
+	adapter: AdapterFactoryCustomizeAdapterCreator;
 };
 
-export interface AdapterConfig {
+export interface AdapterFactoryConfig {
 	/**
 	 * Use plural table names.
 	 *
@@ -100,6 +100,7 @@ export interface AdapterConfig {
 	 *
 	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
 	 *
+	 * @default false
 	 */
 	transaction?:
 		| false
@@ -163,7 +164,7 @@ export interface AdapterConfig {
 		/**
 		 * The fields of the model.
 		 */
-		fieldAttributes: FieldAttribute;
+		fieldAttributes: DBFieldAttribute;
 		/**
 		 * The field to transform.
 		 */
@@ -179,7 +180,7 @@ export interface AdapterConfig {
 		/**
 		 * The schema of the user's Better-Auth instance.
 		 */
-		schema: BetterAuthDbSchema;
+		schema: BetterAuthDBSchema;
 		/**
 		 * The options of the user's Better-Auth instance.
 		 */
@@ -195,7 +196,7 @@ export interface AdapterConfig {
 		/**
 		 * The fields of the model.
 		 */
-		fieldAttributes: FieldAttribute;
+		fieldAttributes: DBFieldAttribute;
 		/**
 		 * The field to transform.
 		 */
@@ -211,7 +212,7 @@ export interface AdapterConfig {
 		/**
 		 * The schema of the user's Better-Auth instance.
 		 */
-		schema: BetterAuthDbSchema;
+		schema: BetterAuthDBSchema;
 		/**
 		 * The options of the user's Better-Auth instance.
 		 */
@@ -240,18 +241,12 @@ export interface AdapterConfig {
 	customIdGenerator?: (props: { model: string }) => string;
 }
 
-export type CreateCustomAdapter = ({
-	options,
-	debugLog,
-	schema,
-	getDefaultModelName,
-	getDefaultFieldName,
-}: {
+export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	options: BetterAuthOptions;
 	/**
 	 * The schema of the user's Better-Auth instance.
 	 */
-	schema: BetterAuthDbSchema;
+	schema: BetterAuthDBSchema;
 	/**
 	 * The debug log function.
 	 *
@@ -308,7 +303,7 @@ export type CreateCustomAdapter = ({
 	}: {
 		model: string;
 		field: string;
-	}) => FieldAttribute;
+	}) => DBFieldAttribute;
 }) => CustomAdapter;
 
 export interface CustomAdapter {
@@ -382,7 +377,7 @@ export interface CustomAdapter {
 		/**
 		 * The tables from the user's Better-Auth instance schema.
 		 */
-		tables: BetterAuthDbSchema;
+		tables: BetterAuthDBSchema;
 	}) => Promise<AdapterSchemaCreation>;
 	/**
 	 * Your adapter's options.
@@ -396,3 +391,18 @@ export type AdapterTestDebugLogs = {
 	resetDebugLogs: () => void;
 	printDebugLogs: () => void;
 };
+
+/**
+ * @deprecated Use `AdapterFactoryOptions` instead. This export will be removed in a future version.
+ */
+export type CreateAdapterOptions = AdapterFactoryOptions;
+
+/**
+ * @deprecated Use `AdapterFactoryConfig` instead. This export will be removed in a future version.
+ */
+export type AdapterConfig = AdapterFactoryConfig;
+
+/**
+ * @deprecated Use `AdapterFactoryCustomizeAdapterCreator` instead. This export will be removed in a future version.
+ */
+export type CreateCustomAdapter = AdapterFactoryCustomizeAdapterCreator;
