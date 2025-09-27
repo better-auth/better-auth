@@ -7,10 +7,6 @@ on:
     branches: [ main, canary ]
   workflow_dispatch:
 
-permissions:
-  contents: write
-  deployments: write
-
 jobs:
   benchmark:
     name: Run TypeScript compilation benchmarks
@@ -57,7 +53,7 @@ jobs:
           name: TypeScript Compilation Benchmark
           tool: 'customSmallerIsBetter'
           output-file-path: packages/better-auth/benchmark-results/output.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.ALEX_GITHUB_TOKEN }}
           auto-push: true
           alert-threshold: '120%'
           comment-on-alert: true
