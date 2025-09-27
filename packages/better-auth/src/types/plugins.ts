@@ -1,42 +1,33 @@
-import type { Migration } from "kysely";
-import { type AuthMiddleware } from "../api/call";
-import type { FieldAttribute } from "../db/field";
-import type { HookEndpointContext } from ".";
-import type {
-	Awaitable,
-	DeepPartial,
-	LiteralString,
-	UnionToIntersection,
-} from "../types/helper";
-
-import type { AuthContext, BetterAuthOptions } from ".";
 import type { Endpoint, Middleware } from "better-call";
+import type { Migration } from "kysely";
+import type { AuthMiddleware } from "../api/call";
+import type { FieldAttributeFor } from "../db/field";
+import type { HookEndpointContext } from ".";
+import type { DeepPartial, LiteralString, UnionToIntersection } from "./helper";
+import type { AuthContext, BetterAuthOptions } from ".";
+
+export type AuthPluginTableSchema<TSchema extends AuthPluginSchema = AuthPluginSchema, TTable extends keyof TSchema = keyof TSchema> = {
+    fields: { [field in string]: FieldAttributeFor<any, TSchema> };
+    disableMigration?: boolean;
+    modelName?: string;
+}
 
 export type AuthPluginSchema = {
-	[table in string]: {
-		fields: {
-			[field in string]: FieldAttribute;
-		};
-		disableMigration?: boolean;
-		modelName?: string;
-	};
+	[table in string]: AuthPluginTableSchema<AuthPluginSchema, table>;
 };
 
-export type BetterAuthPlugin = {
+export type BetterAuthPlugin<T extends AuthPluginSchema=any> = {
 	id: LiteralString;
 	/**
 	 * The init function is called when the plugin is initialized.
 	 * You can return a new context or modify the existing context.
 	 */
-	init?: (ctx: AuthContext) =>
-		| Awaitable<{
-				context?: DeepPartial<Omit<AuthContext, "options">>;
-				options?: Partial<BetterAuthOptions>;
-		  }>
-		| void
-		| Promise<void>;
+	init?: (ctx: AuthContext) => {
+		context?: DeepPartial<Omit<AuthContext, "options">>;
+		options?: Partial<BetterAuthOptions<T>>;
+	} | void;
 	endpoints?: {
-		[key: string]: Endpoint;
+		[key: string]: Endpoint<T>;
 	};
 	middlewares?: {
 		path: string;
@@ -97,7 +88,7 @@ export type BetterAuthPlugin = {
 	 * } as AuthPluginSchema
 	 * ```
 	 */
-	schema?: AuthPluginSchema;
+	schema?: T;
 	/**
 	 * The migrations of the plugin. If you define schema that will automatically create
 	 * migrations for you.
@@ -135,17 +126,17 @@ export type InferOptionSchema<S extends AuthPluginSchema> = S extends Record<
 	? {
 			[K in keyof S]?: {
 				modelName?: string;
-				fields?: {
+				fields: {
 					[P in keyof Fields]?: string;
 				};
 			};
 		}
 	: never;
 
-export type InferPluginErrorCodes<O extends BetterAuthOptions> =
+export type InferPluginErrorCodes<O extends BetterAuthOptions<any>> =
 	O["plugins"] extends Array<infer P>
 		? UnionToIntersection<
-				P extends BetterAuthPlugin
+				P extends BetterAuthPlugin<any>
 					? P["$ERROR_CODES"] extends Record<string, any>
 						? P["$ERROR_CODES"]
 						: {}
