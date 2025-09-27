@@ -2,6 +2,7 @@ import type { FieldAttribute } from "../../db";
 import type { BetterAuthDbSchema } from "../../db/get-tables";
 import type {
 	AdapterSchemaCreation,
+	AuthPluginSchema,
 	BetterAuthOptions,
 	TransactionAdapter,
 	Where,
@@ -33,12 +34,12 @@ export type AdapterDebugLogs =
 			isRunningAdapterTests: boolean;
 	  };
 
-export type AdapterFactoryOptions = {
-	config: AdapterFactoryConfig;
+export type AdapterFactoryOptions<S extends AuthPluginSchema> = {
+	config: AdapterFactoryConfig<S>;
 	adapter: AdapterFactoryCustomizeAdapterCreator;
 };
 
-export interface AdapterFactoryConfig {
+export interface AdapterFactoryConfig<S extends AuthPluginSchema> {
 	/**
 	 * Use plural table names.
 	 *
@@ -184,7 +185,7 @@ export interface AdapterFactoryConfig {
 		/**
 		 * The options of the user's Better-Auth instance.
 		 */
-		options: BetterAuthOptions;
+		options: BetterAuthOptions<S>;
 	}) => any;
 	/**
 	 * Custom transform output function.
@@ -241,8 +242,8 @@ export interface AdapterFactoryConfig {
 	customIdGenerator?: (props: { model: string }) => string;
 }
 
-export type AdapterFactoryCustomizeAdapterCreator = (config: {
-	options: BetterAuthOptions;
+export type AdapterFactoryCustomizeAdapterCreator = <S extends AuthPluginSchema>(config: {
+	options: BetterAuthOptions<S>;
 	/**
 	 * The schema of the user's Better-Auth instance.
 	 */

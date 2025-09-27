@@ -3,7 +3,6 @@ import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
 	Models,
-	TransactionAdapter,
 	Where,
 } from "../types";
 
