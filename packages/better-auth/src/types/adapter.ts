@@ -124,6 +124,8 @@ export type AdapterSchemaCreation = {
 	overwrite?: boolean;
 };
 
+export type TransactionAdapter = Omit<Adapter, "transaction">;
+
 export interface AdapterInstance<S extends AuthPluginSchema> {
 	(options: BetterAuthOptions<S>): Adapter<S>;
 }

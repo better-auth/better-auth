@@ -1,3 +1,6 @@
+import type { AuthPluginTableSchema } from ".";
+import type { FieldPrimitive } from "../db";
+
 export type Primitive =
 	| string
 	| number
@@ -6,6 +9,25 @@ export type Primitive =
 	| boolean
 	| null
 	| undefined;
+
+
+export type MergeSchema<S1 extends Record<any, any>, S2 extends Record<any, any> = {}> = {
+  [K in keyof S1 | keyof S2]: K extends keyof S2 & keyof S1 ? S1[K] extends Record<any, any> ? S2[K] extends Record<any, any> ? MergeSchema<S1[K], S2[K]> : never : S2[K] : K extends keyof S1 ? S1[K] : K extends keyof S2 ? S2[K] : never;
+}
+
+export type SchemaTypes<S extends AuthPluginTableSchema> = {
+  [K in keyof S["fields"]] : FieldPrimitive<S["fields"][K]["type"]>
+}
+
+export type RequiredOnly<S extends AuthPluginTableSchema> = {
+	[K in keyof S["fields"]]: Ensure<S["fields"][K]["required"], true, S["fields"][K]>;
+}
+
+export type Ensure<T, U, R=T> = T extends U ? R : never;
+
+export type EnsureAuthPluginSchema<T> = Ensure<T, AuthPluginTableSchema>;
+
+
 export type LiteralString = "" | (string & Record<never, never>);
 export type LiteralNumber = 0 | (number & Record<never, never>);
 
