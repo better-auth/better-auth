@@ -1,4 +1,9 @@
-import { APIError, type Middleware, createRouter } from "better-call";
+import {
+	APIError,
+	type Middleware,
+	createRouter,
+	type Endpoint,
+} from "better-call";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions } from "../types";
 import type { UnionToIntersection } from "../types/helper";
@@ -156,15 +161,13 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 	ctx: Promise<AuthContext> | AuthContext,
 	options: Option,
 ) {
-	const pluginEndpoints = options.plugins?.reduce(
-		(acc, plugin) => {
+	const pluginEndpoints =
+		options.plugins?.reduce<Record<string, Endpoint>>((acc, plugin) => {
 			return {
 				...acc,
 				...plugin.endpoints,
 			};
-		},
-		{} as Record<string, any>,
-	);
+		}, {}) ?? {};
 
 	type PluginEndpoint = UnionToIntersection<
 		Option["plugins"] extends Array<infer T>
@@ -238,7 +241,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		...pluginEndpoints,
 		ok,
 		error,
-	};
+	} as const;
 	const api = toAuthEndpoints(endpoints, ctx);
 	return {
 		api: api as typeof endpoints & PluginEndpoint,

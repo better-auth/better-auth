@@ -63,4 +63,4 @@ export type InferSessionAPI<API> = API extends {
 		>
 	: never;
 
-export type InferAPI<API> = InferSessionAPI<API> & FilteredAPI<API>;
+export type InferAPI<API> = InferSessionAPI<API> & API;
