@@ -132,6 +132,16 @@
         "default": "./dist/client/solid/index.cjs"
       }
     },
+    "./lynx": {
+      "import": {
+        "types": "./dist/client/lynx/index.d.ts",
+        "default": "./dist/client/lynx/index.mjs"
+      },
+      "require": {
+        "types": "./dist/client/lynx/index.d.cts",
+        "default": "./dist/client/lynx/index.cjs"
+      }
+    },
     "./test": {
       "import": {
         "types": "./dist/test-utils/index.d.ts",
@@ -583,6 +593,9 @@
       ],
       "solid": [
         "./dist/client/solid/index.d.ts"
+      ],
+      "lynx": [
+        "./dist/client/lynx/index.d.ts"
       ],
       "api": [
         "./dist/api/index.d.ts"
