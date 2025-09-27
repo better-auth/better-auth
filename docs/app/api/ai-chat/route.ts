@@ -23,7 +23,6 @@ export async function POST(request: NextRequest) {
 		);
 		if (!response.ok) {
 			const errorText = await response.text();
-			console.log({errorText})	
 			if (response.status === 400) {
 				return NextResponse.json(
 					{
