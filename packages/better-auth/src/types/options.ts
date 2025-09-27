@@ -1,6 +1,7 @@
 import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type {
 	Account,
+	AuthPluginSchema,
 	GenericEndpointContext,
 	Session,
 	User,
@@ -10,7 +11,7 @@ import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
-import type { FieldAttribute } from "../db";
+import type { FieldAttributeFor } from "../db";
 import type { Models, RateLimit } from "./models";
 import type { AuthContext } from ".";
 import type { CookieOptions } from "better-call";
@@ -22,7 +23,7 @@ import type { AdapterDebugLogs } from "../adapters";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
 
-export type BetterAuthOptions = {
+export type BetterAuthOptions<S extends AuthPluginSchema> = {
 	/**
 	 * The name of the application
 	 *
@@ -82,7 +83,7 @@ export type BetterAuthOptions = {
 		| MysqlPool
 		| Database
 		| Dialect
-		| AdapterInstance
+		| AdapterInstance<S>
 		| BunDatabase
 		| DatabaseSync
 		| {
@@ -305,7 +306,7 @@ export type BetterAuthOptions = {
 	/**
 	 * List of Better Auth plugins
 	 */
-	plugins?: [] | BetterAuthPlugin[];
+	plugins?: [] | BetterAuthPlugin<S>[];
 	/**
 	 * User configuration
 	 */
@@ -329,7 +330,7 @@ export type BetterAuthOptions = {
 		 * Additional fields for the session
 		 */
 		additionalFields?: {
-			[key: string]: FieldAttribute;
+			[key: string]: FieldAttributeFor<any, S>;
 		};
 		/**
 		 * Changing email configuration
@@ -439,7 +440,7 @@ export type BetterAuthOptions = {
 		 * Additional fields for the session
 		 */
 		additionalFields?: {
-			[key: string]: FieldAttribute;
+			[key: string]: FieldAttributeFor<any, S>;
 		};
 		/**
 		 * By default if secondary storage is provided
