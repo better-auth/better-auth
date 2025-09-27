@@ -49,7 +49,7 @@ jobs:
       - name: Extract benchmark metrics
         working-directory: packages/better-auth
         run: |
-          node ../../scripts/extract-tsc-metrics.js benchmark-results/trace > benchmark-results/output.json
+          node ../../scripts/extract-tsc-metrics.mts benchmark-results/trace > benchmark-results/output.json
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
