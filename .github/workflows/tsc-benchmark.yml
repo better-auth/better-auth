@@ -44,7 +44,7 @@ jobs:
         working-directory: packages/better-auth
         run: |
           mkdir -p benchmark-results
-          pnpm exec tsc -p tsconfig.json --generateTrace benchmark-results/trace
+          pnpm exec tsc --build --generateTrace benchmark-results/trace
 
       - name: Extract benchmark metrics
         working-directory: packages/better-auth
