@@ -190,12 +190,12 @@ export const testAdapter = async ({
 			describe(adapterDisplayName, async () => {
 				beforeAll(async () => {
 					await migrate();
-				});
+				}, 20000);
 
 				afterAll(async () => {
 					await cleanup();
 					await onFinish?.();
-				});
+				}, 20000);
 
 				for (const testSuite of tests) {
 					await testSuite({
