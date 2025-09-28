@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.3.18",
+  "version": "1.3.20",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "main": "./dist/index.cjs",
