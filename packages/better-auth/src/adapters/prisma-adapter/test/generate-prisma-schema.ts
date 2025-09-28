@@ -31,7 +31,6 @@ export async function generatePrismaSchema(
 		adapter: prismaDB({}),
 		options: { ...betterAuthOptions, database: prismaDB },
 	});
-	code = code?.replace(`@map("email")`, ""); // TODO remove this line
 	if (dialect === "postgresql") {
 		code = code?.replace(
 			`env("DATABASE_URL")`,

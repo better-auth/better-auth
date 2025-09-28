@@ -160,9 +160,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					if (provider === "mongodb") {
 						fieldBuilder.attribute(`map("_id")`);
 					}
-				} else if (fieldName !== field) {
-					fieldBuilder.attribute(`map("${field}")`);
-				}
+				} 
 
 				if (attr.unique) {
 					builder.model(modelName).blockAttribute(`unique([${fieldName}])`);
