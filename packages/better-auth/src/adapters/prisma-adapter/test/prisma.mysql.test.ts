@@ -16,11 +16,11 @@ import {
 	getPrismaClient,
 	incrementMigrationCount,
 } from "./get-prisma-client";
-import { Pool } from "pg";
+import { createPool } from "mysql2/promise";
 
-const { done } = await waitForTestPermission("prisma-pg");
+const { done } = await waitForTestPermission("prisma-mysql");
 
-const dialect = "postgresql";
+const dialect = "mysql";
 const { execute } = await testAdapter({
 	adapter: async () => {
 		const db = await getPrismaClient(dialect);
@@ -30,12 +30,14 @@ const { execute } = await testAdapter({
 		});
 	},
 	runMigrations: async (options: BetterAuthOptions) => {
-		const db = await getPrismaClient(dialect);
-		const pgDB = new Pool({
-			connectionString: "postgres://user:password@localhost:5432/better_auth",
+		const mysqlDB = createPool({
+			uri: "mysql://user:password@localhost:3306/better_auth",
+			timezone: "Z",
 		});
-		await pgDB.query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
-		await pgDB.end();
+		await mysqlDB.query("DROP DATABASE IF EXISTS better_auth");
+		await mysqlDB.query("CREATE DATABASE better_auth");
+		await mysqlDB.end();
+		const db = await getPrismaClient(dialect);
 		const migrationCount = incrementMigrationCount();
 		await generateAuthConfigFile(options);
 		await generatePrismaSchema(options, db, migrationCount, dialect);
@@ -51,7 +53,7 @@ const { execute } = await testAdapter({
 	onFinish: async () => {
 		await done();
 	},
-	prefixTests: "pg",
+	prefixTests: dialect,
 });
 
 execute();

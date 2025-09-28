@@ -27,13 +27,15 @@ export async function generatePrismaSchema(
 
 	const prismaDB = prismaAdapter(db, { provider: dialect });
 	let { fileName, code } = await generateSchema({
-		file: join(import.meta.dirname, "schema.prisma"),
+		file: join(import.meta.dirname, `schema-${dialect}.prisma`),
 		adapter: prismaDB({}),
 		options: { ...betterAuthOptions, database: prismaDB },
 	});
 	code = code?.replace(`@map("email")`, ""); // TODO remove this line
 	if(dialect === "postgresql"){
 		code = code?.replace(`env("DATABASE_URL")`, "\"postgres://user:password@localhost:5432/better_auth\"")
+	}else if(dialect === "mysql"){
+		code = code?.replace(`env("DATABASE_URL")`, "\"mysql://user:password@localhost:3306/better_auth\"")
 	}
 	code = code
 		?.split("\n")

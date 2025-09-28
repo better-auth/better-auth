@@ -6,14 +6,16 @@ const PORT = 7789;
 const conflictingTests = [
 	["drizzle-mysql", "kysely-mysql"],
 	["drizzle-pg", "kysely-pg"],
+	// ["prisma-sqlite", "prisma-pg", "prisma-mysql"],
 ];
 
 /**
  * This file is used to setup adapter unit tests.
  * Since test database migrations are ran in `beforeAll` hooks, it's possible
  * that vitest will run multiple `beforeAll` hooks along-side each other,
- * thus causing migrations to collide or cause the following tests to clash due to
- * race conditions.
+ * thus causing migrations to collide. For example, Prisma clients (despite
+ * separate instances and separate DBs) will cause issues while running migrations
+ * due to unknown reasons.
  *
  * Since there is no way to share state across tests,
  * we use a server to coordinate conflicting tests.
@@ -93,11 +95,9 @@ export default async function setup(project: TestProject) {
 						return;
 					}
 
-					// Check if this is the first test in the conflicting group to run
 					const isFirstInGroup = conflictingGroup[0] === testName;
 
 					if (isFirstInGroup) {
-						// This is the first test in the group, allow it to run
 						runningTests.add(testName);
 						setCorsHeaders();
 						res.writeHead(200, { "Content-Type": "application/json" });
@@ -105,7 +105,6 @@ export default async function setup(project: TestProject) {
 						return;
 					}
 
-					// Check if the previous test in the group has completed
 					const testIndex = conflictingGroup.indexOf(testName);
 					const previousTest = conflictingGroup[testIndex - 1];
 					const previousTestCompleted = completedTests.has(previousTest || "");
@@ -122,20 +121,29 @@ export default async function setup(project: TestProject) {
 					}
 
 					// Check if the previous test is running or if we should wait
-					// If the previous test is not running and not completed, 
+					// If the previous test is not running and not completed,
 					// and no other test in the group is running, allow this one to run
 					const previousTestRunning = runningTests.has(previousTest || "");
-					const anyTestInGroupRunning = conflictingGroup.some(test => 
-						test !== testName && runningTests.has(test)
+					const anyTestInGroupRunning = conflictingGroup.some(
+						(test) => test !== testName && runningTests.has(test),
 					);
 
-					if (!previousTestRunning && !previousTestCompleted && !anyTestInGroupRunning) {
+					if (
+						!previousTestRunning &&
+						!previousTestCompleted &&
+						!anyTestInGroupRunning
+					) {
 						// Previous test is not running and not completed, and no other test is running
 						// This means the previous test is not part of this test run, so allow this one
 						runningTests.add(testName);
 						setCorsHeaders();
 						res.writeHead(200, { "Content-Type": "application/json" });
-						res.end(JSON.stringify({ canRun: true, reason: "previous-test-not-running" }));
+						res.end(
+							JSON.stringify({
+								canRun: true,
+								reason: "previous-test-not-running",
+							}),
+						);
 						return;
 					}
 
@@ -202,9 +210,7 @@ export default async function setup(project: TestProject) {
 		}
 	});
 
-	server.listen(PORT, () => {
-		console.log(`Adapter test coordinator server running on port ${PORT}`);
-	});
+	server.listen(PORT, () => {});
 }
 
 /**
@@ -277,7 +283,8 @@ type allAdapterTests =
 	| "drizzle-pg"
 	| "drizzle-sqlite"
 	| "prisma-sqlite"
-	| "prisma-pg";
+	| "prisma-pg"
+	| "prisma-mysql";
 
 /**
  * Waits for permission to run a test and returns a cleanup function.

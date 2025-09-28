@@ -41,7 +41,7 @@ const { execute } = await testAdapter({
 		const migrationCount = incrementMigrationCount();
 		await generateAuthConfigFile(options);
 		await generatePrismaSchema(options, db, migrationCount, dialect);
-		await pushPrismaSchema();
+		await pushPrismaSchema(dialect);
 		db.$disconnect();
 		destroyPrismaClient({ migrationCount: migrationCount - 1, dialect });
 	},
