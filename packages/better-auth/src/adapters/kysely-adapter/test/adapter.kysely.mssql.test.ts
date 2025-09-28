@@ -304,20 +304,12 @@ const { execute } = await testAdapter({
 		});
 	},
 	async runMigrations(betterAuthOptions) {
-		console.time(`stage 1`);
 		await resetDB();
-		console.timeEnd(`stage 1`);
-		console.time(`stage 2`);
 		const opts = Object.assign(betterAuthOptions, {
 			database: { db: kyselyDB, type: "mssql" },
 		} satisfies BetterAuthOptions);
-		console.timeEnd(`stage 2`);
-		console.time(`stage 3`);
 		const { runMigrations } = await getMigrations(opts);
-		console.timeEnd(`stage 3`);
-		console.time(`stage 4`);
 		await runMigrations();
-		console.timeEnd(`stage 4`);
 	},
 	prefixTests: "mssql",
 	tests: [
