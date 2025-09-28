@@ -14,7 +14,6 @@ import type { BetterAuthOptions } from "../../../types";
 import { join } from "path";
 import fs from "fs/promises";
 import type { PrismaClient } from "@prisma/client";
-
 type PC = InstanceType<typeof PrismaClient>;
 
 const { done } = await waitForTestPermission("prisma-sqlite");
@@ -31,19 +30,17 @@ const getPrismaClient = async () => {
 };
 
 const { execute } = await testAdapter({
-	adapter: async (options) => {
+	adapter: async () => {
 		const db = await getPrismaClient();
-		return (o) => {
-			return prismaAdapter(db, {
-				provider: "sqlite",
-				debugLogs: { isRunningAdapterTests: true },
-			})(o);
-		};
+		return prismaAdapter(db, {
+			provider: "sqlite",
+			debugLogs: { isRunningAdapterTests: true },
+		});
 	},
 	runMigrations: async (options: BetterAuthOptions) => {
+		migrationCount++;
 		const dbPath = join(__dirname, "dev.db");
 		await fs.unlink(dbPath);
-		migrationCount++;
 		const db = await getPrismaClient();
 		await generateAuthConfigFile(options);
 		await generatePrismaSchema(options, db, migrationCount);
@@ -59,7 +56,7 @@ const { execute } = await testAdapter({
 	onFinish: async () => {
 		await done();
 	},
-	prefixTests: "sqlite"
+	prefixTests: "sqlite",
 });
 
 execute();
