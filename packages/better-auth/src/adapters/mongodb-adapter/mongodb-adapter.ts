@@ -316,7 +316,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 			}) {
 				if (field === "_id" || fieldAttributes.references?.field === "id") {
 					if (action === "update") {
-						if(typeof data === "string") {
+						if (typeof data === "string") {
 							try {
 								return new ObjectId(data);
 							} catch (error) {
@@ -327,7 +327,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					}
 					if (Array.isArray(data)) {
 						return data.map((v) => {
-							if(typeof v === "string") {
+							if (typeof v === "string") {
 								try {
 									return new ObjectId(v);
 								} catch (error) {

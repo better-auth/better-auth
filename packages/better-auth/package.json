@@ -26,7 +26,6 @@
     "build": "unbuild --clean",
     "stub": "unbuild --stub",
     "test": "vitest",
-    "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/normal-tests/schema.prisma && prisma generate --schema ./src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
     "typecheck": "tsc --project tsconfig.json"
   },
   "main": "./dist/index.cjs",

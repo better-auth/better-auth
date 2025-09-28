@@ -20,7 +20,7 @@ export const testAdapter = async ({
 	tests,
 	prefixTests,
 	onFinish,
-	customIdGenerator
+	customIdGenerator,
 }: {
 	/**
 	 * A function that will return the adapter instance to test with.

@@ -443,9 +443,7 @@ export const normalTestSuite = createTestSuite(
 				const [user2] = await insertRandom("user");
 				const result = await adapter.update<Session>({
 					model: "session",
-					where: [
-						{ field: "userId", value: user.id },
-					],
+					where: [{ field: "userId", value: user.id }],
 					update: { id: user2.id },
 				});
 				expect(result).toStrictEqual({
