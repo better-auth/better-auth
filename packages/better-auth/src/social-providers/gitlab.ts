@@ -52,6 +52,7 @@ export interface GitlabProfile extends Record<string, any> {
 }
 
 export interface GitlabOptions extends ProviderOptions<GitlabProfile> {
+	clientId: string;
 	issuer?: string;
 }
 
@@ -136,7 +137,7 @@ export const gitlab = (options: GitlabOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.id.toString(),
+					id: profile.id,
 					name: profile.name ?? profile.username,
 					email: profile.email,
 					image: profile.avatar_url,

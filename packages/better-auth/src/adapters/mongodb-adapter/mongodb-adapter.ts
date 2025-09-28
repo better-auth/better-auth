@@ -1,8 +1,18 @@
-import { ObjectId, type Db } from "mongodb";
-import type { BetterAuthOptions, Where } from "../../types";
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
+import { ClientSession, ObjectId, type Db, type MongoClient } from "mongodb";
+import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import {
+	createAdapterFactory,
+	type AdapterDebugLogs,
+	type AdapterFactoryOptions,
+	type AdapterFactoryCustomizeAdapterCreator,
+} from "../adapter-factory";
 
 export interface MongoDBAdapterConfig {
+	/**
+	 * MongoDB client instance
+	 * If not provided, Database transactions won't be enabled.
+	 */
+	client?: MongoClient;
 	/**
 	 * Enable debug logs for the adapter
 	 *
@@ -15,9 +25,18 @@ export interface MongoDBAdapterConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+	/**
+	 * Whether to execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions,
+	 * set this to `false` and operations will be executed sequentially.
+	 * @default true
+	 */
+	transaction?: boolean;
 }
 
 export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
+	let lazyOptions: BetterAuthOptions | null;
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
 		const generator =
 			options.advanced?.database?.generateId || options.advanced?.generateId;
@@ -26,70 +45,10 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 		}
 		return undefined;
 	};
-	return createAdapter({
-		config: {
-			adapterId: "mongodb-adapter",
-			adapterName: "MongoDB Adapter",
-			usePlural: config?.usePlural ?? false,
-			debugLogs: config?.debugLogs ?? false,
-			mapKeysTransformInput: {
-				id: "_id",
-			},
-			mapKeysTransformOutput: {
-				_id: "id",
-			},
-			supportsNumericIds: false,
-			customTransformInput({
-				action,
-				data,
-				field,
-				fieldAttributes,
-				schema,
-				model,
-				options,
-			}) {
-				const customIdGen = getCustomIdGenerator(options);
 
-				if (field === "_id" || fieldAttributes.references?.field === "id") {
-					if (customIdGen) {
-						return data;
-					}
-					if (action === "update") {
-						return data;
-					}
-					if (Array.isArray(data)) {
-						return data.map((v) => new ObjectId());
-					}
-					if (typeof data === "string") {
-						try {
-							return new ObjectId(data);
-						} catch (error) {
-							return new ObjectId();
-						}
-					}
-					return new ObjectId();
-				}
-				return data;
-			},
-			customTransformOutput({ data, field, fieldAttributes }) {
-				if (field === "id" || fieldAttributes.references?.field === "id") {
-					if (data instanceof ObjectId) {
-						return data.toHexString();
-					}
-					if (Array.isArray(data)) {
-						return data.map((v) => {
-							if (v instanceof ObjectId) {
-								return v.toHexString();
-							}
-							return v;
-						});
-					}
-					return data;
-				}
-				return data;
-			},
-		},
-		adapter: ({ options, getFieldName, schema, getDefaultModelName }) => {
+	const createCustomAdapter =
+		(db: Db, session?: ClientSession): AdapterFactoryCustomizeAdapterCreator =>
+		({ options, getFieldName, schema, getDefaultModelName }) => {
 			const customIdGen = getCustomIdGenerator(options);
 
 			function serializeID({
@@ -108,7 +67,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				if (
 					field === "id" ||
 					field === "_id" ||
-					schema[model].fields[field]?.references?.field === "id"
+					schema[model]!.fields[field]?.references?.field === "id"
 				) {
 					if (typeof value !== "string") {
 						if (value instanceof ObjectId) {
@@ -177,6 +136,15 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 								},
 							};
 							break;
+						case "not_in":
+							condition = {
+								[field]: {
+									$nin: Array.isArray(value)
+										? value.map((v) => serializeID({ field, value: v, model }))
+										: [serializeID({ field, value, model })],
+								},
+							};
+							break;
 						case "gt":
 							condition = { [field]: { $gt: value } };
 							break;
@@ -208,7 +176,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return { condition, connector };
 				});
 				if (conditions.length === 1) {
-					return conditions[0].condition;
+					return conditions[0]!.condition;
 				}
 				const andConditions = conditions
 					.filter((c) => c.connector === "AND")
@@ -229,19 +197,19 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 
 			return {
 				async create({ model, data: values }) {
-					const res = await db.collection(model).insertOne(values);
+					const res = await db.collection(model).insertOne(values, { session });
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
 				async findOne({ model, where, select }) {
 					const clause = convertWhereClause({ where, model });
-					const res = await db.collection(model).findOne(clause);
+					const res = await db.collection(model).findOne(clause, { session });
 					if (!res) return null;
 					return res as any;
 				},
 				async findMany({ model, where, limit, offset, sortBy }) {
 					const clause = where ? convertWhereClause({ where, model }) : {};
-					const cursor = db.collection(model).find(clause);
+					const cursor = db.collection(model).find(clause, { session });
 					if (limit) cursor.limit(limit);
 					if (offset) cursor.skip(offset);
 					if (sortBy)
@@ -253,7 +221,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return res as any;
 				},
 				async count({ model }) {
-					const res = await db.collection(model).countDocuments();
+					const res = await db
+						.collection(model)
+						.countDocuments(undefined, { session });
 					return res;
 				},
 				async update({ model, where, update: values }) {
@@ -263,6 +233,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 						clause,
 						{ $set: values as any },
 						{
+							session,
 							returnDocument: "after",
 						},
 					);
@@ -272,21 +243,129 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				async updateMany({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
 
-					const res = await db.collection(model).updateMany(clause, {
-						$set: values as any,
-					});
+					const res = await db.collection(model).updateMany(
+						clause,
+						{
+							$set: values as any,
+						},
+						{ session },
+					);
 					return res.modifiedCount;
 				},
 				async delete({ model, where }) {
 					const clause = convertWhereClause({ where, model });
-					await db.collection(model).deleteOne(clause);
+					await db.collection(model).deleteOne(clause, { session });
 				},
 				async deleteMany({ model, where }) {
 					const clause = convertWhereClause({ where, model });
-					const res = await db.collection(model).deleteMany(clause);
+					const res = await db
+						.collection(model)
+						.deleteMany(clause, { session });
 					return res.deletedCount;
 				},
 			};
+		};
+
+	let lazyAdapter: ((options: BetterAuthOptions) => Adapter) | null = null;
+	let adapterOptions: AdapterFactoryOptions | null = null;
+	adapterOptions = {
+		config: {
+			adapterId: "mongodb-adapter",
+			adapterName: "MongoDB Adapter",
+			usePlural: config?.usePlural ?? false,
+			debugLogs: config?.debugLogs ?? false,
+			mapKeysTransformInput: {
+				id: "_id",
+			},
+			mapKeysTransformOutput: {
+				_id: "id",
+			},
+			supportsNumericIds: false,
+			transaction:
+				config?.client && (config?.transaction ?? false)
+					? async (cb) => {
+							if (!config.client) {
+								return cb(lazyAdapter!(lazyOptions!));
+							}
+
+							const session = config.client.startSession();
+
+							try {
+								session.startTransaction();
+
+								const adapter = createAdapterFactory({
+									config: adapterOptions!.config,
+									adapter: createCustomAdapter(db, session),
+								})(lazyOptions!);
+
+								const result = await cb(adapter);
+
+								await session.commitTransaction();
+								return result;
+							} catch (err) {
+								await session.abortTransaction();
+								throw err;
+							} finally {
+								await session.endSession();
+							}
+						}
+					: false,
+			customTransformInput({
+				action,
+				data,
+				field,
+				fieldAttributes,
+				schema,
+				model,
+				options,
+			}) {
+				const customIdGen = getCustomIdGenerator(options);
+
+				if (field === "_id" || fieldAttributes.references?.field === "id") {
+					if (customIdGen) {
+						return data;
+					}
+					if (action === "update") {
+						return data;
+					}
+					if (Array.isArray(data)) {
+						return data.map((v) => new ObjectId());
+					}
+					if (typeof data === "string") {
+						try {
+							return new ObjectId(data);
+						} catch (error) {
+							return new ObjectId();
+						}
+					}
+					return new ObjectId();
+				}
+				return data;
+			},
+			customTransformOutput({ data, field, fieldAttributes }) {
+				if (field === "id" || fieldAttributes.references?.field === "id") {
+					if (data instanceof ObjectId) {
+						return data.toHexString();
+					}
+					if (Array.isArray(data)) {
+						return data.map((v) => {
+							if (v instanceof ObjectId) {
+								return v.toHexString();
+							}
+							return v;
+						});
+					}
+					return data;
+				}
+				return data;
+			},
 		},
-	});
+		adapter: createCustomAdapter(db),
+	};
+	lazyAdapter = createAdapterFactory(adapterOptions);
+
+	return (options: BetterAuthOptions): Adapter => {
+		lazyOptions = options;
+		return lazyAdapter(options);
+	};
 };

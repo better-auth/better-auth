@@ -1,8 +1,8 @@
 import type { Migration } from "kysely";
 import { type AuthMiddleware } from "../api/call";
-import type { FieldAttribute } from "../db/field";
 import type { HookEndpointContext } from ".";
 import type {
+	Awaitable,
 	DeepPartial,
 	LiteralString,
 	UnionToIntersection,
@@ -10,11 +10,12 @@ import type {
 
 import type { AuthContext, BetterAuthOptions } from ".";
 import type { Endpoint, Middleware } from "better-call";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 
 export type AuthPluginSchema = {
 	[table in string]: {
 		fields: {
-			[field in string]: FieldAttribute;
+			[field in string]: DBFieldAttribute;
 		};
 		disableMigration?: boolean;
 		modelName?: string;
@@ -27,10 +28,13 @@ export type BetterAuthPlugin = {
 	 * The init function is called when the plugin is initialized.
 	 * You can return a new context or modify the existing context.
 	 */
-	init?: (ctx: AuthContext) => {
-		context?: DeepPartial<Omit<AuthContext, "options">>;
-		options?: Partial<BetterAuthOptions>;
-	} | void;
+	init?: (ctx: AuthContext) =>
+		| Awaitable<{
+				context?: DeepPartial<Omit<AuthContext, "options">>;
+				options?: Partial<BetterAuthOptions>;
+		  }>
+		| void
+		| Promise<void>;
 	endpoints?: {
 		[key: string]: Endpoint;
 	};

@@ -1,6 +1,6 @@
 import { Endpoint } from "./endpoint";
 // import { Tab, Tabs } from "fumadocs-ui/components/tabs";
-import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
+import { DynamicCodeBlock } from "./ui/dynamic-code-block";
 import {
 	Table,
 	TableBody,
@@ -9,8 +9,13 @@ import {
 	TableHeader,
 	TableRow,
 } from "./ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { ReactNode } from "react";
+import {
+	ApiMethodTabs,
+	ApiMethodTabsContent,
+	ApiMethodTabsList,
+	ApiMethodTabsTrigger,
+} from "./api-method-tabs";
+import { JSX, ReactNode } from "react";
 import { Link } from "lucide-react";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
@@ -139,6 +144,7 @@ export const APIMethod = ({
 				noResult ? "" : `const ${resultVariable} = `
 			}await auth.api.${functionName}(${serverBody});${code_suffix}`}
 			lang="ts"
+			allowCopy={!isClientOnly}
 		/>
 	);
 
@@ -153,12 +159,12 @@ export const APIMethod = ({
 					className="absolute invisible -top-[100px]"
 				/>
 			</div>
-			<Tabs
+			<ApiMethodTabs
 				defaultValue={isServerOnly ? "server" : "client"}
-				className="w-full gap-0"
+				className="gap-0 w-full"
 			>
-				<TabsList className="relative flex justify-start w-full p-0 bg-transparent hover:[&>div>a>button]:opacity-100">
-					<TabsTrigger
+				<ApiMethodTabsList className="relative flex justify-start w-full p-0 bg-transparent hover:[&>div>a>button]:opacity-100">
+					<ApiMethodTabsTrigger
 						value="client"
 						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/50 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/10 rounded-none"
 					>
@@ -179,8 +185,8 @@ export const APIMethod = ({
 							<path fill="none" d="M0 0h36v36H0z" />
 						</svg>
 						<span>Client</span>
-					</TabsTrigger>
-					<TabsTrigger
+					</ApiMethodTabsTrigger>
+					<ApiMethodTabsTrigger
 						value="server"
 						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/50 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/10 rounded-none"
 					>
@@ -196,20 +202,20 @@ export const APIMethod = ({
 							/>
 						</svg>
 						<span>Server</span>
-					</TabsTrigger>
+					</ApiMethodTabsTrigger>
 					<div className="absolute right-0">
 						<a href={`#api-method${pathId}`}>
 							<Button
 								variant="ghost"
-								className="transition-all duration-150 ease-in-out scale-90 opacity-100 md:opacity-0"
+								className="opacity-100 transition-all duration-150 ease-in-out scale-90 md:opacity-0"
 								size={"icon"}
 							>
 								<Link className="size-4" />
 							</Button>
 						</a>
 					</div>
-				</TabsList>
-				<TabsContent value="client">
+				</ApiMethodTabsList>
+				<ApiMethodTabsContent value="client">
 					{isServerOnly ? null : (
 						<Endpoint
 							method={method || "GET"}
@@ -228,7 +234,7 @@ export const APIMethod = ({
 							) : null}
 						</Note>
 					) : null}
-					<div className={cn("w-full relative")}>
+					<div className={cn("relative w-full")}>
 						<DynamicCodeBlock
 							code={`${code_prefix}${
 								noResult
@@ -238,16 +244,17 @@ export const APIMethod = ({
 										}, error } = `
 							}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
 							lang="ts"
+							allowCopy={!isServerOnly}
 						/>
 						{isServerOnly ? (
-							<div className="absolute inset-0 flex items-center justify-center w-full h-full border rounded-lg backdrop-brightness-50 backdrop-blur-xs border-border">
+							<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">
 								<span>This is a server-only endpoint</span>
 							</div>
 						) : null}
 					</div>
 					{!isServerOnly ? <TypeTable props={props} isServer={false} /> : null}
-				</TabsContent>
-				<TabsContent value="server">
+				</ApiMethodTabsContent>
+				<ApiMethodTabsContent value="server">
 					{isClientOnly ? null : (
 						<Endpoint
 							method={method || "GET"}
@@ -267,17 +274,17 @@ export const APIMethod = ({
 							) : null}
 						</Note>
 					) : null}
-					<div className={cn("w-full relative")}>
+					<div className={cn("relative w-full")}>
 						{serverCodeBlock}
 						{isClientOnly ? (
-							<div className="absolute inset-0 flex items-center justify-center w-full h-full border rounded-lg backdrop-brightness-50 backdrop-blur-xs border-border">
+							<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">
 								<span>This is a client-only endpoint</span>
 							</div>
 						) : null}
 					</div>
 					{!isClientOnly ? <TypeTable props={props} isServer /> : null}
-				</TabsContent>
-			</Tabs>
+				</ApiMethodTabsContent>
+			</ApiMethodTabs>
 		</>
 	);
 };
@@ -328,7 +335,7 @@ function TypeTable({
 	if (!props.length) return null;
 
 	return (
-		<Table className="mt-2 mb-0 overflow-hidden">
+		<Table className="overflow-hidden mt-2 mb-0">
 			<TableHeader>
 				<TableRow>
 					<TableHead className="text-primary w-[100px]">Prop</TableHead>
@@ -354,7 +361,7 @@ function TypeTable({
 								) : null}
 							</TableCell>
 							<TableCell className="max-w-[500px] overflow-hidden">
-								<div className="w-full break-words h-fit text-wrap ">
+								<div className="w-full break-words h-fit text-wrap">
 									{tsxifyBackticks(prop.description ?? "")}
 								</div>
 							</TableCell>
@@ -396,7 +403,8 @@ function parseCode(children: JSX.Element) {
 		.map((x: any) =>
 			x === "\n" ? { props: { children: { props: { children: "\n" } } } } : x,
 		)
-		.map((x: any) => x.props.children);
+		.map((x: any) => x.props.children)
+		.filter((x: any) => x != null);
 	const arrayOfCode: string[] = arrayOfJSXCode
 		.flatMap(
 			(
@@ -708,8 +716,8 @@ function createServerBody({
 
 function Note({ children }: { children: ReactNode }) {
 	return (
-		<div className="relative flex flex-col w-full gap-2 p-3 mb-2 break-words border rounded-md text-md text-wrap border-border bg-fd-secondary/50">
-			<span className="w-full -mb-1 text-xs select-none text-muted-foreground">
+		<div className="flex relative flex-col gap-2 p-3 mb-2 w-full break-words rounded-md border text-md text-wrap border-border bg-fd-secondary/50">
+			<span className="-mb-1 w-full text-xs select-none text-muted-foreground">
 				Notes
 			</span>
 			<p className="mt-0 mb-0 text-sm">{children as any}</p>

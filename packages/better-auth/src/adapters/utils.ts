@@ -1,11 +1,18 @@
-import type { FieldAttribute } from "../db";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 
 export function withApplyDefault(
 	value: any,
-	field: FieldAttribute,
+	field: DBFieldAttribute,
 	action: "create" | "update",
 ) {
 	if (action === "update") {
+		// Apply onUpdate if value is undefined
+		if (value === undefined && field.onUpdate !== undefined) {
+			if (typeof field.onUpdate === "function") {
+				return field.onUpdate();
+			}
+			return field.onUpdate;
+		}
 		return value;
 	}
 	if (value === undefined || value === null) {

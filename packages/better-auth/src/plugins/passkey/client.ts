@@ -26,7 +26,6 @@ export const getPasskeyActions = (
 	const signInPasskey = async (
 		opts?: {
 			autoFill?: boolean;
-			email?: string;
 			fetchOptions?: BetterFetchOption;
 		},
 		options?: BetterFetchOption,
@@ -35,9 +34,6 @@ export const getPasskeyActions = (
 			"/passkey/generate-authenticate-options",
 			{
 				method: "POST",
-				body: {
-					email: opts?.email,
-				},
 			},
 		);
 		if (!response.data) {
@@ -59,13 +55,13 @@ export const getPasskeyActions = (
 				...options,
 				method: "POST",
 			});
-			if (!verified.data) {
-				return verified;
-			}
+
+			return verified;
 		} catch (e) {
 			return {
 				data: null,
 				error: {
+					code: "AUTH_CANCELLED",
 					message: "auth cancelled",
 					status: 400,
 					statusText: "BAD_REQUEST",
@@ -141,6 +137,7 @@ export const getPasskeyActions = (
 					return {
 						data: null,
 						error: {
+							code: e.code,
 							message: "previously registered",
 							status: 400,
 							statusText: "BAD_REQUEST",
@@ -151,6 +148,7 @@ export const getPasskeyActions = (
 					return {
 						data: null,
 						error: {
+							code: e.code,
 							message: "registration cancelled",
 							status: 400,
 							statusText: "BAD_REQUEST",
@@ -160,6 +158,7 @@ export const getPasskeyActions = (
 				return {
 					data: null,
 					error: {
+						code: e.code,
 						message: e.message,
 						status: 400,
 						statusText: "BAD_REQUEST",
@@ -169,6 +168,7 @@ export const getPasskeyActions = (
 			return {
 				data: null,
 				error: {
+					code: "UNKNOWN_ERROR",
 					message: e instanceof Error ? e.message : "unknown error",
 					status: 500,
 					statusText: "INTERNAL_SERVER_ERROR",

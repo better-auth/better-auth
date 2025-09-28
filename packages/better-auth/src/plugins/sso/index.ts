@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
 import type { BetterAuthPlugin, User } from "../../types";
 import {
@@ -603,7 +603,7 @@ export const sso = (options?: SSOOptions) => {
 								"email, organizationSlug, domain or providerId is required",
 						});
 					}
-					domain = body.domain || email?.split("@")[1];
+					domain = body.domain || email?.split("@")[1]!;
 					let orgId = "";
 					if (organizationSlug) {
 						orgId = await ctx.context.adapter
