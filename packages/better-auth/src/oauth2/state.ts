@@ -101,7 +101,6 @@ export async function parseState(c: GenericEndpointContext) {
 		stateCookie.name,
 		c.context.secret,
 	);
-	console.log({ stateCookieValue, state });
 	if (!stateCookieValue || stateCookieValue !== state) {
 		const errorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
