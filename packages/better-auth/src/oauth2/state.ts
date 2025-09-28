@@ -16,8 +16,13 @@ export async function generateState(
 			message: "callbackURL is required",
 		});
 	}
+
 	const codeVerifier = generateRandomString(128);
 	const state = generateRandomString(32);
+	const stateCookie = c.context.createAuthCookie("state", {
+		maxAge: 5 * 60 * 1000, // 5 minutes
+	});
+	c.setCookie(stateCookie.name, state, stateCookie.attributes);
 	const data = JSON.stringify({
 		callbackURL,
 		codeVerifier,
@@ -65,6 +70,7 @@ export async function parseState(c: GenericEndpointContext) {
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 	}
+
 	const parsedData = z
 		.object({
 			callbackURL: z.string(),
@@ -85,6 +91,16 @@ export async function parseState(c: GenericEndpointContext) {
 	if (!parsedData.errorURL) {
 		parsedData.errorURL = `${c.context.baseURL}/error`;
 	}
+	const stateCookie = c.context.createAuthCookie("state");
+	const stateCookieValue = c.getCookie(stateCookie.name);
+	if (!stateCookieValue || stateCookieValue !== state) {
+		const errorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+		throw c.redirect(`${errorURL}?error=state_mismatch`);
+	}
+	c.setCookie(stateCookie.name, "", {
+		maxAge: 0,
+	});
 	if (parsedData.expiresAt < Date.now()) {
 		await c.context.internalAdapter.deleteVerificationValue(data.id);
 		const errorURL =
