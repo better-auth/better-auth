@@ -38,7 +38,7 @@ const dialect = new MssqlDialect({
 					type: "default",
 				},
 				options: {
-					database: "better_auth",
+					database: "master", // Start with master database, will create better_auth if needed
 					port: 1433,
 					trustServerCertificate: true,
 					encrypt: false,
@@ -56,6 +56,33 @@ const kyselyDB = new Kysely({
 	dialect: dialect,
 });
 
+// Create better_auth database if it doesn't exist
+const ensureDatabaseExists = async () => {
+	try {
+		console.log("Ensuring better_auth database exists...");
+		await kyselyDB.getExecutor().executeQuery({
+			sql: `
+				IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'better_auth')
+				BEGIN
+					CREATE DATABASE better_auth;
+					PRINT 'Database better_auth created successfully';
+				END
+				ELSE
+				BEGIN
+					PRINT 'Database better_auth already exists';
+				END
+			`,
+			parameters: [],
+			query: { kind: "SelectQueryNode" },
+			queryId: { queryId: "ensure-db" },
+		});
+		console.log("Database check/creation completed");
+	} catch (error) {
+		console.error("Failed to ensure database exists:", error);
+		throw error;
+	}
+};
+
 // Warm up connection for CI environments
 const warmupConnection = async () => {
 	const isCI =
@@ -65,9 +92,12 @@ const warmupConnection = async () => {
 		console.log(
 			`Environment: CI=${process.env.CI}, GITHUB_ACTIONS=${process.env.GITHUB_ACTIONS}`,
 		);
-		console.log(`MSSQL Server: localhost:1433, Database: better_auth`);
+		console.log(`MSSQL Server: localhost:1433, Database: master (will create better_auth)`);
 
 		try {
+			// Ensure database exists first
+			await ensureDatabaseExists();
+			
 			// Try a simple query to establish the connection
 			await kyselyDB.getExecutor().executeQuery({
 				sql: "SELECT 1 as warmup, @@VERSION as version",
@@ -89,6 +119,9 @@ const warmupConnection = async () => {
 				console.log("- Database may not exist yet");
 			}
 		}
+	} else {
+		// For local development, also ensure database exists
+		await ensureDatabaseExists();
 	}
 };
 
@@ -135,9 +168,13 @@ const query = async (sql: string, timeoutMs: number = 30000) => {
 		console.log(
 			`Executing SQL: ${sql.substring(0, 100)}... (timeout: ${actualTimeout}ms, CI: ${isCI})`,
 		);
+		
+		// Ensure we're using the better_auth database for queries
+		const sqlWithContext = sql.includes('USE ') ? sql : `USE better_auth; ${sql}`;
+		
 		const result = (await Promise.race([
 			kyselyDB.getExecutor().executeQuery({
-				sql,
+				sql: sqlWithContext,
 				parameters: [],
 				query: { kind: "SelectQueryNode" },
 				queryId: { queryId: "" },
