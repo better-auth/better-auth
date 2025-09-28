@@ -6,13 +6,15 @@ const clientMap = new Map<string, PC>();
 export const getPrismaClient = async (
 	dialect: "sqlite" | "postgresql" | "mysql",
 ) => {
+	if (clientMap.has(`${dialect}-${migrationCount}`)) {
+		return clientMap.get(`${dialect}-${migrationCount}`) as PC;
+	}
 	const { PrismaClient } = await import(
 		migrationCount === 0
 			? "@prisma/client"
 			: `./.tmp/prisma-client-${dialect}-${migrationCount}`
 	);
-	const db =
-		clientMap.get(`${dialect}-${migrationCount}`) || new PrismaClient();
+	const db = new PrismaClient();
 	clientMap.set(`${dialect}-${migrationCount}`, db);
 	return db as PC;
 };

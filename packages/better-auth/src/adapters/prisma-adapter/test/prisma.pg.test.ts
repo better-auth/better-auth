@@ -46,7 +46,7 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		transactionsTestSuite(),
 		authFlowTestSuite(),
-		performanceTestSuite(),
+		performanceTestSuite({ dialect }),
 	],
 	onFinish: async () => {
 		await done();

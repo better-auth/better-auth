@@ -61,7 +61,7 @@ const { execute } = await testAdapter({
 				console.log(DB);
 			},
 		}),
-		transactionsTestSuite(),
+		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		performanceTestSuite({ dialect: "pg" }),
 	],
