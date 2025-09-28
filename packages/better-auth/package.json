@@ -26,7 +26,7 @@
     "build": "unbuild --clean",
     "stub": "unbuild --stub",
     "test": "vitest",
-    "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/schema-sqlite.prisma",
+    "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/schema-base.prisma",
     "typecheck": "tsc --project tsconfig.json"
   },
   "main": "./dist/index.cjs",
