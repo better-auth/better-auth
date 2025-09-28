@@ -1,12 +1,10 @@
 {
   "extends": "../../tsconfig.json",
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
     "lib": ["esnext", "dom", "dom.iterable"],
     "types": ["node", "bun"]
   },
-  "include": ["src"],
-  "references": [{ "path": "../core" }]
+  "include": ["src"]
 }
