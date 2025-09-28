@@ -1,5 +1,5 @@
-import type { FieldAttribute } from "../../db";
-import type { BetterAuthDbSchema } from "../../db/get-tables";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import type {
 	AdapterSchemaCreation,
 	BetterAuthOptions,
@@ -164,7 +164,7 @@ export interface AdapterFactoryConfig {
 		/**
 		 * The fields of the model.
 		 */
-		fieldAttributes: FieldAttribute;
+		fieldAttributes: DBFieldAttribute;
 		/**
 		 * The field to transform.
 		 */
@@ -180,7 +180,7 @@ export interface AdapterFactoryConfig {
 		/**
 		 * The schema of the user's Better-Auth instance.
 		 */
-		schema: BetterAuthDbSchema;
+		schema: BetterAuthDBSchema;
 		/**
 		 * The options of the user's Better-Auth instance.
 		 */
@@ -196,7 +196,7 @@ export interface AdapterFactoryConfig {
 		/**
 		 * The fields of the model.
 		 */
-		fieldAttributes: FieldAttribute;
+		fieldAttributes: DBFieldAttribute;
 		/**
 		 * The field to transform.
 		 */
@@ -212,7 +212,7 @@ export interface AdapterFactoryConfig {
 		/**
 		 * The schema of the user's Better-Auth instance.
 		 */
-		schema: BetterAuthDbSchema;
+		schema: BetterAuthDBSchema;
 		/**
 		 * The options of the user's Better-Auth instance.
 		 */
@@ -258,7 +258,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	/**
 	 * The schema of the user's Better-Auth instance.
 	 */
-	schema: BetterAuthDbSchema;
+	schema: BetterAuthDBSchema;
 	/**
 	 * The debug log function.
 	 *
@@ -315,8 +315,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	}: {
 		model: string;
 		field: string;
-	}) => FieldAttribute;
-
+	}) => DBFieldAttribute;
 	// The following functions are exposed primarily for the purpose of having wrapper adapters.
 	transformInput: (
 		data: Record<string, any>,
@@ -409,7 +408,7 @@ export interface CustomAdapter {
 		/**
 		 * The tables from the user's Better-Auth instance schema.
 		 */
-		tables: BetterAuthDbSchema;
+		tables: BetterAuthDBSchema;
 	}) => Promise<AdapterSchemaCreation>;
 	/**
 	 * Your adapter's options.

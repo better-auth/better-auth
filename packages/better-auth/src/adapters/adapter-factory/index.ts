@@ -14,8 +14,8 @@ import type {
 	AdapterTestDebugLogs,
 	CleanedWhere,
 } from "./types";
-import type { FieldAttribute } from "../../db";
 import { colors } from "../../utils/colors";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
@@ -284,7 +284,7 @@ export const createAdapterFactory =
 							},
 						}
 					: {}),
-			} satisfies FieldAttribute;
+			} satisfies DBFieldAttribute;
 		};
 
 		const getFieldAttributes = ({
