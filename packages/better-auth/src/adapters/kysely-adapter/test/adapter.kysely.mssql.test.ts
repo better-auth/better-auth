@@ -58,12 +58,15 @@ const kyselyDB = new Kysely({
 
 // Warm up connection for CI environments
 const warmupConnection = async () => {
-	const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+	const isCI =
+		process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 	if (isCI) {
 		console.log("Warming up MSSQL connection for CI environment...");
-		console.log(`Environment: CI=${process.env.CI}, GITHUB_ACTIONS=${process.env.GITHUB_ACTIONS}`);
+		console.log(
+			`Environment: CI=${process.env.CI}, GITHUB_ACTIONS=${process.env.GITHUB_ACTIONS}`,
+		);
 		console.log(`MSSQL Server: localhost:1433, Database: better_auth`);
-		
+
 		try {
 			// Try a simple query to establish the connection
 			await kyselyDB.getExecutor().executeQuery({
@@ -74,7 +77,10 @@ const warmupConnection = async () => {
 			});
 			console.log("Connection warmup successful");
 		} catch (error) {
-			console.warn("Connection warmup failed, will retry during validation:", error);
+			console.warn(
+				"Connection warmup failed, will retry during validation:",
+				error,
+			);
 			// Log additional debugging info for CI
 			if (isCI) {
 				console.log("CI Debug Info:");
@@ -88,19 +94,25 @@ const warmupConnection = async () => {
 
 // Add connection validation helper with CI-specific handling
 const validateConnection = async (retries: number = 10): Promise<boolean> => {
-	const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+	const isCI =
+		process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 	const maxRetries = isCI ? 15 : retries; // More retries in CI
 	const baseDelay = isCI ? 2000 : 1000; // Longer delays in CI
-	
-	console.log(`Validating connection (CI: ${isCI}, max retries: ${maxRetries})`);
-	
+
+	console.log(
+		`Validating connection (CI: ${isCI}, max retries: ${maxRetries})`,
+	);
+
 	for (let i = 0; i < maxRetries; i++) {
 		try {
 			await query("SELECT 1 as test", isCI ? 10000 : 5000);
 			console.log("Connection validated successfully");
 			return true;
 		} catch (error) {
-			console.warn(`Connection validation attempt ${i + 1}/${maxRetries} failed:`, error);
+			console.warn(
+				`Connection validation attempt ${i + 1}/${maxRetries} failed:`,
+				error,
+			);
 			if (i === maxRetries - 1) {
 				console.error("All connection validation attempts failed");
 				return false;
@@ -115,11 +127,14 @@ const validateConnection = async (retries: number = 10): Promise<boolean> => {
 };
 
 const query = async (sql: string, timeoutMs: number = 30000) => {
-	const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+	const isCI =
+		process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 	const actualTimeout = isCI ? Math.max(timeoutMs, 60000) : timeoutMs; // Minimum 60s timeout in CI
-	
+
 	try {
-		console.log(`Executing SQL: ${sql.substring(0, 100)}... (timeout: ${actualTimeout}ms, CI: ${isCI})`);
+		console.log(
+			`Executing SQL: ${sql.substring(0, 100)}... (timeout: ${actualTimeout}ms, CI: ${isCI})`,
+		);
 		const result = (await Promise.race([
 			kyselyDB.getExecutor().executeQuery({
 				sql,
@@ -153,11 +168,14 @@ const showDB = async () => {
 };
 
 const resetDB = async (retryCount: number = 0) => {
-	const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+	const isCI =
+		process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 	const maxRetries = isCI ? 3 : 1; // Allow retries in CI
-	
+
 	try {
-		console.log(`Starting database reset... (attempt ${retryCount + 1}/${maxRetries + 1})`);
+		console.log(
+			`Starting database reset... (attempt ${retryCount + 1}/${maxRetries + 1})`,
+		);
 
 		// Warm up connection first (especially important for CI)
 		await warmupConnection();
@@ -211,15 +229,17 @@ const resetDB = async (retryCount: number = 0) => {
 		console.log("Database reset completed successfully");
 	} catch (error) {
 		console.error("Database reset failed:", error);
-		
+
 		// Retry logic for CI environments
 		if (retryCount < maxRetries) {
 			const delay = 5000 * (retryCount + 1); // Increasing delay
-			console.log(`Retrying in ${delay}ms... (attempt ${retryCount + 2}/${maxRetries + 1})`);
-			await new Promise(resolve => setTimeout(resolve, delay));
+			console.log(
+				`Retrying in ${delay}ms... (attempt ${retryCount + 2}/${maxRetries + 1})`,
+			);
+			await new Promise((resolve) => setTimeout(resolve, delay));
 			return resetDB(retryCount + 1);
 		}
-		
+
 		// Final fallback - try to recreate the database
 		try {
 			console.log("Attempting database recreation...");
