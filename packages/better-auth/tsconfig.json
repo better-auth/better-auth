@@ -6,6 +6,5 @@
     "lib": ["esnext", "dom", "dom.iterable"],
     "types": ["node", "bun"]
   },
-  "include": ["src"],
-  "references": [{ "path": "../core" }]
+  "include": ["src"]
 }
