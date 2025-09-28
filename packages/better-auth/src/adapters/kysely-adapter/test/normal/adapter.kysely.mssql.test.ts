@@ -45,6 +45,10 @@ const dialect = new MssqlDialect({
 				},
 				server: "localhost",
 			}),
+		TYPES: {
+			...Tedious.TYPES,
+			DateTime: Tedious.TYPES.DateTime2,
+		},
 	},
 });
 

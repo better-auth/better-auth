@@ -200,7 +200,6 @@ export const kyselyAdapter = (
 						}
 
 						if (operator === "gt") {
-							console.log(`value: `, value)
 							return eb(field, ">", value);
 						}
 
