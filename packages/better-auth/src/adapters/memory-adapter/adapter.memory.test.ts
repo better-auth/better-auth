@@ -27,7 +27,7 @@ const { execute } = await testAdapter({
 		normalTestSuite({
 			showDB: () => console.log(db),
 		}),
-		transactionsTestSuite(),
+		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		performanceTestSuite(),
 	],

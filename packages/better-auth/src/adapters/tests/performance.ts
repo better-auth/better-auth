@@ -28,7 +28,7 @@ export const performanceTestSuite = createTestSuite(
 		);
 
 		const seedUser = async () => {
-			const user = generate("user");
+			const user = await generate("user");
 			return await adapter.create({
 				model: "user",
 				data: user,

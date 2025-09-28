@@ -8,7 +8,14 @@ import type { Session, User } from "../../types";
 export const normalTestSuite = createTestSuite(
 	"normal",
 	(
-		{ adapter, generate, insertRandom, modifyBetterAuthOptions, sortModels },
+		{
+			adapter,
+			generate,
+			insertRandom,
+			modifyBetterAuthOptions,
+			sortModels,
+			customIdGenerator,
+		},
 		additionalHelpers?: {
 			showDB?: () => void;
 			testFn?: () => void | Promise<void>;
@@ -23,7 +30,7 @@ export const normalTestSuite = createTestSuite(
 		const createBinarySortFriendlyUsers = async (count: number) => {
 			let users: User[] = [];
 			for (let i = 0; i < count; i++) {
-				const user = generate("user");
+				const user = await generate("user");
 				const userResult = await adapter.create<User>({
 					model: "user",
 					data: {
@@ -39,7 +46,7 @@ export const normalTestSuite = createTestSuite(
 
 		return {
 			"create - should create a model": async () => {
-				const user = generate("user");
+				const user = await generate("user");
 				const result = await adapter.create<User>({
 					model: "user",
 					data: user,
@@ -48,7 +55,7 @@ export const normalTestSuite = createTestSuite(
 				expect(result).toEqual(user);
 			},
 			"create - should always return an id": async () => {
-				const { id: _, ...user } = generate("user");
+				const { id: _, ...user } = await generate("user");
 				const res = await adapter.create<User>({
 					model: "user",
 					data: user,
@@ -57,22 +64,23 @@ export const normalTestSuite = createTestSuite(
 				expect(typeof res.id).toEqual("string");
 			},
 			"create - should use generateId if provided": async () => {
+				const ID = (await customIdGenerator?.()) || "MOCK-ID";
 				await modifyBetterAuthOptions(
 					{
 						advanced: {
 							database: {
-								generateId: () => "MOCK-ID",
+								generateId: () => ID,
 							},
 						},
 					},
 					false,
 				);
-				const { id: _, ...user } = generate("user");
+				const { id: _, ...user } = await generate("user");
 				const res = await adapter.create<User>({
 					model: "user",
 					data: user,
 				});
-				expect(res.id).toEqual("MOCK-ID");
+				expect(res.id).toEqual(ID);
 				const findResult = await adapter.findOne<User>({
 					model: "user",
 					where: [{ field: "id", value: res.id }],
@@ -86,6 +94,14 @@ export const normalTestSuite = createTestSuite(
 					where: [{ field: "id", value: user.id }],
 				});
 				expect(result).toEqual(user);
+			},
+			"findOne - should find a model using a reference field": async () => {
+				const [user, session] = await insertRandom("session");
+				const result = await adapter.findOne<User>({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				});
+				expect(result).toEqual(session);
 			},
 			"findOne - should not throw on record not found": async () => {
 				const result = await adapter.findOne<User>({
@@ -130,14 +146,6 @@ export const normalTestSuite = createTestSuite(
 					select: ["email", "name"],
 				});
 				expect(result).toEqual({ email: user.email, name: user.name });
-			},
-			"findOne - should work with reference fields": async () => {
-				const [user, session] = await insertRandom("session");
-				const result = await adapter.findOne<Session>({
-					model: "session",
-					where: [{ field: "userId", value: user.id }],
-				});
-				expect(result).toEqual(session);
 			},
 			"findMany - should find many models": async () => {
 				const users = (await insertRandom("user", 3)).map((x) => x[0]);
@@ -225,12 +233,6 @@ export const normalTestSuite = createTestSuite(
 				const expectedResult = sortModels(
 					users.filter((user) => user.createdAt > oldestUser.createdAt),
 				);
-				// console.log({
-				// 	expectedResult,
-				// 	resultSorted: sortModels(result),
-				// 	result: result,
-				// 	user: oldestUser,
-				// });
 				expect(result.length).not.toBe(0);
 				expect(sortModels(result)).toEqual(expectedResult);
 			},
@@ -436,6 +438,22 @@ export const normalTestSuite = createTestSuite(
 				findResult!.updatedAt = user.updatedAt;
 				expect(findResult).toEqual(expectedResult);
 			},
+			"update - should update a reference field": async () => {
+				const [user, session] = await insertRandom("session");
+				const [user2] = await insertRandom("user");
+				const result = await adapter.update<Session>({
+					model: "session",
+					where: [
+						{ field: "userId", value: user.id },
+					],
+					update: { id: user2.id },
+				});
+				expect(result).toStrictEqual({
+					...session,
+					id: user2.id,
+					updatedAt: result!.updatedAt,
+				});
+			},
 			"updateMany - should update all models when where is empty": async () => {
 				const users = (await insertRandom("user", 3)).map((x) => x[0]);
 				await adapter.updateMany({
@@ -502,6 +520,18 @@ export const normalTestSuite = createTestSuite(
 				const result = await adapter.findOne<User>({
 					model: "user",
 					where: [{ field: "id", value: user.id }],
+				});
+				expect(result).toBeNull();
+			},
+			"delete - should delete a model by reference field": async () => {
+				const [user, session] = await insertRandom("session");
+				await adapter.delete({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				});
+				const result = await adapter.findOne<Session>({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
 				});
 				expect(result).toBeNull();
 			},

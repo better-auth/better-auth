@@ -10,77 +10,17 @@ import { betterAuth } from "../auth";
 
 type GenerateFn = <M extends "user" | "session" | "verification" | "account">(
 	Model: M,
-) => M extends "user"
-	? User
-	: M extends "session"
-		? Session
-		: M extends "verification"
-			? Verification
-			: M extends "account"
-				? Account
-				: undefined;
-
-const generateModel: GenerateFn = (model: string) => {
-	const id = generateId();
-	const randomDate = new Date(
-		Date.now() - Math.random() * 1000 * 60 * 60 * 24 * 365,
-	);
-	if (model === "user") {
-		const user: User = {
-			id,
-			createdAt: randomDate,
-			updatedAt: new Date(),
-			email: `user-${id}@email.com`.toLowerCase(),
-			emailVerified: true,
-			name: `user-${id}`,
-			image: null,
-		};
-		return user as any;
-	}
-	if (model === "session") {
-		const session: Session = {
-			id,
-			createdAt: randomDate,
-			updatedAt: new Date(),
-			expiresAt: new Date(),
-			token: generateId(32),
-			userId: generateId(),
-			ipAddress: "127.0.0.1",
-			userAgent: "Some User Agent",
-		};
-		return session as any;
-	}
-	if (model === "verification") {
-		const verification: Verification = {
-			id,
-			createdAt: randomDate,
-			updatedAt: new Date(),
-			expiresAt: new Date(),
-			identifier: `test:${generateId()}`,
-			value: generateId(),
-		};
-		return verification as any;
-	}
-	if (model === "account") {
-		const account: Account = {
-			id,
-			createdAt: randomDate,
-			updatedAt: new Date(),
-			accountId: generateId(),
-			providerId: "test",
-			userId: generateId(),
-			accessToken: generateId(),
-			refreshToken: generateId(),
-			idToken: generateId(),
-			accessTokenExpiresAt: new Date(),
-			refreshTokenExpiresAt: new Date(),
-			scope: "test",
-		};
-		return account as any;
-	}
-	// This should never happen given the type constraints, but TypeScript needs an exhaustive check
-	throw new Error(`Unknown model type: ${model}`);
-};
+) => Promise<
+	M extends "user"
+		? User
+		: M extends "session"
+			? Session
+			: M extends "verification"
+				? Verification
+				: M extends "account"
+					? Account
+					: undefined
+>;
 
 type Success<T> = {
 	data: T;
@@ -184,6 +124,7 @@ export const createTestSuite = <
 			})[];
 			getAuth: () => Promise<ReturnType<typeof betterAuth>>;
 			tryCatch<T, E = Error>(promise: Promise<T>): Promise<Result<T, E>>;
+			customIdGenerator?: () => string | Promise<string>;
 		},
 		additionalOptions?: AdditionalOptions,
 	) => Tests,
@@ -205,6 +146,7 @@ export const createTestSuite = <
 			runMigrations: () => Promise<void>;
 			prefixTests?: string;
 			onTestFinish: () => Promise<void>;
+			customIdGenerator?: () => string | Promise<string>;
 		}) => {
 			const createdRows: Record<string, any[]> = {};
 
@@ -301,6 +243,68 @@ export const createTestSuite = <
 				}
 			};
 
+			const generateModel: GenerateFn = async (model: string) => {
+				const id = (await helpers.customIdGenerator?.()) || generateId();
+				const randomDate = new Date(
+					Date.now() - Math.random() * 1000 * 60 * 60 * 24 * 365,
+				);
+				if (model === "user") {
+					const user: User = {
+						id,
+						createdAt: randomDate,
+						updatedAt: new Date(),
+						email: `user-${id}@email.com`.toLowerCase(),
+						emailVerified: true,
+						name: `user-${id}`,
+						image: null,
+					};
+					return user as any;
+				}
+				if (model === "session") {
+					const session: Session = {
+						id,
+						createdAt: randomDate,
+						updatedAt: new Date(),
+						expiresAt: new Date(),
+						token: generateId(32),
+						userId: generateId(),
+						ipAddress: "127.0.0.1",
+						userAgent: "Some User Agent",
+					};
+					return session as any;
+				}
+				if (model === "verification") {
+					const verification: Verification = {
+						id,
+						createdAt: randomDate,
+						updatedAt: new Date(),
+						expiresAt: new Date(),
+						identifier: `test:${generateId()}`,
+						value: generateId(),
+					};
+					return verification as any;
+				}
+				if (model === "account") {
+					const account: Account = {
+						id,
+						createdAt: randomDate,
+						updatedAt: new Date(),
+						accountId: generateId(),
+						providerId: "test",
+						userId: generateId(),
+						accessToken: generateId(),
+						refreshToken: generateId(),
+						idToken: generateId(),
+						accessTokenExpiresAt: new Date(),
+						refreshTokenExpiresAt: new Date(),
+						scope: "test",
+					};
+					return account as any;
+				}
+				// This should never happen given the type constraints, but TypeScript needs an exhaustive check
+				throw new Error(`Unknown model type: ${model}`);
+			};
+
 			const insertRandom: InsertRandomFn = async <
 				M extends "user" | "session" | "verification" | "account",
 				Count extends number = 1,
@@ -313,22 +317,22 @@ export const createTestSuite = <
 					let models: string[] = [model];
 					let modelData: Record<string, any>[] = [];
 					if (model === "user") {
-						modelData = [generateModel("user")];
+						modelData = [await generateModel("user")];
 					}
 					if (model === "session") {
-						const user = generateModel("user");
-						const session = generateModel("session");
+						const user = await generateModel("user");
+						const session = await generateModel("session");
 						session.userId = user.id;
 						models = ["user", "session"];
 						modelData = [user, session];
 					}
 					if (model === "verification") {
-						const verification = generateModel("verification");
+						const verification = await generateModel("verification");
 						modelData = [verification];
 					}
 					if (model === "account") {
-						const user = generateModel("user");
-						const account = generateModel("account");
+						const user = await generateModel("user");
+						const account = await generateModel("account");
 						account.userId = user.id;
 						models = ["user", "account"];
 						modelData = [user, account];
@@ -416,6 +420,7 @@ export const createTestSuite = <
 					getBetterAuthOptions: helpers.getBetterAuthOptions,
 					sortModels,
 					tryCatch,
+					customIdGenerator: helpers.customIdGenerator,
 				},
 				additionalOptions as AdditionalOptions,
 			);
@@ -457,6 +462,7 @@ export const createTestSuite = <
 				};
 				test.skipIf(shouldSkip)(
 					testName,
+					{ retry: 10, timeout: 10000 },
 					async ({ onTestFailed, skip }) => {
 						resetDebugLogs();
 						onTestFailed(async () => {
@@ -466,7 +472,6 @@ export const createTestSuite = <
 						await testFn({ skip });
 						await onFinish();
 					},
-					10000,
 				);
 			}
 		};

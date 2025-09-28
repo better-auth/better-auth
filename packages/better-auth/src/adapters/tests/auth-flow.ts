@@ -21,7 +21,7 @@ export const authFlowTestSuite = createTestSuite(
 				false,
 			);
 			const auth = await getAuth();
-			const user = generate("user");
+			const user = await generate("user");
 			const start = Date.now();
 			const result = await auth.api.signUpEmail({
 				body: {
@@ -57,7 +57,7 @@ export const authFlowTestSuite = createTestSuite(
 				false,
 			);
 			const auth = await getAuth();
-			const user = generate("user");
+			const user = await generate("user");
 			const password = crypto.randomUUID();
 			const signUpResult = await auth.api.signUpEmail({
 				body: {
@@ -87,7 +87,7 @@ export const authFlowTestSuite = createTestSuite(
 				false,
 			);
 			const auth = await getAuth();
-			const user = generate("user");
+			const user = await generate("user");
 			const password = crypto.randomUUID();
 
 			const { headers, response: signUpResult } = await auth.api.signUpEmail({
@@ -123,7 +123,7 @@ export const authFlowTestSuite = createTestSuite(
 				false,
 			);
 			const auth = await getAuth();
-			const user = generate("user");
+			const user = await generate("user");
 			const { data, error } = await tryCatch(
 				auth.api.signInEmail({
 					body: { email: user.email, password: crypto.randomUUID() },
@@ -140,7 +140,7 @@ export const authFlowTestSuite = createTestSuite(
 					false,
 				);
 				const auth = await getAuth();
-				const user = generate("user");
+				const user = await generate("user");
 				const password = crypto.randomUUID();
 				const userSignUp = await auth.api.signUpEmail({
 					body: {

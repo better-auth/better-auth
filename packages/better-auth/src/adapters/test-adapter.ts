@@ -20,6 +20,7 @@ export const testAdapter = async ({
 	tests,
 	prefixTests,
 	onFinish,
+	customIdGenerator
 }: {
 	/**
 	 * A function that will return the adapter instance to test with.
@@ -69,6 +70,10 @@ export const testAdapter = async ({
 	 * Upon finish of the tests, this function will be called.
 	 */
 	onFinish?: () => Promise<void> | void;
+	/**
+	 * Custom ID generator function to be used by the helper functions. (such as `insertRandom`)
+	 */
+	customIdGenerator?: () => string | Promise<string>;
 }) => {
 	const defaultBAOptions = {} satisfies BetterAuthOptions;
 	let betterAuthOptions = (() => {
@@ -217,6 +222,7 @@ export const testAdapter = async ({
 						prefixTests,
 						runMigrations: migrate,
 						onTestFinish: async () => {},
+						customIdGenerator,
 					});
 				}
 			});

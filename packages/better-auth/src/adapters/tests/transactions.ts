@@ -17,8 +17,8 @@ export const transactionsTestSuite = createTestSuite(
 				return;
 			}
 
-			const user1 = generate("user");
-			const user2 = generate("user");
+			const user1 = await generate("user");
+			const user2 = await generate("user");
 			await expect(
 				adapter.transaction(async (tx) => {
 					await tx.create({ model: "user", data: user1, forceAllowId: true });

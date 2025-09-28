@@ -39,7 +39,7 @@ export async function generatePrismaSchema(
 	} else if (dialect === "mysql") {
 		code = code?.replace(
 			`env("DATABASE_URL")`,
-			'"mysql://user:password@localhost:3306/better_auth"',
+			'"mysql://user:password@localhost:3308/better_auth"',
 		);
 	}
 	code = code

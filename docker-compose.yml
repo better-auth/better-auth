@@ -21,6 +21,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # Drizzle tests
   mysql:
     image: mysql:latest
     container_name: mysql
@@ -33,6 +34,34 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+
+
+  mysql-kysely:
+    image: mysql:latest
+    container_name: mysql-kysely
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: better_auth
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-kysely_data:/var/lib/mysql
+
+  mysql-prisma:
+    image: mysql:latest
+    container_name: mysql-prisma
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: better_auth
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql-prisma_data:/var/lib/mysql
+
 
   mssql:
     image: mcr.microsoft.com/mssql/server:latest
@@ -50,3 +79,5 @@ volumes:
   postgres_data:
   mysql_data:
   mssql_data:
+  mysql-kysely_data:
+  mysql-prisma_data: 

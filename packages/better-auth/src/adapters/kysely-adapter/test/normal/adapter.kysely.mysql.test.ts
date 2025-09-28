@@ -15,7 +15,7 @@ import { waitForTestPermission } from "../../../../test/adapter-test-setup";
 const { done } = await waitForTestPermission("kysely-mysql");
 
 const mysqlDB = createPool({
-	uri: "mysql://user:password@localhost:3306/better_auth",
+	uri: "mysql://user:password@localhost:3307/better_auth",
 	timezone: "Z",
 });
 

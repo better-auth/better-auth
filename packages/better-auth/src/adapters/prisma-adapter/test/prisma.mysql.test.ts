@@ -31,7 +31,7 @@ const { execute } = await testAdapter({
 	},
 	runMigrations: async (options: BetterAuthOptions) => {
 		const mysqlDB = createPool({
-			uri: "mysql://user:password@localhost:3306/better_auth",
+			uri: "mysql://user:password@localhost:3308/better_auth",
 			timezone: "Z",
 		});
 		await mysqlDB.query("DROP DATABASE IF EXISTS better_auth");
