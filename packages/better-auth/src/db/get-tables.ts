@@ -1,31 +1,16 @@
-import type { FieldAttribute } from ".";
-import type { BetterAuthOptions } from "../types";
+import type { AuthPluginSchema, BetterAuthOptions } from "../types";
 
-export type BetterAuthDbSchema = Record<
-	string,
-	{
-		/**
-		 * The name of the table in the database
-		 */
-		modelName: string;
-		/**
-		 * The fields of the table
-		 */
-		fields: Record<string, FieldAttribute>;
-		/**
-		 * Whether to disable migrations for this table
-		 * @default false
-		 */
-		disableMigrations?: boolean;
-		/**
+export type BetterAuthDbSchema = AuthPluginSchema & {
+	[table in keyof AuthPluginSchema]: {
+			/**
 		 * The order of the table
 		 */
-		order?: number;
+			order?: number;
 	}
->;
+}
 
-export const getAuthTables = (
-	options: BetterAuthOptions,
+export const getAuthTables = <S extends AuthPluginSchema>(
+	options: BetterAuthOptions<S>,
 ): BetterAuthDbSchema => {
 	const pluginSchema = (options.plugins ?? []).reduce(
 		(acc, plugin) => {
@@ -42,10 +27,7 @@ export const getAuthTables = (
 			}
 			return acc;
 		},
-		{} as Record<
-			string,
-			{ fields: Record<string, FieldAttribute>; modelName: string }
-		>,
+		{} as AuthPluginSchema
 	);
 
 	const shouldAddRateLimitTable = options.rateLimit?.storage === "database";

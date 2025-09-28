@@ -5,6 +5,7 @@ import { setSessionCookie } from "../../cookies";
 import { APIError } from "better-call";
 import type {
 	AdditionalUserFieldsInput,
+	AuthPluginSchema,
 	BetterAuthOptions,
 	User,
 } from "../../types";
@@ -12,7 +13,7 @@ import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
 
-export const signUpEmail = <O extends BetterAuthOptions>() =>
+export const signUpEmail = <O extends BetterAuthOptions<S>, S extends AuthPluginSchema>() =>
 	createAuthEndpoint(
 		"/sign-up/email",
 		{
@@ -27,7 +28,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						image?: string;
 						callbackURL?: string;
 						rememberMe?: boolean;
-					} & AdditionalUserFieldsInput<O>,
+					} & AdditionalUserFieldsInput<O, S>,
 				},
 				openapi: {
 					description: "Sign up a user using email and password",

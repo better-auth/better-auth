@@ -11,19 +11,19 @@ import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
-import type { FieldAttributeFor } from "../db";
+import type { FieldAttributeFor, schema } from "../db";
 import type { Models, RateLimit } from "./models";
 import type { AuthContext } from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
-import type { LiteralUnion, OmitId } from "./helper";
+import type { MergeAdditionalFields, LiteralUnion, OmitId } from "./helper";
 import type { AdapterDebugLogs } from "../adapters";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
 
-export type BetterAuthOptions<S extends AuthPluginSchema> = {
+export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 	/**
 	 * The name of the application
 	 *
@@ -162,7 +162,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema> = {
 			 * @param token the token to send the verification email to
 			 */
 			data: {
-				user: User;
+				user: S["user"];
 				url: string;
 				token: string;
 			},
@@ -200,13 +200,13 @@ export type BetterAuthOptions<S extends AuthPluginSchema> = {
 		 * @param user the user that verified their email
 		 * @param request the request object
 		 */
-		onEmailVerification?: (user: User, request?: Request) => Promise<void>;
+		onEmailVerification?: (user: S["user"], request?: Request) => Promise<void>;
 		/**
 		 * A function that is called when a user's email is updated to verified
 		 * @param user the user that verified their email
 		 * @param request the request object
 		 */
-		afterEmailVerification?: (user: User, request?: Request) => Promise<void>;
+		afterEmailVerification?: (user: S["user"], request?: Request) => Promise<void>;
 	};
 	/**
 	 * Email and password authentication
@@ -255,7 +255,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema> = {
 			 * @param token the token to send to the user (could be used instead of sending the url
 			 * if you need to redirect the user to custom route)
 			 */
-			data: { user: User; url: string; token: string },
+			data: { user: S["user"], url: string; token: string },
 			/**
 			 * The request object
 			 */
@@ -272,7 +272,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema> = {
 		 * when a user's password is changed successfully.
 		 */
 		onPasswordReset?: (
-			data: { user: User },
+			data: { user: S["user"] },
 			request?: Request,
 		) => Promise<void>;
 		/**
@@ -330,7 +330,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema> = {
 		 * Additional fields for the session
 		 */
 		additionalFields?: {
-			[key: string]: FieldAttributeFor<any, S>;
+			[key: string]: FieldAttributeFor<any>;
 		};
 		/**
 		 * Changing email configuration
@@ -348,7 +348,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema> = {
 			 */
 			sendChangeEmailVerification?: (
 				data: {
-					user: User;
+					user: S["user"];
 					newEmail: string;
 					url: string;
 					token: string;
@@ -384,13 +384,13 @@ export type BetterAuthOptions<S extends AuthPluginSchema> = {
 			 *
 			 * to interrupt with error you can throw `APIError`
 			 */
-			beforeDelete?: (user: User, request?: Request) => Promise<void>;
+			beforeDelete?: (user: S["user"], request?: Request) => Promise<void>;
 			/**
 			 * A function that is called after a user is deleted.
 			 *
 			 * This is useful for cleaning up user data
 			 */
-			afterDelete?: (user: User, request?: Request) => Promise<void>;
+			afterDelete?: (user: S["user"], request?: Request) => Promise<void>;
 			/**
 			 * The expiration time for the delete token.
 			 *
@@ -440,7 +440,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema> = {
 		 * Additional fields for the session
 		 */
 		additionalFields?: {
-			[key: string]: FieldAttributeFor<any, S>;
+			[key: string]: FieldAttributeFor<any>;
 		};
 		/**
 		 * By default if secondary storage is provided
@@ -818,7 +818,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema> = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					user: User & Record<string, unknown>,
+					user: S["user"] & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -831,7 +831,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema> = {
 				 * Hook that is called after a user is created.
 				 */
 				after?: (
-					user: User & Record<string, unknown>,
+					user: S["user"] & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -842,7 +842,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema> = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					user: Partial<User> & Record<string, unknown>,
+					user: Partial<S["user"]> & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -1042,7 +1042,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema> = {
 		 * @param error
 		 * @param ctx - Auth context
 		 */
-		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
+		onError?: (error: unknown, ctx: AuthContext<S>) => void | Promise<void>;
 		/**
 		 * The URL to redirect to on error
 		 *

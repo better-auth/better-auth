@@ -1,12 +1,13 @@
-import type { BetterAuthClientPlugin, BetterAuthOptions } from "../../types";
+import type { AuthPluginSchema, BetterAuthClientPlugin, BetterAuthOptions } from "../../types";
 
 export const InferServerPlugin = <
 	AuthOrOption extends
-		| BetterAuthOptions
+		| BetterAuthOptions<S>
 		| {
-				options: BetterAuthOptions;
+				options: BetterAuthOptions<S>;
 		  },
 	ID extends string,
+	S extends AuthPluginSchema,
 >() => {
 	type Option = AuthOrOption extends { options: infer O } ? O : AuthOrOption;
 	type Plugin = Option["plugins"] extends Array<infer P>

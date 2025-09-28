@@ -1,16 +1,21 @@
 import type {
 	Adapter,
+	AuthPluginSchema,
 	BetterAuthOptions,
+	Ensure,
 	GenericEndpointContext,
 	Models,
+	OmitId,
+	SchemaTypes,
+	TransactionAdapter,
 	Where,
 } from "../types";
 
-export function getWithHooks(
-	adapter: Adapter,
+export function getWithHooks<S extends AuthPluginSchema>(
+	adapter: Adapter<S>,
 	ctx: {
-		options: BetterAuthOptions;
-		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
+		options: BetterAuthOptions<S>;
+		hooks: Exclude<BetterAuthOptions<S>["databaseHooks"], undefined>[];
 	},
 ) {
 	const hooks = ctx.hooks;
@@ -18,16 +23,16 @@ export function getWithHooks(
 		Models,
 		"user" | "account" | "session" | "verification"
 	>;
-	async function createWithHooks<T extends Record<string, any>>(
-		data: T,
-		model: BaseModels,
+	async function createWithHooks<M extends BaseModels, D extends Omit<SchemaTypes<Required<S[M]>>, "id"> = Omit<SchemaTypes<S[M]>, "id">>(
+		data: D,
+		model: M,
 		customCreateFn?: {
-			fn: (data: Record<string, any>) => void | Promise<any>;
+			fn: (data: D) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
 		context?: GenericEndpointContext,
-		trxAdapter?: TransactionAdapter,
-	) {
+		trxAdapter?: TransactionAdapter<S>,
+	): Promise<SchemaTypes<S[M]>> {
 		let actualData = data;
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.before;
@@ -51,9 +56,9 @@ export function getWithHooks(
 			: null;
 		const created =
 			!customCreateFn || customCreateFn.executeMainFn
-				? await (trxAdapter || adapter).create<T>({
+				? await (trxAdapter || adapter).create({
 						model,
-						data: actualData as any,
+						data: actualData,
 						forceAllowId: true,
 					})
 				: customCreated;
@@ -68,16 +73,16 @@ export function getWithHooks(
 		return created;
 	}
 
-	async function updateWithHooks<T extends Record<string, any>>(
-		data: any,
-		where: Where[],
-		model: BaseModels,
+	async function updateWithHooks<M extends BaseModels, D extends Partial<SchemaTypes<S[M]>> = Partial<SchemaTypes<S[M]>>>(
+		data: D,
+		where: Where<S[M], keyof S[M]["fields"]>[],
+		model: M,
 		customUpdateFn?: {
-			fn: (data: Record<string, any>) => void | Promise<any>;
+			fn: (data: D) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
 		context?: GenericEndpointContext,
-		trxAdapter?: TransactionAdapter,
+		trxAdapter?: TransactionAdapter<S>,
 	) {
 		let actualData = data;
 
@@ -99,7 +104,7 @@ export function getWithHooks(
 
 		const updated =
 			!customUpdateFn || customUpdateFn.executeMainFn
-				? await (trxAdapter || adapter).update<T>({
+				? await (trxAdapter || adapter).update({
 						model,
 						update: actualData,
 						where,
@@ -115,16 +120,16 @@ export function getWithHooks(
 		return updated;
 	}
 
-	async function updateManyWithHooks<T extends Record<string, any>>(
-		data: any,
-		where: Where[],
-		model: BaseModels,
+	async function updateManyWithHooks<M extends BaseModels, D extends Partial<SchemaTypes<S[M]>> = Partial<SchemaTypes<S[M]>>>(
+		data: D,
+		where: Where<S[M], keyof S[M]["fields"]>[],
+		model: M,
 		customUpdateFn?: {
-			fn: (data: Record<string, any>) => void | Promise<any>;
+			fn: (data: D) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
 		context?: GenericEndpointContext,
-		trxAdapter?: TransactionAdapter,
+		trxAdapter?: TransactionAdapter<S>,
 	) {
 		let actualData = data;
 

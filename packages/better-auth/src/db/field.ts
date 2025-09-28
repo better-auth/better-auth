@@ -1,6 +1,4 @@
-import type { ZodType } from "zod";
-import type { BetterAuthOptions } from "../types";
-import type { LiteralString } from "../types/helper";
+import type { BetterAuthOptions, LiteralString, StandardSchemaV1 } from "../types";
 
 export type FieldType =
 	| "string"
@@ -21,7 +19,10 @@ type Primitive =
 	| string[]
 	| number[];
 
-export type FieldAttributeConfig<T extends FieldType = FieldType> = {
+export type FieldPrimitive<T extends FieldType> = T extends "string" ? string : T extends "number" ? number : T extends "boolean" ? boolean : T extends "date" ? Date : T extends "json" ? string : T extends "string[]" ? string[] : T extends "number[]" ? number[] : T extends Array<any> ? T[number] : never;
+type Promiseable<T> = T | Promise<T>;
+
+export type FieldAttributeConfig<F extends FieldType = FieldType, P extends Primitive = FieldPrimitive<F>> = {
 	/**
 	 * If the field should be required on a new record.
 	 * @default true
@@ -43,20 +44,20 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * Note: This will not create a default value on the database level. It will only
 	 * be used when creating a new record.
 	 */
-	defaultValue?: Primitive | (() => Primitive);
+	defaultValue?: P | (() => P);
 	/**
 	 * Update value for the field
 	 *
 	 * Note: This will create an onUpdate trigger on the database level for supported adapters.
 	 * It will be called when updating a record.
 	 */
-	onUpdate?: () => Primitive;
+	onUpdate?: () => P;
 	/**
 	 * transform the value before storing it.
 	 */
 	transform?: {
-		input?: (value: Primitive) => Primitive | Promise<Primitive>;
-		output?: (value: Primitive) => Primitive | Promise<Primitive>;
+		input?: (value: P) => Promiseable<P>;
+		output?: (value: P) => Promiseable<P>;
 	};
 	/**
 	 * Reference to another model.
@@ -65,11 +66,11 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 		/**
 		 * The model to reference.
 		 */
-		model: string;
+		model: string
 		/**
 		 * The field on the referenced model.
 		 */
-		field: string;
+		field: string
 		/**
 		 * The action to perform when the reference is deleted.
 		 * @default "cascade"
@@ -90,8 +91,8 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * A zod schema to validate the value.
 	 */
 	validator?: {
-		input?: ZodType;
-		output?: ZodType;
+		input?: StandardSchemaV1.Types;
+		output?: StandardSchemaV1.Types;
 	};
 	/**
 	 * The name of the field on the database.
@@ -106,10 +107,19 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	sortable?: boolean;
 };
 
-export type FieldAttribute<T extends FieldType = FieldType> = {
-	type: T;
-} & FieldAttributeConfig<T>;
+export type FieldAttributeFor<
+    T extends FieldType,
+> = { type: T } & FieldAttributeConfig<T>
 
+type DistributeFieldAttribute<T extends FieldType> = T extends FieldType
+    ? FieldAttributeFor<T>
+    : never;
+
+export type FieldAttribute = DistributeFieldAttribute<FieldType>
+
+/**
+* For new uses, use the `field` function instead.
+*/
 export const createFieldAttribute = <
 	T extends FieldType,
 	C extends Omit<FieldAttributeConfig<T>, "type">,
@@ -120,8 +130,22 @@ export const createFieldAttribute = <
 	return {
 		type,
 		...config,
-	} satisfies FieldAttribute<T>;
+	} as FieldAttributeFor<T>;
 };
+
+export const field = <
+	T extends FieldType,
+	C extends Omit<FieldAttributeConfig<T>, "type">,
+>(
+	type: T,
+	config?: C,
+) => {
+	return {
+		type,
+		required: true,
+		...config,
+	} as FieldAttributeFor<T>;
+};;
 
 export type InferValueType<T extends FieldType> = T extends "string"
 	? string
@@ -271,7 +295,7 @@ export type PluginFieldAttribute = Omit<
 >;
 
 export type InferFieldsFromPlugins<
-	Options extends BetterAuthOptions,
+	Options extends BetterAuthOptions<any>,
 	Key extends string,
 	Format extends "output" | "input" = "output",
 > = Options["plugins"] extends []
@@ -291,7 +315,7 @@ export type InferFieldsFromPlugins<
 		: {};
 
 export type InferFieldsFromOptions<
-	Options extends BetterAuthOptions,
+	Options extends BetterAuthOptions<any>,
 	Key extends "session" | "user",
 	Format extends "output" | "input" = "output",
 > = Options[Key] extends {

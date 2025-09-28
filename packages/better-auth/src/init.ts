@@ -5,11 +5,13 @@ import {
 	createInternalAdapter,
 	getAuthTables,
 	getMigrations,
+	schema,
 } from "./db";
 import type { Entries } from "type-fest";
 import { getAdapter } from "./db/utils";
 import type {
 	Adapter,
+	AuthPluginSchema,
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	Models,
@@ -38,7 +40,7 @@ import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
 import { isPromise } from "./utils/is-promise";
 
-export const init = async (options: BetterAuthOptions) => {
+export const init = async <S extends AuthPluginSchema>(options: BetterAuthOptions<S>) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
@@ -94,7 +96,7 @@ export const init = async (options: BetterAuthOptions) => {
 		})
 		.filter((x) => x !== null);
 
-	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
+	const generateIdFunc: AuthContext<S>["generateId"] = ({ model, size }) => {
 		if (typeof options.advanced?.generateId === "function") {
 			return options.advanced.generateId({ model, size });
 		}
@@ -112,7 +114,7 @@ export const init = async (options: BetterAuthOptions) => {
 				: getKyselyDatabaseType(options.database) || "unknown",
 	});
 
-	let ctx: AuthContext = {
+	let ctx: AuthContext<S> = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
@@ -179,7 +181,7 @@ export const init = async (options: BetterAuthOptions) => {
 		publishTelemetry: publish,
 	};
 	const initOrPromise = runPluginInit(ctx);
-	let context: AuthContext;
+	let context: AuthContext<S>;
 	if (isPromise(initOrPromise)) {
 		({ context } = await initOrPromise);
 	} else {
@@ -188,8 +190,8 @@ export const init = async (options: BetterAuthOptions) => {
 	return context;
 };
 
-export type AuthContext = {
-	options: BetterAuthOptions;
+export type AuthContext<S extends AuthPluginSchema> = {
+	options: BetterAuthOptions<S>;
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
@@ -221,7 +223,7 @@ export type AuthContext = {
 		window: number;
 		max: number;
 		storage: "memory" | "database" | "secondary-storage";
-	} & BetterAuthOptions["rateLimit"];
+	} & BetterAuthOptions<S>["rateLimit"];
 	adapter: Adapter;
 	internalAdapter: ReturnType<typeof createInternalAdapter>;
 	createAuthCookie: ReturnType<typeof createCookieGetter>;
@@ -250,15 +252,15 @@ export type AuthContext = {
 	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
 };
 
-async function runPluginInit(ctx: AuthContext) {
+async function runPluginInit<S extends AuthPluginSchema>(ctx: AuthContext<S>) {
 	let options = ctx.options;
 	const plugins = options.plugins || [];
-	let context: AuthContext = ctx;
-	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
+	let context: AuthContext<S> = ctx;
+	const dbHooks: BetterAuthOptions<S>["databaseHooks"][] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
 			let initPromise = plugin.init(context);
-			let result: ReturnType<Required<BetterAuthPlugin>["init"]>;
+			let result: ReturnType<Required<BetterAuthPlugin<S>>["init"]>;
 			if (isPromise(initPromise)) {
 				result = await initPromise;
 			} else {
@@ -275,7 +277,7 @@ async function runPluginInit(ctx: AuthContext) {
 				if (result.context) {
 					context = {
 						...context,
-						...(result.context as Partial<AuthContext>),
+						...(result.context as Partial<AuthContext<S>>),
 					};
 				}
 			}
@@ -293,15 +295,15 @@ async function runPluginInit(ctx: AuthContext) {
 	return { context };
 }
 
-function getInternalPlugins(options: BetterAuthOptions) {
-	const plugins: BetterAuthPlugin[] = [];
+function getInternalPlugins<S extends AuthPluginSchema>(options: BetterAuthOptions<S>) {
+	const plugins: BetterAuthPlugin<S>[] = [];
 	if (options.advanced?.crossSubDomainCookies?.enabled) {
 		//TODO: add internal plugin
 	}
 	return plugins;
 }
 
-function getTrustedOrigins(options: BetterAuthOptions) {
+function getTrustedOrigins<S extends AuthPluginSchema>(options: BetterAuthOptions<S>) {
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 	if (!baseURL) {
 		return [];

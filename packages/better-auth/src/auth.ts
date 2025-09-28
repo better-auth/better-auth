@@ -7,6 +7,7 @@ import type {
 	InferSession,
 	InferUser,
 	AuthContext,
+	AuthPluginSchema,
 } from "./types";
 import type { PrettifyDeep, Expand } from "./types/helper";
 import { getBaseURL, getOrigin } from "./utils/url";
@@ -16,7 +17,7 @@ import { BetterAuthError } from "./error";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
 
-export const betterAuth = <O extends BetterAuthOptions>(
+export const betterAuth = <O extends BetterAuthOptions<S>, S extends AuthPluginSchema>(
 	options: O &
 		// fixme(alex): do we need Record<never, never> here?
 		Record<never, never>,
@@ -63,10 +64,10 @@ export const betterAuth = <O extends BetterAuthOptions>(
 		$context: authContext,
 		$Infer: {} as {
 			Session: {
-				session: PrettifyDeep<InferSession<O>>;
-				user: PrettifyDeep<InferUser<O>>;
+				session: PrettifyDeep<InferSession<O, S>>;
+				user: PrettifyDeep<InferUser<O, S>>;
 			};
-		} & InferPluginTypes<O>,
+		} & InferPluginTypes<O, S>,
 		$ERROR_CODES: {
 			...errorCodes,
 			...BASE_ERROR_CODES,
@@ -74,10 +75,10 @@ export const betterAuth = <O extends BetterAuthOptions>(
 	};
 };
 
-export type Auth = {
+export type Auth<S extends AuthPluginSchema> = {
 	handler: (request: Request) => Promise<Response>;
 	api: FilterActions<ReturnType<typeof router>["endpoints"]>;
-	options: BetterAuthOptions;
+	options: BetterAuthOptions<S>;
 	$ERROR_CODES: typeof BASE_ERROR_CODES;
-	$context: Promise<AuthContext>;
+	$context: Promise<AuthContext<S>>;
 };

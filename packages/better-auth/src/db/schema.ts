@@ -1,61 +1,85 @@
 import * as z from "zod";
-import type { FieldAttribute } from ".";
+import { field, type FieldAttribute } from ".";
 import type { AuthPluginSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
 
-export const coreSchema = z.object({
-	id: z.string(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
-});
+export const coreSchema = {
+	id: field("string"),
+	createdAt: field("date", { defaultValue: () => new Date() }),
+	updatedAt: field("date", { defaultValue: () => new Date() }),
+}
 
-export const accountSchema = coreSchema.extend({
-	providerId: z.string(),
-	accountId: z.string(),
-	userId: z.coerce.string(),
-	accessToken: z.string().nullish(),
-	refreshToken: z.string().nullish(),
-	idToken: z.string().nullish(),
-	/**
-	 * Access token expires at
-	 */
-	accessTokenExpiresAt: z.date().nullish(),
-	/**
-	 * Refresh token expires at
-	 */
-	refreshTokenExpiresAt: z.date().nullish(),
-	/**
-	 * The scopes that the user has authorized
-	 */
-	scope: z.string().nullish(),
-	/**
-	 * Password is only stored in the credential provider
-	 */
-	password: z.string().nullish(),
-});
+export const accountSchema = {
+	fields: {
+		providerId: field("string"),
+		accountId: field("string"),
+		userId: field("string"),
+		accessToken: field("string", { required: false }),
+		refreshToken: field("string", { required: false }),
+		idToken: field("string", { required: false }),
+		/**
+		 * Access token expires at
+		 */
+		accessTokenExpiresAt: field("date", { required: false }),
+		/**
+		 * Refresh token expires at
+		 */
+		refreshTokenExpiresAt: field("date", { required: false }),
+		/**
+		 * The scopes that the user has authorized
+		 */
+		scope: field("string", { required: false }),
+		/**
+		 * Password is only stored in the credential provider
+		 */
+		password: field("string", { required: false }),
 
-export const userSchema = coreSchema.extend({
-	email: z.string().transform((val) => val.toLowerCase()),
-	emailVerified: z.boolean().default(false),
-	name: z.string(),
-	image: z.string().nullish(),
-});
 
-export const sessionSchema = coreSchema.extend({
-	userId: z.coerce.string(),
-	expiresAt: z.date(),
-	token: z.string(),
-	ipAddress: z.string().nullish(),
-	userAgent: z.string().nullish(),
-});
+		...coreSchema
+	}
+}
 
-export const verificationSchema = coreSchema.extend({
-	value: z.string(),
-	expiresAt: z.date(),
-	identifier: z.string(),
-});
+export const userSchema = {
+	fields: {
+		email: field("string", { transform: { input: (val) => val.toLowerCase() } }),
+		emailVerified: field("boolean", { defaultValue: false }),
+		name: field("string"),
+		image: field("string", { required: false }),
+
+		...coreSchema
+	}
+}
+
+export const sessionSchema = {
+	fields: {
+		userId: field("string"),
+		expiresAt: field("date"),
+		token: field("string"),
+		ipAddress: field("string", { required: false }),
+		userAgent: field("string", { required: false }),
+
+		...coreSchema
+	}
+}
+
+export const verificationSchema = {
+	fields: {
+		value: field("string"),
+		expiresAt: field("date"),
+		identifier: field("string"),
+
+		...coreSchema
+	}
+}
+
+export const schema = {
+	account: accountSchema,
+	user: userSchema,
+	session: sessionSchema,
+	verification: verificationSchema
+};
 
 export function parseOutputData<T extends Record<string, any>>(
 	data: T,
@@ -79,7 +103,7 @@ export function parseOutputData<T extends Record<string, any>>(
 	return parsedData as T;
 }
 
-export function getAllFields(options: BetterAuthOptions, table: string) {
+export function getAllFields<S extends AuthPluginSchema, T extends keyof S>(options: BetterAuthOptions<S>, table: T) {
 	let schema: Record<string, FieldAttribute> = {
 		...(table === "user" ? options.user?.additionalFields : {}),
 		...(table === "session" ? options.session?.additionalFields : {}),
@@ -95,7 +119,7 @@ export function getAllFields(options: BetterAuthOptions, table: string) {
 	return schema;
 }
 
-export function parseUserOutput(options: BetterAuthOptions, user: User) {
+export function parseUserOutput<S extends AuthPluginSchema>(options: BetterAuthOptions<S>, user: User) {
 	const schema = getAllFields(options, "user");
 	return parseOutputData(user, { fields: schema });
 }

@@ -8,6 +8,7 @@ import {
 } from "../../cookies";
 import * as z from "zod";
 import type {
+	AuthPluginSchema,
 	BetterAuthOptions,
 	GenericEndpointContext,
 	InferSession,
@@ -44,7 +45,7 @@ export const getSessionQuerySchema = z.optional(
 	}),
 );
 
-export const getSession = <Option extends BetterAuthOptions>() =>
+export const getSession = <Option extends BetterAuthOptions<S>, S extends AuthPluginSchema>() =>
 	createAuthEndpoint(
 		"/get-session",
 		{

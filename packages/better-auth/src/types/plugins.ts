@@ -6,28 +6,28 @@ import type { HookEndpointContext } from ".";
 import type { DeepPartial, LiteralString, UnionToIntersection } from "./helper";
 import type { AuthContext, BetterAuthOptions } from ".";
 
-export type AuthPluginTableSchema<TSchema extends AuthPluginSchema = AuthPluginSchema, TTable extends keyof TSchema = keyof TSchema> = {
-    fields: { [field in string]: FieldAttributeFor<any, TSchema> };
+export type AuthPluginTableSchema = {
+    fields: { [field in string]: FieldAttributeFor<any> };
     disableMigration?: boolean;
     modelName?: string;
 }
 
 export type AuthPluginSchema = {
-	[table in string]: AuthPluginTableSchema<AuthPluginSchema, table>;
+	[table in string]: AuthPluginTableSchema;
 };
 
-export type BetterAuthPlugin<T extends AuthPluginSchema=any> = {
+export type BetterAuthPlugin<T extends AuthPluginSchema> = {
 	id: LiteralString;
 	/**
 	 * The init function is called when the plugin is initialized.
 	 * You can return a new context or modify the existing context.
 	 */
-	init?: (ctx: AuthContext) => {
-		context?: DeepPartial<Omit<AuthContext, "options">>;
+	init?: (ctx: AuthContext<T>) => {
+		context?: DeepPartial<Omit<AuthContext<T>, "options">>;
 		options?: Partial<BetterAuthOptions<T>>;
 	} | void;
 	endpoints?: {
-		[key: string]: Endpoint<T>;
+		[key: string]: Endpoint;
 	};
 	middlewares?: {
 		path: string;
@@ -35,7 +35,7 @@ export type BetterAuthPlugin<T extends AuthPluginSchema=any> = {
 	}[];
 	onRequest?: (
 		request: Request,
-		ctx: AuthContext,
+		ctx: AuthContext<T>,
 	) => Promise<
 		| {
 				response: Response;
@@ -47,7 +47,7 @@ export type BetterAuthPlugin<T extends AuthPluginSchema=any> = {
 	>;
 	onResponse?: (
 		response: Response,
-		ctx: AuthContext,
+		ctx: AuthContext<T>,
 	) => Promise<{
 		response: Response;
 	} | void>;

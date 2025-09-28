@@ -1,5 +1,6 @@
-import { createEndpoint, createMiddleware } from "better-call";
+import { createEndpoint, createMiddleware, type Endpoint, type EndpointOptions, type EndpointContext } from "better-call";
 import type { AuthContext } from "../init";
+import type { schema } from "../db";
 
 export const optionsMiddleware = createMiddleware(async () => {
 	/**
@@ -7,7 +8,7 @@ export const optionsMiddleware = createMiddleware(async () => {
 	 * the context. Used to infer the type
 	 * here.
 	 */
-	return {} as AuthContext;
+	return {} as AuthContext<typeof schema>;
 });
 
 export const createAuthMiddleware = createMiddleware.create({

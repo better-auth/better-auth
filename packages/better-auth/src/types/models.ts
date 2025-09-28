@@ -1,14 +1,15 @@
 import type { BetterAuthOptions } from "./options";
 import type {
 	accountSchema,
+	schema,
 	sessionSchema,
 	userSchema,
 	verificationSchema,
 } from "../db/schema";
 import type { Auth } from "../auth";
 import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../db";
-import type { StripEmptyObjects, UnionToIntersection } from "./helper";
-import type { BetterAuthPlugin } from "./plugins";
+import type { SchemaTypes, StripEmptyObjects, UnionToIntersection } from "./helper";
+import type { AuthPluginSchema, BetterAuthPlugin } from "./plugins";
 import type * as z from "zod";
 
 export type Models =
@@ -24,49 +25,49 @@ export type Models =
 	| "passkey"
 	| "two-factor";
 
-export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
+export type AdditionalUserFieldsInput<Options extends BetterAuthOptions<S>, S extends AuthPluginSchema> = InferFieldsFromPlugins<Options, "user", "input"> &
 	InferFieldsFromPlugins<Options, "user", "input"> &
 		InferFieldsFromOptions<Options, "user", "input">;
 
-export type AdditionalUserFieldsOutput<Options extends BetterAuthOptions> =
+export type AdditionalUserFieldsOutput<Options extends BetterAuthOptions<S>, S extends AuthPluginSchema> =
 	InferFieldsFromPlugins<Options, "user"> &
 		InferFieldsFromOptions<Options, "user">;
 
-export type AdditionalSessionFieldsInput<Options extends BetterAuthOptions> =
+export type AdditionalSessionFieldsInput<Options extends BetterAuthOptions<S>, S extends AuthPluginSchema> =
 	InferFieldsFromPlugins<Options, "session", "input"> &
 		InferFieldsFromOptions<Options, "session", "input">;
 
-export type AdditionalSessionFieldsOutput<Options extends BetterAuthOptions> =
+export type AdditionalSessionFieldsOutput<Options extends BetterAuthOptions<S>, S extends AuthPluginSchema> =
 	InferFieldsFromPlugins<Options, "session"> &
 		InferFieldsFromOptions<Options, "session">;
 
-export type InferUser<O extends BetterAuthOptions | Auth> = UnionToIntersection<
+export type InferUser<O extends BetterAuthOptions<S> | Auth<S>, S extends AuthPluginSchema> = UnionToIntersection<
 	StripEmptyObjects<
 		User &
-			(O extends BetterAuthOptions
-				? AdditionalUserFieldsOutput<O>
-				: O extends Auth
-					? AdditionalUserFieldsOutput<O["options"]>
+			(O extends BetterAuthOptions<S>
+				? AdditionalUserFieldsOutput<O, S>
+				: O extends Auth<S>
+					? AdditionalUserFieldsOutput<O["options"], S>
 					: {})
 	>
 >;
 
-export type InferSession<O extends BetterAuthOptions | Auth> =
+export type InferSession<O extends BetterAuthOptions<S> | Auth<S>, S extends AuthPluginSchema> =
 	UnionToIntersection<
 		StripEmptyObjects<
 			Session &
-				(O extends BetterAuthOptions
-					? AdditionalSessionFieldsOutput<O>
-					: O extends Auth
-						? AdditionalSessionFieldsOutput<O["options"]>
+				(O extends BetterAuthOptions<S>
+					? AdditionalSessionFieldsOutput<O, S>
+					: O extends Auth<S>
+						? AdditionalSessionFieldsOutput<O["options"], S>
 						: {})
 		>
 	>;
 
-export type InferPluginTypes<O extends BetterAuthOptions> =
+export type InferPluginTypes<O extends BetterAuthOptions<S>, S extends AuthPluginSchema> =
 	O["plugins"] extends Array<infer P>
 		? UnionToIntersection<
-				P extends BetterAuthPlugin
+				P extends BetterAuthPlugin<S>
 					? P["$Infer"] extends Record<string, any>
 						? P["$Infer"]
 						: {}
@@ -89,8 +90,8 @@ interface RateLimit {
 	lastRequest: number;
 }
 
-export type User = z.infer<typeof userSchema>;
-export type Account = z.infer<typeof accountSchema>;
-export type Session = z.infer<typeof sessionSchema>;
-export type Verification = z.infer<typeof verificationSchema>;
+export type User = SchemaTypes<typeof userSchema>;
+export type Account = SchemaTypes<typeof accountSchema>;
+export type Session = SchemaTypes<typeof sessionSchema>;
+export type Verification = SchemaTypes<typeof verificationSchema>;
 export type { RateLimit };

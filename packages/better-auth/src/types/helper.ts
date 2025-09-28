@@ -1,4 +1,4 @@
-import type { AuthPluginTableSchema } from ".";
+import type { AuthPluginSchema, AuthPluginTableSchema, BetterAuthPlugin } from ".";
 import type { FieldPrimitive } from "../db";
 
 export type Primitive =
@@ -10,6 +10,23 @@ export type Primitive =
 	| null
 	| undefined;
 
+export type Required<S extends AuthPluginTableSchema, R extends boolean = true> = {
+	[K in keyof S["fields"]]: S["fields"][K]["required"] extends R ? K : never;
+}
+
+export type MergePlugin<S1 extends AuthPluginSchema, P extends BetterAuthPlugin<S3>, S3 extends AuthPluginSchema> = {
+	[K in keyof S1]: K extends keyof S3 ? {
+		[F in keyof S1[K] | keyof S3[K]]: F extends keyof S3[K] ? S3[K][F] : F extends keyof S1[K] ? S1[K][F] : never;
+	} : S1[K];
+}
+
+export type MergePlugins<S1 extends AuthPluginSchema, P extends BetterAuthPlugin<any>[]> = MergePlugin<S1, P[number], P[number] extends BetterAuthPlugin<infer S3> ? S3: never>;
+
+export type MergeAdditionalFields<S1 extends AuthPluginSchema, M extends keyof S1, S2 extends Partial<S1[M]> & Record<string, any>> = {
+	[K in keyof S1]: K extends M ? {
+		[F in keyof S1[K] | keyof S2]: F extends keyof S2 ? S2[F] : F extends keyof S1[K] ? S1[K][F] : never;
+	} : S1[K];
+}
 
 export type MergeSchema<S1 extends Record<any, any>, S2 extends Record<any, any> = {}> = {
   [K in keyof S1 | keyof S2]: K extends keyof S2 & keyof S1 ? S1[K] extends Record<any, any> ? S2[K] extends Record<any, any> ? MergeSchema<S1[K], S2[K]> : never : S2[K] : K extends keyof S1 ? S1[K] : K extends keyof S2 ? S2[K] : never;

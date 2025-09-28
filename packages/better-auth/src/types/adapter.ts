@@ -1,8 +1,8 @@
-import type { schema } from "../types/schema";
 import type { AuthPluginSchema, AuthPluginTableSchema, Ensure, SchemaTypes } from ".";
 import type { BetterAuthOptions } from "./options";
 import type { FieldPrimitive } from "../db/field";
 import type { AdapterFactoryConfig, CustomAdapter } from "../adapters";
+import type { schema } from "../db";
 
 /**
  * Adapter where clause
@@ -124,7 +124,7 @@ export type AdapterSchemaCreation = {
 	overwrite?: boolean;
 };
 
-export type TransactionAdapter = Omit<Adapter, "transaction">;
+export type TransactionAdapter<S extends AuthPluginSchema> = Omit<Adapter<S>, "transaction">;
 
 export interface AdapterInstance<S extends AuthPluginSchema> {
 	(options: BetterAuthOptions<S>): Adapter<S>;

@@ -37,12 +37,12 @@ import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
 import { type InternalLogger, logger } from "../utils/logger";
-import type { BetterAuthPlugin } from "../plugins";
+import type { AuthPluginSchema, BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 
-export function checkEndpointConflicts(
-	options: BetterAuthOptions,
+export function checkEndpointConflicts<S extends AuthPluginSchema>(
+	options: BetterAuthOptions<S>,
 	logger: InternalLogger,
 ) {
 	const endpointRegistry = new Map<
@@ -152,8 +152,8 @@ To resolve this, you can:
 	}
 }
 
-export function getEndpoints<Option extends BetterAuthOptions>(
-	ctx: Promise<AuthContext> | AuthContext,
+export function getEndpoints<Option extends BetterAuthOptions<S>, S extends AuthPluginSchema>(
+	ctx: Promise<AuthContext<S>> | AuthContext<S>,
 	options: Option,
 ) {
 	const pluginEndpoints = options.plugins?.reduce(
@@ -168,7 +168,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 
 	type PluginEndpoint = UnionToIntersection<
 		Option["plugins"] extends Array<infer T>
-			? T extends BetterAuthPlugin
+			? T extends BetterAuthPlugin<S>
 				? T extends {
 						endpoints: infer E;
 					}
@@ -205,9 +205,9 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 	const baseEndpoints = {
 		signInSocial,
 		callbackOAuth,
-		getSession: getSession<Option>(),
+		getSession: getSession(),
 		signOut,
-		signUpEmail: signUpEmail<Option>(),
+		signUpEmail: signUpEmail(),
 		signInEmail,
 		forgetPassword,
 		resetPassword,
@@ -216,12 +216,12 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		changeEmail,
 		changePassword,
 		setPassword,
-		updateUser: updateUser<Option>(),
+		updateUser: updateUser(),
 		deleteUser,
 		forgetPasswordCallback,
 		requestPasswordReset,
 		requestPasswordResetCallback,
-		listSessions: listSessions<Option>(),
+		listSessions: listSessions(),
 		revokeSession,
 		revokeSessions,
 		revokeOtherSessions,
@@ -245,8 +245,8 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		middlewares,
 	};
 }
-export const router = <Option extends BetterAuthOptions>(
-	ctx: AuthContext,
+export const router = <Option extends BetterAuthOptions<S>, S extends AuthPluginSchema>(
+	ctx: AuthContext<S>,
 	options: Option,
 ) => {
 	const { api, middlewares } = getEndpoints(ctx, options);

@@ -1,10 +1,13 @@
 import { getDate } from "../utils/date";
-import { parseSessionOutput, parseUserOutput } from "./schema";
+import { parseSessionOutput, parseUserOutput, schema } from "./schema";
 import type {
 	Adapter,
 	AuthContext,
+	AuthPluginSchema,
 	BetterAuthOptions,
+	Ensure,
 	GenericEndpointContext,
+	SchemaTypes,
 	TransactionAdapter,
 	Where,
 } from "../types";
@@ -19,13 +22,13 @@ import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId, type InternalLogger } from "../utils";
 
-export const createInternalAdapter = (
-	adapter: Adapter,
+export const createInternalAdapter = <S extends typeof schema = typeof schema>(
+	adapter: Adapter<S>,
 	ctx: {
-		options: Omit<BetterAuthOptions, "logger">;
+		options: Omit<BetterAuthOptions<S>, "logger">;
 		logger: InternalLogger;
-		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
-		generateId: AuthContext["generateId"];
+		hooks: Exclude<BetterAuthOptions<S>["databaseHooks"], undefined>[];
+		generateId: AuthContext<S>["generateId"];
 	},
 ) => {
 	const logger = ctx.logger;
@@ -72,19 +75,14 @@ export const createInternalAdapter = (
 
 	return {
 		createOAuthUser: async (
-			user: Omit<User, "id" | "createdAt" | "updatedAt">,
+			user: Omit<SchemaTypes<S["user"]>, "id" | "createdAt" | "updatedAt">,
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 			context?: GenericEndpointContext,
 		) => {
-			return adapter.transaction(async (trxAdapter) => {
+			return adapter.transaction(async (trgitxAdapter) => {
 				const createdUser = await createWithHooks(
-					{
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						...user,
-					},
+					user,
 					"user",
 					undefined,
 					context,
@@ -137,7 +135,7 @@ export const createInternalAdapter = (
 				Partial<Account> &
 				T,
 			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
+			trxAdapter?: TransactionAdapter<S>,
 		) => {
 			const createdAccount = await createWithHooks(
 				{
@@ -270,7 +268,7 @@ export const createInternalAdapter = (
 			dontRememberMe?: boolean,
 			override?: Partial<Session> & Record<string, any>,
 			overrideAll?: boolean,
-			trxAdapter?: TransactionAdapter,
+			trxAdapter?: TransactionAdapter<S>,
 		) => {
 			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
