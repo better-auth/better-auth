@@ -1,16 +1,16 @@
 import { Kysely, MysqlDialect } from "kysely";
-import { testAdapter } from "../../../test-adapter";
-import { kyselyAdapter } from "../../kysely-adapter";
+import { testAdapter } from "../../test-adapter";
+import { kyselyAdapter } from "../kysely-adapter";
 import { createPool } from "mysql2/promise";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
 	performanceTestSuite,
 	transactionsTestSuite,
-} from "../../../tests";
-import { getMigrations } from "../../../../db";
+} from "../../tests";
+import { getMigrations } from "../../../db";
 import { assert } from "vitest";
-import { waitForTestPermission } from "../../../../test/adapter-test-setup";
+import { waitForTestPermission } from "../../../test/adapter-test-setup";
 
 const { done } = await waitForTestPermission("kysely-mysql");
 

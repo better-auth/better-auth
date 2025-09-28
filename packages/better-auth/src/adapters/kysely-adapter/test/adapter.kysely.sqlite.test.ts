@@ -1,17 +1,17 @@
 import { Kysely, SqliteDialect } from "kysely";
-import { testAdapter } from "../../../test-adapter";
-import { kyselyAdapter } from "../../kysely-adapter";
+import { testAdapter } from "../../test-adapter";
+import { kyselyAdapter } from "../kysely-adapter";
 import Database from "better-sqlite3";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
 	performanceTestSuite,
 	transactionsTestSuite,
-} from "../../../tests";
+} from "../../tests";
 import path from "path";
-import { getMigrations } from "../../../../db";
+import { getMigrations } from "../../../db";
 import fs from "fs/promises";
-import { waitForTestPermission } from "../../../../test/adapter-test-setup";
+import { waitForTestPermission } from "../../../test/adapter-test-setup";
 
 const { done } = await waitForTestPermission("kysely-sqlite");
 

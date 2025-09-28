@@ -1,17 +1,17 @@
 import { Kysely, MssqlDialect } from "kysely";
-import { testAdapter } from "../../../test-adapter";
-import { kyselyAdapter } from "../../kysely-adapter";
+import { testAdapter } from "../../test-adapter";
+import { kyselyAdapter } from "../kysely-adapter";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
 	performanceTestSuite,
 	transactionsTestSuite,
-} from "../../../tests";
-import { getMigrations } from "../../../../db";
+} from "../../tests";
+import { getMigrations } from "../../../db";
 import * as Tedious from "tedious";
 import * as Tarn from "tarn";
-import type { BetterAuthOptions } from "../../../../types";
-import { waitForTestPermission } from "../../../../test/adapter-test-setup";
+import type { BetterAuthOptions } from "../../../types";
+import { waitForTestPermission } from "../../../test/adapter-test-setup";
 
 const { done } = await waitForTestPermission("kysely-mssql");
 

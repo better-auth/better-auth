@@ -1,16 +1,16 @@
 import { Kysely, PostgresDialect } from "kysely";
-import { testAdapter } from "../../../test-adapter";
-import { kyselyAdapter } from "../../kysely-adapter";
+import { testAdapter } from "../../test-adapter";
+import { kyselyAdapter } from "../kysely-adapter";
 import { Pool } from "pg";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
 	performanceTestSuite,
 	transactionsTestSuite,
-} from "../../../tests";
-import { getMigrations } from "../../../../db";
-import type { BetterAuthOptions } from "../../../../types";
-import { waitForTestPermission } from "../../../../test/adapter-test-setup";
+} from "../../tests";
+import { getMigrations } from "../../../db";
+import type { BetterAuthOptions } from "../../../types";
+import { waitForTestPermission } from "../../../test/adapter-test-setup";
 
 const { done } = await waitForTestPermission("kysely-pg");
 
