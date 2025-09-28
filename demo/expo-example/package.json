@@ -9,6 +9,7 @@
     "dev": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "test": "jest --watchAll",
     "lint": "expo lint",
     "android": "expo run:android"
   },
@@ -16,7 +17,7 @@
     "@better-auth/expo": "workspace:*",
     "@expo/metro-runtime": "^6.1.2",
     "@expo/vector-icons": "^15.0.2",
-    "@nanostores/react": "^1.0.0",
+    "@nanostores/react": "^0.8.4",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/native": "^7.1.17",
     "@rn-primitives/avatar": "^1.1.0",
@@ -59,6 +60,9 @@
     "@babel/preset-env": "^7.26.0",
     "@babel/runtime": "^7.26.0",
     "@types/babel__core": "^7.20.5",
-    "@types/react": "^19.1.12"
+    "@types/jest": "^29.5.14",
+    "@types/react": "^19.1.12",
+    "@types/react-test-renderer": "^18.3.1",
+    "typescript": "^5.7.2"
   }
 }

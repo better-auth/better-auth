@@ -22,7 +22,12 @@ export async function generateState(
 	const stateCookie = c.context.createAuthCookie("state", {
 		maxAge: 5 * 60 * 1000, // 5 minutes
 	});
-	c.setCookie(stateCookie.name, state, stateCookie.attributes);
+	await c.setSignedCookie(
+		stateCookie.name,
+		state,
+		c.context.secret,
+		stateCookie.attributes,
+	);
 	const data = JSON.stringify({
 		callbackURL,
 		codeVerifier,
@@ -92,7 +97,11 @@ export async function parseState(c: GenericEndpointContext) {
 		parsedData.errorURL = `${c.context.baseURL}/error`;
 	}
 	const stateCookie = c.context.createAuthCookie("state");
-	const stateCookieValue = c.getCookie(stateCookie.name);
+	const stateCookieValue = await c.getSignedCookie(
+		stateCookie.name,
+		c.context.secret,
+	);
+	console.log({ stateCookieValue, state });
 	if (!stateCookieValue || stateCookieValue !== state) {
 		const errorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
