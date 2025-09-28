@@ -56,14 +56,49 @@ const kyselyDB = new Kysely({
 	dialect: dialect,
 });
 
-const query = async (sql: string) => {
-	const result = await kyselyDB.getExecutor().executeQuery({
-		sql,
-		parameters: [],
-		query: { kind: "SelectQueryNode" },
-		queryId: { queryId: "" },
-	});
-	return { rows: result.rows, rowCount: result.rows.length };
+// Add connection validation helper
+const validateConnection = async (retries: number = 3): Promise<boolean> => {
+	for (let i = 0; i < retries; i++) {
+		try {
+			await query("SELECT 1 as test", 5000);
+			console.log("Connection validated successfully");
+			return true;
+		} catch (error) {
+			console.warn(`Connection validation attempt ${i + 1} failed:`, error);
+			if (i === retries - 1) {
+				console.error("All connection validation attempts failed");
+				return false;
+			}
+			// Wait before retry
+			await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)));
+		}
+	}
+	return false;
+};
+
+const query = async (sql: string, timeoutMs: number = 30000) => {
+	try {
+		console.log(`Executing SQL: ${sql.substring(0, 100)}...`);
+		const result = (await Promise.race([
+			kyselyDB.getExecutor().executeQuery({
+				sql,
+				parameters: [],
+				query: { kind: "SelectQueryNode" },
+				queryId: { queryId: "" },
+			}),
+			new Promise((_, reject) =>
+				setTimeout(
+					() => reject(new Error(`Query timeout after ${timeoutMs}ms`)),
+					timeoutMs,
+				),
+			),
+		])) as any;
+		console.log(`Query completed successfully`);
+		return { rows: result.rows, rowCount: result.rows.length };
+	} catch (error) {
+		console.error(`Query failed: ${error}`);
+		throw error;
+	}
 };
 
 const showDB = async () => {
@@ -77,26 +112,71 @@ const showDB = async () => {
 };
 
 const resetDB = async () => {
-	// First, drop all foreign key constraints
-	await query(`
-		DECLARE @sql NVARCHAR(MAX) = '';
-		SELECT @sql = @sql + 'ALTER TABLE [' + TABLE_SCHEMA + '].[' + TABLE_NAME + '] DROP CONSTRAINT [' + CONSTRAINT_NAME + '];' + CHAR(13)
-		FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
-		WHERE CONSTRAINT_TYPE = 'FOREIGN KEY'
-		AND TABLE_CATALOG = DB_NAME();
-		EXEC sp_executesql @sql;
-	`);
+	try {
+		console.log("Starting database reset...");
 
-	// Then drop all tables
-	await query(`
-		DECLARE @sql NVARCHAR(MAX) = '';
-		SELECT @sql = @sql + 'DROP TABLE [' + TABLE_NAME + '];' + CHAR(13)
-		FROM INFORMATION_SCHEMA.TABLES 
-		WHERE TABLE_TYPE = 'BASE TABLE' 
-		AND TABLE_CATALOG = DB_NAME()
-		AND TABLE_SCHEMA = 'dbo';
-		EXEC sp_executesql @sql;
-	`);
+		// Validate connection before proceeding
+		const isConnected = await validateConnection();
+		if (!isConnected) {
+			throw new Error("Database connection validation failed");
+		}
+
+		// First, try to disable foreign key checks and drop constraints
+		console.log("Dropping foreign key constraints...");
+		await query(
+			`
+			-- Disable all foreign key constraints
+			EXEC sp_MSforeachtable "ALTER TABLE ? NOCHECK CONSTRAINT all";
+		`,
+			15000,
+		);
+
+		// Drop foreign key constraints
+		await query(
+			`
+			DECLARE @sql NVARCHAR(MAX) = '';
+			SELECT @sql = @sql + 'ALTER TABLE [' + TABLE_SCHEMA + '].[' + TABLE_NAME + '] DROP CONSTRAINT [' + CONSTRAINT_NAME + '];' + CHAR(13)
+			FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+			WHERE CONSTRAINT_TYPE = 'FOREIGN KEY'
+			AND TABLE_CATALOG = DB_NAME();
+			IF LEN(@sql) > 0
+				EXEC sp_executesql @sql;
+		`,
+			15000,
+		);
+
+		// Then drop all tables
+		console.log("Dropping tables...");
+		await query(
+			`
+			DECLARE @sql NVARCHAR(MAX) = '';
+			SELECT @sql = @sql + 'DROP TABLE [' + TABLE_NAME + '];' + CHAR(13)
+			FROM INFORMATION_SCHEMA.TABLES 
+			WHERE TABLE_TYPE = 'BASE TABLE' 
+			AND TABLE_CATALOG = DB_NAME()
+			AND TABLE_SCHEMA = 'dbo';
+			IF LEN(@sql) > 0
+				EXEC sp_executesql @sql;
+		`,
+			15000,
+		);
+
+		console.log("Database reset completed successfully");
+	} catch (error) {
+		console.error("Database reset failed:", error);
+		// Final fallback - try to recreate the database
+		try {
+			console.log("Attempting database recreation...");
+			// This would require a separate connection to master database
+			// For now, just throw the error with better context
+			throw new Error(`Database reset failed completely: ${error}`);
+		} catch (finalError) {
+			console.error("Final fallback also failed:", finalError);
+			throw new Error(
+				`Database reset failed: ${error}. All fallback attempts failed: ${finalError}`,
+			);
+		}
+	}
 };
 
 const { execute } = await testAdapter({
