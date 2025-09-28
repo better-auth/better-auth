@@ -112,7 +112,6 @@ export const expo = (options?: ExpoOptions) => {
 						ctx.context.secret,
 						stateCookie.attributes,
 					);
-					console.log({ url });
 					return ctx.redirect(ctx.query.authorizationURL);
 				},
 			),
