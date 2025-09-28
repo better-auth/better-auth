@@ -700,10 +700,12 @@
     "@simplewebauthn/browser": "^13.1.2",
     "@simplewebauthn/server": "^13.1.2",
     "better-call": "catalog:",
+    "bs58": "^6.0.0",
     "defu": "^6.1.4",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
     "nanostores": "^1.0.1",
+    "tweetnacl": "^1.0.3",
     "zod": "^4.1.5"
   },
   "peerDependencies": {
