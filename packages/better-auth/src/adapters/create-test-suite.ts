@@ -194,13 +194,13 @@ export const createTestSuite = <
 		} & AdditionalOptions,
 	) => {
 		return async (helpers: {
-			adapter: () => Adapter;
+			adapter: () => Promise<Adapter>;
 			log: Logger;
 			adapterDisplayName: string;
 			getBetterAuthOptions: () => BetterAuthOptions;
 			modifyBetterAuthOptions: (
 				options: BetterAuthOptions,
-			) => BetterAuthOptions;
+			) => Promise<BetterAuthOptions>;
 			cleanup: () => Promise<void>;
 			runMigrations: () => Promise<void>;
 			prefixTests?: string;
@@ -208,14 +208,13 @@ export const createTestSuite = <
 		}) => {
 			const createdRows: Record<string, any[]> = {};
 
-			const adapter = helpers.adapter;
+			let adapter = await helpers.adapter();
 			const wrapperAdapter = () => {
 				const options = helpers.getBetterAuthOptions();
-				let adapter_ = adapter();
 				const adapterConfig = {
 					adapterId: helpers.adapterDisplayName,
-					...adapter_.options?.adapterConfig,
-					adapterName: `Wrapped ${adapter_.options?.adapterConfig.adapterName}`,
+					...adapter.options?.adapterConfig,
+					adapterName: `Wrapped ${adapter.options?.adapterConfig.adapterName}`,
 					disableTransformOutput: true,
 					disableTransformInput: true,
 				};
@@ -223,32 +222,25 @@ export const createTestSuite = <
 					createAdapterFactory({
 						config: {
 							...adapterConfig,
-							transaction: adapter_.transaction,
+							transaction: adapter.transaction,
 						},
 						adapter: ({ getDefaultModelName }) => {
-							let adapter_ = adapter();
-
 							//@ts-expect-error
-							adapter_.transaction = undefined;
+							adapter.transaction = undefined;
 							return {
-								count: adapter_.count,
-								deleteMany: adapter_.deleteMany,
-								delete: adapter_.delete,
-								findOne: adapter_.findOne,
-								findMany: adapter_.findMany,
-								update: adapter_.update as any,
-								updateMany: adapter_.updateMany,
-								// options: {
-								// 	...adapter_.options,
-								// 	adapterConfig: {
-								// 		...adapter_.options?.adapterConfig,
-								// 		adapterName: `wrapped-${adapter_.options?.adapterConfig.adapterName}`,
-								// 	},
-								// },
-								createSchema: adapter_.createSchema as any,
+								count: adapter.count,
+								deleteMany: adapter.deleteMany,
+								delete: adapter.delete,
+								findOne: adapter.findOne,
+								findMany: adapter.findMany,
+								update: adapter.update as any,
+								updateMany: adapter.updateMany,
+								
+								createSchema: adapter.createSchema as any,
 								async create({ data, model, select }) {
 									const defaultModelName = getDefaultModelName(model);
-									const res = await adapter().create({
+									adapter = await helpers.adapter();
+									const res = await adapter.create({
 										data: data,
 										model: defaultModelName,
 										select,
@@ -257,6 +249,7 @@ export const createTestSuite = <
 									createdRows[model] = [...(createdRows[model] || []), res];
 									return res as any;
 								},
+								options: adapter.options,
 							};
 						},
 					})(options);
@@ -275,10 +268,11 @@ export const createTestSuite = <
 			};
 
 			const cleanupCreatedRows = async () => {
+				adapter = await helpers.adapter();
 				for (const model of Object.keys(createdRows)) {
 					for (const row of createdRows[model]!) {
 						try {
-							await adapter().delete({
+							await adapter.delete({
 								model,
 								where: [{ field: "id", value: row.id }],
 							});
@@ -295,10 +289,12 @@ export const createTestSuite = <
 			let didMigrateOnOptionsModify = false;
 
 			const resetBetterAuthOptions = async () => {
-				helpers.modifyBetterAuthOptions({});
+				adapter = await helpers.adapter();
+				await helpers.modifyBetterAuthOptions({});
 				if (didMigrateOnOptionsModify) {
 					didMigrateOnOptionsModify = false;
 					await helpers.runMigrations();
+					adapter = await helpers.adapter();
 				}
 			};
 
@@ -339,8 +335,9 @@ export const createTestSuite = <
 					let i = -1;
 					for (const data of modelData) {
 						i++;
+						const a = wrapperAdapter();
 						modelResults.push(
-							await wrapperAdapter().create({
+							await a.create({
 								model: models[i]!,
 								data,
 								forceAllowId: true,
@@ -387,7 +384,7 @@ export const createTestSuite = <
 						get(target, prop) {
 							const adapter = wrapperAdapter();
 							if (prop === "transaction") {
-								return helpers.adapter().transaction;
+								return adapter.transaction;
 							}
 							const value = adapter[prop as keyof typeof adapter];
 							if (typeof value === "function") {
@@ -398,9 +395,12 @@ export const createTestSuite = <
 					}),
 					auth: new Proxy({} as any, {
 						get(target, prop) {
+							const adapter = wrapperAdapter();
 							const auth = betterAuth({
 								...helpers.getBetterAuthOptions(),
-								database: adapter,
+								database: (options: BetterAuthOptions) => {
+									return adapter;
+								},
 							});
 							return auth[prop as keyof typeof auth];
 						},

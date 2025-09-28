@@ -120,6 +120,7 @@ export const normalTestSuite = createTestSuite(
 				});
 				expect(result).toEqual(user);
 				expect(result?.email).toEqual(user.email);
+				expect(true).toEqual(true);
 			},
 			"findOne - should select fields": async () => {
 				const [user] = await insertRandom("user");
@@ -208,28 +209,50 @@ export const normalTestSuite = createTestSuite(
 			},
 			"findMany - should find many models with gt operator": async () => {
 				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const oldestUser = users.sort(
+					(a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+				)[0]!;
 				const result = await adapter.findMany<User>({
 					model: "user",
 					where: [
-						{ field: "createdAt", value: users[0]!.createdAt, operator: "gt" },
+						{
+							field: "createdAt",
+							value: oldestUser.createdAt,
+							operator: "gt",
+						},
 					],
 				});
-				const expectedResult = users.filter(
-					(user) => user.createdAt > users[0]!.createdAt,
+				const expectedResult = sortModels(
+					users.filter((user) => user.createdAt > oldestUser.createdAt),
 				);
-				expect(sortModels(result)).toEqual(sortModels(expectedResult));
+				// console.log({
+				// 	expectedResult,
+				// 	resultSorted: sortModels(result),
+				// 	result: result,
+				// 	user: oldestUser,
+				// });
+				expect(result.length).not.toBe(0);
+				expect(sortModels(result)).toEqual(expectedResult);
 			},
 			"findMany - should find many models with gte operator": async () => {
 				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const oldestUser = users.sort(
+					(a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+				)[0]!;
 				const result = await adapter.findMany<User>({
 					model: "user",
 					where: [
-						{ field: "createdAt", value: users[0]!.createdAt, operator: "gte" },
+						{
+							field: "createdAt",
+							value: oldestUser.createdAt,
+							operator: "gte",
+						},
 					],
 				});
 				const expectedResult = users.filter(
-					(user) => user.createdAt >= users[0]!.createdAt,
+					(user) => user.createdAt >= oldestUser.createdAt,
 				);
+				expect(result.length).not.toBe(0);
 				expect(sortModels(result)).toEqual(sortModels(expectedResult));
 			},
 			"findMany - should find many models with lte operator": async () => {

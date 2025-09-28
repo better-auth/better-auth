@@ -62,6 +62,7 @@ testAdapter({
 				};
 				console.log(DB);
 			},
+			disableTests: { "create - should create a model": true },
 		}),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),

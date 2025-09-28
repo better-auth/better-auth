@@ -95,7 +95,7 @@ const resetDB = async () => {
 	`);
 };
 
-testAdapter({
+const { execute } = await testAdapter({
 	adapter: () => {
 		return kyselyAdapter(kyselyDB, {
 			type: "mssql",
@@ -124,3 +124,4 @@ testAdapter({
 		await done();
 	},
 });
+execute();

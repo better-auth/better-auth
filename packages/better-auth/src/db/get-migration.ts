@@ -53,7 +53,7 @@ const mssqlMap = {
 	string: ["varchar", "nvarchar"],
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
-	date: ["datetime", "date"],
+	date: ["datetime2", "date", "datetime"],
 	json: ["varchar", "nvarchar"],
 };
 
@@ -208,7 +208,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 				sqlite: "date",
 				postgres: "timestamptz",
 				mysql: "timestamp(3)",
-				mssql: "datetime",
+				mssql: sql`datetime2(3)`,
 			},
 			json: {
 				sqlite: "text",

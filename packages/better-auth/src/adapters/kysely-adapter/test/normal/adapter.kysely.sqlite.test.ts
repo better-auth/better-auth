@@ -22,12 +22,13 @@ let kyselyDB = new Kysely({
 	dialect: new SqliteDialect({ database }),
 });
 
-testAdapter({
-	adapter: () =>
-		kyselyAdapter(kyselyDB, {
+const { execute } = await testAdapter({
+	adapter: () => {
+		return kyselyAdapter(kyselyDB, {
 			type: "sqlite",
 			debugLogs: { isRunningAdapterTests: true },
-		}),
+		});
+	},
 	prefixTests: "sqlite",
 	async runMigrations(betterAuthOptions) {
 		database.close();
@@ -51,3 +52,4 @@ testAdapter({
 		await done();
 	},
 });
+execute();

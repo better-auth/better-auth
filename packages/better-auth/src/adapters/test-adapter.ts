@@ -12,7 +12,7 @@ export type Logger = {
 	debug: (...args: any[]) => void;
 };
 
-export const testAdapter = ({
+export const testAdapter = async ({
 	adapter: getAdapter,
 	runMigrations,
 	overrideBetterAuthOptions,
@@ -34,7 +34,9 @@ export const testAdapter = ({
 	 */
 	adapter: (
 		options: BetterAuthOptions,
-	) => (options: BetterAuthOptions) => Adapter;
+	) =>
+		| Promise<(options: BetterAuthOptions) => Adapter>
+		| ((options: BetterAuthOptions) => Adapter);
 	/**
 	 * A function that will run the database migrations.
 	 */
@@ -76,13 +78,17 @@ export const testAdapter = ({
 		} satisfies BetterAuthOptions;
 	})();
 
-	const adapter = () => {
-		return getAdapter(betterAuthOptions)(betterAuthOptions);
-	};
+	let adapter: Adapter = (await getAdapter(betterAuthOptions))(
+		betterAuthOptions,
+	);
 
-	const adapterName = adapter().options?.adapterConfig.adapterName;
-	const adapterId = adapter().options?.adapterConfig.adapterId || adapter().id;
+	const adapterName = adapter.options?.adapterConfig.adapterName;
+	const adapterId = adapter.options?.adapterConfig.adapterId || adapter.id;
 	const adapterDisplayName = adapterName || adapterId;
+
+	const refreshAdapter = async (betterAuthOptions: BetterAuthOptions) => {
+		adapter = (await getAdapter(betterAuthOptions))(betterAuthOptions);
+	};
 
 	/**
 	 * A helper function to log to the console.
@@ -122,12 +128,13 @@ export const testAdapter = ({
 	 */
 	const cleanup = async () => {
 		const start = performance.now();
+		await refreshAdapter(betterAuthOptions);
 		const getAllModels = getAuthTables(betterAuthOptions);
 
 		// Clean up all rows from all models
 		for (const model of Object.keys(getAllModels)) {
 			try {
-				await adapter().deleteMany({ model: model, where: [] });
+				await adapter.deleteMany({ model: model, where: [] });
 			} catch (error) {
 				const msg = `Error while cleaning up all rows from ${model}`;
 				log.error(msg, error);
@@ -147,6 +154,7 @@ export const testAdapter = ({
 				cause: error,
 			});
 		}
+		await refreshAdapter(betterAuthOptions);
 		log.success(
 			`${colors.bright}CLEAN-UP${colors.reset} completed successfully (${(performance.now() - start).toFixed(3)}ms)`,
 		);
@@ -172,38 +180,46 @@ export const testAdapter = ({
 		);
 	};
 
-	describe(adapterDisplayName, async () => {
-		beforeAll(async () => {
-			await migrate();
-		});
+	return {
+		execute: () => {
+			describe(adapterDisplayName, async () => {
+				beforeAll(async () => {
+					await migrate();
+				});
 
-		afterAll(async () => {
-			await cleanup();
-			await onFinish?.();
-		});
+				afterAll(async () => {
+					await cleanup();
+					await onFinish?.();
+				});
 
-		for (const testSuite of tests) {
-			await testSuite({
-				adapter,
-				adapterDisplayName,
-				log,
-				getBetterAuthOptions: () => betterAuthOptions,
-				modifyBetterAuthOptions: (options) => {
-					const newOptions = {
-						...defaultBAOptions,
-						...options,
-					};
-					betterAuthOptions = {
-						...newOptions,
-						...(overrideBetterAuthOptions?.(newOptions) || {}),
-					};
-					return betterAuthOptions;
-				},
-				cleanup,
-				prefixTests,
-				runMigrations: migrate,
-				onTestFinish: async () => {},
+				for (const testSuite of tests) {
+					await testSuite({
+						adapter: async () => {
+							await refreshAdapter(betterAuthOptions);
+							return adapter;
+						},
+						adapterDisplayName,
+						log,
+						getBetterAuthOptions: () => betterAuthOptions,
+						modifyBetterAuthOptions: async (options) => {
+							const newOptions = {
+								...defaultBAOptions,
+								...options,
+							};
+							betterAuthOptions = {
+								...newOptions,
+								...(overrideBetterAuthOptions?.(newOptions) || {}),
+							};
+							await refreshAdapter(betterAuthOptions);
+							return betterAuthOptions;
+						},
+						cleanup,
+						prefixTests,
+						runMigrations: migrate,
+						onTestFinish: async () => {},
+					});
+				}
 			});
-		}
-	});
+		},
+	};
 };
