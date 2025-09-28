@@ -3,9 +3,9 @@ import { createServer } from "http";
 
 const PORT = 7789;
 
-const conflictingTests = [
-	["drizzle-mysql", "kysely-mysql"],
-	["drizzle-pg", "kysely-pg"],
+const conflictingTests: string[][] = [
+	// ["drizzle-mysql", "kysely-mysql"],
+	// ["drizzle-pg", "kysely-pg"],
 	// ["prisma-sqlite", "prisma-pg", "prisma-mysql"],
 ];
 

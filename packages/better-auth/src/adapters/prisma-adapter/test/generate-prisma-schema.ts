@@ -34,7 +34,7 @@ export async function generatePrismaSchema(
 	if (dialect === "postgresql") {
 		code = code?.replace(
 			`env("DATABASE_URL")`,
-			'"postgres://user:password@localhost:5432/better_auth"',
+			'"postgres://user:password@localhost:5434/better_auth"',
 		);
 	} else if (dialect === "mysql") {
 		code = code?.replace(

@@ -15,7 +15,7 @@ import { waitForTestPermission } from "../../../test/adapter-test-setup";
 const { done } = await waitForTestPermission("kysely-pg");
 
 const pgDB = new Pool({
-	connectionString: "postgres://user:password@localhost:5432/better_auth",
+	connectionString: "postgres://user:password@localhost:5433/better_auth",
 });
 
 let kyselyDB = new Kysely({

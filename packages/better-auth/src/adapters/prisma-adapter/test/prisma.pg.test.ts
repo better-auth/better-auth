@@ -32,7 +32,7 @@ const { execute } = await testAdapter({
 	runMigrations: async (options: BetterAuthOptions) => {
 		const db = await getPrismaClient(dialect);
 		const pgDB = new Pool({
-			connectionString: "postgres://user:password@localhost:5432/better_auth",
+			connectionString: "postgres://user:password@localhost:5434/better_auth",
 		});
 		await pgDB.query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
 		await pgDB.end();
