@@ -179,7 +179,7 @@ describe("lastLoginMethod", async () => {
 	});
 
 	it("should update the last login method in the database on subsequent logins with email and OAuth", async () => {
-		const { client, auth } = await getTestInstance({
+		const { client, auth, cookieSetter } = await getTestInstance({
 			plugins: [lastLoginMethod({ storeInDatabase: true })],
 			account: {
 				accountLinking: {
@@ -216,9 +216,13 @@ describe("lastLoginMethod", async () => {
 
 		await client.signOut();
 
+		const oAuthHeaders = new Headers();
 		const signInRes = await client.signIn.social({
 			provider: "google",
 			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
 		});
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
@@ -232,6 +236,7 @@ describe("lastLoginMethod", async () => {
 				state,
 				code: "test",
 			},
+			headers: oAuthHeaders,
 			method: "GET",
 			onError(context) {
 				expect(context.response.status).toBe(302);

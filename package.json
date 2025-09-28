@@ -19,15 +19,17 @@
     "test": "turbo --filter \"./packages/*\" test",
     "e2e:smoke": "turbo --filter \"./e2e/*\" e2e:smoke",
     "e2e:integration": "turbo --filter \"./e2e/*\" e2e:integration",
-    "typecheck": "tsc -b --verbose --diagnostics"
+    "typecheck": "turbo --filter \"./packages/*\" typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.4",
+    "@types/bun": "^1.2.20",
     "@types/node": "^24.4.0",
     "bumpp": "^10.2.3",
     "tinyglobby": "^0.2.15",
     "turbo": "^2.5.6",
     "typescript": "catalog:",
+    "unbuild": "catalog:",
     "vitest": "catalog:"
   },
   "resolutions": {
