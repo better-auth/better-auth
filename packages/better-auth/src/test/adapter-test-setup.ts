@@ -276,7 +276,8 @@ type allAdapterTests =
 	| "drizzle-mysql"
 	| "drizzle-pg"
 	| "drizzle-sqlite"
-	| "prisma-sqlite";
+	| "prisma-sqlite"
+	| "prisma-pg";
 
 /**
  * Waits for permission to run a test and returns a cleanup function.

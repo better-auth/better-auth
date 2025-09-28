@@ -11,17 +11,16 @@ import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
 import { pushPrismaSchema } from "./push-prisma-schema";
 import type { BetterAuthOptions } from "../../../types";
-import { join } from "path";
-import fs from "node:fs/promises";
 import {
 	destroyPrismaClient,
 	getPrismaClient,
 	incrementMigrationCount,
 } from "./get-prisma-client";
+import { Pool } from "pg";
 
-const { done } = await waitForTestPermission("prisma-sqlite");
+const { done } = await waitForTestPermission("prisma-pg");
 
-const dialect = "sqlite";
+const dialect = "postgresql";
 const { execute } = await testAdapter({
 	adapter: async () => {
 		const db = await getPrismaClient(dialect);
@@ -31,18 +30,16 @@ const { execute } = await testAdapter({
 		});
 	},
 	runMigrations: async (options: BetterAuthOptions) => {
-		const dbPath = join(__dirname, "dev.db");
-		try {
-			await fs.unlink(dbPath);
-		} catch {
-			console.log("db path not found");
-		}
 		const db = await getPrismaClient(dialect);
+		const pgDB = new Pool({
+			connectionString: "postgres://user:password@localhost:5432/better_auth",
+		});
+		await pgDB.query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
+		await pgDB.end();
 		const migrationCount = incrementMigrationCount();
 		await generateAuthConfigFile(options);
 		await generatePrismaSchema(options, db, migrationCount, dialect);
 		await pushPrismaSchema();
-		db.$disconnect();
 		destroyPrismaClient({ migrationCount: migrationCount - 1, dialect });
 	},
 	tests: [
@@ -54,7 +51,7 @@ const { execute } = await testAdapter({
 	onFinish: async () => {
 		await done();
 	},
-	prefixTests: dialect,
+	prefixTests: "pg",
 });
 
 execute();

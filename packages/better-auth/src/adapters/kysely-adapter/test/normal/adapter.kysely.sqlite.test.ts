@@ -31,7 +31,6 @@ const { execute } = await testAdapter({
 	},
 	prefixTests: "sqlite",
 	async runMigrations(betterAuthOptions) {
-		database.close();
 		if (await fs.lstat(dbPath)) {
 			await fs.unlink(dbPath);
 		}

@@ -7,7 +7,7 @@ import { createTestSuite } from "../create-test-suite";
 export const authFlowTestSuite = createTestSuite(
 	"auth-flow",
 	(
-		{ generate, auth, modifyBetterAuthOptions, tryCatch },
+		{ generate, getAuth, modifyBetterAuthOptions, tryCatch },
 		debug?: { showDB?: () => Promise<void> },
 	) => ({
 		"should successfully sign up": async () => {
@@ -20,6 +20,7 @@ export const authFlowTestSuite = createTestSuite(
 				},
 				false,
 			);
+			const auth = await getAuth();
 			const user = generate("user");
 			const start = Date.now();
 			const result = await auth.api.signUpEmail({
@@ -55,6 +56,7 @@ export const authFlowTestSuite = createTestSuite(
 				},
 				false,
 			);
+			const auth = await getAuth();
 			const user = generate("user");
 			const password = crypto.randomUUID();
 			const signUpResult = await auth.api.signUpEmail({
@@ -84,6 +86,7 @@ export const authFlowTestSuite = createTestSuite(
 				},
 				false,
 			);
+			const auth = await getAuth();
 			const user = generate("user");
 			const password = crypto.randomUUID();
 
@@ -119,6 +122,7 @@ export const authFlowTestSuite = createTestSuite(
 				{ emailAndPassword: { enabled: true } },
 				false,
 			);
+			const auth = await getAuth();
 			const user = generate("user");
 			const { data, error } = await tryCatch(
 				auth.api.signInEmail({
@@ -135,6 +139,7 @@ export const authFlowTestSuite = createTestSuite(
 					{ emailAndPassword: { enabled: true } },
 					false,
 				);
+				const auth = await getAuth();
 				const user = generate("user");
 				const password = crypto.randomUUID();
 				const userSignUp = await auth.api.signUpEmail({
@@ -154,16 +159,6 @@ export const authFlowTestSuite = createTestSuite(
 					userSignIn.user.createdAt.toISOString(),
 				);
 			},
-		// "test timestamps in different timezones": async () => {
-		// 	using _ = recoverProcessTZ();
-		// 	process.env.TZ = "Europe/London";
-		// 	const date1 = new Date();
-		// 	console.log(date1.toISOString());
-		// 	process.env.TZ = "America/Los_Angeles";
-		// 	const date2 = new Date();
-		// 	console.log(date2.toISOString());
-		// 	expect(date1).toStrictEqual(date2);
-		// },
 	}),
 );
 

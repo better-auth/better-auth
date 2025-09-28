@@ -182,7 +182,7 @@ export const createTestSuite = <
 			) => (Record<string, any> & {
 				id: string;
 			})[];
-			auth: ReturnType<typeof betterAuth>;
+			getAuth: () => Promise<ReturnType<typeof betterAuth>>;
 			tryCatch<T, E = Error>(promise: Promise<T>): Promise<Result<T, E>>;
 		},
 		additionalOptions?: AdditionalOptions,
@@ -209,8 +209,8 @@ export const createTestSuite = <
 			const createdRows: Record<string, any[]> = {};
 
 			let adapter = await helpers.adapter();
-			const wrapperAdapter = () => {
-				const options = helpers.getBetterAuthOptions();
+			const wrapperAdapter = (overrideOptions?: BetterAuthOptions) => {
+				const options = {...helpers.getBetterAuthOptions(), ...overrideOptions};
 				const adapterConfig = {
 					adapterId: helpers.adapterDisplayName,
 					...adapter.options?.adapterConfig,
@@ -393,18 +393,17 @@ export const createTestSuite = <
 							return value;
 						},
 					}),
-					auth: new Proxy({} as any, {
-						get(target, prop) {
-							const adapter = wrapperAdapter();
-							const auth = betterAuth({
-								...helpers.getBetterAuthOptions(),
-								database: (options: BetterAuthOptions) => {
-									return adapter;
-								},
-							});
-							return auth[prop as keyof typeof auth];
-						},
-					}),
+					getAuth: async () => {
+						adapter = await helpers.adapter();
+						const auth = betterAuth({
+							...helpers.getBetterAuthOptions(),
+							database: (options: BetterAuthOptions) => {
+								const adapter = wrapperAdapter(options);
+								return adapter;
+							},
+						});
+						return auth;
+					},
 					log: helpers.log,
 					generate: generateModel,
 					cleanup: cleanupCreatedRows,
