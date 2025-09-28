@@ -19,7 +19,7 @@ const { done } = await waitForTestPermission("drizzle-sqlite");
 const dbFilePath = path.join(__dirname, "test.db");
 let sqliteDB = new Database(dbFilePath);
 
-testAdapter({
+const { execute } = await testAdapter({
 	adapter: (options) => {
 		return drizzleAdapter(drizzle(sqliteDB), {
 			debugLogs: { isRunningAdapterTests: true },
@@ -58,3 +58,5 @@ testAdapter({
 		await done();
 	},
 });
+
+execute();

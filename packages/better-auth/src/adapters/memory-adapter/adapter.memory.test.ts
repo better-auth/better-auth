@@ -12,7 +12,7 @@ import { waitForTestPermission } from "../../test/adapter-test-setup";
 const { done } = await waitForTestPermission("memory");
 let db: Record<string, any[]> = {};
 
-testAdapter({
+const { execute } = await testAdapter({
 	adapter: () => {
 		return memoryAdapter(db);
 	},
@@ -35,3 +35,5 @@ testAdapter({
 		await done();
 	},
 });
+
+execute();

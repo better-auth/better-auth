@@ -6,7 +6,11 @@ import {
 } from "../adapter-factory";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
-import { sql, type InsertQueryBuilder, type Kysely, type UpdateQueryBuilder } from "kysely";
+import {
+	type InsertQueryBuilder,
+	type Kysely,
+	type UpdateQueryBuilder,
+} from "kysely";
 
 interface KyselyAdapterConfig {
 	/**
@@ -109,9 +113,9 @@ export const kyselyAdapter = (
 					return value ? 1 : 0;
 				}
 				if (f!.type === "date" && value && value instanceof Date) {
-					if(type === 'sqlite') return value.toISOString();
+					if (type === "sqlite") return value.toISOString();
 					// else if (type === 'mssql') return sql`CAST(${value} AS datetime2(3))`
-					return  value;
+					return value;
 				}
 				return value;
 			}

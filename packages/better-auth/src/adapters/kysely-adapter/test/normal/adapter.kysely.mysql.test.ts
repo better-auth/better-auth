@@ -34,7 +34,7 @@ const showDB = async () => {
 	console.log(`DB`, DB);
 };
 
-const {execute} = await testAdapter({
+const { execute } = await testAdapter({
 	adapter: () =>
 		kyselyAdapter(kyselyDB, {
 			type: "mysql",

@@ -32,10 +32,16 @@ export async function generatePrismaSchema(
 		options: { ...betterAuthOptions, database: prismaDB },
 	});
 	code = code?.replace(`@map("email")`, ""); // TODO remove this line
-	if(dialect === "postgresql"){
-		code = code?.replace(`env("DATABASE_URL")`, "\"postgres://user:password@localhost:5432/better_auth\"")
-	}else if(dialect === "mysql"){
-		code = code?.replace(`env("DATABASE_URL")`, "\"mysql://user:password@localhost:3306/better_auth\"")
+	if (dialect === "postgresql") {
+		code = code?.replace(
+			`env("DATABASE_URL")`,
+			'"postgres://user:password@localhost:5432/better_auth"',
+		);
+	} else if (dialect === "mysql") {
+		code = code?.replace(
+			`env("DATABASE_URL")`,
+			'"mysql://user:password@localhost:3306/better_auth"',
+		);
 	}
 	code = code
 		?.split("\n")

@@ -26,8 +26,12 @@ const cleanupDatabase = async () => {
 	await pgDB.query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
 };
 
-const {execute} = await testAdapter({
-	adapter: () => kyselyAdapter(kyselyDB, { type: "postgres", debugLogs: { isRunningAdapterTests: true } }),
+const { execute } = await testAdapter({
+	adapter: () =>
+		kyselyAdapter(kyselyDB, {
+			type: "postgres",
+			debugLogs: { isRunningAdapterTests: true },
+		}),
 	prefixTests: "pg",
 	async runMigrations(betterAuthOptions) {
 		await cleanupDatabase();
@@ -49,4 +53,3 @@ const {execute} = await testAdapter({
 	},
 });
 execute();
-

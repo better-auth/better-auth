@@ -20,7 +20,7 @@ const mysqlDB = createPool({
 	timezone: "Z",
 });
 
-testAdapter({
+const { execute } = await testAdapter({
 	adapter: (options) => {
 		return drizzleAdapter(drizzle(mysqlDB), {
 			debugLogs: { isRunningAdapterTests: true },
@@ -73,3 +73,5 @@ testAdapter({
 		await done();
 	},
 });
+
+execute();

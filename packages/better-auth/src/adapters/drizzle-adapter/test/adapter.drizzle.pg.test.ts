@@ -32,7 +32,7 @@ const cleanupDatabase = async (shouldDestroy = false) => {
 	}
 };
 
-testAdapter({
+const { execute } = await testAdapter({
 	adapter: (options) => {
 		return drizzleAdapter(drizzle(pgDB), {
 			debugLogs: { isRunningAdapterTests: true },
@@ -70,3 +70,5 @@ testAdapter({
 		await done();
 	},
 });
+
+execute();
