@@ -103,19 +103,20 @@ export default function SignIn() {
 											toast.success("Successfully signed in");
 											router.push(getCallbackURL(params));
 										},
+										onError(context) {
+											toast.error(context.error.message);
+										},
 									},
 								);
 							});
 						}}
 					>
-						<div className="flex items-center justify-between w-full">
-							<span className="flex-1">
-								{loading ? (
-									<Loader2 size={16} className="animate-spin" />
-								) : (
-									"Login"
-								)}
-							</span>
+						<div className="flex items-center justify-center w-full relative">
+							{loading ? (
+								<Loader2 size={16} className="animate-spin" />
+							) : (
+								"Login"
+							)}
 							{client.isLastUsedLoginMethod("email") && <LastUsedIndicator />}
 						</div>
 					</Button>

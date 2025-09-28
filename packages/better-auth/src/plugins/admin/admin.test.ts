@@ -461,12 +461,14 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow banned user to sign in with social provider", async () => {
+		const headers = new Headers();
 		const res = await client.signIn.social(
 			{
 				provider: "google",
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		const state = new URL(res.url!).searchParams.get("state");
@@ -476,6 +478,7 @@ describe("Admin plugin", async () => {
 				state,
 				code: "test",
 			},
+			headers,
 			method: "GET",
 			onError(context) {
 				expect(context.response.status).toBe(302);

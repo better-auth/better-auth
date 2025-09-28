@@ -225,7 +225,7 @@ describe("email-otp", async () => {
 			type: "email-verification",
 		});
 		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1000 * 60 * 5);
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 6);
 		const res = await client.emailOtp.verifyEmail({
 			email: testUser.email,
 			otp,

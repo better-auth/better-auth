@@ -21,7 +21,7 @@ describe("mcp", async () => {
 	const baseURL = `http://localhost:${port}`;
 	await tempServer.close();
 
-	const { auth, signInWithTestUser, customFetchImpl, testUser } =
+	const { auth, signInWithTestUser, customFetchImpl, testUser, cookieSetter } =
 		await getTestInstance({
 			baseURL,
 			plugins: [
@@ -161,28 +161,29 @@ describe("mcp", async () => {
 	});
 
 	it("should authenticate public client with PKCE only", async ({ expect }) => {
-		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
-			account: {
-				accountLinking: {
-					trustedProviders: ["test-public"],
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test-public"],
+					},
 				},
-			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: "test-public",
-							clientId: publicClient.clientId,
-							clientSecret: "", // Public client has no secret
-							authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
-							tokenUrl: `${baseURL}/api/auth/mcp/token`,
-							scopes: ["openid", "profile", "email"],
-							pkce: true,
-						},
-					],
-				}),
-			],
-		});
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-public",
+								clientId: publicClient.clientId,
+								clientSecret: "", // Public client has no secret
+								authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
+								tokenUrl: `${baseURL}/api/auth/mcp/token`,
+								scopes: ["openid", "profile", "email"],
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
 
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
@@ -191,7 +192,7 @@ describe("mcp", async () => {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
-
+		const oAuthHeaders = new Headers();
 		const data = await client.signIn.oauth2(
 			{
 				providerId: "test-public",
@@ -199,6 +200,7 @@ describe("mcp", async () => {
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(oAuthHeaders),
 			},
 		);
 
@@ -220,6 +222,7 @@ describe("mcp", async () => {
 
 		let callbackURL = "";
 		await client.$fetch(redirectURI, {
+			headers: oAuthHeaders,
 			onError(context: any) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
@@ -254,29 +257,30 @@ describe("mcp", async () => {
 	it("should still support confidential clients in MCP context", async ({
 		expect,
 	}) => {
-		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
-			account: {
-				accountLinking: {
-					trustedProviders: ["test-confidential"],
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test-confidential"],
+					},
 				},
-			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: "test-confidential",
-							clientId: confidentialClient.clientId,
-							clientSecret: confidentialClient.clientSecret || "",
-							authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
-							tokenUrl: `${baseURL}/api/auth/mcp/token`,
-							scopes: ["openid", "profile", "email"],
-							pkce: true,
-						},
-					],
-				}),
-			],
-		});
-
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-confidential",
+								clientId: confidentialClient.clientId,
+								clientSecret: confidentialClient.clientSecret || "",
+								authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
+								tokenUrl: `${baseURL}/api/auth/mcp/token`,
+								scopes: ["openid", "profile", "email"],
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+		const oAuthHeaders = new Headers();
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5001",
@@ -292,6 +296,7 @@ describe("mcp", async () => {
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(oAuthHeaders),
 			},
 		);
 
@@ -311,6 +316,7 @@ describe("mcp", async () => {
 
 		let callbackURL = "";
 		await client.$fetch(redirectURI, {
+			headers: oAuthHeaders,
 			onError(context: any) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
