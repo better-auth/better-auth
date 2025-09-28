@@ -92,12 +92,14 @@ const warmupConnection = async () => {
 		console.log(
 			`Environment: CI=${process.env.CI}, GITHUB_ACTIONS=${process.env.GITHUB_ACTIONS}`,
 		);
-		console.log(`MSSQL Server: localhost:1433, Database: master (will create better_auth)`);
+		console.log(
+			`MSSQL Server: localhost:1433, Database: master (will create better_auth)`,
+		);
 
 		try {
 			// Ensure database exists first
 			await ensureDatabaseExists();
-			
+
 			// Try a simple query to establish the connection
 			await kyselyDB.getExecutor().executeQuery({
 				sql: "SELECT 1 as warmup, @@VERSION as version",
@@ -168,10 +170,12 @@ const query = async (sql: string, timeoutMs: number = 30000) => {
 		console.log(
 			`Executing SQL: ${sql.substring(0, 100)}... (timeout: ${actualTimeout}ms, CI: ${isCI})`,
 		);
-		
+
 		// Ensure we're using the better_auth database for queries
-		const sqlWithContext = sql.includes('USE ') ? sql : `USE better_auth; ${sql}`;
-		
+		const sqlWithContext = sql.includes("USE ")
+			? sql
+			: `USE better_auth; ${sql}`;
+
 		const result = (await Promise.race([
 			kyselyDB.getExecutor().executeQuery({
 				sql: sqlWithContext,
