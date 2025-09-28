@@ -1,3 +1,3 @@
 auth.ts
-schema.prisma
+schema-*.prisma
 .tmp

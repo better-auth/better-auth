@@ -210,7 +210,10 @@ export const createTestSuite = <
 
 			let adapter = await helpers.adapter();
 			const wrapperAdapter = (overrideOptions?: BetterAuthOptions) => {
-				const options = {...helpers.getBetterAuthOptions(), ...overrideOptions};
+				const options = {
+					...helpers.getBetterAuthOptions(),
+					...overrideOptions,
+				};
 				const adapterConfig = {
 					adapterId: helpers.adapterDisplayName,
 					...adapter.options?.adapterConfig,
@@ -235,7 +238,7 @@ export const createTestSuite = <
 								findMany: adapter.findMany,
 								update: adapter.update as any,
 								updateMany: adapter.updateMany,
-								
+
 								createSchema: adapter.createSchema as any,
 								async create({ data, model, select }) {
 									const defaultModelName = getDefaultModelName(model);
@@ -452,15 +455,19 @@ export const createTestSuite = <
 						await helpers.onTestFinish();
 					}
 				};
-				test.skipIf(shouldSkip)(testName, async ({ onTestFailed, skip }) => {
-					resetDebugLogs();
-					onTestFailed(async () => {
-						printDebugLogs();
+				test.skipIf(shouldSkip)(
+					testName,
+					async ({ onTestFailed, skip }) => {
+						resetDebugLogs();
+						onTestFailed(async () => {
+							printDebugLogs();
+							await onFinish();
+						});
+						await testFn({ skip });
 						await onFinish();
-					});
-					await testFn({ skip });
-					await onFinish();
-				});
+					},
+					10000,
+				);
 			}
 		};
 	};
