@@ -16,11 +16,7 @@
     "composite": true,
     "incremental": true,
     "noErrorTruncation": true,
-    "types": ["node", "bun"],
-    "paths": {
-      "better-auth": ["./packages/better-auth/src"],
-      "better-auth/*": ["./packages/better-auth/src/*"]
-    }
+    "types": ["node", "bun"]
   },
   "references": [
     {
