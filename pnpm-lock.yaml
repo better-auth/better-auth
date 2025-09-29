@@ -32,6 +32,7 @@ importers:
   .:
     devDependencies:
       '@biomejs/biome':
+
         specifier: 2.2.4
         version: 2.2.4
       '@types/bun':
