@@ -75,41 +75,6 @@ export const createInternalAdapter = (
 		);
 	}
 
-	async function refreshUserSessions(user: User) {
-		if (!secondaryStorage) return;
-
-		const listRaw = await secondaryStorage.get(`active-sessions-${user.id}`);
-		if (!listRaw) return;
-
-		const now = Date.now();
-		const list =
-			safeJSONParse<{ token: string; expiresAt: number }[]>(listRaw) || [];
-		const validSessions = list.filter((s) => s.expiresAt > now);
-
-		await Promise.all(
-			validSessions.map(async ({ token }) => {
-				const cached = await secondaryStorage.get(token);
-				if (!cached) return;
-				const parsed = safeJSONParse<{ session: Session; user: User }>(cached);
-				if (!parsed) return;
-
-				const sessionTTL = Math.max(
-					Math.floor(new Date(parsed.session.expiresAt).getTime() - now) / 1000,
-					0,
-				);
-
-				await secondaryStorage.set(
-					token,
-					JSON.stringify({
-						session: parsed.session,
-						user,
-					}),
-					Math.floor(sessionTTL),
-				);
-			}),
-		);
-	}
-
 	return {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt">,
