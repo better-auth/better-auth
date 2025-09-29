@@ -23,17 +23,6 @@ let kyselyDB = new Kysely({
 	dialect: new MysqlDialect(mysqlDB),
 });
 
-const showDB = async () => {
-	const q = async (s: string) => await mysqlDB.execute(s);
-	const DB = {
-		users: (await q("SELECT * FROM user"))[0],
-		sessions: await q("SELECT * FROM session"),
-		accounts: await q("SELECT * FROM account"),
-		verifications: await q("SELECT * FROM verification"),
-	};
-	console.log(`DB`, DB);
-};
-
 const { execute } = await testAdapter({
 	adapter: () =>
 		kyselyAdapter(kyselyDB, {
@@ -63,16 +52,9 @@ const { execute } = await testAdapter({
 	},
 	prefixTests: "mysql",
 	tests: [
-		normalTestSuite({
-			showDB,
-			async testFn() {
-				const [rows] = await mysqlDB.query("SELECT * FROM user");
-				console.log(rows);
-			},
-			// disableTests: { ALL: true, "create - should create a model": false },
-		}),
+		normalTestSuite(),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
-		authFlowTestSuite({ showDB }),
+		authFlowTestSuite(),
 		performanceTestSuite({ dialect: "mysql" }),
 	],
 	async onFinish() {

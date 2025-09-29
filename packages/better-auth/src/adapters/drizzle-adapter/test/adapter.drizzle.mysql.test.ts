@@ -52,16 +52,6 @@ const { execute } = await testAdapter({
 	prefixTests: "mysql",
 	tests: [
 		normalTestSuite({
-			async showDB() {
-				const q = async (s: string) => (await mysqlDB.prepare(s)).execute([]);
-				const DB = {
-					users: await q("SELECT * FROM user"),
-					sessions: await q("SELECT * FROM session"),
-					accounts: await q("SELECT * FROM account"),
-					verifications: await q("SELECT * FROM verification"),
-				};
-				console.log(DB);
-			},
 			disableTests: { "create - should create a model": true },
 		}),
 		transactionsTestSuite({ disableTests: { ALL: true } }),

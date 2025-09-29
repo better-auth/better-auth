@@ -31,8 +31,11 @@ const { execute } = await testAdapter({
 	},
 	prefixTests: "sqlite",
 	async runMigrations(betterAuthOptions) {
-		if (await fs.lstat(dbPath)) {
+		database.close();
+		try {
 			await fs.unlink(dbPath);
+		} catch {
+			console.log("db doesnt exist");
 		}
 		database = new Database(dbPath);
 		kyselyDB = new Kysely({ dialect: new SqliteDialect({ database }) });

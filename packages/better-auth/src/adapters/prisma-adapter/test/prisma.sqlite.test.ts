@@ -31,7 +31,7 @@ const { execute } = await testAdapter({
 		});
 	},
 	runMigrations: async (options: BetterAuthOptions) => {
-		const dbPath = join(__dirname, "dev.db");
+		const dbPath = join(import.meta.dirname, "dev.db");
 		try {
 			await fs.unlink(dbPath);
 		} catch {
@@ -42,7 +42,7 @@ const { execute } = await testAdapter({
 		await generateAuthConfigFile(options);
 		await generatePrismaSchema(options, db, migrationCount, dialect);
 		await pushPrismaSchema(dialect);
-		db.$disconnect();
+		await db.$disconnect();
 		destroyPrismaClient({ migrationCount: migrationCount - 1, dialect });
 	},
 	tests: [

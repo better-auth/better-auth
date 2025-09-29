@@ -29,8 +29,10 @@ const { execute } = await testAdapter({
 	},
 	async runMigrations(betterAuthOptions) {
 		sqliteDB.close();
-		if (await fs.lstat(dbFilePath)) {
+		try {
 			await fs.unlink(dbFilePath);
+		} catch {
+			console.log("db file not found");
 		}
 		sqliteDB = new Database(dbFilePath);
 		const options = Object.assign(betterAuthOptions, { database: sqliteDB });
@@ -39,17 +41,7 @@ const { execute } = await testAdapter({
 	},
 	prefixTests: "sqlite",
 	tests: [
-		normalTestSuite({
-			showDB() {
-				const DB = {
-					users: sqliteDB.prepare("SELECT * FROM user").all(),
-					sessions: sqliteDB.prepare("SELECT * FROM session").all(),
-					accounts: sqliteDB.prepare("SELECT * FROM account").all(),
-					verifications: sqliteDB.prepare("SELECT * FROM verification").all(),
-				};
-				console.log(DB);
-			},
-		}),
+		normalTestSuite(),
 		transactionsTestSuite({ disableTests: { ALL: true } }), // Transactions are not supported for SQLite
 		authFlowTestSuite(),
 		performanceTestSuite({ dialect: "sqlite" }),

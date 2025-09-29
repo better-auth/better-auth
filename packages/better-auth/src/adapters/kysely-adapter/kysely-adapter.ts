@@ -114,7 +114,6 @@ export const kyselyAdapter = (
 				}
 				if (f!.type === "date" && value && value instanceof Date) {
 					if (type === "sqlite") return value.toISOString();
-					// else if (type === 'mssql') return sql`CAST(${value} AS datetime2(3))`
 					return value;
 				}
 				return value;

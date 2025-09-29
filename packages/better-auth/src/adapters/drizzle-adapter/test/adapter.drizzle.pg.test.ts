@@ -18,13 +18,6 @@ const pgDB = new Pool({
 	connectionString: "postgres://user:password@localhost:5432/better_auth",
 });
 
-const columnsOfTable = async (table: string) => {
-	const res = await pgDB.query(
-		`SELECT column_name FROM information_schema.columns WHERE table_name = '${table}'`,
-	);
-	return res.rows.map((row) => row.column_name);
-};
-
 const cleanupDatabase = async (shouldDestroy = false) => {
 	await pgDB.query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
 	if (shouldDestroy) {
@@ -49,18 +42,7 @@ const { execute } = await testAdapter({
 	},
 	prefixTests: "pg",
 	tests: [
-		normalTestSuite({
-			async showDB() {
-				console.log(await columnsOfTable("user"));
-				const DB = {
-					users: await pgDB.query("SELECT * FROM user"),
-					sessions: await pgDB.query("SELECT * FROM session"),
-					accounts: await pgDB.query("SELECT * FROM account"),
-					verifications: await pgDB.query("SELECT * FROM verification"),
-				};
-				console.log(DB);
-			},
-		}),
+		normalTestSuite(),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		performanceTestSuite({ dialect: "pg" }),

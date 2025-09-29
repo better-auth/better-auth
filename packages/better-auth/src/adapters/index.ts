@@ -40,6 +40,3 @@ export type AdapterConfig = AdapterFactoryConfig;
  * @deprecated Use `AdapterFactoryCustomizeAdapterCreator` instead. This export will be removed in the next major version.
  */
 export type CreateCustomAdapter = AdapterFactoryCustomizeAdapterCreator;
-
-export * from "./create-test-suite";
-export * from "./test-adapter";

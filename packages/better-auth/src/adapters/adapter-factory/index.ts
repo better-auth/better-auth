@@ -425,16 +425,6 @@ export const createAdapterFactory =
 							)?.[0] || originalKey
 						];
 
-					if (
-						cfg.adapterName?.startsWith("wrapped-") &&
-						key.startsWith("email")
-					) {
-						console.log(1, {
-							newValue,
-							originalKey,
-							data,
-						});
-					}
 					if (field.transform?.output) {
 						newValue = await field.transform.output(newValue);
 					}

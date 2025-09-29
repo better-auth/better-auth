@@ -86,11 +86,13 @@ export const generateDrizzleSchema = (
 
 			if (field.references) {
 				const { model: modelRef, field: fieldRef } = field.references;
-				table[key] = table[key].references(() => schema[modelRef][fieldRef]);
+				table[key] = table[key].references(() => schema[modelRef][fieldRef], {
+					onDelete: schema[modelRef][fieldRef].onDelete || "cascade",
+				});
 			}
 
 			if (field.references && "default" in table[key]) {
-				table[key] = table[fieldName].default(field.defaultValue);
+				table[key] = table[key].default(field.defaultValue);
 			}
 
 			if (field.unique && "unique" in table[key]) {

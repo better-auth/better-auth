@@ -92,12 +92,8 @@ const warmupConnection = async () => {
 		console.log(
 			`Environment: CI=${process.env.CI}, GITHUB_ACTIONS=${process.env.GITHUB_ACTIONS}`,
 		);
-		console.log(
-			`MSSQL Server: localhost:1433, Database: master (will create better_auth)`,
-		);
 
 		try {
-			// Ensure database exists first
 			await ensureDatabaseExists();
 
 			// Try a simple query to establish the connection
@@ -221,14 +217,12 @@ const resetDB = async (retryCount: number = 0) => {
 		// Warm up connection first (especially important for CI)
 		await warmupConnection();
 
-		// Validate connection before proceeding
 		const isConnected = await validateConnection();
 		if (!isConnected) {
 			throw new Error("Database connection validation failed");
 		}
 
 		// First, try to disable foreign key checks and drop constraints
-		console.log("Dropping foreign key constraints...");
 		await query(
 			`
 			-- Disable all foreign key constraints
@@ -252,7 +246,6 @@ const resetDB = async (retryCount: number = 0) => {
 		);
 
 		// Then drop all tables
-		console.log("Dropping tables...");
 		await query(
 			`
 			DECLARE @sql NVARCHAR(MAX) = '';

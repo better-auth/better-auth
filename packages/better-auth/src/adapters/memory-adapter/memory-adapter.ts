@@ -81,13 +81,13 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 						case "ne":
 							return record[field] !== value;
 						case "gt":
-							return Boolean(value && record[field] > value);
+							return value != null && Boolean(record[field] > value);
 						case "gte":
-							return Boolean(value && record[field] >= value);
+							return value != null && Boolean(record[field] >= value);
 						case "lt":
-							return Boolean(value && record[field] < value);
+							return value != null && Boolean(record[field] < value);
 						case "lte":
-							return Boolean(value && record[field] <= value);
+							return value != null && Boolean(record[field] <= value);
 						default:
 							return record[field] === value;
 					}
