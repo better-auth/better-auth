@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import type { RateLimit } from "better-auth/types";
+import type { RateLimit } from "../../types";
 
 describe(
 	"rate-limiter",
