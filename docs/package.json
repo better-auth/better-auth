@@ -49,6 +49,7 @@
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",
     "date-fns": "^4.1.0",
+    "dotenv": "^17.2.2",
     "embla-carousel-react": "^8.6.0",
     "foxact": "^0.2.49",
     "framer-motion": "^12.23.12",
