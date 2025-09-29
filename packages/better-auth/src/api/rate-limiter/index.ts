@@ -81,7 +81,13 @@ function createDBStorage(ctx: AuthContext) {
 }
 
 const memory = new Map<string, RateLimit>();
-export function getRateLimitStorage(ctx: AuthContext) {
+export function getRateLimitStorage(
+	ctx: AuthContext,
+	rateLimitSettings?: {
+		window?: number;
+		max?: number;
+	},
+) {
 	if (ctx.options.rateLimit?.customStorage) {
 		return ctx.options.rateLimit.customStorage;
 	}
@@ -93,7 +99,8 @@ export function getRateLimitStorage(ctx: AuthContext) {
 				return data ? safeJSONParse<RateLimit>(data) : undefined;
 			},
 			set: async (key: string, value: RateLimit, _update?: boolean) => {
-				const ttl = ctx.options.rateLimit?.window ?? 10000;
+				const ttl =
+					rateLimitSettings?.window ?? ctx.options.rateLimit?.window ?? 10000;
 				await ctx.options.secondaryStorage?.set?.(
 					key,
 					JSON.stringify(value),
@@ -173,7 +180,10 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 		}
 	}
 
-	const storage = getRateLimitStorage(ctx);
+	const storage = getRateLimitStorage(ctx, {
+		window,
+		max,
+	});
 	const data = await storage.get(key);
 	const now = Date.now();
 

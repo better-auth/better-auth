@@ -150,7 +150,7 @@ describe("custom rate limiting storage", async () => {
 				expect(rateLimitData.count).toBe(i + 1);
 			}
 			const rateLimitExp = expirationMap.get("127.0.0.1/sign-in/email");
-			expect(rateLimitExp).toBe(10000);
+			expect(rateLimitExp).toBe(10);
 		}
 	});
 });
