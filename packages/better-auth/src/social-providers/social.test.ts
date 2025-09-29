@@ -229,7 +229,7 @@ describe("Social Providers", async (c) => {
 			newUserCallbackURL: "/welcome",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
-			}
+			},
 		});
 		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/google", {
@@ -260,7 +260,7 @@ describe("Social Providers", async (c) => {
 			newUserCallbackURL: "/welcome",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
-			}
+			},
 		});
 		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
 		expect(signInRes.data).toMatchObject({
@@ -295,14 +295,14 @@ describe("Social Providers", async (c) => {
 			callbackURL: "/callback",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
-			}
+			},
 		});
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
 		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-	    await client.$fetch("/callback/google", {
+		await client.$fetch("/callback/google", {
 			query: {
 				state,
 				code: "test",
@@ -357,7 +357,7 @@ describe("Social Providers", async (c) => {
 			newUserCallbackURL: "/welcome",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
-			}
+			},
 		});
 
 		expect(signInRes.data).toMatchObject({
@@ -490,7 +490,7 @@ describe("Disable implicit signup", async () => {
 			newUserCallbackURL: "/welcome",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
-			}
+			},
 		});
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
@@ -536,7 +536,7 @@ describe("Disable implicit signup", async () => {
 			requestSignUp: true,
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
-			}
+			},
 		});
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
@@ -585,7 +585,7 @@ describe("Disable signup", async () => {
 			newUserCallbackURL: "/welcome",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
-			}
+			},
 		});
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
@@ -639,14 +639,13 @@ describe("signin", async () => {
 			callbackURL: "/callback",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
-			}
+			},
 		});
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
 		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-
 
 		await client.$fetch("/callback/google", {
 			query: {
@@ -694,14 +693,13 @@ describe("signin", async () => {
 			callbackURL: "/callback",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
-			}
+			},
 		});
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
 		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-
 
 		await client.$fetch("/callback/google", {
 			query: {
@@ -740,7 +738,7 @@ describe("updateAccountOnSignIn", async () => {
 			callbackURL: "/callback",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
-			}
+			},
 		});
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
@@ -777,7 +775,7 @@ describe("updateAccountOnSignIn", async () => {
 			callbackURL: "/callback",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
-			}
+			},
 		});
 		expect(signInRes2.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
