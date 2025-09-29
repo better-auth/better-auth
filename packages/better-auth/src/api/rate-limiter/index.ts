@@ -85,19 +85,23 @@ export function getRateLimitStorage(ctx: AuthContext) {
 	if (ctx.options.rateLimit?.customStorage) {
 		return ctx.options.rateLimit.customStorage;
 	}
-	if (ctx.rateLimit.storage === "secondary-storage") {
+	const storage = ctx.rateLimit.storage;
+	if (storage === "secondary-storage") {
 		return {
 			get: async (key: string) => {
 				const data = await ctx.options.secondaryStorage?.get(key);
 				return data ? safeJSONParse<RateLimit>(data) : undefined;
 			},
-			set: async (key: string, value: RateLimit) => {
-				await ctx.options.secondaryStorage?.set?.(key, JSON.stringify(value));
+			set: async (key: string, value: RateLimit, _update?: boolean) => {
+				const ttl = ctx.options.rateLimit?.window ?? 10000;
+				await ctx.options.secondaryStorage?.set?.(
+					key,
+					JSON.stringify(value),
+					ttl,
+				);
 			},
 		};
-	}
-	const storage = ctx.rateLimit.storage;
-	if (storage === "memory") {
+	} else if (storage === "memory") {
 		return {
 			async get(key: string) {
 				return memory.get(key);
