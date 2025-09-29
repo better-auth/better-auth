@@ -16,7 +16,7 @@ import { waitForTestPermission } from "../../../test/adapter-test-setup";
 const { done } = await waitForTestPermission("drizzle-mysql");
 
 const mysqlDB = createPool({
-	uri: "mysql://user:password@localhost:3306/better_auth",
+	uri: "mysql://user:password@localhost:3306",
 	timezone: "Z",
 });
 
@@ -51,9 +51,7 @@ const { execute } = await testAdapter({
 	},
 	prefixTests: "mysql",
 	tests: [
-		normalTestSuite({
-			disableTests: { "create - should create a model": true },
-		}),
+		normalTestSuite(),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		performanceTestSuite({ dialect: "mysql" }),
