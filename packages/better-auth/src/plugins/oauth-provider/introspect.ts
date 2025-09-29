@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
-import type { GenericEndpointContext, User } from "../../types";
+import type { Session, GenericEndpointContext, User } from "../../types";
 import {
 	basicToClientCredentials,
 	getClient,
@@ -10,7 +10,7 @@ import {
 import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
-	OAuthSession,
+	OAuthRefreshToken,
 } from "./types";
 import { getJwtPlugin } from "./utils";
 import { decodeRefreshToken } from "./token";
@@ -99,7 +99,7 @@ async function validateJwtAccessToken(
 
 	// Validate JWT against its session if it exists
 	if (jwtPayload.sid) {
-		const session = await ctx.context.adapter.findOne<OAuthSession>({
+		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
 			where: [
 				{
@@ -189,24 +189,15 @@ async function validateOpaqueAccessToken(
 
 	let user: (User & Record<string, any>) | undefined;
 	if (accessToken.sessionId) {
-		const session = await ctx.context.adapter
-			.findOne<OAuthSession>({
-				model: "session",
-				where: [
-					{
-						field: "id",
-						value: accessToken.sessionId,
-					},
-				],
-			})
-			.then((res) => {
-				// TODO: remove join when native arrays supported
-				if (!res) return res;
-				return {
-					...res,
-					scopes: (res.scopes as unknown as string)?.split(" "),
-				};
-			});
+		const session = await ctx.context.adapter.findOne<Session>({
+			model: "session",
+			where: [
+				{
+					field: "id",
+					value: accessToken.sessionId,
+				},
+			],
+		});
 		// Token was valid but associated session is no longer valid
 		if (!session || session.expiresAt < new Date()) {
 			return {
@@ -249,12 +240,12 @@ async function validateRefreshToken(
 	token: string,
 	clientId: string,
 ) {
-	const userSession = await ctx.context.adapter
-		.findOne<OAuthSession | null>({
-			model: "session",
+	const refreshToken = await ctx.context.adapter
+		.findOne<OAuthRefreshToken | null>({
+			model: "oauthRefreshToken",
 			where: [
 				{
-					field: "refresh",
+					field: "token",
 					value: await getStoredToken(opts.storeTokens, token, "refresh_token"),
 				},
 			],
@@ -267,19 +258,34 @@ async function validateRefreshToken(
 				scopes: (res.scopes as unknown as string)?.split(" "),
 			};
 		});
-	if (!userSession) {
+	if (!refreshToken) {
 		// Pass through may be other token type
 		throw new APIError("BAD_REQUEST", {
 			error_description: "token not found",
 			error: "invalid_token",
 		});
 	}
-	if (!userSession.clientId || userSession.clientId !== clientId) {
+	if (!refreshToken.clientId || refreshToken.clientId !== clientId) {
 		return {
 			active: false,
 		};
 	}
-	if (!userSession.expiresAt || userSession.expiresAt < new Date()) {
+	if (!refreshToken.expiresAt || refreshToken.expiresAt < new Date()) {
+		return {
+			active: false,
+		};
+	}
+
+	const session = await ctx.context.adapter.findOne<Session>({
+		model: "session",
+		where: [
+			{
+				field: "id",
+				value: refreshToken.sessionId,
+			},
+		],
+	});
+	if (!session) {
 		return {
 			active: false,
 		};
@@ -296,11 +302,11 @@ async function validateRefreshToken(
 		active: true,
 		client_id: clientId,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
-		sub: userSession.userId,
-		sid: userSession.id,
-		exp: Math.floor(userSession.expiresAt.getTime() / 1000),
-		iat: Math.floor(userSession.createdAt.getTime() / 1000),
-		scope: userSession.scopes?.join(" "),
+		sub: session.userId,
+		sid: session.id,
+		exp: Math.floor(refreshToken.expiresAt.getTime() / 1000),
+		iat: Math.floor(refreshToken.createdAt.getTime() / 1000),
+		scope: refreshToken.scopes?.join(" "),
 	} as JWTPayload;
 }
 

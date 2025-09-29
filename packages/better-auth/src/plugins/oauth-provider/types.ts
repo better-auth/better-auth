@@ -1,5 +1,5 @@
 import type { GrantType } from "../../oauth-2.1/types";
-import type { InferOptionSchema, Session, User } from "../../types";
+import type { InferOptionSchema, User } from "../../types";
 import type { Awaitable } from "../../types/helper";
 import { schema } from "./schema";
 
@@ -355,10 +355,7 @@ export interface OAuthOptions {
 	 * If defined, you must provide the function
 	 * decodeRefreshToken.
 	 */
-	encodeRefreshToken?: (
-		token: string,
-		session?: Omit<Session, "token"> & { token?: string },
-	) => Awaitable<string>;
+	encodeRefreshToken?: (token: string, sessionId?: string) => Awaitable<string>;
 	/**
 	 * Decodes a custom session token format.
 	 * If you changed the format after production deployment,
@@ -521,16 +518,6 @@ export interface OAuthAuthorizationQuery {
 }
 
 /**
- * Merged Session schema type
- */
-export type OAuthSession = Omit<Session, "token"> & {
-	token?: string;
-	refresh?: string;
-	clientId?: string;
-	scopes?: string[];
-};
-
-/**
  * Stored within the verification.value field
  * in JSON format.
  *
@@ -540,7 +527,8 @@ export type OAuthSession = Omit<Session, "token"> & {
 export interface VerificationValue {
 	type: "authorization_code" | "consent";
 	clientId?: string;
-	userId?: string;
+	sessionId: string;
+	userId: string;
 	redirectUri?: string;
 	scopes?: string;
 	state?: string;
@@ -665,6 +653,12 @@ export interface OAuthOpaqueAccessToken {
 	 * where no user session is involved.
 	 */
 	sessionId?: string;
+	/**
+	 * The refresh token the access token is associated with.
+	 *
+	 * Not available without the "offline_access" scope
+	 */
+	refreshId?: string;
 	/** The expiration date of the access token. */
 	expiresAt: Date;
 	/** The creation date of the access token. */
@@ -672,7 +666,25 @@ export interface OAuthOpaqueAccessToken {
 	/**
 	 * Scope granted for the access token.
 	 *
-	 * Shall match the sessionId.scopes if sessionId is provided.
+	 * Shall match the refreshId.scopes if refreshId is provided.
 	 */
 	scopes: string[];
 }
+
+/**
+ * Merged Session schema type
+ */
+export type OAuthRefreshToken = {
+	token: string;
+	sessionId: string;
+	userId: string;
+	clientId?: string;
+	expiresAt: Date;
+	createdAt: Date;
+	/**
+	 * Scopes granted for this refresh token.
+	 *
+	 * Considered Immutable once granted.
+	 */
+	scopes?: string[];
+};

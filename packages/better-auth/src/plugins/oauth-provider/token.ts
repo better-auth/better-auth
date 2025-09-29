@@ -3,8 +3,8 @@ import type { GenericEndpointContext, Session, User } from "../../types";
 import type {
 	SchemaClient,
 	OAuthOptions,
-	OAuthSession,
 	VerificationValue,
+	OAuthRefreshToken,
 } from "./types";
 import { createHash } from "@better-auth/utils/hash";
 import { generateRandomString } from "../../crypto";
@@ -79,10 +79,10 @@ async function createJwtAccessToken(
 	clientId: string,
 	audience: string | string[],
 	scopes: string[],
-	sessionId: string,
 	overrides?: {
 		iat?: number;
 		exp?: number;
+		sid?: string;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
@@ -108,7 +108,7 @@ async function createJwtAccessToken(
 						: audience,
 			azp: clientId,
 			scope: scopes.join(" "),
-			sid: sessionId,
+			sid: overrides?.sid,
 			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			iat,
 			exp,
@@ -193,7 +193,7 @@ async function createIdToken(
 async function encodeRefreshToken(
 	opts: OAuthOptions,
 	token: string,
-	session?: (Omit<Session, "token"> & { token?: string }) | null,
+	sessionId?: string,
 ) {
 	if (opts.encodeRefreshToken && !opts.decodeRefreshToken) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -204,7 +204,7 @@ async function encodeRefreshToken(
 	return (
 		(opts.refreshTokenPrefix ?? "") +
 		(opts.encodeRefreshToken
-			? opts.encodeRefreshToken(token, session ?? undefined)
+			? opts.encodeRefreshToken(token, sessionId)
 			: token)
 	);
 }
@@ -241,6 +241,7 @@ async function createOpaqueAccessToken(
 	clientId: string,
 	scopes: string[],
 	payload: JWTPayload,
+	refreshId?: string,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const expiresIn = opts.accessTokenExpiresIn ?? 3600;
@@ -254,12 +255,45 @@ async function createOpaqueAccessToken(
 			token: await storeToken(opts.storeTokens, token, "access_token"),
 			clientId,
 			sessionId: payload?.sid,
+			refreshId,
 			scopes: scopes.join(" "), // TODO: remove join when native arrays supported
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
 		},
 	});
 	return (opts.opaqueAccessTokenPrefix ?? "") + token;
+}
+
+async function createRefreshToken(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions,
+	user: User,
+	clientId: string,
+	scopes: string[],
+	payload: JWTPayload,
+) {
+	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
+	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
+	const token = opts.generateRefreshToken
+		? await opts.generateRefreshToken()
+		: generateRandomString(32, "A-Z", "a-z");
+	const sessionId = payload?.sid as string | undefined;
+	const refreshToken = await ctx.context.adapter.create({
+		model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+		data: {
+			token: await storeToken(opts.storeTokens, token, "refresh_token"),
+			clientId,
+			sessionId,
+			userId: user.id,
+			scopes: scopes.join(" "), // TODO: remove join when native arrays supported
+			createdAt: new Date(iat * 1000),
+			expiresAt: new Date(exp * 1000),
+		},
+	});
+	return {
+		id: refreshToken.id,
+		token: await encodeRefreshToken(opts, token, sessionId),
+	};
 }
 
 /**
@@ -309,20 +343,10 @@ async function createUserTokens(
 	client: SchemaClient,
 	scopes: string[],
 	user: User,
-	/* if provided update session, if not create session */
-	_session?: {
-		// sessionId?: string; // TODO: update by sessionId
-		sessionToken: string;
-	},
+	sessionId?: string,
 	nonce?: string,
 ) {
-	const refreshToken = scopes.includes("offline_access")
-		? opts.generateRefreshToken
-			? await opts.generateRefreshToken()
-			: generateRandomString(32, "A-Z", "a-z")
-		: undefined;
 	const iat = Math.floor(Date.now() / 1000);
-	const now = new Date(iat * 1000);
 	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
 	const exp = opts.scopeExpirations
 		? scopes
@@ -335,97 +359,26 @@ async function createUserTokens(
 					return prev < curr ? prev : curr;
 				}, defaultExp)
 		: defaultExp;
-	const accessTokenExpiresAt = new Date(exp * 1000);
-	const refreshTokenExpiresAt = refreshToken
-		? new Date((iat + (opts.refreshTokenExpiresIn ?? 2592000)) * 1000)
-		: undefined;
-	let session: OAuthSession | null = null;
-	try {
-		session = _session?.sessionToken
-			? await ctx.context.adapter
-					.update({
-						model: "session",
-						where: [
-							{
-								field: "refresh",
-								value: await getStoredToken(
-									opts.storeTokens,
-									_session.sessionToken,
-									"refresh_token",
-								),
-							},
-						],
-						update: {
-							refresh: refreshToken
-								? await storeToken(
-										opts.storeTokens,
-										refreshToken,
-										"refresh_token",
-									)
-								: undefined,
-							updatedAt: now,
-							expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
-						},
-					})
-					.then((res: any) => {
-						// TODO: remove join when native arrays supported
-						if (!res) return res;
-						return {
-							...res,
-							scopes: res.scopes?.split(" "),
-						} as OAuthSession;
-					})
-			: await ctx.context.adapter
-					.create({
-						model: "session",
-						data: {
-							userId: user.id,
-							clientId: client.clientId,
-							scopes: scopes.join(" "), // TODO: remove join when native arrays supported
-							refresh: refreshToken
-								? await storeToken(
-										opts.storeTokens,
-										refreshToken,
-										"refresh_token",
-									)
-								: undefined,
-							createdAt: now,
-							updatedAt: now,
-							expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
-						},
-					})
-					.then((res) => {
-						// TODO: remove join when native arrays supported
-						return {
-							...res,
-							scopes: res.scopes.split(" "),
-						} as OAuthSession;
-					});
-	} catch (err) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error: "invalid_request",
-			error_description: "unable to update/create user session",
-		});
-	}
-
-	if (!session) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error: "invalid_request",
-			error_description: "unable to update/create user session",
-		});
-	}
-
-	// Ensure no refresh data is used
-	if (session?.refresh) {
-		session.refresh = undefined;
-	}
 
 	// Check requested audience if sent as the resource parameter
 	const audience = await checkResource(ctx, opts, scopes);
+	const isRefreshToken = scopes.includes("offline_access");
+	const isJwtAccessToken = audience && !opts.disableJwtPlugin;
+	const isIdToken = scopes.includes("openid");
+
+	// Refresh token may need to be created beforehand for id field
+	const earlyRefreshToken =
+		isRefreshToken && !isJwtAccessToken
+			? await createRefreshToken(ctx, opts, user, client.clientId, scopes, {
+					iat,
+					exp,
+					sid: sessionId,
+				})
+			: undefined;
 
 	// Sign jwt and refresh tokens in parallel
-	const [accessToken, sessionRefresh, idToken] = await Promise.all([
-		audience && !opts.disableJwtPlugin
+	const [accessToken, refreshToken, idToken] = await Promise.all([
+		isJwtAccessToken
 			? createJwtAccessToken(
 					ctx,
 					opts,
@@ -433,19 +386,34 @@ async function createUserTokens(
 					client.clientId,
 					audience,
 					scopes,
-					session.id,
 					{
 						iat,
 						exp,
+						sid: sessionId,
 					},
 				)
-			: createOpaqueAccessToken(ctx, opts, client.clientId, scopes, {
-					iat,
-					exp,
-					sid: session.id,
-				}),
-		refreshToken ? encodeRefreshToken(opts, refreshToken, session) : undefined,
-		scopes.includes("openid")
+			: createOpaqueAccessToken(
+					ctx,
+					opts,
+					client.clientId,
+					scopes,
+					{
+						iat,
+						exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
+						sid: sessionId,
+					},
+					earlyRefreshToken?.id,
+				),
+		earlyRefreshToken
+			? earlyRefreshToken
+			: isRefreshToken
+				? createRefreshToken(ctx, opts, user, client.clientId, scopes, {
+						iat,
+						exp,
+						sid: sessionId,
+					})
+				: undefined,
+		isIdToken
 			? createIdToken(
 					ctx,
 					opts,
@@ -464,7 +432,7 @@ async function createUserTokens(
 			expires_in: exp - iat,
 			expires_at: exp,
 			token_type: "Bearer",
-			refresh_token: sessionRefresh,
+			refresh_token: refreshToken?.token,
 			scope: scopes.join(" "),
 			id_token: idToken,
 		},
@@ -673,13 +641,30 @@ async function handleAuthorizationCodeGrant(
 		});
 	}
 
+	// Check if session used is still active
+	const session = await ctx.context.adapter.findOne<Session>({
+		model: "session",
+		where: [
+			{
+				field: "id",
+				value: verificationValue.sessionId,
+			},
+		],
+	});
+	if (!session || session.expiresAt < new Date()) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "session no longer exists",
+			error: "invalid_request",
+		});
+	}
+
 	return createUserTokens(
 		ctx,
 		opts,
 		client,
 		verificationValue.scopes?.split(" ") ?? [],
 		user,
-		undefined,
+		session.id,
 		verificationValue.nonce,
 	);
 }
@@ -862,12 +847,12 @@ async function handleRefreshTokenGrant(
 	}
 	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);
 
-	const session = await ctx.context.adapter
-		.findOne<OAuthSession>({
-			model: "session",
+	const refreshToken = await ctx.context.adapter
+		.findOne<OAuthRefreshToken>({
+			model: "oauthRefreshToken",
 			where: [
 				{
-					field: "refresh",
+					field: "token",
 					value: await getStoredToken(
 						opts.storeTokens,
 						decodedRefresh.token,
@@ -882,23 +867,23 @@ async function handleRefreshTokenGrant(
 			return {
 				...res,
 				scopes: (res?.scopes as unknown as string)?.split(" "),
-			} as OAuthSession;
+			} as OAuthRefreshToken;
 		});
 
 	// Check session
-	if (!session) {
+	if (!refreshToken) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "session not found",
 			error: "invalid_request",
 		});
 	}
-	if (session.clientId !== client_id?.toString()) {
+	if (refreshToken.clientId !== client_id?.toString()) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid client_id",
 			error: "invalid_client",
 		});
 	}
-	if (session.expiresAt < new Date()) {
+	if (refreshToken.expiresAt < new Date()) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "refresh token expired",
 			error: "invalid_request",
@@ -906,7 +891,7 @@ async function handleRefreshTokenGrant(
 	}
 
 	// Check session scopes
-	const scopes = session?.scopes ?? [];
+	const scopes = refreshToken?.scopes ?? [];
 	const requestedScopes = scope?.split(" ");
 	if (requestedScopes) {
 		for (const requestedScope of requestedScopes) {
@@ -927,7 +912,9 @@ async function handleRefreshTokenGrant(
 		requestedScopes ?? scopes,
 	);
 
-	const user = await ctx.context.internalAdapter.findUserById(session.userId);
+	const user = await ctx.context.internalAdapter.findUserById(
+		refreshToken.userId,
+	);
 	if (!user) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "user not found",
@@ -936,8 +923,12 @@ async function handleRefreshTokenGrant(
 	}
 
 	// Generate new tokens
-	return createUserTokens(ctx, opts, client, requestedScopes ?? scopes, user, {
-		// sessionId: decodedRefresh.sessionId, // TODO: Update by sessionId
-		sessionToken: decodedRefresh.token,
-	});
+	return createUserTokens(
+		ctx,
+		opts,
+		client,
+		requestedScopes ?? scopes,
+		user,
+		refreshToken.sessionId,
+	);
 }

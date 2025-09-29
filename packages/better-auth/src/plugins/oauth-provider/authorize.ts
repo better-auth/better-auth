@@ -192,6 +192,7 @@ export async function authorizeEndpoint(
 			query,
 			clientId: client.clientId,
 			userId: session.user.id,
+			sessionId: session.session.id,
 			scopes: requestScope.join(" "),
 		});
 	}
@@ -202,6 +203,7 @@ export async function authorizeEndpoint(
 			query,
 			clientId: client.clientId,
 			userId: session.user.id,
+			sessionId: session.session.id,
 			scopes: requestScope.join(" "),
 		});
 	}
@@ -228,6 +230,7 @@ export async function authorizeEndpoint(
 			query,
 			clientId: client.clientId,
 			userId: session.user.id,
+			sessionId: session.session.id,
 			scopes: requestScope.join(" "),
 		});
 	}
@@ -236,6 +239,7 @@ export async function authorizeEndpoint(
 		query,
 		clientId: client.clientId,
 		userId: session.user.id,
+		sessionId: session.session.id,
 		scopes: requestScope.join(" "),
 	});
 }
@@ -247,6 +251,7 @@ async function redirectWithAuthorizationCode(
 		query: OAuthAuthorizationQuery;
 		clientId: string;
 		userId: string;
+		sessionId: string;
 		scopes: string;
 	},
 ) {
@@ -267,6 +272,7 @@ async function redirectWithAuthorizationCode(
 				type: "authorization_code",
 				clientId: verificationValue.clientId,
 				userId: verificationValue.userId,
+				sessionId: verificationValue?.sessionId,
 				redirectUri: verificationValue.query.redirect_uri,
 				scopes: verificationValue.scopes,
 				state: verificationValue.query.state,
@@ -291,6 +297,7 @@ async function redirectWithConsentCode(
 		query: OAuthAuthorizationQuery;
 		clientId: string;
 		userId: string;
+		sessionId: string;
 		scopes: string;
 	},
 ) {
@@ -311,6 +318,7 @@ async function redirectWithConsentCode(
 				type: "consent",
 				clientId: verificationValue.clientId,
 				userId: verificationValue.userId,
+				sessionId: verificationValue.sessionId,
 				redirectUri: verificationValue.query.redirect_uri,
 				scopes: verificationValue.scopes,
 				state: verificationValue.query.state,

@@ -116,32 +116,53 @@ export const schema = {
 		},
 	},
 	/**
-	 * Uses the "session" schema to maintain user sessions
-	 * and their optional refresh token.
+	 * An opaque refresh token created with "offline_access"
+	 *
+	 * Refresh tokens are linked to a session.
 	 */
-	session: {
+	oauthRefreshToken: {
 		fields: {
-			/** Token logic is used in direct login methods */
 			token: {
 				type: "string",
-				required: false,
-			},
-			/** Refresh is for oAuth logic */
-			refresh: {
-				type: "string",
-				required: false,
+				required: true,
 			},
 			clientId: {
 				type: "string",
-				required: false,
+				required: true,
 				references: {
 					model: "oauthClient",
 					field: "clientId",
 				},
 			},
+			// Session used during authorization
+			sessionId: {
+				type: "string",
+				required: false,
+				references: {
+					model: "session",
+					field: "id",
+					// session can be deleted but refresh still active
+					onDelete: "set null",
+				},
+			},
+			userId: {
+				type: "string",
+				required: true,
+				references: {
+					model: "user",
+					field: "id",
+				},
+			},
+			expiresAt: {
+				type: "date",
+			},
+			createdAt: {
+				type: "date",
+			},
+			// Immutable
 			scopes: {
 				type: "string[]",
-				required: false,
+				required: true,
 			},
 		},
 	},
@@ -180,6 +201,16 @@ export const schema = {
 				references: {
 					model: "session",
 					field: "id",
+					// session can be deleted but refresh still active
+					onDelete: "set null",
+				},
+			},
+			refreshId: {
+				type: "string",
+				required: false,
+				references: {
+					model: "oauthRefreshToken",
+					field: "id",
 				},
 			},
 			expiresAt: {
@@ -188,7 +219,7 @@ export const schema = {
 			createdAt: {
 				type: "date",
 			},
-			// Shall be same as sessionId.scopes if using sessionId
+			// Shall be same as refreshId.scopes if using refreshId
 			scopes: {
 				type: "string[]",
 				required: true,

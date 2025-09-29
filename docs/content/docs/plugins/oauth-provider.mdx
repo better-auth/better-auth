@@ -29,7 +29,6 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
 - **Resource Endpoints**: Read and manage tokens.
   - **Introspection**: [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection.
   - **Revocation**: [RFC7009](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Revocation.
-- **Sessions**: Successful login attempts create a `Session` which through other plugins can trigger hooks, such as welcome emails.
 
 **Grants Supported**
 
@@ -791,8 +790,8 @@ Example with change in refresh token format with backwards compatablity with ori
 
 ```ts title="auth.ts"
 oauthProvider({
-  encodeRefreshToken: (token, session) => {
-    const res = session ? `1.${token}.${session}` : token;
+  encodeRefreshToken: (token, sessionId) => {
+    const res = sessionId ? `1.${token}.${sessionId}` : token;
     return res;
   },
   decodeRefreshToken: (token) => {
@@ -819,9 +818,9 @@ const enc = "A256GCM"
 
 const auth = betterAuth({
   plugins: [oauthProvider({
-    encodeRefreshToken: (token, session) {
+    encodeRefreshToken: (token, sessionId) {
       const value = JSON.stringify({
-        sessionId: session.id,
+        sessionId,
         token,
       });
       const jwe = await new CompactEncrypt(Buffer.from(value))
@@ -1212,34 +1211,61 @@ Table Name: `oauthClient`
 
 ### Session
 
-Table Name: `session`
-
-Extends the native [`session`](/docs/concepts/session-management) table.
-
-<Callout type="warn">
-The original required `token` field is now marked as optional.
-</Callout>
+Table Name: `oauthRefreshToken`
 
 <DatabaseTable
   fields={[
     {
-      name: "refresh",
+      name: "id",
       type: "string",
-      description: "A hashed/encrypted refresh token",
-      isOptional: true,
+      description: "Database ID of the refresh token",
+      isPrimaryKey: true
+    },
+    {
+      name: "token",
+      type: "string",
+      description: "Hashed/encrypted refresh token",
+      isRequired: true,
     },
     {
       name: "clientId",
       type: "string",
       description: "ID of the OAuth client",
-      references: { model: "oauthClient", field: "clientId" },
-      isOptional: true,
+      isForeignKey: true,
+      isRequired: true,
+      references: { model: "oauthClient", field: "clientId" }
+    },
+    {
+      name: "sessionId",
+      type: "string",
+      description: "ID of the user associated with the token",
+      isForeignKey: true,
+      isRequired: false,
+      references: { model: "session", field: "id" },
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "ID of the user associated with the token",
+      isForeignKey: true,
+      isRequired: true,
+      references: { model: "user", field: "id" },
     },
     {
       name: "scopes",
       type: "string[]",
       description: "Array of granted scopes",
       isRequired: true,
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp when the access token was created" 
+    },
+    {
+      name: "expiresAt",
+      type: "Date",
+      description: "Timestamp when the token will expire",
     },
   ]}
 />
@@ -1255,17 +1281,20 @@ Table Name: `oauthAccessToken`
       type: "string",
       description: "Database ID of the opaque access token",
       isPrimaryKey: true
+      isRequired: true,
     },
     {
       name: "token",
       type: "string",
       description: "Hashed/encrypted access token",
+      isRequired: true,
     },
     {
       name: "clientId",
       type: "string",
       description: "ID of the OAuth client",
       isForeignKey: true,
+      isRequired: true,
       references: { model: "oauthClient", field: "clientId" }
     },
     {
@@ -1273,7 +1302,16 @@ Table Name: `oauthAccessToken`
       type: "string",
       description: "ID of the user associated with the token",
       isForeignKey: true,
+      isOptional: true,
       references: { model: "session", field: "id" },
+    },
+    {
+      name: "refreshId",
+      type: "string",
+      description: "ID of the refresh associated with the token",
+      isForeignKey: true,
+      isOptional: true,
+      references: { model: "oauthRefreshToken", field: "id" },
     },
     {
       name: "scopes",
@@ -1403,10 +1441,10 @@ You may choose to opt-out of this table conversion with minimal impact. By doing
 
 Option 2 (more complex):
 
-- Convert all `oauthAccessToken` to a `Session` using the following map:
+- Convert `oauthAccessToken` with `refreshToken` field into a new `oauthRefreshToken` entry.
 ```ts
 {
-  refresh: hashed(refreshToken),
+  token: hashed(refreshToken),
   expiresAt: refreshTokenExpiresAt,
   clientId: clientId,
   scopes: scopes,
@@ -1415,14 +1453,15 @@ Option 2 (more complex):
   updatedAt: updatedAt,
 }
 ```
-- Map all `oauthAccessToken`:
+
+- Keep `oauthAccessToken` but reference new `oauthRefreshToken`.
 ```ts
 {
   token: hashed(accessToken),
   expiresAt: accessTokenExpiresAt,
   clientId: clientId,
   scopes: scopes,
-  userId: userId,
+  refreshId: oauthRefreshToken.id, // `undefined` if no refreshToken
   createdAt: createdAt,
   updatedAt: updatedAt,
 }

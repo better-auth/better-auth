@@ -9,7 +9,7 @@ import {
 import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
-	OAuthSession,
+	OAuthRefreshToken,
 } from "./types";
 import { getJwtPlugin } from "./utils";
 import { decodeRefreshToken } from "./token";
@@ -146,22 +146,24 @@ async function revokeRefreshToken(
 	token: string,
 	clientId: string,
 ) {
-	const userSession = await ctx.context.adapter.findOne<OAuthSession>({
-		model: "session",
+	const refreshToken = await ctx.context.adapter.findOne<
+		OAuthRefreshToken & { id: string }
+	>({
+		model: "oauthRefreshToken",
 		where: [
 			{
-				field: "refresh",
+				field: "token",
 				value: await getStoredToken(opts.storeTokens, token, "refresh_token"),
 			},
 		],
 	});
-	if (!userSession) {
+	if (!refreshToken) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "token not found",
 			error: "invalid_request",
 		});
 	}
-	if (!userSession.clientId || userSession.clientId !== clientId) {
+	if (!refreshToken.clientId || refreshToken.clientId !== clientId) {
 		return null;
 	}
 
@@ -169,12 +171,12 @@ async function revokeRefreshToken(
 		// Removes all access tokens associated with the refresh token
 		ctx.context.adapter.deleteMany({
 			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
-			where: [{ field: "sessionId", value: userSession.id }],
+			where: [{ field: "refreshId", value: refreshToken.id }],
 		}),
 		// Remove the refresh token
 		ctx.context.adapter.delete({
-			model: "session",
-			where: [{ field: "id", value: userSession.id }],
+			model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
 		}),
 	]);
 }
