@@ -369,7 +369,7 @@ describe("SSO disable implicit sign in", async () => {
 });
 
 describe("provisioning", async (ctx) => {
-	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter, db } =
 		await getTestInstance({
 			plugins: [sso(), organization()],
 		});
@@ -518,5 +518,74 @@ describe("provisioning", async (ctx) => {
 		});
 
 		expect(res.url).toContain("http://localhost:8080/authorize");
+	});
+
+	it("should not delete SSO provider when creator user is deleted", async () => {
+		const { headers, user } = await signInWithTestUser();
+
+		await auth.api.createOIDCProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "delete-test.com",
+				clientId: "test-delete",
+				clientSecret: "test-delete",
+				authorizationEndpoint: `${server.issuer.url}/authorize`,
+				tokenEndpoint: `${server.issuer.url}/token`,
+				jwksEndpoint: `${server.issuer.url}/jwks`,
+				mapping: {
+					id: "sub",
+					email: "email",
+					emailVerified: "email_verified",
+					name: "name",
+					image: "picture",
+				},
+				providerId: "test-delete",
+			},
+			headers,
+		});
+
+		// Verify provider exists before deletion and has the correct userId
+		const providerBeforeDelete = await db.findOne<{
+			userId: string | null;
+			domain: string;
+			providerId: string;
+		}>({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: "test-delete" }],
+		});
+
+		expect(providerBeforeDelete).toBeTruthy();
+		expect(providerBeforeDelete?.userId).toBe(user.id);
+
+		// Delete the user who created the SSO provider
+		// The database foreign key constraint with SET NULL should handle setting userId to null
+		await db.delete({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					value: user.id,
+				},
+			],
+		});
+
+		// Verify SSO provider still exists but userId is null
+		const ssoProvider = await db.findOne<{
+			userId: string | null;
+			domain: string;
+			providerId: string;
+		}>({
+			model: "ssoProvider",
+			where: [
+				{
+					field: "providerId",
+					value: "test-delete",
+				},
+			],
+		});
+
+		expect(ssoProvider).toBeTruthy();
+		expect(ssoProvider?.userId).toBeNull();
+		expect(ssoProvider?.domain).toBe("delete-test.com");
 	});
 });
