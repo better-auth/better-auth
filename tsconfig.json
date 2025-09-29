@@ -2,25 +2,22 @@
   "compilerOptions": {
     "strict": true,
     "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "downlevelIteration": true,
     "baseUrl": ".",
-    "strict": true,
-    "target": "esnext",
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "esModuleInterop": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false,
     "incremental": true,
     "noErrorTruncation": true,
-    "types": ["node"]
+    "types": ["node", "bun"],
+    "paths": {
+      "better-auth": ["./packages/better-auth/src"],
+      "better-auth/*": ["./packages/better-auth/src/*"]
+    }
   },
   "references": [
     {
@@ -39,19 +36,5 @@
       "path": "./packages/stripe"
     }
   ],
-  "files": [],
-  "include": [],
-    "exactOptionalPropertyTypes": false,
-    "declaration": true,
-    "emitDeclarationOnly": true,
-    "composite": true,
-    "incremental": true,
-    "noErrorTruncation": true,
-    "types": ["node"],
-    "paths": {
-      "better-auth": ["./packages/better-auth/src"],
-      "better-auth/*": ["./packages/better-auth/src/*"]
-    }
-  },
   "exclude": ["**/dist/**", "**/node_modules/**"]
 }
