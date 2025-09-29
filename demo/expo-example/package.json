@@ -17,7 +17,7 @@
     "@better-auth/expo": "workspace:*",
     "@expo/metro-runtime": "^6.1.2",
     "@expo/vector-icons": "^15.0.2",
-    "@nanostores/react": "^0.8.4",
+    "@nanostores/react": "^1.0.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/native": "^7.1.17",
     "@rn-primitives/avatar": "^1.1.0",
