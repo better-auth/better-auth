@@ -59,6 +59,13 @@ export const captcha = (options: CaptchaOptions) =>
 						siteKey: options.siteKey,
 					});
 				}
+
+				if (options.provider === Providers.CAPTCHAFOX) {
+					return await verifyHandlers.captchaFox({
+						...handlerParams,
+						siteKey: options.siteKey,
+					});
+				}
 			} catch (_error) {
 				const errorMessage =
 					_error instanceof Error ? _error.message : undefined;
