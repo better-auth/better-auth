@@ -51,7 +51,7 @@ export default async function Page({
 			editOnGithub={{
 				owner: "better-auth",
 				repo: "better-auth",
-				sha: "main",
+				sha: process.env.VERCEL_GIT_COMMIT_SHA || "main",
 				path: `/docs/content/docs/${page.path}`,
 			}}
 			tableOfContent={{
