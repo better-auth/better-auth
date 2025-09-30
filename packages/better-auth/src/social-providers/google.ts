@@ -60,6 +60,8 @@ export const google = (options: GoogleOptions) => {
 			redirectURI,
 			loginHint,
 			display,
+			prompt,
+			accessType,
 		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
@@ -83,8 +85,9 @@ export const google = (options: GoogleOptions) => {
 				state,
 				codeVerifier,
 				redirectURI,
-				prompt: options.prompt,
-				accessType: options.accessType,
+				prompt: typeof prompt === "string" ? prompt : options.prompt,
+				accessType:
+					typeof accessType === "string" ? accessType : options.accessType,
 				display: display || options.display,
 				loginHint,
 				hd: options.hd,

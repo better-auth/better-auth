@@ -183,6 +183,35 @@ describe("account", async () => {
 		});
 	});
 
+	it("should pass custom options to authorization URL", async () => {
+		const { runWithDefaultUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const linkAccountRes = await client.linkSocial({
+				provider: "google",
+				callbackURL: "/callback",
+				options: {
+					accessType: "offline",
+					prompt: "consent",
+				},
+			});
+
+			if (linkAccountRes.error) {
+				console.error("Error from linkSocial:", linkAccountRes.error);
+			}
+
+			expect(linkAccountRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+
+			const url = new URL(linkAccountRes.data!.url);
+			const accessTypeParam = url.searchParams.get("access_type");
+			const promptParam = url.searchParams.get("prompt");
+			expect(accessTypeParam).toBe("offline");
+			expect(promptParam).toBe("consent");
+		});
+	});
+
 	it("should link second account from the same provider", async () => {
 		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async (headers) => {
