@@ -1023,9 +1023,11 @@ export const sso = (options?: SSOOptions) => {
 					},
 					userId: {
 						type: "string",
+						required: false,
 						references: {
 							model: "user",
 							field: "id",
+							onDelete: "set null",
 						},
 					},
 					providerId: {
@@ -1050,7 +1052,7 @@ export const sso = (options?: SSOOptions) => {
 export interface SSOProvider {
 	issuer: string;
 	oidcConfig: OIDCConfig;
-	userId: string;
+	userId?: string;
 	providerId: string;
 	organizationId?: string;
 }
