@@ -30,6 +30,16 @@ export function getPublicJwk(
 	return publicJwk;
 }
 
+/**
+ * @todo: JSDoc; make heurestic stronger by correlating alg to the needed fields
+ * @param jwk
+ * @returns
+ */
+export function isPublicKey(jwk: JWK): boolean {
+	const privateParts = ["d", "p", "q", "dp", "dq", "qi"];
+	return !privateParts.some((privateField) => privateField in jwk);
+}
+
 export function isPrivateKeyEncrypted(key: string) {
 	// If it is encrypted it will contain hex data, otherwise it is a JSON
 	return key.at(0) !== "{";

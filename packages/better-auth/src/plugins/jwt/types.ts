@@ -406,7 +406,7 @@ export interface JwtVerifyOptions {
 	 *
 	 * @description I/O could be a costly operation, for systems under high load, logging every jwt-verification failure including simple expiration, might be undesired.
 	 * @todo redact
-     * @default true
+	 * @default true
 	 */
 	logFailure?: boolean;
 }

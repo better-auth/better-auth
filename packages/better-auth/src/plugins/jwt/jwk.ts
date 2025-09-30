@@ -15,6 +15,7 @@ import {
 	getJwtPluginOptions,
 	getPublicJwk,
 	isPrivateKeyEncrypted,
+	isPublicKey,
 } from "./utils";
 import { exportJWK, generateKeyPair, importJWK } from "jose";
 
@@ -194,19 +195,59 @@ export async function createJwk(
  *
  * @returns The imported **JWK** stored in the database.
  */
+export async function importJwkInternal(
+	ctx: GenericEndpointContext,
+	privateKey: JWK,
+	pluginOpts?: JwtPluginOptions,
+): Promise<Jwk> {
+	const adapter = getJwksAdapter(ctx.context.adapter);
+
+	if (isPublicKey(privateKey))
+		throw new BetterAuthError(
+			"Failed to import the JWK: Private key is expected, received a public key",
+			JSON.stringify(privateKey),
+		);
+
+	const privateKeyStringified = JSON.stringify(privateKey);
+	return adapter.importKey({
+		id: privateKey.kid,
+		publicKey: JSON.stringify(getPublicJwk(privateKey)),
+		privateKey: pluginOpts?.jwks?.disablePrivateKeyEncryption
+			? privateKeyStringified
+			: await encryptPrivateKey(ctx.context.secret, privateKeyStringified),
+	} as Jwk);
+}
+
+/**
+ * Imports existing **JSON Web Key (JWK)** pair into the database.
+ *
+ * @param ctx - Endpoint context.
+ * @param privateKey - Private key. **Must** have `id`.
+ *
+ * @throws {Error} - If private key encryption or the database insert fails.
+ *
+ * @returns The imported **JWK** stored in the database.
+ */
 export async function importJwk(
 	ctx: GenericEndpointContext,
 	privateKey: CryptoKeyIdAlg,
 ): Promise<Jwk> {
 	const exportedPrivateKey = await exportJWK(privateKey.key);
+	exportedPrivateKey.kid = privateKey.id;
 
-	const adapter = getJwksAdapter(ctx.context.adapter);
+	if (privateKey.alg && privateKey.alg !== exportedPrivateKey.alg)
+		throw new BetterAuthError(
+			`Fail to import JWK: Algorithm mismatch within a CryptoKeyIdAlg (${privateKey.alg} !== ${exportedPrivateKey.alg})`,
+			JSON.stringify(exportedPrivateKey),
+		);
 
-	return adapter.importKey({
-		id: privateKey.id!,
-		publicKey: JSON.stringify(getPublicJwk(exportedPrivateKey)),
-		privateKey: JSON.stringify(exportedPrivateKey),
-	} as Jwk);
+	exportedPrivateKey.alg = privateKey.alg;
+
+	return importJwkInternal(
+		ctx,
+		exportedPrivateKey,
+		getJwtPluginOptions(ctx.context),
+	);
 }
 
 /**

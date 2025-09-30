@@ -19,7 +19,7 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import { mergeSchema } from "../../db/schema";
-import { createJwkInternal, getJwk, revokeJwk } from "./jwk";
+import { createJwkInternal, getJwk, importJwkInternal, revokeJwk } from "./jwk";
 import { getSessionJwtInternal, signJwtInternal } from "./sign";
 import { verifyJwtInternal, verifyJwtWithKeyInternal } from "./verify";
 import { type JSONWebKeySet, type JWK, type JWTPayload } from "jose";
@@ -134,7 +134,6 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 				async (ctx) => {
 					const adapter = getJwksAdapter(ctx.context.adapter);
 
-					const keySets = await adapter.getAllKeys();
 					const keySets = ((await adapter.getAllKeys()) ?? []).filter(
 						(k) => !k.id.endsWith(" revoked"),
 					);
@@ -564,14 +563,30 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 				},
 				async (ctx) => {
 					const exportedPrivateKey = ctx.body.jwk;
-					// Not calling `importJwk` from `./jwk.ts`, because this key is already exported
-					const key = getJwksAdapter(ctx.context.adapter).importKey({
-						id: exportedPrivateKey.kid!,
-						publicKey: JSON.stringify(getPublicJwk(exportedPrivateKey)),
-						privateKey: JSON.stringify(exportedPrivateKey),
-					} as Jwk);
+					try {
+						const key = await importJwkInternal(
+							ctx,
+							exportedPrivateKey,
+							pluginOpts,
+						);
 
-					return ctx.json({ key: key });
+						return ctx.json({ key: key });
+					} catch (error: unknown) {
+						if (error instanceof BetterAuthError) {
+							if (
+								exportedPrivateKey.kid &&
+								error.cause === exportedPrivateKey.kid
+							)
+								throw new APIError("BAD_REQUEST", {
+									message:
+										"Could not import the JWK: A JWK with the same ID exists already",
+								});
+						}
+						ctx.context.logger.error(`Could not import the JWK: ${error}`);
+						throw new APIError("BAD_REQUEST", {
+							message: `Could not import the JWK: ${error}`,
+						});
+					}
 				},
 			),
 			revokeJwk: createAuthEndpoint(
