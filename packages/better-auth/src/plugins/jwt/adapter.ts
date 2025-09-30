@@ -9,18 +9,18 @@ import { BetterAuthError } from "../../error";
 
 export const getJwksAdapter = (adapter: Adapter) => {
 	return {
-		getAllKeys: async () => {
+		getAllKeys: async (): Promise<Jwk[] | undefined> => {
 			return await adapter.findMany<Jwk>({
 				model: "jwks",
 			});
 		},
-		getKeyById: async (keyId: string) => {
+		getKeyById: async (keyId: string): Promise<Jwk | null> => {
 			return await adapter.findOne<Jwk>({
 				model: "jwks",
 				where: [{ field: "id", value: keyId }],
 			});
 		},
-		getLatestKey: async () => {
+		getLatestKey: async (): Promise<Jwk | undefined> => {
 			const key = await adapter.findMany<Jwk>({
 				model: "jwks",
 				sortBy: {
@@ -77,28 +77,28 @@ export const getJwksAdapter = (adapter: Adapter) => {
 
 			return jwk;
 		},
-		importKey: async (key: Jwk) => {
-			const oldKey = await adapter.findOne<Jwk>({
+		importKey: async (key: Jwk): Promise<Jwk> => {
+			if (key.id) {
+				const oldKey = await adapter.findOne<Jwk>({
+					model: "jwks",
+					where: [{ field: "id", value: key.id }],
+				});
+				if (oldKey !== null)
+					throw new BetterAuthError(
+						`Cannot import JWK with ID "${key.id}": Already exists!`,
+						key.id,
+					);
+			}
+			return adapter.create<Jwk>({
 				model: "jwks",
-				where: [{ field: "id", value: key.id }],
-			});
-			if (oldKey !== undefined)
-				throw new BetterAuthError(
-					`Cannot import JWK with id "${key.id}": Already exists!`,
-					JSON.stringify(key),
-				);
-
-			const jwk = await adapter.create<Jwk>({
-				model: "jwks",
+				forceAllowId: key.id !== undefined,
 				data: {
 					...key,
 					createdAt: new Date(),
 				},
 			});
-
-			return jwk;
 		},
-		revokeKey: async (keyId: string) => {
+		revokeKey: async (keyId: string): Promise<Jwk | null | undefined> => {
 			const key = await adapter.findOne<Jwk>({
 				model: "jwks",
 				where: [{ field: "id", value: keyId }],
