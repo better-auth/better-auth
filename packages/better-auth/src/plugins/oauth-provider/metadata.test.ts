@@ -395,6 +395,10 @@ describe("metadata - resource discovery functions", async () => {
 		const metadataEndpoint = oauthProviderProtectedResourceMetadata(auth, {
 			externalScopes: ["write:posts"],
 			overrides: {
+				authorization_servers: [
+					authServerBaseUrl,
+					"https://another.example.com",
+				],
 				scopes_supported: ["read:posts", "write:posts"],
 			},
 		});
@@ -407,7 +411,10 @@ describe("metadata - resource discovery functions", async () => {
 		const metadata: ResourceServerMetadata = await metadataRes.json();
 		expect(metadata).toMatchObject({
 			resource: validAudience, // aud
-			authorization_servers: [authServerBaseUrl], // iss
+			authorization_servers: [
+				authServerBaseUrl, // iss
+				"https://another.example.com",
+			],
 			scopes_supported: ["read:posts", "write:posts"],
 		});
 	});
