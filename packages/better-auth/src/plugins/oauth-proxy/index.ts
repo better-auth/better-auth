@@ -58,7 +58,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 		// if skip proxy header is set, we don't need to proxy
 		const skipProxy = ctx.request?.headers.get("x-skip-oauth-proxy");
 		if (skipProxy) {
-			return;
+			return true;
 		}
 		const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
 		if (productionURL === ctx.context.options.baseURL) {
@@ -231,14 +231,15 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx);
+						console.log("skipProxy", skipProxy);
 						if (skipProxy) {
 							return;
 						}
 						const url = resolveCurrentURL(ctx);
-						if (!ctx.context.body) {
+						if (!ctx.body) {
 							return;
 						}
-						ctx.context.body.callbackURL = `${url.origin}${
+						ctx.body.callbackURL = `${url.origin}${
 							ctx.context.options.basePath || "/api/auth"
 						}/oauth-proxy-callback?callbackURL=${encodeURIComponent(
 							ctx.body.callbackURL || ctx.context.baseURL,
