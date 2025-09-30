@@ -55,6 +55,7 @@ type PrismaClientInternal = {
 		findFirst: (data: any) => Promise<any>;
 		findMany: (data: any) => Promise<any>;
 		update: (data: any) => Promise<any>;
+		updateMany: (data: any) => Promise<any>;
 		delete: (data: any) => Promise<any>;
 		[key: string]: any;
 	};
@@ -91,7 +92,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				}
 			}
 			const convertWhereClause = (model: string, where?: Where[]) => {
-				if (!where) return {};
+				if (!where || !where.length) return {};
 				if (where.length === 1) {
 					const w = where[0]!;
 					if (!w) {
