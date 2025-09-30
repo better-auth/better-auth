@@ -1,5 +1,7 @@
-import { drizzleAdapter } from "../drizzle-adapter";
+import { Kysely, MysqlDialect } from "kysely";
 import { testAdapter } from "../../test-adapter";
+import { kyselyAdapter } from "../kysely-adapter";
+import { createPool } from "mysql2/promise";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
@@ -7,51 +9,31 @@ import {
 	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
-import { drizzle } from "drizzle-orm/mysql2";
-import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
-import { createPool } from "mysql2/promise";
+import { getMigrations } from "../../../db";
 import { assert } from "vitest";
-import { execSync } from "child_process";
 
 const mysqlDB = createPool({
-	uri: "mysql://user:password@localhost:3306",
+	uri: "mysql://user:password@localhost:3307/better_auth",
 	timezone: "Z",
 });
 
+let kyselyDB = new Kysely({
+	dialect: new MysqlDialect(mysqlDB),
+});
+
 const { execute } = await testAdapter({
-	adapter: async (options) => {
-		const { schema } = await generateDrizzleSchema(mysqlDB, options, "mysql");
-		return drizzleAdapter(drizzle(mysqlDB), {
+	adapter: () =>
+		kyselyAdapter(kyselyDB, {
+			type: "mysql",
 			debugLogs: { isRunningAdapterTests: true },
-			schema,
-			provider: "mysql",
-		});
-	},
+		}),
 	async runMigrations(betterAuthOptions) {
 		await mysqlDB.query("DROP DATABASE IF EXISTS better_auth");
 		await mysqlDB.query("CREATE DATABASE better_auth");
 		await mysqlDB.query("USE better_auth");
-
-		const { fileName } = await generateDrizzleSchema(
-			mysqlDB,
-			betterAuthOptions,
-			"mysql",
-		);
-
-		const command = `npx drizzle-kit push --dialect=mysql --schema=${fileName}.ts --url=mysql://user:password@localhost:3306/better_auth`;
-		console.log(`Running: ${command}`);
-		console.log(`Options:`, betterAuthOptions);
-		try {
-			// wait for the above console.log to be printed
-			await new Promise((resolve) => setTimeout(resolve, 10));
-			execSync(command, {
-				cwd: import.meta.dirname,
-				stdio: "inherit",
-			});
-		} catch (error) {
-			console.error("Failed to push drizzle schema (mysql):", error);
-			throw error;
-		}
+		const opts = Object.assign(betterAuthOptions, { database: mysqlDB });
+		const { runMigrations } = await getMigrations(opts);
+		await runMigrations();
 
 		// ensure migrations were run successfully
 		const [tables_result] = (await mysqlDB.query("SHOW TABLES")) as unknown as [
@@ -76,8 +58,6 @@ const { execute } = await testAdapter({
 	],
 	async onFinish() {
 		await mysqlDB.end();
-		resetGenerationCount();
 	},
 });
-
 execute();

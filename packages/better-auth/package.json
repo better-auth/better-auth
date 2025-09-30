@@ -26,7 +26,7 @@
     "build": "unbuild --clean",
     "stub": "unbuild --stub",
     "test": "vitest",
-    "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/normal-tests/schema.prisma && prisma generate --schema ./src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
+    "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/base.prisma",
     "typecheck": "tsc --project tsconfig.json"
   },
   "main": "./dist/index.cjs",
@@ -770,6 +770,7 @@
     "better-sqlite3": "^12.2.0",
     "concurrently": "^9.2.1",
     "deepmerge": "^4.3.1",
+    "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.38.2",
     "happy-dom": "^18.0.1",
     "hono": "^4.9.7",
