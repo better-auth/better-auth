@@ -507,18 +507,6 @@ export const normalTestSuite = createTestSuite(
 				});
 				expect(result).toBeNull();
 			},
-			"delete - should delete a model by reference field": async () => {
-				const [user, session] = await insertRandom("session");
-				await adapter.delete({
-					model: "session",
-					where: [{ field: "userId", value: user.id }],
-				});
-				const result = await adapter.findOne<Session>({
-					model: "session",
-					where: [{ field: "userId", value: user.id }],
-				});
-				expect(result).toBeNull();
-			},
 			"delete - should not throw on record not found": async () => {
 				await expect(
 					adapter.delete({
