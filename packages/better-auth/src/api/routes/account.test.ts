@@ -184,7 +184,7 @@ describe("account", async () => {
 	});
 
 	it("should pass custom options to authorization URL", async () => {
-		const { runWithDefaultUser: runWithClient2 } = await signInWithTestUser();
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async () => {
 			const linkAccountRes = await client.linkSocial({
 				provider: "google",
