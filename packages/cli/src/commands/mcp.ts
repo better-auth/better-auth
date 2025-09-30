@@ -132,7 +132,10 @@ function handleOpenCodeAction(mcpUrl: string) {
 	const configPath = path.join(process.cwd(), "opencode.json");
 
 	try {
-		let existingConfig = {};
+		let existingConfig: {
+			mcp?: Record<string, unknown>;
+			[key: string]: unknown;
+		} = {};
 		if (fs.existsSync(configPath)) {
 			const existingContent = fs.readFileSync(configPath, "utf8");
 			existingConfig = JSON.parse(existingContent);
@@ -142,7 +145,7 @@ function handleOpenCodeAction(mcpUrl: string) {
 			...existingConfig,
 			...openCodeConfig,
 			mcp: {
-				...(existingConfig as any).mcp,
+				...existingConfig.mcp,
 				...openCodeConfig.mcp,
 			},
 		};
