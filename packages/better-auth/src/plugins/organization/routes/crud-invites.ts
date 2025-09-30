@@ -100,7 +100,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 * The organization ID to invite
 						 * the user to
 						 */
-						organizationId?: string;
+						organizationId?: string | undefined;
 						/**
 						 * Resend the invitation email, if
 						 * the user is already invited
