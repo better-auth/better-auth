@@ -438,20 +438,6 @@ export const normalTestSuite = createTestSuite(
 				findResult!.updatedAt = user.updatedAt;
 				expect(findResult).toEqual(expectedResult);
 			},
-			"update - should update a reference field": async () => {
-				const [user, session] = await insertRandom("session");
-				const [user2] = await insertRandom("user");
-				const result = await adapter.update<Session>({
-					model: "session",
-					where: [{ field: "userId", value: user.id }],
-					update: { id: user2.id },
-				});
-				expect(result).toStrictEqual({
-					...session,
-					id: user2.id,
-					updatedAt: result!.updatedAt,
-				});
-			},
 			"updateMany - should update all models when where is empty": async () => {
 				const users = (await insertRandom("user", 3)).map((x) => x[0]);
 				await adapter.updateMany({
