@@ -209,8 +209,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx);
-
-						if (skipProxy) {
+						if (skipProxy || ctx.path !== "/callback/:id") {
 							return;
 						}
 						return {
