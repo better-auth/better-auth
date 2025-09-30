@@ -42,21 +42,21 @@ vi.mock("../../oauth2", async (importOriginal) => {
 });
 
 describe("oauth-proxy", async () => {
-	const { client } = await getTestInstance({
-		plugins: [
-			oAuthProxy({
-				currentURL: "http://preview-localhost:3000",
-			}),
-		],
-		socialProviders: {
-			google: {
-				clientId: "test",
-				clientSecret: "test",
-			},
-		},
-	});
-
 	it("should redirect to proxy url", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			plugins: [
+				oAuthProxy({
+					currentURL: "http://preview-localhost:3000",
+				}),
+			],
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const headers = new Headers();
 		const res = await client.signIn.social(
 			{
 				provider: "google",
@@ -68,6 +68,7 @@ describe("oauth-proxy", async () => {
 		);
 		const state = new URL(res.url!).searchParams.get("state");
 		await client.$fetch(`/callback/google?code=test&state=${state}`, {
+			headers,
 			onError(context) {
 				const location = context.response.headers.get("location") ?? "";
 				if (!location) {
@@ -83,7 +84,7 @@ describe("oauth-proxy", async () => {
 	});
 
 	it("shouldn't redirect to proxy url on same origin", async () => {
-		const { client } = await getTestInstance({
+		const { client, cookieSetter } = await getTestInstance({
 			plugins: [oAuthProxy()],
 			socialProviders: {
 				google: {
@@ -92,6 +93,7 @@ describe("oauth-proxy", async () => {
 				},
 			},
 		});
+		const headers = new Headers();
 		const res = await client.signIn.social(
 			{
 				provider: "google",
@@ -99,6 +101,7 @@ describe("oauth-proxy", async () => {
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		const state = new URL(res.url!).searchParams.get("state");
@@ -154,10 +157,14 @@ describe("oauth-proxy", async () => {
 		});
 	});
 
-	it("shouldn't redirect to proxy url on same origin", async () => {
+	it("should require state cookie if it's not in proxy url", async () => {
 		const { client } = await getTestInstance({
 			baseURL: "https://myapp.com",
-			plugins: [oAuthProxy()],
+			plugins: [
+				oAuthProxy({
+					productionURL: "https://myapp.com",
+				}),
+			],
 			socialProviders: {
 				google: {
 					clientId: "test",
@@ -176,6 +183,45 @@ describe("oauth-proxy", async () => {
 		);
 		const state = new URL(res.url!).searchParams.get("state");
 		await client.$fetch(`/callback/google?code=test&state=${state}`, {
+			onError(context) {
+				const location = context.response.headers.get("location");
+				if (!location) {
+					throw new Error("Location header not found");
+				}
+				expect(location).toContain("state_mismatch");
+			},
+		});
+	});
+
+	it("shouldn't redirect to proxy url on same origin", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			baseURL: "https://myapp.com",
+			plugins: [
+				oAuthProxy({
+					productionURL: "https://myapp.com",
+				}),
+			],
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const headers = new Headers();
+		const res = await client.signIn.social(
+			{
+				provider: "google",
+				callbackURL: "/dashboard",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const state = new URL(res.url!).searchParams.get("state");
+		await client.$fetch(`/callback/google?code=test&state=${state}`, {
+			headers,
 			onError(context) {
 				const location = context.response.headers.get("location");
 				if (!location) {
