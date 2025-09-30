@@ -60,7 +60,6 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 		if (skipProxy) {
 			return;
 		}
-		const url = resolveCurrentURL(ctx);
 		const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
 		if (productionURL === ctx.context.options.baseURL) {
 			return true;
@@ -236,16 +235,16 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 							return;
 						}
 						const url = resolveCurrentURL(ctx);
+						if (!ctx.context.body) {
+							return;
+						}
+						ctx.context.body.callbackURL = `${url.origin}${
+							ctx.context.options.basePath || "/api/auth"
+						}/oauth-proxy-callback?callbackURL=${encodeURIComponent(
+							ctx.body.callbackURL || ctx.context.baseURL,
+						)}`;
 						return {
-							context: {
-								body: {
-									callbackURL: `${url.origin}${
-										ctx.context.options.basePath || "/api/auth"
-									}/oauth-proxy-callback?callbackURL=${encodeURIComponent(
-										ctx.body.callbackURL || ctx.context.baseURL,
-									)}`,
-								},
-							},
+							context: ctx,
 						};
 					}),
 				},
