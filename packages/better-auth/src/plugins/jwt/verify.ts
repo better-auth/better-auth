@@ -121,21 +121,27 @@ export async function verifyJwtInternal(
 	});
 	const localJwks = createLocalJWKSet(jwks);
 
-	const { payload, protectedHeader } = await verifyJwtJose(
-		ctx,
-		jwt,
-		localJwks,
-		pluginOpts,
-		options,
-	);
-
-	if (protectedHeader.kid?.endsWith(" revoked"))
-		throw new BetterAuthError(
-			`Failed to verify the JWT: Cannot verify the JWT using a revoked JWK with ID "${protectedHeader.kid}"`,
-			protectedHeader.kid,
+	try {
+		const { payload, protectedHeader } = await verifyJwtJose(
+			ctx,
+			jwt,
+			localJwks,
+			pluginOpts,
+			options,
 		);
 
-	return payload;
+		if (protectedHeader.kid?.endsWith(" revoked"))
+			throw new BetterAuthError(
+				`Failed to verify the JWT: Cannot verify the JWT using a revoked JWK with ID "${protectedHeader.kid}"`,
+				protectedHeader.kid,
+			);
+		return payload;
+	} catch (error: unknown) {
+		// This is not an error, verification failure is often nothing unexpected
+		if (options?.logFailure === undefined || options?.logFailure)
+			ctx.context.logger.info(`Failed to verify the JWT: ${error}"`);
+		throw error;
+	}
 }
 
 /**

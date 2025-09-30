@@ -276,8 +276,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 						return ctx.json({ payload });
 					} catch (error: unknown) {
 						// Do not return information about the error to the caller, could be a client who isn't supposed to obtain it
-						// Instead log it as an "info" on server. This is not a system error, verification failure is often nothing unexpected
-						ctx.context.logger.info(`Failed to verify the JWT: ${error}"`);
+						// Instead log it as an "info" on server inside `verifyJwtInternal`. This is not a system error, verification failure is often nothing unexpected
 						if (error instanceof JWTExpired)
 							throw new APIError("BAD_REQUEST", {
 								message: "Failed to verify the JWT: the token has expired",
