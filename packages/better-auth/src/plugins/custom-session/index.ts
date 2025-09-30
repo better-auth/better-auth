@@ -21,14 +21,17 @@ const getSessionQuerySchema = z.optional(
 		 */
 		disableCookieCache: z
 			.boolean()
-			.describe("Disable cookie cache and fetch session from database")
+			.meta({
+				description: "Disable cookie cache and fetch session from database",
+			})
 			.or(z.string().transform((v) => v === "true"))
 			.optional(),
 		disableRefresh: z
 			.boolean()
-			.describe(
-				"Disable session refresh. Useful for checking session status, without updating the session",
-			)
+			.meta({
+				description:
+					"Disable session refresh. Useful for checking session status, without updating the session",
+			})
 			.optional(),
 	}),
 );
@@ -104,7 +107,7 @@ export const customSession = <
 					},
 					requireHeaders: true,
 				},
-				async (ctx) => {
+				async (ctx): Promise<Returns | null> => {
 					const session = await getSession()({
 						...ctx,
 						asResponse: false,
@@ -117,6 +120,13 @@ export const customSession = <
 						return ctx.json(null);
 					}
 					const fnResult = await fn(session.response as any, ctx);
+
+					const setCookie = session.headers.get("set-cookie");
+					if (setCookie) {
+						ctx.setHeader("set-cookie", setCookie);
+						session.headers.delete("set-cookie");
+					}
+
 					session.headers.forEach((value, key) => {
 						ctx.setHeader(key, value);
 					});

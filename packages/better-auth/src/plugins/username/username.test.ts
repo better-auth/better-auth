@@ -533,3 +533,44 @@ describe("post normalization flow", async (it) => {
 		expect(session?.user.displayUsername).toBe("Test Username");
 	});
 });
+
+describe("username email verification flow (no info leak)", async (it) => {
+	const { client } = await getTestInstance(
+		{
+			emailAndPassword: { enabled: true, requireEmailVerification: true },
+			plugins: [username()],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient()],
+			},
+		},
+	);
+
+	it("returns INVALID_USERNAME_OR_PASSWORD for wrong password even if email is unverified", async () => {
+		await client.signUp.email({
+			email: "unverified-user@example.com",
+			username: "unverified_user",
+			password: "correct-password",
+			name: "Unverified User",
+		});
+
+		const res = await client.signIn.username({
+			username: "unverified_user",
+			password: "wrong-password",
+		});
+
+		expect(res.error?.status).toBe(401);
+		expect(res.error?.code).toBe("INVALID_USERNAME_OR_PASSWORD");
+	});
+
+	it("returns EMAIL_NOT_VERIFIED only after a correct password for an unverified user", async () => {
+		const res = await client.signIn.username({
+			username: "unverified_user",
+			password: "correct-password",
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("EMAIL_NOT_VERIFIED");
+	});
+});

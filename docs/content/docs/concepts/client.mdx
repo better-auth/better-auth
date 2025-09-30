@@ -145,13 +145,13 @@ In addition to the standard methods, the client provides hooks to easily access 
                 style="display: flex; flex-direction: column; gap: 10px; border-radius: 10px; border: 1px solid #4B453F; padding: 20px; margin-top: 10px;"
             >
                 <div>
-                {#if $session}
+                {#if $session.data}
                     <div>
                     <p>
-                        {$session?.data?.user.name}
+                        {$session.data.user.name}
                     </p>
                     <p>
-                        {$session?.data?.user.email}
+                        {$session.data.user.email}
                     </p>
                     <button
                         onclick={async () => {

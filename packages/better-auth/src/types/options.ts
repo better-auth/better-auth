@@ -10,7 +10,7 @@ import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
-import type { FieldAttribute } from "../db";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { Models, RateLimit } from "./models";
 import type { AuthContext } from ".";
 import type { CookieOptions } from "better-call";
@@ -168,8 +168,6 @@ export type BetterAuthOptions = {
 	 * the system will check the following environment variable:
 	 *
 	 * process.env.BETTER_AUTH_URL
-	 *
-	 * If not set it will throw an error.
 	 */
 	baseURL?: string;
 	/**
@@ -459,7 +457,7 @@ export type BetterAuthOptions = {
 		 * Additional fields for the session
 		 */
 		additionalFields?: {
-			[key: string]: FieldAttribute;
+			[key: string]: DBFieldAttribute;
 		};
 		/**
 		 * Changing email configuration
@@ -569,7 +567,7 @@ export type BetterAuthOptions = {
 		 * Additional fields for the session
 		 */
 		additionalFields?: {
-			[key: string]: FieldAttribute;
+			[key: string]: DBFieldAttribute;
 		};
 		/**
 		 * By default if secondary storage is provided

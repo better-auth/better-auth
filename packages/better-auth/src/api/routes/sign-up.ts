@@ -181,7 +181,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					rememberMe,
 					...additionalFields
 				} = body;
-				const isValidEmail = z.string().email().safeParse(email);
+				const isValidEmail = z.email().safeParse(email);
 
 				if (!isValidEmail.success) {
 					throw new APIError("BAD_REQUEST", {
@@ -210,7 +210,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						`Sign-up attempt for existing email: ${email}`,
 					);
 					throw new APIError("UNPROCESSABLE_ENTITY", {
-						message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
+						message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 					});
 				}
 
