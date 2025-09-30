@@ -62,7 +62,7 @@
     "@types/babel__core": "^7.20.5",
     "@types/jest": "^29.5.14",
     "@types/react": "^19.1.12",
-    "@types/react-test-renderer": "^18.3.1",
+    "@types/react-test-renderer": "^19.1.0",
     "typescript": "^5.7.2"
   }
 }
