@@ -6,8 +6,11 @@ import {
 } from "../adapter-factory";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
-import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
-import { ensureUTC } from "../../utils/ensure-utc";
+import {
+	type InsertQueryBuilder,
+	type Kysely,
+	type UpdateQueryBuilder,
+} from "kysely";
 
 interface KyselyAdapterConfig {
 	/**
@@ -44,7 +47,7 @@ export const kyselyAdapter = (
 	const createCustomAdapter = (
 		db: Kysely<any>,
 	): AdapterFactoryCustomizeAdapterCreator => {
-		return ({ getFieldName, schema }) => {
+		return ({ getFieldName, schema, getDefaultModelName }) => {
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -110,7 +113,8 @@ export const kyselyAdapter = (
 					return value ? 1 : 0;
 				}
 				if (f!.type === "date" && value && value instanceof Date) {
-					return type === "sqlite" ? value.toISOString() : value;
+					if (type === "sqlite") return value.toISOString();
+					return value;
 				}
 				return value;
 			}
@@ -123,7 +127,7 @@ export const kyselyAdapter = (
 						const field = obj[key];
 
 						if (field instanceof Date && config?.type === "mysql") {
-							obj[key] = ensureUTC(field);
+							// obj[key] = ensureUTC(field);
 						} else if (typeof field === "object" && field !== null) {
 							transformObject(field);
 						}
@@ -232,10 +236,8 @@ export const kyselyAdapter = (
 			return {
 				async create({ data, model }) {
 					const builder = db.insertInto(model).values(data);
-
-					return transformValueFromDB(
-						await withReturning(data, builder, model, []),
-					) as any;
+					const returned = await withReturning(data, builder, model, []);
+					return transformValueFromDB(returned) as any;
 				},
 				async findOne({ model, where, select }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -326,7 +328,13 @@ export const kyselyAdapter = (
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					const res = await query.execute();
-					return res[0]!.count as number;
+					if (typeof res[0]!.count === "number") {
+						return res[0]!.count;
+					}
+					if (typeof res[0]!.count === "bigint") {
+						return Number(res[0]!.count);
+					}
+					return parseInt(res[0]!.count);
 				},
 				async delete({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -363,7 +371,10 @@ export const kyselyAdapter = (
 			usePlural: config?.usePlural,
 			debugLogs: config?.debugLogs,
 			supportsBooleans:
-				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
+				config?.type === "sqlite" ||
+				config?.type === "mssql" ||
+				config?.type === "mysql" ||
+				!config?.type
 					? false
 					: true,
 			supportsDates:
