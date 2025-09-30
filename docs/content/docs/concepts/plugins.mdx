@@ -365,6 +365,7 @@ Allows you to get the client's session data by passing the auth middleware's `co
 
 ```ts title="plugin.ts"
 import {  createAuthMiddleware } from "better-auth/plugins";
+import { getSessionFromCtx } from "better-auth/api";
 
 const myPlugin = {
     id: "my-plugin",
