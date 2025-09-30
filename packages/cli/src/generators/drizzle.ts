@@ -1,7 +1,7 @@
 import {
 	getAuthTables,
-	type BetterAuthDbSchema,
-	type FieldAttribute,
+	type BetterAuthDBSchema,
+	type DBFieldAttribute,
 } from "better-auth/db";
 import type { BetterAuthOptions } from "better-auth/types";
 import { existsSync } from "fs";
@@ -43,7 +43,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		const modelName = getModelName(table.modelName, adapter.options);
 		const fields = table.fields;
 
-		function getType(name: string, field: FieldAttribute) {
+		function getType(name: string, field: DBFieldAttribute) {
 			// Not possible to reach, it's here to make typescript happy
 			if (!databaseType) {
 				throw new Error(
@@ -104,7 +104,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						: `int('${name}')`,
 				},
 				date: {
-					sqlite: `integer('${name}', { mode: 'timestamp' })`,
+					sqlite: `integer('${name}', { mode: 'timestamp_ms' })`,
 					pg: `timestamp('${name}')`,
 					mysql: `timestamp('${name}')`,
 				},
@@ -170,7 +170,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 										attr.defaultValue.toString().includes("new Date()")
 									) {
 										if (databaseType === "sqlite") {
-											type += `.default(sql\`(current_timestamp)\`)`;
+											type += `.default(sql\`(cast(unixepoch('subsecond') * 1000 as integer))\`)`;
 										} else {
 											type += `.defaultNow()`;
 										}
@@ -224,7 +224,7 @@ function generateImport({
 	options,
 }: {
 	databaseType: "sqlite" | "mysql" | "pg";
-	tables: BetterAuthDbSchema;
+	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
 }) {
 	const rootImports: string[] = [];

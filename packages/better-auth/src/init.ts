@@ -1,11 +1,6 @@
 import { defu } from "defu";
 import { hashPassword, verifyPassword } from "./crypto/password";
-import {
-	type BetterAuthDbSchema,
-	createInternalAdapter,
-	getAuthTables,
-	getMigrations,
-} from "./db";
+import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
 import type { Entries } from "type-fest";
 import { getAdapter } from "./db/utils";
 import type {
@@ -37,6 +32,7 @@ import type { TelemetryEvent } from "./telemetry/types";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
 import { isPromise } from "./utils/is-promise";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -245,7 +241,7 @@ export type AuthContext = {
 		};
 		checkPassword: typeof checkPassword;
 	};
-	tables: BetterAuthDbSchema;
+	tables: BetterAuthDBSchema;
 	runMigrations: () => Promise<void>;
 	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
 };

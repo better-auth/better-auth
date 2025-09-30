@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.4.0-beta.4",
+  "version": "1.4.0-beta.5",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -706,7 +706,7 @@
     "nanostores": "^1.0.1",
     "zod": "^4.1.5"
   },
-  "peerDependencies": {
+  "peerDependenciesOptional": {
     "@lynx-js/react": "*",
     "@sveltejs/kit": "^2.0.0",
     "next": "^14.0.0 || ^15.0.0",
