@@ -1,5 +1,5 @@
 import { getClientConfig } from "./config";
-import { capitalizeFirstLetter } from "../utils/misc";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/misc";
 import type {
 	BetterAuthClientPlugin,
 	ClientOptions,

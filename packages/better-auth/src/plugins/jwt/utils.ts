@@ -1,6 +1,6 @@
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
-import { joseSecs } from "../../utils/time";
+import { joseSecs } from "@better-auth/core/utils/time";
 import type { JwtOptions, Jwk } from "./types";
 import { generateKeyPair, exportJWK } from "jose";
 import type { GenericEndpointContext } from "../../types";

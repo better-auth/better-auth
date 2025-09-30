@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
-import { getDate } from "../../utils/date";
+import { getDate } from "@better-auth/core/utils/date";
 import { memoryAdapter, type MemoryDB } from "../../adapters/memory-adapter";
 
 describe("session", async () => {

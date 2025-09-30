@@ -4,7 +4,7 @@ import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
-import { DEFAULT_SECRET } from "../../utils/constants";
+import { DEFAULT_SECRET } from "@better-auth/core/utils/constants";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { createOTP } from "@better-auth/utils/otp";

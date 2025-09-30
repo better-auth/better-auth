@@ -3,9 +3,9 @@ import type { User, Session, Verification, Account } from "../types";
 import type { BetterAuthOptions } from "../types";
 import { createAdapterFactory } from "./adapter-factory";
 import { test } from "vitest";
-import { generateId } from "../utils";
+import { generateId } from "@better-auth/core/utils";
 import type { Logger } from "./test-adapter";
-import { colors } from "../utils/colors";
+import { colors } from "@better-auth/core/utils/colors";
 import { betterAuth } from "../auth";
 import { deepmerge } from "./utils";
 

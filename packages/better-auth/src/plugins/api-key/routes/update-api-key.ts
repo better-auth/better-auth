@@ -3,10 +3,10 @@ import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { getDate } from "../../../utils/date";
+import { getDate } from "@better-auth/core/utils/date";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { safeJSONParse } from "../../../utils/json";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { API_KEY_TABLE_NAME } from "..";
 export function updateApiKey({
 	opts,

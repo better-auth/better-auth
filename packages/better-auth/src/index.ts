@@ -2,7 +2,6 @@ export { getCurrentAdapter } from "./context/transaction";
 export * from "./auth";
 export * from "./types";
 export * from "./error";
-export * from "./utils";
 export type * from "better-call";
 export type * from "zod/v4";
 // @ts-expect-error we need to export core to make sure type annotations works with v4/core

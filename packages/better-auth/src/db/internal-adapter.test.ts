@@ -12,7 +12,7 @@ import { betterAuth } from "../auth";
 import { getMigrations } from "./get-migration";
 import { Kysely, SqliteDialect } from "kysely";
 import { getTestInstance } from "../test-utils/test-instance";
-import { safeJSONParse } from "../utils/json";
+import { safeJSONParse } from "@better-auth/core/utils";
 
 describe("adapter test", async () => {
 	const sqliteDialect = new SqliteDialect({

@@ -11,7 +11,7 @@ import type {
 	InferSession,
 	InferUser,
 } from "../../types";
-import { getEndpointResponse } from "../../utils/plugin-helper";
+import { getEndpointResponse } from "@better-auth/core/utils/plugin-helper";
 
 const getSessionQuerySchema = z.optional(
 	z.object({

@@ -1,6 +1,6 @@
 import { expect, test, describe, beforeAll } from "vitest";
 import type { Adapter, BetterAuthOptions, User } from "../types";
-import { generateId } from "../utils";
+import { generateId } from "@better-auth/core/utils";
 
 interface AdapterTestOptions {
 	getAdapter: (

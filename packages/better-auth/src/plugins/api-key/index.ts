@@ -3,7 +3,7 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { mergeSchema } from "../../db";
 import { apiKeySchema } from "./schema";
 import { getIp } from "../../utils/get-request-ip";
-import { getDate } from "../../utils/date";
+import { getDate } from "@better-auth/core/utils/date";
 import type { ApiKeyOptions } from "./types";
 import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
 import { validateApiKey } from "./routes/verify-api-key";

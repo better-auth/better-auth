@@ -4,7 +4,7 @@ export * from "./username";
 export * from "./bearer";
 export * from "../types/plugins";
 export * from "../api/call";
-export * from "../utils/hide-metadata";
+export * from "@better-auth/core/utils";
 export * from "./magic-link";
 export * from "./phone-number";
 export * from "./anonymous";

@@ -7,7 +7,7 @@ import { createAccessControl } from "../access";
 import { createAuthClient } from "../../client";
 import type { GoogleProfile } from "../../social-providers";
 import { signJWT } from "../../crypto";
-import { DEFAULT_SECRET } from "../../utils/constants";
+import { DEFAULT_SECRET } from "@better-auth/core/utils/constants";
 import { getOAuth2Tokens } from "../../oauth2";
 
 vi.mock("../../oauth2", async (importOriginal) => {

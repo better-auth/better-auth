@@ -11,7 +11,7 @@ import type {
 import type { User } from "../../types";
 import { schema } from "./schema";
 import { getOrigin } from "../../utils/url";
-import { toChecksumAddress } from "../../utils/hashing";
+import { toChecksumAddress } from "@better-auth/core/utils/hashing";
 import { mergeSchema } from "../../db/schema";
 
 export interface SIWEPluginOptions {

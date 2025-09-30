@@ -1,6 +1,6 @@
 import { getClientConfig } from "../config";
 import { createDynamicPathProxy } from "../proxy";
-import { capitalizeFirstLetter } from "../../utils/misc";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/misc";
 import type {
 	BetterAuthClientPlugin,
 	ClientOptions,

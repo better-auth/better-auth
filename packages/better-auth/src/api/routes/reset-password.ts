@@ -2,8 +2,8 @@ import * as z from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import type { AuthContext } from "../../init";
-import { getDate } from "../../utils/date";
-import { generateId } from "../../utils";
+import { getDate } from "@better-auth/core/utils/date";
+import { generateId } from "@better-auth/core/utils";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../middlewares";
 

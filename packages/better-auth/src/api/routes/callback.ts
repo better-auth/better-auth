@@ -3,9 +3,9 @@ import { setSessionCookie } from "../../cookies";
 import { setTokenUtil, type OAuth2Tokens } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
-import { HIDE_METADATA } from "../../utils/hide-metadata";
+import { HIDE_METADATA } from "@better-auth/core/utils/hide-metadata";
 import { createAuthEndpoint } from "../call";
-import { safeJSONParse } from "../../utils/json";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 
 const schema = z.object({
 	code: z.string().optional(),

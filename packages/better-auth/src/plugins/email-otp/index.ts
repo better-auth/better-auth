@@ -6,9 +6,9 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
-import { getDate } from "../../utils/date";
+import { getDate } from "@better-auth/core/utils/date";
 import { setSessionCookie } from "../../cookies";
-import { getEndpointResponse } from "../../utils/plugin-helper";
+import { getEndpointResponse } from "@better-auth/core/utils/plugin-helper";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
 
 export interface EmailOTPOptions {

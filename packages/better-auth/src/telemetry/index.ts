@@ -8,7 +8,7 @@ import { detectSystemInfo } from "./detectors/detect-system-info";
 import { detectPackageManager } from "./detectors/detect-project-info";
 import { betterFetch } from "@better-fetch/fetch";
 import type { TelemetryContext, TelemetryEvent } from "./types";
-import { logger } from "../utils";
+import { logger } from "@better-auth/core/utils";
 import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
 
 export async function createTelemetry(

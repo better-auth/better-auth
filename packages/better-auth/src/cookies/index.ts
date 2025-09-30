@@ -3,12 +3,12 @@ import { BetterAuthError } from "../error";
 import type { Session, User } from "../types";
 import type { GenericEndpointContext } from "../types/context";
 import type { BetterAuthOptions } from "../types/options";
-import { getDate } from "../utils/date";
+import { getDate } from "@better-auth/core/utils/date";
 import { env, isProduction } from "../utils/env";
 import { base64Url } from "@better-auth/utils/base64";
 import { ms } from "ms";
 import { createHMAC } from "@better-auth/utils/hmac";
-import { safeJSONParse } from "../utils/json";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getBaseURL } from "../utils/url";
 import { binary } from "@better-auth/utils/binary";
 

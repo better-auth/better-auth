@@ -1,5 +1,5 @@
 import type { OAuth2Tokens } from "./types";
-import { getDate } from "../utils/date";
+import { getDate } from "@better-auth/core/utils/date";
 import { createHash } from "@better-auth/utils/hash";
 import { base64Url } from "@better-auth/utils/base64";
 import type { AuthContext } from "../types";

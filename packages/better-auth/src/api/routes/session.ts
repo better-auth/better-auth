@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
-import { getDate } from "../../utils/date";
+import { getDate } from "@better-auth/core/utils/date";
 import {
 	deleteSessionCookie,
 	setCookieCache,
@@ -16,7 +16,7 @@ import type {
 	User,
 } from "../../types";
 import type { Prettify } from "../../types/helper";
-import { safeJSONParse } from "../../utils/json";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { base64Url } from "@better-auth/utils/base64";

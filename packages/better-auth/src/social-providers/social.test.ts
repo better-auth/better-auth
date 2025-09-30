@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import { DEFAULT_SECRET } from "../utils/constants";
+import { DEFAULT_SECRET } from "@better-auth/core/utils/constants";
 import type { GoogleProfile } from "./google";
 import { parseSetCookieHeader } from "../cookies";
 import { getOAuth2Tokens, refreshAccessToken } from "../oauth2";

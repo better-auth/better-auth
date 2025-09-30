@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe } from "vitest";
 import type { Adapter, BetterAuthOptions } from "../types";
 import { getAuthTables } from "../db";
 import type { createTestSuite } from "./create-test-suite";
-import { colors } from "../utils/colors";
+import { colors } from "@better-auth/core/utils/colors";
 import { deepmerge } from "./utils";
 
 export type Logger = {

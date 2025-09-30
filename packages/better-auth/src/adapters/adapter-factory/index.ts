@@ -1,4 +1,4 @@
-import { safeJSONParse } from "../../utils/json";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
 import type {
@@ -7,14 +7,17 @@ import type {
 	TransactionAdapter,
 	Where,
 } from "../../types";
-import { generateId as defaultGenerateId, logger } from "../../utils";
+import {
+	generateId as defaultGenerateId,
+	logger,
+} from "@better-auth/core/utils";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 	CleanedWhere,
 } from "./types";
-import { colors } from "../../utils/colors";
+import { colors } from "@better-auth/core/utils";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import { parseUserInput } from "../../db";
 export * from "./types";
