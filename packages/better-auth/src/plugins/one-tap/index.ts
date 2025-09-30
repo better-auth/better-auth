@@ -3,7 +3,7 @@ import { APIError, createAuthEndpoint } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import type { BetterAuthPlugin } from "../../types";
 import { jwtVerify, createRemoteJWKSet } from "jose";
-import { toBoolean } from "@better-auth/core/utils/boolean";
+import { toBoolean } from "@better-auth/core/utils";
 
 interface OneTapOptions {
 	/**

@@ -1,5 +1,5 @@
 import type { GenericEndpointContext, Session, User } from "../../types";
-import { getDate } from "@better-auth/core/utils/date";
+import { getDate } from "@better-auth/core/utils";
 import type { OrganizationOptions } from "./types";
 import type {
 	InferInvitation,

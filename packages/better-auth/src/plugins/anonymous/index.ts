@@ -16,7 +16,7 @@ import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { getOrigin } from "../../utils/url";
 import { mergeSchema } from "../../db/schema";
 import type { EndpointContext } from "better-call";
-import { generateId } from "@better-auth/core/utils/id";
+import { generateId } from "@better-auth/core/utils";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;

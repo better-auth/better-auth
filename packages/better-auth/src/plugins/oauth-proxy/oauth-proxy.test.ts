@@ -2,7 +2,7 @@ import { describe, vi, it, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oAuthProxy } from ".";
 import type { GoogleProfile } from "../../social-providers";
-import { DEFAULT_SECRET } from "@better-auth/core/utils/constants";
+import { DEFAULT_SECRET } from "@better-auth/core/utils";
 import { getOAuth2Tokens } from "../../oauth2";
 import { signJWT } from "../../crypto/jwt";
 

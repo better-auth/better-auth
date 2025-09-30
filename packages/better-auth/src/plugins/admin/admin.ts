@@ -7,8 +7,8 @@ import {
 } from "../../api";
 import { type BetterAuthPlugin, type Session, type Where } from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import { getDate } from "@better-auth/core/utils/date";
-import { getEndpointResponse } from "@better-auth/core/utils/plugin-helper";
+import { getDate } from "@better-auth/core/utils";
+import { getEndpointResponse } from "@better-auth/core/utils";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
 import { type AccessControl } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";

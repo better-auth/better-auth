@@ -17,7 +17,7 @@ import {
 	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
-import { getDate } from "@better-auth/core/utils/date";
+import { getDate } from "@better-auth/core/utils";
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({

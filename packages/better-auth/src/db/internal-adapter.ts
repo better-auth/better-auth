@@ -15,7 +15,7 @@ import {
 } from "../types";
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
-import { safeJSONParse } from "@better-auth/core/utils/json";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { generateId, type InternalLogger } from "@better-auth/core/utils";
 import { getCurrentAdapter, runWithTransaction } from "../context/transaction";
 

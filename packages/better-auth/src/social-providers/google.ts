@@ -3,7 +3,7 @@ import { decodeJwt } from "jose";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
-import { logger } from "@better-auth/core/utils/logger";
+import { logger } from "@better-auth/core/utils";
 import { refreshAccessToken } from "../oauth2/refresh-access-token";
 
 export interface GoogleProfile {

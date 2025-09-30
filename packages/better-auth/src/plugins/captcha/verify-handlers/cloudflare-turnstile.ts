@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { middlewareResponse } from "@better-auth/core/utils/middleware-response";
+import { middlewareResponse } from "@better-auth/core/utils";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "../error-codes";
 
 type Params = {

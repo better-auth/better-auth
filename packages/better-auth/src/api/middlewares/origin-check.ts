@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import { createAuthMiddleware } from "../call";
-import { wildcardMatch } from "@better-auth/core/utils/wildcard";
+import { wildcardMatch } from "@better-auth/core/utils";
 import { getHost, getOrigin, getProtocol } from "../../utils/url";
 import type { GenericEndpointContext } from "../../types";
 

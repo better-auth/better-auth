@@ -5,7 +5,7 @@ import { createAdapterFactory } from "./adapter-factory";
 import { test } from "vitest";
 import { generateId } from "@better-auth/core/utils";
 import type { Logger } from "./test-adapter";
-import { colors } from "@better-auth/core/utils/colors";
+import { colors } from "@better-auth/core/utils";
 import { betterAuth } from "../auth";
 import { deepmerge } from "./utils";
 

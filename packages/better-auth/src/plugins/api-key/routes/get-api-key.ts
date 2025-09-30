@@ -5,7 +5,7 @@ import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { safeJSONParse } from "@better-auth/core/utils/json";
+import { safeJSONParse } from "@better-auth/core/utils";
 
 export function getApiKey({
 	opts,

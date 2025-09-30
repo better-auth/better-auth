@@ -6,7 +6,7 @@ import type { ApiKey } from "../types";
 import { isRateLimited } from "../rate-limit";
 import type { AuthContext, GenericEndpointContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { safeJSONParse } from "@better-auth/core/utils/json";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { role } from "../../access";
 import { defaultKeyHasher } from "../";
 

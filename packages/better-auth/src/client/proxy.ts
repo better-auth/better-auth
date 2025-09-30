@@ -2,7 +2,7 @@ import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
 import type { Atom, PreinitializedWritableAtom } from "nanostores";
 import type { ProxyRequest } from "./path-to-object";
 import type { BetterAuthClientPlugin } from "./types";
-import { isAtom } from "@better-auth/core/utils/is-atom";
+import { isAtom } from "@better-auth/core/utils";
 
 function getMethod(
 	path: string,

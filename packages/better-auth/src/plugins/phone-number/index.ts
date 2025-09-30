@@ -9,7 +9,7 @@ import { APIError } from "better-call";
 import { mergeSchema } from "../../db/schema";
 import { generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx } from "../../api";
-import { getDate } from "@better-auth/core/utils/date";
+import { getDate } from "@better-auth/core/utils";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import type { User } from "../../types";

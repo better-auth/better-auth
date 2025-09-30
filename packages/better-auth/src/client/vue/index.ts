@@ -1,7 +1,7 @@
 import { useStore } from "./vue-store";
 import type { DeepReadonly, Ref } from "vue";
 import { getClientConfig } from "../config";
-import { capitalizeFirstLetter } from "@better-auth/core/utils/misc";
+import { capitalizeFirstLetter } from "@better-auth/core/utils";
 import type {
 	BetterAuthClientPlugin,
 	ClientOptions,

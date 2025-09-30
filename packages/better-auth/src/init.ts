@@ -12,13 +12,13 @@ import type {
 	Session,
 	User,
 } from "./types";
-import { DEFAULT_SECRET } from "@better-auth/core/utils/constants";
+import { DEFAULT_SECRET } from "@better-auth/core/utils";
 import {
 	type BetterAuthCookies,
 	createCookieGetter,
 	getCookies,
 } from "./cookies";
-import { createLogger } from "@better-auth/core/utils/logger";
+import { createLogger } from "@better-auth/core/utils";
 import { type SocialProviders, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "@better-auth/core/utils";
@@ -31,7 +31,7 @@ import { createTelemetry } from "./telemetry";
 import type { TelemetryEvent } from "./telemetry/types";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
-import { isPromise } from "@better-auth/core/utils/is-promise";
+import { isPromise } from "@better-auth/core/utils";
 import type { BetterAuthDBSchema } from "@better-auth/core/db";
 
 export const init = async (options: BetterAuthOptions) => {
