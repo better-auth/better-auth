@@ -29,9 +29,11 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		authFlowTestSuite(),
 		transactionsTestSuite(),
+		// numberIdTestSuite(), // Mongo doesn't support number ids
 		performanceTestSuite(),
 	],
 	customIdGenerator: () => new ObjectId().toString(),
+	defaultRetryCount: 20,
 });
 
 execute();

@@ -6,10 +6,8 @@ import {
 	normalTestSuite,
 	transactionsTestSuite,
 	authFlowTestSuite,
+	numberIdTestSuite,
 } from "../tests";
-import { waitForTestPermission } from "../../test/adapter-test-setup";
-
-const { done } = await waitForTestPermission("memory");
 let db: Record<string, any[]> = {};
 
 const { execute } = await testAdapter({
@@ -24,16 +22,13 @@ const { execute } = await testAdapter({
 		}
 	},
 	tests: [
-		normalTestSuite({
-			showDB: () => console.log(db),
-		}),
+		normalTestSuite(),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
+		numberIdTestSuite(),
 		performanceTestSuite(),
 	],
-	async onFinish() {
-		await done();
-	},
+	async onFinish() {},
 });
 
 execute();

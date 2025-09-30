@@ -5,15 +5,13 @@ import Database from "better-sqlite3";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
+	numberIdTestSuite,
 	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import path from "path";
 import { getMigrations } from "../../../db";
 import fs from "fs/promises";
-import { waitForTestPermission } from "../../../test/adapter-test-setup";
-
-const { done } = await waitForTestPermission("kysely-sqlite");
 
 const dbPath = path.join(__dirname, "test.db");
 let database = new Database(dbPath);
@@ -47,11 +45,11 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
+		numberIdTestSuite(),
 		performanceTestSuite({ dialect: "sqlite" }),
 	],
 	async onFinish() {
 		database.close();
-		await done();
 	},
 });
 execute();

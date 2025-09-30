@@ -109,13 +109,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.attribute(`map("_id")`);
 				} else {
 					if (options.advanced?.database?.useNumberId) {
-						const col = builder
+						builder
 							.model(modelName)
 							.field("id", "Int")
-							.attribute("id");
-						if (provider !== "sqlite") {
-							col.attribute("default(autoincrement())");
-						}
+							.attribute("id")
+							.attribute("default(autoincrement())");
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
 					}

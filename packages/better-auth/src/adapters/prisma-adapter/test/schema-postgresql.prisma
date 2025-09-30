@@ -1,7 +1,7 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "./.tmp/prisma-client-postgresql-3"
+  output   = "./.tmp/prisma-client-postgresql-6"
 }
 
 datasource db {
@@ -10,7 +10,7 @@ datasource db {
 }
 
 model User {
-  id            String    @id
+  id            Int       @id @default(autoincrement())
   name          String
   email         String
   emailVerified Boolean   @default(false)
@@ -25,14 +25,14 @@ model User {
 }
 
 model Session {
-  id        String   @id
+  id        Int      @id @default(autoincrement())
   expiresAt DateTime
   token     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   ipAddress String?
   userAgent String?
-  userId    String
+  userId    Int
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([token])
@@ -40,10 +40,10 @@ model Session {
 }
 
 model Account {
-  id                    String    @id
+  id                    Int       @id @default(autoincrement())
   accountId             String
   providerId            String
-  userId                String
+  userId                Int
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken           String?
   refreshToken          String?
@@ -59,7 +59,7 @@ model Account {
 }
 
 model Verification {
-  id         String   @id
+  id         Int      @id @default(autoincrement())
   identifier String
   value      String
   expiresAt  DateTime

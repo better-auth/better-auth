@@ -3,6 +3,7 @@ import type { Adapter, BetterAuthOptions } from "../types";
 import { getAuthTables } from "../db";
 import type { createTestSuite } from "./create-test-suite";
 import { colors } from "../utils/colors";
+import { deepmerge } from "./utils";
 
 export type Logger = {
 	info: (...args: any[]) => void;
@@ -21,6 +22,7 @@ export const testAdapter = async ({
 	prefixTests,
 	onFinish,
 	customIdGenerator,
+	defaultRetryCount,
 }: {
 	/**
 	 * A function that will return the adapter instance to test with.
@@ -74,6 +76,10 @@ export const testAdapter = async ({
 	 * Custom ID generator function to be used by the helper functions. (such as `insertRandom`)
 	 */
 	customIdGenerator?: () => string | Promise<string>;
+	/**
+	 * Default retry count for the tests.
+	 */
+	defaultRetryCount?: number;
 }) => {
 	const defaultBAOptions = {} satisfies BetterAuthOptions;
 	let betterAuthOptions = (() => {
@@ -207,14 +213,11 @@ export const testAdapter = async ({
 						log,
 						getBetterAuthOptions: () => betterAuthOptions,
 						modifyBetterAuthOptions: async (options) => {
-							const newOptions = {
-								...defaultBAOptions,
-								...options,
-							};
-							betterAuthOptions = {
-								...newOptions,
-								...(overrideBetterAuthOptions?.(newOptions) || {}),
-							};
+							const newOptions = deepmerge(defaultBAOptions, options);
+							betterAuthOptions = deepmerge(
+								newOptions,
+								overrideBetterAuthOptions?.(newOptions) || {},
+							);
 							await refreshAdapter(betterAuthOptions);
 							return betterAuthOptions;
 						},
@@ -223,6 +226,7 @@ export const testAdapter = async ({
 						runMigrations: migrate,
 						onTestFinish: async () => {},
 						customIdGenerator,
+						defaultRetryCount: defaultRetryCount,
 					});
 				}
 			});

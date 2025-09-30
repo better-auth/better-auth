@@ -1,3 +1,5 @@
 auth.ts
-schema-*.prisma
+schema-mysql.prisma
+schema-sqlite.prisma
+schema-postgresql.prisma
 .tmp

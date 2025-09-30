@@ -2,11 +2,11 @@ import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
+	numberIdTestSuite,
 	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { prismaAdapter } from "../prisma-adapter";
-import { waitForTestPermission } from "../../../test/adapter-test-setup";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
 import { pushPrismaSchema } from "./push-prisma-schema";
@@ -17,8 +17,6 @@ import {
 	incrementMigrationCount,
 } from "./get-prisma-client";
 import { createPool } from "mysql2/promise";
-
-const { done } = await waitForTestPermission("prisma-mysql");
 
 const dialect = "mysql";
 const { execute } = await testAdapter({
@@ -48,11 +46,10 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		transactionsTestSuite(),
 		authFlowTestSuite(),
+		numberIdTestSuite(),
 		performanceTestSuite({ dialect }),
 	],
-	onFinish: async () => {
-		await done();
-	},
+	onFinish: async () => {},
 	prefixTests: dialect,
 });
 

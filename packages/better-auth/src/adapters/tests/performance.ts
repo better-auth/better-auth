@@ -6,6 +6,7 @@ import { createTestSuite } from "../create-test-suite";
  */
 export const performanceTestSuite = createTestSuite(
 	"performance",
+	{},
 	(
 		{ adapter, generate, cleanup },
 		config?: { iterations?: number; userSeedCount?: number; dialect?: string },

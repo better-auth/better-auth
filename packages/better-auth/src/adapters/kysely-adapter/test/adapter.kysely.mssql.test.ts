@@ -4,6 +4,7 @@ import { kyselyAdapter } from "../kysely-adapter";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
+	numberIdTestSuite,
 	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
@@ -11,9 +12,6 @@ import { getMigrations } from "../../../db";
 import * as Tedious from "tedious";
 import * as Tarn from "tarn";
 import type { BetterAuthOptions } from "../../../types";
-import { waitForTestPermission } from "../../../test/adapter-test-setup";
-
-const { done } = await waitForTestPermission("kysely-mssql");
 
 // We are not allowed to handle the mssql connection
 // we must let kysely handle it. This is because if kysely is already
@@ -306,16 +304,14 @@ const { execute } = await testAdapter({
 	},
 	prefixTests: "mssql",
 	tests: [
-		normalTestSuite({
-			showDB,
-		}),
+		normalTestSuite(),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite({ showDB }),
+		numberIdTestSuite(),
 		performanceTestSuite({ dialect: "mssql" }),
 	],
 	async onFinish() {
 		kyselyDB.destroy();
-		await done();
 	},
 });
 execute();

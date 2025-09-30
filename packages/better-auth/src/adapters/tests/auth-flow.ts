@@ -6,6 +6,7 @@ import { createTestSuite } from "../create-test-suite";
  */
 export const authFlowTestSuite = createTestSuite(
 	"auth-flow",
+	{},
 	(
 		{ generate, getAuth, modifyBetterAuthOptions, tryCatch },
 		debug?: { showDB?: () => Promise<void> },

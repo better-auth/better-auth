@@ -7,6 +7,7 @@ import { generateId } from "../utils";
 import type { Logger } from "./test-adapter";
 import { colors } from "../utils/colors";
 import { betterAuth } from "../auth";
+import { deepmerge } from "./utils";
 
 type GenerateFn = <M extends "user" | "session" | "verification" | "account">(
 	Model: M,
@@ -93,6 +94,14 @@ export const createTestSuite = <
 	AdditionalOptions extends Record<string, any> = {},
 >(
 	suiteName: string,
+	config: {
+		defaultBetterAuthOptions?: BetterAuthOptions;
+		/**
+		 * Helpful if the default better auth options require migrations to be run.
+		 */
+		alwaysMigrate?: boolean;
+		prefixTests?: string;
+	},
 	tests: (
 		helpers: {
 			adapter: Adapter;
@@ -147,18 +156,22 @@ export const createTestSuite = <
 			prefixTests?: string;
 			onTestFinish: () => Promise<void>;
 			customIdGenerator?: () => string | Promise<string>;
+			defaultRetryCount?: number;
 		}) => {
 			const createdRows: Record<string, any[]> = {};
 
 			let adapter = await helpers.adapter();
 			const wrapperAdapter = (overrideOptions?: BetterAuthOptions) => {
-				const options = {
-					...helpers.getBetterAuthOptions(),
-					...overrideOptions,
-				};
+				const options = deepmerge(
+					deepmerge(
+						helpers.getBetterAuthOptions(),
+						config?.defaultBetterAuthOptions || {},
+					),
+					overrideOptions || {},
+				);
 				const adapterConfig = {
 					adapterId: helpers.adapterDisplayName,
-					...adapter.options?.adapterConfig,
+					...(adapter.options?.adapterConfig || {}),
 					adapterName: `Wrapped ${adapter.options?.adapterConfig.adapterName}`,
 					disableTransformOutput: true,
 					disableTransformInput: true,
@@ -235,7 +248,9 @@ export const createTestSuite = <
 
 			const resetBetterAuthOptions = async () => {
 				adapter = await helpers.adapter();
-				await helpers.modifyBetterAuthOptions({});
+				await helpers.modifyBetterAuthOptions(
+					config.defaultBetterAuthOptions || {},
+				);
 				if (didMigrateOnOptionsModify) {
 					didMigrateOnOptionsModify = false;
 					await helpers.runMigrations();
@@ -313,43 +328,62 @@ export const createTestSuite = <
 				count: Count = 1 as Count,
 			) => {
 				let res: any[] = [];
+				const a = wrapperAdapter();
+
 				for (let i = 0; i < count; i++) {
-					let models: string[] = [model];
-					let modelData: Record<string, any>[] = [];
+					const modelResults = [];
+
 					if (model === "user") {
-						modelData = [await generateModel("user")];
+						const user = await generateModel("user");
+						modelResults.push(
+							await a.create({
+								data: user,
+								model: "user",
+								forceAllowId: true,
+							}),
+						);
 					}
 					if (model === "session") {
 						const user = await generateModel("user");
+						const userRes = await a.create({
+							data: user,
+							model: "user",
+							forceAllowId: true,
+						});
 						const session = await generateModel("session");
-						session.userId = user.id;
-						models = ["user", "session"];
-						modelData = [user, session];
+						session.userId = userRes.id;
+						const sessionRes = await a.create({
+							data: session,
+							model: "session",
+							forceAllowId: true,
+						});
+						modelResults.push(userRes, sessionRes);
 					}
 					if (model === "verification") {
 						const verification = await generateModel("verification");
-						modelData = [verification];
+						modelResults.push(
+							await a.create({
+								data: verification,
+								model: "verification",
+								forceAllowId: true,
+							}),
+						);
 					}
 					if (model === "account") {
 						const user = await generateModel("user");
 						const account = await generateModel("account");
-						account.userId = user.id;
-						models = ["user", "account"];
-						modelData = [user, account];
-					}
-					const modelResults = [];
-
-					let i = -1;
-					for (const data of modelData) {
-						i++;
-						const a = wrapperAdapter();
-						modelResults.push(
-							await a.create({
-								model: models[i]!,
-								data,
-								forceAllowId: true,
-							}),
-						);
+						const userRes = await a.create({
+							data: user,
+							model: "user",
+							forceAllowId: true,
+						});
+						account.userId = userRes.id;
+						const accRes = await a.create({
+							data: account,
+							model: "account",
+							forceAllowId: true,
+						});
+						modelResults.push(userRes, accRes);
 					}
 					res.push(modelResults);
 				}
@@ -374,8 +408,10 @@ export const createTestSuite = <
 				opts: BetterAuthOptions,
 				shouldRunMigrations: boolean,
 			) => {
-				const res = helpers.modifyBetterAuthOptions(opts);
-				if (shouldRunMigrations) {
+				const res = helpers.modifyBetterAuthOptions(
+					deepmerge(config?.defaultBetterAuthOptions || {}, opts),
+				);
+				if (config.alwaysMigrate || shouldRunMigrations) {
 					didMigrateOnOptionsModify = true;
 					await helpers.runMigrations();
 				}
@@ -404,6 +440,7 @@ export const createTestSuite = <
 						adapter = await helpers.adapter();
 						const auth = betterAuth({
 							...helpers.getBetterAuthOptions(),
+							...(config?.defaultBetterAuthOptions || {}),
 							database: (options: BetterAuthOptions) => {
 								const adapter = wrapperAdapter(options);
 								return adapter;
@@ -426,15 +463,44 @@ export const createTestSuite = <
 			);
 
 			const dash = `─`;
+			const allDisabled: boolean = options?.disableTests?.ALL ?? false;
+
 			// Here to display a label in the tests showing the suite name
 			test(`\n${colors.fg.white}${" ".repeat(3)}${dash.repeat(35)} [${colors.fg.magenta}${suiteName}${colors.fg.white}] ${dash.repeat(35)}`, async () => {
 				try {
 					await helpers.cleanup();
 				} catch {}
+				if (config.defaultBetterAuthOptions && !allDisabled) {
+					await helpers.modifyBetterAuthOptions(
+						config.defaultBetterAuthOptions,
+					);
+					if (config.alwaysMigrate) {
+						await helpers.runMigrations();
+					}
+				}
 			});
 
+			const onFinish = async (testName: string) => {
+				await cleanupCreatedRows();
+				await resetBetterAuthOptions();
+				// Check if this is the last test by comparing current test index with total tests
+				const testEntries = Object.entries(fullTests);
+				const currentTestIndex = testEntries.findIndex(
+					([name]) =>
+						name === testName.replace(/\[.*?\] /, "").replace(/ ─ /g, " - "),
+				);
+				const isLastTest = currentTestIndex === testEntries.length - 1;
+
+				if (isLastTest) {
+					await helpers.onTestFinish();
+				}
+			};
+
+			if (allDisabled) {
+				await resetBetterAuthOptions();
+			}
+
 			for (let [testName, testFn] of Object.entries(fullTests)) {
-				const allDisabled: boolean = options?.disableTests?.ALL ?? false;
 				let shouldSkip =
 					(allDisabled && options?.disableTests?.[testName] !== false) ||
 					(options?.disableTests?.[testName] ?? false);
@@ -442,35 +508,24 @@ export const createTestSuite = <
 					" - ",
 					` ${colors.dim}${dash}${colors.undim} `,
 				);
+				if (config.prefixTests) {
+					testName = `${config.prefixTests} ${colors.dim}>${colors.undim} ${testName}`;
+				}
 				if (helpers.prefixTests) {
 					testName = `[${colors.dim}${helpers.prefixTests}${colors.undim}] ${testName}`;
 				}
-				const onFinish = async () => {
-					await cleanupCreatedRows();
-					await resetBetterAuthOptions();
-					// Check if this is the last test by comparing current test index with total tests
-					const testEntries = Object.entries(fullTests);
-					const currentTestIndex = testEntries.findIndex(
-						([name]) =>
-							name === testName.replace(/\[.*?\] /, "").replace(/ ─ /g, " - "),
-					);
-					const isLastTest = currentTestIndex === testEntries.length - 1;
 
-					if (isLastTest) {
-						await helpers.onTestFinish();
-					}
-				};
 				test.skipIf(shouldSkip)(
 					testName,
-					{ retry: 10, timeout: 10000 },
+					{ retry: helpers?.defaultRetryCount ?? 10, timeout: 10000 },
 					async ({ onTestFailed, skip }) => {
 						resetDebugLogs();
 						onTestFailed(async () => {
 							printDebugLogs();
-							await onFinish();
+							await onFinish(testName);
 						});
 						await testFn({ skip });
-						await onFinish();
+						await onFinish(testName);
 					},
 				);
 			}

@@ -7,6 +7,7 @@ import type { User } from "../../types";
  */
 export const transactionsTestSuite = createTestSuite(
 	"transactions",
+	{},
 	({ adapter, generate, hardCleanup }) => ({
 		"transaction - should rollback failing transaction": async ({ skip }) => {
 			const isEnabled = adapter.options?.adapterConfig.transaction;

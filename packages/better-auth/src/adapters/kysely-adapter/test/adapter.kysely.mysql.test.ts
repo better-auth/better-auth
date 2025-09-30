@@ -5,14 +5,12 @@ import { createPool } from "mysql2/promise";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
+	numberIdTestSuite,
 	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { getMigrations } from "../../../db";
 import { assert } from "vitest";
-import { waitForTestPermission } from "../../../test/adapter-test-setup";
-
-const { done } = await waitForTestPermission("kysely-mysql");
 
 const mysqlDB = createPool({
 	uri: "mysql://user:password@localhost:3307/better_auth",
@@ -55,11 +53,11 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
+		numberIdTestSuite(),
 		performanceTestSuite({ dialect: "mysql" }),
 	],
 	async onFinish() {
 		await mysqlDB.end();
-		await done();
 	},
 });
 execute();

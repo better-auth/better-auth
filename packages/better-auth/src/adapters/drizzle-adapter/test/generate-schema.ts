@@ -1,119 +1,98 @@
-import { getAuthTables } from "../../../db";
-import type { BetterAuthOptions } from "../../../types";
-import * as pg from "drizzle-orm/pg-core";
-import * as mysql from "drizzle-orm/mysql-core";
-import * as sqlite from "drizzle-orm/sqlite-core";
+import type { Adapter, BetterAuthOptions } from "../../../types";
+import { drizzleAdapter } from "../drizzle-adapter";
+import fs from "fs/promises";
+import { join } from "path";
+
+let generationCount = 0;
+
+const schemaCache = new Map<string, { count: number; schema: any }>();
 
 /**
  * generates a drizzle schema based on BetterAuthOptions & a given dialect.
  *
  * Useful for testing the Drizzle adapter.
  */
-export const generateDrizzleSchema = (
+export const generateDrizzleSchema = async (
+	db: any,
 	options: BetterAuthOptions,
 	dialect: "sqlite" | "mysql" | "pg",
 ) => {
-	const models = getAuthTables(options);
-	let schema: Record<string, any> = {};
-	let debugSchema: Record<string, any> = {};
-	for (const defaultModelName in models) {
-		const model = models[defaultModelName]!;
-		const modelName = model?.modelName || defaultModelName;
-
-		const table: Record<string, any> = {};
-		const debugTable: Record<string, any> = {};
-
-		const fields = model?.fields || {};
-		if (dialect === "pg") {
-			table.id = pg.varchar("id", { length: 36 }).primaryKey();
-		} else if (dialect === "mysql") {
-			table.id = mysql.varchar("id", { length: 36 }).primaryKey();
-		} else if (dialect === "sqlite") {
-			table.id = sqlite.text("id").primaryKey();
-		}
-		for (const defaultFieldName in fields) {
-			const field = fields[defaultFieldName]!;
-			const fieldName = field?.fieldName || defaultFieldName;
-			const key = fieldName;
-
-			const type = field.type;
-			if (type === "boolean") {
-				if (dialect === "pg") {
-					table[key] = pg.boolean(fieldName);
-				} else if (dialect === "mysql") {
-					table[key] = mysql.boolean(fieldName);
-				} else if (dialect === "sqlite") {
-					table[key] = sqlite.integer(fieldName, { mode: "boolean" });
-				}
-			} else if (type === "number") {
-				if (dialect === "pg") {
-					table[key] = pg.integer(fieldName);
-				} else if (dialect === "mysql") {
-					table[key] = mysql.int(fieldName);
-				} else if (dialect === "sqlite") {
-					table[key] = sqlite.integer(fieldName);
-				}
-			} else if (
-				type === "string" ||
-				type === "string[]" ||
-				type === "number[]"
-			) {
-				if (dialect === "pg") {
-					table[key] = pg.varchar(fieldName, { length: 255 });
-				} else if (dialect === "mysql") {
-					table[key] = mysql.varchar(fieldName, { length: 255 });
-				} else if (dialect === "sqlite") {
-					table[key] = sqlite.text(fieldName);
-				}
-			} else if (type === "date") {
-				if (dialect === "pg") {
-					table[key] = pg.timestamp(fieldName);
-				} else if (dialect === "mysql") {
-					table[key] = mysql.timestamp(fieldName);
-				} else if (dialect === "sqlite") {
-					table[key] = sqlite.integer(fieldName, { mode: "timestamp_ms" });
-				}
-			} else if (type === "json") {
-				if (dialect === "pg") {
-					table[key] = pg.jsonb(fieldName);
-				} else if (dialect === "mysql") {
-					table[key] = mysql.json(fieldName);
-				} else if (dialect === "sqlite") {
-					table[key] = sqlite.text(fieldName);
-				}
-			}
-			debugTable[key] = { fieldName, type };
-
-			if (field.references) {
-				const { model: modelRef, field: fieldRef } = field.references;
-				table[key] = table[key].references(() => schema[modelRef][fieldRef], {
-					onDelete: schema[modelRef][fieldRef].onDelete || "cascade",
-				});
-			}
-
-			if (field.references && "default" in table[key]) {
-				table[key] = table[key].default(field.defaultValue);
-			}
-
-			if (field.unique && "unique" in table[key]) {
-				table[key] = table[key].unique();
-			}
-
-			if (field.required && "notNull" in table[key]) {
-				table[key] = table[key].notNull();
-			}
-		}
-
-		if (dialect === "pg") {
-			schema[modelName] = pg.pgTable(modelName, table);
-		} else if (dialect === "mysql") {
-			schema[modelName] = mysql.mysqlTable(modelName, table);
-		} else if (dialect === "sqlite") {
-			schema[modelName] = sqlite.sqliteTable(modelName, table);
-		}
-
-		debugSchema[modelName] = debugTable;
+	const cacheKey = `${dialect}-${JSON.stringify(options)}`;
+	if (schemaCache.has(cacheKey)) {
+		const { count, schema } = schemaCache.get(cacheKey)!;
+		return {
+			schema,
+			fileName: `./.tmp/generated-${dialect}-schema-${count}`,
+		};
 	}
-	// console.log(debugSchema);
-	return schema;
+	generationCount++;
+	let thisCount = generationCount;
+	const i = async (x: string) => {
+		// Clear the Node.js module cache for the generated schema file to ensure fresh import
+		try {
+			const resolvedPath =
+				require?.resolve?.(x) ||
+				(import.meta && new URL(x, import.meta.url).pathname);
+			if (resolvedPath && typeof resolvedPath === "string" && require?.cache) {
+				delete require.cache[resolvedPath];
+			}
+		} catch (error) {}
+		return await import(x);
+	};
+
+	const { generateSchema } = (await i(
+		"./../../../../../cli/src/generators/index",
+	)) as {
+		generateSchema: (opts: {
+			adapter: Adapter;
+			file?: string;
+			options: BetterAuthOptions;
+		}) => Promise<{
+			code: string | undefined;
+			fileName: string;
+			overwrite: boolean | undefined;
+		}>;
+	};
+
+	const exists = await fs
+		.access(join(import.meta.dirname, `/.tmp`))
+		.then(() => true)
+		.catch(() => false);
+	if (!exists) {
+		await fs.mkdir(join(import.meta.dirname, `/.tmp`), { recursive: true });
+	}
+
+	let adapter = drizzleAdapter(db, { provider: dialect })(options);
+
+	let { code } = await generateSchema({
+		adapter,
+		options,
+	});
+
+	await fs.writeFile(
+		join(
+			import.meta.dirname,
+			`/.tmp/generated-${dialect}-schema-${thisCount}.ts`,
+		),
+		code || "",
+		"utf-8",
+	);
+
+	const res = await i(`./.tmp/generated-${dialect}-schema-${thisCount}`);
+	schemaCache.set(cacheKey, {
+		count: thisCount,
+		schema: res,
+	});
+	return {
+		schema: res,
+		fileName: `./.tmp/generated-${dialect}-schema-${thisCount}`,
+	};
+};
+
+export const clearSchemaCache = () => {
+	schemaCache.clear();
+};
+
+export const resetGenerationCount = () => {
+	generationCount = 0;
 };

@@ -2,11 +2,11 @@ import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
+	numberIdTestSuite,
 	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { prismaAdapter } from "../prisma-adapter";
-import { waitForTestPermission } from "../../../test/adapter-test-setup";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
 import { pushPrismaSchema } from "./push-prisma-schema";
@@ -18,8 +18,6 @@ import {
 	getPrismaClient,
 	incrementMigrationCount,
 } from "./get-prisma-client";
-
-const { done } = await waitForTestPermission("prisma-sqlite");
 
 const dialect = "sqlite";
 const { execute } = await testAdapter({
@@ -49,11 +47,10 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		transactionsTestSuite(),
 		authFlowTestSuite(),
+		numberIdTestSuite(),
 		performanceTestSuite({ dialect }),
 	],
-	onFinish: async () => {
-		await done();
-	},
+	onFinish: async () => {},
 	prefixTests: dialect,
 });
 
