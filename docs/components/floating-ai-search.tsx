@@ -16,6 +16,7 @@ import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import Link from "fumadocs-core/link";
 import { Markdown } from "./markdown";
 import { Presence } from "@radix-ui/react-presence";
+import { betterFetch } from "@better-fetch/fetch";
 
 const Context = createContext<{
 	open: boolean;
@@ -81,7 +82,7 @@ function SearchAIInput(props: ComponentProps<"form">) {
 				placeholder={isLoading ? "AI is answering..." : "Ask AI"}
 				autoFocus
 				className="p-4"
-				disabled={status === "streaming" || status === "submitted"}
+				disabled={isLoading}
 				onChange={(e) => {
 					setInput(e.target.value);
 				}}
@@ -321,7 +322,14 @@ export function AISearchTrigger() {
 				requestBody.session_id = sessionId;
 			}
 
-			const response = await fetch("/api/ai-chat", {
+			const { data, error } = await betterFetch<{
+				content?: string;
+				answer?: string;
+				response?: string;
+				session_id?: string;
+				references?: Array<{ link: string; title: string; icon?: string }>;
+				error?: string;
+			}>("/api/ai-chat", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -329,16 +337,12 @@ export function AISearchTrigger() {
 				body: JSON.stringify(requestBody),
 			});
 
-			if (!response.ok) {
-				throw new Error(`HTTP error! status: ${response.status}`);
+			if (error) {
+				console.error("API Error Response:", error);
+				throw new Error(`HTTP ${error.status}: ${error.message}`);
 			}
 
-			const data = await response.json();
-			console.log("API Response:", data);
-
-			// Extract session_id from response if present
 			if (data.session_id) {
-				console.log("Received session_id:", data.session_id);
 				setSessionId(data.session_id);
 			}
 
@@ -348,6 +352,8 @@ export function AISearchTrigger() {
 				responseContent = data.content;
 			} else if (data.answer) {
 				responseContent = data.answer;
+			} else if (data.response) {
+				responseContent = data.response;
 			} else if (data.error) {
 				responseContent = data.error;
 			} else {
