@@ -18,6 +18,15 @@ describe("stripe", async () => {
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_mock123" }),
 			list: vi.fn().mockResolvedValue({ data: [] }),
+			retrieve: vi.fn().mockResolvedValue({
+				id: "cus_mock123",
+				email: "test@email.com",
+				deleted: false,
+			}),
+			update: vi.fn().mockResolvedValue({
+				id: "cus_mock123",
+				email: "newemail@example.com",
+			}),
 		},
 		checkout: {
 			sessions: {
@@ -1415,5 +1424,76 @@ describe("stripe", async () => {
 			return hadTrial;
 		});
 		expect(hasEverTrialed).toBe(true);
+	});
+
+	it("should update stripe customer email when user email changes", async () => {
+		// Setup mock for customer retrieve and update
+		mockStripe.customers.retrieve = vi.fn().mockResolvedValue({
+			id: "cus_mock123",
+			email: "test@email.com",
+			deleted: false,
+		});
+		mockStripe.customers.update = vi.fn().mockResolvedValue({
+			id: "cus_mock123",
+			email: "newemail@example.com",
+		});
+
+		// Sign up a user
+		const userRes = await authClient.signUp.email(testUser, {
+			throw: true,
+		});
+
+		expect(userRes.user).toBeDefined();
+
+		// Verify customer was created during signup
+		expect(mockStripe.customers.create).toHaveBeenCalledWith({
+			email: testUser.email,
+			name: testUser.name,
+			metadata: {
+				userId: userRes.user.id,
+			},
+		});
+
+		// Clear mocks to track the update
+		vi.clearAllMocks();
+
+		// Re-setup the retrieve mock for the update flow
+		mockStripe.customers.retrieve = vi.fn().mockResolvedValue({
+			id: "cus_mock123",
+			email: "test@email.com",
+			deleted: false,
+		});
+		mockStripe.customers.update = vi.fn().mockResolvedValue({
+			id: "cus_mock123",
+			email: "newemail@example.com",
+		});
+
+		// Create a mock request context
+		const mockRequest = new Request("http://localhost:3000/api/test", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+			},
+		});
+
+		// Update the user's email using internal adapter (which triggers hooks)
+		await ctx.internalAdapter.updateUserByEmail(
+			testUser.email,
+			{
+				email: "newemail@example.com",
+			},
+			{
+				request: mockRequest,
+				context: ctx,
+			} as any,
+		);
+
+		// Verify that Stripe customer.retrieve was called
+		expect(mockStripe.customers.retrieve).toHaveBeenCalledWith("cus_mock123");
+
+		// Verify that Stripe customer.update was called with the new email
+		expect(mockStripe.customers.update).toHaveBeenCalledWith("cus_mock123", {
+			email: "newemail@example.com",
+		});
 	});
 });
