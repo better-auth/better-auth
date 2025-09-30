@@ -17,6 +17,7 @@ describe("stripe", async () => {
 		},
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_mock123" }),
+			list: vi.fn().mockResolvedValue({ data: [] }),
 		},
 		checkout: {
 			sessions: {
@@ -1186,6 +1187,140 @@ describe("stripe", async () => {
 			(s: Subscription) => s.trialStart || s.trialEnd,
 		);
 		expect(hasTrialData).toBe(true);
+	});
+
+	it("should upgrade existing subscription instead of creating new one", async () => {
+		// Reset mocks for this test
+		vi.clearAllMocks();
+
+		// Create a user
+		const userRes = await authClient.signUp.email(
+			{ ...testUser, email: "upgrade-existing@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{ ...testUser, email: "upgrade-existing@email.com" },
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		// Mock customers.list to find existing customer
+		mockStripe.customers.list.mockResolvedValueOnce({
+			data: [{ id: "cus_test_123" }]
+		});
+
+		// First create a starter subscription
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		// Simulate the subscription being active
+		const starterSub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				stripeSubscriptionId: "sub_active_test_123",
+				stripeCustomerId: "cus_mock123", // Use the same customer ID as the mock
+			},
+			where: [
+				{
+					field: "id",
+					value: starterSub!.id,
+				},
+			],
+		});
+
+		// Also update the user with the Stripe customer ID
+		await ctx.adapter.update({
+			model: "user",
+			update: {
+				stripeCustomerId: "cus_mock123",
+			},
+			where: [
+				{
+					field: "id",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Mock Stripe subscriptions.list to return the active subscription
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_active_test_123",
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_test_123",
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		// Clear mock calls before the upgrade
+		mockStripe.checkout.sessions.create.mockClear();
+		mockStripe.billingPortal.sessions.create.mockClear();
+
+		// Now upgrade to premium plan - should use billing portal to update existing subscription
+		const upgradeRes = await authClient.subscription.upgrade({
+			plan: "premium",
+			fetchOptions: { headers },
+		});
+
+		// Verify that billing portal was called (indicating update, not new subscription)
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				customer: "cus_mock123",
+				flow_data: expect.objectContaining({
+					type: "subscription_update_confirm",
+					subscription_update_confirm: expect.objectContaining({
+						subscription: "sub_active_test_123",
+					}),
+				}),
+			}),
+		);
+
+		// Should not create a new checkout session
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+
+		// Verify the response has a redirect URL
+		expect(upgradeRes.data?.url).toBe("https://billing.stripe.com/mock");
+		expect(upgradeRes.data?.redirect).toBe(true);
+
+		// Verify no new subscription was created in the database
+		const allSubs = await ctx.adapter.findMany<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+		expect(allSubs).toHaveLength(1); // Should still have only one subscription
 	});
 
 	it("should prevent multiple free trials across different plans", async () => {
