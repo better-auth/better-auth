@@ -718,6 +718,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 					slug: {
 						type: "string",
+						required: true,
 						unique: true,
 						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,
