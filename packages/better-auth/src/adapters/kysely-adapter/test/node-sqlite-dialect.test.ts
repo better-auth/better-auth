@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Kysely, sql } from "kysely";
-import { NodeSqliteDialect } from "../../node-sqlite-dialect";
-import { kyselyAdapter } from "../../kysely-adapter";
-import { runAdapterTest } from "../../../test";
-import { getMigrations } from "../../../../db/get-migration";
-import type { BetterAuthOptions } from "../../../../types";
+import { NodeSqliteDialect } from "../node-sqlite-dialect";
+import { kyselyAdapter } from "../kysely-adapter";
+import { runAdapterTest } from "../../test";
+import { getMigrations } from "../../../db/get-migration";
+import type { BetterAuthOptions } from "../../../types";
 import merge from "deepmerge";
 import type { DatabaseSync } from "node:sqlite";
 const nodeVersion = process.version;
