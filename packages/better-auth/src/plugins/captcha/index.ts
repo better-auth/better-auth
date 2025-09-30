@@ -3,7 +3,7 @@ import type { CaptchaOptions } from "./types";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
 import { middlewareResponse } from "../../utils/middleware-response";
-import * as verifyHandlers from "./verify-handlers";
+import defer * as verifyHandlers from "./verify-handlers";
 
 export const captcha = (options: CaptchaOptions) =>
 	({
