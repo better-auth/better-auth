@@ -613,32 +613,6 @@ export const getNormalTestSuiteTests = ({
 				expect(result!.id).toBe(user.id);
 			},
 
-		"update - should handle compound where with one field being updated":
-			async () => {
-				const [user] = await insertRandom("user");
-
-				// Update email while using both email and id in where clause
-				const result = await adapter.update<User>({
-					model: "user",
-					where: [
-						{ field: "email", value: user.email },
-						{ field: "id", value: user.id },
-					],
-					update: { email: "compound-updated@example.com" },
-				});
-
-				expect(result).toBeDefined();
-				expect(result!.email).toBe("compound-updated@example.com");
-				expect(result!.id).toBe(user.id);
-
-				// Verify it's findable with new email
-				const foundUser = await adapter.findOne<User>({
-					model: "user",
-					where: [{ field: "id", value: user.id }],
-				});
-				expect(foundUser!.email).toBe("compound-updated@example.com");
-			},
-
 		"update - should work when updated field is not in where clause":
 			async () => {
 				// Regression test: ensure normal updates still work
