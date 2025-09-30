@@ -756,7 +756,7 @@
     }
   },
   "devDependencies": {
-    "@lynx-js/react": "^0.112.5",
+    "@lynx-js/react": "^0.114.0",
     "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.37.1",
     "@tanstack/react-start": "^1.131.3",
