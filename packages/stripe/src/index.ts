@@ -353,9 +353,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				const activeSubscription = activeSubscriptions.find((sub) => {
 					// If we have a specific subscription to update, match by ID
-					if (subscriptionToUpdate?.stripeSubscriptionId || ctx.body.subscriptionId) {
-						return sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
-							sub.id === ctx.body.subscriptionId;
+					if (
+						subscriptionToUpdate?.stripeSubscriptionId ||
+						ctx.body.subscriptionId
+					) {
+						return (
+							sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
+							sub.id === ctx.body.subscriptionId
+						);
 					}
 					// Only find subscription for the same referenceId to avoid mixing personal and org subscriptions
 					if (activeOrTrialingSubscription?.stripeSubscriptionId) {

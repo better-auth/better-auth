@@ -1210,7 +1210,7 @@ describe("stripe", async () => {
 
 		// Mock customers.list to find existing customer
 		mockStripe.customers.list.mockResolvedValueOnce({
-			data: [{ id: "cus_test_123" }]
+			data: [{ id: "cus_test_123" }],
 		});
 
 		// First create a starter subscription
@@ -1272,7 +1272,8 @@ describe("stripe", async () => {
 								price: { id: process.env.STRIPE_PRICE_ID_1 },
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
-								current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
 							},
 						],
 					},
