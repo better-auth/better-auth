@@ -99,8 +99,7 @@ export function getRateLimitStorage(
 			},
 			set: async (key: string, value: RateLimit, _update?: boolean) => {
 				const ttl =
-					(rateLimitSettings?.window ?? ctx.options.rateLimit?.window ?? 10) *
-					1000;
+					rateLimitSettings?.window ?? ctx.options.rateLimit?.window ?? 10;
 				await ctx.options.secondaryStorage?.set?.(
 					key,
 					JSON.stringify(value),
