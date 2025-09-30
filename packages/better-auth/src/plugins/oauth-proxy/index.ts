@@ -54,6 +54,20 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 		);
 	};
 
+	const checkSkipProxy = (ctx: EndpointContext<string, any>) => {
+		// if skip proxy header is set, we don't need to proxy
+		const skipProxy = ctx.request?.headers.get("x-skip-oauth-proxy");
+		if (skipProxy) {
+			return;
+		}
+		const url = resolveCurrentURL(ctx);
+		const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
+		if (productionURL === ctx.context.options.baseURL) {
+			return true;
+		}
+		return false;
+	};
+
 	return {
 		id: "oauth-proxy",
 		options: opts,
@@ -190,6 +204,27 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 			],
 			before: [
 				{
+					matcher() {
+						return true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const skipProxy = checkSkipProxy(ctx);
+
+						if (skipProxy) {
+							return;
+						}
+						return {
+							context: {
+								context: {
+									oauthConfig: {
+										skipStateCookieCheck: true,
+									},
+								},
+							},
+						};
+					}),
+				},
+				{
 					matcher(context) {
 						return (
 							context.path?.startsWith("/sign-in/social") ||
@@ -197,23 +232,21 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						// if skip proxy header is set, we don't need to proxy
-						const skipProxy = ctx.request?.headers.get("x-skip-oauth-proxy");
+						const skipProxy = checkSkipProxy(ctx);
 						if (skipProxy) {
 							return;
 						}
 						const url = resolveCurrentURL(ctx);
-						const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
-						if (productionURL === ctx.context.options.baseURL) {
-							return;
-						}
-						ctx.body.callbackURL = `${url.origin}${
-							ctx.context.options.basePath || "/api/auth"
-						}/oauth-proxy-callback?callbackURL=${encodeURIComponent(
-							ctx.body.callbackURL || ctx.context.baseURL,
-						)}`;
 						return {
-							context: ctx,
+							context: {
+								body: {
+									callbackURL: `${url.origin}${
+										ctx.context.options.basePath || "/api/auth"
+									}/oauth-proxy-callback?callbackURL=${encodeURIComponent(
+										ctx.body.callbackURL || ctx.context.baseURL,
+									)}`,
+								},
+							},
 						};
 					}),
 				},
