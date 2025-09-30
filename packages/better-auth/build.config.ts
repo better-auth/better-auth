@@ -60,6 +60,7 @@ export default defineBuildConfig({
 		"@sveltejs/vite-plugin-svelte",
 		"csstype",
 		"siwe",
+		"@lynx-js/react",
 	],
 	entries: [
 		"./src/index.ts",
@@ -82,6 +83,7 @@ export default defineBuildConfig({
 		"./src/client/vue/index.ts",
 		"./src/client/svelte/index.ts",
 		"./src/client/solid/index.ts",
+		"./src/client/lynx/index.ts",
 		"./src/plugins/index.ts",
 		"./src/plugins/access/index.ts",
 		"./src/api/index.ts",

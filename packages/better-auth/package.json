@@ -132,6 +132,16 @@
         "default": "./dist/client/solid/index.cjs"
       }
     },
+    "./lynx": {
+      "import": {
+        "types": "./dist/client/lynx/index.d.ts",
+        "default": "./dist/client/lynx/index.mjs"
+      },
+      "require": {
+        "types": "./dist/client/lynx/index.d.cts",
+        "default": "./dist/client/lynx/index.cjs"
+      }
+    },
     "./test": {
       "import": {
         "types": "./dist/test-utils/index.d.ts",
@@ -584,6 +594,9 @@
       "solid": [
         "./dist/client/solid/index.d.ts"
       ],
+      "lynx": [
+        "./dist/client/lynx/index.d.ts"
+      ],
       "api": [
         "./dist/api/index.d.ts"
       ],
@@ -743,7 +756,7 @@
     }
   },
   "devDependencies": {
-    "@lynx-js/react": "^0.112.5",
+    "@lynx-js/react": "^0.114.0",
     "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.37.1",
     "@tanstack/react-start": "^1.131.3",
