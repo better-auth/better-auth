@@ -1,4 +1,4 @@
-import { logger } from "../../utils";
+import { logger } from "@better-auth/core/utils";
 import {
 	createAdapterFactory,
 	type AdapterDebugLogs,

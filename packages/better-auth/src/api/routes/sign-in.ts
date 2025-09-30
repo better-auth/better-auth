@@ -3,7 +3,7 @@ import * as z from "zod";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
 import { createEmailVerificationToken } from "./email-verification";
-import { generateState } from "../../utils";
+import { generateState } from "../../oauth2/state";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { SocialProviderListEnum } from "../../social-providers";

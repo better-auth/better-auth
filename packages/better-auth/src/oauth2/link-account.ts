@@ -1,7 +1,7 @@
 import { APIError, createEmailVerificationToken } from "../api";
 import type { Account } from "../types";
 import type { GenericEndpointContext, User } from "../types";
-import { logger } from "../utils";
+import { logger } from "@better-auth/core/utils";
 import { isDevelopment } from "../utils/env";
 import { setTokenUtil } from "./utils";
 

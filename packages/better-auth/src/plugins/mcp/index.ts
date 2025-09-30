@@ -24,7 +24,7 @@ import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
 import { getBaseURL } from "../../utils/url";
 import { isProduction } from "../../utils/env";
-import { logger } from "../../utils";
+import { logger } from "@better-auth/core/utils";
 
 interface MCPOptions {
 	loginPage: string;

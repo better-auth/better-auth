@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { generateId } from "../../utils";
+import { generateId } from "@better-auth/core/utils";
 import type { OrganizationOptions } from "./types";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import type { Prettify } from "better-call";

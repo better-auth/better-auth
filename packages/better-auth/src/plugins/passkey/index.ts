@@ -22,7 +22,7 @@ import type {
 	AuthPluginSchema,
 } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
-import { generateId } from "../../utils";
+import { generateId } from "@better-auth/core/utils";
 import { mergeSchema } from "../../db/schema";
 import { base64 } from "@better-auth/utils/base64";
 

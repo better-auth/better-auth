@@ -1,4 +1,4 @@
-import { generateId } from "../utils";
+import { generateId } from "@better-auth/core/utils";
 import { hashToBase64 } from "../crypto";
 import { getNameFromLocalPackageJson } from "../utils/package-json";
 
