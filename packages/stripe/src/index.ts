@@ -265,12 +265,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 						})
-					: referenceId
-						? await ctx.context.adapter.findOne<Subscription>({
-								model: "subscription",
-								where: [{ field: "referenceId", value: referenceId }],
-							})
-						: null;
+					: null;
 
 				if (ctx.body.subscriptionId && !subscriptionToUpdate) {
 					throw new APIError("BAD_REQUEST", {
@@ -335,12 +330,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						),
 					);
 
-				const activeSubscription = activeSubscriptions.find((sub) =>
-					subscriptionToUpdate?.stripeSubscriptionId || ctx.body.subscriptionId
-						? sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
-							sub.id === ctx.body.subscriptionId
-						: false,
-				);
+				const activeSubscription = subscriptionToUpdate
+					? activeSubscriptions.find(
+							(sub) => sub.id === subscriptionToUpdate.stripeSubscriptionId,
+						)
+					: null;
 
 				const subscriptions = subscriptionToUpdate
 					? [subscriptionToUpdate]
@@ -367,14 +361,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					activeOrTrialingSubscription &&
 					activeOrTrialingSubscription.status === "active" &&
 					activeOrTrialingSubscription.plan === ctx.body.plan &&
-					activeOrTrialingSubscription.seats === (ctx.body.seats || 1)
+					activeOrTrialingSubscription.seats === (ctx.body.seats || 1) &&
+					activeOrTrialingSubscription.referenceId === referenceId
 				) {
 					throw new APIError("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
 					});
 				}
 
-				if (activeSubscription && customerId) {
+				// Only trigger upgrade flow if we're updating an existing subscription
+				// with the same referenceId OR if a specific subscriptionId was provided
+				if (
+					activeSubscription &&
+					customerId &&
+					(ctx.body.subscriptionId || subscriptionToUpdate)
+				) {
 					const { url } = await client.billingPortal.sessions
 						.create({
 							customer: customerId,
