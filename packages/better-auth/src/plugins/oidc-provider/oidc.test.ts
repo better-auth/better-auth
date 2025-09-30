@@ -19,59 +19,12 @@ import { toNodeHandler } from "../../integrations/node";
 import { jwt } from "../jwt";
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 
-// Type for the server client with OIDC plugin
-type ServerClient = ReturnType<
-	typeof createAuthClient<{
-		plugins: [ReturnType<typeof oidcClient>];
-	}>
->;
-
-/**
- * Helper to handle OIDC consent flow when required per OIDC spec
- */
-async function handleConsentFlow(
-	redirectURI: string,
-	serverClient: ServerClient,
-	sessionHeaders: Headers,
-	consentHeaders: Headers,
-): Promise<string> {
-	if (!redirectURI.includes("consent_code=")) {
-		return redirectURI;
-	}
-
-	// Extract consent code from redirect URL
-	const url = new URL(redirectURI, "http://localhost:3000");
-	const consentCode = url.searchParams.get("consent_code");
-
-	if (!consentCode) {
-		throw new Error("Consent code not found in redirect URL");
-	}
-
-	// Merge session headers with consent cookies
-	const authHeaders = new Headers(sessionHeaders);
-	consentHeaders.forEach((value, key) => {
-		if (key.toLowerCase() === "cookie") {
-			const existing = authHeaders.get("Cookie") || "";
-			authHeaders.set("Cookie", existing ? `${existing}; ${value}` : value);
-		} else {
-			authHeaders.set(key, value);
-		}
-	});
-
-	// Accept consent
-	const response = await serverClient.oauth2.consent(
-		{ accept: true, consent_code: consentCode },
-		{ headers: authHeaders, throw: true },
-	);
-
-	return response.redirectURI;
-}
-
 describe("oidc", async () => {
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
 		customFetchImpl,
+		cookieSetter,
 		testUser,
 	} = await getTestInstance({
 		baseURL: "http://localhost:3000",
@@ -80,7 +33,7 @@ describe("oidc", async () => {
 				loginPage: "/login",
 				consentPage: "/oauth2/authorize",
 				requirePKCE: true,
-				getAdditionalUserInfoClaim(user) {
+				getAdditionalUserInfoClaim(user, scopes, client) {
 					return {
 						custom: "custom value",
 						userId: user.id,
@@ -157,30 +110,29 @@ describe("oidc", async () => {
 
 	it("should sign in the user with the provider", async ({ expect }) => {
 		// The RP (Relying Party) - the client application
-		const { customFetchImpl: customFetchImplRP, cookieSetter } =
-			await getTestInstance({
-				account: {
-					accountLinking: {
-						trustedProviders: ["test"],
-					},
+		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
+			account: {
+				accountLinking: {
+					trustedProviders: ["test"],
 				},
-				plugins: [
-					genericOAuth({
-						config: [
-							{
-								providerId: "test",
-								clientId: application.clientId,
-								clientSecret: application.clientSecret || "",
-								authorizationUrl:
-									"http://localhost:3000/api/auth/oauth2/authorize",
-								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
-								scopes: ["openid", "profile", "email"],
-								pkce: true,
-							},
-						],
-					}),
-				],
-			});
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test",
+							clientId: application.clientId,
+							clientSecret: application.clientSecret || "",
+							authorizationUrl:
+								"http://localhost:3000/api/auth/oauth2/authorize",
+							tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+							scopes: ["openid", "profile", "email"],
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
 
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
@@ -189,7 +141,7 @@ describe("oidc", async () => {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
-		const oAuthHeaders = new Headers();
+		const headers = new Headers();
 		const data = await client.signIn.oauth2(
 			{
 				providerId: "test",
@@ -197,7 +149,7 @@ describe("oidc", async () => {
 			},
 			{
 				throw: true,
-				onSuccess: cookieSetter(oAuthHeaders),
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		expect(data.url).toContain(
@@ -205,35 +157,20 @@ describe("oidc", async () => {
 		);
 		expect(data.url).toContain(`client_id=${application.clientId}`);
 
-		// Make the authorization request
 		let redirectURI = "";
-		const consentHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
-				// Capture any consent cookies
-				cookieSetter(consentHeaders)(context);
 			},
 		});
-
-		// Handle consent flow if required (per OIDC spec for non-trusted clients)
-		redirectURI = await handleConsentFlow(
-			redirectURI,
-			serverClient,
-			headers,
-			consentHeaders,
-		);
-
-		// Verify we got an authorization code
 		expect(redirectURI).toContain(
 			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
 		);
 
-		// Complete the OAuth flow
 		let callbackURL = "";
 		await client.$fetch(redirectURI, {
-			headers: oAuthHeaders,
+			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
@@ -306,7 +243,7 @@ describe("oidc", async () => {
 		expect(redirectURI).toContain("consent_code=");
 		expect(redirectURI).toContain("client_id=");
 
-		// No need to extract consent_code - it's in the signed cookie
+		console.log({ newHeaders });
 		const res = await serverClient.oauth2.consent(
 			{
 				accept: true,
@@ -445,6 +382,7 @@ describe("oidc storage", async () => {
 			auth: authorizationServer,
 			signInWithTestUser,
 			customFetchImpl,
+			testUser,
 		} = await getTestInstance({
 			baseURL: "http://localhost:3000",
 			plugins: [
@@ -452,7 +390,7 @@ describe("oidc storage", async () => {
 					loginPage: "/login",
 					consentPage: "/oauth2/authorize",
 					requirePKCE: true,
-					getAdditionalUserInfoClaim(user) {
+					getAdditionalUserInfoClaim(user, scopes, client) {
 						return {
 							custom: "custom value",
 							userId: user.id,
@@ -566,26 +504,12 @@ describe("oidc storage", async () => {
 		expect(data.url).toContain(`client_id=${application.clientId}`);
 
 		let redirectURI = "";
-		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
-				cookieSetter(newHeaders)(context);
-				// Note: headers might be available from parent scope (serverClient auth)
-				// newHeaders already has the consent cookies
 			},
 		});
-
-		// Handle consent flow if required (per OIDC spec for non-trusted clients)
-		redirectURI = await handleConsentFlow(
-			redirectURI,
-			serverClient,
-			headers,
-			newHeaders,
-		);
-
-		// Verify we got an authorization code
 		expect(redirectURI).toContain(
 			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
 		);
@@ -616,7 +540,7 @@ describe("oidc-jwt", async () => {
 		{ useJwt: false, description: "without jwt plugin", expected: "HS256" },
 	])(
 		"testing oidc-provider $description to return token signed with $expected",
-		async ({ useJwt, expected }) => {
+		async ({ useJwt, description, expected }) => {
 			const {
 				auth: authorizationServer,
 				signInWithTestUser,
@@ -629,7 +553,7 @@ describe("oidc-jwt", async () => {
 						loginPage: "/login",
 						consentPage: "/oauth2/authorize",
 						requirePKCE: true,
-						getAdditionalUserInfoClaim(user) {
+						getAdditionalUserInfoClaim(user, scopes, client) {
 							return {
 								custom: "custom value",
 								userId: user.id,
@@ -742,49 +666,15 @@ describe("oidc-jwt", async () => {
 			expect(data.url).toContain(`client_id=${application.clientId}`);
 
 			let redirectURI = "";
-			const newHeaders = new Headers();
 			await serverClient.$fetch(data.url, {
 				method: "GET",
 				onError(context) {
 					redirectURI = context.response.headers.get("Location") || "";
-					cookieSetter(newHeaders)(context);
-					if (headers.get("Cookie")) {
-						newHeaders.append("Cookie", headers.get("Cookie") || "");
-					}
 				},
 			});
-
-			// Check if consent is needed (per OIDC spec)
-			if (redirectURI.includes("consent_code=")) {
-				// Handle consent flow - this is expected per OIDC spec for non-trusted clients
-				expect(redirectURI).toContain("/oauth2/authorize?");
-				expect(redirectURI).toContain("consent_code=");
-				expect(redirectURI).toContain("client_id=");
-
-				// Extract consent_code from URL
-				const url = new URL(redirectURI, "http://localhost:3000");
-				const consentCode = url.searchParams.get("consent_code");
-
-				const res = await serverClient.oauth2.consent(
-					{
-						accept: true,
-						consent_code: consentCode,
-					},
-					{
-						headers: newHeaders,
-						throw: true,
-					},
-				);
-				expect(res.redirectURI).toContain(
-					"http://localhost:3000/api/auth/oauth2/callback/test?code=",
-				);
-				redirectURI = res.redirectURI;
-			} else {
-				// Direct code response (trusted client)
-				expect(redirectURI).toContain(
-					"http://localhost:3000/api/auth/oauth2/callback/test?code=",
-				);
-			}
+			expect(redirectURI).toContain(
+				"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+			);
 			let authToken = undefined;
 			let callbackURL = "";
 			await client.$fetch(redirectURI, {
