@@ -325,23 +325,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				}
 
-				const activeSubscriptions = await client.subscriptions
-					.list({
-						customer: customerId,
-					})
-					.then((res) =>
-						res.data.filter(
-							(sub) => sub.status === "active" || sub.status === "trialing",
-						),
-					);
-
-				const activeSubscription = activeSubscriptions.find((sub) =>
-					subscriptionToUpdate?.stripeSubscriptionId || ctx.body.subscriptionId
-						? sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
-							sub.id === ctx.body.subscriptionId
-						: false,
-				);
-
 				const subscriptions = subscriptionToUpdate
 					? [subscriptionToUpdate]
 					: await ctx.context.adapter.findMany<Subscription>({
@@ -357,6 +340,34 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const activeOrTrialingSubscription = subscriptions.find(
 					(sub) => sub.status === "active" || sub.status === "trialing",
 				);
+
+				const activeSubscriptions = await client.subscriptions
+					.list({
+						customer: customerId,
+					})
+					.then((res) =>
+						res.data.filter(
+							(sub) => sub.status === "active" || sub.status === "trialing",
+						),
+					);
+
+				const activeSubscription = activeSubscriptions.find((sub) => {
+					// If we have a specific subscription to update, match by ID
+					if (
+						subscriptionToUpdate?.stripeSubscriptionId ||
+						ctx.body.subscriptionId
+					) {
+						return (
+							sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
+							sub.id === ctx.body.subscriptionId
+						);
+					}
+					// Only find subscription for the same referenceId to avoid mixing personal and org subscriptions
+					if (activeOrTrialingSubscription?.stripeSubscriptionId) {
+						return sub.id === activeOrTrialingSubscription.stripeSubscriptionId;
+					}
+					return false;
+				});
 
 				// Also find any incomplete subscription that we can reuse
 				const incompleteSubscription = subscriptions.find(
@@ -375,6 +386,61 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}
 
 				if (activeSubscription && customerId) {
+					// Find the corresponding database subscription for this Stripe subscription
+					let dbSubscription = await ctx.context.adapter.findOne<Subscription>({
+						model: "subscription",
+						where: [
+							{
+								field: "stripeSubscriptionId",
+								value: activeSubscription.id,
+							},
+						],
+					});
+
+					// If no database record exists for this Stripe subscription, update the existing one
+					if (!dbSubscription && activeOrTrialingSubscription) {
+						await ctx.context.adapter.update<InputSubscription>({
+							model: "subscription",
+							update: {
+								stripeSubscriptionId: activeSubscription.id,
+								updatedAt: new Date(),
+							},
+							where: [
+								{
+									field: "id",
+									value: activeOrTrialingSubscription.id,
+								},
+							],
+						});
+						dbSubscription = activeOrTrialingSubscription;
+					}
+
+					// Resolve price ID if using lookup keys
+					let priceIdToUse: string | undefined = undefined;
+					if (ctx.body.annual) {
+						priceIdToUse = plan.annualDiscountPriceId;
+						if (!priceIdToUse && plan.annualDiscountLookupKey) {
+							priceIdToUse = await resolvePriceIdFromLookupKey(
+								client,
+								plan.annualDiscountLookupKey,
+							);
+						}
+					} else {
+						priceIdToUse = plan.priceId;
+						if (!priceIdToUse && plan.lookupKey) {
+							priceIdToUse = await resolvePriceIdFromLookupKey(
+								client,
+								plan.lookupKey,
+							);
+						}
+					}
+
+					if (!priceIdToUse) {
+						throw ctx.error("BAD_REQUEST", {
+							message: "Price ID not found for the selected plan",
+						});
+					}
+
 					const { url } = await client.billingPortal.sessions
 						.create({
 							customer: customerId,
@@ -393,9 +459,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										{
 											id: activeSubscription.items.data[0]?.id as string,
 											quantity: ctx.body.seats || 1,
-											price: ctx.body.annual
-												? plan.annualDiscountPriceId
-												: plan.priceId,
+											price: priceIdToUse,
 										},
 									],
 								},
