@@ -60,7 +60,7 @@
     "@babel/preset-env": "^7.26.0",
     "@babel/runtime": "^7.26.0",
     "@types/babel__core": "^7.20.5",
-    "@types/jest": "^29.5.14",
+    "@types/jest": "^30.0.0",
     "@types/react": "^19.1.12",
     "@types/react-test-renderer": "^18.3.1",
     "typescript": "^5.7.2"
