@@ -16,6 +16,7 @@
     "release:no-build": "bumpp && pnpm -r publish --access public --no-git-checks --tag next",
     "release:canary": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
     "bump": "bumpp",
+    "prepare": "husky",
     "test": "turbo --filter \"./packages/*\" test",
     "e2e:smoke": "turbo --filter \"./e2e/*\" e2e:smoke",
     "e2e:integration": "turbo --filter \"./e2e/*\" e2e:integration",
@@ -26,6 +27,8 @@
     "@types/bun": "^1.2.20",
     "@types/node": "^24.4.0",
     "bumpp": "^10.2.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.3",
     "tinyglobby": "^0.2.15",
     "turbo": "^2.5.6",
     "typescript": "catalog:",
@@ -36,5 +39,12 @@
     "zod": "^4.1.5",
     "miniflare>zod": "^3.25.1",
     "vinxi>zod": "^3.24.3"
+  },
+  "lint-staged": {
+    "*.{js,ts,jsx,tsx,json,css,md}": [
+      "pnpm lint:fix",
+      "pnpm format",
+      "git add"
+    ]
   }
 }
