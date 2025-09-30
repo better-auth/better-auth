@@ -374,7 +374,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			logo?: string;
 			metadata?: Record<string, any>;
 		} & Partial<InferAdditionalFieldsFromPluginOptions<"organization", O>>;
-		organizationId: string;
+		organizationId?: string | undefined;
 	};
 	return createAuthEndpoint(
 		"/organization/update",
