@@ -1322,6 +1322,56 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									}
 								},
 							},
+							update: {
+								async after(user, ctx) {
+									if (!ctx) return;
+
+									try {
+										// Cast user to include stripeCustomerId (added by the stripe plugin schema)
+										const userWithStripe = user as typeof user & {
+											stripeCustomerId?: string;
+										};
+
+										// Only proceed if user has a Stripe customer ID
+										if (!userWithStripe.stripeCustomerId) return;
+
+										// Get the user from the database to check if email actually changed
+										// The 'user' parameter here is the freshly updated user
+										// We need to check if the Stripe customer's email matches
+										const stripeCustomer = await client.customers.retrieve(
+											userWithStripe.stripeCustomerId,
+										);
+
+										// Check if customer was deleted
+										if (stripeCustomer.deleted) {
+											ctx.context.logger.warn(
+												`Stripe customer ${userWithStripe.stripeCustomerId} was deleted, cannot update email`,
+											);
+											return;
+										}
+
+										// If Stripe customer email doesn't match the user's current email, update it
+										if (stripeCustomer.email !== user.email) {
+											await client.customers.update(
+												userWithStripe.stripeCustomerId,
+												{
+													email: user.email,
+												},
+											);
+											ctx.context.logger.info(
+												`Updated Stripe customer email from ${stripeCustomer.email} to ${user.email}`,
+											);
+										}
+									} catch (e: any) {
+										// Ignore errors - this is a best-effort sync
+										// Email might have been deleted or Stripe customer might not exist
+										ctx.context.logger.error(
+											`Failed to sync email to Stripe customer: ${e.message}`,
+											e,
+										);
+									}
+								},
+							},
 						},
 					},
 				},
