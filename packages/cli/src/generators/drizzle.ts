@@ -104,7 +104,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						: `int('${name}')`,
 				},
 				date: {
-					sqlite: `integer('${name}', { mode: 'timestamp' })`,
+					sqlite: `integer('${name}', { mode: 'timestamp_ms' })`,
 					pg: `timestamp('${name}')`,
 					mysql: `timestamp('${name}')`,
 				},
@@ -170,7 +170,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 										attr.defaultValue.toString().includes("new Date()")
 									) {
 										if (databaseType === "sqlite") {
-											type += `.default(sql\`(current_timestamp)\`)`;
+											type += `.default(sql\`(cast(unixepoch('subsecond') * 1000 as integer))\`)`;
 										} else {
 											type += `.defaultNow()`;
 										}
