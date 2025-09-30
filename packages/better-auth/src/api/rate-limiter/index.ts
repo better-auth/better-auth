@@ -85,7 +85,6 @@ export function getRateLimitStorage(
 	ctx: AuthContext,
 	rateLimitSettings?: {
 		window?: number;
-		max?: number;
 	},
 ) {
 	if (ctx.options.rateLimit?.customStorage) {
@@ -100,7 +99,8 @@ export function getRateLimitStorage(
 			},
 			set: async (key: string, value: RateLimit, _update?: boolean) => {
 				const ttl =
-					rateLimitSettings?.window ?? ctx.options.rateLimit?.window ?? 10000;
+					(rateLimitSettings?.window ?? ctx.options.rateLimit?.window ?? 10) *
+					1000;
 				await ctx.options.secondaryStorage?.set?.(
 					key,
 					JSON.stringify(value),
@@ -182,7 +182,6 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 
 	const storage = getRateLimitStorage(ctx, {
 		window,
-		max,
 	});
 	const data = await storage.get(key);
 	const now = Date.now();
