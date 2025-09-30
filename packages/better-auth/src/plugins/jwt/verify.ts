@@ -44,25 +44,43 @@ async function verifyJwtJose(
 	options?: JwtVerifyOptions,
 ): Promise<JWTVerifyResult<JWTPayload>> {
 	const audiences = options?.allowedAudiences;
+	// Set defaults, if some options are missing
 	const parsedOptions: JWTVerifyOptions = {
 		audience:
-			audiences && audiences.length === 0
+			audiences === null || (audiences && audiences.length === 0)
 				? undefined
 				: (audiences ?? [ctx.context.options.baseURL!]),
 		clockTolerance:
-			options?.maxClockSkew ?? pluginOpts?.jwt?.maxClockSkew ?? 60,
+			options?.maxClockSkew === null
+				? undefined
+				: (options?.maxClockSkew ?? pluginOpts?.jwt?.maxClockSkew ?? 30),
 		issuer:
-			options?.allowedIssuers && options?.allowedIssuers.length === 0
+			options?.allowedIssuers === null ||
+			(options?.allowedIssuers && options?.allowedIssuers.length === 0)
 				? undefined
 				: (options?.allowedIssuers ?? [ctx.context.options.baseURL!]),
-		maxTokenAge: options?.maxExpirationTime,
+		maxTokenAge:
+			options?.maxTokenAge === null || options?.maxTokenAge?.trim() === ""
+				? undefined
+				: (options?.maxTokenAge ??
+					pluginOpts?.jwt?.maxTokenAge ??
+					(options?.requiredClaims === undefined ||
+					(options?.requiredClaims && "iat" in options?.requiredClaims)
+						? "1 week"
+						: undefined)),
 		subject: options?.expectedSubject,
 		typ:
-			options?.expectedType === ""
+			options?.expectedType === null || options?.expectedType === ""
 				? undefined
 				: (options?.expectedType ?? "JWT"),
+		requiredClaims:
+			options?.requiredClaims === null
+				? undefined
+				: ((options?.requiredClaims ??
+						(pluginOpts?.enableJwtRevocation
+							? ["aud", "exp", "iat", "iss", "jti"]
+							: ["aud", "exp", "iat", "iss"])) as string[]),
 	};
-
 	// This check is needed to differentiate between function overloads
 	if (jwk instanceof CryptoKey) return jwtVerify(jwt, jwk, parsedOptions);
 
@@ -96,7 +114,7 @@ export async function verifyJwtInternal(
 ): Promise<JWTPayload> {
 	const adapter = getJwksAdapter(ctx.context.adapter);
 	const jwks = await ctx.json({
-		keys: (await adapter.getAllKeys()).map((keySet) => ({
+		keys: ((await adapter.getAllKeys()) ?? []).map((keySet) => ({
 			...JSON.parse(keySet.publicKey),
 			kid: keySet.id,
 		})),
@@ -113,7 +131,7 @@ export async function verifyJwtInternal(
 
 	if (protectedHeader.kid?.endsWith(" revoked"))
 		throw new BetterAuthError(
-			`Failed to verify a JWT: Cannot verify the JWT using a revoked JWK with id "${protectedHeader.kid}"`,
+			`Failed to verify the JWT: Cannot verify the JWT using a revoked JWK with ID "${protectedHeader.kid}"`,
 			protectedHeader.kid,
 		);
 
@@ -172,11 +190,16 @@ export async function verifyJwtWithKeyInternal(
 ): Promise<JWTPayload | null> {
 	if (!jwt) return null;
 
+	if (typeof jwk === "string" && jwk?.endsWith(" revoked"))
+		throw new BetterAuthError(
+			`Failed to verify the JWT: Cannot verify the JWT using a revoked JWK with ID "${jwk}"`,
+			jwk,
+		);
 	let publicKey = await getJwk(ctx, false, jwk);
 
 	if (publicKey === undefined)
 		throw new BetterAuthError(
-			`Failed to sign JWT: Could not find a JWK with id "${jwk}"`,
+			`Failed to verify the JWT: Could not find a JWK with ID "${jwk}"`,
 		);
 
 	const { payload, protectedHeader } = await verifyJwtJose(
@@ -192,7 +215,7 @@ export async function verifyJwtWithKeyInternal(
 			return payload;
 
 		throw new BetterAuthError(
-			`JWT has invalid "kid" field in the protected header ("${protectedHeader.kid}" !== "${publicKey.id}")`,
+			`Failed to verify the JWT: invalid "kid" field in the protected header ("${protectedHeader.kid}" !== "${publicKey.id}")`,
 			jwt,
 		);
 	}

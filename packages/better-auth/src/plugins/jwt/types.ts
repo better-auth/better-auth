@@ -5,9 +5,20 @@ import type { schema } from "./schema";
 import z from "zod/v4";
 
 export interface JwtPluginOptions {
+	/**
+	 * Options for JWKS.
+	 *
+	 * @description Contains `keyPairConfig` which tells how the keys should be created by default.
+	 * The key is created when a JWT function is called, but there is no key or when calling `createJwk` function, or `/create-jwk` endpoint.
+	 * In the latter 2 cases, these defaults can be overriden and a key with different configuration can be created.
+	 */
 	jwks?: JwksOptions;
+	/**
+	 * Default options for signing and veryfing.
+	 *
+	 * @description They can be overriden in **JWT signing and verification functions** or by providing `options` argument to the `/sign-jwt` or `/verify-jwt` endpoints.
+	 */
 	jwt?: JwtOptions;
-
 	/**
 	 * Disables setting JWTs through middleware.
 	 *
@@ -18,10 +29,11 @@ export interface JwtPluginOptions {
 	 */
 	disableSettingJwtHeader?: boolean;
 	/**
-	 * @todo maxExpirationTime?
+	 * @todo: describe
 	 */
+	enableJwtRevocation?: boolean;
 	/**
-	 * Custom schema for the admin plugin
+	 * Custom schema for the admin plugin.
 	 */
 	schema?: InferOptionSchema<typeof schema>;
 }
@@ -102,6 +114,7 @@ export interface JwksOptions {
 	 * ⚠ If two keys from different sources share the same "kid", the newly fetched key will be ignored. After a server restart, the prioritization of keys may differ.
 	 *
 	 * ⚠ If a key is revoked, a POST request to /revoke-jwk **server-only** endpoint must be done or the server must be restarted.
+	 * @todo optional CRON that checks for key revocation from remote JWKS
 	 */
 	remoteJwks?: (() => Awaitable<Jwk[] | JSONWebKeySet>)[];
 
@@ -124,6 +137,7 @@ export interface JwksOptions {
 
 	/**
 	 * @todo describe
+	 * @todo if key rotation is enabled, this is keyChainId instead
 	 * @default getJwksAdapter(adapter).getLatestKey() // Latest key in the database
 	 */
 	defaultKeyId?: string;
@@ -167,18 +181,27 @@ export interface JwtOptions {
 	 */
 	expirationTime?: number | string | Date;
 	/**
-	 * The time in seconds.
+	 * Maximum time from payload's `iat` (**"Issued At" Claim**).
 	 *
-	 * @description **When signing JWT**: Tells how far the requested `iat` ("Issued At" Claim) can be "into the past" or "into the future"
+	 * @description This is the **maximum allowed expiration time**, but this **will verify** the **JWT** if the **JWT `exp` ("Expiration Time") Claim** is set to higher than this.
+	 * Once `maxTokenAge` time has passed since the **JWT `iat` ("Issued At") Claim**, it will be then rejected. Even if the **JWT `exp` Claim** suggets it's still valid.
+	 *
+	 * Expects the same **time as {`string`} format** as `expirationTime` in `JwtOptions` interface. If present, `iat` is necessary in the payload.
+	 *
+	 * ⚠ Might be necessary to set to a **null** and not `undefined` when dealing with **JWT**s that set `iat`, but the default `maxTokenAge` behaviour is not desired.
+	 *
+	 * @default "1 week" // only if `iat` is present in `requiredClaims` in verification's {`JwtVerifyOptions`}, otherwise `null`
+	 */
+	maxTokenAge?: string | null;
+	/**
+	 * Time in seconds.
+	 *
+	 * @description Tells how far the requested `iat` ("Issued At" Claim) can be "into the past" or "into the future"
 	 * because of the clock differences of different machines within the request chain and processing time.
 	 *
-	 * **When veryfing JWT**: Tells how much leeway is there for `exp` ("Expiration Time" Claim) and `nbf` ("Not Before" Claim)
-	 * because of the clock differences of **this machine (veryfing one)** and **the one that signed JWT**.
-	 * It effectively extends allowed `exp` and lowers `nbf` requirement by this amount.
-	 *
-	 * @default 60
+	 * @default 30
 	 */
-	maxClockSkew?: number;
+	maxClockSkew?: number | null;
 	/**
 	 * A function that is called to define the data of the **JWT** in the `getSessionJwt` function.
 	 *
@@ -212,9 +235,8 @@ export interface JwtCustomClaims {
 	 * Changes **JWT "Expiration Time" Claim**. Expects the same type as `expirationTime` in `JwtOptions` interface.
 	 *
 	 * ⚠ Undefined value sets it to **default**, but only passing `null` sets it to no `exp` claim.
-	 * @todo: test NaN
 	 *
-	 * @default getJWTPluginOptions(ctx)?.jwt?.expirationTime // Plugin configuration
+	 * @default getJWTPluginOptions(ctx)?.jwt?.expirationTime // Plugin configuration, by default "15 min"
 	 */
 	exp?: string | number | Date | null;
 	/**
@@ -222,7 +244,7 @@ export interface JwtCustomClaims {
 	 *
 	 * ⚠ Undefined value sets it to **default**, but only passing `null` sets it to no `iat` claim.
 	 *
-	 * @default new Date() // Current local machine time
+	 * @default Date.now() // Current local machine time
 	 */
 	iat?: string | number | Date | null;
 	/**
@@ -293,67 +315,170 @@ export const jwtCustomClaimsSchema = z
 	})
 	.describe("Custom JWT claims that override or add to standard claims");
 
+type JwtClaim = "aud" | "exp" | "iat" | "iss" | "jti" | "nbf" | "sub";
 export interface JwtVerifyOptions {
 	/**
-	 * The amount of time in seconds, the requested `iat` ("Issued At" Claim) can be "into the future" because of the clock differences from different machines within the request chain.
+	 * Array of allowed **payload**'s `aud` (**"Audience" Claim**).
 	 *
-	 * Also leeway for `exp` ("Expiration Time" Claim) and `nbf` ("Not Before" Claim). It effectively extends allowed `exp` and lower `nbf` requirement by this amount.
+	 * @description If provided, `aud` presence is necessary in the payload and the payload **must have at least one audience** from this array.
 	 *
-	 * @default getJwtPluginOptions(ctx.context)?.jwt?.allowedClockSkew // 60 if not defined
-	 */
-	maxClockSkew?: number;
-	/**
-	 * Maximum time in **seconds** from payload's `iat` (**"Issued At" Claim**). Consider it a maximum `exp` (**"Expiration Time" Claim**) the payload can have. If present, `iat` is necessary in the payload.
-	 */
-	maxExpirationTime?: string;
-	/**
-	 * Array of allowed payload's `iss` (**"Issuer" Claim**). If provided, `iss` presence is necessary in the payload.
-	 *
-	 * ⚠ It might be necessary to set this to an **empty array** and not `undefined` when dealing with JWTs issued by external systems that do not set `iss` at all.
+	 * ⚠ Might be necessary to set to an **empty array or null** and not `undefined` when dealing with **JWT**s that do not set `aud` at all.
 	 *
 	 * @default [baseURL] // Taken from `BetterAuthOptions` inside `AuthContext` if defined, otherwise `process.env.BETTER_AUTH_URL`
 	 */
-	allowedIssuers?: string[];
+	allowedAudiences?: string[] | null;
 	/**
-	 * Array of allowed payload's `aud` (**"Audience" Claim**). If provided, `aud` presence is necessary in the payload and the payload **must have at least one audience** from this array.
+	 * Array of allowed **payload**'s `iss` (**"Issuer" Claim**).
 	 *
-	 * ⚠ Might be necessary to set to an **empty array** and not `undefined` when dealing with JWTs issued by external systems that do not set `aud` at all.
+	 * @description If provided, `iss` presence is necessary in the payload.
+	 *
+	 * ⚠ It might be necessary to set this to an **empty array or null** and not `undefined` when dealing with **JWT**s that do not set `iss` at all.
 	 *
 	 * @default [baseURL] // Taken from `BetterAuthOptions` inside `AuthContext` if defined, otherwise `process.env.BETTER_AUTH_URL`
 	 */
-	allowedAudiences?: string[];
+	allowedIssuers?: string[] | null;
 	/**
-	 * Expected `sub` (**"Subject" Claim**). If provided, `sub` presence is necessary in the payload.
+	 * Maximum time from payload's `iat` (**"Issued At" Claim**).
+	 *
+	 * @description This is the **maximum allowed expiration time**, but this **will verify** the **JWT** if the **JWT `exp` ("Expiration Time") Claim** is set to higher than this.
+	 * Once `maxTokenAge` time has passed since the **JWT `iat` ("Issued At") Claim**, it will be then rejected. Even if the **JWT `exp` Claim** suggets it's still valid.
+	 *
+	 * Expects the same **time as {`string`} format** as `expirationTime` in `JwtOptions` interface. If present, `iat` is necessary in the payload.
+	 *
+	 * ⚠ Might be necessary to set to a **null** and not `undefined` when dealing with **JWT**s that set `iat`, but the default `maxTokenAge` behaviour is not desired.
+	 *
+	 * @default getJwtPluginOptions(ctx.context)?.jwt?.maxTokenAge // if not defined: "1 week" if `iat` is present
+	 */
+	maxTokenAge?: string | null;
+	/**
+	 * Expected `sub` (**"Subject" Claim**).
+	 *
+	 * @description If provided, `sub` presence is necessary in the payload.
 	 */
 	expectedSubject?: string;
 	/**
-	 * Expected **JWT "typ" (Type) Header Parameter** value. This option makes the **"typ"** presence required.
+	 * Expected **JWT "typ" (Type) Header Parameter** value.
 	 *
-	 * ⚠ Might be necessary to set to an **empty string or `null`** when dealing with JWTs issued by external systems that do not set **JWT "typ" (Type) Header Parameter** at all.
+	 * @description This option makes the **"typ"** presence required.
+	 *
+	 * ⚠ Might be necessary to set to an **empty string or null** when dealing with **JWT**s that do not set **JWT "typ" (Type) Header Parameter** at all.
 	 *
 	 * @default "JWT"
 	 */
-	expectedType?: string;
+	expectedType?: string | null;
+	/**
+	 * Expected **JWT Claims** for **JWT** to have.
+	 *
+	 * @description
+	 *
+	 * ⚠ Might be necessary to set to an **empty array or `null`** and not `undefined` when dealing with **JWT**s that do not require to set any claims.
+	 *
+	 * @default ["aud", "exp", "iat", "iss"] // "jti" is added to this array, if JWT revocation is enabled
+	 */
+	requiredClaims?: JwtClaim[] | null;
+	/**
+	 * The key used to verify a JWT ought belong to this key ring.
+	 */
+	expectedKeyRing?: string;
 	/**
 	 * Do not throw error when `CryptoKeyIdAlg` has set `id`, but `jwt` does not have **JWT "kid" (Key ID) Header Parameter**.
+	 *
+	 * @description
 	 *
 	 * ⚠ Might be necessary to set this to `true` when dealing with **JWT**s issued by external systems if the key has an assigned `id`.
 	 *
 	 * @default false
 	 */
 	allowNoKeyId?: boolean;
+	/**
+	 * Time in seconds.
+	 *
+	 * @description Tells how far the requested `iat` ("Issued At" Claim) can be "into the past" or "into the future"
+	 * because of the clock differences of different machines within the request chain and processing time.
+	 * This becomes a leeway for `exp` ("Expiration Time" Claim) and `nbf` ("Not Before" Claim).
+	 * It effectively extends the allowed `exp` time and lowers the `nbf` requirement by this amount.
+	 *
+	 * @default getJwtPluginOptions(ctx.context)?.jwt?.allowedClockSkew // 30 if not defined
+	 */
+	maxClockSkew?: number | null;
+	/**
+	 * Display information on console if **JWT verification** fails.
+	 *
+	 * @description I/O could be a costly operation, for systems under high load, logging every jwt-verification failure including simple expiration, might be undesired.
+	 * @todo redact
+     * @default true
+	 */
+	logFailure?: boolean;
 }
 
-// todo: add describe() to fields
 export const JwtVerifyOptionsSchema = z
 	.object({
-		maxClockSkew: z.number().optional(),
-		maxExpirationTime: z.string().optional(),
-		allowedIssuers: z.array(z.string()).optional(),
-		allowedAudiences: z.array(z.string()).optional(),
-		expectedSubject: z.string().optional(),
-		expectedType: z.string().optional(),
-		allowNoKeyId: z.boolean().optional(),
+		allowedAudiences: z
+			.array(z.string())
+			.nullable()
+			.optional()
+			.describe(
+				"Array of allowed payload's `aud` (Audience Claim). If provided, `aud` presence is necessary in the payload and the payload must have at least one audience from this array",
+			),
+
+		allowedIssuers: z
+			.array(z.string())
+			.nullable()
+			.optional()
+			.describe(
+				"Array of allowed payload's `iss` (Issuer Claim). If provided, `iss` presence is necessary in the payload",
+			),
+
+		maxTokenAge: z
+			.string()
+			.nullable()
+			.optional()
+			.describe(
+				"Maximum time from payload's `iat` (Issued At Claim). If present, `iat` is necessary in the payload",
+			),
+
+		expectedSubject: z
+			.string()
+			.optional()
+			.describe(
+				"Expected `sub` (Subject Claim). If provided, `sub` presence is necessary in the payload",
+			),
+
+		expectedType: z
+			.string()
+			.nullable()
+			.optional()
+			.describe(
+				"Expected JWT `typ` (Type) Header Parameter value. This option makes the `typ` presence required",
+			),
+
+		requiredClaims: z
+			.array(z.enum(["aud", "exp", "iat", "iss", "jti", "nbf", "sub"]))
+			.nullable()
+			.optional()
+			.describe("Expected JWT Claims for the JWT to have"),
+
+		expectedKeyRing: z
+			.string()
+			.optional()
+			.describe("The key used to verify a JWT ought belong to this key ring"),
+
+		allowNoKeyId: z
+			.boolean()
+			.optional()
+			.describe(
+				"Do not throw error when CryptoKeyIdAlg has set `id`, but JWT does not have `kid` (Key ID) header parameter",
+			),
+
+		maxClockSkew: z
+			.number()
+			.nullable()
+			.optional()
+			.describe(
+				"The default time in seconds that `iat` (Issued At), `exp` (Expiration), and `nbf` (Not Before) claims can be offset to account for clock skew between systems",
+			),
+		// todo: describe()
+		logFailure: z.boolean().optional(),
 	})
 	.describe("Strictness of verification");
 

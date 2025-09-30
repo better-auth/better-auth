@@ -1,5 +1,11 @@
 import type { GenericEndpointContext } from "../../types";
-import type { CryptoKeyIdAlg, Jwk, JwkOptions, JwksOptions } from "./types";
+import type {
+	CryptoKeyIdAlg,
+	Jwk,
+	JwkOptions,
+	JwksOptions,
+	JwtPluginOptions,
+} from "./types";
 import type { JWK } from "jose";
 import { BetterAuthError } from "../../error";
 import { getJwksAdapter } from "./adapter";
@@ -129,6 +135,7 @@ export async function getJwk(
 export async function createJwkInternal(
 	ctx: GenericEndpointContext,
 	jwksOpts?: JwksOptions,
+	keyId?: string,
 ): Promise<Jwk> {
 	const jwkOpts = jwksOpts?.keyPairConfig;
 
@@ -154,8 +161,10 @@ export async function createJwkInternal(
 /**
  * Creates a new **JSON Web Key (JWK)** pair and saves it in the database.
  *
+ * ⓘ **Internal use only**: not exported in `index.ts`.
+ *
  * @param ctx - Endpoint context.
- * @param jwkOpts - Optional. Configuration for the key pair (algorithm, curve, etc.). If not provided, plugin defaults are used.
+ * @param options.jwkOpts - Optional. Configuration for the key pair (algorithm, curve, etc.). If not provided, plugin defaults are used.
  *
  * @throws {TypeError | JOSENotSupported} - If key generation fails.
  * @throws {Error} - If private key encryption or the database insert fails.
@@ -164,10 +173,12 @@ export async function createJwkInternal(
  */
 export async function createJwk(
 	ctx: GenericEndpointContext,
-	jwkOpts?: JwkOptions,
+	options?: {
+		jwkOpts?: JwkOptions;
+	},
 ): Promise<Jwk> {
 	const jwksOpts = getJwtPluginOptions(ctx.context)?.jwks || {
-		keyPairConfig: jwkOpts,
+		keyPairConfig: options?.jwkOpts,
 	};
 
 	return createJwkInternal(ctx, jwksOpts);
@@ -217,7 +228,7 @@ export async function revokeJwk(
 	const revokedKey = await adapter.revokeKey(keyId);
 	if (!revokedKey)
 		throw new BetterAuthError(
-			`Failed to revoke a JWK: No such key found with id "${keyId}"`,
+			`Failed to revoke a JWK: No such key found with ID "${keyId}"`,
 			keyId,
 		);
 

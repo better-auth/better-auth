@@ -5,7 +5,6 @@ import {
 	jwkOptionsSchema,
 	JwtVerifyOptionsSchema,
 	type JwtCustomClaims,
-	type Jwk,
 	type JwkOptions,
 	type JwksOptions,
 	type JwtPluginOptions,
@@ -25,8 +24,9 @@ import { getSessionJwtInternal, signJwtInternal } from "./sign";
 import { verifyJwtInternal, verifyJwtWithKeyInternal } from "./verify";
 import { type JSONWebKeySet, type JWK, type JWTPayload } from "jose";
 import * as z from "zod/v4";
-import { getPublicJwk, parseJwk } from "./utils";
+import { parseJwk } from "./utils";
 import { BetterAuthError } from "../../error";
+import { JWTExpired } from "jose/errors";
 export type * from "./types";
 export { createJwk, getJwk, importJwk } from "./jwk";
 export { getSessionJwt, signJwt } from "./sign";
@@ -135,12 +135,14 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 					const adapter = getJwksAdapter(ctx.context.adapter);
 
 					const keySets = await adapter.getAllKeys();
+					const keySets = ((await adapter.getAllKeys()) ?? []).filter(
+						(k) => !k.id.endsWith(" revoked"),
+					);
 
 					if (keySets.length === 0) {
 						const key = await createJwkInternal(ctx, pluginOpts?.jwks);
 						keySets.push(key);
 					}
-
 					const keyPairConfig = pluginOpts?.jwks?.keyPairConfig;
 					const defaultCrv = keyPairConfig
 						? "crv" in keyPairConfig
@@ -210,6 +212,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 						}),
 						jwk: jwkExportedSchema.or(z.string()).optional(),
 						options: JwtVerifyOptionsSchema.optional(),
+						logFailure: z.boolean().optional(),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -218,6 +221,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 								jwt: string;
 								jwk?: string | JWK;
 								options?: JwtVerifyOptions;
+								logFailure?: boolean;
 							},
 						},
 						openapi: {
@@ -272,8 +276,16 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 
 						return ctx.json({ payload });
 					} catch (error: unknown) {
+						// Do not return information about the error to the caller, could be a client who isn't supposed to obtain it
+						// Instead log it as an "info" on server. This is not a system error, verification failure is often nothing unexpected
+						ctx.context.logger.info(`Failed to verify the JWT: ${error}"`);
+						if (error instanceof JWTExpired)
+							throw new APIError("BAD_REQUEST", {
+								message: "Failed to verify the JWT: the token has expired",
+							});
+						else if (error instanceof APIError) throw error;
 						throw new APIError("BAD_REQUEST", {
-							message: `Failed to verify the JWT: ${error}`,
+							message: "Failed to verify the JWT",
 						});
 					}
 				},
@@ -540,11 +552,14 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 										},
 									},
 								},
+								400: {
+									description: "A JWK with the same ID exists already",
+								},
 							},
 						},
 					},
 					body: z.object({
-						jwk: jwkExportedSchema.nonoptional(),
+						jwk: jwkExportedSchema,
 					}),
 				},
 				async (ctx) => {
@@ -663,7 +678,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 						if (error instanceof BetterAuthError) {
 							if (error.cause === keyId)
 								throw new APIError("BAD_REQUEST", {
-									message: "Could not find the JWK pair to revoke",
+									message: "Could not revoke the JWK: the JWK pair not found",
 								});
 						}
 						ctx.context.logger.error(`Could not revoke the JWK: ${error}`);
