@@ -199,19 +199,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					let whereClause = convertWhereClause(model, where);
-					const modelData = await db[model]!.findFirst({
-						where: whereClause,
-					});
-					if (!modelData || !Object.keys(modelData).length) return null;
-					const keys = Object.keys(modelData);
-					const key = keys[0]!;
+					const whereClause = convertWhereClause(model, where);
 					return await db[model]!.update({
-						where: convertWhereClause(model, [
-							"id" in modelData
-								? { field: "id", value: modelData.id }
-								: { field: key, value: modelData[key] },
-						]),
+						where: whereClause,
 						data: update,
 					});
 				},
@@ -225,19 +215,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				},
 				async delete({ model, where }) {
 					const whereClause = convertWhereClause(model, where);
-					const modelData = await db[model]!.findFirst({
-						where: whereClause,
-					});
-					if (!modelData || !Object.keys(modelData).length) return;
-					const keys = Object.keys(modelData);
-					const key = keys[0]!;
 					try {
 						await db[model]!.delete({
-							where: convertWhereClause(model, [
-								"id" in modelData
-									? { field: "id", value: modelData.id }
-									: { field: key, value: modelData[key] },
-							]),
+							where: whereClause,
 						});
 					} catch (e) {
 						// If the record doesn't exist, we don't want to throw an error
