@@ -220,13 +220,13 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					const res = await cursor.toArray();
 					return res as any;
 				},
-			async count({ model, where }) {
-				const clause = where ? convertWhereClause({ where, model }) : {};
-				const res = await db
-					.collection(model)
-					.countDocuments(clause, { session });
-				return res;
-			},
+				async count({ model, where }) {
+					const clause = where ? convertWhereClause({ where, model }) : {};
+					const res = await db
+						.collection(model)
+						.countDocuments(clause, { session });
+					return res;
+				},
 				async update({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
 
