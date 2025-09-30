@@ -297,7 +297,7 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 
-					const parsedSamlConfig: SAMLConfig = safeJsonParse<SAMLConfig>(
+					const parsedSamlConfig = safeJsonParse<SAMLConfig>(
 						provider.samlConfig,
 					);
 					if (!parsedSamlConfig) {
@@ -1133,7 +1133,7 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 					if (provider.samlConfig) {
-						const parsedSamlConfig: SAMLConfig =
+						const parsedSamlConfig =
 							typeof provider.samlConfig === "object"
 								? provider.samlConfig
 								: safeJsonParse<SAMLConfig>(
