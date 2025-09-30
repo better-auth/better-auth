@@ -1168,7 +1168,7 @@ Table Name: `oauthClient`
       name: "redirectUris",
       type: "string[]",
       description: "Array of of redirect uris",
-      isRequired: true
+      isRequired: true,
     },
     {
       name: "tokenEndpointAuthMethod",
@@ -1179,7 +1179,7 @@ Table Name: `oauthClient`
     {
       name: "grantTypes",
       type: "string[]",
-      description: "Array of supported grant types. Supports: ['authorization_code', 'authorization_code', 'refresh_token']",
+      description: "Array of supported grant types. Supports: ['authorization_code', 'client_credentials', 'refresh_token']",
       isOptional: true,
     },
     {

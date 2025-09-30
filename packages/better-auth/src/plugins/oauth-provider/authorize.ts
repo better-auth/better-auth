@@ -286,7 +286,12 @@ async function redirectWithAuthorizationCode(
 
 	const redirectUriWithCode = new URL(verificationValue.query.redirect_uri);
 	redirectUriWithCode.searchParams.set("code", code);
-	redirectUriWithCode.searchParams.set("state", verificationValue.query.state);
+	if (verificationValue.query.state) {
+		redirectUriWithCode.searchParams.set(
+			"state",
+			verificationValue.query.state,
+		);
+	}
 	return handleRedirect(ctx, redirectUriWithCode.toString());
 }
 

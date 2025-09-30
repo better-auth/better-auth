@@ -251,7 +251,7 @@ export const oauthProviderProtectedResourceMetadata = <
 
 	if (
 		opts?.externalScopes &&
-		(opts.overrides?.authorization_servers?.length ?? 0) > 1
+		(opts.overrides?.authorization_servers?.length ?? 0) <= 1
 	) {
 		throw new BetterAuthError(
 			"external scopes should not be provided with one authorization server",

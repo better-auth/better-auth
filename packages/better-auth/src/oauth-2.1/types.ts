@@ -313,6 +313,6 @@ export interface ResourceServerMetadata {
 	resource_tos_uri?: string;
 	tls_client_certificate_bound_access_tokens?: boolean;
 	authorization_details_types_supported?: string;
-	dpop_signing_alg_values_supported?: JWSAlgorithms;
+	dpop_signing_alg_values_supported?: JWSAlgorithms[];
 	dpop_bound_access_tokens_required?: boolean;
 }

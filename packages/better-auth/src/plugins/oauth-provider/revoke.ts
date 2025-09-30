@@ -149,7 +149,7 @@ async function revokeRefreshToken(
 	const refreshToken = await ctx.context.adapter.findOne<
 		OAuthRefreshToken & { id: string }
 	>({
-		model: "oauthRefreshToken",
+		model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
 		where: [
 			{
 				field: "token",

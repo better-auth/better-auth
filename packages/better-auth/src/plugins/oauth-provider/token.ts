@@ -371,7 +371,7 @@ async function createUserTokens(
 		isRefreshToken && !isJwtAccessToken
 			? await createRefreshToken(ctx, opts, user, client.clientId, scopes, {
 					iat,
-					exp,
+					exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
 					sid: sessionId,
 				})
 			: undefined;
@@ -399,7 +399,7 @@ async function createUserTokens(
 					scopes,
 					{
 						iat,
-						exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
+						exp,
 						sid: sessionId,
 					},
 					earlyRefreshToken?.id,
@@ -409,7 +409,7 @@ async function createUserTokens(
 			: isRefreshToken
 				? createRefreshToken(ctx, opts, user, client.clientId, scopes, {
 						iat,
-						exp,
+						exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
 						sid: sessionId,
 					})
 				: undefined,
