@@ -26,11 +26,7 @@ const { execute } = await testAdapter({
 	},
 	runMigrations: async (betterAuthOptions) => {},
 	tests: [
-		normalTestSuite({
-			disableTests: {
-				"update - should update a reference field": true,
-			},
-		}),
+		normalTestSuite(),
 		authFlowTestSuite(),
 		transactionsTestSuite(),
 		performanceTestSuite(),
