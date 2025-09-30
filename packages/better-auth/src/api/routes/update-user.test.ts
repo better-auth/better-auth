@@ -28,8 +28,7 @@ describe("updateUser", async () => {
 		},
 	});
 	// Sign in once for all tests in this describe block
-	const { runWithDefaultUser: globalRunWithClient } =
-		await signInWithTestUser();
+	const { runWithUser: globalRunWithClient } = await signInWithTestUser();
 
 	it("should update the user's name", async () => {
 		await globalRunWithClient(async () => {
@@ -358,8 +357,8 @@ describe("delete user", async () => {
 				},
 			},
 		});
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const res = await client.deleteUser();
 			console.log(res);
 		});
@@ -375,8 +374,8 @@ describe("delete user", async () => {
 				freshAge: 1000,
 			},
 		});
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const res = await client.deleteUser();
 			expect(res.data).toMatchObject({
 				success: true,
@@ -398,8 +397,8 @@ describe("delete user", async () => {
 				},
 			},
 		});
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const res = await client.deleteUser({
 				password: testUser.password,
 			});
