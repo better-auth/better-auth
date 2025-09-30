@@ -182,6 +182,34 @@ export async function authorize(
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const codeExpiresInMs = opts.codeExpiresIn * 1000;
 	const expiresAt = new Date(Date.now() + codeExpiresInMs);
+
+	// Determine if consent is required
+	// Consent is ALWAYS required unless:
+	// 1. The client is trusted (skipConsent = true)
+	// 2. The user has already consented and prompt is not "consent"
+	const skipConsentForTrustedClient = client.skipConsent;
+	const hasAlreadyConsented = await ctx.context.adapter
+		.findOne<{
+			consentGiven: boolean;
+		}>({
+			model: "oauthConsent",
+			where: [
+				{
+					field: "clientId",
+					value: client.clientId,
+				},
+				{
+					field: "userId",
+					value: session.user.id,
+				},
+			],
+		})
+		.then((res) => !!res?.consentGiven);
+
+	const requireConsent =
+		!skipConsentForTrustedClient &&
+		(!hasAlreadyConsented || query.prompt === "consent");
+
 	try {
 		/**
 		 * Save the code in the database
@@ -195,19 +223,16 @@ export async function authorize(
 					userId: session.user.id,
 					authTime: new Date(session.session.createdAt).getTime(),
 					/**
-					 * If the prompt is set to `consent`, then we need
-					 * to require the user to consent to the scopes.
+					 * Consent is required per OIDC spec unless:
+					 * 1. Client is trusted (skipConsent = true)
+					 * 2. User has already consented (and prompt is not "consent")
 					 *
-					 * This means the code now needs to be treated as a
-					 * consent request.
-					 *
-					 * once the user consents, the code will be updated
-					 * with the actual code. This is to prevent the
-					 * client from using the code before the user
-					 * consents.
+					 * When consent is required, the code needs to be treated as a
+					 * consent request. Once the user consents, the code will be
+					 * updated with the actual authorization code.
 					 */
-					requireConsent: query.prompt === "consent",
-					state: query.prompt === "consent" ? query.state : null,
+					requireConsent,
+					state: requireConsent ? query.state : null,
 					codeChallenge: query.code_challenge,
 					codeChallengeMethod: query.code_challenge_method,
 					nonce: query.nonce,
@@ -227,40 +252,15 @@ export async function authorize(
 		);
 	}
 
-	const redirectURIWithCode = new URL(redirectURI);
-	redirectURIWithCode.searchParams.set("code", code);
-	redirectURIWithCode.searchParams.set("state", ctx.query.state);
-
-	if (query.prompt !== "consent") {
+	// If consent is not required, redirect with the code immediately
+	if (!requireConsent) {
+		const redirectURIWithCode = new URL(redirectURI);
+		redirectURIWithCode.searchParams.set("code", code);
+		redirectURIWithCode.searchParams.set("state", ctx.query.state);
 		return handleRedirect(redirectURIWithCode.toString());
 	}
 
-	// Check if this is a trusted client that should skip consent
-	if (client.skipConsent) {
-		return handleRedirect(redirectURIWithCode.toString());
-	}
-
-	const hasAlreadyConsented = await ctx.context.adapter
-		.findOne<{
-			consentGiven: boolean;
-		}>({
-			model: "oauthConsent",
-			where: [
-				{
-					field: "clientId",
-					value: client.clientId,
-				},
-				{
-					field: "userId",
-					value: session.user.id,
-				},
-			],
-		})
-		.then((res) => !!res?.consentGiven);
-
-	if (hasAlreadyConsented) {
-		return handleRedirect(redirectURIWithCode.toString());
-	}
+	// Consent is required - redirect to consent page or show consent HTML
 
 	if (options?.consentPage) {
 		// Set cookie to support cookie-based consent flows

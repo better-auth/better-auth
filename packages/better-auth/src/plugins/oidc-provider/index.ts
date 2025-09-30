@@ -262,7 +262,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							return;
 						}
 						ctx.query = JSON.parse(cookie);
-						ctx.query!.prompt = "consent";
+						// Don't force prompt to "consent" - let the authorize function
+						// determine if consent is needed based on OIDC spec requirements
 						ctx.context.session = session;
 						const response = await authorize(ctx, opts);
 						return response;
@@ -320,7 +321,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					method: "POST",
 					body: z.object({
 						accept: z.boolean(),
-						consent_code: z.string().optional(),
+						consent_code: z.string().optional().nullish(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
