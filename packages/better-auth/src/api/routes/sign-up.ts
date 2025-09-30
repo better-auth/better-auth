@@ -8,7 +8,6 @@ import type {
 	BetterAuthOptions,
 	User,
 } from "../../types";
-import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
 import { runWithTransaction } from "../../context/transaction";
@@ -179,7 +178,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					image,
 					callbackURL,
 					rememberMe,
-					...additionalFields
+					...rest
 				} = body;
 				const isValidEmail = z.email().safeParse(email);
 
@@ -213,11 +212,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 					});
 				}
-
-				const additionalData = parseUserInput(
-					ctx.context.options,
-					additionalFields as any,
-				);
 				/**
 				 * Hash the password
 				 *
@@ -231,10 +225,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				try {
 					createdUser = await ctx.context.internalAdapter.createUser(
 						{
+							...rest,
 							email: email.toLowerCase(),
 							name,
 							image,
-							...additionalData,
 							emailVerified: false,
 						},
 						ctx,
@@ -283,13 +277,30 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					const url = `${
 						ctx.context.baseURL
 					}/verify-email?token=${token}&callbackURL=${body.callbackURL || "/"}`;
+
+					const args: Parameters<
+						Required<
+							Required<BetterAuthOptions>["emailVerification"]
+						>["sendVerificationEmail"]
+					> = ctx.request
+						? [
+								{
+									user: createdUser,
+									url,
+									token,
+								},
+								ctx.request,
+							]
+						: [
+								{
+									user: createdUser,
+									url,
+									token,
+								},
+							];
+
 					await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-						{
-							user: createdUser,
-							url,
-							token,
-						},
-						ctx.request,
+						...args,
 					);
 				}
 
