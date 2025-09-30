@@ -300,8 +300,8 @@ describe("Email Verification Secondary Storage", async () => {
 	});
 
 	it("should change email", async () => {
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async (headers) => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async (headers) => {
 			await auth.api.changeEmail({
 				body: {
 					newEmail: "new@email.com",
