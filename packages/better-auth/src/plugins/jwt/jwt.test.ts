@@ -1372,7 +1372,6 @@ describe("jwt", async () => {
 					const localJwks = createLocalJWKSet(jwks.data!);
 
 					const someData = { answer: 42 };
-					const now = Math.floor(Date.now() / 1000);
 
 					async function testJwtVerificationShouldFail(
 						claims: JwtCustomClaims,
@@ -1450,6 +1449,7 @@ describe("jwt", async () => {
 						payload: JWTPayload | null;
 						protectedHeader: JWTHeaderParameters;
 					}> {
+						const now = Math.floor(Date.now() / 1000);
 						const { payload, payloadCustom, payloadManual, protectedHeader } =
 							await verifyJwt(
 								auth,
@@ -1566,35 +1566,35 @@ describe("jwt", async () => {
 
 					it("Maximum Token Age tests", async () => {
 						await testJwtVerificationShouldFail(
-							{ iat: toJwtTime("-8 min", now) },
+							{ iat: toJwtTime("-8 min") },
 							"Failed to verify the JWT: the token has expired", //'Failed to verify the JWT: JWTExpired: "iat" claim timestamp check failed (too far in the past)',
 							{ maxTokenAge: "5 min" },
 						);
 						await testJwtVerificationShouldFail(
-							{ iat: toJwtTime("-8 min", now) },
+							{ iat: toJwtTime("-8 min") },
 							"Failed to verify the JWT", //"Failed to verify the JWT: TypeError: Invalid time period format",
 							{ maxTokenAge: "what is this? 5 week" },
 						);
 						await testJwtVerificationShouldSucceed(
-							{ iat: toJwtTime("-4 min", now) },
+							{ iat: toJwtTime("-4 min") },
 							{ maxTokenAge: "5 min" },
 						);
 						await testJwtVerificationShouldSucceed(
 							{
-								iat: toJwtTime("-2 weeks", now),
-								exp: toJwtTime("3 weeks", now),
+								iat: toJwtTime("-2 weeks"),
+								exp: toJwtTime("3 weeks"),
 							},
 							{ maxTokenAge: null },
 						);
 						await testJwtVerificationShouldFail(
 							{
-								iat: toJwtTime("-2 weeks", now),
-								exp: toJwtTime("3 weeks", now),
+								iat: toJwtTime("-2 weeks"),
+								exp: toJwtTime("3 weeks"),
 							},
 							"Failed to verify the JWT: the token has expired", //'Failed to verify the JWT: JWTExpired: "iat" claim timestamp check failed (too far in the past)',
 						);
 						await testJwtVerificationShouldFail(
-							{ iat: toJwtTime("-8 min", now) },
+							{ iat: toJwtTime("-8 min") },
 							"Failed to verify the JWT: the token has expired", //'Failed to verify the JWT: JWTExpired: "iat" claim timestamp check failed (too far in the past)',
 							{ maxTokenAge: "5 min" },
 						);
@@ -1662,7 +1662,7 @@ describe("jwt", async () => {
 							{ requiredClaims: ["nbf"] },
 						);
 						await testJwtVerificationShouldSucceed(
-							{ nbf: toJwtTime("5 min ago", now) },
+							{ nbf: toJwtTime("5 min ago") },
 							{ requiredClaims: ["nbf"] },
 						);
 					});
