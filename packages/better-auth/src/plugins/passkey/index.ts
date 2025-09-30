@@ -323,7 +323,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						},
 						ctx,
 					);
-					return ctx.json(options, {
+					return ctx.json({ data: options }, {
 						status: 200,
 					});
 				},
@@ -478,7 +478,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						},
 						ctx,
 					);
-					return ctx.json(options, {
+					return ctx.json({ data: options }, {
 						status: 200,
 					});
 				},
@@ -602,7 +602,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							model: "passkey",
 							data: newPasskey,
 						});
-						return ctx.json(newPasskeyRes, {
+						return ctx.json({ data: newPasskeyRes }, {
 							status: 200,
 						});
 					} catch (e) {
