@@ -94,6 +94,9 @@ export async function parseJwk(key: JWK): Promise<CryptoKeyIdAlg> {
  *
  * @param time - See options.jwt.expirationTime.
  * @param iat - The `iat` ("Issued At" JWT Claim) time to consolidate on.
+ *
+ * @throws {`TypeError`} - When the time period format is incorrect
+ *
  * @returns ISO seconds time
  */
 export function toJwtTime(time: number | Date | string, iat?: number): number {
@@ -108,27 +111,29 @@ export function toJwtTime(time: number | Date | string, iat?: number): number {
 
 /**
  * Makes sure `data` does not contain any of the *#RFC7519 JWT Claims*.
- *
- * @description The `data` is modified in place, there is no copy and this function does not return anything.
  */
-export function removeJwtClaims(
+export function withoutJwtClaims(
 	data: Record<string, unknown>,
 	logger?: Record<LogLevel, (...params: LogHandlerParams) => void>,
-): void {
+): Omit<
+	Record<string, unknown>,
+	"aud" | "exp" | "iat" | "iss" | "jti" | "nbf" | "sub"
+> {
 	const reservedClaims = ["aud", "exp", "iat", "iss", "jti", "nbf", "sub"];
 	const editableClaims = ["aud", "exp", "iat", "jti", "nbf", "sub"];
 
 	for (const claim of reservedClaims) {
 		if (data[claim] !== undefined) {
-			let warn: string = `Signing JWT: Removing "${claim}" field from the data to be signed (affects original record!). This is a reserved field.`;
+			let warn: string = `Signing JWT: Removing "${claim}" field from the data to be signed (does not modify original record). This is a reserved field.`;
 			if (editableClaims.includes(claim))
 				warn +=
-					' If you need to edit this JWT Claim, provide its override in "signJwt" function\'s "options.claims" argument.';
+					' If you need to edit this JWT Claim, provide its override in "signJwt" function\'s or "/sign-jwt" endpoint\'s "claims" argument.';
 			else
 				warn +=
 					' If you need to edit this field (unrecommended), sign the payload yourself with a key from "getJwk".';
 			logger?.warn(warn);
-			delete data[claim];
 		}
 	}
+	const { aud, exp, iat, iss, jti, nbf, sub, ...sanitizedData } = data;
+	return sanitizedData;
 }

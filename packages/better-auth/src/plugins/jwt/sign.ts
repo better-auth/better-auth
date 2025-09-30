@@ -11,7 +11,7 @@ import {
 	decryptPrivateKey,
 	getJwtPluginOptions,
 	isPrivateKeyEncrypted,
-	removeJwtClaims,
+	withoutJwtClaims,
 	toJwtTime,
 } from "./utils";
 import { importJWK, SignJWT } from "jose";
@@ -38,6 +38,7 @@ async function signJwtPayload(
 	ctx: GenericEndpointContext,
 	payload: JWTPayload,
 	pluginOpts?: JwtPluginOptions,
+	keyChain?: never,
 	jwk?: string | CryptoKeyIdAlg,
 	skipClaims?: { aud?: boolean; iat?: boolean; iss?: boolean; exp?: boolean },
 	customType?: string,
@@ -132,37 +133,30 @@ export async function signJwtInternal(
 	data: Record<string, unknown>,
 	pluginOpts?: JwtPluginOptions,
 	options?: {
+		keyChain?: never;
 		jwk?: string | CryptoKeyIdAlg;
 		claims?: JwtCustomClaims;
 	},
 ): Promise<string> {
 	const claims: JwtCustomClaims | undefined = options?.claims;
 	// Make sure user did not set any of the #RFC7519 JWT Claims in the data and remove them if present
-	removeJwtClaims(data, ctx.context.logger);
 
-	const payload: JWTPayload = data;
+	const payload: JWTPayload = withoutJwtClaims(data, ctx.context.logger);
+
+	const now = Math.floor(Date.now() / 1000);
+
 	if (claims?.aud) payload.aud = claims.aud;
-	if (claims?.exp) payload.exp = toJwtTime(claims.exp);
-	if (claims?.iat) {
-		const iat = toJwtTime(claims.iat);
-		const allowedClockSkew: number = pluginOpts?.jwt?.maxClockSkew ?? 60;
-		const now = Math.floor(Date.now() / 1000);
-		if (iat > now + allowedClockSkew)
-			throw new BetterAuthError(
-				`Failed to sign a JWT: Requested "Issued At" Claim is in the future ${iat} > ${now} ` +
-					`and it exceeds allowed leeway of ${allowedClockSkew} seconds`,
-				iat.toString(),
-			);
-		payload.iat = iat;
-	}
+	if (claims?.exp) payload.exp = toJwtTime(claims.exp, now);
+	if (claims?.iat) payload.iat = toJwtTime(claims.iat, now);
 	if (claims?.jti) payload.jti = claims.jti;
-	if (claims?.nbf) payload.nbf = toJwtTime(claims.nbf);
+	if (claims?.nbf) payload.nbf = toJwtTime(claims.nbf, now);
 	if (claims?.sub) payload.sub = claims.sub;
 
 	return await signJwtPayload(
 		ctx,
 		payload,
 		pluginOpts,
+		options?.keyChain,
 		options?.jwk,
 		{
 			aud: claims?.aud === null,
@@ -199,6 +193,7 @@ export async function signJwt(
 	ctx: GenericEndpointContext,
 	data: Record<string, unknown>,
 	options?: {
+		//keyChain?: never;
 		jwk?: string | CryptoKeyIdAlg;
 		claims?: JwtCustomClaims;
 	},
@@ -235,6 +230,7 @@ export async function signJwt(
 export async function getSessionJwtInternal(
 	ctx: GenericEndpointContext,
 	pluginOpts?: JwtPluginOptions,
+	keyChain?: never,
 	jwk?: string | CryptoKeyIdAlg,
 ): Promise<string> {
 	const session = ctx.context.session!;
@@ -243,13 +239,13 @@ export async function getSessionJwtInternal(
 		? await pluginOpts?.jwt?.defineSessionJwtData(session)
 		: session.user;
 
-	removeJwtClaims(payload, ctx.context.logger);
+	const sanitizedPayload = withoutJwtClaims(payload, ctx.context.logger);
 
-	payload.sub = pluginOpts?.jwt?.defineSessionJwtSubject
+	sanitizedPayload.sub = pluginOpts?.jwt?.defineSessionJwtSubject
 		? await pluginOpts?.jwt?.defineSessionJwtSubject(session)
 		: session.user.id;
 
-	return await signJwtPayload(ctx, payload, pluginOpts, jwk);
+	return await signJwtPayload(ctx, sanitizedPayload, pluginOpts, keyChain, jwk);
 }
 
 /**
@@ -272,7 +268,15 @@ export async function getSessionJwtInternal(
  */
 export async function getSessionJwt(
 	ctx: GenericEndpointContext,
-	jwk?: string | CryptoKeyIdAlg,
+	options?: {
+		//keyChain?: never;
+		jwk?: string | CryptoKeyIdAlg;
+	},
 ): Promise<string> {
-	return getSessionJwtInternal(ctx, getJwtPluginOptions(ctx.context), jwk);
+	return getSessionJwtInternal(
+		ctx,
+		getJwtPluginOptions(ctx.context),
+		undefined, //options?.keyChain,
+		options?.jwk,
+	);
 }
