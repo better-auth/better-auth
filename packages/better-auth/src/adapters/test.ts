@@ -5,7 +5,7 @@ import { generateId } from "../utils";
 interface AdapterTestOptions {
 	getAdapter: (
 		customOptions?: Omit<BetterAuthOptions, "database">,
-	) => Promise<Adapter>;
+	) => Promise<Adapter> | Adapter;
 	disableTests?: Partial<Record<keyof typeof adapterTests, boolean>>;
 	testPrefix?: string;
 }
