@@ -631,10 +631,10 @@ export type BetterAuthOptions = {
 		 */
 		fields?: Partial<Record<keyof OmitId<Account>, string>>;
 		/**
-		 * Additional fields for the user
+		 * Additional fields for the account
 		 */
 		additionalFields?: {
-			[key: string]: FieldAttribute;
+			[key: string]: DBFieldAttribute;
 		};
 		/**
 		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
