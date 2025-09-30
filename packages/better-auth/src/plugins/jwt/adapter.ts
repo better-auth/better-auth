@@ -89,9 +89,17 @@ export const getJwksAdapter = (adapter: Adapter) => {
 						key.id,
 					);
 			}
+			if (key.id === undefined)
+				return adapter.create<Omit<Jwk, "id">, Jwk>({
+					model: "jwks",
+					data: {
+						...key,
+						createdAt: new Date(),
+					},
+				});
 			return adapter.create<Jwk>({
 				model: "jwks",
-				forceAllowId: key.id !== undefined,
+				forceAllowId: true,
 				data: {
 					...key,
 					createdAt: new Date(),
