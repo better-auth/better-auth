@@ -77,7 +77,7 @@ describe("oauth", async () => {
 		auth: authorizationServer,
 		signInWithTestUser,
 		customFetchImpl,
-		testUser,
+		cookieSetter,
 	} = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -221,6 +221,7 @@ describe("oauth", async () => {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
+		const headers = new Headers();
 		const data = await client.signIn.oauth2(
 			{
 				providerId,
@@ -228,6 +229,7 @@ describe("oauth", async () => {
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		expect(data.url).toContain(
@@ -248,6 +250,7 @@ describe("oauth", async () => {
 		let callbackUrl = "";
 		await client.$fetch(redirectUriResponse, {
 			method: "GET",
+			headers,
 			onError(context) {
 				callbackUrl = context.response.headers.get("Location") || "";
 			},
@@ -272,6 +275,7 @@ describe("oauth", async () => {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
+		const headers = new Headers();
 		const data = await client.signIn.oauth2(
 			{
 				providerId,
@@ -279,6 +283,7 @@ describe("oauth", async () => {
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		expect(data.url).toContain(
@@ -299,6 +304,7 @@ describe("oauth", async () => {
 		let callbackURL = "";
 		await client.$fetch(redirectUriResponse, {
 			method: "GET",
+			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
@@ -494,6 +500,7 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
+		const oauthHeaders = new Headers();
 		const data = await client.signIn.oauth2(
 			{
 				providerId,
@@ -501,6 +508,7 @@ describe("oauth - prompt", async () => {
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(oauthHeaders),
 			},
 		);
 		expect(data.url).toContain(
@@ -549,9 +557,9 @@ describe("oauth - prompt", async () => {
 		let callbackURL = "";
 		await client.$fetch(res.redirect_uri, {
 			method: "GET",
+			headers: oauthHeaders,
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
-				cookieSetter(newHeaders)(context);
 			},
 		});
 		expect(callbackURL).toContain("/success");
@@ -576,6 +584,7 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
+		const oauthHeaders = new Headers();
 		const data = await client.signIn.oauth2(
 			{
 				providerId,
@@ -583,6 +592,7 @@ describe("oauth - prompt", async () => {
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(oauthHeaders),
 			},
 		);
 		expect(data.url).toContain(
@@ -608,6 +618,8 @@ describe("oauth - prompt", async () => {
 		// Code exchange should be successful
 		let callbackURL = "";
 		await client.$fetch(callbackRedirectUrl, {
+			method: "GET",
+			headers: oauthHeaders,
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
@@ -734,7 +746,8 @@ describe("oauth - config", () => {
 			oauthClient = createdClient;
 
 			// The RP (Relying Party) - the client application
-			const { customFetchImpl: customFetchImplRP } = await createTestInstance();
+			const { customFetchImpl: customFetchImplRP, cookieSetter } =
+				await createTestInstance();
 
 			const client = createAuthClient({
 				plugins: [genericOAuthClient()],
@@ -743,6 +756,7 @@ describe("oauth - config", () => {
 					customFetchImpl: customFetchImplRP,
 				},
 			});
+			const oauthHeaders = new Headers();
 			const data = await client.signIn.oauth2(
 				{
 					providerId: "test",
@@ -750,6 +764,7 @@ describe("oauth - config", () => {
 				},
 				{
 					throw: true,
+					onSuccess: cookieSetter(oauthHeaders),
 				},
 			);
 			expect(data.url).toContain(
@@ -769,6 +784,8 @@ describe("oauth - config", () => {
 
 			let callbackURL = "";
 			await client.$fetch(redirectUriResponse, {
+				method: "GET",
+				headers: oauthHeaders,
 				onError(context) {
 					callbackURL = context.response.headers.get("Location") || "";
 				},
@@ -788,6 +805,7 @@ describe("oauth - config", () => {
 				auth: authorizationServer,
 				signInWithTestUser,
 				customFetchImpl,
+				cookieSetter,
 			} = await getTestInstance({
 				baseURL: authServerBaseUrl,
 				plugins: [
@@ -840,6 +858,7 @@ describe("oauth - config", () => {
 					customFetchImpl: customFetchImplRP,
 				},
 			});
+			const oauthHeaders = new Headers();
 			const data = await client.signIn.oauth2(
 				{
 					providerId: "test",
@@ -847,6 +866,7 @@ describe("oauth - config", () => {
 				},
 				{
 					throw: true,
+					onSuccess: cookieSetter(oauthHeaders),
 				},
 			);
 			expect(data.url).toContain(
@@ -866,6 +886,8 @@ describe("oauth - config", () => {
 
 			let callbackURL = "";
 			await client.$fetch(redirectUriResponse, {
+				method: "GET",
+				headers: oauthHeaders,
 				onError(context) {
 					callbackURL = context.response.headers.get("Location") || "";
 				},
@@ -891,6 +913,7 @@ describe("oauth - config", () => {
 				: "https://api.example.com";
 			const {
 				auth: authorizationServer,
+				cookieSetter,
 				signInWithTestUser,
 				customFetchImpl,
 			} = await getTestInstance({
@@ -963,7 +986,7 @@ describe("oauth - config", () => {
 					customFetchImpl: customFetchImplRP,
 				},
 			});
-
+			const oauthHeaders = new Headers();
 			const data = await client.signIn.oauth2(
 				{
 					providerId: "test",
@@ -971,6 +994,7 @@ describe("oauth - config", () => {
 				},
 				{
 					throw: true,
+					onSuccess: cookieSetter(oauthHeaders),
 				},
 			);
 			expect(data.url).toContain(`${authServerUrl}/oauth2/authorize`);
@@ -989,6 +1013,8 @@ describe("oauth - config", () => {
 			let authToken: string | undefined;
 			let callbackURL: string | undefined;
 			await client.$fetch(redirectUriResponse, {
+				method: "GET",
+				headers: oauthHeaders,
 				onError(context) {
 					callbackURL = context.response.headers.get("Location") ?? undefined;
 					authToken =
