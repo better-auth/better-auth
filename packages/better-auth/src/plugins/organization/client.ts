@@ -119,7 +119,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				members: InferMember<CO, false>[];
 				invitations: InferInvitation<CO>[];
 				teams: InferTeam<CO, false>[];
-			} & InferOrganization<CO>
+			} & InferOrganization<CO, false>
 		: {
 				members: InferMember<CO, false>[];
 				invitations: InferInvitation<CO>[];
