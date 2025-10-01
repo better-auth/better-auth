@@ -6,7 +6,7 @@ export type EndpointMatcherFn = (url: string) => boolean;
 
 export interface BaseCaptchaOptions {
 	secretKey: string;
-	endpoints?: Array<string | EndpointMatcherFn>;
+	endpoints?: (string | EndpointMatcherFn)[];
 	siteVerifyURLOverride?: string;
 }
 
