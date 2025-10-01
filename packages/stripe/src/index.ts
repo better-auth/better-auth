@@ -1299,10 +1299,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							create: {
 								async after(user, ctx) {
 									if (ctx && options.createCustomerOnSignUp) {
-
-										let options_override = {};
+										let optionsOverride = {};
 										if (options.getCustomerCreateParams) {
-											options_override = await options.getCustomerCreateParams(
+											optionsOverride = await options.getCustomerCreateParams(
 												{ user, session: null },
 												ctx,
 											);
@@ -1314,7 +1313,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 											metadata: {
 												userId: user.id,
 											},
-											...options_override,
+											...optionsOverride,
 										});
 										await ctx.context.internalAdapter.updateUser(user.id, {
 											stripeCustomerId: stripeCustomer.id,
