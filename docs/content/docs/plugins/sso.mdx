@@ -697,6 +697,8 @@ The plugin automatically creates the following SAML endpoints:
 - **SP Metadata**: `/api/auth/sso/saml2/sp/metadata?providerId={providerId}`
 - **SAML Callback**: `/api/auth/sso/saml2/callback/{providerId}`
 
+For a detailed guide on setting up SAML SSO with examples for Okta and testing with DummyIDP, see our [SAML SSO Setup Guide](/docs/guides/sso-saml-guide).
+
 ## Schema
 
 The plugin requires additional fields in the `ssoProvider` table to store the provider's configuration.
@@ -717,7 +719,55 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
     ]}
 />
 
-For a detailed guide on setting up SAML SSO with examples for Okta and testing with DummyIDP, see our [SAML SSO Setup Guide](/docs/guides/sso-saml-guide).
+### Extending the `ssoProvider` schema
+
+You can customize the underlying table via the `schema.ssoProvider` option. This lets you:
+
+- Override column names for built‑in fields using `fields`
+- Provide a custom table name via `modelName`
+- Add your own columns with `additionalFields`
+
+Each additional field uses the same `FieldAttribute` structure as other Better Auth plugins. You can specify `type`, `required`, `defaultValue`, `input`, `returned`, `unique`, `references`, validators, and more.
+
+#### Example: Adding environment and region columns
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+export const auth = betterAuth({
+    plugins: [
+        sso({
+            schema: {
+                ssoProvider: {
+                    modelName: "singleSignOnProvider", // optional table name override
+                    fields: {
+                        providerId: "provider_id", // map column name
+                    },
+                    additionalFields: {
+                        environment: {
+                            type: "string",
+                            required: true,
+                            defaultValue: "prod", // auto-filled on create
+                        },
+                        region: {
+                            type: "string",
+                            required: false,
+                        },
+                    },
+                },
+            },
+        }),
+    ],
+});
+```
+
+Once added, the inferred type for an SSO provider is augmented. You can access it via the plugin inference helper:
+
+```ts
+type MySSOProvider = typeof auth.$Infer.SSOProvider;
+// has environment (string) and region?: string
+```
 
 ## Provider Domain Configuration
 
