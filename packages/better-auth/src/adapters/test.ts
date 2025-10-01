@@ -50,6 +50,8 @@ const adapterTests = {
 	SHOULD_ROLLBACK_FAILING_TRANSACTION: "should rollback failing transaction",
 	SHOULD_RETURN_TRANSACTION_RESULT: "should return transaction result",
 	SHOULD_FIND_MANY_WITH_CONNECTORS: "should find many with connectors",
+	SHOULD_COUNT_ALL: "should count all",
+	SHOULD_COUNT_WITH_WHERE: "should count with where",
 } as const;
 
 const { ...numberIdAdapterTestsCopy } = adapterTests;
@@ -1041,6 +1043,65 @@ function adapterTest(
 				],
 			});
 			expect(orRes.length).toBe(2);
+		},
+	);
+
+	test.skipIf(disabledTests?.SHOULD_COUNT_ALL)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.SHOULD_COUNT_ALL}`,
+		async ({ onTestFailed }) => {
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
+			});
+			const initialCount = await (await adapter()).count({ model: "user" });
+			await (await adapter()).create({
+				model: "user",
+				data: {
+					name: "count-all-1",
+					email: getUniqueEmail("count-all-1@email.com"),
+				},
+			});
+			await (await adapter()).create({
+				model: "user",
+				data: {
+					name: "count-all-2",
+					email: getUniqueEmail("count-all-2@email.com"),
+				},
+			});
+			const finalCount = await (await adapter()).count({ model: "user" });
+			expect(finalCount).toBe(initialCount + 2);
+		},
+	);
+
+	test.skipIf(disabledTests?.SHOULD_COUNT_WITH_WHERE)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_COUNT_WITH_WHERE
+		}`,
+		async ({ onTestFailed }) => {
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
+			});
+			const user1Email = getUniqueEmail("count-where-1@email.com");
+			await (await adapter()).create({
+				model: "user",
+				data: {
+					name: "count-where",
+					email: user1Email,
+				},
+			});
+			await (await adapter()).create({
+				model: "user",
+				data: {
+					name: "count-where",
+					email: getUniqueEmail("count-where-2@email.com"),
+				},
+			});
+			const count = await (await adapter()).count({
+				model: "user",
+				where: [{ field: "email", value: user1Email }],
+			});
+			expect(count).toBe(1);
 		},
 	);
 }
