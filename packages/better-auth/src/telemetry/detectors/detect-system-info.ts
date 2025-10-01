@@ -148,7 +148,7 @@ async function isDocker() {
 async function isWsl() {
 	try {
 		if (getVendor() === "cloudflare") return false;
-		if (typeof process === "undefined" || process.platform !== "linux") {
+		if (typeof process === "undefined" || process?.platform !== "linux") {
 			return false;
 		}
 		const fs = await importRuntime<typeof import("fs")>("fs");

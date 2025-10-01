@@ -15,10 +15,8 @@ export type { AsyncLocalStorage };
 let moduleName: string = "node:async_hooks";
 
 const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage> = import(
-	/**
-	 * @webpackIgnore: true
-	 * @vite-ignore
-	 */
+	/* @vite-ignore */
+	/* webpackIgnore: true */
 	moduleName
 )
 	.then((mod) => mod.AsyncLocalStorage)
