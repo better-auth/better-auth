@@ -1298,7 +1298,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						user: {
 							create: {
 								async after(user, ctx) {
-									if (ctx && options.createCustomerOnSignUp) {
+									if (ctx && options.createCustomerOnSignUp && !user.isAnonymous) {
 										const stripeCustomer = await client.customers.create({
 											email: user.email,
 											name: user.name,
