@@ -15,9 +15,6 @@ import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { setSessionCookie } from "../../cookies";
-import { mergeSchema } from "../../db";
-import { schema } from "./schema";
-
 export interface SSOOptions {
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
