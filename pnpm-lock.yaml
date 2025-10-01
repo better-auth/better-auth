@@ -15025,6 +15025,161 @@ snapshots:
       - utf-8-validate
     optional: true
 
+  '@expo/cli@54.0.8(expo-router@6.0.8)(expo@54.0.10)(graphql@16.11.0)(react-native@0.81.4(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.1.12)(react@19.1.0))':
+    dependencies:
+      '@0no-co/graphql.web': 1.2.0(graphql@16.11.0)
+      '@expo/code-signing-certificates': 0.0.5
+      '@expo/config': 12.0.9
+      '@expo/config-plugins': 54.0.1
+      '@expo/devcert': 1.2.0
+      '@expo/env': 2.0.7
+      '@expo/image-utils': 0.8.7
+      '@expo/json-file': 10.0.7
+      '@expo/mcp-tunnel': 0.0.8
+      '@expo/metro': 54.0.0
+      '@expo/metro-config': 54.0.5(expo@54.0.10)
+      '@expo/osascript': 2.3.7
+      '@expo/package-manager': 1.9.8
+      '@expo/plist': 0.4.7
+      '@expo/prebuild-config': 54.0.3(expo@54.0.10)
+      '@expo/schema-utils': 0.1.7
+      '@expo/server': 0.7.5
+      '@expo/spawn-async': 1.7.2
+      '@expo/ws-tunnel': 1.0.6
+      '@expo/xcpretty': 4.3.2
+      '@react-native/dev-middleware': 0.81.4
+      '@urql/core': 5.2.0(graphql@16.11.0)
+      '@urql/exchange-retry': 1.3.2(@urql/core@5.2.0(graphql@16.11.0))
+      accepts: 1.3.8
+      arg: 5.0.2
+      better-opn: 3.0.2
+      bplist-creator: 0.1.0
+      bplist-parser: 0.3.2
+      chalk: 4.1.2
+      ci-info: 3.9.0
+      compression: 1.8.1
+      connect: 3.7.0
+      debug: 4.4.1
+      env-editor: 0.4.2
+      expo: 54.0.10(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.8)(graphql@16.11.0)(react-native@0.81.4(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.1.12)(react@19.1.0))(react@19.1.0)
+      freeport-async: 2.0.0
+      getenv: 2.0.0
+      glob: 10.4.5
+      lan-network: 0.1.7
+      minimatch: 9.0.5
+      node-forge: 1.3.1
+      npm-package-arg: 11.0.3
+      ora: 3.4.0
+      picomatch: 3.0.1
+      pretty-bytes: 5.6.0
+      pretty-format: 29.7.0
+      progress: 2.0.3
+      prompts: 2.4.2
+      qrcode-terminal: 0.11.0
+      require-from-string: 2.0.2
+      requireg: 0.2.2
+      resolve: 1.22.10
+      resolve-from: 5.0.0
+      resolve.exports: 2.0.3
+      semver: 7.7.2
+      send: 0.19.1
+      slugify: 1.6.6
+      source-map-support: 0.5.21
+      stacktrace-parser: 0.1.11
+      structured-headers: 0.4.1
+      tar: 7.4.3
+      terminal-link: 2.1.1
+      undici: 6.21.3
+      wrap-ansi: 7.0.0
+      ws: 8.18.3
+    optionalDependencies:
+      expo-router: 6.0.8(e70a043d30323b1c09f8b80fafc503e8)
+      react-native: 0.81.4(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.1.12)(react@19.1.0)
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - bufferutil
+      - graphql
+      - supports-color
+      - utf-8-validate
+
+  '@expo/cli@54.0.8(expo-router@6.0.8)(expo@54.0.10)(graphql@16.11.0)(react-native@0.81.4(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.1.12)(react@19.1.1))':
+    dependencies:
+      '@0no-co/graphql.web': 1.2.0(graphql@16.11.0)
+      '@expo/code-signing-certificates': 0.0.5
+      '@expo/config': 12.0.9
+      '@expo/config-plugins': 54.0.1
+      '@expo/devcert': 1.2.0
+      '@expo/env': 2.0.7
+      '@expo/image-utils': 0.8.7
+      '@expo/json-file': 10.0.7
+      '@expo/mcp-tunnel': 0.0.8
+      '@expo/metro': 54.0.0
+      '@expo/metro-config': 54.0.5(expo@54.0.10)
+      '@expo/osascript': 2.3.7
+      '@expo/package-manager': 1.9.8
+      '@expo/plist': 0.4.7
+      '@expo/prebuild-config': 54.0.3(expo@54.0.10)
+      '@expo/schema-utils': 0.1.7
+      '@expo/server': 0.7.5
+      '@expo/spawn-async': 1.7.2
+      '@expo/ws-tunnel': 1.0.6
+      '@expo/xcpretty': 4.3.2
+      '@react-native/dev-middleware': 0.81.4
+      '@urql/core': 5.2.0(graphql@16.11.0)
+      '@urql/exchange-retry': 1.3.2(@urql/core@5.2.0(graphql@16.11.0))
+      accepts: 1.3.8
+      arg: 5.0.2
+      better-opn: 3.0.2
+      bplist-creator: 0.1.0
+      bplist-parser: 0.3.2
+      chalk: 4.1.2
+      ci-info: 3.9.0
+      compression: 1.8.1
+      connect: 3.7.0
+      debug: 4.4.1
+      env-editor: 0.4.2
+      expo: 54.0.10(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.8)(graphql@16.11.0)(react-native@0.81.4(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.1.12)(react@19.1.1))(react@19.1.1)
+      freeport-async: 2.0.0
+      getenv: 2.0.0
+      glob: 10.4.5
+      lan-network: 0.1.7
+      minimatch: 9.0.5
+      node-forge: 1.3.1
+      npm-package-arg: 11.0.3
+      ora: 3.4.0
+      picomatch: 3.0.1
+      pretty-bytes: 5.6.0
+      pretty-format: 29.7.0
+      progress: 2.0.3
+      prompts: 2.4.2
+      qrcode-terminal: 0.11.0
+      require-from-string: 2.0.2
+      requireg: 0.2.2
+      resolve: 1.22.10
+      resolve-from: 5.0.0
+      resolve.exports: 2.0.3
+      semver: 7.7.2
+      send: 0.19.1
+      slugify: 1.6.6
+      source-map-support: 0.5.21
+      stacktrace-parser: 0.1.11
+      structured-headers: 0.4.1
+      tar: 7.4.3
+      terminal-link: 2.1.1
+      undici: 6.21.3
+      wrap-ansi: 7.0.0
+      ws: 8.18.3
+    optionalDependencies:
+      expo-router: 6.0.8(b6c171666c32adf37b0749411192e587)
+      react-native: 0.81.4(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.1.12)(react@19.1.1)
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - bufferutil
+      - graphql
+      - supports-color
+      - utf-8-validate
+    optional: true
+
   '@expo/code-signing-certificates@0.0.5':
     dependencies:
       node-forge: 1.3.1
@@ -15273,6 +15428,25 @@ snapshots:
     optionalDependencies:
       react-dom: 19.1.1(react@19.1.1)
     optional: true
+
+  '@expo/metro@54.0.0':
+    dependencies:
+      metro: 0.83.1
+      metro-babel-transformer: 0.83.1
+      metro-cache: 0.83.1
+      metro-cache-key: 0.83.1
+      metro-config: 0.83.1
+      metro-core: 0.83.1
+      metro-file-map: 0.83.1
+      metro-resolver: 0.83.1
+      metro-runtime: 0.83.1
+      metro-source-map: 0.83.1
+      metro-transform-plugins: 0.83.1
+      metro-transform-worker: 0.83.1
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
 
   '@expo/metro@54.0.0':
     dependencies:

@@ -96,19 +96,6 @@ export async function parseState(c: GenericEndpointContext) {
 	if (!parsedData.errorURL) {
 		parsedData.errorURL = `${c.context.baseURL}/error`;
 	}
-	const stateCookie = c.context.createAuthCookie("state");
-	const stateCookieValue = await c.getSignedCookie(
-		stateCookie.name,
-		c.context.secret,
-	);
-	if (!stateCookieValue || stateCookieValue !== state) {
-		const errorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-		throw c.redirect(`${errorURL}?error=state_mismatch`);
-	}
-	c.setCookie(stateCookie.name, "", {
-		maxAge: 0,
-	});
 	if (parsedData.expiresAt < Date.now()) {
 		await c.context.internalAdapter.deleteVerificationValue(data.id);
 		const errorURL =
