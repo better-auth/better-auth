@@ -101,7 +101,16 @@ export async function parseState(c: GenericEndpointContext) {
 		stateCookie.name,
 		c.context.secret,
 	);
-	if (!stateCookieValue || stateCookieValue !== state) {
+	/**
+	 * This is generally cause security issue and should only be used in
+	 * dev or staging environments. It's currently used by the oauth-proxy
+	 * plugin
+	 */
+	const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
+	if (
+		!skipStateCookieCheck &&
+		(!stateCookieValue || stateCookieValue !== state)
+	) {
 		const errorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 		throw c.redirect(`${errorURL}?error=state_mismatch`);

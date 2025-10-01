@@ -11,33 +11,9 @@
     "verbatimModuleSyntax": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false,
-    "declaration": true,
-    "emitDeclarationOnly": true,
-    "composite": true,
     "incremental": true,
     "noErrorTruncation": true,
-    "types": ["node", "bun"],
-    "paths": {
-      "better-auth": ["./packages/better-auth/src"],
-      "better-auth/*": ["./packages/better-auth/src/*"]
-    }
+    "types": ["node", "bun"]
   },
-  "references": [
-    {
-      "path": "./packages/better-auth"
-    },
-    {
-      "path": "./packages/cli"
-    },
-    {
-      "path": "./packages/expo"
-    },
-    {
-      "path": "./packages/sso"
-    },
-    {
-      "path": "./packages/stripe"
-    }
-  ],
   "exclude": ["**/dist/**", "**/node_modules/**"]
 }

@@ -2,8 +2,7 @@
   "name": "@better-auth/root",
   "private": true,
   "type": "module",
-  "version": "0.0.2-beta.8",
-  "packageManager": "pnpm@10.15.0",
+  "packageManager": "pnpm@10.17.1",
   "scripts": {
     "build": "turbo --filter \"./packages/*\" build",
     "dev": "turbo --filter \"./packages/*\" dev",
@@ -19,7 +18,7 @@
     "test": "turbo --filter \"./packages/*\" test",
     "e2e:smoke": "turbo --filter \"./e2e/*\" e2e:smoke",
     "e2e:integration": "turbo --filter \"./e2e/*\" e2e:integration",
-    "typecheck": "tsc -b --verbose --diagnostics"
+    "typecheck": "turbo --filter \"./packages/*\" typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.4",
