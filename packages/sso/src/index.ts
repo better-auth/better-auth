@@ -1594,8 +1594,9 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 					const parsedSamlConfig = safeJsonParse<SAMLConfig>(
-						provider.samlConfig as unknown as string,
+						provider.samlConfig,
 					);
+
 					if (!parsedSamlConfig) {
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid SAML configuration",
