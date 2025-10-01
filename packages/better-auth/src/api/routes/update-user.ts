@@ -10,7 +10,6 @@ import {
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
 import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
-import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../middlewares";
@@ -99,17 +98,12 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					status: true,
 				});
 			}
-			const additionalFields = parseUserInput(
-				ctx.context.options,
-				rest,
-				"update",
-			);
 			const user = await ctx.context.internalAdapter.updateUser(
 				session.user.id,
 				{
 					name,
 					image,
-					...additionalFields,
+					...rest,
 				},
 				ctx,
 			);

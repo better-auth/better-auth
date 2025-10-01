@@ -1,44 +1,16 @@
-import type { AsyncLocalStorage } from "node:async_hooks";
+import {
+	getAsyncLocalStorage,
+	type AsyncLocalStorage,
+} from "@better-auth/core/async_hooks";
 import type { Adapter } from "../types";
 
-/**
- * Dynamically import AsyncLocalStorage to avoid issues in environments where it's not available.
- *
- * Right now, this is primarily for Cloudflare Workers.
- *
- * We will directly import 'node:async_hooks' in the next major release.
- */
-let moduleName: string = "node:async_hooks";
-const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage> = import(
-	moduleName
-)
-	.then((mod) => mod.AsyncLocalStorage)
-	.catch((err) => {
-		if ("AsyncLocalStorage" in globalThis) {
-			return (globalThis as any).AsyncLocalStorage;
-		}
-		console.warn(
-			"[better-auth] Warning: AsyncLocalStorage is not available in this environment. Some features may not work as expected.",
-		);
-		console.warn(
-			"[better-auth] Please read more about this warning at https://better-auth.com/docs/installation#mount-handler",
-		);
-		console.warn(
-			"[better-auth] If you are using Cloudflare Workers, please see: https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag",
-		);
-		throw err;
-	});
-
-/**
- * @internal
- */
 let currentAdapterAsyncStorage: AsyncLocalStorage<
 	Omit<Adapter, "transaction">
 > | null = null;
 
 const ensureAsyncStorage = async () => {
 	if (!currentAdapterAsyncStorage) {
-		const AsyncLocalStorage = await AsyncLocalStoragePromise;
+		const AsyncLocalStorage = await getAsyncLocalStorage();
 		currentAdapterAsyncStorage = new AsyncLocalStorage();
 	}
 	return currentAdapterAsyncStorage;
