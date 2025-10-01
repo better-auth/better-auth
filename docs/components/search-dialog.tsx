@@ -57,15 +57,6 @@ export function CustomSearchDialog(props: SharedProps) {
 					<SearchDialogHeader>
 						<SearchDialogIcon />
 						<SearchDialogInput />
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={handleAskAIClick}
-							className="flex items-center gap-2 mr-2 text-sm hover:bg-muted"
-						>
-							<Bot className="h-4 w-4" />
-							Ask AI
-						</Button>
 						<SearchDialogClose className="hidden md:block" />
 					</SearchDialogHeader>
 					<SearchDialogList
