@@ -132,6 +132,8 @@ export const requestPasswordReset = createAuthEndpoint(
 		);
 		return ctx.json({
 			status: true,
+			message:
+				"If this email exists in our system, check your email for the reset link",
 		});
 	},
 );
