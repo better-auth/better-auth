@@ -65,7 +65,7 @@ import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 import type { OrganizationOptions } from "./types";
-import type { DBFieldAttribute, FieldAttribute } from "../../db";
+import type { DBFieldAttribute } from "../../db";
 
 export function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
