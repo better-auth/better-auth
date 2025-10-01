@@ -201,8 +201,7 @@ function Message({
 					"mb-2 text-sm font-medium text-fd-muted-foreground",
 					message.role === "assistant" && "text-fd-primary",
 				)}
-			>
-			</p>
+			></p>
 			<div className="prose text-sm">
 				<Markdown text={message.content} />
 				{message.isStreaming && (
@@ -447,7 +446,10 @@ export function AISearchTrigger() {
 					body: JSON.stringify(fetchReferencesBody),
 				});
 
-				if (referencesData?.references && referencesData.references.length > 0) {
+				if (
+					referencesData?.references &&
+					referencesData.references.length > 0
+				) {
 					const filteredReferences = referencesData.references.filter(
 						(ref) => !ref.link.includes("github.com"),
 					);

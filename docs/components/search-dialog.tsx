@@ -15,8 +15,6 @@ import {
 import { useDocsSearch } from "fumadocs-core/search/client";
 import { OramaClient } from "@oramacloud/client";
 import { useI18n } from "fumadocs-ui/contexts/i18n";
-import { Button } from "@/components/ui/button";
-import { Bot } from "lucide-react";
 import { AIChatModal, aiChatModalAtom } from "./ai-chat-modal";
 import { useAtom } from "jotai";
 
