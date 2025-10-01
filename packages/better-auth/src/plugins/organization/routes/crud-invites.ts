@@ -7,7 +7,7 @@ import {
 	type InferInvitation,
 	type InferOrganizationRolesFromOption,
 	type Invitation,
-  type Member,
+	type Member,
 } from "../schema";
 import { APIError } from "better-call";
 import { parseRoles } from "../organization";
