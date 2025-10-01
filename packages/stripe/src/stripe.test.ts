@@ -17,6 +17,16 @@ describe("stripe", async () => {
 		},
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_mock123" }),
+			list: vi.fn().mockResolvedValue({ data: [] }),
+			retrieve: vi.fn().mockResolvedValue({
+				id: "cus_mock123",
+				email: "test@email.com",
+				deleted: false,
+			}),
+			update: vi.fn().mockResolvedValue({
+				id: "cus_mock123",
+				email: "newemail@example.com",
+			}),
 		},
 		checkout: {
 			sessions: {
@@ -1188,6 +1198,141 @@ describe("stripe", async () => {
 		expect(hasTrialData).toBe(true);
 	});
 
+	it("should upgrade existing subscription instead of creating new one", async () => {
+		// Reset mocks for this test
+		vi.clearAllMocks();
+
+		// Create a user
+		const userRes = await authClient.signUp.email(
+			{ ...testUser, email: "upgrade-existing@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{ ...testUser, email: "upgrade-existing@email.com" },
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		// Mock customers.list to find existing customer
+		mockStripe.customers.list.mockResolvedValueOnce({
+			data: [{ id: "cus_test_123" }],
+		});
+
+		// First create a starter subscription
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		// Simulate the subscription being active
+		const starterSub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				stripeSubscriptionId: "sub_active_test_123",
+				stripeCustomerId: "cus_mock123", // Use the same customer ID as the mock
+			},
+			where: [
+				{
+					field: "id",
+					value: starterSub!.id,
+				},
+			],
+		});
+
+		// Also update the user with the Stripe customer ID
+		await ctx.adapter.update({
+			model: "user",
+			update: {
+				stripeCustomerId: "cus_mock123",
+			},
+			where: [
+				{
+					field: "id",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Mock Stripe subscriptions.list to return the active subscription
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_active_test_123",
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_test_123",
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		// Clear mock calls before the upgrade
+		mockStripe.checkout.sessions.create.mockClear();
+		mockStripe.billingPortal.sessions.create.mockClear();
+
+		// Now upgrade to premium plan - should use billing portal to update existing subscription
+		const upgradeRes = await authClient.subscription.upgrade({
+			plan: "premium",
+			fetchOptions: { headers },
+		});
+
+		// Verify that billing portal was called (indicating update, not new subscription)
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				customer: "cus_mock123",
+				flow_data: expect.objectContaining({
+					type: "subscription_update_confirm",
+					subscription_update_confirm: expect.objectContaining({
+						subscription: "sub_active_test_123",
+					}),
+				}),
+			}),
+		);
+
+		// Should not create a new checkout session
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+
+		// Verify the response has a redirect URL
+		expect(upgradeRes.data?.url).toBe("https://billing.stripe.com/mock");
+		expect(upgradeRes.data?.redirect).toBe(true);
+
+		// Verify no new subscription was created in the database
+		const allSubs = await ctx.adapter.findMany<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+		expect(allSubs).toHaveLength(1); // Should still have only one subscription
+	});
+
 	it("should prevent multiple free trials across different plans", async () => {
 		// Create a user
 		const userRes = await authClient.signUp.email(
@@ -1279,5 +1424,76 @@ describe("stripe", async () => {
 			return hadTrial;
 		});
 		expect(hasEverTrialed).toBe(true);
+	});
+
+	it("should update stripe customer email when user email changes", async () => {
+		// Setup mock for customer retrieve and update
+		mockStripe.customers.retrieve = vi.fn().mockResolvedValue({
+			id: "cus_mock123",
+			email: "test@email.com",
+			deleted: false,
+		});
+		mockStripe.customers.update = vi.fn().mockResolvedValue({
+			id: "cus_mock123",
+			email: "newemail@example.com",
+		});
+
+		// Sign up a user
+		const userRes = await authClient.signUp.email(testUser, {
+			throw: true,
+		});
+
+		expect(userRes.user).toBeDefined();
+
+		// Verify customer was created during signup
+		expect(mockStripe.customers.create).toHaveBeenCalledWith({
+			email: testUser.email,
+			name: testUser.name,
+			metadata: {
+				userId: userRes.user.id,
+			},
+		});
+
+		// Clear mocks to track the update
+		vi.clearAllMocks();
+
+		// Re-setup the retrieve mock for the update flow
+		mockStripe.customers.retrieve = vi.fn().mockResolvedValue({
+			id: "cus_mock123",
+			email: "test@email.com",
+			deleted: false,
+		});
+		mockStripe.customers.update = vi.fn().mockResolvedValue({
+			id: "cus_mock123",
+			email: "newemail@example.com",
+		});
+
+		// Create a mock request context
+		const mockRequest = new Request("http://localhost:3000/api/test", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+			},
+		});
+
+		// Update the user's email using internal adapter (which triggers hooks)
+		await ctx.internalAdapter.updateUserByEmail(
+			testUser.email,
+			{
+				email: "newemail@example.com",
+			},
+			{
+				request: mockRequest,
+				context: ctx,
+			} as any,
+		);
+
+		// Verify that Stripe customer.retrieve was called
+		expect(mockStripe.customers.retrieve).toHaveBeenCalledWith("cus_mock123");
+
+		// Verify that Stripe customer.update was called with the new email
+		expect(mockStripe.customers.update).toHaveBeenCalledWith("cus_mock123", {
+			email: "newemail@example.com",
+		});
 	});
 });

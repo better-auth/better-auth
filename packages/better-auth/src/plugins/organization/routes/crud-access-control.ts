@@ -85,7 +85,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					body: {} as {
-						organizationId?: string;
+						organizationId?: string | undefined;
 						role: string;
 						permission: Record<string, string[]>;
 					} & (IsExactlyEmptyObject<AdditionalFields> extends true
@@ -311,7 +311,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						| {
 								roleId: string;
 						  }
-					) & { organizationId?: string },
+					) & { organizationId?: string | undefined },
 				},
 			},
 		},
@@ -494,6 +494,15 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 					}),
 				})
 				.optional(),
+			metadata: {
+				$Infer: {
+					query: {} as
+						| {
+								organizationId?: string | undefined;
+						  }
+						| undefined,
+				},
+			},
 		},
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
@@ -622,7 +631,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					query: {} as {
-						organizationId?: string;
+						organizationId?: string | undefined;
 					} & ({ roleName: string } | { roleId: string }),
 				},
 			},
@@ -793,10 +802,10 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					body: {} as {
-						organizationId?: string;
+						organizationId?: string | undefined;
 						data: {
-							permission?: Record<string, string[]>;
-							roleName?: string;
+							permission?: Record<string, string[]> | undefined;
+							roleName?: string | undefined;
 						} & AdditionalFields;
 					} & ({ roleName: string } | { roleId: string }),
 				},

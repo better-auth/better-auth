@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-
-export async function POST(request: NextRequest) {
+import { NextResponse } from "next/server";
+export const maxDuration = 300;
+export async function POST(request: Request) {
 	try {
 		const body = await request.json();
 		const gurubasePayload = {

@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.0-beta.5",
+  "version": "1.4.0-beta.6",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -14,6 +14,16 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
+      }
+    },
+    "./async_hooks": {
+      "import": {
+        "types": "./dist/async_hooks/index.d.ts",
+        "default": "./dist/async_hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/async_hooks/index.d.cts",
+        "default": "./dist/async_hooks/index.cjs"
       }
     },
     "./db": {
@@ -31,6 +41,9 @@
     "*": {
       "index": [
         "dist/index.d.ts"
+      ],
+      "async_hooks": [
+        "dist/async_hooks.d.ts"
       ],
       "db": [
         "dist/db.d.ts"

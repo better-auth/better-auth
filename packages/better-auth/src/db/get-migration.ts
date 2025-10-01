@@ -53,7 +53,7 @@ const mssqlMap = {
 	string: ["varchar", "nvarchar"],
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
-	date: ["datetime", "date"],
+	date: ["datetime2", "date", "datetime"],
 	json: ["varchar", "nvarchar"],
 };
 
@@ -207,8 +207,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 			date: {
 				sqlite: "date",
 				postgres: "timestamptz",
-				mysql: "timestamp",
-				mssql: "datetime",
+				mysql: "timestamp(3)",
+				mssql: sql`datetime2(3)`,
 			},
 			json: {
 				sqlite: "text",
@@ -266,7 +266,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 								dbType === "mysql" ||
 								dbType === "mssql")
 						) {
-							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+							if (dbType === "mysql") {
+								col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
+							} else {
+								col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+							}
 						}
 						return col;
 					});
@@ -291,6 +295,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 						if (config.advanced?.database?.useNumberId) {
 							if (dbType === "postgres" || dbType === "sqlite") {
 								return col.primaryKey().notNull();
+							} else if (dbType === "mssql") {
+								return col.identity().primaryKey().notNull();
 							}
 							return col.autoIncrement().primaryKey().notNull();
 						}
@@ -316,7 +322,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 						typeof field.defaultValue === "function" &&
 						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
 					) {
-						col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+						if (dbType === "mysql") {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
+						} else {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+						}
 					}
 					return col;
 				});

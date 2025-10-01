@@ -16,6 +16,8 @@ exports[`init > should match config 1`] = `
         "adapterId": "kysely",
         "adapterName": "Kysely Adapter",
         "debugLogs": false,
+        "disableTransformInput": false,
+        "disableTransformOutput": false,
         "supportsBooleans": false,
         "supportsDates": false,
         "supportsJSON": false,

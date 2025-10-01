@@ -1022,8 +1022,46 @@ export const sso = (options?: SSOOptions) => {
 				},
 			),
 		},
-		schema: mergeSchema(schema(options?.schema), options?.schema),
-		options: options,
+		schema: {
+			ssoProvider: {
+				fields: {
+					issuer: {
+						type: "string",
+						required: true,
+					},
+					oidcConfig: {
+						type: "string",
+						required: false,
+					},
+					samlConfig: {
+						type: "string",
+						required: false,
+					},
+					userId: {
+						type: "string",
+						required: false,
+						references: {
+							model: "user",
+							field: "id",
+							onDelete: "set null",
+						},
+					},
+					providerId: {
+						type: "string",
+						required: true,
+						unique: true,
+					},
+					organizationId: {
+						type: "string",
+						required: false,
+					},
+					domain: {
+						type: "string",
+						required: true,
+					},
+				},
+			},
+		},
 	} satisfies BetterAuthPlugin;
 };
 
@@ -1031,7 +1069,7 @@ export interface SSOProvider {
 	id: string;
 	issuer: string;
 	oidcConfig: OIDCConfig;
-	userId: string;
+	userId?: string;
 	providerId: string;
 	organizationId?: string;
 }
