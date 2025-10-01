@@ -74,8 +74,9 @@ function adapterTest(
 		predefinedOptions: Omit<BetterAuthOptions, "database">;
 	},
 ) {
-
-	console.warn("This test function is deprecated and will be removed in the future. Use `testAdapter` instead.");
+	console.warn(
+		"This test function is deprecated and will be removed in the future. Use `testAdapter` instead.",
+	);
 	const adapter = async () =>
 		await getAdapter(internalOptions?.predefinedOptions);
 
