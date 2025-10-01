@@ -836,14 +836,9 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						}),
 					}),
 					error: z.object({
-						error: z
-							.enum([
-								"invalid_request",
-								"expired_token",
-							])
-							.meta({
-								description: "Error code",
-							}),
+						error: z.enum(["invalid_request", "expired_token"]).meta({
+							description: "Error code",
+						}),
 						error_description: z.string().meta({
 							description: "Detailed error description",
 						}),
