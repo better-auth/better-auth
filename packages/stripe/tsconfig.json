@@ -1,20 +1,9 @@
 {
-	"compilerOptions": {
-		"esModuleInterop": true,
-		"skipLibCheck": true,
-		"target": "es2022",
-		"allowJs": true,
-		"resolveJsonModule": true,
-		"module": "ESNext",
-		"noEmit": true,
-		"moduleResolution": "Bundler",
-		"moduleDetection": "force",
-		"isolatedModules": true,
-		"verbatimModuleSyntax": true,
-		"strict": true,
-		"noImplicitOverride": true,
-		"noFallthroughCasesInSwitch": true
-	},
-	"exclude": ["node_modules", "dist"],
-	"include": ["src"]
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "lib": ["esnext", "dom", "dom.iterable"]
+  },
+  "include": ["src"]
 }

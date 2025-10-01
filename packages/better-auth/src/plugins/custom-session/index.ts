@@ -1,5 +1,9 @@
-import * as z from "zod/v4";
-import { createAuthEndpoint, getSession } from "../../api";
+import * as z from "zod";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+	getSession,
+} from "../../api";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
@@ -7,6 +11,38 @@ import type {
 	InferSession,
 	InferUser,
 } from "../../types";
+import { getEndpointResponse } from "../../utils/plugin-helper";
+
+const getSessionQuerySchema = z.optional(
+	z.object({
+		/**
+		 * If cookie cache is enabled, it will disable the cache
+		 * and fetch the session from the database
+		 */
+		disableCookieCache: z
+			.boolean()
+			.meta({
+				description: "Disable cookie cache and fetch session from database",
+			})
+			.or(z.string().transform((v) => v === "true"))
+			.optional(),
+		disableRefresh: z
+			.boolean()
+			.meta({
+				description:
+					"Disable session refresh. Useful for checking session status, without updating the session",
+			})
+			.optional(),
+	}),
+);
+
+export type CustomSessionPluginOptions = {
+	/**
+	 * This option is used to determine if the list-device-sessions endpoint should be mutated to the custom session data.
+	 * @default false
+	 */
+	shouldMutateListDeviceSessionsEndpoint?: boolean;
+};
 
 export const customSession = <
 	Returns extends Record<string, any>,
@@ -20,37 +56,33 @@ export const customSession = <
 		ctx: GenericEndpointContext,
 	) => Promise<Returns>,
 	options?: O,
+	pluginOptions?: CustomSessionPluginOptions,
 ) => {
 	return {
 		id: "custom-session",
+		hooks: {
+			after: [
+				{
+					matcher: (ctx) =>
+						ctx.path === "/multi-session/list-device-sessions" &&
+						(pluginOptions?.shouldMutateListDeviceSessionsEndpoint ?? false),
+					handler: createAuthMiddleware(async (ctx) => {
+						const response = await getEndpointResponse<[]>(ctx);
+						if (!response) return;
+						const newResponse = await Promise.all(
+							response.map(async (v) => await fn(v, ctx)),
+						);
+						return ctx.json(newResponse);
+					}),
+				},
+			],
+		},
 		endpoints: {
 			getSession: createAuthEndpoint(
 				"/get-session",
 				{
 					method: "GET",
-					query: z.optional(
-						z.object({
-							/**
-							 * If cookie cache is enabled, it will disable the cache
-							 * and fetch the session from the database
-							 */
-							disableCookieCache: z
-								.boolean()
-								.meta({
-									description:
-										"Disable cookie cache and fetch session from database",
-								})
-								.or(z.string().transform((v) => v === "true"))
-								.optional(),
-							disableRefresh: z
-								.boolean()
-								.meta({
-									description:
-										"Disable session refresh. Useful for checking session status, without updating the session",
-								})
-								.optional(),
-						}),
-					),
+					query: getSessionQuerySchema,
 					metadata: {
 						CUSTOM_SESSION: true,
 						openapi: {
@@ -75,7 +107,7 @@ export const customSession = <
 					},
 					requireHeaders: true,
 				},
-				async (ctx) => {
+				async (ctx): Promise<Returns | null> => {
 					const session = await getSession()({
 						...ctx,
 						asResponse: false,
@@ -88,6 +120,13 @@ export const customSession = <
 						return ctx.json(null);
 					}
 					const fnResult = await fn(session.response as any, ctx);
+
+					const setCookie = session.headers.get("set-cookie");
+					if (setCookie) {
+						ctx.setHeader("set-cookie", setCookie);
+						session.headers.delete("set-cookie");
+					}
+
 					session.headers.forEach((value, key) => {
 						ctx.setHeader(key, value);
 					});

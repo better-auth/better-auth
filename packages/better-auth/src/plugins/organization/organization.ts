@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import * as z from "zod/v4";
+import * as z from "zod";
 import type { AuthPluginSchema } from "../../types";
 import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
@@ -25,6 +25,7 @@ import {
 	listMembers,
 	removeMember,
 	updateMemberRole,
+	getActiveMemberRole,
 } from "./routes/crud-members";
 import {
 	checkOrganizationSlug,
@@ -53,6 +54,13 @@ import type {
 	Team,
 	TeamMember,
 } from "./schema";
+import {
+	createOrgRole,
+	deleteOrgRole,
+	listOrgRoles,
+	getOrgRole,
+	updateOrgRole,
+} from "./routes/crud-access-control";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
@@ -77,9 +85,7 @@ export function parseRoles(roles: string | string[]): string {
  * });
  * ```
  */
-export const organization = <O extends OrganizationOptions>(
-	options?: OrganizationOptions & O,
-) => {
+export const organization = <O extends OrganizationOptions>(options?: O) => {
 	let endpoints = {
 		/**
 		 * ### Endpoint
@@ -385,6 +391,22 @@ export const organization = <O extends OrganizationOptions>(
 		 * `authClient.organization.listMembers`
 		 */
 		listMembers: listMembers(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get-active-member-role`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getActiveMemberRole`
+		 *
+		 * **client:**
+		 * `authClient.organization.getActiveMemberRole`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-active-member-role)
+		 */
+		getActiveMemberRole: getActiveMemberRole(options as O),
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {
@@ -471,7 +493,7 @@ export const organization = <O extends OrganizationOptions>(
 		/**
 		 * ### Endpoint
 		 *
-		 * POST `/organization/list-user-teams`
+		 * GET `/organization/list-user-teams`
 		 *
 		 * ### API Methods
 		 *
@@ -539,11 +561,26 @@ export const organization = <O extends OrganizationOptions>(
 			...teamEndpoints,
 		};
 	}
+
+	const dynamicAccessControlEndpoints = {
+		createOrgRole: createOrgRole(options as O),
+		deleteOrgRole: deleteOrgRole(options as O),
+		listOrgRoles: listOrgRoles(options as O),
+		getOrgRole: getOrgRole(options as O),
+		updateOrgRole: updateOrgRole(options as O),
+	};
+	if (options?.dynamicAccessControl?.enabled) {
+		endpoints = {
+			...endpoints,
+			...dynamicAccessControlEndpoints,
+		};
+	}
 	const roles = {
 		...defaultRoles,
 		...options?.roles,
 	};
 
+	// Build team schema in a way that never introduces undefined values when spreading
 	const teamSchema = teamSupport
 		? ({
 				team: {
@@ -572,6 +609,7 @@ export const organization = <O extends OrganizationOptions>(
 							type: "date",
 							required: false,
 							fieldName: options?.schema?.team?.fields?.updatedAt,
+							onUpdate: () => new Date(),
 						},
 						...(options?.schema?.team?.additionalFields || {}),
 					},
@@ -605,196 +643,55 @@ export const organization = <O extends OrganizationOptions>(
 					},
 				},
 			} satisfies AuthPluginSchema)
-		: undefined;
+		: {};
 
-	/**
-	 * the orgMiddleware type-asserts an empty object representing org options, roles, and a getSession function.
-	 * This `shimContext` function is used to add those missing properties to the context object.
-	 */
-	const api = shimContext(endpoints, {
-		orgOptions: options || {},
-		roles,
-		getSession: async (context: AuthContext) => {
-			//@ts-expect-error
-			return await getSessionFromCtx(context);
-		},
-	});
-
-	type DefaultStatements = typeof defaultStatements;
-	type Statements = O["ac"] extends AccessControl<infer S>
-		? S
-		: DefaultStatements;
-	type PermissionType = {
-		[key in keyof Statements]?: Array<
-			Statements[key] extends readonly unknown[]
-				? Statements[key][number]
-				: never
-		>;
-	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never;
-		  };
-
-	return {
-		id: "organization",
-		endpoints: {
-			// ...endpoints,
-			...(api as O["teams"] extends { enabled: true }
-				? typeof teamEndpoints & typeof endpoints
-				: typeof endpoints),
-			hasPermission: createAuthEndpoint(
-				"/organization/has-permission",
-				{
-					method: "POST",
-					requireHeaders: true,
-					body: z
-						.object({
-							organizationId: z.string().optional(),
-						})
-						.and(
-							z.union([
-								z.object({
-									permission: z.record(z.string(), z.array(z.string())),
-									permissions: z.undefined(),
-								}),
-								z.object({
-									permission: z.undefined(),
-									permissions: z.record(z.string(), z.array(z.string())),
-								}),
-							]),
-						),
-					use: [orgSessionMiddleware],
-					metadata: {
-						$Infer: {
-							body: {} as PermissionExclusive & {
-								organizationId?: string;
+	const organizationRoleSchema = options?.dynamicAccessControl?.enabled
+		? ({
+				organizationRole: {
+					fields: {
+						organizationId: {
+							type: "string",
+							required: true,
+							references: {
+								model: "organization",
+								field: "id",
 							},
+							fieldName:
+								options?.schema?.organizationRole?.fields?.organizationId,
 						},
-						openapi: {
-							description: "Check if the user has permission",
-							requestBody: {
-								content: {
-									"application/json": {
-										schema: {
-											type: "object",
-											properties: {
-												permission: {
-													type: "object",
-													description: "The permission to check",
-													deprecated: true,
-												},
-												permissions: {
-													type: "object",
-													description: "The permission to check",
-												},
-											},
-											required: ["permissions"],
-										},
-									},
-								},
-							},
-							responses: {
-								"200": {
-									description: "Success",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													error: {
-														type: "string",
-													},
-													success: {
-														type: "boolean",
-													},
-												},
-												required: ["success"],
-											},
-										},
-									},
-								},
-							},
+						role: {
+							type: "string",
+							required: true,
+							fieldName: options?.schema?.organizationRole?.fields?.role,
 						},
+						permission: {
+							type: "string",
+							required: true,
+							fieldName: options?.schema?.organizationRole?.fields?.permission,
+						},
+						createdAt: {
+							type: "date",
+							required: true,
+							defaultValue: () => new Date(),
+							fieldName: options?.schema?.organizationRole?.fields?.createdAt,
+						},
+						updatedAt: {
+							type: "date",
+							required: false,
+							fieldName: options?.schema?.organizationRole?.fields?.updatedAt,
+							onUpdate: () => new Date(),
+						},
+						...(options?.schema?.organizationRole?.additionalFields || {}),
 					},
+					modelName: options?.schema?.organizationRole?.modelName,
 				},
-				async (ctx) => {
-					const activeOrganizationId =
-						ctx.body.organizationId ||
-						ctx.context.session.session.activeOrganizationId;
-					if (!activeOrganizationId) {
-						throw new APIError("BAD_REQUEST", {
-							message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-						});
-					}
-					const adapter = getOrgAdapter<O>(ctx.context, options);
-					const member = await adapter.findMemberByOrgId({
-						userId: ctx.context.session.user.id,
-						organizationId: activeOrganizationId,
-					});
-					if (!member) {
-						throw new APIError("UNAUTHORIZED", {
-							message:
-								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-						});
-					}
-					const result = hasPermission({
-						role: member.role as string,
-						options: options || {},
-						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
-					});
-					return ctx.json({
-						error: null,
-						success: result,
-					});
-				},
-			),
-		},
-		schema: {
-			session: {
-				fields: {
-					activeOrganizationId: {
-						type: "string",
-						required: false,
-						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
-					},
-					...(teamSupport
-						? {
-								activeTeamId: {
-									type: "string",
-									required: false,
-									fieldName: options?.schema?.session?.fields?.activeTeamId,
-								},
-							}
-						: {}),
-				} as unknown as O["teams"] extends {
-					enabled: true;
-				}
-					? {
-							activeTeamId: {
-								type: "string";
-								required: false;
-							};
-							activeOrganizationId: {
-								type: "string";
-								required: false;
-							};
-						}
-					: {
-							activeOrganizationId: {
-								type: "string";
-								required: false;
-							};
-						},
-			},
+			} satisfies AuthPluginSchema)
+		: {};
+
+	const schema = {
+		...organizationRoleSchema,
+		...teamSchema,
+		...({
 			organization: {
 				modelName: options?.schema?.organization?.modelName,
 				fields: {
@@ -806,6 +703,7 @@ export const organization = <O extends OrganizationOptions>(
 					},
 					slug: {
 						type: "string",
+						required: true,
 						unique: true,
 						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,
@@ -922,7 +820,214 @@ export const organization = <O extends OrganizationOptions>(
 					...(options?.schema?.invitation?.additionalFields || {}),
 				},
 			},
-			...(teamSupport ? teamSchema : {}),
+		} satisfies AuthPluginSchema),
+	};
+
+	/**
+	 * the orgMiddleware type-asserts an empty object representing org options, roles, and a getSession function.
+	 * This `shimContext` function is used to add those missing properties to the context object.
+	 */
+	const api = shimContext(endpoints, {
+		orgOptions: options || {},
+		roles,
+		getSession: async (context: AuthContext) => {
+			//@ts-expect-error
+			return await getSessionFromCtx(context);
+		},
+	});
+
+	type DefaultStatements = typeof defaultStatements;
+	type Statements = O["ac"] extends AccessControl<infer S>
+		? S
+		: DefaultStatements;
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? Statements[key][number]
+				: never
+		>;
+	};
+	type PermissionExclusive =
+		| {
+				/**
+				 * @deprecated Use `permissions` instead
+				 */
+				permission: PermissionType;
+				permissions?: never;
+		  }
+		| {
+				permissions: PermissionType;
+				permission?: never;
+		  };
+
+	type IncludeTeamEndpoints<ExistingEndpoints extends Record<string, any>> =
+		O["teams"] extends { enabled: true }
+			? ExistingEndpoints & typeof teamEndpoints
+			: ExistingEndpoints;
+
+	type IncludeDynamicAccessControlEndpoints<
+		ExistingEndpoints extends Record<string, any>,
+	> = O["dynamicAccessControl"] extends { enabled: true }
+		? ExistingEndpoints & typeof dynamicAccessControlEndpoints
+		: ExistingEndpoints;
+
+	type AllEndpoints = IncludeDynamicAccessControlEndpoints<
+		IncludeTeamEndpoints<typeof endpoints>
+	>;
+
+	return {
+		id: "organization",
+		endpoints: {
+			...(api as AllEndpoints),
+			hasPermission: createAuthEndpoint(
+				"/organization/has-permission",
+				{
+					method: "POST",
+					requireHeaders: true,
+					body: z
+						.object({
+							organizationId: z.string().optional(),
+						})
+						.and(
+							z.union([
+								z.object({
+									permission: z.record(z.string(), z.array(z.string())),
+									permissions: z.undefined(),
+								}),
+								z.object({
+									permission: z.undefined(),
+									permissions: z.record(z.string(), z.array(z.string())),
+								}),
+							]),
+						),
+					use: [orgSessionMiddleware],
+					metadata: {
+						$Infer: {
+							body: {} as PermissionExclusive & {
+								organizationId?: string;
+							},
+						},
+						openapi: {
+							description: "Check if the user has permission",
+							requestBody: {
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												permission: {
+													type: "object",
+													description: "The permission to check",
+													deprecated: true,
+												},
+												permissions: {
+													type: "object",
+													description: "The permission to check",
+												},
+											},
+											required: ["permissions"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: {
+														type: "string",
+													},
+													success: {
+														type: "boolean",
+													},
+												},
+												required: ["success"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const activeOrganizationId =
+						ctx.body.organizationId ||
+						ctx.context.session.session.activeOrganizationId;
+					if (!activeOrganizationId) {
+						throw new APIError("BAD_REQUEST", {
+							message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+						});
+					}
+					const adapter = getOrgAdapter<O>(ctx.context, options);
+					const member = await adapter.findMemberByOrgId({
+						userId: ctx.context.session.user.id,
+						organizationId: activeOrganizationId,
+					});
+					if (!member) {
+						throw new APIError("UNAUTHORIZED", {
+							message:
+								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+						});
+					}
+					const result = await hasPermission(
+						{
+							role: member.role,
+							options: options || {},
+							permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+							organizationId: activeOrganizationId,
+						},
+						ctx,
+					);
+					return ctx.json({
+						error: null,
+						success: result,
+					});
+				},
+			),
+		},
+		schema: {
+			...(schema as AuthPluginSchema),
+			session: {
+				fields: {
+					activeOrganizationId: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
+					},
+					...(teamSupport
+						? {
+								activeTeamId: {
+									type: "string",
+									required: false,
+									fieldName: options?.schema?.session?.fields?.activeTeamId,
+								},
+							}
+						: {}),
+				} as unknown as O["teams"] extends {
+					enabled: true;
+				}
+					? {
+							activeTeamId: {
+								type: "string";
+								required: false;
+							};
+							activeOrganizationId: {
+								type: "string";
+								required: false;
+							};
+						}
+					: {
+							activeOrganizationId: {
+								type: "string";
+								required: false;
+							};
+						},
+			},
 		},
 		$Infer: {
 			Organization: {} as InferOrganization<O>,

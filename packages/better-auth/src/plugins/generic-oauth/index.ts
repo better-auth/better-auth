@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "../../error/codes";
@@ -10,11 +10,16 @@ import {
 	validateAuthorizationCode,
 	type OAuth2Tokens,
 	type OAuthProvider,
+	type OAuth2UserInfo,
 } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 import { generateState, parseState } from "../../oauth2/state";
-import type { BetterAuthPlugin, User } from "../../types";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+	User,
+} from "../../types";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -87,33 +92,20 @@ export interface GenericOAuthConfig {
 	 * @param tokens - The OAuth tokens received after successful authentication
 	 * @returns A promise that resolves to a User object or null
 	 */
-	getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
+	getUserInfo?: (tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>;
 	/**
 	 * Custom function to map the user profile to a User object.
 	 */
-	mapProfileToUser?: (profile: Record<string, any>) =>
-		| {
-				id?: string;
-				name?: string;
-				email?: string;
-				image?: string;
-				emailVerified?: boolean;
-				[key: string]: any;
-		  }
-		| Promise<{
-				id?: string;
-				name?: string;
-				email?: string;
-				image?: string;
-				emailVerified?: boolean;
-				[key: string]: any;
-		  }>;
+	mapProfileToUser?: (
+		profile: Record<string, any>,
+	) => Partial<Partial<User>> | Promise<Partial<User>>;
 	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	authorizationUrlParams?: Record<string, string>;
-
+	authorizationUrlParams?:
+		| Record<string, string>
+		| ((ctx: GenericEndpointContext) => Record<string, string>);
 	/**
 	 * Additional search-params to add to the tokenUrl.
 	 * Warning: Search-params added here overwrite any default params.
@@ -163,7 +155,7 @@ interface GenericOAuthOptions {
 async function getUserInfo(
 	tokens: OAuth2Tokens,
 	finalUserInfoUrl: string | undefined,
-) {
+): Promise<OAuth2UserInfo | null> {
 	if (tokens.idToken) {
 		const decoded = decodeJwt(tokens.idToken) as {
 			sub: string;
@@ -201,8 +193,9 @@ async function getUserInfo(
 		},
 	});
 	return {
+		// @ts-expect-error sub is optional in the type
 		id: userInfo.data?.sub,
-		emailVerified: userInfo.data?.email_verified,
+		emailVerified: userInfo.data?.email_verified ?? false,
 		email: userInfo.data?.email,
 		image: userInfo.data?.picture,
 		name: userInfo.data?.name,
@@ -482,6 +475,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						}
 						finalAuthUrl = withAdditionalParams.toString();
 					}
+					const additionalParams =
+						typeof authorizationUrlParams === "function"
+							? authorizationUrlParams(ctx)
+							: authorizationUrlParams;
 
 					const { state, codeVerifier } = await generateState(ctx);
 					const authUrl = await createAuthorizationURL({
@@ -502,7 +499,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						accessType,
 						responseType,
 						responseMode,
-						additionalParams: authorizationUrlParams,
+						additionalParams,
 					});
 					return ctx.json({
 						url: authUrl.toString(),
@@ -660,32 +657,51 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							message: "Invalid OAuth configuration.",
 						});
 					}
-					const userInfo = (
-						provider.getUserInfo
-							? await provider.getUserInfo(tokens)
-							: await getUserInfo(tokens, finalUserInfoUrl)
-					) as User | null;
-					if (!userInfo) {
-						throw redirectOnError("user_info_is_missing");
-					}
-					const mapUser = provider.mapProfileToUser
-						? await provider.mapProfileToUser(userInfo)
-						: userInfo;
-					if (!mapUser?.email) {
-						ctx.context.logger.error("Unable to get user info", userInfo);
-						throw redirectOnError("email_is_missing");
-					}
+					const userInfo: Omit<User, "createdAt" | "updatedAt"> =
+						await (async function handleUserInfo() {
+							const userInfo = (
+								provider.getUserInfo
+									? await provider.getUserInfo(tokens)
+									: await getUserInfo(tokens, finalUserInfoUrl)
+							) as OAuth2UserInfo | null;
+							if (!userInfo) {
+								throw redirectOnError("user_info_is_missing");
+							}
+							const mapUser = provider.mapProfileToUser
+								? await provider.mapProfileToUser(userInfo)
+								: userInfo;
+							const email = mapUser.email
+								? mapUser.email.toLowerCase()
+								: userInfo.email?.toLowerCase();
+							if (!email) {
+								ctx.context.logger.error("Unable to get user info", userInfo);
+								throw redirectOnError("email_is_missing");
+							}
+							const id = mapUser.id ? String(mapUser.id) : String(userInfo.id);
+							const name = mapUser.name ? mapUser.name : userInfo.name;
+							if (!name) {
+								ctx.context.logger.error("Unable to get user info", userInfo);
+								throw redirectOnError("name_is_missing");
+							}
+							return {
+								...userInfo,
+								...mapUser,
+								email,
+								id,
+								name,
+							};
+						})();
 					if (link) {
 						if (
 							ctx.context.options.account?.accountLinking
 								?.allowDifferentEmails !== true &&
-							link.email !== mapUser.email.toLowerCase()
+							link.email !== userInfo.email
 						) {
 							return redirectOnError("email_doesn't_match");
 						}
 						const existingAccount =
 							await ctx.context.internalAdapter.findAccountByProviderId(
-								userInfo.id,
+								String(userInfo.id),
 								provider.providerId,
 							);
 						if (existingAccount) {
@@ -713,7 +729,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								await ctx.context.internalAdapter.createAccount({
 									userId: link.userId,
 									providerId: provider.providerId,
-									accountId: mapUser.id ?? userInfo.id,
+									accountId: userInfo.id,
 									accessToken: tokens.accessToken,
 									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
@@ -736,10 +752,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 
 					const result = await handleOAuthUserInfo(ctx, {
-						userInfo: {
-							...userInfo,
-							...mapUser,
-						},
+						userInfo,
 						account: {
 							providerId: provider.providerId,
 							accountId: userInfo.id,
@@ -917,6 +930,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						email: session.user.email,
 					});
 
+					const additionalParams =
+						typeof authorizationUrlParams === "function"
+							? authorizationUrlParams(c)
+							: authorizationUrlParams;
+
 					const url = await createAuthorizationURL({
 						id: providerId,
 						options: {
@@ -935,7 +953,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							`${c.context.baseURL}/oauth2/callback/${providerId}`,
 						prompt,
 						accessType,
-						additionalParams: authorizationUrlParams,
+						additionalParams,
 					});
 
 					return c.json({

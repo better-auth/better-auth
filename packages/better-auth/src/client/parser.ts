@@ -58,19 +58,19 @@ function parseISODate(value: string): Date | null {
 
 	let date = new Date(
 		Date.UTC(
-			parseInt(year, 10),
-			parseInt(month, 10) - 1,
-			parseInt(day, 10),
-			parseInt(hour, 10),
-			parseInt(minute, 10),
-			parseInt(second, 10),
+			parseInt(year!, 10),
+			parseInt(month!, 10) - 1,
+			parseInt(day!, 10),
+			parseInt(hour!, 10),
+			parseInt(minute!, 10),
+			parseInt(second!, 10),
 			ms ? parseInt(ms.padEnd(3, "0"), 10) : 0,
 		),
 	);
 
 	if (offsetSign) {
 		const offset =
-			(parseInt(offsetHour, 10) * 60 + parseInt(offsetMinute, 10)) *
+			(parseInt(offsetHour!, 10) * 60 + parseInt(offsetMinute!, 10)) *
 			(offsetSign === "+" ? -1 : 1);
 		date.setUTCMinutes(date.getUTCMinutes() + offset);
 	}
@@ -96,6 +96,7 @@ function betterJSONParse<T = unknown>(
 	const trimmed = value.trim();
 
 	if (
+		trimmed.length > 0 &&
 		trimmed[0] === '"' &&
 		trimmed.endsWith('"') &&
 		!trimmed.slice(1, -1).includes('"')

@@ -1,9 +1,8 @@
-import { BetterAuthClientPlugin, Store } from "better-auth/types";
-import * as Browser from "expo-web-browser";
+import type { BetterAuthClientPlugin, Store } from "better-auth/types";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
-import { BetterFetchOption } from "@better-fetch/fetch";
+import type { BetterFetchOption } from "@better-fetch/fetch";
 
 interface CookieAttributes {
 	value: string;
@@ -20,22 +19,53 @@ export function parseSetCookieHeader(
 	header: string,
 ): Map<string, CookieAttributes> {
 	const cookieMap = new Map<string, CookieAttributes>();
-	const cookies = header.split(", ");
+	const cookies = splitSetCookieHeader(header);
 	cookies.forEach((cookie) => {
-		const [nameValue, ...attributes] = cookie.split("; ");
-		const [name, value] = nameValue.split("=");
-
+		const parts = cookie.split(";").map((p) => p.trim());
+		const [nameValue, ...attributes] = parts;
+		const [name, ...valueParts] = nameValue!.split("=");
+		const value = valueParts.join("=");
 		const cookieObj: CookieAttributes = { value };
-
 		attributes.forEach((attr) => {
-			const [attrName, attrValue] = attr.split("=");
-			cookieObj[attrName.toLowerCase() as "value"] = attrValue;
+			const [attrName, ...attrValueParts] = attr.split("=");
+			const attrValue = attrValueParts.join("=");
+			cookieObj[attrName!.toLowerCase() as "value"] = attrValue;
 		});
-
-		cookieMap.set(name, cookieObj);
+		cookieMap.set(name!, cookieObj);
 	});
-
 	return cookieMap;
+}
+
+function splitSetCookieHeader(setCookie: string): string[] {
+	const parts: string[] = [];
+	let buffer = "";
+	let i = 0;
+	while (i < setCookie.length) {
+		const char = setCookie[i];
+		if (char === ",") {
+			const recent = buffer.toLowerCase();
+			const hasExpires = recent.includes("expires=");
+			const hasGmt = /gmt/i.test(recent);
+			if (hasExpires && !hasGmt) {
+				buffer += char;
+				i += 1;
+				continue;
+			}
+			if (buffer.trim().length > 0) {
+				parts.push(buffer.trim());
+				buffer = "";
+			}
+			i += 1;
+			if (setCookie[i] === " ") i += 1;
+			continue;
+		}
+		buffer += char;
+		i += 1;
+	}
+	if (buffer.trim().length > 0) {
+		parts.push(buffer.trim());
+	}
+	return parts;
 }
 
 interface ExpoClientOptions {
@@ -172,13 +202,27 @@ export const expoClient = (opts: ExpoClientOptions) => {
 
 						if (
 							context.data?.redirect &&
-							context.request.url.toString().includes("/sign-in") &&
+							(context.request.url.toString().includes("/sign-in") ||
+								context.request.url.toString().includes("/link-social")) &&
 							!context.request?.body.includes("idToken") // id token is used for silent sign-in
 						) {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
 							const to = callbackURL;
 							const signInURL = context.data?.url;
-							const result = await Browser.openAuthSessionAsync(signInURL, to);
+							let Browser: typeof import("expo-web-browser") | undefined =
+								undefined;
+							try {
+								Browser = await import("expo-web-browser");
+							} catch (error) {
+								throw new Error(
+									'"expo-web-browser" is not installed as a dependency!',
+									{
+										cause: error,
+									},
+								);
+							}
+							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;
+							const result = await Browser.openAuthSessionAsync(proxyURL, to);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
 							const cookie = String(url.searchParams.get("cookie"));
@@ -232,6 +276,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					if (url.includes("/sign-out")) {
 						await storage.setItem(cookieName, "{}");
 						store?.atoms.session?.set({
+							...store.atoms.session.get(),
 							data: null,
 							error: null,
 							isPending: false,

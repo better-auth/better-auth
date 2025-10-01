@@ -8,22 +8,25 @@ import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
 import { parseSetCookieHeader } from "../../cookies";
 
-let server = new OAuth2Server();
-
 describe("oauth2", async () => {
 	const providerId = "test";
 	const clientId = "test-client-id";
 	const clientSecret = "test-client-secret";
+	const server = new OAuth2Server();
+	await server.start();
+	const port = Number(server.issuer.url?.split(":")[2]!);
 
-	const { customFetchImpl, auth } = await getTestInstance({
+	afterAll(async () => {
+		await server.stop();
+	});
+
+	const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
 		plugins: [
 			genericOAuth({
 				config: [
 					{
 						providerId,
-						discoveryUrl:
-							server.issuer.url ||
-							"http://localhost:8081/.well-known/openid-configuration",
+						discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 						clientId: clientId,
 						clientSecret: clientSecret,
 						pkce: true,
@@ -48,15 +51,6 @@ describe("oauth2", async () => {
 			name: "OAuth2 Test",
 		});
 		await server.issuer.keys.generate("RS256");
-
-		server.issuer.on;
-		// Start the server
-		await server.start(8081, "localhost");
-		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8081
-	});
-
-	afterAll(async () => {
-		await server.stop().catch(() => {});
 	});
 
 	server.service.on("beforeUserinfo", (userInfoResponse, req) => {
@@ -94,10 +88,7 @@ describe("oauth2", async () => {
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
-				newHeaders.set(
-					"cookie",
-					context.response.headers.get("Set-Cookie") || "",
-				);
+				cookieSetter(newHeaders)(context);
 			},
 		});
 
@@ -110,9 +101,12 @@ describe("oauth2", async () => {
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		expect(signInRes.data).toMatchObject({
-			url: expect.stringContaining("http://localhost:8081/authorize"),
+			url: expect.stringContaining(`http://localhost:${port}/authorize`),
 			redirect: true,
 		});
 		const { callbackURL } = await simulateOAuthFlow(
@@ -139,9 +133,12 @@ describe("oauth2", async () => {
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		expect(signInRes.data).toMatchObject({
-			url: expect.stringContaining("http://localhost:8081/authorize"),
+			url: expect.stringContaining(`http://localhost:${port}/authorize`),
 			redirect: true,
 		});
 		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
@@ -154,7 +151,7 @@ describe("oauth2", async () => {
 				headers: newHeaders,
 			},
 		});
-
+		console.log(session.data, newHeaders);
 		const ctx = await auth.$context;
 		const accounts = await ctx.internalAdapter.findAccounts(
 			session.data?.user.id!,
@@ -179,6 +176,9 @@ describe("oauth2", async () => {
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
@@ -246,8 +246,7 @@ describe("oauth2", async () => {
 					config: [
 						{
 							providerId: "test2",
-							discoveryUrl:
-								"http://localhost:8081/.well-known/openid-configuration",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 							redirectURI: "http://localhost:3000/api/auth/callback/test2",
@@ -257,12 +256,13 @@ describe("oauth2", async () => {
 				}),
 			],
 		});
-
+		const headers = new Headers();
 		const authClient = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 
@@ -270,9 +270,11 @@ describe("oauth2", async () => {
 			providerId: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
-		expect(res.data?.url).toContain("http://localhost:8081/authorize");
-		const headers = new Headers();
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
 		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
 			headers,
@@ -293,14 +295,13 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		const { customFetchImpl } = await getTestInstance({
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
 						{
 							providerId: "test2",
-							discoveryUrl:
-								"http://localhost:8081/.well-known/openid-configuration",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
@@ -310,7 +311,6 @@ describe("oauth2", async () => {
 				}),
 			],
 		});
-
 		const authClient = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
@@ -318,14 +318,16 @@ describe("oauth2", async () => {
 				customFetchImpl,
 			},
 		});
-
+		const headers = new Headers();
 		const res = await authClient.signIn.oauth2({
 			providerId: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
 			errorCallbackURL: "http://localhost:3000/error",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
-		expect(res.data?.url).toContain("http://localhost:8081/authorize");
-		const headers = new Headers();
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
 		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
 			headers,
@@ -348,14 +350,13 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		const { customFetchImpl } = await getTestInstance({
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
 						{
 							providerId: "test2",
-							discoveryUrl:
-								"http://localhost:8081/.well-known/openid-configuration",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
@@ -373,15 +374,17 @@ describe("oauth2", async () => {
 				customFetchImpl,
 			},
 		});
-
+		const headers = new Headers();
 		const res = await authClient.signIn.oauth2({
 			providerId: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
 			errorCallbackURL: "http://localhost:3000/error",
 			requestSignUp: true,
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
-		expect(res.data?.url).toContain("http://localhost:8081/authorize");
-		const headers = new Headers();
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
 		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
 			headers,
@@ -400,14 +403,13 @@ describe("oauth2", async () => {
 			receivedHeaders = req.headers as Record<string, string>;
 		});
 
-		const { customFetchImpl } = await getTestInstance({
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
 						{
 							providerId: "test3",
-							discoveryUrl:
-								"http://localhost:8081/.well-known/openid-configuration",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
@@ -417,12 +419,13 @@ describe("oauth2", async () => {
 				}),
 			],
 		});
-
+		const headers = new Headers();
 		const authClient = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 
@@ -430,10 +433,12 @@ describe("oauth2", async () => {
 			providerId: "test3",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 
-		expect(res.data?.url).toContain("http://localhost:8081/authorize");
-		const headers = new Headers();
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
 		await simulateOAuthFlow(res.data?.url || "", headers, customFetchImpl);
 
 		expect(receivedHeaders).toHaveProperty("x-custom-header");
@@ -442,7 +447,7 @@ describe("oauth2", async () => {
 
 	it("should delete oauth user with verification flow without password", async () => {
 		let token = "";
-		const { customFetchImpl } = await getTestInstance({
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			user: {
 				deleteUser: {
 					enabled: true,
@@ -456,8 +461,7 @@ describe("oauth2", async () => {
 					config: [
 						{
 							providerId: "test",
-							discoveryUrl:
-								"http://localhost:8081/.well-known/openid-configuration",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 						},
@@ -465,41 +469,45 @@ describe("oauth2", async () => {
 				}),
 			],
 		});
-
+		const headers = new Headers();
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		const signInRes = await client.signIn.oauth2({
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 
 		expect(signInRes.data).toMatchObject({
-			url: expect.stringContaining("http://localhost:8081/authorize"),
+			url: expect.stringContaining(`http://localhost:${port}/authorize`),
 			redirect: true,
 		});
 
-		const { headers } = await simulateOAuthFlow(
+		const { headers: newHeaders } = await simulateOAuthFlow(
 			signInRes.data?.url || "",
-			new Headers(),
+			headers,
 			customFetchImpl,
 		);
 
 		const session = await client.getSession({
 			fetchOptions: {
-				headers,
+				headers: newHeaders,
 			},
 		});
 		expect(session.data).not.toBeNull();
 
 		const deleteRes = await client.deleteUser({
 			fetchOptions: {
-				headers,
+				headers: newHeaders,
 			},
 		});
 
@@ -512,7 +520,7 @@ describe("oauth2", async () => {
 		const deleteCallbackRes = await client.deleteUser({
 			token,
 			fetchOptions: {
-				headers,
+				headers: newHeaders,
 			},
 		});
 		expect(deleteCallbackRes.data).toMatchObject({
@@ -524,5 +532,355 @@ describe("oauth2", async () => {
 			},
 		});
 		expect(nullSession.data).toBeNull();
+	});
+
+	it("should handle numeric account IDs correctly and prevent duplicate accounts", async () => {
+		const numericAccountId = 123456789;
+		const userEmail = "numeric-id-test@test.com";
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: userEmail,
+				name: "Numeric ID Test User",
+				sub: numericAccountId,
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "numeric-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const firstSignIn = await authClient.signIn.oauth2({
+			providerId: "numeric-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL: firstCallbackURL, headers: firstHeaders } =
+			await simulateOAuthFlow(
+				firstSignIn.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+		expect(firstCallbackURL).toBe("http://localhost:3000/new_user");
+
+		const firstSession = await authClient.getSession({
+			fetchOptions: {
+				headers: firstHeaders,
+			},
+		});
+
+		expect(firstSession.data).not.toBeNull();
+		const userId = firstSession.data?.user.id!;
+
+		const ctx = await auth.$context;
+		const accountsAfterFirst = await ctx.internalAdapter.findAccounts(userId);
+		expect(accountsAfterFirst).toHaveLength(1);
+		expect(accountsAfterFirst[0]).toMatchObject({
+			providerId: "numeric-test",
+			accountId: String(numericAccountId),
+			userId: userId,
+		});
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: userEmail,
+				name: "Numeric ID Test User",
+				sub: numericAccountId,
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const secondSignIn = await authClient.signIn.oauth2({
+			providerId: "numeric-test",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+
+		const { callbackURL: secondCallbackURL, headers: secondHeaders } =
+			await simulateOAuthFlow(
+				secondSignIn.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+		expect(secondCallbackURL).toBe("http://localhost:3000/dashboard");
+
+		const secondSession = await authClient.getSession({
+			fetchOptions: {
+				headers: secondHeaders,
+			},
+		});
+
+		expect(secondSession.data).not.toBeNull();
+		expect(secondSession.data?.user.id).toBe(userId);
+
+		const accountsAfterSecond = await ctx.internalAdapter.findAccounts(userId);
+		expect(accountsAfterSecond).toHaveLength(1);
+		expect(accountsAfterSecond[0]!.accountId).toBe(String(numericAccountId));
+	});
+
+	it("should handle custom getUserInfo returning numeric ID", async () => {
+		const numericId = 987654321;
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "custom-numeric",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							getUserInfo: async (_tokens) => {
+								return {
+									id: numericId,
+									email: "custom-numeric@test.com",
+									name: "Custom Numeric User",
+									emailVerified: true,
+									image: "https://test.com/avatar.png",
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "custom-numeric",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+
+		expect(accounts[0]!.accountId).toBe(String(numericId));
+	});
+
+	it("should handle mapProfileToUser returning numeric ID", async () => {
+		const numericProfileId = 111222333;
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "map-profile-numeric@test.com",
+				name: "Map Profile Numeric User",
+				sub: "string-sub-id",
+				user_id: numericProfileId,
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "map-profile-numeric",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							mapProfileToUser: (profile) => {
+								return {
+									id: profile.user_id,
+									email: profile.email,
+									name: profile.name,
+									emailVerified: profile.email_verified,
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "map-profile-numeric",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+
+		expect(accounts[0]!.accountId).toBe(String(numericProfileId));
+	});
+
+	it("should handle Strava OAuth with custom mapProfileToUser", async () => {
+		const stravaUserId = 12345678;
+		const stravaProfile = {
+			id: stravaUserId,
+			firstname: "John",
+			lastname: "Doe",
+			profile: "https://example.com/strava-avatar.jpg",
+			email_verified: true,
+		};
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = stravaProfile;
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "strava",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							userInfoUrl: `http://localhost:${port}/userinfo`,
+							clientId: "STRAVA_CLIENT_ID",
+							clientSecret: "STRAVA_CLIENT_SECRET",
+							scopes: ["read", "activity:read_all"],
+							pkce: true,
+							mapProfileToUser: (profile) => {
+								const fullName = `${profile.firstname} ${profile.lastname}`;
+								return {
+									id: profile.id,
+									email: `${profile.id}@strava.local`,
+									name: fullName,
+									image: profile.profile,
+									emailVerified: true,
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "strava",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		expect(signInRes.data?.url).toContain(`http://localhost:${port}/authorize`);
+		// we missed the `activity:read_all`
+		expect(signInRes.data?.url).toContain("scope=read+activity");
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe(`${stravaUserId}@strava.local`);
+		expect(session.data?.user.name).toBe("John Doe");
+		expect(session.data?.user.image).toBe(
+			"https://example.com/strava-avatar.jpg",
+		);
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+
+		expect(accounts[0]).toMatchObject({
+			providerId: "strava",
+			accountId: String(stravaUserId),
+			userId: session.data?.user.id,
+		});
 	});
 });

@@ -44,12 +44,43 @@ Default: `/api/auth`
 
 ## `trustedOrigins`
 
-List of trusted origins.
+List of trusted origins. You can provide a static array of origins, a function that returns origins dynamically, or use wildcard patterns to match multiple domains.
+
+### Static Origins
+
+You can provide a static array of origins:
 
 ```ts
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	trustedOrigins: ["http://localhost:3000", "https://example.com"],
+})
+```
+
+### Dynamic Origins
+
+You can provide a function that returns origins dynamically:
+
+```ts
+export const auth = betterAuth({
+	trustedOrigins: async (request: Request) => {
+		// Return an array of trusted origins based on the request
+		return ["https://dynamic-origin.com"];
+	}
+})
+```
+
+### Wildcard Support
+
+You can use wildcard patterns in trusted origins:
+
+```ts
+export const auth = betterAuth({
+	trustedOrigins: [
+		"*.example.com",             // Trust all subdomains of example.com
+		"https://*.example.com",     // Trust only HTTPS subdomains
+		"http://*.dev.example.com"   // Trust HTTP subdomains of dev.example.com
+	]
 })
 ```
 
@@ -466,6 +497,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	logger: {
 		disabled: false,
+		disableColors: false,
 		level: "error",
 		log: (level, message, ...args) => {
 			// Custom logging implementation
@@ -478,6 +510,7 @@ export const auth = betterAuth({
 The logger configuration allows you to customize how Better Auth handles logging. It supports the following options:
 
 - `disabled`: Disable all logging when set to `true` (default: `false`)
+- `disableColors`: Disable colors in the default logger implementation (default: determined by the terminal's color support)
 - `level`: Set the minimum log level to display. Available levels are:
   - `"info"`: Show all logs
   - `"warn"`: Show warnings and errors
@@ -603,5 +636,18 @@ Disable specific auth paths.
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	disabledPaths: ["/sign-up/email", "/sign-in/email"],
+})
+```
+
+## `telemetry`
+
+Enable or disable Better Auth's telemetry collection. (default: `false`)
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+  telemetry: {
+    enabled: false,
+  }
 })
 ```

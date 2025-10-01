@@ -117,7 +117,12 @@ export interface TiktokProfile extends Record<string, any> {
 	};
 }
 
-export interface TiktokOptions extends ProviderOptions {}
+export interface TiktokOptions extends ProviderOptions {
+	// Client ID is not used in TikTok, we delete it from the options
+	clientId?: never;
+	clientSecret: string;
+	clientKey: string;
+}
 
 export const tiktok = (options: TiktokOptions) => {
 	return {
@@ -130,9 +135,7 @@ export const tiktok = (options: TiktokOptions) => {
 			return new URL(
 				`https://www.tiktok.com/v2/auth/authorize?scope=${_scopes.join(
 					",",
-				)}&response_type=code&client_key=${options.clientKey}&client_secret=${
-					options.clientSecret
-				}&redirect_uri=${encodeURIComponent(
+				)}&response_type=code&client_key=${options.clientKey}&redirect_uri=${encodeURIComponent(
 					options.redirectURI || redirectURI,
 				)}&state=${state}`,
 			);
@@ -142,7 +145,10 @@ export const tiktok = (options: TiktokOptions) => {
 			return validateAuthorizationCode({
 				code,
 				redirectURI: options.redirectURI || redirectURI,
-				options,
+				options: {
+					clientKey: options.clientKey,
+					clientSecret: options.clientSecret,
+				},
 				tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
 			});
 		},
@@ -152,11 +158,13 @@ export const tiktok = (options: TiktokOptions) => {
 					return refreshAccessToken({
 						refreshToken,
 						options: {
-							clientId: options.clientId,
-							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
 						tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
+						authentication: "post",
+						extraParams: {
+							client_key: options.clientKey,
+						},
 					});
 				},
 		async getUserInfo(token) {
@@ -196,5 +204,5 @@ export const tiktok = (options: TiktokOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<TiktokProfile>;
+	} satisfies OAuthProvider<TiktokProfile, TiktokOptions>;
 };
