@@ -12,7 +12,6 @@ import { memoryAdapter } from "../../adapters/memory-adapter";
 import type { OrganizationOptions } from "./types";
 import type { PrettifyDeep } from "../../types/helper";
 import type { InvitationStatus } from "./schema";
-import { nextCookies } from "../../integrations/next-js";
 import type { User } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";

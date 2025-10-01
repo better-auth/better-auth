@@ -4,6 +4,7 @@ import { getSessionFromCtx } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import {
+	type InferInvitation,
 	type InferOrganizationRolesFromOption,
 	type Invitation,
   type Member,
@@ -291,7 +292,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					ctx.request,
 				);
 
-				return ctx.json(updatedInvitation);
+				return ctx.json(updatedInvitation as InferInvitation<O, false>);
 			}
 
 			if (

@@ -285,6 +285,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return member;
 		},
 		updateMember: async (memberId: string, role: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
 			const member = await adapter.update<InferMember<O, false>>({
 				model: "member",
 				where: [
