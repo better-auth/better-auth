@@ -243,7 +243,7 @@ export async function getTestInstance<
 			user: data.user as User,
 			headers,
 			setCookie,
-			runWithDefaultUser: async (fn: (headers: Headers) => Promise<void>) => {
+			runWithUser: async (fn: (headers: Headers) => Promise<void>) => {
 				return currentUserContextStorage.run({ headers }, async () => {
 					await fn(headers);
 				});
@@ -299,7 +299,7 @@ export async function getTestInstance<
 		runWithUser: async (
 			email: string,
 			password: string,
-			fn: (headers: Headers) => Promise<void>,
+			fn: (headers: Headers) => Promise<void> | void,
 		) => {
 			const { headers } = await signInWithUser(email, password);
 			return currentUserContextStorage.run({ headers }, async () => {
