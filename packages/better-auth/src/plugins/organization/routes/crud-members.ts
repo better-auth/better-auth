@@ -59,9 +59,9 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 						role:
 							| InferOrganizationRolesFromOption<O>
 							| InferOrganizationRolesFromOption<O>[];
-						organizationId?: string;
+						organizationId?: string | undefined;
 					} & (O extends { teams: { enabled: true } }
-						? { teamId?: string }
+						? { teamId?: string | undefined }
 						: {}) &
 						InferAdditionalFieldsFromPluginOptions<"member", O>,
 				},
