@@ -65,6 +65,7 @@ import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 import type { OrganizationOptions } from "./types";
+import type { DBFieldAttribute, FieldAttribute } from "../../db";
 
 export function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -1014,7 +1015,12 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "string",
 						required: false,
 						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
-					},
+						references: {
+							field: "id",
+							model: "organization",
+							onDelete: "set null",
+						},
+					} satisfies DBFieldAttribute,
 					...(teamSupport
 						? {
 								activeTeamId: {
