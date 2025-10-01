@@ -318,7 +318,7 @@ Accept or deny user consent for a set of scopes.
 
 <APIMethod path="/oauth2/consent" method="POST">
 ```ts
-type authorizeOAuth = {
+type oauth2Consent = {
   /**
    * Accept or deny user consent for a set of scopes
    */
@@ -335,7 +335,7 @@ This endpoint provides details of the provided token. If the token is additional
 
 <APIMethod path="/oauth2/introspect" method="POST">
 ```ts
-type introspectOAuth = {
+type oauth2Introspect = {
   /**
    * Client Id.
    */
@@ -370,7 +370,7 @@ For an `access_token` type,
 
 <APIMethod path="/oauth2/revoke" method="POST">
 ```ts
-type revokeOAuth = {
+type oauth2Revoke = {
   /**
    * Client Id.
    */

@@ -254,7 +254,7 @@ export async function revokeEndpoint(
 	if (typeof token === "string" && token.startsWith("Bearer ")) {
 		token = token.replace("Bearer ", "");
 	}
-	if (!token.length) {
+	if (!token?.length) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "missing a required token for introspection",
 			error: "invalid_request",

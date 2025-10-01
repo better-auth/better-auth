@@ -275,7 +275,9 @@ async function redirectWithAuthorizationCode(
 				sessionId: verificationValue?.sessionId,
 				redirectUri: verificationValue.query.redirect_uri,
 				scopes: verificationValue.scopes,
-				state: verificationValue.query.state,
+				...(verificationValue.query.state !== undefined
+					? { state: verificationValue.query.state }
+					: {}),
 				codeChallenge: verificationValue.query.code_challenge,
 				codeChallengeMethod: verificationValue.query.code_challenge_method,
 				nonce: verificationValue.query.nonce,

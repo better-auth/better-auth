@@ -67,7 +67,7 @@ describe("oauth authorize - unauthenticated", async () => {
 			state: "123",
 			scopes: ["openid"],
 			responseType: "code",
-			codeVerifier: generateRandomString(32),
+			codeVerifier: generateRandomString(64),
 			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		});
 
@@ -138,7 +138,7 @@ describe("oauth authorize - authenticated", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
-		const codeVerifier = generateRandomString(32);
+		const codeVerifier = generateRandomString(64);
 		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {

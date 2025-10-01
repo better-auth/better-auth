@@ -35,11 +35,9 @@ export async function consentEndpoint(
 				try {
 					parsedValue = JSON.parse(val.value);
 				} catch (err) {
-					// Handle invalid JSON gracefully
-					// For example, return null or throw a specific invalid_request error
-					throw new Error(
-						"invalid_request: verification value is not valid JSON",
-					);
+					throw new APIError("UNAUTHORIZED", {
+						message: "invalid verification value",
+					});
 				}
 			}
 			return {
