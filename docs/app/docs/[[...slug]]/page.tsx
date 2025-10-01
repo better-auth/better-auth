@@ -29,6 +29,7 @@ import { APIMethod } from "@/components/api-method";
 import { LLMCopyButton, ViewOptions } from "./page.client";
 import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
 import { Callout } from "@/components/ui/callout";
+import { AddToCursor } from "@/components/mdx/add-to-cursor";
 export default async function Page({
 	params,
 }: {
@@ -50,7 +51,7 @@ export default async function Page({
 			editOnGithub={{
 				owner: "better-auth",
 				repo: "better-auth",
-				sha: "main",
+				sha: process.env.VERCEL_GIT_COMMIT_SHA || "main",
 				path: `/docs/content/docs/${page.path}`,
 			}}
 			tableOfContent={{
@@ -59,7 +60,7 @@ export default async function Page({
 		>
 			<DocsTitle>{page.data.title}</DocsTitle>
 			{!avoidLLMHeader.includes(page.data.title) && (
-				<div className="flex flex-row gap-2 items-center border-b pb-3">
+				<div className="flex flex-row gap-2 items-center pb-3 border-b">
 					<LLMCopyButton />
 					<ViewOptions
 						markdownUrl={`${page.url}.mdx`}
@@ -75,7 +76,7 @@ export default async function Page({
 							return (
 								<CodeBlockTabs
 									{...props}
-									className="bg-fd-secondary border-b p-0 rounded-lg"
+									className="p-0 border-0 rounded-lg bg-fd-secondary"
 								>
 									<div {...props}>{props.children}</div>
 								</CodeBlockTabs>
@@ -85,7 +86,7 @@ export default async function Page({
 							return (
 								<CodeBlockTabsList
 									{...props}
-									className="bg-fd-secondary my-0 pb-0 rounded-lg"
+									className="pb-0 my-0 rounded-lg bg-fd-secondary"
 								/>
 							);
 						},
@@ -94,9 +95,9 @@ export default async function Page({
 						},
 						pre: (props) => {
 							return (
-								<CodeBlock className="bg-fd-muted rounded-xl" {...props}>
+								<CodeBlock className="rounded-xl bg-fd-muted" {...props}>
 									<div style={{ minWidth: "100%", display: "table" }}>
-										<Pre className="bg-fd-muted py-3 px-0 focus-visible:outline-none">
+										<Pre className="px-0 py-3 bg-fd-muted focus-visible:outline-none">
 											{props.children}
 										</Pre>
 									</div>
@@ -129,6 +130,7 @@ export default async function Page({
 						TypeTable,
 						Features,
 						ForkButton,
+						AddToCursor,
 						DatabaseTable,
 						Accordion,
 						Accordions,

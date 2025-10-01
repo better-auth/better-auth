@@ -16,15 +16,20 @@ exports[`init > should match config 1`] = `
         "adapterId": "kysely",
         "adapterName": "Kysely Adapter",
         "debugLogs": false,
+        "disableTransformInput": false,
+        "disableTransformOutput": false,
         "supportsBooleans": false,
         "supportsDates": false,
         "supportsJSON": false,
         "supportsNumericIds": true,
+        "transaction": false,
         "usePlural": undefined,
       },
       "debugLogs": false,
+      "transaction": undefined,
       "type": "sqlite",
     },
+    "transaction": [Function],
     "update": [Function],
     "updateMany": [Function],
   },
@@ -165,6 +170,7 @@ exports[`init > should match config 1`] = `
           "type": "string",
         },
         "createdAt": {
+          "defaultValue": [Function],
           "fieldName": "createdAt",
           "required": true,
           "type": "date",
@@ -222,6 +228,7 @@ exports[`init > should match config 1`] = `
     "session": {
       "fields": {
         "createdAt": {
+          "defaultValue": [Function],
           "fieldName": "createdAt",
           "required": true,
           "type": "date",
@@ -283,7 +290,7 @@ exports[`init > should match config 1`] = `
           "unique": true,
         },
         "emailVerified": {
-          "defaultValue": [Function],
+          "defaultValue": false,
           "fieldName": "emailVerified",
           "required": true,
           "type": "boolean",
@@ -315,7 +322,7 @@ exports[`init > should match config 1`] = `
         "createdAt": {
           "defaultValue": [Function],
           "fieldName": "createdAt",
-          "required": false,
+          "required": true,
           "type": "date",
         },
         "expiresAt": {
@@ -332,7 +339,7 @@ exports[`init > should match config 1`] = `
           "defaultValue": [Function],
           "fieldName": "updatedAt",
           "onUpdate": [Function],
-          "required": false,
+          "required": true,
           "type": "date",
         },
         "value": {

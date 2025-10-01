@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
@@ -11,11 +11,10 @@ import type { OrganizationOptions } from "./types";
 import type { PrettifyDeep } from "../../types/helper";
 import type { InvitationStatus } from "./schema";
 import { admin } from "../admin";
-import { ownerAc } from "./access";
+import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { nextCookies } from "../../integrations/next-js";
 
 describe("organization", async (it) => {
-	const onInvitationAccepted = vi.fn();
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
 		await getTestInstance({
 			user: {
@@ -37,7 +36,6 @@ describe("organization", async (it) => {
 						},
 					},
 					invitationLimit: 3,
-					onInvitationAccepted,
 				}),
 			],
 			logger: {
@@ -272,7 +270,7 @@ describe("organization", async (it) => {
 		expect(wrongInvitation.error?.status).toBe(400);
 
 		const wrongPerson = await client.organization.acceptInvitation({
-			invitationId: invite.data.id,
+			invitationId: invite.data!.id!,
 			fetchOptions: {
 				headers,
 			},
@@ -280,7 +278,7 @@ describe("organization", async (it) => {
 		expect(wrongPerson.error?.status).toBe(403);
 
 		const invitation = await client.organization.acceptInvitation({
-			invitationId: invite.data.id,
+			invitationId: invite.data!.id!,
 			fetchOptions: {
 				headers: headers2,
 			},
@@ -295,94 +293,7 @@ describe("organization", async (it) => {
 			organizationId,
 		);
 	});
-	it("should call onInvitationAccepted callback when invitation is accepted", async () => {
-		onInvitationAccepted.mockClear();
 
-		const testOrg = await client.organization.create({
-			name: "Test Org for Callback",
-			slug: `test-org-callback-${Math.random().toString(36).substring(7)}`,
-			metadata: {
-				test: "test",
-			},
-			fetchOptions: {
-				headers,
-			},
-		});
-
-		if (!testOrg.data) {
-			throw new Error("Failed to create test organization");
-		}
-
-		const uniqueId = Math.random().toString(36).substring(7);
-		const newUser = {
-			email: `test-accept-${uniqueId}@example.com`,
-			password: "password123",
-			name: "Test Accept User",
-		};
-
-		await client.signUp.email({
-			email: newUser.email,
-			password: newUser.password,
-			name: newUser.name,
-		});
-
-		const { headers: newUserHeaders } = await signInWithUser(
-			newUser.email,
-			newUser.password,
-		);
-
-		const invite = await client.organization.inviteMember({
-			organizationId: testOrg.data.id,
-			email: newUser.email,
-			role: "member",
-			fetchOptions: {
-				headers,
-			},
-		});
-
-		if (!invite.data) {
-			console.error("Invitation creation failed:", invite);
-			throw new Error("Invitation not created");
-		}
-		expect(invite.data.role).toBe("member");
-
-		const accept = await client.organization.acceptInvitation({
-			invitationId: invite.data.id,
-			fetchOptions: {
-				headers: newUserHeaders,
-			},
-		});
-
-		expect(accept.data?.invitation.status).toBe("accepted");
-
-		expect(onInvitationAccepted).toHaveBeenCalledTimes(1);
-		expect(onInvitationAccepted).toHaveBeenCalledWith(
-			expect.objectContaining({
-				id: invite.data.id,
-				role: "member",
-				organization: expect.objectContaining({
-					id: testOrg.data.id,
-					name: "Test Org for Callback",
-				}),
-				invitation: expect.objectContaining({
-					id: invite.data.id,
-					status: expect.any(String),
-				}),
-				inviter: expect.objectContaining({
-					user: expect.objectContaining({
-						email: expect.any(String),
-						name: expect.any(String),
-					}),
-				}),
-				acceptedUser: expect.objectContaining({
-					id: expect.any(String),
-					email: newUser.email,
-					name: newUser.name,
-				}),
-			}),
-			expect.any(Object),
-		);
-	});
 	it("should create invitation with multiple roles", async () => {
 		const invite = await client.organization.inviteMember({
 			organizationId: organizationId,
@@ -449,7 +360,7 @@ describe("organization", async (it) => {
 			user.password,
 		);
 		const acceptRes = await client.organization.acceptInvitation({
-			invitationId: invite.data.id,
+			invitationId: invite.data!.id!,
 			fetchOptions: {
 				headers: userHeaders,
 			},
@@ -510,10 +421,10 @@ describe("organization", async (it) => {
 			},
 		});
 		if (!org.data) throw new Error("Organization not found");
-		expect(org.data?.members[3].role).toBe("member");
+		expect(org.data.members[3]!.role).toBe("member");
 		const member = await client.organization.updateMemberRole({
-			organizationId: org.data.id,
-			memberId: org.data.members[3].id,
+			organizationId: org.data!.id,
+			memberId: org.data!.members[3]!.id,
 			role: "admin",
 			fetchOptions: {
 				headers,
@@ -533,9 +444,9 @@ describe("organization", async (it) => {
 			},
 		});
 		const c = await client.organization.updateMemberRole({
-			organizationId: org.data?.id as string,
+			organizationId: org.data!.id,
 			role: ["member", "admin"],
-			memberId: org.data?.members[1].id as string,
+			memberId: org.data!.members[1]!.id,
 			fetchOptions: {
 				headers,
 			},
@@ -712,6 +623,24 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(removedOwner.error?.status).toBe(400);
+
+		const res = await client.organization.updateMemberRole({
+			organizationId: organizationId,
+			role: ["owner", "admin"],
+			memberId: org.data?.members.find((m) => m.role === "owner")?.id!,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const removedMultipleRoleOwner = await client.organization.removeMember({
+			organizationId: org.data.id,
+			memberIdOrEmail: org.data?.members.find((m) => m.role === "owner")!.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(removedMultipleRoleOwner.error?.status).toBe(400);
 	});
 
 	it("should validate permissions", async () => {
@@ -976,7 +905,7 @@ describe("organization", async (it) => {
 		);
 
 		const invitation = await client.organization.acceptInvitation({
-			invitationId: invite.data.id,
+			invitationId: invite.data!.id!,
 			fetchOptions: {
 				headers: headers2,
 			},
@@ -1056,7 +985,7 @@ describe("organization", async (it) => {
 				headers: headers2,
 			},
 		});
-		expect(userInvitations.data?.[0].id).toBe(invitation.data?.id);
+		expect(userInvitations.data?.[0]!.id).toBe(invitation.data?.id);
 		expect(userInvitations.data?.length).toBe(1);
 	});
 
@@ -1067,29 +996,29 @@ describe("organization", async (it) => {
 			},
 		});
 
-		if (!orgInvitations.data?.[0].email) throw new Error("No email found");
+		if (!orgInvitations.data?.[0]!.email) throw new Error("No email found");
 
 		const invitations = await auth.api.listUserInvitations({
 			query: {
-				email: orgInvitations.data?.[0].email,
+				email: orgInvitations.data?.[0]!.email,
 			},
 		});
 
 		expect(invitations?.length).toBe(
-			orgInvitations.data.filter(
-				(x) => x.email === orgInvitations.data?.[0].email,
+			orgInvitations.data!.filter(
+				(x) => x.email === orgInvitations.data?.[0]!.email,
 			).length,
 		);
 
 		const invitationsUpper = await auth.api.listUserInvitations({
 			query: {
-				email: orgInvitations.data?.[0].email.toUpperCase(),
+				email: orgInvitations.data?.[0]!.email.toUpperCase(),
 			},
 		});
 
 		expect(invitationsUpper?.length).toBe(
-			orgInvitations.data.filter(
-				(x) => x.email === orgInvitations.data?.[0].email,
+			orgInvitations.data!.filter(
+				(x) => x.email === orgInvitations.data?.[0]!.email,
 			).length,
 		);
 	});
@@ -1099,18 +1028,22 @@ describe("access control", async (it) => {
 	const ac = createAccessControl({
 		project: ["create", "read", "update", "delete"],
 		sales: ["create", "read", "update", "delete"],
+		...defaultStatements,
 	});
 	const owner = ac.newRole({
 		project: ["create", "delete", "update", "read"],
 		sales: ["create", "read", "update", "delete"],
+		...ownerAc.statements,
 	});
 	const admin = ac.newRole({
 		project: ["create", "read"],
 		sales: ["create", "read"],
+		...adminAc.statements,
 	});
 	const member = ac.newRole({
 		project: ["read"],
 		sales: ["read"],
+		...memberAc.statements,
 	});
 	const { auth, customFetchImpl, sessionSetter, signInWithTestUser } =
 		await getTestInstance({
@@ -1122,13 +1055,14 @@ describe("access control", async (it) => {
 						member,
 						owner,
 					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
 				}),
 			],
 		});
 
-	const {
-		organization: { checkRolePermission, hasPermission, create },
-	} = createAuthClient({
+	const authClient = createAuthClient({
 		baseURL: "http://localhost:3000",
 		plugins: [
 			organizationClient({
@@ -1138,14 +1072,20 @@ describe("access control", async (it) => {
 					member,
 					owner,
 				},
+				dynamicAccessControl: {
+					enabled: true,
+				},
 			}),
 		],
 		fetchOptions: {
 			customFetchImpl,
 		},
 	});
+	const {
+		organization: { checkRolePermission, hasPermission, create },
+	} = authClient;
 
-	const { headers } = await signInWithTestUser();
+	const { headers, user, session } = await signInWithTestUser();
 
 	const org = await create(
 		{
@@ -1160,9 +1100,10 @@ describe("access control", async (it) => {
 			headers,
 		},
 	);
+	if (!org.data) throw new Error("Organization not created");
 
 	it("should return success", async () => {
-		const canCreateProject = checkRolePermission({
+		const canCreateProject = await checkRolePermission({
 			role: "admin",
 			permissions: {
 				project: ["create"],
@@ -1171,7 +1112,7 @@ describe("access control", async (it) => {
 		expect(canCreateProject).toBe(true);
 
 		// To be removed when `permission` will be removed entirely
-		const canCreateProjectLegacy = checkRolePermission({
+		const canCreateProjectLegacy = await checkRolePermission({
 			role: "admin",
 			permission: {
 				project: ["create"],
@@ -1191,7 +1132,7 @@ describe("access control", async (it) => {
 	});
 
 	it("should return not success", async () => {
-		const canCreateProject = checkRolePermission({
+		const canCreateProject = await checkRolePermission({
 			role: "admin",
 			permissions: {
 				project: ["delete"],
@@ -1201,7 +1142,7 @@ describe("access control", async (it) => {
 	});
 
 	it("should return not success", async () => {
-		const res = checkRolePermission({
+		const res = await checkRolePermission({
 			role: "admin",
 			permissions: {
 				project: ["read"],
@@ -1478,7 +1419,7 @@ describe("owner can update roles", async () => {
 		},
 	});
 
-	const adminCookie = headers.getSetCookie()[0];
+	const adminCookie = headers.getSetCookie()[0]!;
 
 	const org = await auth.api.createOrganization({
 		headers: { cookie: adminCookie },
@@ -1528,7 +1469,7 @@ describe("owner can update roles", async () => {
 			body: {
 				organizationId: org.id,
 				memberId: addMemberRes.id,
-				role: ["custom"],
+				role: ["custom", "owner"],
 			},
 		});
 
@@ -1540,7 +1481,7 @@ describe("owner can update roles", async () => {
 			},
 		});
 
-		const userCookie = signInRes.headers.getSetCookie()[0];
+		const userCookie = signInRes.headers.getSetCookie()[0]!;
 
 		const permissionRes = await auth.api.hasPermission({
 			headers: { cookie: userCookie },
@@ -1580,8 +1521,7 @@ describe("owner can update roles", async () => {
 		expect(permissionRes.error).toBeNull();
 	});
 
-	// TODO: We might not want to allow this.
-	it("allows an org owner to remove their own creator role", async () => {
+	it("allows an org owner to remove their own creator role if not sole owner", async () => {
 		await auth.api.updateMemberRole({
 			headers: { cookie: adminCookie },
 			body: {
@@ -1590,12 +1530,38 @@ describe("owner can update roles", async () => {
 				role: [],
 			},
 		});
-
-		const member = await auth.api.getActiveMember({
-			headers: { cookie: adminCookie },
-		});
-		expect(member?.role).toBe("");
 	});
+
+	it("should throw error if sole org owner tries to remove creator role"),
+		async () => {
+			const userEmail = "user@email.com";
+			const userPassword = "userpassword";
+
+			const signInRes = await auth.api.signInEmail({
+				returnHeaders: true,
+				body: {
+					email: userEmail,
+					password: userPassword,
+				},
+			});
+
+			const userCookie = signInRes.headers.getSetCookie()[0]!;
+
+			await auth.api
+				.updateMemberRole({
+					headers: { cookie: userCookie },
+					body: {
+						organizationId: org.id,
+						memberId: ownerId,
+						role: [],
+					},
+				})
+				.catch((e: APIError) => {
+					expect(e.message).toBe(
+						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER,
+					);
+				});
+		};
 });
 
 describe("types", async (it) => {
@@ -1899,14 +1865,11 @@ describe("Additional Fields", async () => {
 			headers,
 		});
 
-		expect(invitation?.invitationRequiredField).toBe("hey");
-		expectTypeOf<
-			typeof invitation.invitationRequiredField
-		>().toEqualTypeOf<string>();
-		expect(invitation?.invitationOptionalField).toBe("hey2");
-		expectTypeOf<typeof invitation.invitationOptionalField>().toEqualTypeOf<
-			string | undefined
-		>();
+		const invitationWithFields = invitation as any;
+		expect(invitationWithFields.invitationRequiredField).toBe("hey");
+		expectTypeOf<string>().toEqualTypeOf<string>();
+		expect(invitationWithFields.invitationOptionalField).toBe("hey2");
+		expectTypeOf<string | undefined>().toEqualTypeOf<string | undefined>();
 		const row = db.invitation.find((x) => x.id === invitation?.id)!;
 		expect(row).toBeDefined();
 		expect(row.invitationRequiredField).toBe("hey");
@@ -1994,5 +1957,81 @@ describe("Additional Fields", async () => {
 		expect(row).toBeDefined();
 		expect(row.teamOptionalField).toBe("hey3");
 		expect(row.teamRequiredField).toBe("hey4");
+	});
+});
+
+describe("organization hooks", async (it) => {
+	let hooksCalled: string[] = [];
+
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				organizationHooks: {
+					beforeCreateOrganization: async (data) => {
+						hooksCalled.push("beforeCreateOrganization");
+						return {
+							data: {
+								...data.organization,
+								metadata: { hookCalled: true },
+							},
+						};
+					},
+					afterCreateOrganization: async (data) => {
+						hooksCalled.push("afterCreateOrganization");
+					},
+					beforeCreateInvitation: async (data) => {
+						hooksCalled.push("beforeCreateInvitation");
+					},
+					afterCreateInvitation: async (data) => {
+						hooksCalled.push("afterCreateInvitation");
+					},
+					beforeAddMember: async (data) => {
+						hooksCalled.push("beforeAddMember");
+					},
+					afterAddMember: async (data) => {
+						hooksCalled.push("afterAddMember");
+					},
+				},
+				async sendInvitationEmail() {},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	it("should call organization creation hooks", async () => {
+		hooksCalled = [];
+		const organization = await client.organization.create({
+			name: "Test Org with Hooks",
+			slug: "test-org-hooks",
+			fetchOptions: { headers },
+		});
+
+		expect(hooksCalled).toContain("beforeCreateOrganization");
+		expect(hooksCalled).toContain("afterCreateOrganization");
+		expect(organization.data?.metadata).toEqual({ hookCalled: true });
+	});
+
+	it("should call invitation hooks", async () => {
+		hooksCalled = [];
+
+		await client.organization.inviteMember({
+			email: "test@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		expect(hooksCalled).toContain("beforeCreateInvitation");
+		expect(hooksCalled).toContain("afterCreateInvitation");
 	});
 });

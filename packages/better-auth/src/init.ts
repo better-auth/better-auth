@@ -1,7 +1,7 @@
 import { defu } from "defu";
 import { hashPassword, verifyPassword } from "./crypto/password";
-import { createInternalAdapter, getMigrations } from "./db";
-import { getAuthTables } from "./db/get-tables";
+import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
+import type { Entries } from "type-fest";
 import { getAdapter } from "./db/utils";
 import type {
 	Adapter,
@@ -19,7 +19,7 @@ import {
 	getCookies,
 } from "./cookies";
 import { createLogger } from "./utils/logger";
-import { socialProviderList, socialProviders } from "./social-providers";
+import { type SocialProviders, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
 import { env, isProduction } from "./utils/env";
@@ -30,6 +30,9 @@ import { BetterAuthError } from "./error";
 import { createTelemetry } from "./telemetry";
 import type { TelemetryEvent } from "./telemetry/types";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
+import { checkEndpointConflicts } from "./api";
+import { isPromise } from "./utils/is-promise";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -60,26 +63,29 @@ export const init = async (options: BetterAuthOptions) => {
 		plugins: plugins.concat(internalPlugins),
 	};
 
+	checkEndpointConflicts(options, logger);
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
-	const providers = Object.keys(options.socialProviders || {})
-		.map((key) => {
-			const value = options.socialProviders?.[key as "github"]!;
-			if (!value || value.enabled === false) {
+	const providers: OAuthProvider[] = (
+		Object.entries(
+			options.socialProviders || {},
+		) as unknown as Entries<SocialProviders>
+	)
+		.map(([key, config]) => {
+			if (config == null) {
 				return null;
 			}
-			if (!value.clientId) {
+			if (config.enabled === false) {
+				return null;
+			}
+			if (!config.clientId) {
 				logger.warn(
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);
 			}
-			const provider = socialProviders[
-				key as (typeof socialProviderList)[number]
-			](
-				value as any, // TODO: fix this
-			);
+			const provider = socialProviders[key](config as never);
 			(provider as OAuthProvider).disableImplicitSignUp =
-				value.disableImplicitSignUp;
+				config.disableImplicitSignUp;
 			return provider;
 		})
 		.filter((x) => x !== null);
@@ -168,7 +174,13 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 		publishTelemetry: publish,
 	};
-	let { context } = runPluginInit(ctx);
+	const initOrPromise = runPluginInit(ctx);
+	let context: AuthContext;
+	if (isPromise(initOrPromise)) {
+		({ context } = await initOrPromise);
+	} else {
+		({ context } = initOrPromise);
+	}
 	return context;
 };
 
@@ -177,6 +189,12 @@ export type AuthContext = {
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
+	oauthConfig?: {
+		/**
+		 * This is dangerous and should only be used in dev or staging environments.
+		 */
+		skipStateCookieCheck?: boolean;
+	};
 	/**
 	 * New session that will be set after the request
 	 * meaning: there is a `set-cookie` header that will set
@@ -229,19 +247,25 @@ export type AuthContext = {
 		};
 		checkPassword: typeof checkPassword;
 	};
-	tables: ReturnType<typeof getAuthTables>;
+	tables: BetterAuthDBSchema;
 	runMigrations: () => Promise<void>;
 	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
 };
 
-function runPluginInit(ctx: AuthContext) {
+async function runPluginInit(ctx: AuthContext) {
 	let options = ctx.options;
 	const plugins = options.plugins || [];
 	let context: AuthContext = ctx;
 	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
-			const result = plugin.init(context);
+			let initPromise = plugin.init(context);
+			let result: ReturnType<Required<BetterAuthPlugin>["init"]>;
+			if (isPromise(initPromise)) {
+				result = await initPromise;
+			} else {
+				result = initPromise;
+			}
 			if (typeof result === "object") {
 				if (result.options) {
 					const { databaseHooks, ...restOpts } = result.options;

@@ -19,6 +19,7 @@ export interface FacebookProfile {
 }
 
 export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
+	clientId: string;
 	/**
 	 * Extend list of fields to retrieve from the Facebook user profile.
 	 *

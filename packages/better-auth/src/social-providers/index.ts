@@ -1,7 +1,7 @@
-import * as z from "zod/v4";
-import type { Prettify } from "../types/helper";
+import * as z from "zod";
 import { apple } from "./apple";
 import { atlassian } from "./atlassian";
+import { cognito } from "./cognito";
 import { discord } from "./discord";
 import { facebook } from "./facebook";
 import { figma } from "./figma";
@@ -25,11 +25,15 @@ import { roblox } from "./roblox";
 import { salesforce } from "./salesforce";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
+import { kakao } from "./kakao";
+import { naver } from "./naver";
 import { line } from "./line";
 import { paypal } from "./paypal";
+
 export const socialProviders = {
 	apple,
 	atlassian,
+	cognito,
 	discord,
 	facebook,
 	figma,
@@ -53,6 +57,8 @@ export const socialProviders = {
 	vk,
 	zoom,
 	notion,
+	kakao,
+	naver,
 	line,
 	paypal,
 };
@@ -69,15 +75,16 @@ export const SocialProviderListEnum = z
 export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
 
 export type SocialProviders = {
-	[K in SocialProviderList[number]]?: Prettify<
-		Parameters<(typeof socialProviders)[K]>[0] & {
-			enabled?: boolean;
-		}
-	>;
+	[K in SocialProviderList[number]]?: Parameters<
+		(typeof socialProviders)[K]
+	>[0] & {
+		enabled?: boolean;
+	};
 };
 
 export * from "./apple";
 export * from "./atlassian";
+export * from "./cognito";
 export * from "./discord";
 export * from "./dropbox";
 export * from "./facebook";
@@ -103,6 +110,8 @@ export * from "./zoom";
 export * from "./kick";
 export * from "./huggingface";
 export * from "./slack";
+export * from "./kakao";
+export * from "./naver";
 export * from "./line";
 export * from "./paypal";
 

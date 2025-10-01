@@ -1,9 +1,9 @@
 import {
 	APIError,
-	toResponse,
 	type EndpointContext,
 	type EndpointOptions,
 	type InputContext,
+	toResponse,
 } from "better-call";
 import type { AuthEndpoint, AuthMiddleware } from "./call";
 import type { AuthContext, HookEndpointContext } from "../types";
@@ -81,7 +81,16 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				internalContext = defuReplaceArrays(rest, internalContext);
 			} else if (before) {
 				/* Return before hook response if it's anything other than a context return */
-				return before;
+				return context?.asResponse
+					? toResponse(before, {
+							headers: context?.headers,
+						})
+					: context?.returnHeaders
+						? {
+								headers: context?.headers,
+								response: before,
+							}
+						: before;
 			}
 
 			internalContext.asResponse = false;
@@ -121,8 +130,8 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				result.response instanceof APIError &&
 				shouldPublishLog(authContext.logger.level, "debug")
 			) {
-				// inherit stack from errorWithStack if debug mode is enabled
-				result.response.stack = result.response.errorWithStack.stack;
+				// inherit stack from errorStack if debug mode is enabled
+				result.response.stack = result.response.errorStack;
 			}
 
 			if (result.response instanceof APIError && !context?.asResponse) {
@@ -169,8 +178,8 @@ async function runBeforeHooks(
 						e instanceof APIError &&
 						shouldPublishLog(context.context.logger.level, "debug")
 					) {
-						// inherit stack from errorWithStack if debug mode is enabled
-						e.stack = e.errorWithStack.stack;
+						// inherit stack from errorStack if debug mode is enabled
+						e.stack = e.errorStack;
 					}
 					throw e;
 				});
@@ -211,8 +220,8 @@ async function runAfterHooks(
 			const result = (await hook.handler(context).catch((e) => {
 				if (e instanceof APIError) {
 					if (shouldPublishLog(context.context.logger.level, "debug")) {
-						// inherit stack from errorWithStack if debug mode is enabled
-						e.stack = e.errorWithStack.stack;
+						// inherit stack from errorStack if debug mode is enabled
+						e.stack = e.errorStack;
 					}
 					return {
 						response: e,
