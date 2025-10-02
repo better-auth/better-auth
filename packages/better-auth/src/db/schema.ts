@@ -3,13 +3,7 @@ import type { AuthPluginSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
-import type { DBFieldAttribute } from "@better-auth/core/db";
-
-export const coreSchema = z.object({
-	id: z.string(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
-});
+import { type DBFieldAttribute, coreSchema } from "@better-auth/core/db";
 
 export const accountSchema = coreSchema.extend({
 	providerId: z.string(),
@@ -34,13 +28,6 @@ export const accountSchema = coreSchema.extend({
 	 * Password is only stored in the credential provider
 	 */
 	password: z.string().nullish(),
-});
-
-export const userSchema = coreSchema.extend({
-	email: z.string().transform((val) => val.toLowerCase()),
-	emailVerified: z.boolean().default(false),
-	name: z.string(),
-	image: z.string().nullish(),
 });
 
 export const sessionSchema = coreSchema.extend({

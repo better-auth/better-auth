@@ -6,6 +6,9 @@ import type {
 	BetterAuthDBSchema,
 } from "./type";
 
+export { coreSchema } from "./schema/shared";
+export { userSchema, type User } from "./schema/user";
+
 export type {
 	DBFieldAttribute,
 	DBFieldAttributeConfig,
