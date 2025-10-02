@@ -142,14 +142,9 @@ export type BetterAuthAdvancedOptions = {
 	 * If not provided, random ids will be generated.
 	 * If set to false, the database's auto generated id will be used.
 	 *
-	 * @deprecated Please use `database.generateId` instead. This will be potentially removed in future releases.
+	 * @deprecated Please use `database.generateId` instead.
 	 */
-	generateId?:
-		| ((options: {
-				model: LiteralUnion<Models, string>;
-				size?: number;
-		  }) => string)
-		| false;
+	generateId?: never;
 };
 
 export type BetterAuthOptions = {
