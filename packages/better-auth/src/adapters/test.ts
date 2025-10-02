@@ -5,7 +5,7 @@ import { generateId } from "../utils";
 interface AdapterTestOptions {
 	getAdapter: (
 		customOptions?: Omit<BetterAuthOptions, "database">,
-	) => Promise<Adapter>;
+	) => Promise<Adapter> | Adapter;
 	disableTests?: Partial<Record<keyof typeof adapterTests, boolean>>;
 	testPrefix?: string;
 }
@@ -65,12 +65,18 @@ const numberIdAdapterTests = {
 // biome-ignore lint/performance/noDelete: testing propose
 delete numberIdAdapterTests.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND;
 
+/**
+ * @deprecated Use `testAdapter` instead.
+ */
 function adapterTest(
 	{ getAdapter, disableTests: disabledTests, testPrefix }: AdapterTestOptions,
 	internalOptions?: {
 		predefinedOptions: Omit<BetterAuthOptions, "database">;
 	},
 ) {
+	console.warn(
+		"This test function is deprecated and will be removed in the future. Use `testAdapter` instead.",
+	);
 	const adapter = async () =>
 		await getAdapter(internalOptions?.predefinedOptions);
 

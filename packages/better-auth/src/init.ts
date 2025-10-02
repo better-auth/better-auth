@@ -189,6 +189,12 @@ export type AuthContext = {
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
+	oauthConfig?: {
+		/**
+		 * This is dangerous and should only be used in dev or staging environments.
+		 */
+		skipStateCookieCheck?: boolean;
+	};
 	/**
 	 * New session that will be set after the request
 	 * meaning: there is a `set-cookie` header that will set

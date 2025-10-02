@@ -157,6 +157,43 @@ describe("SSO", async () => {
 		}
 	});
 
+	it("should not allow creating a provider with duplicate providerId", async () => {
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "duplicate.com",
+				providerId: "duplicate-oidc-provider",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+			headers,
+		});
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "another-duplicate.com",
+					providerId: "duplicate-oidc-provider",
+					oidcConfig: {
+						clientId: "test2",
+						clientSecret: "test2",
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "UNPROCESSABLE_ENTITY",
+			body: {
+				message: "SSO provider with this providerId already exists",
+			},
+		});
+	});
+
 	it("should sign in with SSO provider with email matching", async () => {
 		const headers = new Headers();
 		const res = await authClient.signIn.sso({

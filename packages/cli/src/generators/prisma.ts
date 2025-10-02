@@ -109,13 +109,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.attribute(`map("_id")`);
 				} else {
 					if (options.advanced?.database?.useNumberId) {
-						const col = builder
+						builder
 							.model(modelName)
 							.field("id", "Int")
-							.attribute("id");
-						if (provider !== "sqlite") {
-							col.attribute("default(autoincrement())");
-						}
+							.attribute("id")
+							.attribute("default(autoincrement())");
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
 					}
@@ -160,8 +158,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					if (provider === "mongodb") {
 						fieldBuilder.attribute(`map("_id")`);
 					}
-				} else if (fieldName !== field) {
-					fieldBuilder.attribute(`map("${field}")`);
 				}
 
 				if (attr.unique) {
