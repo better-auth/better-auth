@@ -101,7 +101,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				const schemaModel = getSchema(model);
 				const builderVal = builder.config?.values;
 				if (where?.length) {
-					const clause = convertWhereClause(where, model);
+					// If we're updating a field that's in the where clause, use the new value
+					const updatedWhere = where.map((w) => {
+						// If this field was updated, use the new value for lookup
+						if (data[w.field] !== undefined) {
+							return { ...w, value: data[w.field] };
+						}
+						return w;
+					});
+
+					const clause = convertWhereClause(updatedWhere, model);
 					const res = await db
 						.select()
 						.from(schemaModel)
