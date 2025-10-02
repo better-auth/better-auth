@@ -16,7 +16,6 @@ import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
 export type * from "./types";
 export { generateExportedKeyPair, createJwk } from "./utils";
-export { jwtClient } from "./client";
 
 export const jwt = (options?: JwtOptions) => {
 	// Remote url must be set when using signing function
