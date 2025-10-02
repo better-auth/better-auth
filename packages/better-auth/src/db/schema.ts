@@ -5,14 +5,6 @@ import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
 import { type DBFieldAttribute, coreSchema } from "@better-auth/core/db";
 
-export const sessionSchema = coreSchema.extend({
-	userId: z.coerce.string(),
-	expiresAt: z.date(),
-	token: z.string(),
-	ipAddress: z.string().nullish(),
-	userAgent: z.string().nullish(),
-});
-
 export const verificationSchema = coreSchema.extend({
 	value: z.string(),
 	expiresAt: z.date(),
