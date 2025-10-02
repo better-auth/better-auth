@@ -21,6 +21,16 @@ describe("sign-up with custom fields", async (it) => {
 						type: "string",
 						required: false,
 					},
+					isAdmin: {
+						type: "boolean",
+						defaultValue: true,
+						input: false,
+					},
+					role: {
+						input: false,
+						type: "string",
+						required: false,
+					},
 				},
 			},
 			emailVerification: {
@@ -75,5 +85,52 @@ describe("sign-up with custom fields", async (it) => {
 			userAgent: "test-user-agent",
 			ipAddress: "127.0.0.1",
 		});
+	});
+
+	it("should rollback when session creation fails", async ({ skip }) => {
+		const ctx = await auth.$context;
+		if (!ctx.adapter.options?.adapterConfig.transaction) {
+			skip();
+		}
+		const originalCreateSession = ctx.internalAdapter.createSession;
+		ctx.internalAdapter.createSession = vi
+			.fn()
+			.mockRejectedValue(new Error("Session creation failed"));
+
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "rollback@test.com",
+					password: "password",
+					name: "Rollback Test",
+				},
+			}),
+		).rejects.toThrow();
+
+		const users = await db.findMany({ model: "user" });
+		const rollbackUser = users.find(
+			(u: any) => u.email === "rollback@test.com",
+		);
+		expect(rollbackUser).toBeUndefined();
+
+		ctx.internalAdapter.createSession = originalCreateSession;
+	});
+
+	it("should not allow user to set the field that is set to input: false", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "input-false@test.com",
+				password: "password",
+				name: "Input False Test",
+				//@ts-expect-error
+				role: "admin",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session?.user.role).toBeNull();
 	});
 });

@@ -313,6 +313,10 @@ export const createAdapterFactory =
 		) => {
 			const transformedData: Record<string, any> = {};
 			const fields = schema[defaultModelName]!.fields;
+<<<<<<< HEAD
+=======
+
+>>>>>>> 5ba0e093e (reafactor: move user input parser to api endpoints)
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
 			if (
 				!config.disableIdGeneration &&
