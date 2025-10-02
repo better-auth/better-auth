@@ -15,8 +15,6 @@ import {
 import { useDocsSearch } from "fumadocs-core/search/client";
 import { OramaClient } from "@oramacloud/client";
 import { useI18n } from "fumadocs-ui/contexts/i18n";
-import { Button } from "@/components/ui/button";
-import { Bot } from "lucide-react";
 import { AIChatModal, aiChatModalAtom } from "./ai-chat-modal";
 import { useAtom } from "jotai";
 
@@ -57,15 +55,6 @@ export function CustomSearchDialog(props: SharedProps) {
 					<SearchDialogHeader>
 						<SearchDialogIcon />
 						<SearchDialogInput />
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={handleAskAIClick}
-							className="flex items-center gap-2 mr-2 text-sm hover:bg-muted"
-						>
-							<Bot className="h-4 w-4" />
-							Ask AI
-						</Button>
 						<SearchDialogClose className="hidden md:block" />
 					</SearchDialogHeader>
 					<SearchDialogList

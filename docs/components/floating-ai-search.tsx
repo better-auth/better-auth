@@ -198,12 +198,10 @@ function Message({
 		<div {...props}>
 			<p
 				className={cn(
-					"mb-1 text-sm font-medium text-fd-muted-foreground",
+					"mb-2 text-sm font-medium text-fd-muted-foreground",
 					message.role === "assistant" && "text-fd-primary",
 				)}
-			>
-				{roleName[message.role] ?? "unknown"}
-			</p>
+			></p>
 			<div className="prose text-sm">
 				<Markdown text={message.content} />
 				{message.isStreaming && (
@@ -260,6 +258,7 @@ export function AISearchTrigger() {
 	const [isLoading, setIsLoading] = useState(false);
 	const [input, setInput] = useState("");
 	const [sessionId, setSessionId] = useState<string>("");
+	const [questionCount, setQuestionCount] = useState(0);
 
 	const streamText = (
 		messageId: string,
@@ -281,7 +280,7 @@ export function AISearchTrigger() {
 							? {
 									...msg,
 									content: currentText,
-									isStreaming: wordIndex < words.length,
+									isStreaming: false,
 								}
 							: msg,
 					),
@@ -289,7 +288,9 @@ export function AISearchTrigger() {
 			} else {
 				setMessages((prev) =>
 					prev.map((msg) =>
-						msg.id === messageId ? { ...msg, isStreaming: false } : msg,
+						msg.id === messageId
+							? { ...msg, isStreaming: false, references }
+							: msg,
 					),
 				);
 				clearInterval(streamInterval);
@@ -310,77 +311,175 @@ export function AISearchTrigger() {
 
 		setMessages((prev) => [...prev, userMessage]);
 		setIsLoading(true);
+		setQuestionCount((prev) => prev + 1);
+
+		const messageId = (Date.now() + 1).toString();
+		const assistantMessage = {
+			id: messageId,
+			role: "assistant" as const,
+			content: "",
+			isStreaming: true,
+		};
+
+		setMessages((prev) => [...prev, assistantMessage]);
 
 		try {
-			const requestBody: any = {
-				question: text,
-				stream: false,
-				external_user_id: "floating-ai-user",
-			};
+			const currentQuestionNumber = questionCount + 1;
+			const isFirstQuestion = currentQuestionNumber === 1;
+			const isSecondQuestion = currentQuestionNumber === 2;
 
-			if (sessionId) {
-				requestBody.session_id = sessionId;
-			}
+			if (!isFirstQuestion) {
+				const requestBody: any = {
+					question: text,
+					stream: false,
+					fetch_existing: true,
+				};
 
-			const { data, error } = await betterFetch<{
-				content?: string;
-				answer?: string;
-				response?: string;
-				session_id?: string;
-				references?: Array<{ link: string; title: string; icon?: string }>;
-				error?: string;
-			}>("/api/ai-chat", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(requestBody),
-			});
+				if (!isSecondQuestion && sessionId) {
+					requestBody.session_id = sessionId;
+				}
 
-			if (error) {
-				console.error("API Error Response:", error);
-				throw new Error(`HTTP ${error.status}: ${error.message}`);
-			}
+				const { data, error } = await betterFetch<{
+					content?: string;
+					answer?: string;
+					response?: string;
+					session_id?: string;
+					references?: Array<{ link: string; title: string; icon?: string }>;
+					error?: string;
+				}>("/api/ai-chat", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(requestBody),
+				});
 
-			if (data.session_id) {
-				setSessionId(data.session_id);
-			}
+				if (error) {
+					console.error("API Error Response:", error);
+					throw new Error(`HTTP ${error.status}: ${error.message}`);
+				}
 
-			// Handle different response formats
-			let responseContent = "";
-			if (data.content) {
-				responseContent = data.content;
-			} else if (data.answer) {
-				responseContent = data.answer;
-			} else if (data.response) {
-				responseContent = data.response;
-			} else if (data.error) {
-				responseContent = data.error;
+				let responseContent = "";
+				if (data.content) {
+					responseContent = data.content;
+				} else if (data.answer) {
+					responseContent = data.answer;
+				} else if (data.response) {
+					responseContent = data.response;
+				} else if (data.error) {
+					responseContent = data.error;
+				} else {
+					responseContent = "No response received";
+				}
+
+				const filteredReferences = data.references?.filter(
+					(ref) => !ref.link.includes("github.com"),
+				);
+
+				streamText(messageId, responseContent, filteredReferences);
+
+				if (isSecondQuestion && data.session_id) {
+					setSessionId(data.session_id);
+				}
 			} else {
-				responseContent = "No response received";
+				const streamRequestBody = {
+					question: text,
+					stream: true,
+					external_user_id: "floating-ai-user",
+				};
+
+				const streamResponse = await fetch("/api/ai-chat", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(streamRequestBody),
+				});
+
+				if (!streamResponse.ok) {
+					throw new Error(`HTTP error! status: ${streamResponse.status}`);
+				}
+
+				const reader = streamResponse.body?.getReader();
+				const decoder = new TextDecoder();
+				let accumulatedContent = "";
+
+				if (reader) {
+					while (true) {
+						const { done, value } = await reader.read();
+						if (done) break;
+
+						const chunk = decoder.decode(value, { stream: true });
+						accumulatedContent += chunk;
+
+						setMessages((prev) =>
+							prev.map((msg) =>
+								msg.id === messageId
+									? { ...msg, content: accumulatedContent, isStreaming: true }
+									: msg,
+							),
+						);
+					}
+				}
+
+				setMessages((prev) =>
+					prev.map((msg) =>
+						msg.id === messageId ? { ...msg, isStreaming: false } : msg,
+					),
+				);
+
+				const fetchReferencesBody = {
+					question: text,
+					stream: false,
+					fetch_existing: true,
+					external_user_id: "floating-ai-user",
+				};
+
+				const { data: referencesData } = await betterFetch<{
+					references?: Array<{ link: string; title: string; icon?: string }>;
+					session_id?: string;
+				}>("/api/ai-chat", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(fetchReferencesBody),
+				});
+
+				if (
+					referencesData?.references &&
+					referencesData.references.length > 0
+				) {
+					const filteredReferences = referencesData.references.filter(
+						(ref) => !ref.link.includes("github.com"),
+					);
+
+					if (filteredReferences.length > 0) {
+						setMessages((prev) =>
+							prev.map((msg) =>
+								msg.id === messageId
+									? { ...msg, references: filteredReferences }
+									: msg,
+							),
+						);
+					}
+				}
 			}
-
-			const messageId = (Date.now() + 1).toString();
-			const assistantMessage = {
-				id: messageId,
-				role: "assistant" as const,
-				content: "",
-				references: data.references || undefined,
-				isStreaming: true,
-			};
-
-			setMessages((prev) => [...prev, assistantMessage]);
-
-			streamText(messageId, responseContent, data.references);
 		} catch (error) {
 			console.error("Error sending message:", error);
-			const errorMessage = {
-				id: (Date.now() + 1).toString(),
-				role: "assistant" as const,
-				content:
-					"Sorry, there was an error processing your request. Please try again.",
-			};
-			setMessages((prev) => [...prev, errorMessage]);
+
+			setMessages((prev) => {
+				const filtered = prev.filter((msg) => msg.id !== messageId);
+				return [
+					...filtered,
+					{
+						id: messageId,
+						role: "assistant" as const,
+						content:
+							"Sorry, there was an error processing your request. Please try again.",
+					},
+				];
+			});
 		} finally {
 			setIsLoading(false);
 		}
@@ -389,6 +488,7 @@ export function AISearchTrigger() {
 	const clearMessages = () => {
 		setMessages([]);
 		setSessionId("");
+		setQuestionCount(0);
 	};
 
 	const onKeyPress = (e: KeyboardEvent) => {
