@@ -314,11 +314,7 @@ export const createAdapterFactory =
 		) => {
 			const transformedData: Record<string, any> = {};
 			const fields = schema[defaultModelName]!.fields;
-			switch (defaultModelName) {
-				case "user": {
-					data = parseUserInput(options, data, action);
-				}
-			}
+
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
 			if (
 				!config.disableIdGeneration &&
