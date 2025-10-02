@@ -417,6 +417,55 @@ describe("Social Providers", async (c) => {
 			refreshToken: "new-refresh-token",
 		});
 	});
+
+	it("should signin with clientSecret function", async () => {
+		const { client: _client, cookieSetter: _cookieSetter } =
+			await getTestInstance(
+				{
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: async () =>
+								new Promise<string>((res) => {
+									setTimeout(() => res("test-client-secret"), 100);
+								}),
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+		const headers = new Headers();
+		const signInRes = await _client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: _cookieSetter(headers),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await _client.$fetch("/callback/google", {
+			method: "GET",
+			headers,
+			query: {
+				state,
+				code: "test",
+			},
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/welcome");
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+			},
+		});
+	});
 });
 
 describe("Redirect URI", async () => {
