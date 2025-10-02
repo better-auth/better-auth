@@ -573,6 +573,9 @@ describe("provisioning", async (ctx) => {
 });
 
 describe("SSO Foreign Key Constraints", async () => {
+	// Create a dedicated server instance for this test suite
+	const fkConstraintsServer = new OAuth2Server();
+
 	const { auth, runWithUser, customFetchImpl } = await getTestInstance({
 		plugins: [sso(), organization()],
 	});
@@ -586,13 +589,21 @@ describe("SSO Foreign Key Constraints", async () => {
 	});
 
 	beforeAll(async () => {
-		await server.issuer.keys.generate("RS256");
-		server.issuer.on;
-		await server.start(8081, "localhost");
+		await fkConstraintsServer.issuer.keys.generate("RS256");
+		fkConstraintsServer.issuer.on;
+		await fkConstraintsServer.start(8083, "localhost");
+		
+		// Set up token signing
+		fkConstraintsServer.service.on("beforeTokenSigning", (token, req) => {
+			token.payload.email = "sso-user@localhost:8000.com";
+			token.payload.email_verified = true;
+			token.payload.name = "Test User";
+			token.payload.picture = "https://test.com/picture.png";
+		});
 	});
 
 	afterAll(async () => {
-		await server.stop();
+		await fkConstraintsServer.stop();
 	});
 
 	it("should not delete SSO provider when creator user is deleted", async () => {
@@ -609,15 +620,15 @@ describe("SSO Foreign Key Constraints", async () => {
 		await runWithUser(testUser.email, testUser.password, async (headers) => {
 			const provider = await auth.api.registerSSOProvider({
 				body: {
-					issuer: server.issuer.url!,
+					issuer: fkConstraintsServer.issuer.url!,
 					domain: "oidc-delete-test.com",
 					oidcConfig: {
 						clientId: "test-delete",
 						clientSecret: "test-delete",
-						authorizationEndpoint: `${server.issuer.url}/authorize`,
-						tokenEndpoint: `${server.issuer.url}/token`,
-						jwksEndpoint: `${server.issuer.url}/jwks`,
-						discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+						authorizationEndpoint: `${fkConstraintsServer.issuer.url}/authorize`,
+						tokenEndpoint: `${fkConstraintsServer.issuer.url}/token`,
+						jwksEndpoint: `${fkConstraintsServer.issuer.url}/jwks`,
+						discoveryEndpoint: `${fkConstraintsServer.issuer.url}/.well-known/openid-configuration`,
 						mapping: {
 							id: "sub",
 							email: "email",
@@ -706,15 +717,15 @@ describe("SSO Foreign Key Constraints", async () => {
 			// Register an SSO provider for the organization
 			const provider = await auth.api.registerSSOProvider({
 				body: {
-					issuer: server.issuer.url!,
+					issuer: fkConstraintsServer.issuer.url!,
 					domain: "org-cascade-delete.com",
 					oidcConfig: {
 						clientId: "test-org-cascade",
 						clientSecret: "test-org-cascade",
-						authorizationEndpoint: `${server.issuer.url}/authorize`,
-						tokenEndpoint: `${server.issuer.url}/token`,
-						jwksEndpoint: `${server.issuer.url}/jwks`,
-						discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+						authorizationEndpoint: `${fkConstraintsServer.issuer.url}/authorize`,
+						tokenEndpoint: `${fkConstraintsServer.issuer.url}/token`,
+						jwksEndpoint: `${fkConstraintsServer.issuer.url}/jwks`,
+						discoveryEndpoint: `${fkConstraintsServer.issuer.url}/.well-known/openid-configuration`,
 						mapping: {
 							id: "sub",
 							email: "email",
