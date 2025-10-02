@@ -260,15 +260,11 @@ describe("Email Verification", async () => {
 				callbackURL,
 			},
 		});
-
-		// Verify that the email was sent
 		expect(mockSendEmailLocal).toHaveBeenCalled();
 
-		// Parse the URL that was sent in the email
 		const emailUrl = new URL(capturedUrl);
 		const callbackURLParam = emailUrl.searchParams.get("callbackURL");
 
-		// The callbackURL should be properly encoded and decodable
 		expect(callbackURLParam).toBe(callbackURL);
 		expect(callbackURLParam).toContain("?redirect=/dashboard&tab=settings");
 	});
