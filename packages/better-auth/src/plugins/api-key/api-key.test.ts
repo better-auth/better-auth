@@ -2120,4 +2120,184 @@ describe("api-key", async () => {
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.permissions).toEqual(permissions);
 	});
+
+	it("should refill API key credits after refill interval (milliseconds)", async () => {
+		vi.useRealTimers();
+
+		const refillInterval = 3600000; // 1 hour in milliseconds
+		const refillAmount = 5;
+		const initialRemaining = 2;
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				remaining: initialRemaining,
+				refillInterval: refillInterval,
+				refillAmount: refillAmount,
+			},
+		});
+
+		// First verification - should reduce remaining to 1
+		let result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(initialRemaining - 1);
+
+		// Second verification - should reduce remaining to 0
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(0);
+
+		// Third verification - should fail due to no remaining credits
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(false);
+		expect(result.error?.code).toBe("USAGE_EXCEEDED");
+
+		// Advance time by more than refill interval
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(refillInterval + 1000);
+
+		// Fourth verification - should succeed with refilled credits
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(refillAmount - 1);
+
+		vi.useRealTimers();
+	});
+
+	it("should not refill API key credits before refill interval expires", async () => {
+		vi.useRealTimers();
+
+		const refillInterval = 86400000; // 24 hours in milliseconds
+		const refillAmount = 10;
+		const initialRemaining = 1;
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				remaining: initialRemaining,
+				refillInterval: refillInterval,
+				refillAmount: refillAmount,
+			},
+		});
+
+		// First verification - should reduce remaining to 0
+		let result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(0);
+
+		// Advance time by less than refill interval
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(refillInterval / 2); // Only advance half the interval
+
+		// Second verification - should still fail (no refill yet)
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(false);
+		expect(result.error?.code).toBe("USAGE_EXCEEDED");
+
+		// Advance time to complete the refill interval
+		await vi.advanceTimersByTimeAsync(refillInterval / 2 + 1000);
+
+		// Third verification - should succeed with refilled credits
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(refillAmount - 1);
+
+		vi.useRealTimers();
+	});
+
+	it("should handle multiple refill cycles correctly", async () => {
+		vi.useRealTimers();
+
+		const refillInterval = 3600000; // 1 hour in milliseconds
+		const refillAmount = 3;
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				remaining: 1,
+				refillInterval: refillInterval,
+				refillAmount: refillAmount,
+			},
+		});
+
+		// Use the initial credit
+		let result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(0);
+
+		vi.useFakeTimers();
+
+		// First refill cycle
+		await vi.advanceTimersByTimeAsync(refillInterval + 1000);
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(refillAmount - 1);
+
+		// Use all refilled credits
+		for (let i = 0; i < refillAmount - 1; i++) {
+			result = await auth.api.verifyApiKey({
+				body: {
+					key: apiKey.key,
+				},
+			});
+			expect(result.valid).toBe(true);
+		}
+
+		// Should be out of credits now
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(false);
+		expect(result.error?.code).toBe("USAGE_EXCEEDED");
+
+		// Second refill cycle
+		await vi.advanceTimersByTimeAsync(refillInterval + 1000);
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(refillAmount - 1);
+
+		vi.useRealTimers();
+	});
 });
