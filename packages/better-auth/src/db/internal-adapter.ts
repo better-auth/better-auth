@@ -77,7 +77,7 @@ export const createInternalAdapter = (
 				Partial<Account>,
 			context?: GenericEndpointContext,
 		) => {
-			return adapter.transaction(async (trxAdapter) => {
+			const executeOAuthUserCreation = async (trxAdapter: TransactionAdapter) => {
 				const createdUser = await createWithHooks(
 					{
 						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
@@ -107,7 +107,14 @@ export const createInternalAdapter = (
 					user: createdUser,
 					account: createdAccount,
 				};
-			});
+			};
+
+			// Use transaction if supported, otherwise execute sequentially
+			if (adapter.transaction) {
+				return adapter.transaction(executeOAuthUserCreation);
+			} else {
+				return executeOAuthUserCreation(adapter);
+			}
 		},
 		createUser: async <T>(
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
