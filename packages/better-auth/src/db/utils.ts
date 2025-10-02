@@ -37,7 +37,7 @@ export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 	// patch for 1.3.x to ensure we have a transaction function in the adapter
 	if (!adapter.transaction) {
 		logger.warn(
-			"Adapter does incorrectly implement transaction function, patching it automatically. Please update your adapter implementation.",
+			"Adapter does not correctly implement transaction function, patching it automatically. Please update your adapter implementation.",
 		);
 		adapter.transaction = async (cb) => {
 			return cb(adapter);
