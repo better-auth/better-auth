@@ -355,7 +355,7 @@ export const createAdapterFactory =
 						// Do nothing; If failed to convert, then it's not a date.
 					}
 				}
-				
+
 				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
 				let newValue = withApplyDefault(value, fieldAttributes!, action);
 
