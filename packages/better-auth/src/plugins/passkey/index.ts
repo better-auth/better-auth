@@ -12,7 +12,7 @@ import type {
 } from "@simplewebauthn/server";
 import { APIError } from "better-call";
 import { generateRandomString } from "../../crypto/random";
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
@@ -133,6 +133,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							authenticatorAttachment: z
 								.enum(["platform", "cross-platform"])
 								.optional(),
+							name: z.string().optional(),
 						})
 						.optional(),
 					metadata: {
@@ -148,6 +149,11 @@ export const passkey = (options?: PasskeyOptions) => {
 												description: `Type of authenticator to use for registration. 
                           "platform" for device-specific authenticators, 
                           "cross-platform" for authenticators that can be used across devices.`,
+												required: false,
+											},
+											name: {
+												description: `Optional custom name for the passkey. 
+                          This can help identify the passkey when managing multiple credentials.`,
 												required: false,
 											},
 										},
@@ -271,7 +277,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						rpName: opts.rpName || ctx.context.appName,
 						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userID,
-						userName: session.user.email || session.user.id,
+						userName: ctx.query?.name || session.user.email || session.user.id,
 						userDisplayName: session.user.email || session.user.id,
 						attestationType: "none",
 						excludeCredentials: userPasskeys.map((passkey) => ({

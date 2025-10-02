@@ -96,6 +96,10 @@ To add or register a passkey make sure a user is authenticated and then call the
 ```ts
 type addPasskey = {
     /**
+     * An optional name to label the authenticator account being registered. If not provided, it will default to the user's email address or user ID
+    */
+    name?: string = "example-passkey-name"
+    /**
      * You can also specify the type of authenticator you want to register. Default behavior allows both platform and cross-platform passkeys
     */
     authenticatorAttachment?: "platform" | "cross-platform" = "cross-platform"
@@ -123,10 +127,28 @@ type signInPasskey = {
     /**
      * The URL to redirect to after the user has signed in.
     */
-    callbackURL?: string = "/dashboard"
 }
 ```
 </APIMethod>
+
+#### Example Usage
+```ts
+// With post authentication redirect
+await authClient.signIn.passkey({
+    email: "user@example.com",
+    autoFill: true,
+    fetchOptions: {
+        onSuccess(context) {
+            // Redirect to dashboard after successful authentication
+            window.location.href = "/dashboard";
+        },
+        onError(context) {
+            // Handle authentication errors
+            console.error("Authentication failed:", context.error.message);
+        }
+    }
+});
+```
 
 ### List passkeys
 

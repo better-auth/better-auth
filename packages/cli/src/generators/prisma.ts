@@ -15,6 +15,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	const tables = getAuthTables(options);
 	const filePath = file || "./prisma/schema.prisma";
 	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
+
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
 		schemaPrisma = await fs.readFile(
@@ -25,37 +26,49 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schemaPrisma = getNewPrisma(provider);
 	}
 
-	// Create a map to store many-to-many relationships
 	const manyToManyRelations = new Map();
 
-	// First pass: identify many-to-many relationships
 	for (const table in tables) {
 		const fields = tables[table]?.fields;
 		for (const field in fields) {
 			const attr = fields[field]!;
 			if (attr.references) {
-				const referencedModel = capitalizeFirstLetter(attr.references.model);
-				if (!manyToManyRelations.has(referencedModel)) {
-					manyToManyRelations.set(referencedModel, new Set());
+				const referencedOriginalModel = attr.references.model;
+				const referencedCustomModel =
+					tables[referencedOriginalModel]?.modelName || referencedOriginalModel;
+				const referencedModelNameCap = capitalizeFirstLetter(
+					referencedCustomModel,
+				);
+
+				if (!manyToManyRelations.has(referencedModelNameCap)) {
+					manyToManyRelations.set(referencedModelNameCap, new Set());
 				}
+
+				const currentCustomModel = tables[table]?.modelName || table;
+				const currentModelNameCap = capitalizeFirstLetter(currentCustomModel);
+
 				manyToManyRelations
-					.get(referencedModel)
-					.add(capitalizeFirstLetter(table));
+					.get(referencedModelNameCap)
+					.add(currentModelNameCap);
 			}
 		}
 	}
 
 	const schema = produceSchema(schemaPrisma, (builder) => {
 		for (const table in tables) {
+			const originalTableName = table;
+			const customModelName = tables[table]?.modelName || table;
+			const modelName = capitalizeFirstLetter(customModelName);
 			const fields = tables[table]?.fields;
-			const originalTable = tables[table]?.modelName;
-			const modelName = capitalizeFirstLetter(originalTable || "");
-
 			function getType({
 				isBigint,
 				isOptional,
 				type,
-			}: { type: FieldType; isOptional: boolean; isBigint: boolean }) {
+			}: {
+				type: FieldType;
+				isOptional: boolean;
+				isBigint: boolean;
+			}) {
 				if (type === "string") {
 					return isOptional ? "String?" : "String";
 				}
@@ -70,6 +83,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 				if (type === "date") {
 					return isOptional ? "DateTime?" : "DateTime";
+				}
+				if (type === "json") {
+					return isOptional ? "Json?" : "Json";
 				}
 				if (type === "string[]") {
 					return isOptional ? "String[]" : "String[]";
@@ -93,11 +109,13 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.attribute(`map("_id")`);
 				} else {
 					if (options.advanced?.database?.useNumberId) {
-						builder
+						const col = builder
 							.model(modelName)
 							.field("id", "Int")
-							.attribute("id")
-							.attribute("default(autoincrement())");
+							.attribute("id");
+						if (provider !== "sqlite") {
+							col.attribute("default(autoincrement())");
+						}
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
 					}
@@ -106,10 +124,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 			for (const field in fields) {
 				const attr = fields[field]!;
+				const fieldName = attr.fieldName || field;
 
 				if (prismaModel) {
 					const isAlreadyExist = builder.findByType("field", {
-						name: field,
+						name: fieldName,
 						within: prismaModel.properties,
 					});
 					if (isAlreadyExist) {
@@ -117,8 +136,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					}
 				}
 
-				builder.model(modelName).field(
-					field,
+				const fieldBuilder = builder.model(modelName).field(
+					fieldName,
 					field === "id" && options.advanced?.database?.useNumberId
 						? getType({
 								isBigint: false,
@@ -136,10 +155,51 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 										: attr.type,
 							}),
 				);
-				if (attr.unique) {
-					builder.model(modelName).blockAttribute(`unique([${field}])`);
+				if (field === "id") {
+					fieldBuilder.attribute("id");
+					if (provider === "mongodb") {
+						fieldBuilder.attribute(`map("_id")`);
+					}
+				} else if (fieldName !== field) {
+					fieldBuilder.attribute(`map("${field}")`);
 				}
+
+				if (attr.unique) {
+					builder.model(modelName).blockAttribute(`unique([${fieldName}])`);
+				}
+
+				if (attr.defaultValue !== undefined) {
+					if (field === "createdAt") {
+						fieldBuilder.attribute("default(now())");
+					} else if (typeof attr.defaultValue === "boolean") {
+						fieldBuilder.attribute(`default(${attr.defaultValue})`);
+					} else if (typeof attr.defaultValue === "function") {
+						// For other function-based defaults, we'll need to check what they return
+						const defaultVal = attr.defaultValue();
+						if (defaultVal instanceof Date) {
+							fieldBuilder.attribute("default(now())");
+						} else {
+							console.warn(
+								`Warning: Unsupported default function for field ${fieldName} in model ${modelName}. Please adjust manually.`,
+							);
+						}
+					}
+				}
+
+				// This is a special handling for updatedAt fields
+				if (field === "updatedAt" && attr.onUpdate) {
+					fieldBuilder.attribute("updatedAt");
+				} else if (attr.onUpdate) {
+					console.warn(
+						`Warning: 'onUpdate' is only supported on 'updatedAt' fields. Please adjust manually for field ${fieldName} in model ${modelName}.`,
+					);
+				}
+
 				if (attr.references) {
+					const referencedOriginalModelName = attr.references.model;
+					const referencedCustomModelName =
+						tables[referencedOriginalModelName]?.modelName ||
+						referencedOriginalModelName;
 					let action = "Cascade";
 					if (attr.references.onDelete === "no action") action = "NoAction";
 					else if (attr.references.onDelete === "set null") action = "SetNull";
@@ -149,11 +209,13 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					builder
 						.model(modelName)
 						.field(
-							`${attr.references.model.toLowerCase()}`,
-							capitalizeFirstLetter(attr.references.model),
+							`${referencedCustomModelName.toLowerCase()}`,
+							`${capitalizeFirstLetter(referencedCustomModelName)}${
+								!attr.required ? "?" : ""
+							}`,
 						)
 						.attribute(
-							`relation(fields: [${field}], references: [${attr.references.field}], onDelete: ${action})`,
+							`relation(fields: [${fieldName}], references: [${attr.references.field}], onDelete: ${action})`,
 						);
 				}
 				if (
@@ -162,7 +224,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					provider === "mysql" &&
 					attr.type === "string"
 				) {
-					builder.model(modelName).field(field).attribute("db.Text");
+					builder.model(modelName).field(fieldName).attribute("db.Text");
 				}
 			}
 
@@ -184,16 +246,24 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				name: "map",
 				within: prismaModel?.properties,
 			});
-			if (originalTable !== modelName && !hasAttribute) {
-				builder.model(modelName).blockAttribute("map", originalTable);
+			const hasChanged = customModelName !== originalTableName;
+			if (!hasAttribute) {
+				builder
+					.model(modelName)
+					.blockAttribute(
+						"map",
+						`${hasChanged ? customModelName : originalTableName}`,
+					);
 			}
 		}
 	});
 
+	const schemaChanged = schema.trim() !== schemaPrisma.trim();
+
 	return {
-		code: schema.trim() === schemaPrisma.trim() ? "" : schema,
+		code: schemaChanged ? schema : "",
 		fileName: filePath,
-		overwrite: true,
+		overwrite: schemaPrismaExist && schemaChanged,
 	};
 };
 

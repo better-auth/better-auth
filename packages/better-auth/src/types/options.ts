@@ -19,8 +19,8 @@ import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
 import type { AdapterDebugLogs } from "../adapters";
-//@ts-ignore - we need to import this to get the type of the database
 import type { Database as BunDatabase } from "bun:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
 export type BetterAuthOptions = {
 	/**
@@ -84,6 +84,7 @@ export type BetterAuthOptions = {
 		| Dialect
 		| AdapterInstance
 		| BunDatabase
+		| DatabaseSync
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
@@ -99,6 +100,13 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				debugLogs?: AdapterDebugLogs;
+				/**
+				 * Whether to execute multiple operations in a transaction.
+				 * If the database doesn't support transactions,
+				 * set this to `false` and operations will be executed sequentially.
+				 * @default true
+				 */
+				transaction?: boolean;
 		  }
 		| {
 				/**
@@ -121,6 +129,13 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				debugLogs?: AdapterDebugLogs;
+				/**
+				 * Whether to execute multiple operations in a transaction.
+				 * If the database doesn't support transactions,
+				 * set this to `false` and operations will be executed sequentially.
+				 * @default true
+				 */
+				transaction?: boolean;
 		  };
 	/**
 	 * Secondary storage configuration
@@ -173,7 +188,6 @@ export type BetterAuthOptions = {
 		 * Auto signin the user after they verify their email
 		 */
 		autoSignInAfterVerification?: boolean;
-
 		/**
 		 * Number of seconds the verification token is
 		 * valid for.
@@ -291,7 +305,7 @@ export type BetterAuthOptions = {
 	/**
 	 * List of Better Auth plugins
 	 */
-	plugins?: BetterAuthPlugin[];
+	plugins?: [] | BetterAuthPlugin[];
 	/**
 	 * User configuration
 	 */
@@ -609,12 +623,17 @@ export type BetterAuthOptions = {
 						 */
 						max: number;
 				  }
+				| false
 				| ((request: Request) =>
 						| { window: number; max: number }
-						| Promise<{
-								window: number;
-								max: number;
-						  }>);
+						| false
+						| Promise<
+								| {
+										window: number;
+										max: number;
+								  }
+								| false
+						  >);
 		};
 		/**
 		 * Storage configuration
@@ -762,7 +781,7 @@ export type BetterAuthOptions = {
 				| ((options: {
 						model: LiteralUnion<Models, string>;
 						size?: number;
-				  }) => string)
+				  }) => string | false)
 				| false;
 		};
 		/**
@@ -798,7 +817,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					user: User,
+					user: User & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -810,7 +829,10 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a user is created.
 				 */
-				after?: (user: User, context?: GenericEndpointContext) => Promise<void>;
+				after?: (
+					user: User & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 			update?: {
 				/**
@@ -819,7 +841,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					user: Partial<User>,
+					user: Partial<User> & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -831,7 +853,10 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a user is updated.
 				 */
-				after?: (user: User, context?: GenericEndpointContext) => Promise<void>;
+				after?: (
+					user: User & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 		};
 		/**
@@ -845,7 +870,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					session: Session,
+					session: Session & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -858,7 +883,7 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a session is created.
 				 */
 				after?: (
-					session: Session,
+					session: Session & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -872,7 +897,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					session: Partial<Session>,
+					session: Partial<Session> & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -885,7 +910,7 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a session is updated.
 				 */
 				after?: (
-					session: Session,
+					session: Session & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -928,7 +953,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					account: Partial<Account>,
+					account: Partial<Account> & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -941,7 +966,7 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a account is updated.
 				 */
 				after?: (
-					account: Account,
+					account: Account & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -957,7 +982,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					verification: Verification,
+					verification: Verification & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -970,7 +995,7 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a verification is created.
 				 */
 				after?: (
-					verification: Verification,
+					verification: Verification & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -981,7 +1006,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					verification: Partial<Verification>,
+					verification: Partial<Verification> & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -994,7 +1019,7 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a verification is updated.
 				 */
 				after?: (
-					verification: Verification,
+					verification: Verification & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -1046,4 +1071,21 @@ export type BetterAuthOptions = {
 	 * Paths you want to disable.
 	 */
 	disabledPaths?: string[];
+	/**
+	 * Telemetry configuration
+	 */
+	telemetry?: {
+		/**
+		 * Enable telemetry collection
+		 *
+		 * @default false
+		 */
+		enabled?: boolean;
+		/**
+		 * Enable debug mode
+		 *
+		 * @default false
+		 */
+		debug?: boolean;
+	};
 };

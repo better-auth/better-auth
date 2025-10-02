@@ -6,7 +6,7 @@ import type { BetterAuthOptions } from "../types/options";
 import { getDate } from "../utils/date";
 import { env, isProduction } from "../utils/env";
 import { base64Url } from "@better-auth/utils/base64";
-import { createTime } from "../utils/time";
+import { ms } from "ms";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
@@ -64,8 +64,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 
 export function getCookies(options: BetterAuthOptions) {
 	const createCookie = createCookieGetter(options);
-	const sessionMaxAge =
-		options.session?.expiresIn || createTime(7, "d").toSeconds();
+	const sessionMaxAge = options.session?.expiresIn || ms("7d") / 1000;
 	const sessionToken = createCookie("session_token", {
 		maxAge: sessionMaxAge,
 	});
@@ -101,6 +100,7 @@ export async function setCookieCache(
 		session: Session & Record<string, any>;
 		user: User;
 	},
+	dontRememberMe: boolean,
 ) {
 	const shouldStoreSessionDataInCookie =
 		ctx.context.options.session?.cookieCache?.enabled;
@@ -117,11 +117,17 @@ export async function setCookieCache(
 			},
 			{} as Record<string, any>,
 		);
+
 		const sessionData = { session: filteredSession, user: session.user };
-		const expiresAtDate = getDate(
-			ctx.context.authCookies.sessionData.options.maxAge || 60,
-			"sec",
-		).getTime();
+
+		const options = {
+			...ctx.context.authCookies.sessionData.options,
+			maxAge: dontRememberMe
+				? undefined
+				: ctx.context.authCookies.sessionData.options.maxAge,
+		};
+
+		const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
 		const data = base64Url.encode(
 			JSON.stringify({
 				session: sessionData,
@@ -143,11 +149,7 @@ export async function setCookieCache(
 				"Session data is too large to store in the cookie. Please disable session cookie caching or reduce the size of the session data",
 			);
 		}
-		ctx.setCookie(
-			ctx.context.authCookies.sessionData.name,
-			data,
-			ctx.context.authCookies.sessionData.options,
-		);
+		ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
 	}
 }
 
@@ -191,7 +193,7 @@ export async function setSessionCookie(
 			ctx.context.authCookies.dontRememberToken.options,
 		);
 	}
-	await setCookieCache(ctx, session);
+	await setCookieCache(ctx, session, dontRememberMe);
 	ctx.context.setNewSession(session);
 	/**
 	 * If secondary storage is enabled, store the session data in the secondary storage

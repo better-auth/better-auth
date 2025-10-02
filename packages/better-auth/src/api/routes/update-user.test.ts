@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { Account } from "../../types";
 
 describe("updateUser", async () => {
 	const sendChangeEmail = vi.fn();
@@ -162,6 +163,79 @@ describe("updateUser", async () => {
 		expect(signInCurrentPassword.data).toBeNull();
 	});
 
+	it("should update account's updatedAt when changing password", async () => {
+		const newHeaders = new Headers();
+		await client.signUp.email({
+			name: "Test User",
+			email: "test-updated-at@email.com",
+			password: "originalPassword",
+			fetchOptions: {
+				onSuccess: sessionSetter(newHeaders),
+			},
+		});
+
+		// Get the initial account data
+		const initialSession = await client.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+				throw: true,
+			},
+		});
+		const userId = initialSession?.user.id;
+
+		// Get initial account updatedAt
+		const initialAccounts: Account[] = await db.findMany({
+			model: "account",
+			where: [
+				{
+					field: "userId",
+					value: userId!,
+				},
+				{
+					field: "providerId",
+					value: "credential",
+				},
+			],
+		});
+		expect(initialAccounts.length).toBe(1);
+		const initialUpdatedAt = initialAccounts[0]!.updatedAt;
+
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		// Change password
+		const updated = await client.changePassword({
+			newPassword: "newPassword123",
+			currentPassword: "originalPassword",
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(updated.data).toBeDefined();
+
+		// Get updated account data
+		const updatedAccounts: Account[] = await db.findMany({
+			model: "account",
+			where: [
+				{
+					field: "userId",
+					value: userId!,
+				},
+				{
+					field: "providerId",
+					value: "credential",
+				},
+			],
+		});
+		expect(updatedAccounts.length).toBe(1);
+		const newUpdatedAt = updatedAccounts[0]!.updatedAt;
+
+		// Verify updatedAt was refreshed
+		expect(newUpdatedAt).not.toBe(initialUpdatedAt);
+		expect(new Date(newUpdatedAt).getTime()).toBeGreaterThan(
+			new Date(initialUpdatedAt).getTime(),
+		);
+	});
+
 	it("should not update password if current password is wrong", async () => {
 		const newHeaders = new Headers();
 		await client.signUp.email({
@@ -261,7 +335,7 @@ describe("updateUser", async () => {
 				throw: true,
 			},
 		});
-		// @ts-ignore
+		// @ts-expect-error
 		expect(session?.user.newField).toBe("new");
 	});
 
@@ -312,8 +386,24 @@ describe("updateUser", async () => {
 });
 
 describe("delete user", async () => {
+	it("should not delete user if deleteUser is disabled", async () => {
+		const { client, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: false,
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+		console.log(res);
+	});
 	it("should delete the user with a fresh session", async () => {
-		const { auth, client, signInWithTestUser } = await getTestInstance({
+		const { client, signInWithTestUser } = await getTestInstance({
 			user: {
 				deleteUser: {
 					enabled: true,
@@ -384,5 +474,67 @@ describe("delete user", async () => {
 			},
 		});
 		expect(nullSession.data).toBeNull();
+	});
+
+	it("should ignore cookie cache for sensitive operations like changePassword", async () => {
+		const { client: cacheClient, sessionSetter: cacheSessionSetter } =
+			await getTestInstance(
+				{
+					session: {
+						cookieCache: {
+							enabled: true,
+							maxAge: 60,
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+		const uniqueEmail = `cache-test-${Date.now()}@test.com`;
+		const testPassword = "testPassword123";
+
+		await cacheClient.signUp.email({
+			email: uniqueEmail,
+			password: testPassword,
+			name: "Cache Test User",
+		});
+
+		const cacheHeaders = new Headers();
+		await cacheClient.signIn.email({
+			email: uniqueEmail,
+			password: testPassword,
+			fetchOptions: {
+				onSuccess: cacheSessionSetter(cacheHeaders),
+			},
+		});
+
+		const initialSession = await cacheClient.getSession({
+			fetchOptions: {
+				headers: cacheHeaders,
+				throw: true,
+			},
+		});
+		expect(initialSession?.user).toBeDefined();
+
+		const changePasswordResult = await cacheClient.changePassword({
+			newPassword: "newSecurePassword123",
+			currentPassword: testPassword,
+			revokeOtherSessions: true,
+			fetchOptions: {
+				headers: cacheHeaders,
+			},
+		});
+
+		expect(changePasswordResult.data).toBeDefined();
+
+		const sessionAfterPasswordChange = await cacheClient.getSession({
+			fetchOptions: {
+				headers: cacheHeaders,
+			},
+		});
+
+		expect(sessionAfterPasswordChange.data).toBeNull();
 	});
 });

@@ -4,7 +4,10 @@ import parseJSON from "../../client/parser";
 export const apiKeySchema = ({
 	timeWindow,
 	rateLimitMax,
-}: { timeWindow: number; rateLimitMax: number }) =>
+}: {
+	timeWindow: number;
+	rateLimitMax: number;
+}) =>
 	({
 		apikey: {
 			fields: {
@@ -46,7 +49,7 @@ export const apiKeySchema = ({
 				 */
 				userId: {
 					type: "string",
-					references: { model: "user", field: "id" },
+					references: { model: "user", field: "id", onDelete: "cascade" },
 					required: true,
 					input: false,
 				},

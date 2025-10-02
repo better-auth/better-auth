@@ -22,6 +22,8 @@ export const ORGANIZATION_ERROR_CODES = {
 	TEAM_NOT_FOUND: "Team not found",
 	YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER:
 		"You cannot leave the organization as the only owner",
+	YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER:
+		"You cannot leave the organization without an owner",
 	YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER:
 		"You are not allowed to delete this member",
 	YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION:
@@ -31,12 +33,14 @@ export const ORGANIZATION_ERROR_CODES = {
 	INVITATION_NOT_FOUND: "Invitation not found",
 	YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION:
 		"You are not the recipient of the invitation",
+	EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION:
+		"Email verification required before accepting or rejecting invitation",
 	YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION:
 		"You are not allowed to cancel this invitation",
 	INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION:
 		"Inviter is no longer a member of the organization",
 	YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE:
-		"you are not allowed to invite user with this role",
+		"You are not allowed to invite a user with this role",
 	FAILED_TO_RETRIEVE_INVITATION: "Failed to retrieve invitation",
 	YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS:
 		"You have reached the maximum number of teams",
@@ -67,4 +71,18 @@ export const ORGANIZATION_ERROR_CODES = {
 		"You are not allowed to access this organization as an owner",
 	YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION:
 		"You are not a member of this organization",
+	MISSING_AC_INSTANCE:
+		"Dynamic Access Control requires a pre-defined ac instance on the server auth plugin. Read server logs for more information",
+	YOU_MUST_BE_IN_AN_ORGANIZATION_TO_CREATE_A_ROLE:
+		"You must be in an organization to create a role",
+	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE: "You are not allowed to create a role",
+	YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE: "You are not allowed to update a role",
+	YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE: "You are not allowed to delete a role",
+	YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE: "You are not allowed to read a role",
+	YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE: "You are not allowed to list a role",
+	YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE: "You are not allowed to get a role",
+	TOO_MANY_ROLES: "This organization has too many roles",
+	INVALID_RESOURCE: "The provided permission includes an invalid resource",
+	ROLE_NAME_IS_ALREADY_TAKEN: "That role name is already taken",
+	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
 } as const;

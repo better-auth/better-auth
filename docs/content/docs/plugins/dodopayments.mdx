@@ -36,7 +36,7 @@ npm install @dodopayments/better-auth dodopayments better-auth zod
   </Step>
   <Step title="Configure environment variables">
     Add these to your `.env` file:
-```env
+```txt
 DODO_PAYMENTS_API_KEY=your_api_key_here
 DODO_PAYMENTS_WEBHOOK_SECRET=your_webhook_secret_here
 ```
@@ -110,7 +110,7 @@ export const authClient = createAuthClient({
 ### Creating a Checkout Session
 
 ```typescript
-const { data: checkout, error } = await authClient.checkout({
+const { data: checkout, error } = await authClient.dodopayments.checkout({
   slug: "premium-plan",
   customer: {
     email: "customer@example.com",
@@ -134,7 +134,7 @@ if (checkout) {
 ### Accessing the Customer Portal
 
 ```typescript
-const { data: customerPortal, error } = await authClient.customer.portal();
+const { data: customerPortal, error } = await authClient.dodopayments.customer.portal();
 if (customerPortal && customerPortal.redirect) {
   window.location.href = customerPortal.url;
 }
@@ -145,7 +145,7 @@ if (customerPortal && customerPortal.redirect) {
 ```typescript
 // Get subscriptions
 const { data: subscriptions, error } =
-  await authClient.customer.subscriptions.list({
+  await authClient.dodopayments.customer.subscriptions.list({
     query: {
       limit: 10,
       page: 1,
@@ -154,7 +154,7 @@ const { data: subscriptions, error } =
   });
 
 // Get payment history
-const { data: payments, error } = await authClient.customer.payments.list({
+const { data: payments, error } = await authClient.dodopayments.customer.payments.list({
   query: {
     limit: 10,
     page: 1,
@@ -166,13 +166,13 @@ const { data: payments, error } = await authClient.customer.payments.list({
 ### Webhooks
 
 <Card>
-  The webhooks plugin processes real-time payment events from Dodo Payments with secure signature verification. The default endpoint is `/api/auth/webhooks/dodopayments`.
+  The webhooks plugin processes real-time payment events from Dodo Payments with secure signature verification. The default endpoint is `/api/auth/dodopayments/webhooks`.
 </Card>
 
 <Steps>
   <Step title="Generate and set webhook secret">
-    Generate a webhook secret for your endpoint URL (e.g., `https://your-domain.com/api/auth/webhooks/dodopayments`) in the Dodo Payments Dashboard and set it in your .env file:
-```env
+    Generate a webhook secret for your endpoint URL (e.g., `https://your-domain.com/api/auth/dodopayments/webhooks`) in the Dodo Payments Dashboard and set it in your .env file:
+```txt
 DODO_PAYMENTS_WEBHOOK_SECRET=your_webhook_secret_here
 ```
   </Step>

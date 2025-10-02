@@ -17,6 +17,7 @@ export interface RedditProfile {
 }
 
 export interface RedditOptions extends ProviderOptions<RedditProfile> {
+	clientId: string;
 	duration?: string;
 }
 
@@ -79,6 +80,7 @@ export const reddit = (options: RedditOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
+						authentication: "basic",
 						tokenEndpoint: "https://www.reddit.com/api/v1/access_token",
 					});
 				},

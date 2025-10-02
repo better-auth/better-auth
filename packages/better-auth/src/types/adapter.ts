@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "./options";
+import type { AdapterFactoryConfig, CustomAdapter } from "../adapters";
 
 /**
  * Adapter where clause
@@ -12,6 +13,7 @@ export type Where = {
 		| "gt"
 		| "gte"
 		| "in"
+		| "not_in"
 		| "contains"
 		| "starts_with"
 		| "ends_with"; //eq by default
@@ -51,10 +53,7 @@ export type Adapter = {
 		};
 		offset?: number;
 	}) => Promise<T[]>;
-	count: (data: {
-		model: string;
-		where?: Where[];
-	}) => Promise<number>;
+	count: (data: { model: string; where?: Where[] }) => Promise<number>;
 	/**
 	 * ⚠︎ Update may not return the updated data
 	 * if multiple where clauses are provided
@@ -72,6 +71,13 @@ export type Adapter = {
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
+	 * Execute multiple operations in a transaction.
+	 * If the adapter doesn't support transactions, operations will be executed sequentially.
+	 */
+	transaction: <R>(
+		callback: (tx: Omit<Adapter, "transaction">) => Promise<R>,
+	) => Promise<R>;
+	/**
 	 *
 	 * @param options
 	 * @param file - file path if provided by the user
@@ -80,8 +86,12 @@ export type Adapter = {
 		options: BetterAuthOptions,
 		file?: string,
 	) => Promise<AdapterSchemaCreation>;
-	options?: Record<string, any>;
+	options?: {
+		adapterConfig: AdapterFactoryConfig;
+	} & CustomAdapter["options"];
 };
+
+export type TransactionAdapter = Omit<Adapter, "transaction">;
 
 export type AdapterSchemaCreation = {
 	/**
@@ -114,7 +124,7 @@ export interface SecondaryStorage {
 	 * @param key - Key to get
 	 * @returns - Value of the key
 	 */
-	get: (key: string) => Promise<string | null> | string | null;
+	get: (key: string) => Promise<unknown> | unknown;
 	set: (
 		/**
 		 * Key to store
@@ -128,7 +138,7 @@ export interface SecondaryStorage {
 		 * Time to live in seconds
 		 */
 		ttl?: number,
-	) => Promise<void | null | string> | void;
+	) => Promise<void | null | unknown> | void;
 	/**
 	 *
 	 * @param key - Key to delete

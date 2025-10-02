@@ -35,7 +35,7 @@ export default function ArticleLayout() {
 	const cts = group === "docs" ? contents : examples;
 
 	return (
-		<div className={cn("fixed top-0")}>
+		<div className={cn("fixed start-0 top-0")}>
 			<aside
 				className={cn(
 					"md:transition-all",
@@ -211,7 +211,10 @@ const tabs = [
 function SidebarTab({
 	group,
 	setGroup,
-}: { group: string; setGroup: (group: string) => void }) {
+}: {
+	group: string;
+	setGroup: (group: string) => void;
+}) {
 	const router = useRouter();
 	const selected = tabs.find((tab) => tab.value === group);
 

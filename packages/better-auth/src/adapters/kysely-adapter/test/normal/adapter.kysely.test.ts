@@ -1,12 +1,18 @@
 import merge from "deepmerge";
 import fsPromises from "fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { runAdapterTest } from "../../../test";
+import { recoverProcessTZ, runAdapterTest } from "../../../test";
 import { getMigrations } from "../../../../db/get-migration";
 import path from "path";
 import Database from "better-sqlite3";
 import { kyselyAdapter } from "../..";
-import { Kysely, MysqlDialect, sql, SqliteDialect } from "kysely";
+import {
+	Kysely,
+	MysqlDialect,
+	PostgresDialect,
+	sql,
+	SqliteDialect,
+} from "kysely";
 import type { BetterAuthOptions } from "../../../../types";
 import { createPool } from "mysql2/promise";
 
@@ -15,45 +21,50 @@ import * as tarn from "tarn";
 import { MssqlDialect } from "kysely";
 import { getTestInstance } from "../../../../test-utils/test-instance";
 import { setState } from "../state";
-
-const sqlite = new Database(path.join(__dirname, "test.db"));
-const mysql = createPool("mysql://user:password@localhost:3306/better_auth");
-const sqliteKy = new Kysely({
-	dialect: new SqliteDialect({
-		database: sqlite,
-	}),
-});
-const mysqlKy = new Kysely({
-	dialect: new MysqlDialect(mysql),
-});
-export const opts = ({
-	database,
-	isNumberIdTest,
-}: { database: BetterAuthOptions["database"]; isNumberIdTest: boolean }) =>
-	({
-		database: database,
-		user: {
-			fields: {
-				email: "email_address",
-			},
-			additionalFields: {
-				test: {
-					type: "string",
-					defaultValue: "test",
-				},
-			},
-		},
-		session: {
-			modelName: "sessions",
-		},
-		advanced: {
-			database: {
-				useNumberId: isNumberIdTest,
-			},
-		},
-	}) satisfies BetterAuthOptions;
+import { Pool } from "pg";
 
 describe("adapter test", async () => {
+	const sqlite = new Database(path.join(__dirname, "test.db"));
+	const mysql = createPool("mysql://user:password@localhost:3306/better_auth");
+	const sqliteKy = new Kysely({
+		dialect: new SqliteDialect({
+			database: sqlite,
+		}),
+	});
+	const mysqlKy = new Kysely({
+		dialect: new MysqlDialect(mysql),
+	});
+
+	const opts = ({
+		database,
+		isNumberIdTest,
+	}: {
+		database: BetterAuthOptions["database"];
+		isNumberIdTest: boolean;
+	}) =>
+		({
+			database: database,
+			user: {
+				fields: {
+					email: "email_address",
+				},
+				additionalFields: {
+					test: {
+						type: "string",
+						defaultValue: "test",
+					},
+				},
+			},
+			session: {
+				modelName: "sessions",
+			},
+			advanced: {
+				database: {
+					useNumberId: isNumberIdTest,
+				},
+			},
+		}) satisfies BetterAuthOptions;
+
 	const mysqlOptions = opts({
 		database: {
 			db: mysqlKy,
@@ -209,7 +220,6 @@ describe("mssql", async () => {
 
 		let token = "";
 		it("should sign in", async () => {
-			//sign in
 			const signInRes = await auth.api.signInEmail({
 				body: {
 					password: "password",
@@ -238,6 +248,310 @@ describe("mssql", async () => {
 					email: "test-2@email.com",
 				},
 			});
+		});
+
+		it("stores and retrieves timestamps correctly across timezones", async () => {
+			using _ = recoverProcessTZ();
+
+			const sampleUser = {
+				name: "sample",
+				email: "sampler@test.com",
+				password: "samplerrrrr",
+			};
+
+			process.env.TZ = "Europe/London";
+			const userSignUp = await auth.api.signUpEmail({
+				body: {
+					name: sampleUser.name,
+					email: sampleUser.email,
+					password: sampleUser.password,
+				},
+			});
+			process.env.TZ = "America/Los_Angeles";
+			const userSignIn = await auth.api.signInEmail({
+				body: { email: sampleUser.email, password: sampleUser.password },
+			});
+
+			expect(userSignUp.user.createdAt).toStrictEqual(
+				userSignIn.user.createdAt,
+			);
+		});
+	});
+});
+
+describe("postgres", async () => {
+	const pool = new Pool({
+		connectionString: "postgres://user:password@localhost:5432/better_auth",
+	});
+
+	const dialect = new PostgresDialect({
+		pool,
+	});
+
+	const opts = {
+		database: dialect,
+		user: {
+			modelName: "users",
+		},
+	} satisfies BetterAuthOptions;
+
+	beforeAll(async () => {
+		const { runMigrations, toBeAdded, toBeCreated } = await getMigrations(opts);
+		await runMigrations();
+		return async () => {
+			await resetDB();
+			await pool.end();
+			setState("IDLE");
+		};
+	});
+
+	const pg = new Kysely({ dialect });
+
+	const getAdapter = kyselyAdapter(pg, {
+		type: "postgres",
+		debugLogs: {
+			isRunningAdapterTests: true,
+		},
+	});
+
+	async function resetDB() {
+		await sql`DROP TABLE session;`.execute(pg);
+		await sql`DROP TABLE verification;`.execute(pg);
+		await sql`DROP TABLE account;`.execute(pg);
+		await sql`DROP TABLE users;`.execute(pg);
+	}
+
+	await runAdapterTest({
+		getAdapter: async (customOptions = {}) => {
+			// const merged = merge( customOptions,opts);
+			// merged.database = opts.database;
+			return getAdapter(opts);
+		},
+		disableTests: {
+			SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: true,
+		},
+	});
+
+	describe("simple flow", async () => {
+		const { auth } = await getTestInstance(
+			{
+				database: dialect,
+				user: {
+					modelName: "users",
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		it("should sign-up", async () => {
+			const res = await auth.api.signUpEmail({
+				body: {
+					name: "test",
+					password: "password",
+					email: "test-2@email.com",
+				},
+			});
+			expect(res.user.name).toBe("test");
+			expect(res.token?.length).toBeTruthy();
+		});
+
+		let token = "";
+		it("should sign in", async () => {
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					password: "password",
+					email: "test-2@email.com",
+				},
+			});
+
+			expect(signInRes.token?.length).toBeTruthy();
+			expect(signInRes.user.name).toBe("test");
+			token = signInRes.token;
+		});
+
+		it("should return session", async () => {
+			const session = await auth.api.getSession({
+				headers: new Headers({
+					Authorization: `Bearer ${token}`,
+				}),
+			});
+			expect(session).toMatchObject({
+				session: {
+					token,
+					userId: expect.any(String),
+				},
+				user: {
+					name: "test",
+					email: "test-2@email.com",
+				},
+			});
+		});
+
+		it("stores and retrieves timestamps correctly across timezones", async () => {
+			using _ = recoverProcessTZ();
+
+			const sampleUser = {
+				name: "sample",
+				email: "sampler@test.com",
+				password: "samplerrrrr",
+			};
+
+			process.env.TZ = "Europe/London";
+			const userSignUp = await auth.api.signUpEmail({
+				body: {
+					name: sampleUser.name,
+					email: sampleUser.email,
+					password: sampleUser.password,
+				},
+			});
+			process.env.TZ = "America/Los_Angeles";
+			const userSignIn = await auth.api.signInEmail({
+				body: { email: sampleUser.email, password: sampleUser.password },
+			});
+
+			expect(userSignUp.user.createdAt).toStrictEqual(
+				userSignIn.user.createdAt,
+			);
+		});
+	});
+});
+
+describe("mysql", async () => {
+	const pool = createPool("mysql://user:password@localhost:3306/better_auth");
+	const dialect = new MysqlDialect(pool);
+
+	const opts = {
+		database: dialect,
+		user: {
+			modelName: "users",
+		},
+	} satisfies BetterAuthOptions;
+
+	beforeAll(async () => {
+		await pool.query("DROP DATABASE IF EXISTS better_auth");
+		await pool.query("CREATE DATABASE better_auth");
+		await pool.query("USE better_auth");
+
+		const { runMigrations } = await getMigrations(opts);
+		await runMigrations();
+
+		return async () => {
+			await resetDB();
+			await pool.end();
+			setState("IDLE");
+		};
+	});
+
+	const mysql = new Kysely({ dialect });
+
+	const getAdapter = kyselyAdapter(mysql, {
+		type: "mysql",
+		debugLogs: {
+			isRunningAdapterTests: true,
+		},
+	});
+
+	async function resetDB() {
+		await sql`DROP TABLE session;`.execute(mysql);
+		await sql`DROP TABLE verification;`.execute(mysql);
+		await sql`DROP TABLE account;`.execute(mysql);
+		await sql`DROP TABLE users;`.execute(mysql);
+	}
+
+	await runAdapterTest({
+		getAdapter: async (customOptions = {}) => {
+			// const merged = merge( customOptions,opts);
+			// merged.database = opts.database;
+			return getAdapter(opts);
+		},
+		disableTests: {
+			SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: true,
+		},
+	});
+
+	describe("simple flow", async () => {
+		const { auth } = await getTestInstance(
+			{
+				database: pool,
+				user: {
+					modelName: "users",
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		it("should sign-up", async () => {
+			const res = await auth.api.signUpEmail({
+				body: {
+					name: "test",
+					password: "password",
+					email: "test-2@email.com",
+				},
+			});
+			expect(res.user.name).toBe("test");
+			expect(res.token?.length).toBeTruthy();
+		});
+
+		let token = "";
+		it("should sign in", async () => {
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					password: "password",
+					email: "test-2@email.com",
+				},
+			});
+
+			expect(signInRes.token?.length).toBeTruthy();
+			expect(signInRes.user.name).toBe("test");
+			token = signInRes.token;
+		});
+
+		it("should return session", async () => {
+			const session = await auth.api.getSession({
+				headers: new Headers({
+					Authorization: `Bearer ${token}`,
+				}),
+			});
+			expect(session).toMatchObject({
+				session: {
+					token,
+					userId: expect.any(String),
+				},
+				user: {
+					name: "test",
+					email: "test-2@email.com",
+				},
+			});
+		});
+
+		it("stores and retrieves timestamps correctly across timezones", async () => {
+			using _ = recoverProcessTZ();
+
+			const sampleUser = {
+				name: "sample",
+				email: "sampler@test.com",
+				password: "samplerrrrr",
+			};
+
+			process.env.TZ = "Africa/Addis_Ababa";
+			const userSignUp = await auth.api.signUpEmail({
+				body: {
+					name: sampleUser.name,
+					email: sampleUser.email,
+					password: sampleUser.password,
+				},
+			});
+
+			process.env.TZ = "America/Los_Angeles";
+			const userSignIn = await auth.api.signInEmail({
+				body: { email: sampleUser.email, password: sampleUser.password },
+			});
+
+			expect(userSignUp.user.createdAt).toStrictEqual(
+				userSignIn.user.createdAt,
+			);
 		});
 	});
 });

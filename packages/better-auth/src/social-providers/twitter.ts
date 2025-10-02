@@ -95,7 +95,9 @@ export interface TwitterProfile {
 	[claims: string]: unknown;
 }
 
-export interface TwitterOption extends ProviderOptions<TwitterProfile> {}
+export interface TwitterOption extends ProviderOptions<TwitterProfile> {
+	clientId: string;
+}
 
 export const twitter = (options: TwitterOption) => {
 	return {
@@ -138,6 +140,7 @@ export const twitter = (options: TwitterOption) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
+						authentication: "basic",
 						tokenEndpoint: "https://api.x.com/2/oauth2/token",
 					});
 				},

@@ -7,16 +7,24 @@ import {
 } from "better-call";
 import type { AuthEndpoint, AuthMiddleware } from "./call";
 import type { AuthContext, HookEndpointContext } from "../types";
-import defu from "defu";
+import { createDefu } from "defu";
+import { shouldPublishLog } from "../utils";
 
 type InternalContext = InputContext<string, any> &
 	EndpointContext<string, any> & {
 		asResponse?: boolean;
 		context: AuthContext & {
+			logger: AuthContext["logger"];
 			returned?: unknown;
 			responseHeaders?: Headers;
 		};
 	};
+const defuReplaceArrays = createDefu((obj, key, value) => {
+	if (Array.isArray(obj[key]) && Array.isArray(value)) {
+		obj[key] = value;
+		return true;
+	}
+});
 
 export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 	endpoints: E,
@@ -70,7 +78,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 						(internalContext.headers as Headers).set(key, value);
 					});
 				}
-				internalContext = defu(rest, internalContext);
+				internalContext = defuReplaceArrays(rest, internalContext);
 			} else if (before) {
 				/* Return before hook response if it's anything other than a context return */
 				return before;
@@ -94,6 +102,12 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				headers: Headers;
 				response: any;
 			};
+
+			//if response object is returned we skip after hooks and post processing
+			if (result && result instanceof Response) {
+				return result;
+			}
+
 			internalContext.context.returned = result.response;
 			internalContext.context.responseHeaders = result.headers;
 
@@ -103,9 +117,18 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				result.response = after.response;
 			}
 
+			if (
+				result.response instanceof APIError &&
+				shouldPublishLog(authContext.logger.level, "debug")
+			) {
+				// inherit stack from errorStack if debug mode is enabled
+				result.response.stack = result.response.errorStack;
+			}
+
 			if (result.response instanceof APIError && !context?.asResponse) {
 				throw result.response;
 			}
+
 			const response = context?.asResponse
 				? toResponse(result.response, {
 						headers: result.headers,
@@ -125,7 +148,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 }
 
 async function runBeforeHooks(
-	context: HookEndpointContext,
+	context: InternalContext,
 	hooks: {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
@@ -136,10 +159,21 @@ async function runBeforeHooks(
 	} = {};
 	for (const hook of hooks) {
 		if (hook.matcher(context)) {
-			const result = await hook.handler({
-				...context,
-				returnHeaders: false,
-			});
+			const result = await hook
+				.handler({
+					...context,
+					returnHeaders: false,
+				})
+				.catch((e: unknown) => {
+					if (
+						e instanceof APIError &&
+						shouldPublishLog(context.context.logger.level, "debug")
+					) {
+						// inherit stack from errorStack if debug mode is enabled
+						e.stack = e.errorStack;
+					}
+					throw e;
+				});
 			if (result && typeof result === "object") {
 				if ("context" in result && typeof result.context === "object") {
 					const { headers, ...rest } = result.context as {
@@ -154,7 +188,8 @@ async function runBeforeHooks(
 							modifiedContext.headers = headers;
 						}
 					}
-					modifiedContext = defu(rest, modifiedContext);
+					modifiedContext = defuReplaceArrays(rest, modifiedContext);
+
 					continue;
 				}
 				return result;
@@ -165,7 +200,7 @@ async function runBeforeHooks(
 }
 
 async function runAfterHooks(
-	context: HookEndpointContext,
+	context: InternalContext,
 	hooks: {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
@@ -175,6 +210,10 @@ async function runAfterHooks(
 		if (hook.matcher(context)) {
 			const result = (await hook.handler(context).catch((e) => {
 				if (e instanceof APIError) {
+					if (shouldPublishLog(context.context.logger.level, "debug")) {
+						// inherit stack from errorStack if debug mode is enabled
+						e.stack = e.errorStack;
+					}
 					return {
 						response: e,
 						headers: e.headers ? new Headers(e.headers) : null,

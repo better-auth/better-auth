@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { setTokenUtil, type OAuth2Tokens } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -43,16 +43,13 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const { code, error, state, error_description, device_id } = queryOrBody;
 
-		if (error) {
-			throw c.redirect(
-				`${defaultErrorURL}?error=${error}&error_description=${error_description}`,
-			);
-		}
-
 		if (!state) {
 			c.context.logger.error("State not found", error);
-			throw c.redirect(`${defaultErrorURL}?error=state_not_found`);
+			const sep = defaultErrorURL.includes("?") ? "&" : "?";
+			const url = `${defaultErrorURL}${sep}state=state_not_found`;
+			throw c.redirect(url);
 		}
+
 		const {
 			codeVerifier,
 			callbackURL,
@@ -62,14 +59,20 @@ export const callbackOAuth = createAuthEndpoint(
 			requestSignUp,
 		} = await parseState(c);
 
-		function redirectOnError(error: string) {
-			let url = errorURL || defaultErrorURL;
-			if (url.includes("?")) {
-				url = `${url}&error=${error}`;
-			} else {
-				url = `${url}?error=${error}`;
-			}
+		function redirectOnError(error: string, description?: string) {
+			const baseURL = errorURL ?? defaultErrorURL;
+
+			const params = new URLSearchParams({ error });
+			if (description) params.set("error_description", description);
+
+			const sep = baseURL.includes("?") ? "&" : "?";
+			const url = `${baseURL}${sep}${params.toString()}`;
+
 			throw c.redirect(url);
+		}
+
+		if (error) {
+			redirectOnError(error, error_description);
 		}
 
 		if (!code) {
@@ -132,8 +135,15 @@ export const callbackOAuth = createAuthEndpoint(
 				return redirectOnError("unable_to_link_account");
 			}
 
+			if (
+				userInfo.email !== link.email &&
+				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
+			) {
+				return redirectOnError("email_doesn't_match");
+			}
+
 			const existingAccount = await c.context.internalAdapter.findAccount(
-				userInfo.id,
+				String(userInfo.id),
 			);
 
 			if (existingAccount) {
@@ -159,7 +169,7 @@ export const callbackOAuth = createAuthEndpoint(
 					{
 						userId: link.userId,
 						providerId: provider.id,
-						accountId: userInfo.id,
+						accountId: String(userInfo.id),
 						...tokens,
 						accessToken: await setTokenUtil(tokens.accessToken, c.context),
 						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
@@ -191,12 +201,13 @@ export const callbackOAuth = createAuthEndpoint(
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
+				id: String(userInfo.id),
 				email: userInfo.email,
 				name: userInfo.name || userInfo.email,
 			},
 			account: {
 				providerId: provider.id,
-				accountId: userInfo.id,
+				accountId: String(userInfo.id),
 				...tokens,
 				scope: tokens.scopes?.join(","),
 			},

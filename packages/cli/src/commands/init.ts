@@ -201,11 +201,7 @@ const defaultFormatOptions = {
 	tabWidth: 4,
 };
 
-const getDefaultAuthConfig = async ({
-	appName,
-}: {
-	appName?: string;
-}) =>
+const getDefaultAuthConfig = async ({ appName }: { appName?: string }) =>
 	await prettierFormat(
 		[
 			"import { betterAuth } from 'better-auth';",
@@ -708,7 +704,7 @@ export async function initAction(opts: any) {
 				const { dependencies, envs, generatedCode } = await generateAuthConfig({
 					current_user_config,
 					format,
-					//@ts-ignore
+					//@ts-expect-error
 					s,
 					plugins: add_plugins,
 					database,
