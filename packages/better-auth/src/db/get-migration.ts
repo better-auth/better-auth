@@ -226,9 +226,22 @@ export async function getMigrations(config: BetterAuthOptions) {
 					: "varchar(36)",
 				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
 			},
+			foreignKeyId: {
+				postgres: config.advanced?.database?.useNumberId ? "integer" : "text",
+				mysql: config.advanced?.database?.useNumberId
+					? "integer"
+					: "varchar(36)",
+				mssql: config.advanced?.database?.useNumberId
+					? "integer"
+					: "varchar(36)",
+				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
+			},
 		} as const;
 		if (fieldName === "id" || field.references?.field === "id") {
-			return typeMap.id[dbType!];
+			if (fieldName === "id") {
+				return typeMap.id[dbType!];
+			}
+			return typeMap.foreignKeyId[dbType!];
 		}
 		if (dbType === "sqlite" && (type === "string[]" || type === "number[]")) {
 			return "text";
@@ -314,6 +327,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 							.references(`${field.references.model}.${field.references.field}`)
 							.onDelete(field.references.onDelete || "cascade");
 					}
+
 					if (field.unique) {
 						col = col.unique();
 					}

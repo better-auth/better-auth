@@ -344,6 +344,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 							return new ObjectId();
 						}
 					}
+					if (data === null && fieldAttributes.references?.field === "id") {
+						return null;
+					}
 					return new ObjectId();
 				}
 				return data;
