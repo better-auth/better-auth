@@ -1,15 +1,8 @@
-import * as z from "zod";
 import type { AuthPluginSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
-import { type DBFieldAttribute, coreSchema } from "@better-auth/core/db";
-
-export const verificationSchema = coreSchema.extend({
-	value: z.string(),
-	expiresAt: z.date(),
-	identifier: z.string(),
-});
+import type { DBFieldAttribute } from "@better-auth/core/db";
 
 // Cache for parsed schemas to avoid reparsing on every request
 const cache = new WeakMap<
