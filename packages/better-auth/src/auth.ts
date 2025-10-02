@@ -59,20 +59,14 @@ export const betterAuth = <Options extends BetterAuthOptions>(
 			const { handler } = router(ctx, options);
 			return runWithAdapter(ctx.adapter, () => handler(request));
 		},
-		api: api as never,
-		options: options as Options,
+		api,
+		options: options,
 		$context: authContext,
-		$Infer: {} as {
-			Session: {
-				session: PrettifyDeep<InferSession<Options>>;
-				user: PrettifyDeep<InferUser<Options>>;
-			};
-		} & InferPluginTypes<Options>,
 		$ERROR_CODES: {
 			...errorCodes,
 			...BASE_ERROR_CODES,
-		} as InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES,
-	};
+		},
+	} as any;
 };
 
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
@@ -84,10 +78,14 @@ export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	/**
 	 * Share types
 	 */
-	$Infer: {
-		Session: {
-			session: PrettifyDeep<InferSession<Options>>;
-			user: PrettifyDeep<InferUser<Options>>;
-		};
-	} & InferPluginTypes<Options>;
+	$Infer: InferPluginTypes<Options> extends {
+		Session: any;
+	}
+		? InferPluginTypes<Options>
+		: {
+				Session: {
+					session: PrettifyDeep<InferSession<Options>>;
+					user: PrettifyDeep<InferUser<Options>>;
+				};
+			} & InferPluginTypes<Options>;
 };

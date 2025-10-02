@@ -248,7 +248,7 @@ describe("type", () => {
 			},
 		});
 		const $infer = client.$Infer;
-		expectTypeOf($infer.Session).toEqualTypeOf<{
+		expectTypeOf<typeof $infer.Session>().toEqualTypeOf<{
 			session: {
 				id: string;
 				userId: string;
@@ -280,7 +280,7 @@ describe("type", () => {
 			plugins: [organizationClient(), twoFactorClient(), passkeyClient()],
 		});
 		const $infer = client.$Infer.Session;
-		expectTypeOf($infer.user).toEqualTypeOf<{
+		expectTypeOf<typeof $infer.user>().toEqualTypeOf<{
 			name: string;
 			id: string;
 			email: string;
