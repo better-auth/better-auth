@@ -16,7 +16,6 @@ import type {
 } from "./types";
 import { colors } from "../../utils/colors";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import { parseUserInput } from "../../db";
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
@@ -314,11 +313,7 @@ export const createAdapterFactory =
 		) => {
 			const transformedData: Record<string, any> = {};
 			const fields = schema[defaultModelName]!.fields;
-			switch (defaultModelName) {
-				case "user": {
-					data = parseUserInput(options, data, action);
-				}
-			}
+
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
 			if (
 				!config.disableIdGeneration &&
