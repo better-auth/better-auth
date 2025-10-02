@@ -180,9 +180,7 @@ export function parseInputData<T extends Record<string, any>>(
 			});
 		}
 	}
-	const p = parsedData as Partial<T>;
-	console.log({ p });
-	return p;
+	return parsedData as Partial<T>;
 }
 
 export function parseUserInput(
