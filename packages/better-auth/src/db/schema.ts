@@ -5,31 +5,6 @@ import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
 import { type DBFieldAttribute, coreSchema } from "@better-auth/core/db";
 
-export const accountSchema = coreSchema.extend({
-	providerId: z.string(),
-	accountId: z.string(),
-	userId: z.coerce.string(),
-	accessToken: z.string().nullish(),
-	refreshToken: z.string().nullish(),
-	idToken: z.string().nullish(),
-	/**
-	 * Access token expires at
-	 */
-	accessTokenExpiresAt: z.date().nullish(),
-	/**
-	 * Refresh token expires at
-	 */
-	refreshTokenExpiresAt: z.date().nullish(),
-	/**
-	 * The scopes that the user has authorized
-	 */
-	scope: z.string().nullish(),
-	/**
-	 * Password is only stored in the credential provider
-	 */
-	password: z.string().nullish(),
-});
-
 export const sessionSchema = coreSchema.extend({
 	userId: z.coerce.string(),
 	expiresAt: z.date(),
