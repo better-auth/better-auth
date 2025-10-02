@@ -50,6 +50,16 @@ export const subscriptions = {
 				type: "number",
 				required: false,
 			},
+			createdAt: {
+				type: "date",
+				required: false,
+				defaultValue: () => new Date(),
+			},
+			updatedAt: {
+				type: "date",
+				required: false,
+				defaultValue: () => new Date(),
+			},
 		},
 	},
 } satisfies AuthPluginSchema;
