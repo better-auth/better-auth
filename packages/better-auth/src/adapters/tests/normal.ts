@@ -1,6 +1,6 @@
 import { expect } from "vitest";
 import { createTestSuite } from "../create-test-suite";
-import type { User } from "../../types";
+import type { BetterAuthPlugin, Session, User } from "../../types";
 
 /**
  * This test suite tests the basic CRUD operations of the adapter.
@@ -97,6 +97,37 @@ export const getNormalTestSuiteTests = ({
 				where: [{ field: "id", value: res.id }],
 			});
 			expect(findResult).toEqual(res);
+		},
+		"create - should not return string for nullable foreign keys": async () => {
+			await modifyBetterAuthOptions(
+				{
+					plugins: [
+						{
+							id: "test",
+							schema: {
+								testModel: {
+									fields: {
+										nullableReference: {
+											type: "string",
+											references: { field: "id", model: "user" },
+											required: false,
+										},
+									},
+								},
+							},
+						} satisfies BetterAuthPlugin,
+					],
+				},
+				true,
+			);
+			const { nullableReference } = await adapter.create<{
+				nullableReference: string | null;
+			}>({
+				model: "testModel",
+				data: { nullableReference: null },
+				forceAllowId: true,
+			});
+			expect(nullableReference).toBeNull();
 		},
 		"findOne - should find a model": async () => {
 			const [user] = await insertRandom("user");
