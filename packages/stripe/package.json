@@ -43,6 +43,7 @@
     }
   },
   "dependencies": {
+    "defu": "^6.1.4",
     "zod": "^4.1.5"
   },
   "peerDependencies": {
