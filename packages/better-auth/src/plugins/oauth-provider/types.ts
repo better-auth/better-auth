@@ -526,11 +526,11 @@ export interface OAuthAuthorizationQuery {
  */
 export interface VerificationValue {
 	type: "authorization_code" | "consent";
-	clientId?: string;
+	clientId: string;
 	sessionId: string;
 	userId: string;
 	redirectUri?: string;
-	scopes?: string;
+	scopes: string;
 	state?: string;
 	codeChallenge?: string;
 	codeChallengeMethod?: "S256";
@@ -672,9 +672,9 @@ export interface OAuthOpaqueAccessToken {
 }
 
 /**
- * Merged Session schema type
+ * Refresh Token Database Schema
  */
-export type OAuthRefreshToken = {
+export interface OAuthRefreshToken {
 	token: string;
 	sessionId: string;
 	userId: string;
@@ -687,4 +687,16 @@ export type OAuthRefreshToken = {
 	 * Considered Immutable once granted.
 	 */
 	scopes?: string[];
-};
+}
+
+/**
+ * Consent Database Schema
+ */
+export interface OAuthConsent {
+	clientId: string;
+	userId: string;
+	scopes: string[];
+	consentGiven: boolean;
+	createdAt: Date;
+	updatedAt: Date;
+}

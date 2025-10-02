@@ -1,5 +1,5 @@
 import { APIError } from "../../api";
-import type { OAuthOptions, VerificationValue } from "./types";
+import type { OAuthConsent, OAuthOptions, VerificationValue } from "./types";
 import type { GenericEndpointContext } from "../../types";
 import type { Verification } from "../../types";
 import { generateRandomString } from "../../crypto";
@@ -108,15 +108,19 @@ export async function consentEndpoint(
 		identifier: await storeToken(opts.storeTokens, code, "authorization_code"),
 		expiresAt: new Date(exp * 1000),
 	});
+	const consent: OAuthConsent = {
+		clientId: verificationValue.clientId,
+		userId: verificationValue.userId,
+		scopes: verificationValue.scopes.split(" "),
+		consentGiven: true,
+		createdAt: new Date(iat * 1000),
+		updatedAt: new Date(iat * 1000),
+	};
 	await ctx.context.adapter.create({
 		model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
 		data: {
-			clientId: verificationValue.clientId,
-			userId: verificationValue.userId,
-			scopes: verificationValue.scopes,
-			consentGiven: true,
-			createdAt: new Date(iat * 1000),
-			updatedAt: new Date(iat * 1000),
+			...consent,
+			scopes: consent.scopes.join(" "),
 		},
 	});
 	const redirectUri = new URL(verificationValue.redirectUri ?? opts.loginPage);

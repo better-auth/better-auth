@@ -626,6 +626,60 @@ describe("oauth - prompt", async () => {
 		});
 		expect(callbackURL).toContain("/success");
 	});
+
+	it("consent - should consent again given new scope", async ({ expect }) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance({
+				scopes: ["openid", "profile", "email", "offline_access"],
+			});
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		// Generate authorize url
+		const oauthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(oauthHeaders),
+			},
+		);
+		expect(data.url).toContain(
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
+		);
+		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
+
+		// Check for redirection to /consent
+		let consentRedirectUri = "";
+		const newHeaders = new Headers();
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context) {
+				consentRedirectUri = context.response.headers.get("Location") || "";
+				expect(context.response.headers.get("set-cookie")).toContain(
+					"better-auth.oauth_consent_prompt=",
+				);
+				cookieSetter(newHeaders)(context);
+				newHeaders.append("Cookie", headers.get("Cookie") || "");
+			},
+		});
+		expect(consentRedirectUri).toContain(`/consent`);
+		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
+		expect(consentRedirectUri).toContain(`scope=`);
+		expect(consentRedirectUri).toContain(`state=`);
+	});
 });
 
 describe("oauth - config", () => {

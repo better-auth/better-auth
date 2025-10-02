@@ -3,6 +3,7 @@ import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
 import type {
 	OAuthAuthorizationQuery,
+	OAuthConsent,
 	OAuthOptions,
 	VerificationValue,
 } from "./types";
@@ -207,10 +208,8 @@ export async function authorizeEndpoint(
 			scopes: requestScope.join(" "),
 		});
 	}
-	const hasAlreadyConsented = await ctx.context.adapter
-		.findOne<{
-			consentGiven: boolean;
-		}>({
+	const consent = await ctx.context.adapter
+		.findOne<OAuthConsent>({
 			model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
 			where: [
 				{
@@ -223,10 +222,16 @@ export async function authorizeEndpoint(
 				},
 			],
 		})
-		.then((res) => !!res?.consentGiven);
+		.then((res) => {
+			if (!res) return undefined;
+			return {
+				...res,
+				scopes: (res.scopes as unknown as string)?.split(" "),
+			} as OAuthConsent;
+		});
 
-	if (hasAlreadyConsented) {
-		return redirectWithAuthorizationCode(ctx, opts, {
+	if (!consent || !requestScope.every((val) => consent.scopes.includes(val))) {
+		return redirectWithConsentCode(ctx, opts, {
 			query,
 			clientId: client.clientId,
 			userId: session.user.id,
@@ -235,7 +240,7 @@ export async function authorizeEndpoint(
 		});
 	}
 
-	return redirectWithConsentCode(ctx, opts, {
+	return redirectWithAuthorizationCode(ctx, opts, {
 		query,
 		clientId: client.clientId,
 		userId: session.user.id,
