@@ -594,3 +594,44 @@ describe("debug mode stack trace", () => {
 		}
 	});
 });
+
+describe("timing attack protection", () => {
+	it("should delay fast error to match slow success response time", async () => {
+		const endpoint = createAuthEndpoint(
+			"/auth",
+			{ method: "POST", body: z.object({ shouldError: z.boolean() }) },
+			async (c) => {
+				if (c.body.shouldError) {
+					// Error happens immediately
+					throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
+				}
+				// Success takes time
+				await new Promise((resolve) => setTimeout(resolve, 100));
+				return { success: true };
+			},
+		);
+
+		const authContext = init({
+			advanced: {
+				enableTimingProtection: true,
+			},
+		});
+
+		const api = toAuthEndpoints({ endpoint }, authContext);
+
+		// First request succeeds slowly
+		const successStart = Date.now();
+		await api.endpoint({ body: { shouldError: false } });
+		const successTime = Date.now() - successStart;
+
+		// Second request errors fast but should be delayed
+		const errorStart = Date.now();
+		try {
+			await api.endpoint({ body: { shouldError: true } });
+		} catch (error) {
+			const errorTime = Date.now() - errorStart;
+			// Error should be delayed to match success time
+			expect(errorTime).toBeGreaterThanOrEqual(successTime * 0.8);
+		}
+	});
+});

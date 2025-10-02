@@ -9,6 +9,7 @@ import type { AuthEndpoint, AuthMiddleware } from "./call";
 import type { AuthContext, HookEndpointContext } from "../types";
 import { createDefu } from "defu";
 import { shouldPublishLog } from "../utils";
+import { getDurationMap } from "../context/timing";
 
 type InternalContext = InputContext<string, any> &
 	EndpointContext<string, any> & {
@@ -43,6 +44,10 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 	for (const [key, endpoint] of Object.entries(endpoints)) {
 		api[key] = async (context) => {
 			const authContext = await ctx;
+			const durationMap = getDurationMap(authContext);
+			const startTime = Date.now();
+			let hadError = false;
+
 			let internalContext: InternalContext = {
 				...context,
 				context: {
@@ -101,6 +106,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 					 * API Errors from response are caught
 					 * and returned to hooks
 					 */
+					hadError = true;
 					return {
 						response: e,
 						headers: e.headers ? new Headers(e.headers) : null,
@@ -133,6 +139,38 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				// inherit stack from errorStack if debug mode is enabled
 				result.response.stack = result.response.errorStack;
 			}
+
+			if (result.response instanceof APIError) {
+				hadError = true;
+			}
+
+			//#region Timing attack protection
+			{
+				const endpointPath = endpoint.path;
+				const enableTimingProtection =
+					authContext.options.advanced?.enableTimingProtection ?? true;
+
+				const executionTime = Date.now() - startTime;
+				if (hadError && enableTimingProtection) {
+					const avgDuration = durationMap.get(endpointPath);
+					if (avgDuration !== undefined && executionTime < avgDuration) {
+						const delay = avgDuration - executionTime;
+						await new Promise((resolve) => setTimeout(resolve, delay));
+					}
+				} else {
+					const currentAvg = durationMap.get(endpointPath);
+					if (currentAvg === undefined) {
+						durationMap.set(endpointPath, executionTime);
+					} else {
+						// Calculate new average by SMA
+						// Using weight of 0.9 for old average and 0.1 for new value
+						// This gives more stability to the average
+						const newAvg = currentAvg * 0.9 + executionTime * 0.1;
+						durationMap.set(endpointPath, newAvg);
+					}
+				}
+			}
+			//#endregion
 
 			if (result.response instanceof APIError && !context?.asResponse) {
 				throw result.response;

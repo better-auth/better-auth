@@ -58,6 +58,19 @@ export type BetterAuthAdvancedOptions = {
 	 */
 	disableCSRFCheck?: boolean;
 	/**
+	 * Enable timing attack protection
+	 *
+	 * When enabled, error responses are delayed to match the average execution time
+	 * of successful responses for each endpoint. This prevents attackers from using
+	 * timing differences to infer information (e.g., whether a user exists).
+	 *
+	 * The system tracks successful response times using an exponential moving average
+	 * and adds delays to error responses that complete faster than this average.
+	 *
+	 * @default true
+	 */
+	enableTimingProtection?: boolean;
+	/**
 	 * Configure cookies to be cross subdomains
 	 */
 	crossSubDomainCookies?: {
