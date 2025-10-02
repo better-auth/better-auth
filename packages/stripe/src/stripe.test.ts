@@ -1496,4 +1496,247 @@ describe("stripe", async () => {
 			email: "newemail@example.com",
 		});
 	});
+
+	describe("getCustomerCreateParams", () => {
+		it("should call getCustomerCreateParams and merge with default params", async () => {
+			const getCustomerCreateParamsMock = vi
+				.fn()
+				.mockResolvedValue({ metadata: { customField: "customValue" } });
+
+			const testOptions = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+				getCustomerCreateParams: getCustomerCreateParamsMock,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [stripe(testOptions)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			// Sign up a user
+			const userRes = await testAuthClient.signUp.email(
+				{
+					email: "custom-params@email.com",
+					password: "password",
+					name: "Custom User",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			// Verify getCustomerCreateParams was called
+			expect(getCustomerCreateParamsMock).toHaveBeenCalledWith(
+				expect.objectContaining({
+					id: userRes.user.id,
+					email: "custom-params@email.com",
+					name: "Custom User",
+				}),
+				expect.objectContaining({
+					context: expect.any(Object),
+				}),
+			);
+
+			// Verify customer was created with merged params
+			expect(mockStripe.customers.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					email: "custom-params@email.com",
+					name: "Custom User",
+					metadata: expect.objectContaining({
+						userId: userRes.user.id,
+						customField: "customValue",
+					}),
+				}),
+			);
+		});
+
+		it("should use getCustomerCreateParams to add custom address", async () => {
+			const getCustomerCreateParamsMock = vi.fn().mockResolvedValue({
+				address: {
+					line1: "123 Main St",
+					city: "San Francisco",
+					state: "CA",
+					postal_code: "94111",
+					country: "US",
+				},
+			});
+
+			const testOptions = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+				getCustomerCreateParams: getCustomerCreateParamsMock,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [stripe(testOptions)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			// Sign up a user
+			await testAuthClient.signUp.email(
+				{
+					email: "address-user@email.com",
+					password: "password",
+					name: "Address User",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			// Verify customer was created with address
+			expect(mockStripe.customers.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					email: "address-user@email.com",
+					name: "Address User",
+					address: {
+						line1: "123 Main St",
+						city: "San Francisco",
+						state: "CA",
+						postal_code: "94111",
+						country: "US",
+					},
+					metadata: expect.objectContaining({
+						userId: expect.any(String),
+					}),
+				}),
+			);
+		});
+
+		it("should properly merge nested objects using defu", async () => {
+			const getCustomerCreateParamsMock = vi.fn().mockResolvedValue({
+				metadata: {
+					customField: "customValue",
+					anotherField: "anotherValue",
+				},
+				phone: "+1234567890",
+			});
+
+			const testOptions = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+				getCustomerCreateParams: getCustomerCreateParamsMock,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [stripe(testOptions)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			// Sign up a user
+			const userRes = await testAuthClient.signUp.email(
+				{
+					email: "merge-test@email.com",
+					password: "password",
+					name: "Merge User",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			// Verify customer was created with properly merged params
+			// defu merges objects and preserves all fields
+			expect(mockStripe.customers.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					email: "merge-test@email.com",
+					name: "Merge User",
+					phone: "+1234567890",
+					metadata: {
+						userId: userRes.user.id,
+						customField: "customValue",
+						anotherField: "anotherValue",
+					},
+				}),
+			);
+		});
+
+		it("should work without getCustomerCreateParams", async () => {
+			// This test ensures backward compatibility
+			const testOptions = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+				// No getCustomerCreateParams provided
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [stripe(testOptions)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			// Sign up a user
+			const userRes = await testAuthClient.signUp.email(
+				{
+					email: "no-custom-params@email.com",
+					password: "password",
+					name: "Default User",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			// Verify customer was created with default params only
+			expect(mockStripe.customers.create).toHaveBeenCalledWith({
+				email: "no-custom-params@email.com",
+				name: "Default User",
+				metadata: {
+					userId: userRes.user.id,
+				},
+			});
+		});
+	});
 });
