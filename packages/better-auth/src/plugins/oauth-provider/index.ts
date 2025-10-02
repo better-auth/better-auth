@@ -7,5 +7,4 @@ export {
 export { verifyAccessToken } from "./verify";
 export { mcpHandler, handleMcpErrors } from "./mcp";
 export { oauthProvider } from "./oauth";
-export { oauthProviderClient } from "./client";
 export type * from "./types";
