@@ -8,6 +8,7 @@ import type {
 
 export { coreSchema } from "./schema/shared";
 export { userSchema, type User } from "./schema/user";
+export { accountSchema, type Account } from "./schema/account";
 
 export type {
 	DBFieldAttribute,

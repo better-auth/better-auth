@@ -1,9 +1,5 @@
 import type { BetterAuthOptions } from "./options";
-import type {
-	accountSchema,
-	sessionSchema,
-	verificationSchema,
-} from "../db/schema";
+import type { sessionSchema, verificationSchema } from "../db/schema";
 import type { Auth } from "../auth";
 import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../db";
 import type { StripEmptyObjects, UnionToIntersection } from "./helper";
@@ -89,8 +85,7 @@ interface RateLimit {
 	lastRequest: number;
 }
 
-export type { User } from "@better-auth/core/db";
-export type Account = z.infer<typeof accountSchema>;
+export type { User, Account } from "@better-auth/core/db";
 export type Session = z.infer<typeof sessionSchema>;
 export type Verification = z.infer<typeof verificationSchema>;
 export type { RateLimit };
