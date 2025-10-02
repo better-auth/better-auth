@@ -49,15 +49,17 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		"/sign-in/email",
 		"/sign-up/email",
 	];
+
+	const defaultResolveMethod = (ctx: GenericEndpointContext) => {
+		if (paths.includes(ctx.path)) {
+			return ctx.params?.id ? ctx.params.id : ctx.path.split("/").pop();
+		}
+		return null;
+	};
+
 	const config = {
 		cookieName: "better-auth.last_used_login_method",
 		maxAge: 60 * 60 * 24 * 30,
-		customResolveMethod: (ctx) => {
-			if (paths.includes(ctx.path)) {
-				return ctx.params?.id ? ctx.params.id : ctx.path.split("/").pop();
-			}
-			return null;
-		},
 		...userConfig,
 	} satisfies LastLoginMethodOptions;
 
@@ -73,7 +75,8 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 									if (!config.storeInDatabase) return;
 									if (!context) return;
 									const lastUsedLoginMethod =
-										config.customResolveMethod(context);
+										config.customResolveMethod?.(context) ??
+										defaultResolveMethod(context);
 									if (lastUsedLoginMethod) {
 										return {
 											data: {
@@ -91,7 +94,8 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 									if (!config.storeInDatabase) return;
 									if (!context) return;
 									const lastUsedLoginMethod =
-										config.customResolveMethod(context);
+										config.customResolveMethod?.(context) ??
+										defaultResolveMethod(context);
 									if (lastUsedLoginMethod && session?.userId) {
 										try {
 											await ctx.internalAdapter.updateUser(session.userId, {
@@ -118,7 +122,8 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const lastUsedLoginMethod = config.customResolveMethod(ctx);
+						const lastUsedLoginMethod =
+							config.customResolveMethod?.(ctx) ?? defaultResolveMethod(ctx);
 						if (lastUsedLoginMethod) {
 							const setCookie = ctx.context.responseHeaders?.get("set-cookie");
 							const sessionTokenName =
