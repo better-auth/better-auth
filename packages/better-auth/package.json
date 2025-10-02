@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.4.0-beta.3",
+  "version": "1.4.0-beta.6",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -26,7 +26,7 @@
     "build": "unbuild --clean",
     "stub": "unbuild --stub",
     "test": "vitest",
-    "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/normal-tests/schema.prisma && prisma generate --schema ./src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
+    "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/base.prisma",
     "typecheck": "tsc --project tsconfig.json"
   },
   "main": "./dist/index.cjs",
@@ -130,6 +130,16 @@
       "require": {
         "types": "./dist/client/solid/index.d.cts",
         "default": "./dist/client/solid/index.cjs"
+      }
+    },
+    "./lynx": {
+      "import": {
+        "types": "./dist/client/lynx/index.d.ts",
+        "default": "./dist/client/lynx/index.mjs"
+      },
+      "require": {
+        "types": "./dist/client/lynx/index.d.cts",
+        "default": "./dist/client/lynx/index.cjs"
       }
     },
     "./test": {
@@ -584,6 +594,9 @@
       "solid": [
         "./dist/client/solid/index.d.ts"
       ],
+      "lynx": [
+        "./dist/client/lynx/index.d.ts"
+      ],
       "api": [
         "./dist/api/index.d.ts"
       ],
@@ -692,6 +705,7 @@
     }
   },
   "dependencies": {
+    "@better-auth/core": "workspace:*",
     "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.0.0",
@@ -705,7 +719,7 @@
     "nanostores": "^1.0.1",
     "zod": "^4.1.5"
   },
-  "peerDependencies": {
+  "peerDependenciesOptional": {
     "@lynx-js/react": "*",
     "@sveltejs/kit": "^2.0.0",
     "next": "^14.0.0 || ^15.0.0",
@@ -742,7 +756,7 @@
     }
   },
   "devDependencies": {
-    "@lynx-js/react": "^0.112.5",
+    "@lynx-js/react": "^0.114.0",
     "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.37.1",
     "@tanstack/react-start": "^1.131.3",
@@ -756,6 +770,7 @@
     "better-sqlite3": "^12.2.0",
     "concurrently": "^9.2.1",
     "deepmerge": "^4.3.1",
+    "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.38.2",
     "happy-dom": "^18.0.1",
     "hono": "^4.9.7",

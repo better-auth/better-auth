@@ -26,6 +26,7 @@ import type {
 } from "./types";
 import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
 import { getSchema } from "./schema";
+import { defu } from "defu";
 
 const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
@@ -132,13 +133,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					/**
 					 * The name of the plan to subscribe
 					 */
-					plan: z.string().describe("The name of the plan to upgrade to"),
+					plan: z.string().meta({
+						description: 'The name of the plan to upgrade to. Eg: "pro"',
+					}),
 					/**
 					 * If annual plan should be applied.
 					 */
 					annual: z
 						.boolean()
-						.describe("Whether to upgrade to an annual plan")
+						.meta({
+							description: "Whether to upgrade to an annual plan. Eg: true",
+						})
 						.optional(),
 					/**
 					 * Reference id of the subscription to upgrade
@@ -147,7 +152,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					referenceId: z
 						.string()
-						.describe("Reference id of the subscription to upgrade")
+						.meta({
+							description:
+								'Reference id of the subscription to upgrade. Eg: "123"',
+						})
 						.optional(),
 					/**
 					 * This is to allow a specific subscription to be upgrade.
@@ -156,7 +164,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					subscriptionId: z
 						.string()
-						.describe("The id of the subscription to upgrade")
+						.meta({
+							description:
+								'The id of the subscription to upgrade. Eg: "sub_123"',
+						})
 						.optional(),
 					/**
 					 * Any additional data you want to store in your database
@@ -168,41 +179,50 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					seats: z
 						.number()
-						.describe("Number of seats to upgrade to (if applicable)")
+						.meta({
+							description:
+								"Number of seats to upgrade to (if applicable). Eg: 1",
+						})
 						.optional(),
 					/**
 					 * Success URL to redirect back after successful subscription
 					 */
 					successUrl: z
 						.string()
-						.describe(
-							"Callback URL to redirect back after successful subscription",
-						)
+						.meta({
+							description:
+								'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
+						})
 						.default("/"),
 					/**
 					 * Cancel URL
 					 */
 					cancelUrl: z
 						.string()
-						.describe(
-							"If set, checkout shows a back button and customers will be directed here if they cancel payment",
-						)
+						.meta({
+							description:
+								'If set, checkout shows a back button and customers will be directed here if they cancel payment. Eg: "https://example.com/pricing"',
+						})
 						.default("/"),
 					/**
 					 * Return URL
 					 */
 					returnUrl: z
 						.string()
-						.describe(
-							"URL to take customers to when they click on the billing portal’s link to return to your website",
-						)
+						.meta({
+							description:
+								'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
+						})
 						.optional(),
 					/**
 					 * Disable Redirect
 					 */
 					disableRedirect: z
 						.boolean()
-						.describe("Disable redirect after successful subscription")
+						.meta({
+							description:
+								"Disable redirect after successful subscription. Eg: true",
+						})
 						.default(false),
 				}),
 				use: [
@@ -306,23 +326,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				}
 
-				const activeSubscriptions = await client.subscriptions
-					.list({
-						customer: customerId,
-					})
-					.then((res) =>
-						res.data.filter(
-							(sub) => sub.status === "active" || sub.status === "trialing",
-						),
-					);
-
-				const activeSubscription = activeSubscriptions.find((sub) =>
-					subscriptionToUpdate?.stripeSubscriptionId || ctx.body.subscriptionId
-						? sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
-							sub.id === ctx.body.subscriptionId
-						: false,
-				);
-
 				const subscriptions = subscriptionToUpdate
 					? [subscriptionToUpdate]
 					: await ctx.context.adapter.findMany<Subscription>({
@@ -338,6 +341,34 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const activeOrTrialingSubscription = subscriptions.find(
 					(sub) => sub.status === "active" || sub.status === "trialing",
 				);
+
+				const activeSubscriptions = await client.subscriptions
+					.list({
+						customer: customerId,
+					})
+					.then((res) =>
+						res.data.filter(
+							(sub) => sub.status === "active" || sub.status === "trialing",
+						),
+					);
+
+				const activeSubscription = activeSubscriptions.find((sub) => {
+					// If we have a specific subscription to update, match by ID
+					if (
+						subscriptionToUpdate?.stripeSubscriptionId ||
+						ctx.body.subscriptionId
+					) {
+						return (
+							sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
+							sub.id === ctx.body.subscriptionId
+						);
+					}
+					// Only find subscription for the same referenceId to avoid mixing personal and org subscriptions
+					if (activeOrTrialingSubscription?.stripeSubscriptionId) {
+						return sub.id === activeOrTrialingSubscription.stripeSubscriptionId;
+					}
+					return false;
+				});
 
 				// Also find any incomplete subscription that we can reuse
 				const incompleteSubscription = subscriptions.find(
@@ -356,6 +387,61 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}
 
 				if (activeSubscription && customerId) {
+					// Find the corresponding database subscription for this Stripe subscription
+					let dbSubscription = await ctx.context.adapter.findOne<Subscription>({
+						model: "subscription",
+						where: [
+							{
+								field: "stripeSubscriptionId",
+								value: activeSubscription.id,
+							},
+						],
+					});
+
+					// If no database record exists for this Stripe subscription, update the existing one
+					if (!dbSubscription && activeOrTrialingSubscription) {
+						await ctx.context.adapter.update<InputSubscription>({
+							model: "subscription",
+							update: {
+								stripeSubscriptionId: activeSubscription.id,
+								updatedAt: new Date(),
+							},
+							where: [
+								{
+									field: "id",
+									value: activeOrTrialingSubscription.id,
+								},
+							],
+						});
+						dbSubscription = activeOrTrialingSubscription;
+					}
+
+					// Resolve price ID if using lookup keys
+					let priceIdToUse: string | undefined = undefined;
+					if (ctx.body.annual) {
+						priceIdToUse = plan.annualDiscountPriceId;
+						if (!priceIdToUse && plan.annualDiscountLookupKey) {
+							priceIdToUse = await resolvePriceIdFromLookupKey(
+								client,
+								plan.annualDiscountLookupKey,
+							);
+						}
+					} else {
+						priceIdToUse = plan.priceId;
+						if (!priceIdToUse && plan.lookupKey) {
+							priceIdToUse = await resolvePriceIdFromLookupKey(
+								client,
+								plan.lookupKey,
+							);
+						}
+					}
+
+					if (!priceIdToUse) {
+						throw ctx.error("BAD_REQUEST", {
+							message: "Price ID not found for the selected plan",
+						});
+					}
+
 					const { url } = await client.billingPortal.sessions
 						.create({
 							customer: customerId,
@@ -374,9 +460,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										{
 											id: activeSubscription.items.data[0]?.id as string,
 											quantity: ctx.body.seats || 1,
-											price: ctx.body.annual
-												? plan.annualDiscountPriceId
-												: plan.priceId,
+											price: priceIdToUse,
 										},
 									],
 								},
@@ -635,17 +719,22 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				body: z.object({
 					referenceId: z
 						.string()
-						.describe("Reference id of the subscription to cancel")
+						.meta({
+							description:
+								"Reference id of the subscription to cancel. Eg: '123'",
+						})
 						.optional(),
 					subscriptionId: z
 						.string()
-						.describe("The id of the subscription to cancel")
+						.meta({
+							description:
+								"The id of the subscription to cancel. Eg: 'sub_123'",
+						})
 						.optional(),
-					returnUrl: z
-						.string()
-						.describe(
-							"URL to take customers to when they click on the billing portal’s link to return to your website",
-						),
+					returnUrl: z.string().meta({
+						description:
+							'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
+					}),
 				}),
 				use: [
 					sessionMiddleware,
@@ -774,11 +863,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				body: z.object({
 					referenceId: z
 						.string()
-						.describe("Reference id of the subscription to restore")
+						.meta({
+							description:
+								"Reference id of the subscription to restore. Eg: '123'",
+						})
 						.optional(),
 					subscriptionId: z
 						.string()
-						.describe("The id of the subscription to restore")
+						.meta({
+							description:
+								"The id of the subscription to restore. Eg: 'sub_123'",
+						})
 						.optional(),
 				}),
 				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
@@ -902,7 +997,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					z.object({
 						referenceId: z
 							.string()
-							.describe("Reference id of the subscription to list")
+							.meta({
+								description:
+									"Reference id of the subscription to list. Eg: '123'",
+							})
 							.optional(),
 					}),
 				),
@@ -1202,13 +1300,27 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							create: {
 								async after(user, ctx) {
 									if (ctx && options.createCustomerOnSignUp) {
-										const stripeCustomer = await client.customers.create({
-											email: user.email,
-											name: user.name,
-											metadata: {
-												userId: user.id,
+										let extraCreateParams: Partial<Stripe.CustomerCreateParams> =
+											{};
+										if (options.getCustomerCreateParams) {
+											extraCreateParams = await options.getCustomerCreateParams(
+												user,
+												ctx,
+											);
+										}
+
+										const params: Stripe.CustomerCreateParams = defu(
+											{
+												email: user.email,
+												name: user.name,
+												metadata: {
+													userId: user.id,
+												},
 											},
-										});
+											extraCreateParams,
+										);
+										const stripeCustomer =
+											await client.customers.create(params);
 										await ctx.context.internalAdapter.updateUser(user.id, {
 											stripeCustomerId: stripeCustomer.id,
 										});
@@ -1221,6 +1333,56 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												},
 											},
 											ctx,
+										);
+									}
+								},
+							},
+							update: {
+								async after(user, ctx) {
+									if (!ctx) return;
+
+									try {
+										// Cast user to include stripeCustomerId (added by the stripe plugin schema)
+										const userWithStripe = user as typeof user & {
+											stripeCustomerId?: string;
+										};
+
+										// Only proceed if user has a Stripe customer ID
+										if (!userWithStripe.stripeCustomerId) return;
+
+										// Get the user from the database to check if email actually changed
+										// The 'user' parameter here is the freshly updated user
+										// We need to check if the Stripe customer's email matches
+										const stripeCustomer = await client.customers.retrieve(
+											userWithStripe.stripeCustomerId,
+										);
+
+										// Check if customer was deleted
+										if (stripeCustomer.deleted) {
+											ctx.context.logger.warn(
+												`Stripe customer ${userWithStripe.stripeCustomerId} was deleted, cannot update email`,
+											);
+											return;
+										}
+
+										// If Stripe customer email doesn't match the user's current email, update it
+										if (stripeCustomer.email !== user.email) {
+											await client.customers.update(
+												userWithStripe.stripeCustomerId,
+												{
+													email: user.email,
+												},
+											);
+											ctx.context.logger.info(
+												`Updated Stripe customer email from ${stripeCustomer.email} to ${user.email}`,
+											);
+										}
+									} catch (e: any) {
+										// Ignore errors - this is a best-effort sync
+										// Email might have been deleted or Stripe customer might not exist
+										ctx.context.logger.error(
+											`Failed to sync email to Stripe customer: ${e.message}`,
+											e,
 										);
 									}
 								},

@@ -181,19 +181,23 @@ export const deviceAuthorization = (
 				{
 					method: "POST",
 					body: z.object({
-						client_id: z.string().describe("The client ID of the application"),
+						client_id: z.string().meta({
+							description: "The client ID of the application",
+						}),
 						scope: z
 							.string()
-							.describe("Space-separated list of scopes")
+							.meta({
+								description: "Space-separated list of scopes",
+							})
 							.optional(),
 					}),
 					error: z.object({
-						error: z
-							.enum(["invalid_request", "invalid_client"])
-							.describe("Error code"),
-						error_description: z
-							.string()
-							.describe("Detailed error description"),
+						error: z.enum(["invalid_request", "invalid_client"]).meta({
+							description: "Error code",
+						}),
+						error_description: z.string().meta({
+							description: "Detailed error description",
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -328,9 +332,15 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					body: z.object({
 						grant_type: z
 							.literal("urn:ietf:params:oauth:grant-type:device_code")
-							.describe("The grant type for device flow"),
-						device_code: z.string().describe("The device verification code"),
-						client_id: z.string().describe("The client ID of the application"),
+							.meta({
+								description: "The grant type for device flow",
+							}),
+						device_code: z.string().meta({
+							description: "The device verification code",
+						}),
+						client_id: z.string().meta({
+							description: "The client ID of the application",
+						}),
 					}),
 					error: z.object({
 						error: z
@@ -342,10 +352,12 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								"invalid_request",
 								"invalid_grant",
 							])
-							.describe("Error code"),
-						error_description: z
-							.string()
-							.describe("Detailed error description"),
+							.meta({
+								description: "Error code",
+							}),
+						error_description: z.string().meta({
+							description: "Detailed error description",
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -619,13 +631,17 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				{
 					method: "GET",
 					query: z.object({
-						user_code: z.string().describe("The user code to verify"),
+						user_code: z.string().meta({
+							description: "The user code to verify",
+						}),
 					}),
 					error: z.object({
-						error: z.enum(["invalid_request"]).describe("Error code"),
-						error_description: z
-							.string()
-							.describe("Detailed error description"),
+						error: z.enum(["invalid_request"]).meta({
+							description: "Error code",
+						}),
+						error_description: z.string().meta({
+							description: "Detailed error description",
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -701,7 +717,9 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				{
 					method: "POST",
 					body: z.object({
-						userCode: z.string().describe("The user code to approve"),
+						userCode: z.string().meta({
+							description: "The user code to approve",
+						}),
 					}),
 					error: z.object({
 						error: z
@@ -710,10 +728,12 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								"expired_token",
 								"device_code_already_processed",
 							])
-							.describe("Error code"),
-						error_description: z
-							.string()
-							.describe("Detailed error description"),
+							.meta({
+								description: "Error code",
+							}),
+						error_description: z.string().meta({
+							description: "Detailed error description",
+						}),
 					}),
 					requireHeaders: true,
 					metadata: {
@@ -811,7 +831,17 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				{
 					method: "POST",
 					body: z.object({
-						userCode: z.string().describe("The user code to deny"),
+						userCode: z.string().meta({
+							description: "The user code to deny",
+						}),
+					}),
+					error: z.object({
+						error: z.enum(["invalid_request", "expired_token"]).meta({
+							description: "Error code",
+						}),
+						error_description: z.string().meta({
+							description: "Detailed error description",
+						}),
 					}),
 					metadata: {
 						openapi: {

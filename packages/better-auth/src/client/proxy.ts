@@ -39,7 +39,10 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 ): T {
 	function createProxy(path: string[] = []): any {
 		return new Proxy(function () {}, {
-			get(target, prop: string) {
+			get(_, prop) {
+				if (typeof prop !== "string") {
+					return undefined;
+				}
 				if (prop === "then" || prop === "catch" || prop === "finally") {
 					return undefined;
 				}

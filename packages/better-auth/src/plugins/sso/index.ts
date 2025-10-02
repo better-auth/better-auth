@@ -98,96 +98,119 @@ export const sso = (options?: SSOOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						providerId: z
-							.string()
-							.describe(
-								"The ID of the provider. This is used to identify the provider during login and callback. Eg: ",
-							),
-						issuer: z.string().describe("The issuer url of the provider. Eg: "),
-						domain: z
-							.string()
-							.describe(
-								"The domain of the provider. This is used for email matching. Eg: ",
-							),
-						clientId: z.string().describe("The client ID. Eg: "),
-						clientSecret: z.string().describe("The client secret. Eg: "),
+						providerId: z.string().meta({
+							description:
+								'The ID of the provider. This is used to identify the provider during login and callback. Eg: "example-provider"',
+						}),
+						issuer: z.string().meta({
+							description:
+								'The issuer url of the provider. Eg: "https://idp.example.com"',
+						}),
+						domain: z.string().meta({
+							description:
+								'The domain of the provider. This is used for email matching. Eg: "example.com"',
+						}),
+						clientId: z.string().meta({
+							description: 'The client ID. Eg: "1234567890"',
+						}),
+						clientSecret: z.string().meta({
+							description: 'The client secret. Eg: "1234567890"',
+						}),
 						authorizationEndpoint: z
 							.string()
-							.describe("The authorization endpoint. Eg: ")
+							.meta({
+								description:
+									'The authorization endpoint. Eg: "https://idp.example.com/authorize"',
+							})
 							.optional(),
 						tokenEndpoint: z
 							.string()
-							.describe("The token endpoint. Eg: ")
+							.meta({
+								description:
+									'The token endpoint. Eg: "https://idp.example.com/token"',
+							})
 							.optional(),
 						userInfoEndpoint: z
 							.string()
-							.describe("The user info endpoint. Eg: ")
+							.meta({
+								description:
+									'The user info endpoint. Eg: "https://idp.example.com/userinfo"',
+							})
 							.optional(),
 						tokenEndpointAuthentication: z
 							.enum(["client_secret_post", "client_secret_basic"])
-							.describe(
-								"The authentication method for the token endpoint. Defaults to ",
-							)
+							.meta({
+								description:
+									"The authentication method for the token endpoint. Defaults to 'client_secret_post'. Eg: \"client_secret_post\"",
+							})
 							.optional(),
 						jwksEndpoint: z
 							.string()
-							.describe("The JWKS endpoint. Eg: ")
+							.meta({
+								description:
+									'The JWKS endpoint. Eg: "https://idp.example.com/.well-known/jwks.json"',
+							})
 							.optional(),
 						discoveryEndpoint: z.string().optional(),
 						scopes: z
 							.array(z.string())
-							.describe("The scopes to request. ")
+							.meta({
+								description:
+									"The scopes to request. Defaults to ['openid', 'email', 'profile', 'offline_access']. Eg: ['openid', 'email', 'profile']",
+							})
 							.optional(),
 						pkce: z
 							.boolean()
-							.describe(
-								"Whether to use PKCE for the authorization flow. Eg: true",
-							)
+							.meta({
+								description:
+									"Whether to use PKCE for the authorization flow. Eg: true",
+							})
 							.default(true)
 							.optional(),
 						mapping: z
 							.object({
-								id: z
-									.string()
-									.describe(
-										"The field in the user info response that contains the id. Defaults to ",
-									),
-								email: z
-									.string()
-									.describe(
-										"The field in the user info response that contains the email. Defaults to ",
-									),
+								id: z.string().meta({
+									description:
+										"The field in the user info response that contains the id. Defaults to 'sub'. Eg: \"sub\"",
+								}),
+								email: z.string().meta({
+									description:
+										"The field in the user info response that contains the email. Defaults to 'email'. Eg: \"email\"",
+								}),
 								emailVerified: z
 									.string()
-									.describe(
-										"The field in the user info response that contains whether the email is verified. ",
-									)
+									.meta({
+										description:
+											"The field in the user info response that contains whether the email is verified. defaults to 'email_verified'. Eg: \"email_verified\"",
+									})
 									.optional(),
-								name: z
-									.string()
-									.describe(
-										"The field in the user info response that contains the name. Defaults to ",
-									),
+								name: z.string().meta({
+									description:
+										"The field in the user info response that contains the name. Defaults to 'name'. Eg: \"name\"",
+								}),
 								image: z
 									.string()
-									.describe(
-										"The field in the user info response that contains the image. Defaults to ",
-									)
+									.meta({
+										description:
+											"The field in the user info response that contains the image. Defaults to 'picture'. Eg: \"picture\"",
+									})
 									.optional(),
 								extraFields: z.record(z.string(), z.any()).optional(),
 							})
 							.optional(),
 						organizationId: z
 							.string()
-							.describe(
-								"If organization plugin is enabled, the organization id to link the provider to. Eg: ",
-							)
+							.meta({
+								description:
+									'If organization plugin is enabled, the organization id to link the provider to. Eg: "some-org-id"',
+							})
 							.optional(),
 						overrideUserInfo: z
 							.boolean()
-							.describe(
-								"Override user info with the provider info. Defaults to false",
-							)
+							.meta({
+								description:
+									"Override user info with the provider info. Defaults to false",
+							})
 							.default(false)
 							.optional(),
 					}),
@@ -438,46 +461,61 @@ export const sso = (options?: SSOOptions) => {
 					body: z.object({
 						email: z
 							.string()
-							.describe(
-								"The email address to sign in with. This is used to identify the issuer to sign in with",
-							)
+							.meta({
+								description:
+									'The email address to sign in with. This is used to identify the issuer to sign in with. It\'s optional if the issuer is provided. Eg: "john@example.com"',
+							})
 							.optional(),
 						organizationSlug: z
 							.string()
-							.describe("The slug of the organization to sign in with")
+							.meta({
+								description:
+									'The slug of the organization to sign in with. Eg: "example-org"',
+							})
 							.optional(),
 						providerId: z
 							.string()
-							.describe(
-								"The ID of the provider to sign in with. This can be provided instead of email or issuer. Eg: ",
-							)
+							.meta({
+								description:
+									'The ID of the provider to sign in with. This can be provided instead of email or issuer. Eg: "example-provider"',
+							})
 							.optional(),
 						domain: z
 							.string()
-							.describe("The domain of the provider. Eg: ")
+							.meta({
+								description: 'The domain of the provider. Eg: "example.com"',
+							})
 							.optional(),
-						callbackURL: z
-							.string()
-							.describe("The URL to redirect to after login. Eg: "),
+						callbackURL: z.string().meta({
+							description:
+								'The URL to redirect to after login. Eg: "https://example.com/callback"',
+						}),
 						errorCallbackURL: z
 							.string()
-							.describe("The URL to redirect to after login. Eg: ")
+							.meta({
+								description:
+									'The URL to redirect to after login. Eg: "https://example.com/callback"',
+							})
 							.optional(),
 						newUserCallbackURL: z
 							.string()
-							.describe(
-								"The URL to redirect to after login if the user is new. Eg: ",
-							)
+							.meta({
+								description:
+									'The URL to redirect to after login if the user is new. Eg: "https://example.com/new-user"',
+							})
 							.optional(),
 						scopes: z
 							.array(z.string())
-							.describe("Scopes to request from the provider.")
+							.meta({
+								description: "Scopes to request from the provider.",
+							})
 							.optional(),
 						requestSignUp: z
 							.boolean()
-							.describe(
-								"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: true",
-							)
+							.meta({
+								description:
+									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: true",
+							})
 							.optional(),
 					}),
 					metadata: {
@@ -985,9 +1023,11 @@ export const sso = (options?: SSOOptions) => {
 					},
 					userId: {
 						type: "string",
+						required: false,
 						references: {
 							model: "user",
 							field: "id",
+							onDelete: "set null",
 						},
 					},
 					providerId: {
@@ -1012,7 +1052,7 @@ export const sso = (options?: SSOOptions) => {
 export interface SSOProvider {
 	issuer: string;
 	oidcConfig: OIDCConfig;
-	userId: string;
+	userId?: string;
 	providerId: string;
 	organizationId?: string;
 }

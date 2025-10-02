@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.4.0-beta.3",
+  "version": "1.4.0-beta.6",
   "description": "",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
@@ -72,7 +72,8 @@
     "expo-web-browser": ">=14.0.0"
   },
   "dependencies": {
-    "@better-fetch/fetch": "catalog:"
+    "@better-fetch/fetch": "catalog:",
+    "zod": "^4.1.5"
   },
   "files": [
     "dist"

@@ -68,16 +68,16 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 		{
 			method: "POST",
 			body: z.object({
-				organizationId: z
-					.string()
-					.optional()
-					.describe(
-						"The id of the organization to create the role in. If not provided, the user",
-					),
-				role: z.string().describe("The name of the role to create"),
-				permission: z
-					.record(z.string(), z.array(z.string()))
-					.describe("The permission to assign to the role"),
+				organizationId: z.string().optional().meta({
+					description:
+						"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
+				}),
+				role: z.string().meta({
+					description: "The name of the role to create",
+				}),
+				permission: z.record(z.string(), z.array(z.string())).meta({
+					description: "The permission to assign to the role",
+				}),
 				additionalFields: z
 					.object({ ...additionalFieldsSchema.shape })
 					.optional(),
@@ -85,7 +85,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					body: {} as {
-						organizationId?: string;
+						organizationId?: string | undefined;
 						role: string;
 						permission: Record<string, string[]>;
 					} & (IsExactlyEmptyObject<AdditionalFields> extends true
@@ -281,20 +281,22 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 			method: "POST",
 			body: z
 				.object({
-					organizationId: z
-						.string()
-						.optional()
-						.describe(
-							"The id of the organization to create the role in. If not provided, the user",
-						),
+					organizationId: z.string().optional().meta({
+						description:
+							"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
+					}),
 				})
 				.and(
 					z.union([
 						z.object({
-							roleName: z.string().describe("The name of the role to delete"),
+							roleName: z.string().meta({
+								description: "The name of the role to delete",
+							}),
 						}),
 						z.object({
-							roleId: z.string().describe("The id of the role to delete"),
+							roleId: z.string().meta({
+								description: "The id of the role to delete",
+							}),
 						}),
 					]),
 				),
@@ -309,7 +311,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						| {
 								roleId: string;
 						  }
-					) & { organizationId?: string },
+					) & { organizationId?: string | undefined },
 				},
 			},
 		},
@@ -486,14 +488,21 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 			use: [orgSessionMiddleware],
 			query: z
 				.object({
-					organizationId: z
-						.string()
-						.optional()
-						.describe(
-							"The id of the organization to list roles for. If not provided, the user",
-						),
+					organizationId: z.string().optional().meta({
+						description:
+							"The id of the organization to list roles for. If not provided, the user's active organization will be used.",
+					}),
 				})
 				.optional(),
+			metadata: {
+				$Infer: {
+					query: {} as
+						| {
+								organizationId?: string | undefined;
+						  }
+						| undefined,
+				},
+			},
 		},
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
@@ -599,20 +608,22 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 			use: [orgSessionMiddleware],
 			query: z
 				.object({
-					organizationId: z
-						.string()
-						.optional()
-						.describe(
-							"The id of the organization to read a role for. If not provided, the user",
-						),
+					organizationId: z.string().optional().meta({
+						description:
+							"The id of the organization to read a role for. If not provided, the user's active organization will be used.",
+					}),
 				})
 				.and(
 					z.union([
 						z.object({
-							roleName: z.string().describe("The name of the role to read"),
+							roleName: z.string().meta({
+								description: "The name of the role to read",
+							}),
 						}),
 						z.object({
-							roleId: z.string().describe("The id of the role to read"),
+							roleId: z.string().meta({
+								description: "The id of the role to read",
+							}),
 						}),
 					]),
 				)
@@ -620,7 +631,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					query: {} as {
-						organizationId?: string;
+						organizationId?: string | undefined;
 					} & ({ roleName: string } | { roleId: string }),
 				},
 			},
@@ -757,41 +768,44 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			method: "POST",
 			body: z
 				.object({
-					organizationId: z
-						.string()
-						.optional()
-						.describe(
-							"The id of the organization to update the role in. If not provided, the user",
-						),
+					organizationId: z.string().optional().meta({
+						description:
+							"The id of the organization to update the role in. If not provided, the user's active organization will be used.",
+					}),
 					data: z.object({
 						permission: z
 							.record(z.string(), z.array(z.string()))
 							.optional()
-							.describe("The permission to update the role with"),
-						roleName: z
-							.string()
-							.optional()
-							.describe("The name of the role to update"),
+							.meta({
+								description: "The permission to update the role with",
+							}),
+						roleName: z.string().optional().meta({
+							description: "The name of the role to update",
+						}),
 						...additionalFieldsSchema.shape,
 					}),
 				})
 				.and(
 					z.union([
 						z.object({
-							roleName: z.string().describe("The name of the role to update"),
+							roleName: z.string().meta({
+								description: "The name of the role to update",
+							}),
 						}),
 						z.object({
-							roleId: z.string().describe("The id of the role to update"),
+							roleId: z.string().meta({
+								description: "The id of the role to update",
+							}),
 						}),
 					]),
 				),
 			metadata: {
 				$Infer: {
 					body: {} as {
-						organizationId?: string;
+						organizationId?: string | undefined;
 						data: {
-							permission?: Record<string, string[]>;
-							roleName?: string;
+							permission?: Record<string, string[]> | undefined;
+							roleName?: string | undefined;
 						} & AdditionalFields;
 					} & ({ roleName: string } | { roleId: string }),
 				},

@@ -126,7 +126,7 @@ export async function validateApiKey({
 		if (refillInterval && refillAmount) {
 			// if they provide refill info, then we should refill once the interval is reached.
 
-			const timeSinceLastRequest = (now - lastTime) / (1000 * 60 * 60 * 24); // in days
+			const timeSinceLastRequest = now - lastTime;
 			if (timeSinceLastRequest > refillInterval) {
 				remaining = refillAmount;
 				lastRefillAt = new Date();
@@ -198,10 +198,14 @@ export function verifyApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				key: z.string().describe("The key to verify"),
+				key: z.string().meta({
+					description: "The key to verify",
+				}),
 				permissions: z
 					.record(z.string(), z.array(z.string()))
-					.describe("The permissions to verify.")
+					.meta({
+						description: "The permissions to verify.",
+					})
 					.optional(),
 			}),
 			metadata: {

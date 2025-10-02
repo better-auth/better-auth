@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.4.0-beta.3",
+  "version": "1.4.0-beta.6",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
   "repository": {
@@ -43,6 +43,7 @@
     "@babel/core": "^7.28.4",
     "@babel/preset-react": "^7.27.1",
     "@babel/preset-typescript": "^7.27.1",
+    "@better-auth/utils": "0.3.0",
     "@clack/prompts": "^0.11.0",
     "@mrleebo/prisma-ast": "^0.13.0",
     "@prisma/client": "^5.22.0",

@@ -15,7 +15,11 @@ import {
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 import { generateState, parseState } from "../../oauth2/state";
-import type { BetterAuthPlugin, User } from "../../types";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+	User,
+} from "../../types";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -99,13 +103,16 @@ export interface GenericOAuthConfig {
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	authorizationUrlParams?: Record<string, string>;
-
+	authorizationUrlParams?:
+		| Record<string, string>
+		| ((ctx: GenericEndpointContext) => Record<string, string>);
 	/**
 	 * Additional search-params to add to the tokenUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	tokenUrlParams?: Record<string, string>;
+	tokenUrlParams?:
+		| Record<string, string>
+		| ((ctx: GenericEndpointContext) => Record<string, string>);
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
@@ -341,38 +348,47 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						providerId: z
-							.string()
-							.describe("The provider ID for the OAuth provider"),
+						providerId: z.string().meta({
+							description: "The provider ID for the OAuth provider",
+						}),
 						callbackURL: z
 							.string()
-							.describe("The URL to redirect to after sign in")
+							.meta({
+								description: "The URL to redirect to after sign in",
+							})
 							.optional(),
 						errorCallbackURL: z
 							.string()
-							.describe("The URL to redirect to if an error occurs")
+							.meta({
+								description: "The URL to redirect to if an error occurs",
+							})
 							.optional(),
 						newUserCallbackURL: z
 							.string()
-							.describe(
-								"The URL to redirect to after login if the user is new. Eg: ",
-							)
+							.meta({
+								description:
+									'The URL to redirect to after login if the user is new. Eg: "/welcome"',
+							})
 							.optional(),
 						disableRedirect: z
 							.boolean()
-							.describe("Disable redirect")
+							.meta({
+								description: "Disable redirect",
+							})
 							.optional(),
 						scopes: z
 							.array(z.string())
-							.describe(
-								"Scopes to be passed to the provider authorization request.",
-							)
+							.meta({
+								description:
+									"Scopes to be passed to the provider authorization request.",
+							})
 							.optional(),
 						requestSignUp: z
 							.boolean()
-							.describe(
-								"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: false",
-							)
+							.meta({
+								description:
+									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: false",
+							})
 							.optional(),
 					}),
 					metadata: {
@@ -461,6 +477,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						}
 						finalAuthUrl = withAdditionalParams.toString();
 					}
+					const additionalParams =
+						typeof authorizationUrlParams === "function"
+							? authorizationUrlParams(ctx)
+							: authorizationUrlParams;
 
 					const { state, codeVerifier } = await generateState(ctx);
 					const authUrl = await createAuthorizationURL({
@@ -481,7 +501,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						accessType,
 						responseType,
 						responseMode,
-						additionalParams: authorizationUrlParams,
+						additionalParams,
 					});
 					return ctx.json({
 						url: authUrl.toString(),
@@ -494,15 +514,29 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						code: z.string().describe("The OAuth2 code").optional(),
-						error: z.string().describe("The error message, if any").optional(),
+						code: z
+							.string()
+							.meta({
+								description: "The OAuth2 code",
+							})
+							.optional(),
+						error: z
+							.string()
+							.meta({
+								description: "The error message, if any",
+							})
+							.optional(),
 						error_description: z
 							.string()
-							.describe("The error description, if any")
+							.meta({
+								description: "The error description, if any",
+							})
 							.optional(),
 						state: z
 							.string()
-							.describe("The state parameter from the OAuth2 request")
+							.meta({
+								description: "The state parameter from the OAuth2 request",
+							})
 							.optional(),
 					}),
 					metadata: {
@@ -596,6 +630,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration.",
 							});
 						}
+						const additionalParams =
+							typeof provider.tokenUrlParams === "function"
+								? provider.tokenUrlParams(ctx)
+								: provider.tokenUrlParams;
 						tokens = await validateAuthorizationCode({
 							headers: provider.authorizationHeaders,
 							code,
@@ -608,7 +646,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: provider.authentication,
-							additionalParams: provider.tokenUrlParams,
+							additionalParams,
 						});
 					} catch (e) {
 						ctx.context.logger.error(
@@ -788,16 +826,20 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						 */
 						scopes: z
 							.array(z.string())
-							.describe("Additional scopes to request when linking the account")
+							.meta({
+								description:
+									"Additional scopes to request when linking the account",
+							})
 							.optional(),
 						/**
 						 * The URL to redirect to if there is an error during the link process.
 						 */
 						errorCallbackURL: z
 							.string()
-							.describe(
-								"The URL to redirect to if there is an error during the link process",
-							)
+							.meta({
+								description:
+									"The URL to redirect to if there is an error during the link process",
+							})
 							.optional(),
 					}),
 					use: [sessionMiddleware],
@@ -894,6 +936,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						email: session.user.email,
 					});
 
+					const additionalParams =
+						typeof authorizationUrlParams === "function"
+							? authorizationUrlParams(c)
+							: authorizationUrlParams;
+
 					const url = await createAuthorizationURL({
 						id: providerId,
 						options: {
@@ -912,7 +959,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							`${c.context.baseURL}/oauth2/callback/${providerId}`,
 						prompt,
 						accessType,
-						additionalParams: authorizationUrlParams,
+						additionalParams,
 					});
 
 					return c.json({

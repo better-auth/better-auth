@@ -10,7 +10,6 @@ import {
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
 import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
-import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../middlewares";
@@ -21,7 +20,9 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		{
 			method: "POST",
 			body: z.record(
-				z.string().describe("Field name must be a string"),
+				z.string().meta({
+					description: "Field name must be a string",
+				}),
 				z.any(),
 			),
 			use: [sessionMiddleware],
@@ -97,17 +98,12 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					status: true,
 				});
 			}
-			const additionalFields = parseUserInput(
-				ctx.context.options,
-				rest,
-				"update",
-			);
 			const user = await ctx.context.internalAdapter.updateUser(
 				session.user.id,
 				{
 					name,
 					image,
-					...additionalFields,
+					...rest,
 				},
 				ctx,
 			);
@@ -132,18 +128,24 @@ export const changePassword = createAuthEndpoint(
 			/**
 			 * The new password to set
 			 */
-			newPassword: z.string().describe("The new password to set"),
+			newPassword: z.string().meta({
+				description: "The new password to set",
+			}),
 			/**
 			 * The current password of the user
 			 */
-			currentPassword: z.string().describe("The current password is required"),
+			currentPassword: z.string().meta({
+				description: "The current password is required",
+			}),
 			/**
 			 * revoke all sessions that are not the
 			 * current one logged in by the user
 			 */
 			revokeOtherSessions: z
 				.boolean()
-				.describe("Must be a boolean value")
+				.meta({
+					description: "Must be a boolean value",
+				})
 				.optional(),
 		}),
 		use: [sensitiveSessionMiddleware],
@@ -307,7 +309,9 @@ export const setPassword = createAuthEndpoint(
 			/**
 			 * The new password to set
 			 */
-			newPassword: z.string().describe("The new password to set is required"),
+			newPassword: z.string().meta({
+				description: "The new password to set is required",
+			}),
 		}),
 		metadata: {
 			SERVER_ONLY: true,
@@ -373,7 +377,10 @@ export const deleteUser = createAuthEndpoint(
 			 */
 			callbackURL: z
 				.string()
-				.describe("The callback URL to redirect to after the user is deleted")
+				.meta({
+					description:
+						"The callback URL to redirect to after the user is deleted",
+				})
 				.optional(),
 			/**
 			 * The password of the user. If the password isn't provided, session freshness
@@ -381,14 +388,19 @@ export const deleteUser = createAuthEndpoint(
 			 */
 			password: z
 				.string()
-				.describe("The password of the user is required to delete the user")
+				.meta({
+					description:
+						"The password of the user is required to delete the user",
+				})
 				.optional(),
 			/**
 			 * The token to delete the user. If the token is provided, the user will be deleted
 			 */
 			token: z
 				.string()
-				.describe("The token to delete the user is required")
+				.meta({
+					description: "The token to delete the user is required",
+				})
 				.optional(),
 		}),
 		metadata: {
@@ -539,10 +551,14 @@ export const deleteUserCallback = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			token: z.string().describe("The token to verify the deletion request"),
+			token: z.string().meta({
+				description: "The token to verify the deletion request",
+			}),
 			callbackURL: z
 				.string()
-				.describe("The URL to redirect to after deletion")
+				.meta({
+					description: "The URL to redirect to after deletion",
+				})
 				.optional(),
 		}),
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
@@ -633,13 +649,15 @@ export const changeEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			newEmail: z
-				.string()
-				.email()
-				.describe("The new email address to set must be a valid email address"),
+			newEmail: z.email().meta({
+				description:
+					"The new email address to set must be a valid email address",
+			}),
 			callbackURL: z
 				.string()
-				.describe("The URL to redirect to after email verification")
+				.meta({
+					description: "The URL to redirect to after email verification",
+				})
 				.optional(),
 		}),
 		use: [sensitiveSessionMiddleware],
@@ -720,7 +738,7 @@ export const changeEmail = createAuthEndpoint(
 				await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (existing) {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
+					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				});
 			}
 			await ctx.context.internalAdapter.updateUserByEmail(

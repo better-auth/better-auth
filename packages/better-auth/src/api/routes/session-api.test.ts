@@ -124,9 +124,9 @@ describe("session", async () => {
 				updateAge: 0,
 			},
 		});
-		const { runWithDefaultUser } = await signInWithTestUser();
+		const { runWithUser } = await signInWithTestUser();
 
-		await runWithDefaultUser(async () => {
+		await runWithUser(async () => {
 			const session = await client.getSession();
 
 			vi.useFakeTimers();
@@ -409,9 +409,9 @@ describe("session storage", async () => {
 	it("should store session in secondary storage", async () => {
 		//since the instance creates a session on init, we expect the store to have 2 item (1 for session and 1 for active sessions record for the user)
 		expect(store.size).toBe(0);
-		const { runWithDefaultUser } = await signInWithTestUser();
+		const { runWithUser } = await signInWithTestUser();
 		expect(store.size).toBe(2);
-		await runWithDefaultUser(async () => {
+		await runWithUser(async () => {
 			const session = await client.getSession();
 			expect(session.data).toMatchObject({
 				session: {
@@ -435,16 +435,16 @@ describe("session storage", async () => {
 	});
 
 	it("should list sessions", async () => {
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const response = await client.listSessions();
 			expect(response.data?.length).toBe(1);
 		});
 	});
 
 	it("revoke session and list sessions", async () => {
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const session = await client.getSession();
 			expect(session.data).not.toBeNull();
 			expect(session.data?.session?.token).toBeDefined();
@@ -462,8 +462,8 @@ describe("session storage", async () => {
 	});
 
 	it("should revoke session", async () => {
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const session = await client.getSession();
 			expect(session.data).not.toBeNull();
 			const res = await client.revokeSession({
@@ -598,13 +598,11 @@ describe("getSession type tests", async () => {
 	const { auth } = await getTestInstance();
 
 	it("has parameters", () => {
-		type Params = Parameters<typeof auth.api.getSession>[0];
+		type Params = Parameters<typeof auth.api.getSession>[0]["headers"];
 
-		expectTypeOf<Params>().toMatchObjectType<{
-			headers: Headers;
-			asResponse?: boolean;
-			returnHeaders?: boolean;
-		}>();
+		expectTypeOf<Params>().toEqualTypeOf<
+			[string, string][] | Record<string, string> | Headers
+		>();
 	});
 
 	it("can return a response", () => {
