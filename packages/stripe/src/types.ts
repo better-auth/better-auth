@@ -199,12 +199,9 @@ export interface StripeOptions {
 	 * @returns
 	 */
 	getCustomerCreateParams?: (
-		data: {
-			user: User;
-			session: Session;
-		},
+		user: User,
 		ctx: GenericEndpointContext,
-	) => Promise<{}>;
+	) => Promise<Partial<Stripe.CustomerCreateParams>>;
 	/**
 	 * Subscriptions
 	 */
