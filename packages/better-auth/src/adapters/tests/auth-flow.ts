@@ -6,21 +6,30 @@ import { createTestSuite } from "../create-test-suite";
  */
 export const authFlowTestSuite = createTestSuite(
 	"auth-flow",
-	{},
+	{
+		defaultBetterAuthOptions: {
+			emailAndPassword: {
+				enabled: true,
+				password: {
+					hash: async (password) => password,
+					async verify(data) {
+						return data.hash === data.password;
+					},
+				},
+			},
+		},
+	},
 	(
-		{ generate, getAuth, modifyBetterAuthOptions, tryCatch },
+		{
+			generate,
+			getAuth,
+			modifyBetterAuthOptions,
+			tryCatch,
+			getBetterAuthOptions,
+		},
 		debug?: { showDB?: () => Promise<void> },
 	) => ({
 		"should successfully sign up": async () => {
-			await modifyBetterAuthOptions(
-				{
-					emailAndPassword: {
-						enabled: true,
-						password: { hash: async (password) => password },
-					},
-				},
-				false,
-			);
 			const auth = await getAuth();
 			const user = await generate("user");
 			const start = Date.now();
@@ -43,20 +52,6 @@ export const authFlowTestSuite = createTestSuite(
 			expect(result.user.updatedAt).toBeDefined();
 		},
 		"should successfully sign in": async () => {
-			await modifyBetterAuthOptions(
-				{
-					emailAndPassword: {
-						enabled: true,
-						password: {
-							hash: async (password) => password,
-							async verify(data) {
-								return data.hash === data.password;
-							},
-						},
-					},
-				},
-				false,
-			);
 			const auth = await getAuth();
 			const user = await generate("user");
 			const password = crypto.randomUUID();
@@ -78,15 +73,6 @@ export const authFlowTestSuite = createTestSuite(
 			expect(result.user.id).toBe(signUpResult.user.id);
 		},
 		"should successfully get session": async () => {
-			await modifyBetterAuthOptions(
-				{
-					emailAndPassword: {
-						enabled: true,
-						password: { hash: async (password) => password },
-					},
-				},
-				false,
-			);
 			const auth = await getAuth();
 			const user = await generate("user");
 			const password = crypto.randomUUID();
@@ -101,12 +87,7 @@ export const authFlowTestSuite = createTestSuite(
 				returnHeaders: true,
 			});
 
-			// Convert set-cookie header to cookie header for getSession call
-			const modifiedHeaders = new Headers(headers);
-			if (headers.has("set-cookie")) {
-				modifiedHeaders.set("cookie", headers.getSetCookie().join("; "));
-				modifiedHeaders.delete("set-cookie");
-			}
+			const modifiedHeaders = convertSetCookieToCookie(headers);
 
 			const start = Date.now();
 			const result = await auth.api.getSession({
@@ -119,10 +100,6 @@ export const authFlowTestSuite = createTestSuite(
 			expect(result?.session).toBeDefined();
 		},
 		"should not sign in with invalid email": async () => {
-			await modifyBetterAuthOptions(
-				{ emailAndPassword: { enabled: true } },
-				false,
-			);
 			const auth = await getAuth();
 			const user = await generate("user");
 			const { data, error } = await tryCatch(
@@ -136,10 +113,6 @@ export const authFlowTestSuite = createTestSuite(
 		"should store and retrieve timestamps correctly across timezones":
 			async () => {
 				using _ = recoverProcessTZ();
-				await modifyBetterAuthOptions(
-					{ emailAndPassword: { enabled: true } },
-					false,
-				);
 				const auth = await getAuth();
 				const user = await generate("user");
 				const password = crypto.randomUUID();
@@ -160,6 +133,31 @@ export const authFlowTestSuite = createTestSuite(
 					userSignIn.user.createdAt.toISOString(),
 				);
 			},
+		"should sign up with additional fields": async () => {
+			await modifyBetterAuthOptions(
+				{ user: { additionalFields: { dateField: { type: "date" } } } },
+				true,
+			);
+			const auth = await getAuth();
+			const user = await generate("user");
+			const dateField = new Date();
+			const { headers } = await auth.api.signUpEmail({
+				body: {
+					email: user.email,
+					name: user.name,
+					password: crypto.randomUUID(),
+					//@ts-expect-error - we are testing with additional fields
+					dateField: dateField.toISOString(), // using iso string to simulate client to server communication (this should be converted back to Date)
+				},
+				returnHeaders: true,
+			});
+			const modifiedHeaders = convertSetCookieToCookie(headers);
+			const result = await auth.api.getSession({
+				headers: modifiedHeaders,
+			});
+			//@ts-expect-error - we are testing with additional fields
+			expect(result?.user.dateField).toStrictEqual(dateField);
+		},
 	}),
 );
 
@@ -170,4 +168,13 @@ function recoverProcessTZ() {
 			process.env.TZ = originalTZ;
 		},
 	};
+}
+
+function convertSetCookieToCookie(headers: Headers): Headers {
+	const modifiedHeaders = new Headers(headers);
+	if (headers.has("set-cookie")) {
+		modifiedHeaders.set("cookie", headers.getSetCookie().join("; "));
+		modifiedHeaders.delete("set-cookie");
+	}
+	return modifiedHeaders;
 }

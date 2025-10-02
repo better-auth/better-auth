@@ -16,7 +16,6 @@ import type {
 } from "./types";
 import { colors } from "../../utils/colors";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import { parseUserInput } from "../../db";
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
@@ -342,6 +341,18 @@ export const createAdapterFactory =
 				}
 				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
 				let newValue = withApplyDefault(value, fieldAttributes!, action);
+
+				// In some endpoints (like signUpEmail) where there isn't proper Zod validation,
+				// we might recieve a date as a string (this is because of the client converting the Date to a string
+				// when sending to the server). Because of this, we'll convert the string to a Date.
+				if (
+					fieldAttributes &&
+					fieldAttributes.type === "date" &&
+					!(newValue instanceof Date) &&
+					newValue !== null
+				) {
+					newValue = new Date(newValue);
+				}
 
 				// If the field attr provides a custom transform input, then we'll let it handle the value transformation.
 				// Afterwards, we'll continue to apply the default transformations just to make sure it saves in the correct format.
