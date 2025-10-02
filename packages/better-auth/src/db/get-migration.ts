@@ -235,10 +235,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 					? "integer"
 					: "varchar(36)",
 				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
-			}
+			},
 		} as const;
 		if (fieldName === "id" || field.references?.field === "id") {
-			if(fieldName === "id") {
+			if (fieldName === "id") {
 				return typeMap.id[dbType!];
 			}
 			return typeMap.foreignKeyId[dbType!];
