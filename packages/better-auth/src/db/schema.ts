@@ -141,7 +141,7 @@ export function parseInputData<T extends Record<string, any>>(
 	const fields = schema.fields;
 	const parsedData: Record<string, any> = Object.assign(
 		Object.create(null),
-		data,
+		null,
 	);
 	for (const key in fields) {
 		if (key in data) {
@@ -149,6 +149,11 @@ export function parseInputData<T extends Record<string, any>>(
 				if (fields[key]!.defaultValue) {
 					parsedData[key] = fields[key]!.defaultValue;
 					continue;
+				}
+				if (parsedData[key]) {
+					throw new APIError("BAD_REQUEST", {
+						message: `${key} is not allowed to be set`,
+					});
 				}
 				continue;
 			}
@@ -175,7 +180,9 @@ export function parseInputData<T extends Record<string, any>>(
 			});
 		}
 	}
-	return parsedData as Partial<T>;
+	const p = parsedData as Partial<T>;
+	console.log({ p });
+	return p;
 }
 
 export function parseUserInput(
