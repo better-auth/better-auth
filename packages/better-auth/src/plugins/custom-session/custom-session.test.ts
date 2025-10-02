@@ -160,6 +160,7 @@ describe("Custom Session Plugin Tests", async () => {
 			],
 		});
 		type Session = typeof auth.$Infer.Session;
+
 		expectTypeOf<Session>().toEqualTypeOf<{
 			custom: {
 				field: string;
