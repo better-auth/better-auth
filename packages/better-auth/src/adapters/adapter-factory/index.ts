@@ -16,7 +16,6 @@ import type {
 } from "./types";
 import { colors } from "../../utils/colors";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import { parseUserInput } from "../../db";
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
