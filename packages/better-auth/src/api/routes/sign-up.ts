@@ -277,9 +277,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
 					);
-					const url = `${
-						ctx.context.baseURL
-					}/verify-email?token=${token}&callbackURL=${body.callbackURL || "/"}`;
+					const callbackURL = body.callbackURL
+						? encodeURIComponent(body.callbackURL)
+						: encodeURIComponent("/");
+					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 
 					const args: Parameters<
 						Required<
