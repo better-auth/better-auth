@@ -114,6 +114,7 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 
 export interface MicrosoftOptions
 	extends ProviderOptions<MicrosoftEntraIDProfile> {
+	clientId: string;
 	/**
 	 * The tenant ID of the Microsoft account
 	 * @default "common"

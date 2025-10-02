@@ -19,11 +19,11 @@ import {
 import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
-	createAdapter,
+	createAdapterFactory,
 	type AdapterDebugLogs,
-	type CreateAdapterOptions,
-	type CreateCustomAdapter,
-} from "../create-adapter";
+	type AdapterFactoryOptions,
+	type AdapterFactoryCustomizeAdapterCreator,
+} from "../adapter-factory";
 
 export interface DB {
 	[key: string]: any;
@@ -70,7 +70,7 @@ export interface DrizzleAdapterConfig {
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
-		(db: DB): CreateCustomAdapter =>
+		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldName, debugLog }) => {
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
@@ -101,7 +101,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				const schemaModel = getSchema(model);
 				const builderVal = builder.config?.values;
 				if (where?.length) {
-					const clause = convertWhereClause(where, model);
+					// If we're updating a field that's in the where clause, use the new value
+					const updatedWhere = where.map((w) => {
+						// If this field was updated, use the new value for lookup
+						if (data[w.field] !== undefined) {
+							return { ...w, value: data[w.field] };
+						}
+						return w;
+					});
+
+					const clause = convertWhereClause(updatedWhere, model);
 					const res = await db
 						.select()
 						.from(schemaModel)
@@ -353,7 +362,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				options: config,
 			};
 		};
-	let adapterOptions: CreateAdapterOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "drizzle",
@@ -361,10 +370,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			transaction:
-				(config.transaction ?? true)
+				(config.transaction ?? false)
 					? (cb) =>
 							db.transaction((tx: DB) => {
-								const adapter = createAdapter({
+								const adapter = createAdapterFactory({
 									config: adapterOptions!.config,
 									adapter: createCustomAdapter(tx),
 								})(lazyOptions!);
@@ -374,7 +383,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		},
 		adapter: createCustomAdapter(db),
 	};
-	const adapter = createAdapter(adapterOptions);
+	const adapter = createAdapterFactory(adapterOptions);
 	return (options: BetterAuthOptions): Adapter => {
 		lazyOptions = options;
 		return adapter(options);

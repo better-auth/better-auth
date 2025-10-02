@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";

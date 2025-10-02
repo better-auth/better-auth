@@ -184,7 +184,7 @@ function CopyButton({
 					variant: "ghost",
 					size: "icon",
 				}),
-				"transition-opacity border-none  group-hover:opacity-100",
+				"transition-opacity size-7 border-none  group-hover:opacity-100",
 				"opacity-0 group-hover:opacity-100",
 				"group-hover:opacity-100",
 				className,

@@ -221,9 +221,9 @@ export type ApiKey = {
 	 */
 	userId: string;
 	/**
-	 * The interval in which the `remaining` count is refilled by day
+	 * The interval in milliseconds between refills of the `remaining` count
 	 *
-	 * @example 1 // every day
+	 * @example 3600000 // refill every hour (3600000ms = 1h)
 	 */
 	refillInterval: number | null;
 	/**

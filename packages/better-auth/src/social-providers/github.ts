@@ -53,7 +53,9 @@ export interface GithubProfile {
 	};
 }
 
-export interface GithubOptions extends ProviderOptions<GithubProfile> {}
+export interface GithubOptions extends ProviderOptions<GithubProfile> {
+	clientId: string;
+}
 export const github = (options: GithubOptions) => {
 	const tokenEndpoint = "https://github.com/login/oauth/access_token";
 	return {

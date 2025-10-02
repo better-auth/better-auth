@@ -1,9 +1,9 @@
+import { type spinner as clackSpinner } from "@clack/prompts";
+import { logger } from "better-auth";
 import {
 	type SupportedDatabases,
 	type SupportedPlugin,
 } from "../commands/init";
-import { logger } from "better-auth";
-import { type spinner as clackSpinner } from "@clack/prompts";
 
 export type Import = {
 	path: string;
@@ -425,7 +425,7 @@ export async function generateAuthConfig({
 					].join("\n"),
 					imports: [
 						{
-							path: "better-auth/adapters/mongo",
+							path: "better-auth/adapters/mongodb",
 							variables: [
 								{
 									name: "mongodbAdapter",

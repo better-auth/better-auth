@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { APIError, createAuthEndpoint } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
@@ -126,7 +126,7 @@ export async function validateApiKey({
 		if (refillInterval && refillAmount) {
 			// if they provide refill info, then we should refill once the interval is reached.
 
-			const timeSinceLastRequest = (now - lastTime) / (1000 * 60 * 60 * 24); // in days
+			const timeSinceLastRequest = now - lastTime;
 			if (timeSinceLastRequest > refillInterval) {
 				remaining = refillAmount;
 				lastRefillAt = new Date();

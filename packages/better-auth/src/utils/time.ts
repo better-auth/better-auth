@@ -13,12 +13,12 @@ const REGEX =
 export function joseSecs(str: string): number {
 	const matched = REGEX.exec(str);
 
-	if (!matched || (matched[4] && matched[1])) {
+	if (!matched || (matched[4]! && matched[1]!)) {
 		throw new TypeError("Invalid time period format");
 	}
 
-	const value = parseFloat(matched[2]);
-	const unit = matched[3].toLowerCase();
+	const value = parseFloat(matched[2]!);
+	const unit = matched[3]!.toLowerCase();
 
 	let numericDate: number;
 
@@ -60,7 +60,7 @@ export function joseSecs(str: string): number {
 			break;
 	}
 
-	if (matched[1] === "-" || matched[4] === "ago") {
+	if (matched[1]! === "-" || matched[4]! === "ago") {
 		return -numericDate;
 	}
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
 import { getTestInstance } from "../test-utils/test-instance";
-import type { BetterAuthOptions } from "../types/options";
+import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
 import { parseSetCookieHeader } from "./cookie-utils";
+import type { BetterAuthOptions } from "../types/options";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
@@ -287,6 +287,42 @@ describe("getSessionCookie", async () => {
 		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
+	it("should respect dontRememberMe when storing session in cookie cache", async () => {
+		const { client, testUser } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+				rememberMe: false,
+			},
+			{
+				onSuccess(c) {
+					const headers = c.response.headers;
+					const setCookieHeader = headers.get("set-cookie");
+					expect(setCookieHeader).toBeDefined();
+
+					const parsed = parseSetCookieHeader(setCookieHeader!);
+
+					const sessionTokenCookie = parsed.get("better-auth.session_token")!;
+					expect(sessionTokenCookie).toBeDefined();
+					expect(sessionTokenCookie["max-age"]).toBeUndefined();
+
+					const sessionDataCookie = parsed.get("better-auth.session_data")!;
+					expect(sessionDataCookie).toBeDefined();
+					expect(sessionDataCookie["max-age"]).toBeUndefined();
+				},
+			},
+		);
+	});
+
 	it("should return null if the cookie is invalid", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			session: {
@@ -332,143 +368,68 @@ describe("getSessionCookie", async () => {
 		});
 		await expect(getCookieCache(request)).rejects.toThrow();
 	});
-});
 
-describe("cross-origin cookies", () => {
-	it("should handle sameSite=none with secure=true correctly", async () => {
-		const { client, testUser } = await getTestInstance({
-			baseURL: "https://api.example.com",
-			advanced: {
-				defaultCookieAttributes: {
-					sameSite: "none",
-					secure: true,
-				},
+	it("should log error and skip setting cookie when data exceeds size limit", async () => {
+		const loggerErrors: string[] = [];
+		const mockLogger = {
+			log: (level: string, message: string) => {
+				if (level === "error") {
+					loggerErrors.push(message);
+				}
 			},
-		});
+		};
 
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onResponse(context) {
-					const setCookie = context.response.headers.get("set-cookie");
-					expect(setCookie).toContain("SameSite=None");
-					expect(setCookie).toContain("Secure");
-				},
-			},
-		);
-	});
-
-	it("should auto-enforce secure for sameSite=none", async () => {
-		const { client, testUser } = await getTestInstance({
-			baseURL: "https://api.example.com",
-			advanced: {
-				crossOriginCookies: {
-					enabled: true,
-					autoSecure: true,
-				},
-				defaultCookieAttributes: {
-					sameSite: "none",
-					// secure not explicitly set - should be auto-enforced
-				},
-			},
-		});
-
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onResponse(context) {
-					const setCookie = context.response.headers.get("set-cookie");
-					expect(setCookie).toContain("SameSite=None");
-					expect(setCookie).toContain("Secure");
-				},
-			},
-		);
-	});
-
-	it("should allow unsecure cookies on localhost for development", async () => {
-		const { client, testUser } = await getTestInstance({
-			baseURL: "http://localhost:3000",
-			advanced: {
-				crossOriginCookies: {
-					enabled: true,
-					autoSecure: true,
-					allowLocalhostUnsecure: true,
-				},
-				defaultCookieAttributes: {
-					sameSite: "none",
-					secure: false,
-				},
-			},
-		});
-
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onResponse(context) {
-					const setCookie = context.response.headers.get("set-cookie");
-					expect(setCookie).toContain("SameSite=None");
-					// Should not contain Secure on localhost when allowLocalhostUnsecure is true
-					expect(setCookie).not.toContain("Secure");
-				},
-			},
-		);
-	});
-
-	it("should throw error for sameSite=none without secure on non-localhost", async () => {
-		await expect(async () => {
-			await getTestInstance({
-				baseURL: "https://api.example.com",
-				advanced: {
-					crossOriginCookies: {
-						enabled: true,
-						autoSecure: false, // Disable auto-secure
+		const { auth } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					customField1: {
+						type: "string",
+						defaultValue: "",
 					},
-					defaultCookieAttributes: {
-						sameSite: "none",
-						secure: false, // Explicitly set to false
+					customField2: {
+						type: "string",
+						defaultValue: "",
+					},
+					customField3: {
+						type: "string",
+						defaultValue: "",
 					},
 				},
-			});
-		}).rejects.toThrow("SameSite=None cookies require Secure=true");
-	});
-
-	it("should work with partitioned attribute for cross-origin", async () => {
-		const { client, testUser } = await getTestInstance({
-			baseURL: "https://api.example.com",
-			advanced: {
-				crossOriginCookies: {
+			},
+			session: {
+				cookieCache: {
 					enabled: true,
 				},
-				defaultCookieAttributes: {
-					sameSite: "none",
-					secure: true,
-					partitioned: true,
-				},
+			},
+			logger: mockLogger,
+		});
+
+		// Create a very large string that will exceed the cookie size limit when combined with session data
+		// The limit is 4093 bytes, so we create data that will definitely exceed it
+		const largeString = "x".repeat(2000);
+
+		// Sign up with large user data using the server API
+		const result = await auth.api.signUpEmail({
+			body: {
+				name: "Test User",
+				email: "large-data-test@example.com",
+				password: "password123",
+				customField1: largeString,
+				customField2: largeString,
+				customField3: largeString,
 			},
 		});
 
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onResponse(context) {
-					const setCookie = context.response.headers.get("set-cookie");
-					expect(setCookie).toContain("SameSite=None");
-					expect(setCookie).toContain("Secure");
-					expect(setCookie).toContain("Partitioned");
-				},
-			},
+		// Check that logger recorded an error about exceeding size limit
+		const sizeError = loggerErrors.find((msg) =>
+			msg.includes("Session data exceeds cookie size limit"),
 		);
+		expect(sizeError).toBeDefined();
+		expect(sizeError).toContain("4093 bytes");
+
+		// The sign up should still succeed
+		expect(result).toBeDefined();
+		expect(result?.user).toBeDefined();
 	});
 });

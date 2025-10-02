@@ -26,7 +26,6 @@ export const getPasskeyActions = (
 	const signInPasskey = async (
 		opts?: {
 			autoFill?: boolean;
-			email?: string;
 			fetchOptions?: BetterFetchOption;
 		},
 		options?: BetterFetchOption,
@@ -35,9 +34,6 @@ export const getPasskeyActions = (
 			"/passkey/generate-authenticate-options",
 			{
 				method: "POST",
-				body: {
-					email: opts?.email,
-				},
 			},
 		);
 		if (!response.data) {

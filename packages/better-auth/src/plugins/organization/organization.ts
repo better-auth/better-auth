@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import * as z from "zod/v4";
+import * as z from "zod";
 import type { AuthPluginSchema } from "../../types";
 import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
@@ -718,6 +718,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 					slug: {
 						type: "string",
+						required: true,
 						unique: true,
 						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,

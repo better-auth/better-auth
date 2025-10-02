@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { RateLimit } from "../../types";
 
 describe(
 	"rate-limiter",
@@ -107,6 +108,7 @@ describe(
 
 describe("custom rate limiting storage", async () => {
 	let store = new Map<string, string>();
+	const expirationMap = new Map<string, number>();
 	const { client, testUser } = await getTestInstance({
 		rateLimit: {
 			enabled: true,
@@ -114,12 +116,14 @@ describe("custom rate limiting storage", async () => {
 		secondaryStorage: {
 			set(key, value, ttl) {
 				store.set(key, value);
+				if (ttl) expirationMap.set(key, ttl);
 			},
 			get(key) {
 				return store.get(key) || null;
 			},
 			delete(key) {
 				store.delete(key);
+				expirationMap.delete(key);
 			},
 		},
 	});
@@ -127,16 +131,26 @@ describe("custom rate limiting storage", async () => {
 	it("should use custom storage", async () => {
 		await client.getSession();
 		expect(store.size).toBe(3);
+		let lastRequest = Date.now();
 		for (let i = 0; i < 4; i++) {
 			const response = await client.signIn.email({
 				email: testUser.email,
 				password: testUser.password,
 			});
+			const rateLimitData: RateLimit = JSON.parse(
+				store.get("127.0.0.1/sign-in/email") ?? "{}",
+			);
+			expect(rateLimitData.lastRequest).toBeGreaterThanOrEqual(lastRequest);
+			lastRequest = rateLimitData.lastRequest;
 			if (i >= 3) {
 				expect(response.error?.status).toBe(429);
+				expect(rateLimitData.count).toBe(3);
 			} else {
 				expect(response.error).toBeNull();
+				expect(rateLimitData.count).toBe(i + 1);
 			}
+			const rateLimitExp = expirationMap.get("127.0.0.1/sign-in/email");
+			expect(rateLimitExp).toBe(10);
 		}
 	});
 });

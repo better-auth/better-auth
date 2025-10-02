@@ -1,11 +1,11 @@
 import { ClientSession, ObjectId, type Db, type MongoClient } from "mongodb";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
-	createAdapter,
+	createAdapterFactory,
 	type AdapterDebugLogs,
-	type CreateAdapterOptions,
-	type CreateCustomAdapter,
-} from "../create-adapter";
+	type AdapterFactoryOptions,
+	type AdapterFactoryCustomizeAdapterCreator,
+} from "../adapter-factory";
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -37,20 +37,10 @@ export interface MongoDBAdapterConfig {
 
 export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null;
-	const getCustomIdGenerator = (options: BetterAuthOptions) => {
-		const generator =
-			options.advanced?.database?.generateId || options.advanced?.generateId;
-		if (typeof generator === "function") {
-			return generator;
-		}
-		return undefined;
-	};
 
 	const createCustomAdapter =
-		(db: Db, session?: ClientSession): CreateCustomAdapter =>
+		(db: Db, session?: ClientSession): AdapterFactoryCustomizeAdapterCreator =>
 		({ options, getFieldName, schema, getDefaultModelName }) => {
-			const customIdGen = getCustomIdGenerator(options);
-
 			function serializeID({
 				field,
 				value,
@@ -60,14 +50,11 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				value: any;
 				model: string;
 			}) {
-				if (customIdGen) {
-					return value;
-				}
 				model = getDefaultModelName(model);
 				if (
 					field === "id" ||
 					field === "_id" ||
-					schema[model].fields[field]?.references?.field === "id"
+					schema[model]!.fields[field]?.references?.field === "id"
 				) {
 					if (typeof value !== "string") {
 						if (value instanceof ObjectId) {
@@ -176,7 +163,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return { condition, connector };
 				});
 				if (conditions.length === 1) {
-					return conditions[0].condition;
+					return conditions[0]!.condition;
 				}
 				const andConditions = conditions
 					.filter((c) => c.connector === "AND")
@@ -203,7 +190,14 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				},
 				async findOne({ model, where, select }) {
 					const clause = convertWhereClause({ where, model });
-					const res = await db.collection(model).findOne(clause, { session });
+					const projection = select
+						? Object.fromEntries(
+								select.map((field) => [getFieldName({ field, model }), 1]),
+							)
+						: undefined;
+					const res = await db
+						.collection(model)
+						.findOne(clause, { session, projection });
 					if (!res) return null;
 					return res as any;
 				},
@@ -220,10 +214,11 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					const res = await cursor.toArray();
 					return res as any;
 				},
-				async count({ model }) {
+				async count({ model, where }) {
+					const clause = where ? convertWhereClause({ where, model }) : {};
 					const res = await db
 						.collection(model)
-						.countDocuments(undefined, { session });
+						.countDocuments(clause, { session });
 					return res;
 				},
 				async update({ model, where, update: values }) {
@@ -267,7 +262,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 		};
 
 	let lazyAdapter: ((options: BetterAuthOptions) => Adapter) | null = null;
-	let adapterOptions: CreateAdapterOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "mongodb-adapter",
@@ -282,7 +277,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 			},
 			supportsNumericIds: false,
 			transaction:
-				config?.client && (config?.transaction ?? true)
+				config?.client && (config?.transaction ?? false)
 					? async (cb) => {
 							if (!config.client) {
 								return cb(lazyAdapter!(lazyOptions!));
@@ -293,7 +288,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 							try {
 								session.startTransaction();
 
-								const adapter = createAdapter({
+								const adapter = createAdapterFactory({
 									config: adapterOptions!.config,
 									adapter: createCustomAdapter(db, session),
 								})(lazyOptions!);
@@ -319,17 +314,28 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				model,
 				options,
 			}) {
-				const customIdGen = getCustomIdGenerator(options);
-
 				if (field === "_id" || fieldAttributes.references?.field === "id") {
-					if (customIdGen) {
-						return data;
-					}
 					if (action === "update") {
+						if (typeof data === "string") {
+							try {
+								return new ObjectId(data);
+							} catch (error) {
+								return data;
+							}
+						}
 						return data;
 					}
 					if (Array.isArray(data)) {
-						return data.map((v) => new ObjectId());
+						return data.map((v) => {
+							if (typeof v === "string") {
+								try {
+									return new ObjectId(v);
+								} catch (error) {
+									return v;
+								}
+							}
+							return v;
+						});
 					}
 					if (typeof data === "string") {
 						try {
@@ -359,10 +365,13 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				}
 				return data;
 			},
+			customIdGenerator(props) {
+				return new ObjectId().toString();
+			},
 		},
 		adapter: createCustomAdapter(db),
 	};
-	lazyAdapter = createAdapter(adapterOptions);
+	lazyAdapter = createAdapterFactory(adapterOptions);
 
 	return (options: BetterAuthOptions): Adapter => {
 		lazyOptions = options;

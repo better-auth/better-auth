@@ -94,7 +94,7 @@ socialProviders: {
 
 If your application needs additional Google scopes after the user has already signed up (e.g., for Google Drive, Gmail, or other Google services), you can request them using the `linkSocial` method with the same Google provider.
 
-```ts title="auth-client.ts"
+```tsx title="auth-client.ts"
 const requestGoogleDriveAccess = async () => {
   await authClient.linkSocial({
     provider: "google",

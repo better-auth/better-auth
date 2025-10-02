@@ -28,7 +28,9 @@ export interface LineUserInfo {
 }
 
 export interface LineOptions
-	extends ProviderOptions<LineUserInfo | LineIdTokenPayload> {}
+	extends ProviderOptions<LineUserInfo | LineIdTokenPayload> {
+	clientId: string;
+}
 
 /**
  * LINE Login v2.1

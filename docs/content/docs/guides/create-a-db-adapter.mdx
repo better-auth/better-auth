@@ -370,7 +370,7 @@ describe("My Adapter Tests", async () => {
     },
   });
 
-  await runAdapterTest({
+  runAdapterTest({
     getAdapter: async (betterAuthOptions = {}) => {
       return adapter(betterAuthOptions);
     },
@@ -398,7 +398,7 @@ describe("My Adapter Numeric ID Tests", async () => {
     },
   });
 
-  await runNumberIdAdapterTest({
+  runNumberIdAdapterTest({
     getAdapter: async (betterAuthOptions = {}) => {
       return adapter(betterAuthOptions);
     },

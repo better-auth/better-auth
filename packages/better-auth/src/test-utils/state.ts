@@ -10,7 +10,7 @@ export function makeTestState(dirname: string) {
 		try {
 			return fs
 				.readFileSync(stateFilePath, "utf-8")
-				.split("\n")[0]
+				.split("\n")[0]!
 				.trim() as State;
 		} catch {
 			return "IDLE";

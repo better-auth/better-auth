@@ -18,7 +18,7 @@ export function convertSetCookieToCookie(headers: Headers): Headers {
 	const cookies = existingCookies ? existingCookies.split("; ") : [];
 
 	setCookieHeaders.forEach((setCookie) => {
-		const [cookiePair] = setCookie.split(";");
+		const cookiePair = setCookie.split(";")[0]!;
 		cookies.push(cookiePair.trim());
 	});
 

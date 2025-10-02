@@ -11,6 +11,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@better-auth/sso": "workspace:*",
     "@better-auth/stripe": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "@hookform/resolvers": "^5.2.1",
@@ -83,20 +84,20 @@
     "shiki": "^3.12.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
-    "tailwindcss-animate": "^1.0.7",
     "three": "^0.180.0",
     "ua-parser-js": "^2.0.4",
     "vaul": "^1.1.2",
     "zod": "^4.1.5"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.13",
     "@types/canvas-confetti": "^1.9.0",
-    "@types/node": "^24.3.1",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "@types/three": "^0.180.0",
     "@types/ua-parser-js": "^0.7.39",
     "postcss": "^8.5.6",
-    "tailwindcss": "3.4.17"
+    "tailwindcss": "^4.1.13",
+    "tw-animate-css": "^1.3.8"
   }
 }
