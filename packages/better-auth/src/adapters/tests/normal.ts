@@ -98,12 +98,12 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(findResult).toEqual(res);
 		},
-		"create - should not return string for nullable foreign keys": async () => {
+		"create - should return null for nullable foreign keys": async () => {
 			await modifyBetterAuthOptions(
 				{
 					plugins: [
 						{
-							id: "test",
+							id: "nullable-test",
 							schema: {
 								testModel: {
 									fields: {

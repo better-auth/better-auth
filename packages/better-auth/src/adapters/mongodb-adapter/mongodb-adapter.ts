@@ -184,6 +184,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 
 			return {
 				async create({ model, data: values }) {
+					if (model === "testModel") {
+						console.log(values);
+					}
 					const res = await db.collection(model).insertOne(values, { session });
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
@@ -343,6 +346,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 						} catch (error) {
 							return new ObjectId();
 						}
+					}
+					if (data === null && fieldAttributes.references?.field === "id") {
+						return null;
 					}
 					return new ObjectId();
 				}
