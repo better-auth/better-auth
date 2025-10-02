@@ -1069,4 +1069,53 @@ describe("SAML SSO", async () => {
 			},
 		});
 	});
+
+	it("should not allow creating a provider with duplicate providerId", async () => {
+		const headers = await getAuthHeaders();
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "duplicate-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl,
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					spMetadata: {
+						metadata: spMetadata,
+					},
+				},
+			},
+			headers,
+		});
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "duplicate-provider",
+					issuer: "http://localhost:8082",
+					domain: "http://localhost:8082",
+					samlConfig: {
+						entryPoint: mockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8082/api/sso/saml2/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "UNPROCESSABLE_ENTITY",
+			body: {
+				message: "SSO provider with this providerId already exists",
+			},
+		});
+	});
 });
