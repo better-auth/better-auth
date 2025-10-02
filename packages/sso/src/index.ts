@@ -780,6 +780,26 @@ export const sso = (options?: SSOOptions) => {
 							});
 						}
 					}
+
+					const existingProvider = await ctx.context.adapter.findOne({
+						model: "ssoProvider",
+						where: [
+							{
+								field: "providerId",
+								value: body.providerId,
+							},
+						],
+					});
+
+					if (existingProvider) {
+						ctx.context.logger.info(
+							`SSO provider creation attempt with existing providerId: ${body.providerId}`,
+						);
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: "SSO provider with this providerId already exists",
+						});
+					}
+
 					const provider = await ctx.context.adapter.create<
 						Record<string, any>,
 						SSOProvider
