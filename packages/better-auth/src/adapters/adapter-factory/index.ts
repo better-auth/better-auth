@@ -325,7 +325,7 @@ export const createAdapterFactory =
 				});
 			}
 			for (const field in fields) {
-				const value = data[field];
+				let value = data[field];
 				const fieldAttributes = fields[field];
 
 				let newFieldName: string =
@@ -339,8 +339,6 @@ export const createAdapterFactory =
 				) {
 					continue;
 				}
-				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
-				let newValue = withApplyDefault(value, fieldAttributes!, action);
 
 				// In some endpoints (like signUpEmail) where there isn't proper Zod validation,
 				// we might recieve a date as a string (this is because of the client converting the Date to a string
@@ -348,11 +346,18 @@ export const createAdapterFactory =
 				if (
 					fieldAttributes &&
 					fieldAttributes.type === "date" &&
-					!(newValue instanceof Date) &&
-					newValue !== null
+					!(value instanceof Date) &&
+					typeof value === "string"
 				) {
-					newValue = new Date(newValue);
+					try {
+						value = new Date(value);
+					} catch {
+						// Do nothing; If failed to convert, then it's not a date.
+					}
 				}
+				
+				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
+				let newValue = withApplyDefault(value, fieldAttributes!, action);
 
 				// If the field attr provides a custom transform input, then we'll let it handle the value transformation.
 				// Afterwards, we'll continue to apply the default transformations just to make sure it saves in the correct format.
