@@ -1251,7 +1251,7 @@ describe("SAML SSO Foreign Key Constraints", async () => {
 					providerId: "saml-org-cascade",
 					issuer: "http://localhost:8082",
 					domain: "org-cascade-delete.com",
-					organizationId: org.id,
+					organizationId: org!.id,
 					samlConfig: {
 						entryPoint: mockIdP.metadataUrl,
 						cert: certificate,
@@ -1277,7 +1277,7 @@ describe("SAML SSO Foreign Key Constraints", async () => {
 			);
 
 			expect(providerBeforeDelete).toBeTruthy();
-			expect(providerBeforeDelete?.organizationId).toBe(org.id);
+			expect(providerBeforeDelete?.organizationId).toBe(org!.id);
 
 			// Delete the organization
 			// The database foreign key constraint with CASCADE should handle deleting the SSO provider
@@ -1287,7 +1287,7 @@ describe("SAML SSO Foreign Key Constraints", async () => {
 					where: [
 						{
 							field: "id",
-							value: org.id,
+							value: org!.id,
 						},
 					],
 				}),

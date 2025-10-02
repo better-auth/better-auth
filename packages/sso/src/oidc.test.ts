@@ -592,7 +592,7 @@ describe("SSO Foreign Key Constraints", async () => {
 		await fkConstraintsServer.issuer.keys.generate("RS256");
 		fkConstraintsServer.issuer.on;
 		await fkConstraintsServer.start(8083, "localhost");
-		
+
 		// Set up token signing
 		fkConstraintsServer.service.on("beforeTokenSigning", (token, req) => {
 			token.payload.email = "sso-user@localhost:8000.com";
@@ -735,7 +735,7 @@ describe("SSO Foreign Key Constraints", async () => {
 						},
 					},
 					providerId: "oidc-org-cascade",
-					organizationId: org.id,
+					organizationId: org!.id,
 				},
 				headers,
 			});
@@ -753,7 +753,7 @@ describe("SSO Foreign Key Constraints", async () => {
 			);
 
 			expect(providerBeforeDelete).toBeTruthy();
-			expect(providerBeforeDelete?.organizationId).toBe(org.id);
+			expect(providerBeforeDelete?.organizationId).toBe(org!.id);
 
 			// Delete the organization
 			// The database foreign key constraint with CASCADE should handle deleting the SSO provider
@@ -763,7 +763,7 @@ describe("SSO Foreign Key Constraints", async () => {
 					where: [
 						{
 							field: "id",
-							value: org.id,
+							value: org!.id,
 						},
 					],
 				}),
