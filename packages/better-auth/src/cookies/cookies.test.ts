@@ -368,4 +368,68 @@ describe("getSessionCookie", async () => {
 		});
 		await expect(getCookieCache(request)).rejects.toThrow();
 	});
+
+	it("should log error and skip setting cookie when data exceeds size limit", async () => {
+		const loggerErrors: string[] = [];
+		const mockLogger = {
+			log: (level: string, message: string) => {
+				if (level === "error") {
+					loggerErrors.push(message);
+				}
+			},
+		};
+
+		const { auth } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					customField1: {
+						type: "string",
+						defaultValue: "",
+					},
+					customField2: {
+						type: "string",
+						defaultValue: "",
+					},
+					customField3: {
+						type: "string",
+						defaultValue: "",
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+			logger: mockLogger,
+		});
+
+		// Create a very large string that will exceed the cookie size limit when combined with session data
+		// The limit is 4093 bytes, so we create data that will definitely exceed it
+		const largeString = "x".repeat(2000);
+
+		// Sign up with large user data using the server API
+		const result = await auth.api.signUpEmail({
+			body: {
+				name: "Test User",
+				email: "large-data-test@example.com",
+				password: "password123",
+				customField1: largeString,
+				customField2: largeString,
+				customField3: largeString,
+			},
+		});
+
+		// Check that logger recorded an error about exceeding size limit
+		const sizeError = loggerErrors.find((msg) =>
+			msg.includes("Session data exceeds cookie size limit"),
+		);
+		expect(sizeError).toBeDefined();
+		expect(sizeError).toContain("4093 bytes");
+
+		// The sign up should still succeed
+		expect(result).toBeDefined();
+		expect(result?.user).toBeDefined();
+	});
 });

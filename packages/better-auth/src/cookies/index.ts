@@ -145,9 +145,10 @@ export async function setCookieCache(
 			},
 		);
 		if (data.length > 4093) {
-			throw new BetterAuthError(
-				"Session data is too large to store in the cookie. Please disable session cookie caching or reduce the size of the session data",
+			ctx.context?.logger?.error(
+				`Session data exceeds cookie size limit (${data.length} bytes > 4093 bytes). Consider reducing session data size or disabling cookie cache. Session will not be cached in cookie.`,
 			);
+			return;
 		}
 		ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
 	}
