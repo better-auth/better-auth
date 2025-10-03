@@ -11,6 +11,7 @@ import type {
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
 import { runWithTransaction } from "../../context/transaction";
+import { parseUserInput } from "../../db";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -223,12 +224,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const hash = await ctx.context.password.hash(password);
 				let createdUser: User;
 				try {
+					const data = parseUserInput(ctx.context.options, rest, "create");
 					createdUser = await ctx.context.internalAdapter.createUser(
 						{
-							...rest,
 							email: email.toLowerCase(),
 							name,
 							image,
+							...data,
 							emailVerified: false,
 						},
 						ctx,
@@ -275,9 +277,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
 					);
-					const url = `${
-						ctx.context.baseURL
-					}/verify-email?token=${token}&callbackURL=${body.callbackURL || "/"}`;
+					const callbackURL = body.callbackURL
+						? encodeURIComponent(body.callbackURL)
+						: encodeURIComponent("/");
+					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 
 					const args: Parameters<
 						Required<
