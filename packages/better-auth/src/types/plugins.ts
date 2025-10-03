@@ -24,10 +24,8 @@ export type AuthPluginSchema = {
 
 export type BetterAuthPlugin = {
 	id: LiteralString;
-	/**
-	 * The init function is called when the plugin is initialized.
-	 * You can return a new context or modify the existing context.
-	 */
+	requires?: LiteralString[];
+	databaseHooks?: BetterAuthOptions["databaseHooks"];
 	init?: (ctx: AuthContext) =>
 		| Awaitable<{
 				context?: DeepPartial<Omit<AuthContext, "options">>;
@@ -35,6 +33,8 @@ export type BetterAuthPlugin = {
 		  }>
 		| void
 		| Promise<void>;
+	onInit?: (ctx: AuthContext) => Awaitable<void>;
+	onDestroy?: (ctx: AuthContext) => Awaitable<void>;
 	endpoints?: {
 		[key: string]: Endpoint;
 	};
