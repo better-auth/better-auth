@@ -98,6 +98,30 @@ describe("api-key", async () => {
 		expect(res.error?.body.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
 	});
 
+	it("should fail to create api keys from the client if user id is provided", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const response = await client.apiKey.create({
+			userId: user.id,
+		});
+		expect(response.error?.status).toBe(401);
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "new-email@email.com",
+				password: "password",
+				name: "test-name",
+			},
+		});
+		const response2 = await client.apiKey.create(
+			{
+				userId: newUser.user.id,
+			},
+			{
+				headers,
+			},
+		);
+		expect(response2.error?.status).toBe(401);
+	});
+
 	it("should successfully create API keys from server with userId", async () => {
 		const apiKey = await auth.api.createApiKey({
 			body: {
@@ -165,7 +189,7 @@ describe("api-key", async () => {
 		const { user } = await signInWithTestUser();
 		let err: any;
 		try {
-			const apiKeyResult = await auth.api.createApiKey({
+			await auth.api.createApiKey({
 				body: {
 					userId: user.id,
 				},
@@ -1947,8 +1971,8 @@ describe("api-key", async () => {
 				permissions,
 				userId: user.id,
 			},
-			headers,
 		});
+
 		const apiKeyResults = await auth.api.getApiKey({
 			query: {
 				id: apiKey.id,
@@ -1971,7 +1995,6 @@ describe("api-key", async () => {
 				permissions,
 				userId: user.id,
 			},
-			headers,
 		});
 		const apiKeyResults = await auth.api.verifyApiKey({
 			body: {
