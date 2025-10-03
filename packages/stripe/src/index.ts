@@ -26,6 +26,7 @@ import type {
 } from "./types";
 import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
 import { getSchema } from "./schema";
+import { defu } from "defu";
 
 const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
@@ -1299,13 +1300,27 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							create: {
 								async after(user, ctx) {
 									if (ctx && options.createCustomerOnSignUp) {
-										const stripeCustomer = await client.customers.create({
-											email: user.email,
-											name: user.name,
-											metadata: {
-												userId: user.id,
+										let extraCreateParams: Partial<Stripe.CustomerCreateParams> =
+											{};
+										if (options.getCustomerCreateParams) {
+											extraCreateParams = await options.getCustomerCreateParams(
+												user,
+												ctx,
+											);
+										}
+
+										const params: Stripe.CustomerCreateParams = defu(
+											{
+												email: user.email,
+												name: user.name,
+												metadata: {
+													userId: user.id,
+												},
 											},
-										});
+											extraCreateParams,
+										);
+										const stripeCustomer =
+											await client.customers.create(params);
 										await ctx.context.internalAdapter.updateUser(user.id, {
 											stripeCustomerId: stripeCustomer.id,
 										});

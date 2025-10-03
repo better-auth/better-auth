@@ -313,6 +313,7 @@ export const createAdapterFactory =
 		) => {
 			const transformedData: Record<string, any> = {};
 			const fields = schema[defaultModelName]!.fields;
+
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
 			if (
 				!config.disableIdGeneration &&
@@ -352,9 +353,9 @@ export const createAdapterFactory =
 					options.advanced?.database?.useNumberId
 				) {
 					if (Array.isArray(newValue)) {
-						newValue = newValue.map(Number);
+						newValue = newValue.map((x) => (x !== null ? Number(x) : null));
 					} else {
-						newValue = Number(newValue);
+						newValue = newValue !== null ? Number(newValue) : null;
 					}
 				} else if (
 					config.supportsJSON === false &&

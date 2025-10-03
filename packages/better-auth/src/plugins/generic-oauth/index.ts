@@ -110,7 +110,9 @@ export interface GenericOAuthConfig {
 	 * Additional search-params to add to the tokenUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	tokenUrlParams?: Record<string, string>;
+	tokenUrlParams?:
+		| Record<string, string>
+		| ((ctx: GenericEndpointContext) => Record<string, string>);
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
@@ -645,6 +647,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration.",
 							});
 						}
+						const additionalParams =
+							typeof provider.tokenUrlParams === "function"
+								? provider.tokenUrlParams(ctx)
+								: provider.tokenUrlParams;
 						tokens = await validateAuthorizationCode({
 							headers: provider.authorizationHeaders,
 							code,
@@ -657,7 +663,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: provider.authentication,
-							additionalParams: provider.tokenUrlParams,
+							additionalParams,
 						});
 					} catch (e) {
 						ctx.context.logger.error(
