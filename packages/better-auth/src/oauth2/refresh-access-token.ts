@@ -1,9 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens } from "./types";
 import type { ProviderOptions } from "./types";
-import { base64 } from "@better-auth/utils/base64";
+import { createBasicHeader, toClientSecret } from "./utils";
 
-export function createRefreshAccessTokenRequest({
+export async function createRefreshAccessTokenRequest({
 	refreshToken,
 	options,
 	authentication,
@@ -30,21 +30,17 @@ export function createRefreshAccessTokenRequest({
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
-		if (primaryClientId) {
-			headers["authorization"] =
-				"Basic " +
-				base64.encode(`${primaryClientId}:${options.clientSecret ?? ""}`);
-		} else {
-			headers["authorization"] =
-				"Basic " + base64.encode(`:${options.clientSecret ?? ""}`);
-		}
+		headers["authorization"] = await createBasicHeader(
+			primaryClientId,
+			options.clientSecret,
+		);
 	} else {
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
 		body.set("client_id", primaryClientId);
 		if (options.clientSecret) {
-			body.set("client_secret", options.clientSecret);
+			body.set("client_secret", await toClientSecret(options.clientSecret));
 		}
 	}
 
@@ -84,7 +80,7 @@ export async function refreshAccessToken({
 	/** @deprecated always "refresh_token" */
 	grantType?: string;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = createRefreshAccessTokenRequest({
+	const { body, headers } = await createRefreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,
