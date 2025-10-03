@@ -7,7 +7,6 @@ import { facebook } from "./facebook";
 import { figma } from "./figma";
 import { github } from "./github";
 import { google } from "./google";
-import { kick } from "./kick";
 import { huggingface } from "./huggingface";
 import { microsoft } from "./microsoft-entra-id";
 import { slack } from "./slack";
@@ -24,6 +23,8 @@ import { reddit } from "./reddit";
 import { roblox } from "./roblox";
 import { salesforce } from "./salesforce";
 import { vk } from "./vk";
+import { kick } from "./kick";
+import { patreon } from "./patreon";
 import { zoom } from "./zoom";
 import { kakao } from "./kakao";
 import { naver } from "./naver";
@@ -55,6 +56,7 @@ export const socialProviders = {
 	roblox,
 	salesforce,
 	vk,
+	patreon,
 	zoom,
 	notion,
 	kakao,
@@ -108,6 +110,7 @@ export * from "./twitter";
 export * from "./vk";
 export * from "./zoom";
 export * from "./kick";
+export * from "./patreon";
 export * from "./huggingface";
 export * from "./slack";
 export * from "./kakao";
