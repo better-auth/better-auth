@@ -1,5 +1,7 @@
 import { expect } from "vitest";
 import { createTestSuite } from "../create-test-suite";
+import { setCookieToHeader } from "../../cookies";
+import type { Session, User } from "../../types";
 
 /**
  * This test suite tests basic authentication flow using the adapter.
@@ -76,25 +78,29 @@ export const authFlowTestSuite = createTestSuite(
 			const auth = await getAuth();
 			const user = await generate("user");
 			const password = crypto.randomUUID();
-
-			const { headers, response: signUpResult } = await auth.api.signUpEmail({
+			const response = await auth.api.signUpEmail({
 				body: {
 					email: user.email,
 					password: password,
 					name: user.name,
 					image: user.image || "",
 				},
-				returnHeaders: true,
+				asResponse: true,
 			});
-
-			const modifiedHeaders = convertSetCookieToCookie(headers);
-
+			const headers = new Headers();
+			setCookieToHeader(headers)({ response });
 			const start = Date.now();
 			const result = await auth.api.getSession({
-				headers: modifiedHeaders,
+				headers,
 			});
 			const end = Date.now();
 			console.log(`getSession took ${end - start}ms`);
+			const signUpResult = (await response.json()) as {
+				user: User;
+				session: Session;
+			};
+			signUpResult.user.createdAt = new Date(signUpResult.user.createdAt);
+			signUpResult.user.updatedAt = new Date(signUpResult.user.updatedAt);
 			expect(result?.user).toBeDefined();
 			expect(result?.user).toStrictEqual(signUpResult.user);
 			expect(result?.session).toBeDefined();
@@ -141,7 +147,7 @@ export const authFlowTestSuite = createTestSuite(
 			const auth = await getAuth();
 			const user = await generate("user");
 			const dateField = new Date();
-			const { headers } = await auth.api.signUpEmail({
+			const response = await auth.api.signUpEmail({
 				body: {
 					email: user.email,
 					name: user.name,
@@ -149,11 +155,12 @@ export const authFlowTestSuite = createTestSuite(
 					//@ts-expect-error - we are testing with additional fields
 					dateField: dateField.toISOString(), // using iso string to simulate client to server communication (this should be converted back to Date)
 				},
-				returnHeaders: true,
+				asResponse: true,
 			});
-			const modifiedHeaders = convertSetCookieToCookie(headers);
+			const headers = new Headers();
+			setCookieToHeader(headers)({ response });
 			const result = await auth.api.getSession({
-				headers: modifiedHeaders,
+				headers,
 			});
 			//@ts-expect-error - we are testing with additional fields
 			expect(result?.user.dateField).toStrictEqual(dateField);
@@ -168,13 +175,4 @@ function recoverProcessTZ() {
 			process.env.TZ = originalTZ;
 		},
 	};
-}
-
-function convertSetCookieToCookie(headers: Headers): Headers {
-	const modifiedHeaders = new Headers(headers);
-	if (headers.has("set-cookie")) {
-		modifiedHeaders.set("cookie", headers.getSetCookie().join("; "));
-		modifiedHeaders.delete("set-cookie");
-	}
-	return modifiedHeaders;
 }

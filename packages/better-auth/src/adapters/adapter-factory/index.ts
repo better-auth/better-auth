@@ -352,7 +352,7 @@ export const createAdapterFactory =
 					try {
 						value = new Date(value);
 					} catch {
-						// Do nothing; If failed to convert, then it's not a date.
+						logger.error("[Adapter Factory] Failed to convert string to date", { value, field });
 					}
 				}
 
