@@ -26,3 +26,4 @@ export * from "./mcp";
 export * from "./siwe";
 export * from "./device-authorization";
 export * from "./last-login-method";
+export * from "./alias";
