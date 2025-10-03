@@ -2322,6 +2322,11 @@ export const examples: Content[] = [
 				href: "/docs/examples/svelte-kit",
 				icon: Icons.svelteKit,
 			},
+			{
+				title: "Hono + D1",
+				href: "/docs/examples/hono-d1",
+				icon: Icons.hono,
+			},
 		],
 	},
 ];
