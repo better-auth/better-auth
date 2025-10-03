@@ -44,6 +44,7 @@ export const cloudflareTurnstile = async ({
 
 	if (!response.data.success) {
 		return middlewareResponse({
+			code: "VERIFICATION_FAILED" as const,
 			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED,
 			status: 403,
 		});
