@@ -1139,12 +1139,13 @@ export const sso = (options?: SSOOptions) => {
 							codeVerifier: provider.oidcConfig.pkce
 								? state.codeVerifier
 								: undefined,
-							scopes: ctx.body.scopes || [
-								"openid",
-								"email",
-								"profile",
-								"offline_access",
-							],
+							scopes: ctx.body.scopes ||
+								provider.oidcConfig.scopes || [
+									"openid",
+									"email",
+									"profile",
+									"offline_access",
+								],
 							authorizationEndpoint: provider.oidcConfig.authorizationEndpoint!,
 						});
 						return ctx.json({
