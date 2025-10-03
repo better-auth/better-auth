@@ -1889,7 +1889,6 @@ describe("api-key", async () => {
 			},
 		});
 
-		// First verification - should reduce remaining to 1
 		let result = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
@@ -1898,7 +1897,6 @@ describe("api-key", async () => {
 		expect(result.valid).toBe(true);
 		expect(result.key?.remaining).toBe(initialRemaining - 1);
 
-		// Second verification - should reduce remaining to 0
 		result = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
@@ -1907,7 +1905,6 @@ describe("api-key", async () => {
 		expect(result.valid).toBe(true);
 		expect(result.key?.remaining).toBe(0);
 
-		// Third verification - should fail due to no remaining credits
 		result = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
@@ -1916,11 +1913,9 @@ describe("api-key", async () => {
 		expect(result.valid).toBe(false);
 		expect(result.error?.code).toBe("USAGE_EXCEEDED");
 
-		// Advance time by more than refill interval
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(refillInterval + 1000);
 
-		// Fourth verification - should succeed with refilled credits
 		result = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
@@ -1948,7 +1943,6 @@ describe("api-key", async () => {
 			},
 		});
 
-		// First verification - should reduce remaining to 0
 		let result = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
@@ -1957,11 +1951,9 @@ describe("api-key", async () => {
 		expect(result.valid).toBe(true);
 		expect(result.key?.remaining).toBe(0);
 
-		// Advance time by less than refill interval
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(refillInterval / 2); // Only advance half the interval
 
-		// Second verification - should still fail (no refill yet)
 		result = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
@@ -1970,10 +1962,8 @@ describe("api-key", async () => {
 		expect(result.valid).toBe(false);
 		expect(result.error?.code).toBe("USAGE_EXCEEDED");
 
-		// Advance time to complete the refill interval
 		await vi.advanceTimersByTimeAsync(refillInterval / 2 + 1000);
 
-		// Third verification - should succeed with refilled credits
 		result = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
@@ -2000,7 +1990,6 @@ describe("api-key", async () => {
 			},
 		});
 
-		// Use the initial credit
 		let result = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
@@ -2011,7 +2000,6 @@ describe("api-key", async () => {
 
 		vi.useFakeTimers();
 
-		// First refill cycle
 		await vi.advanceTimersByTimeAsync(refillInterval + 1000);
 		result = await auth.api.verifyApiKey({
 			body: {
@@ -2021,7 +2009,6 @@ describe("api-key", async () => {
 		expect(result.valid).toBe(true);
 		expect(result.key?.remaining).toBe(refillAmount - 1);
 
-		// Use all refilled credits
 		for (let i = 0; i < refillAmount - 1; i++) {
 			result = await auth.api.verifyApiKey({
 				body: {
@@ -2031,7 +2018,6 @@ describe("api-key", async () => {
 			expect(result.valid).toBe(true);
 		}
 
-		// Should be out of credits now
 		result = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
@@ -2040,7 +2026,6 @@ describe("api-key", async () => {
 		expect(result.valid).toBe(false);
 		expect(result.error?.code).toBe("USAGE_EXCEEDED");
 
-		// Second refill cycle
 		await vi.advanceTimersByTimeAsync(refillInterval + 1000);
 		result = await auth.api.verifyApiKey({
 			body: {
