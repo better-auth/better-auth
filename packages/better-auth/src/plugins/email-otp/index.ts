@@ -1,6 +1,10 @@
 import * as z from "zod";
 import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
-import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+import type {
+	User,
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "../../types";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -20,6 +24,7 @@ export interface EmailOTPOptions {
 			email: string;
 			otp: string;
 			type: "sign-in" | "email-verification" | "forget-password";
+			user: User | undefined;
 		},
 		request?: Request,
 	) => Promise<void>;
@@ -206,6 +211,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 			},
 			async (ctx) => {
+				let otpReceiver: User | undefined;
+
 				if (!options?.sendVerificationOTP) {
 					ctx.context.logger.error(
 						"send email verification is not implemented",
@@ -222,6 +229,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				}
 				if (opts.disableSignUp) {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					otpReceiver = user?.user;
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.USER_NOT_FOUND,
@@ -229,6 +237,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}
 				} else if (ctx.body.type === "forget-password") {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					otpReceiver = user?.user;
 					if (!user) {
 						return ctx.json({
 							success: true,
@@ -270,6 +279,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						email,
 						otp,
 						type: ctx.body.type,
+						user: otpReceiver,
 					},
 					ctx.request,
 				);
@@ -979,6 +989,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							email,
 							otp,
 							type: "forget-password",
+							user: user.user,
 						},
 						ctx.request,
 					);
@@ -1157,7 +1168,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const response = await getEndpointResponse<{
-							user: { email: string };
+							user: User;
 						}>(ctx);
 						const email = response?.user.email;
 						if (email) {
@@ -1178,6 +1189,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 									email,
 									otp,
 									type: "email-verification",
+									user: response.user,
 								},
 								ctx.request,
 							);
