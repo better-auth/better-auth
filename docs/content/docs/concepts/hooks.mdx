@@ -136,7 +136,7 @@ const hook = createAuthMiddleware(async (ctx) => {
 #### Cookies
 
 - Set cookies: `ctx.setCookies` or `ctx.setSignedCookie`.
-- Get cookies: `ctx.getCookies` or `ctx.getSignedCookies`.
+- Get cookies: `ctx.getCookies` or `ctx.getSignedCookie`.
 
 Example:
 
@@ -150,7 +150,7 @@ const hook = createAuthMiddleware(async (ctx) => {
     });
 
     const cookie = ctx.getCookies("my-cookie");
-    const signedCookie = await ctx.getSignedCookies("my-signed-cookie");
+    const signedCookie = await ctx.getSignedCookie("my-signed-cookie");
 });
 ```
 
