@@ -352,7 +352,10 @@ export const createAdapterFactory =
 					try {
 						value = new Date(value);
 					} catch {
-						logger.error("[Adapter Factory] Failed to convert string to date", { value, field });
+						logger.error("[Adapter Factory] Failed to convert string to date", {
+							value,
+							field,
+						});
 					}
 				}
 
