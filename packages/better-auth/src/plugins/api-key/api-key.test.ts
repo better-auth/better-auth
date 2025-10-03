@@ -98,6 +98,30 @@ describe("api-key", async () => {
 		expect(res.error?.body.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
 	});
 
+	it("should fail to create api keys from the client if user id is provided", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const response = await client.apiKey.create({
+			userId: user.id,
+		});
+		expect(response.error?.status).toBe(401);
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "new-email@email.com",
+				password: "password",
+				name: "test-name",
+			},
+		});
+		const response2 = await client.apiKey.create(
+			{
+				userId: newUser.user.id,
+			},
+			{
+				headers,
+			},
+		);
+		expect(response2.error?.status).toBe(401);
+	});
+
 	it("should successfully create API keys from server with userId", async () => {
 		const apiKey = await auth.api.createApiKey({
 			body: {
@@ -165,7 +189,7 @@ describe("api-key", async () => {
 		const { user } = await signInWithTestUser();
 		let err: any;
 		try {
-			const apiKeyResult = await auth.api.createApiKey({
+			await auth.api.createApiKey({
 				body: {
 					userId: user.id,
 				},
@@ -1947,8 +1971,8 @@ describe("api-key", async () => {
 				permissions,
 				userId: user.id,
 			},
-			headers,
 		});
+
 		const apiKeyResults = await auth.api.getApiKey({
 			query: {
 				id: apiKey.id,
@@ -1971,7 +1995,6 @@ describe("api-key", async () => {
 				permissions,
 				userId: user.id,
 			},
-			headers,
 		});
 		const apiKeyResults = await auth.api.verifyApiKey({
 			body: {
@@ -2119,5 +2142,170 @@ describe("api-key", async () => {
 		});
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.permissions).toEqual(permissions);
+	});
+
+	it("should refill API key credits after refill interval (milliseconds)", async () => {
+		vi.useRealTimers();
+
+		const refillInterval = 3600000; // 1 hour in milliseconds
+		const refillAmount = 5;
+		const initialRemaining = 2;
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				remaining: initialRemaining,
+				refillInterval: refillInterval,
+				refillAmount: refillAmount,
+			},
+		});
+
+		let result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(initialRemaining - 1);
+
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(0);
+
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(false);
+		expect(result.error?.code).toBe("USAGE_EXCEEDED");
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(refillInterval + 1000);
+
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(refillAmount - 1);
+
+		vi.useRealTimers();
+	});
+
+	it("should not refill API key credits before refill interval expires", async () => {
+		vi.useRealTimers();
+
+		const refillInterval = 86400000; // 24 hours in milliseconds
+		const refillAmount = 10;
+		const initialRemaining = 1;
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				remaining: initialRemaining,
+				refillInterval: refillInterval,
+				refillAmount: refillAmount,
+			},
+		});
+
+		let result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(0);
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(refillInterval / 2); // Only advance half the interval
+
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(false);
+		expect(result.error?.code).toBe("USAGE_EXCEEDED");
+
+		await vi.advanceTimersByTimeAsync(refillInterval / 2 + 1000);
+
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(refillAmount - 1);
+
+		vi.useRealTimers();
+	});
+
+	it("should handle multiple refill cycles correctly", async () => {
+		vi.useRealTimers();
+
+		const refillInterval = 3600000; // 1 hour in milliseconds
+		const refillAmount = 3;
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				remaining: 1,
+				refillInterval: refillInterval,
+				refillAmount: refillAmount,
+			},
+		});
+
+		let result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(0);
+
+		vi.useFakeTimers();
+
+		await vi.advanceTimersByTimeAsync(refillInterval + 1000);
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(refillAmount - 1);
+
+		for (let i = 0; i < refillAmount - 1; i++) {
+			result = await auth.api.verifyApiKey({
+				body: {
+					key: apiKey.key,
+				},
+			});
+			expect(result.valid).toBe(true);
+		}
+
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(false);
+		expect(result.error?.code).toBe("USAGE_EXCEEDED");
+
+		await vi.advanceTimersByTimeAsync(refillInterval + 1000);
+		result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+		});
+		expect(result.valid).toBe(true);
+		expect(result.key?.remaining).toBe(refillAmount - 1);
+
+		vi.useRealTimers();
 	});
 });
