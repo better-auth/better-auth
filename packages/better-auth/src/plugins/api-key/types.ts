@@ -175,9 +175,10 @@ export interface ApiKeyOptions {
 	/**
 	 * An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
 	 *
+	 * ⚠︎ This is not recommended for production use, as it can lead to security issues.
 	 * @default false
 	 */
-	disableSessionForAPIKeys?: boolean;
+	enableSessionForAPIKeys?: boolean;
 	/**
 	 * Permissions for the API key.
 	 */
@@ -224,6 +225,97 @@ export type ApiKey = {
 	 * The interval in milliseconds between refills of the `remaining` count
 	 *
 	 * @example 3600000 // refill every hour (3600000ms = 1h)
+	 */
+	refillInterval: number | null;
+	/**
+	 * The amount to refill
+	 */
+	refillAmount: number | null;
+	/**
+	 * The last refill date
+	 */
+	lastRefillAt: Date | null;
+	/**
+	 * Sets if key is enabled or disabled
+	 *
+	 * @default true
+	 */
+	enabled: boolean;
+	/**
+	 * Whether the key has rate limiting enabled.
+	 */
+	rateLimitEnabled: boolean;
+	/**
+	 * The duration in milliseconds
+	 */
+	rateLimitTimeWindow: number | null;
+	/**
+	 * Maximum amount of requests allowed within a window
+	 */
+	rateLimitMax: number | null;
+	/**
+	 * The number of requests made within the rate limit time window
+	 */
+	requestCount: number;
+	/**
+	 * Remaining requests (every time API key is used this should updated and should be updated on refill as well)
+	 */
+	remaining: number | null;
+	/**
+	 * When last request occurred
+	 */
+	lastRequest: Date | null;
+	/**
+	 * Expiry date of a key
+	 */
+	expiresAt: Date | null;
+	/**
+	 * created at
+	 */
+	createdAt: Date;
+	/**
+	 * updated at
+	 */
+	updatedAt: Date;
+	/**
+	 * Extra metadata about the apiKey
+	 */
+	metadata: Record<string, any> | null;
+	/**
+	 * Permissions for the API key
+	 */
+	permissions?: {
+		[key: string]: string[];
+	} | null;
+	/**
+	 * ID
+	 */
+	id: string;
+	/**
+	 * The name of the key
+	 */
+	name: string | null;
+	/**
+	 * Shows the first few characters of the API key, including the prefix.
+	 * This allows you to show those few characters in the UI to make it easier for users to identify the API key.
+	 */
+	start: string | null;
+	/**
+	 * The API Key prefix. Stored as plain text.
+	 */
+	prefix: string | null;
+	/**
+	 * The hashed API key value
+	 */
+	key: string;
+	/**
+	 * The owner of the user id
+	 */
+	userId: string;
+	/**
+	 * The interval in which the `remaining` count is refilled by day
+	 *
+	 * @example 1 // every day
 	 */
 	refillInterval: number | null;
 	/**
