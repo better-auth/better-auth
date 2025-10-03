@@ -88,7 +88,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			charactersLength:
 				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
-		disableSessionForAPIKeys: options?.disableSessionForAPIKeys ?? false,
+		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(
@@ -135,8 +135,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		hooks: {
 			before: [
 				{
-					matcher: (ctx) =>
-						!!getter(ctx) && opts.disableSessionForAPIKeys === false,
+					matcher: (ctx) => !!getter(ctx) && opts.enableSessionForAPIKeys,
 					handler: createAuthMiddleware(async (ctx) => {
 						const key = getter(ctx)!;
 
