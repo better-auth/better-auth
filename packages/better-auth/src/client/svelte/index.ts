@@ -7,6 +7,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SessionQueryParams,
 } from "../types";
 import { createDynamicPathProxy } from "../proxy";
 import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
@@ -81,6 +82,7 @@ export function createAuthClient<Option extends ClientOptions>(
 				error: BetterFetchError | null;
 				isPending: boolean;
 				isRefetching: boolean;
+				refetch: (queryParams?: { query?: SessionQueryParams }) => void;
 			}>;
 			$fetch: typeof $fetch;
 			$store: typeof $store;
