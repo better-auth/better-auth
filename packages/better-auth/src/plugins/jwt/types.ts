@@ -1,4 +1,4 @@
-import type { JSONWebKeySet } from "jose";
+import type { JSONWebKeySet, JWK } from "jose";
 import type { InferOptionSchema, Session, User } from "../../types";
 import type { Awaitable } from "../../types/helper";
 import type { schema } from "./schema";
@@ -29,11 +29,11 @@ export interface JwtPluginOptions {
 	 */
 	disableSettingJwtHeader?: boolean;
 	/**
-	 * @todo: describe
+	 * @todo: describe, implement
 	 */
-	enableJwtRevocation?: boolean;
+	//enableJwtRevocation?: boolean;
 	/**
-	 * Custom schema for the admin plugin.
+	 * Custom schema for the jwt plugin.
 	 */
 	schema?: InferOptionSchema<typeof schema>;
 }
@@ -116,7 +116,7 @@ export interface JwksOptions {
 	 * ⚠ If a key is revoked, a POST request to /revoke-jwk **server-only** endpoint must be done or the server must be restarted.
 	 * @todo optional CRON that checks for key revocation from remote JWKS
 	 */
-	remoteJwks?: (() => Awaitable<Jwk[] | JSONWebKeySet>)[];
+	remoteJwks?: (() => Awaitable<JSONWebKeySet>)[];
 
 	/**
 	 * Default key pair configuration.
@@ -134,7 +134,11 @@ export interface JwksOptions {
 	 * @default false
 	 */
 	disablePrivateKeyEncryption?: boolean;
-
+	/**
+	 * @todo: describe
+	 * @default false
+	 */
+	disableJwksCaching?: boolean;
 	/**
 	 * @todo describe
 	 * @todo if key rotation is enabled, this is keyChainId instead
@@ -165,8 +169,7 @@ export interface JwtOptions {
 	 * - If a `string` is passed as an argument it is resolved to a time span, and then added to the
 	 *   current unix timestamp in seconds and used as the claim.
 	 *
-	 * Format used for time span should be a number followed by a unit, such as "5 minutes" or "1
-	 * day".
+	 * Format used for time span should be a number followed by a unit, such as "5 minutes" or "1 day".
 	 *
 	 * Valid units are: "sec", "secs", "second", "seconds", "s", "minute", "minutes", "min", "mins",
 	 * "m", "hour", "hours", "hr", "hrs", "h", "day", "days", "d", "week", "weeks", "w", "year",

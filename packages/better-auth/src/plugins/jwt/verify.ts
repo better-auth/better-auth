@@ -76,10 +76,7 @@ async function verifyJwtJose(
 		requiredClaims:
 			options?.requiredClaims === null
 				? undefined
-				: ((options?.requiredClaims ??
-						(pluginOpts?.enableJwtRevocation
-							? ["aud", "exp", "iat", "iss", "jti"]
-							: ["aud", "exp", "iat", "iss"])) as string[]),
+				: (options?.requiredClaims ?? ["aud", "exp", "iat", "iss"]), //? ["aud", "exp", "iat", "iss", "jti"] : //(pluginOpts?.enableJwtRevocation
 	};
 	// This check is needed to differentiate between function overloads
 	if (jwk instanceof CryptoKey) return jwtVerify(jwt, jwk, parsedOptions);
