@@ -1,0 +1,65 @@
+{
+  "name": "@better-auth/core",
+  "version": "1.4.0-beta.6",
+  "description": "The most comprehensive authentication library for TypeScript.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./async_hooks": {
+      "import": {
+        "types": "./dist/async_hooks/index.d.ts",
+        "default": "./dist/async_hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/async_hooks/index.d.cts",
+        "default": "./dist/async_hooks/index.cjs"
+      }
+    },
+    "./db": {
+      "import": {
+        "types": "./dist/db/index.d.ts",
+        "default": "./dist/db/index.mjs"
+      },
+      "require": {
+        "types": "./dist/db/index.d.cts",
+        "default": "./dist/db/index.cjs"
+      }
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "index": [
+        "dist/index.d.ts"
+      ],
+      "async_hooks": [
+        "dist/async_hooks.d.ts"
+      ],
+      "db": [
+        "dist/db.d.ts"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "unbuild --clean",
+    "stub": "unbuild --stub",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "devDependencies": {
+    "unbuild": "catalog:"
+  },
+  "dependencies": {
+    "better-call": "catalog:",
+    "zod": "^4.1.5"
+  }
+}

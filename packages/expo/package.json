@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.3.9",
+  "version": "1.4.0-beta.6",
   "description": "",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
@@ -14,7 +14,8 @@
     "test": "vitest",
     "build": "unbuild --clean",
     "dev": "unbuild --watch",
-    "stub": "unbuild --stub"
+    "stub": "unbuild --stub",
+    "typecheck": "tsc --project tsconfig.json"
   },
   "exports": {
     ".": {
@@ -51,6 +52,7 @@
   "license": "MIT",
   "devDependencies": {
     "@better-fetch/fetch": "catalog:",
+    "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.2.0",
     "expo-constants": "~17.1.7",
@@ -58,13 +60,20 @@
     "expo-linking": "~7.1.7",
     "expo-secure-store": "~14.2.3",
     "expo-web-browser": "~14.2.0",
+    "react-native": "~0.80.2",
     "unbuild": "^3.6.1"
   },
   "peerDependencies": {
-    "better-auth": "workspace:*"
+    "better-auth": "workspace:*",
+    "expo-constants": ">=17.0.0",
+    "expo-crypto": ">=13.0.0",
+    "expo-linking": ">=7.0.0",
+    "expo-secure-store": ">=14.0.0",
+    "expo-web-browser": ">=14.0.0"
   },
   "dependencies": {
-    "@better-fetch/fetch": "catalog:"
+    "@better-fetch/fetch": "catalog:",
+    "zod": "^4.1.5"
   },
   "files": [
     "dist"

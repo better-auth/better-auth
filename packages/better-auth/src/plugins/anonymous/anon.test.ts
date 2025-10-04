@@ -45,7 +45,7 @@ vi.mock("../../oauth2", async (importOriginal) => {
 
 describe("anonymous", async () => {
 	const linkAccountFn = vi.fn();
-	const { customFetchImpl, auth, sessionSetter, testUser } =
+	const { customFetchImpl, auth, sessionSetter, testUser, cookieSetter } =
 		await getTestInstance({
 			plugins: [
 				anonymous({
@@ -114,9 +114,13 @@ describe("anonymous", async () => {
 				headers,
 			},
 		});
+
 		const singInRes = await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		const state = new URL(singInRes.data?.url || "").searchParams.get("state");
 		await client.$fetch("/callback/google", {
@@ -152,5 +156,82 @@ describe("anonymous", async () => {
 			},
 		});
 		expect(res.data?.user.name).toBe("i-am-anonymous");
+	});
+
+	it("should not reject first-time anonymous sign-in", async () => {
+		const { customFetchImpl, sessionSetter } = await getTestInstance({
+			plugins: [anonymous()],
+		});
+		const client = createAuthClient({
+			plugins: [anonymousClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+		const freshHeaders = new Headers();
+
+		// First-time anonymous sign-in should succeed without 400 error
+		const res = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(freshHeaders),
+			},
+		});
+
+		expect(res.data?.user).toBeDefined();
+		expect(res.error).toBeNull();
+
+		// Verify session is actually created and contains isAnonymous
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: freshHeaders,
+			},
+		});
+		expect(session.data?.session).toBeDefined();
+		expect(session.data?.user.isAnonymous).toBe(true);
+	});
+
+	it("should reject subsequent anonymous sign-in attempts once signed in", async () => {
+		const { customFetchImpl, sessionSetter } = await getTestInstance({
+			plugins: [anonymous()],
+		});
+		const client = createAuthClient({
+			plugins: [anonymousClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+		const persistentHeaders = new Headers();
+
+		// First sign-in should succeed
+		await client.signIn.anonymous({
+			fetchOptions: {
+				headers: persistentHeaders,
+				onSuccess: sessionSetter(persistentHeaders),
+			},
+		});
+
+		// Verify session is established before testing rejection
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: persistentHeaders,
+			},
+		});
+		expect(session.data?.session).toBeDefined();
+		expect(session.data?.user.isAnonymous).toBe(true);
+
+		// Second attempt should be rejected at the endpoint level
+		const secondAttempt = await client.signIn.anonymous({
+			fetchOptions: {
+				headers: persistentHeaders,
+			},
+		});
+
+		expect(secondAttempt.data).toBeNull();
+		expect(secondAttempt.error).toBeDefined();
+		expect(secondAttempt.error?.message).toBe(
+			"Anonymous users cannot sign in again anonymously",
+		);
 	});
 });

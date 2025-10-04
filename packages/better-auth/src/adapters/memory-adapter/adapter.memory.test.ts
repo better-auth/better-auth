@@ -1,48 +1,34 @@
-import { describe } from "vitest";
+import { getAuthTables } from "../../db";
+import { testAdapter } from "../test-adapter";
 import { memoryAdapter } from "./memory-adapter";
-import { runAdapterTest, runNumberIdAdapterTest } from "../test";
+import {
+	performanceTestSuite,
+	normalTestSuite,
+	transactionsTestSuite,
+	authFlowTestSuite,
+	numberIdTestSuite,
+} from "../tests";
+let db: Record<string, any[]> = {};
 
-describe("adapter test", async () => {
-	const db = {
-		user: [],
-		session: [],
-		account: [],
-	};
-	const adapter = memoryAdapter(db, {
-		debugLogs: {
-			isRunningAdapterTests: true,
-		},
-	});
-	await runAdapterTest({
-		getAdapter: async (customOptions = {}) => {
-			return adapter({
-				user: {
-					fields: {
-						email: "email_address",
-					},
-				},
-				...customOptions,
-			});
-		},
-	});
+const { execute } = await testAdapter({
+	adapter: () => {
+		return memoryAdapter(db);
+	},
+	runMigrations: (options) => {
+		db = {};
+		const allModels = Object.keys(getAuthTables(options));
+		for (const model of allModels) {
+			db[model] = [];
+		}
+	},
+	tests: [
+		normalTestSuite(),
+		transactionsTestSuite({ disableTests: { ALL: true } }),
+		authFlowTestSuite(),
+		numberIdTestSuite(),
+		performanceTestSuite(),
+	],
+	async onFinish() {},
 });
 
-describe("Number Id Adapter Test", async () => {
-	const db = {
-		user: [],
-		session: [],
-		account: [],
-	};
-	const adapter = memoryAdapter(db, {
-		debugLogs: {
-			isRunningAdapterTests: true,
-		},
-	});
-	await runNumberIdAdapterTest({
-		getAdapter: async (customOptions = {}) => {
-			return adapter({
-				...customOptions,
-			});
-		},
-	});
-});
+execute();

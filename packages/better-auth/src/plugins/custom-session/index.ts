@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -107,7 +107,7 @@ export const customSession = <
 					},
 					requireHeaders: true,
 				},
-				async (ctx) => {
+				async (ctx): Promise<Returns | null> => {
 					const session = await getSession()({
 						...ctx,
 						asResponse: false,
@@ -120,12 +120,22 @@ export const customSession = <
 						return ctx.json(null);
 					}
 					const fnResult = await fn(session.response as any, ctx);
+
+					const setCookie = session.headers.get("set-cookie");
+					if (setCookie) {
+						ctx.setHeader("set-cookie", setCookie);
+						session.headers.delete("set-cookie");
+					}
+
 					session.headers.forEach((value, key) => {
 						ctx.setHeader(key, value);
 					});
 					return ctx.json(fnResult);
 				},
 			),
+		},
+		$Infer: {
+			Session: {} as Awaited<ReturnType<typeof fn>>,
 		},
 	} satisfies BetterAuthPlugin;
 };

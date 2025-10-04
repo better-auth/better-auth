@@ -25,7 +25,9 @@ export interface KickProfile {
 	profile_picture: string;
 }
 
-export interface KickOptions extends ProviderOptions<KickProfile> {}
+export interface KickOptions extends ProviderOptions<KickProfile> {
+	clientId: string;
+}
 
 export const kick = (options: KickOptions) => {
 	return {
@@ -73,7 +75,7 @@ export const kick = (options: KickOptions) => {
 				return null;
 			}
 
-			const profile = data.data[0];
+			const profile = data.data[0]!;
 
 			const userMap = await options.mapProfileToUser?.(profile);
 
