@@ -70,6 +70,12 @@ export interface AdminOptions {
 	 */
 	adminUserIds?: string[];
 	/**
+	 * List of user emails that should have admin access
+	 *
+	 * If this is set, the `adminRole` option is ignored
+	 */
+	adminEmails?: (string | RegExp)[];
+	/**
 	 * Message to show when a user is banned
 	 *
 	 * By default, the message is "You have been banned from this application"

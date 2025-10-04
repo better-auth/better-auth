@@ -252,6 +252,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
 						options: opts,
+						email: ctx.context.session.user.email,
 						permissions: {
 							user: ["set-role"],
 						},
@@ -315,6 +316,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 					const canGetUser = hasPermission({
 						userId: ctx.context.session.user.id,
+						email: ctx.context.session.user.email,
 						role: ctx.context.session.user.role,
 						options: opts,
 						permissions: {
@@ -438,6 +440,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							userId: session.user.id,
 							role: session.user.role,
 							options: opts,
+							email: session.user.email,
 							permissions: {
 								user: ["create"],
 							},
@@ -548,6 +551,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				async (ctx) => {
 					const canUpdateUser = hasPermission({
 						userId: ctx.context.session.user.id,
+						email: ctx.context.session.user.email,
 						role: ctx.context.session.user.role,
 						options: opts,
 						permissions: {
@@ -690,6 +694,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const session = ctx.context.session;
 					const canListUsers = hasPermission({
 						userId: ctx.context.session.user.id,
+						email: session.user.email,
 						role: session.user.role,
 						options: opts,
 						permissions: {
@@ -806,6 +811,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const session = ctx.context.session;
 					const canListSessions = hasPermission({
 						userId: ctx.context.session.user.id,
+						email: session.user.email,
 						role: session.user.role,
 						options: opts,
 						permissions: {
@@ -880,6 +886,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const session = ctx.context.session;
 					const canBanUser = hasPermission({
 						userId: ctx.context.session.user.id,
+						email: session.user.email,
 						role: session.user.role,
 						options: opts,
 						permissions: {
@@ -978,6 +985,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const session = ctx.context.session;
 					const canBanUser = hasPermission({
 						userId: ctx.context.session.user.id,
+						email: session.user.email,
 						role: session.user.role,
 						options: opts,
 						permissions: {
@@ -1083,6 +1091,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				async (ctx) => {
 					const canImpersonateUser = hasPermission({
 						userId: ctx.context.session.user.id,
+						email: ctx.context.session.user.email,
 						role: ctx.context.session.user.role,
 						options: opts,
 						permissions: {
@@ -1279,6 +1288,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const session = ctx.context.session;
 					const canRevokeSession = hasPermission({
 						userId: ctx.context.session.user.id,
+						email: session.user.email,
 						role: session.user.role,
 						options: opts,
 						permissions: {
@@ -1354,6 +1364,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const session = ctx.context.session;
 					const canRevokeSession = hasPermission({
 						userId: ctx.context.session.user.id,
+						email: session.user.email,
 						role: session.user.role,
 						options: opts,
 						permissions: {
@@ -1428,6 +1439,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const session = ctx.context.session;
 					const canDeleteUser = hasPermission({
 						userId: ctx.context.session.user.id,
+						email: session.user.email,
 						role: session.user.role,
 						options: opts,
 						permissions: {
@@ -1518,6 +1530,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				async (ctx) => {
 					const canSetUserPassword = hasPermission({
 						userId: ctx.context.session.user.id,
+						email: ctx.context.session.user.email,
 						role: ctx.context.session.user.role,
 						options: opts,
 						permissions: {
@@ -1660,7 +1673,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							: null) ||
 						((await ctx.context.internalAdapter.findUserById(
 							ctx.body.userId as string,
-						)) as { role?: string; id: string });
+						)) as { role?: string; id: string; email?: string });
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: "user not found",
@@ -1668,6 +1681,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const result = hasPermission({
 						userId: user.id,
+						email: user.email,
 						role: user.role,
 						options: options as AdminOptions,
 						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
