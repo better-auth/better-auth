@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { logger } from "better-auth";
+import { globalLog } from "better-auth";
 import { createAuthClient } from "better-auth/client";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import chalk from "chalk";
@@ -73,9 +73,11 @@ export async function loginAction(opts: any) {
 		spinner.stop();
 
 		if (error || !data) {
-			logger.error(
+			globalLog(
+				"error",
 				`Failed to request device authorization: ${error?.error_description || "Unknown error"}`,
-			);
+				null,
+			); // Can't set the better auth's logger options here!
 			process.exit(1);
 		}
 
@@ -154,9 +156,11 @@ export async function loginAction(opts: any) {
 		}
 	} catch (err) {
 		spinner.stop();
-		logger.error(
+		globalLog(
+			"error",
 			`Login failed: ${err instanceof Error ? err.message : "Unknown error"}`,
-		);
+			null,
+		); // Can't set the better auth's logger options here!
 		process.exit(1);
 	}
 }
@@ -209,25 +213,31 @@ async function pollForToken(
 							break;
 						case "access_denied":
 							spinner.stop();
-							logger.error("Access was denied by the user");
+							globalLog("error", "Access was denied by the user", null); // Can't set the better auth's logger options here!
 							process.exit(1);
 							break;
 						case "expired_token":
 							spinner.stop();
-							logger.error("The device code has expired. Please try again.");
+							globalLog(
+								"error",
+								"The device code has expired. Please try again.",
+								null,
+							); // Can't set the better auth's logger options here!
 							process.exit(1);
 							break;
 						default:
 							spinner.stop();
-							logger.error(`Error: ${error.error_description}`);
+							globalLog("error", `Error: ${error.error_description}`, null); // Can't set the better auth's logger options here!
 							process.exit(1);
 					}
 				}
 			} catch (err) {
 				spinner.stop();
-				logger.error(
+				globalLog(
+					"error",
 					`Network error: ${err instanceof Error ? err.message : "Unknown error"}`,
-				);
+					null,
+				); // Can't set the better auth's logger options here!
 				process.exit(1);
 			}
 
@@ -254,7 +264,7 @@ async function storeToken(token: any): Promise<void> {
 
 		await fs.writeFile(TOKEN_FILE, JSON.stringify(tokenData, null, 2), "utf-8");
 	} catch (error) {
-		logger.warn("Failed to store authentication token locally");
+		globalLog("warn", "Failed to store authentication token locally", null); // Can't set the better auth's logger options here!
 	}
 }
 
