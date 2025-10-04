@@ -1,6 +1,28 @@
 import type { ZodType } from "zod";
 import type { LiteralString } from "../types";
 
+declare module "../index" {
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	interface BetterAuthMutators<O, C> {
+		"better-auth/db": {
+			// todo: we should infer the schema from the adapter
+		};
+	}
+}
+
+export type Models =
+	| "user"
+	| "account"
+	| "session"
+	| "verification"
+	| "rate-limit"
+	| "organization"
+	| "member"
+	| "invitation"
+	| "jwks"
+	| "passkey"
+	| "two-factor";
+
 export type DBFieldType =
 	| "string"
 	| "number"
