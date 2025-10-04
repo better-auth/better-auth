@@ -1014,6 +1014,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "string",
 						required: false,
 						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
+						references: {
+							model: "organization",
+							field: "id",
+						}
 					},
 					...(teamSupport
 						? {
