@@ -587,8 +587,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						searchValue: z.string().optional().meta({
 							description: 'The value to search for. Eg: "some name"',
 						}),
-						searchField: z
-							.enum(["email", "name"])
+						searchField: getSearchFieldSchema(["email", "name"])
 							.meta({
 								description:
 									'The field to search in, defaults to email. Can be `email` or `name`. Eg: "name"',
@@ -705,11 +704,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const where: Where[] = [];
 
 					if (ctx.query?.searchValue) {
-						where.push({
-							field: ctx.query.searchField || "email",
-							operator: ctx.query.searchOperator || "contains",
-							value: ctx.query.searchValue,
-						});
+						const operator = ctx.query.searchOperator || "contains";
+						const value = ctx.query.searchValue;
+						where.push(
+							...(ctx.query.searchField ?? ["email"]).map(
+								(field) =>
+									({
+										field,
+										operator,
+										value,
+										connector: "OR",
+									}) satisfies Where,
+							),
+						);
 					}
 
 					if (ctx.query?.filterValue) {
@@ -1683,4 +1690,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		schema: mergeSchema(schema, opts.schema),
 		options: options as any,
 	} satisfies BetterAuthPlugin;
+};
+
+const getSearchFieldSchema = <const T extends string[]>(fields: T) => {
+	const schema = z.enum(fields);
+	type Fields = z.infer<typeof schema>;
+
+	return z.preprocess<
+		Fields[] | undefined,
+		z.ZodOptional<z.ZodArray<typeof schema>>,
+		Fields | Fields[] | undefined
+	>(
+		(v: unknown) =>
+			(typeof v === "string" ? v.split(",").map((s) => s.trim()) : v) as any,
+		z.array(schema).optional(),
+	);
 };
