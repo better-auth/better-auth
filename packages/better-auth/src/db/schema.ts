@@ -1,61 +1,8 @@
-import * as z from "zod";
 import type { AuthPluginSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-
-export const coreSchema = z.object({
-	id: z.string(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
-});
-
-export const accountSchema = coreSchema.extend({
-	providerId: z.string(),
-	accountId: z.string(),
-	userId: z.coerce.string(),
-	accessToken: z.string().nullish(),
-	refreshToken: z.string().nullish(),
-	idToken: z.string().nullish(),
-	/**
-	 * Access token expires at
-	 */
-	accessTokenExpiresAt: z.date().nullish(),
-	/**
-	 * Refresh token expires at
-	 */
-	refreshTokenExpiresAt: z.date().nullish(),
-	/**
-	 * The scopes that the user has authorized
-	 */
-	scope: z.string().nullish(),
-	/**
-	 * Password is only stored in the credential provider
-	 */
-	password: z.string().nullish(),
-});
-
-export const userSchema = coreSchema.extend({
-	email: z.string().transform((val) => val.toLowerCase()),
-	emailVerified: z.boolean().default(false),
-	name: z.string(),
-	image: z.string().nullish(),
-});
-
-export const sessionSchema = coreSchema.extend({
-	userId: z.coerce.string(),
-	expiresAt: z.date(),
-	token: z.string(),
-	ipAddress: z.string().nullish(),
-	userAgent: z.string().nullish(),
-});
-
-export const verificationSchema = coreSchema.extend({
-	value: z.string(),
-	expiresAt: z.date(),
-	identifier: z.string(),
-});
 
 // Cache for parsed schemas to avoid reparsing on every request
 const cache = new WeakMap<
@@ -141,7 +88,7 @@ export function parseInputData<T extends Record<string, any>>(
 	const fields = schema.fields;
 	const parsedData: Record<string, any> = Object.assign(
 		Object.create(null),
-		data,
+		null,
 	);
 	for (const key in fields) {
 		if (key in data) {
@@ -149,6 +96,11 @@ export function parseInputData<T extends Record<string, any>>(
 				if (fields[key]!.defaultValue) {
 					parsedData[key] = fields[key]!.defaultValue;
 					continue;
+				}
+				if (parsedData[key]) {
+					throw new APIError("BAD_REQUEST", {
+						message: `${key} is not allowed to be set`,
+					});
 				}
 				continue;
 			}

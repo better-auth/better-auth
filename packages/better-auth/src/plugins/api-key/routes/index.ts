@@ -25,7 +25,7 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "minimumNameLength"
 			| "requireName"
 			| "enableMetadata"
-			| "disableSessionForAPIKeys"
+			| "enableSessionForAPIKeys"
 			| "startingCharactersConfig"
 		>
 	> & {
