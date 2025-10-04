@@ -363,7 +363,7 @@ describe("mulit team support", async (it) => {
 				}),
 			],
 			logger: {
-				level: "info",
+				level: "error",
 			},
 		},
 		{
