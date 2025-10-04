@@ -100,13 +100,17 @@ export const init = async (options: BetterAuthOptions) => {
 		return generateId(size);
 	};
 
-	const { publish } = await createTelemetry(options, {
-		adapter: adapter.id,
-		database:
-			typeof options.database === "function"
-				? "adapter"
-				: getKyselyDatabaseType(options.database) || "unknown",
-	});
+	const { publish } = options.telemetry?.enabled
+		? await createTelemetry(options, {
+				adapter: adapter.id,
+				database:
+					typeof options.database === "function"
+						? "adapter"
+						: getKyselyDatabaseType(options.database) || "unknown",
+			})
+		: {
+				publish: async () => {},
+			};
 
 	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
