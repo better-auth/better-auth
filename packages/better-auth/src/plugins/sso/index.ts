@@ -1,6 +1,7 @@
 import * as z from "zod";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
-import type { BetterAuthPlugin, User } from "../../types";
+import type { BetterAuthPlugin, InferOptionSchema, User } from "../../types";
+import type { FieldAttribute } from "../../db/field";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -14,7 +15,6 @@ import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { setSessionCookie } from "../../cookies";
-
 export interface SSOOptions {
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
@@ -72,6 +72,19 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	defaultOverrideUserInfo?: boolean;
+	/**
+	 * Extend or customize the underlying ssoProvider model.
+	 *
+	 * Similar to other plugins, you can:
+	 *  - Provide custom DB column names for existing fields via `fields`
+	 *  - Add additional fields via `additionalFields`
+	 *  - Change the table/model name via `modelName`
+	 */
+	schema?: InferOptionSchema<ReturnType<typeof schema>> & {
+		ssoProvider?: {
+			additionalFields?: Record<string, FieldAttribute>;
+		};
+	};
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -1050,6 +1063,7 @@ export const sso = (options?: SSOOptions) => {
 };
 
 export interface SSOProvider {
+	id: string;
 	issuer: string;
 	oidcConfig: OIDCConfig;
 	userId?: string;

@@ -209,6 +209,64 @@ describe("SSO", async () => {
 	});
 });
 
+describe("SSO schema additionalFields", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			sso({
+				schema: {
+					ssoProvider: {
+						additionalFields: {
+							environment: {
+								type: "string",
+								required: true,
+								defaultValue: "prod",
+							},
+						},
+					},
+				},
+			}),
+		],
+	});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.issuer.on;
+		await server.start(8081, "localhost");
+	});
+
+	afterAll(async () => {
+		await server.stop().catch(() => {});
+	});
+
+	it("should persist additional field with default value", async () => {
+		const { headers } = await signInWithTestUser();
+		const provider = await auth.api.createOIDCProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "localhost.com",
+				clientId: "test",
+				clientSecret: "test",
+				authorizationEndpoint: `${server.issuer.url}/authorize`,
+				tokenEndpoint: `${server.issuer.url}/token`,
+				jwksEndpoint: `${server.issuer.url}/jwks`,
+				mapping: {
+					id: "sub",
+					email: "email",
+					emailVerified: "email_verified",
+					name: "name",
+					image: "picture",
+				},
+				providerId: "test-additional",
+			},
+			headers,
+		});
+		expect(provider).toMatchObject({
+			id: expect.any(String),
+			environment: "prod",
+		});
+	});
+});
+
 describe("SSO disable implicit sign in", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
