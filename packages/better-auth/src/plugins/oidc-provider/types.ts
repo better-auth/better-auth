@@ -306,7 +306,7 @@ export interface Client {
 	 *
 	 * For example, `https://example.com/auth/callback`
 	 */
-	redirectURLs: string[];
+	redirectUrls: string[];
 	/**
 	 * The name of the client.
 	 */

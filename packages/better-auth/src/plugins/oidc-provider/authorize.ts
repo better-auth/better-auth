@@ -110,7 +110,7 @@ export async function authorize(
 		);
 		throw ctx.redirect(errorURL);
 	}
-	const redirectURI = client.redirectURLs.find(
+	const redirectURI = client.redirectUrls.find(
 		(url) => url === ctx.query.redirect_uri,
 	);
 
