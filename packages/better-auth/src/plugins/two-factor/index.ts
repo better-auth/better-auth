@@ -9,7 +9,11 @@ import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import { mergeSchema } from "../../db/schema";
-import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
+import {
+	TWO_FACTOR_COOKIE_NAME,
+	TRUST_DEVICE_COOKIE_NAME,
+	TRUST_DEVICE_COOKIE_MAX_AGE,
+} from "./constant";
 import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -291,14 +295,19 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						if (!data?.user.twoFactorEnabled) {
 							return;
 						}
-						// Check for trust device cookie
-						const trustDeviceCookieName = ctx.context.createAuthCookie(
+
+						const trustDeviceCookieAttrs = ctx.context.createAuthCookie(
 							TRUST_DEVICE_COOKIE_NAME,
+							{
+								maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
+							},
 						);
+						// Check for trust device cookie
 						const trustDeviceCookie = await ctx.getSignedCookie(
-							trustDeviceCookieName.name,
+							trustDeviceCookieAttrs.name,
 							ctx.context.secret,
 						);
+
 						if (trustDeviceCookie) {
 							const [token, sessionToken] = trustDeviceCookie.split("!");
 							const expectedToken = await createHMAC(
@@ -306,17 +315,21 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 								"base64urlnopad",
 							).sign(ctx.context.secret, `${data.user.id}!${sessionToken}`);
 
+							// Checks if the token is signed correctly, not that its the current session token
 							if (token === expectedToken) {
 								// Trust device cookie is valid, refresh it and skip 2FA
 								const newToken = await createHMAC(
 									"SHA-256",
 									"base64urlnopad",
-								).sign(ctx.context.secret, `${data.user.id}!${sessionToken}`);
+								).sign(
+									ctx.context.secret,
+									`${data.user.id}!${data.session.token}`,
+								);
 								await ctx.setSignedCookie(
-									trustDeviceCookieName.name,
+									trustDeviceCookieAttrs.name,
 									`${newToken}!${data.session.token}`,
 									ctx.context.secret,
-									trustDeviceCookieName.attributes,
+									trustDeviceCookieAttrs.attributes,
 								);
 								return;
 							}
