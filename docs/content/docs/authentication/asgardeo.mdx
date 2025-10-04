@@ -1,0 +1,58 @@
+---
+title: Asgardeo
+description: Asgardeo provider setup and usage.
+---
+
+<Steps>
+    <Step>
+        ### Get your OAuth credentials
+
+        To use Asgardeo sign in, you need a client ID and client secret. You can get them from the [**Asgardeo Console**](https://console.asgardeo.io).
+
+        1. Go to Applications and create a new [**Traditional Web Application**](https://wso2.com/asgardeo/docs/guides/applications/register-oidc-web-app/).
+
+            Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/asgardeo` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+
+        2. Navigate to the **Protocol** tab and add **Allowed origins** (`http://localhost:3000` for local development) and save changes.
+
+        3. Make `Email`, `First Name` and `Photo URL` user attributes mandatory from the **User Attributes** tab.
+    </Step>
+    <Step>
+        ### Configure the provider
+        To configure the provider, you need to add it to the `socialProviders` option of the auth instance.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+
+        export const auth = betterAuth({
+            socialProviders: {
+                asgardeo: { // [!code highlight]
+                    clientId: process.env.ASGARDEO_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.ASGARDEO_CLIENT_SECRET as string, // [!code highlight]
+                    // https://api.asgardeo.io/t/{organization_name}
+                    issuer: process.env.ASGARDEO_ISSUER as string, // [!code highlight]
+                }, // [!code highlight]
+            },
+        })
+        ```
+    </Step>
+</Steps>
+
+
+## Usage
+
+### Sign In with Asgardeo
+
+To sign in with Asgardeo, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+- `provider`: The provider to use. It should be set to `asgardeo`.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+const authClient = createAuthClient()
+
+const signIn = async () => {
+    const data = await authClient.signIn.social({
+        provider: "asgardeo"
+    })
+}
+```
