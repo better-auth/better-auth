@@ -2250,9 +2250,11 @@ export const sso = (options?: SSOOptions) => {
 					},
 					userId: {
 						type: "string",
+						required: false,
 						references: {
 							model: "user",
 							field: "id",
+							onDelete: "set null",
 						},
 					},
 					providerId: {
@@ -2263,6 +2265,11 @@ export const sso = (options?: SSOOptions) => {
 					organizationId: {
 						type: "string",
 						required: false,
+						references: {
+							model: "organization",
+							field: "id",
+							onDelete: "cascade",
+						},
 					},
 					domain: {
 						type: "string",

@@ -14,6 +14,8 @@ import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
 
+export { getTestInstance } from "./test-instance";
+
 export async function getTestInstanceMemory<
 	O extends Partial<BetterAuthOptions>,
 	C extends ClientOptions,
