@@ -16,9 +16,11 @@ const { execute } = await testAdapter({
 	},
 	runMigrations: (options) => {
 		db = {};
-		const allModels = Object.keys(getAuthTables(options));
+		const authTables = getAuthTables(options);
+		const allModels = Object.keys(authTables);
 		for (const model of allModels) {
-			db[model] = [];
+			const modelName = authTables[model]?.modelName || model;
+			db[modelName] = [];
 		}
 	},
 	tests: [
