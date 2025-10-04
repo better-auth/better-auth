@@ -95,7 +95,11 @@ export default async function Page({
 						},
 						pre: (props) => {
 							return (
-								<CodeBlock className="rounded-xl bg-fd-muted" {...props}>
+								<CodeBlock
+									className="rounded-xl bg-fd-muted"
+									allowCopy={true}
+									{...props}
+								>
 									<div style={{ minWidth: "100%", display: "table" }}>
 										<Pre className="px-0 py-3 bg-fd-muted focus-visible:outline-none">
 											{props.children}
