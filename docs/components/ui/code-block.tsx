@@ -185,9 +185,8 @@ function CopyButton({
 					variant: "ghost",
 					size: "icon",
 				}),
-				"transition-opacity size-7 border-none  group-hover:opacity-100",
-				"opacity-0 group-hover:opacity-100",
-				"group-hover:opacity-100",
+				"transition-opacity size-7 border-none cursor-pointer",
+				"opacity-60 hover:opacity-100 group-hover:opacity-100",
 				className,
 			)}
 			aria-label="Copy Text"
@@ -304,7 +303,7 @@ export const CodeBlockOld = forwardRef<HTMLElement, CodeBlockProps>(
 				className={cn(
 					"not-prose group fd-codeblock relative my-6 overflow-hidden rounded-lg border bg-fd-secondary/50 text-sm",
 					keepBackground &&
-						"bg-[var(--shiki-light-bg)] dark:bg-[var(--shiki-dark-bg)]",
+					"bg-[var(--shiki-light-bg)] dark:bg-[var(--shiki-dark-bg)]",
 					props.className,
 				)}
 			>
@@ -316,8 +315,8 @@ export const CodeBlockOld = forwardRef<HTMLElement, CodeBlockProps>(
 								dangerouslySetInnerHTML={
 									typeof icon === "string"
 										? {
-												__html: icon,
-											}
+											__html: icon,
+										}
 										: undefined
 								}
 							>
