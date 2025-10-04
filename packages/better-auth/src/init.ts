@@ -1,11 +1,6 @@
 import { defu } from "defu";
 import { hashPassword, verifyPassword } from "./crypto/password";
-import {
-	type BetterAuthDbSchema,
-	createInternalAdapter,
-	getAuthTables,
-	getMigrations,
-} from "./db";
+import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
 import type { Entries } from "type-fest";
 import { getAdapter } from "./db/utils";
 import type {
@@ -37,6 +32,7 @@ import type { TelemetryEvent } from "./telemetry/types";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
 import { isPromise } from "./utils/is-promise";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -95,8 +91,8 @@ export const init = async (options: BetterAuthOptions) => {
 		.filter((x) => x !== null);
 
 	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
-		if (typeof options.advanced?.generateId === "function") {
-			return options.advanced.generateId({ model, size });
+		if (typeof (options.advanced as any)?.generateId === "function") {
+			return (options.advanced as any).generateId({ model, size });
 		}
 		if (typeof options?.advanced?.database?.generateId === "function") {
 			return options.advanced.database.generateId({ model, size });
@@ -193,6 +189,12 @@ export type AuthContext = {
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
+	oauthConfig?: {
+		/**
+		 * This is dangerous and should only be used in dev or staging environments.
+		 */
+		skipStateCookieCheck?: boolean;
+	};
 	/**
 	 * New session that will be set after the request
 	 * meaning: there is a `set-cookie` header that will set
@@ -245,7 +247,7 @@ export type AuthContext = {
 		};
 		checkPassword: typeof checkPassword;
 	};
-	tables: BetterAuthDbSchema;
+	tables: BetterAuthDBSchema;
 	runMigrations: () => Promise<void>;
 	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
 };

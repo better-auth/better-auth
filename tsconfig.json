@@ -2,41 +2,18 @@
   "compilerOptions": {
     "strict": true,
     "target": "esnext",
-    "downlevelIteration": true,
-    "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    "downlevelIteration": true,
+    "baseUrl": ".",
+    "esModuleInterop": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false,
-    "declaration": true,
-    "emitDeclarationOnly": true,
-    "composite": true,
     "incremental": true,
     "noErrorTruncation": true,
-    "types": ["node"]
+    "types": ["node", "bun"]
   },
-  "references": [
-    {
-      "path": "./packages/better-auth"
-    },
-    {
-      "path": "./packages/cli"
-    },
-    {
-      "path": "./packages/expo"
-    },
-    {
-      "path": "./packages/sso"
-    },
-    {
-      "path": "./packages/stripe"
-    }
-  ],
-  "files": [],
-  "include": [],
-  "exclude": ["**/dist/**", "**/node_modules/**", "**/examples/**"]
+  "exclude": ["**/dist/**", "**/node_modules/**"]
 }

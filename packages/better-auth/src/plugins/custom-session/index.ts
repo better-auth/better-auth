@@ -107,7 +107,7 @@ export const customSession = <
 					},
 					requireHeaders: true,
 				},
-				async (ctx) => {
+				async (ctx): Promise<Returns | null> => {
 					const session = await getSession()({
 						...ctx,
 						asResponse: false,
@@ -133,6 +133,9 @@ export const customSession = <
 					return ctx.json(fnResult);
 				},
 			),
+		},
+		$Infer: {
+			Session: {} as Awaited<ReturnType<typeof fn>>,
 		},
 	} satisfies BetterAuthPlugin;
 };

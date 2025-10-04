@@ -1,7 +1,7 @@
 import {
 	getAuthTables,
-	type BetterAuthDbSchema,
-	type FieldAttribute,
+	type BetterAuthDBSchema,
+	type DBFieldAttribute,
 } from "better-auth/db";
 import type { BetterAuthOptions } from "better-auth/types";
 import { existsSync } from "fs";
@@ -43,7 +43,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		const modelName = getModelName(table.modelName, adapter.options);
 		const fields = table.fields;
 
-		function getType(name: string, field: FieldAttribute) {
+		function getType(name: string, field: DBFieldAttribute) {
 			// Not possible to reach, it's here to make typescript happy
 			if (!databaseType) {
 				throw new Error(
@@ -104,9 +104,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						: `int('${name}')`,
 				},
 				date: {
-					sqlite: `integer('${name}', { mode: 'timestamp' })`,
+					sqlite: `integer('${name}', { mode: 'timestamp_ms' })`,
 					pg: `timestamp('${name}')`,
-					mysql: `timestamp('${name}')`,
+					mysql: `timestamp('${name}', { fsp: 3 })`,
 				},
 				"number[]": {
 					sqlite: `integer('${name}').array()`,
@@ -137,7 +137,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			if (databaseType === "pg") {
 				id = `serial("id").primaryKey()`;
 			} else if (databaseType === "sqlite") {
-				id = `int("id").primaryKey()`;
+				id = `integer("id", { mode: "number" }).primaryKey({ autoIncrement: true })`;
 			} else {
 				id = `int("id").autoincrement().primaryKey()`;
 			}
@@ -159,7 +159,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					${Object.keys(fields)
 						.map((field) => {
 							const attr = fields[field]!;
-							let type = getType(field, attr);
+							const fieldName = attr.fieldName || field;
+							let type = getType(fieldName, attr);
 							if (
 								attr.defaultValue !== null &&
 								typeof attr.defaultValue !== "undefined"
@@ -170,7 +171,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 										attr.defaultValue.toString().includes("new Date()")
 									) {
 										if (databaseType === "sqlite") {
-											type += `.default(sql\`(current_timestamp)\`)`;
+											type += `.default(sql\`(cast(unixepoch('subsecond') * 1000 as integer))\`)`;
 										} else {
 											type += `.defaultNow()`;
 										}
@@ -190,7 +191,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
-							return `${field}: ${type}${attr.required ? ".notNull()" : ""}${
+							return `${fieldName}: ${type}${attr.required ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
 								attr.references
@@ -198,7 +199,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 											tables[attr.references.model]?.modelName ||
 												attr.references.model,
 											adapter.options,
-										)}.${attr.references.field}, { onDelete: '${
+										)}.${fields[attr.references.field]?.fieldName || attr.references.field}, { onDelete: '${
 											attr.references.onDelete || "cascade"
 										}' })`
 									: ""
@@ -224,7 +225,7 @@ function generateImport({
 	options,
 }: {
 	databaseType: "sqlite" | "mysql" | "pg";
-	tables: BetterAuthDbSchema;
+	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
 }) {
 	const rootImports: string[] = [];

@@ -8,5 +8,9 @@ export default defineBuildConfig({
 	outDir: "dist",
 	clean: true,
 	failOnWarn: false,
-	entries: ["./src/index.ts"],
+	entries: [
+		"./src/index.ts",
+		"./src/db/index.ts",
+		"./src/async_hooks/index.ts",
+	],
 });

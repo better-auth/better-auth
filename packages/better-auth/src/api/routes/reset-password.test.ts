@@ -192,8 +192,8 @@ describe("forget password", async (it) => {
 				resetPasswordTokenExpiresIn: 10,
 			},
 		});
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			await client.requestPasswordReset({
 				email: testUser.email,
 				redirectTo: "/sign-in",
@@ -219,7 +219,7 @@ describe("forget password", async (it) => {
 			token,
 		});
 		expect(res.data?.status).toBe(true);
-		await runWithDefaultUser(async () => {
+		await runWithUser(async () => {
 			await client.requestPasswordReset({
 				email: testUser.email,
 				redirectTo: "/sign-in",
@@ -283,7 +283,7 @@ describe("revoke sessions on password reset", async (it) => {
 	);
 
 	it("should revoke other sessions when revokeSessionsOnPasswordReset is enabled", async () => {
-		const { runWithDefaultUser } = await signInWithTestUser();
+		const { runWithUser } = await signInWithTestUser();
 
 		await client.requestPasswordReset({
 			email: testUser.email,
@@ -301,7 +301,7 @@ describe("revoke sessions on password reset", async (it) => {
 			},
 		);
 
-		await runWithDefaultUser(async () => {
+		await runWithUser(async () => {
 			const sessionAttempt = await client.getSession();
 			expect(sessionAttempt.data).toBeNull();
 		});
@@ -323,7 +323,7 @@ describe("revoke sessions on password reset", async (it) => {
 			},
 		);
 
-		const { runWithDefaultUser } = await signInWithTestUser();
+		const { runWithUser } = await signInWithTestUser();
 
 		await client.requestPasswordReset({
 			email: testUser.email,
@@ -341,7 +341,7 @@ describe("revoke sessions on password reset", async (it) => {
 			},
 		);
 
-		await runWithDefaultUser(async () => {
+		await runWithUser(async () => {
 			const sessionAttempt = await client.getSession();
 			expect(sessionAttempt.data?.user).toBeDefined();
 		});

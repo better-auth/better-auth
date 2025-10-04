@@ -1,4 +1,4 @@
-import { getAuthTables, type FieldAttribute } from ".";
+import { getAuthTables } from ".";
 import { BetterAuthError } from "../error";
 import type { Adapter, BetterAuthOptions } from "../types";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
@@ -7,6 +7,7 @@ import { memoryAdapter, type MemoryDB } from "../adapters/memory-adapter";
 import { globalLog } from "../utils";
 
 export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
+	let adapter: Adapter;
 	if (!options.database) {
 		const tables = getAuthTables(options);
 		const memoryDB = Object.keys(tables).reduce<MemoryDB>((acc, key) => {
@@ -19,28 +20,34 @@ export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 			"No database configuration provided. Using memory adapter in development",
 			options,
 		);
-		return memoryAdapter(memoryDB)(options);
+		adapter = memoryAdapter(memoryDB)(options);
+	} else if (typeof options.database === "function") {
+		adapter = options.database(options);
+	} else {
+		const { kysely, databaseType, transaction } =
+			await createKyselyAdapter(options);
+		if (!kysely) {
+			throw new BetterAuthError("Failed to initialize database adapter");
+		}
+		adapter = kyselyAdapter(kysely, {
+			type: databaseType || "sqlite",
+			debugLogs:
+				"debugLogs" in options.database ? options.database.debugLogs : false,
+			transaction: transaction,
+		})(options);
 	}
-
-	if (typeof options.database === "function") {
-		return options.database(options);
+	// patch for 1.3.x to ensure we have a transaction function in the adapter
+	if (!adapter.transaction) {
+		globalLog("warn", "Adapter does not correctly implement transaction function, patching it automatically. Please update your adapter implementation.", options);
+		adapter.transaction = async (cb) => {
+			return cb(adapter);
+		};
 	}
-
-	const { kysely, databaseType, transaction } =
-		await createKyselyAdapter(options);
-	if (!kysely) {
-		throw new BetterAuthError("Failed to initialize database adapter");
-	}
-	return kyselyAdapter(kysely, {
-		type: databaseType || "sqlite",
-		debugLogs:
-			"debugLogs" in options.database ? options.database.debugLogs : false,
-		transaction: transaction,
-	})(options);
+	return adapter;
 }
 
 export function convertToDB<T extends Record<string, any>>(
-	fields: Record<string, FieldAttribute>,
+	fields: Record<string, DBFieldAttribute>,
 	values: T,
 ) {
 	let result: Record<string, any> = values.id
@@ -60,7 +67,7 @@ export function convertToDB<T extends Record<string, any>>(
 }
 
 export function convertFromDB<T extends Record<string, any>>(
-	fields: Record<string, FieldAttribute>,
+	fields: Record<string, DBFieldAttribute>,
 	values: T | null,
 ) {
 	if (!values) {
