@@ -303,3 +303,185 @@ describe("magic link storeToken", async () => {
 		expect(response2.status).toBe(true);
 	});
 });
+
+describe("magic link disableSignUp as function", async () => {
+	it("should block signup when function returns true", async () => {
+		const disableSignUpFn = vi.fn(() => true);
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink() {},
+					disableSignUp: disableSignUpFn,
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink(
+			{
+				email: "new-user@example.com",
+				name: "Test User",
+			},
+			{
+				onError: (context) => {
+					expect(context.response.status).toBe(400);
+				},
+			},
+		);
+
+		expect(disableSignUpFn).toHaveBeenCalled();
+	});
+
+	it("should allow signup when function returns false", async () => {
+		let capturedEmail = "";
+		const disableSignUpFn = vi.fn(() => false);
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						capturedEmail = data.email;
+					},
+					disableSignUp: disableSignUpFn,
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		const newEmail = "allowed-user@example.com";
+		await client.signIn.magicLink({
+			email: newEmail,
+			name: "Allowed User",
+		});
+
+		expect(disableSignUpFn).toHaveBeenCalled();
+		expect(capturedEmail).toBe(newEmail);
+	});
+
+	it("should receive request context in disableSignUp function", async () => {
+		const disableSignUpFn = vi.fn((request: Request | undefined) => {
+			// Handle undefined request case
+			if (!request) return false;
+			const referer = request.headers.get("referer");
+			return referer?.includes("blocked-path") ?? false;
+		});
+
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink() {},
+					disableSignUp: disableSignUpFn,
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		// Test - should succeed since request doesn't have blocked path
+		await client.signIn.magicLink({
+			email: "test-user@example.com",
+		});
+
+		expect(disableSignUpFn).toHaveBeenCalled();
+
+		// Verify function received request (may be undefined or Request)
+		const callArg = disableSignUpFn.mock.calls[0]?.[0];
+		expect(callArg === undefined || callArg instanceof Request).toBe(true);
+	});
+
+	it("should handle async disableSignUp function", async () => {
+		let wasCalledAsync = false;
+		const disableSignUpFn = vi.fn(async (request: Request | undefined) => {
+			// Simulate async operation
+			await Promise.resolve();
+			wasCalledAsync = true;
+			return true;
+		});
+
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink() {},
+					disableSignUp: disableSignUpFn,
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink(
+			{
+				email: "new-user@example.com",
+			},
+			{
+				onError: (context) => {
+					expect(context.response.status).toBe(400);
+				},
+			},
+		);
+
+		expect(disableSignUpFn).toHaveBeenCalled();
+		expect(wasCalledAsync).toBe(true);
+	});
+
+	it("should not block existing users even when disableSignUp function returns true", async () => {
+		let capturedEmail = "";
+		const disableSignUpFn = vi.fn(() => true);
+		const { customFetchImpl, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						capturedEmail = data.email;
+					},
+					disableSignUp: disableSignUpFn,
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		// Existing user should be allowed even when disableSignUp returns true
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		expect(disableSignUpFn).toHaveBeenCalled();
+		expect(capturedEmail).toBe(testUser.email);
+	});
+});

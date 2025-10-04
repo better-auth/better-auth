@@ -29,9 +29,16 @@ interface MagicLinkopts {
 	/**
 	 * Disable sign up if user is not found.
 	 *
+	 * Can be a boolean or a function that receives the request (if available) and returns a boolean.
+	 * This allows you to conditionally disable signups based on request context.
+	 *
+	 * Note: The request may be undefined in some contexts. Make sure to handle this case.
+	 *
 	 * @default false
 	 */
-	disableSignUp?: boolean;
+	disableSignUp?:
+		| boolean
+		| ((request: Request | undefined) => boolean | Promise<boolean>);
 	/**
 	 * Rate limit configuration.
 	 *
@@ -164,14 +171,24 @@ export const magicLink = (options: MagicLinkopts) => {
 				async (ctx) => {
 					const { email } = ctx.body;
 
+					// Handle disableSignUp - can be boolean or function
 					if (opts.disableSignUp) {
-						const user =
-							await ctx.context.internalAdapter.findUserByEmail(email);
+						let signUpDisabled = false;
+						if (typeof opts.disableSignUp === "function") {
+							signUpDisabled = await opts.disableSignUp(ctx.request);
+						} else {
+							signUpDisabled = true;
+						}
 
-						if (!user) {
-							throw new APIError("BAD_REQUEST", {
-								message: BASE_ERROR_CODES.USER_NOT_FOUND,
-							});
+						if (signUpDisabled) {
+							const user =
+								await ctx.context.internalAdapter.findUserByEmail(email);
+
+							if (!user) {
+								throw new APIError("BAD_REQUEST", {
+									message: BASE_ERROR_CODES.USER_NOT_FOUND,
+								});
+							}
 						}
 					}
 
