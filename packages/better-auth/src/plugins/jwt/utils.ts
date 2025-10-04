@@ -6,6 +6,8 @@ import { BetterAuthError } from "../../error";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { joseSecs } from "../../utils/time";
 
+export const revokedTag = " revoked";
+
 /**
  * @todo: JSDoc
  */

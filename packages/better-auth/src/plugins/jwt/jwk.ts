@@ -16,6 +16,7 @@ import {
 	getPublicJwk,
 	isPrivateKeyEncrypted,
 	isPublicKey,
+	revokedTag,
 } from "./utils";
 import { exportJWK, generateKeyPair, importJWK } from "jose";
 

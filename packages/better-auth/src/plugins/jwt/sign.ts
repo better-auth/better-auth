@@ -13,6 +13,7 @@ import {
 	isPrivateKeyEncrypted,
 	withoutJwtClaims,
 	toJwtTime,
+	revokedTag,
 } from "./utils";
 import { importJWK, SignJWT } from "jose";
 
@@ -43,7 +44,7 @@ async function signJwtPayload(
 	skipClaims?: { aud?: boolean; iat?: boolean; iss?: boolean; exp?: boolean },
 	customType?: string,
 ): Promise<string> {
-	if (typeof jwk === "string" && jwk.endsWith(" revoked"))
+	if (typeof jwk === "string" && jwk.endsWith(revokedTag))
 		throw new BetterAuthError(
 			`Failed to sign a JWT: Cannot sign the JWT using a revoked JWK with id "${jwk}"`,
 			jwk,

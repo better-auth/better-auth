@@ -14,7 +14,7 @@ import { BetterAuthError } from "../../error";
 import { getJwksAdapter } from "./adapter";
 import { getJwk } from "./jwk";
 import { createLocalJWKSet, jwtVerify } from "jose";
-import { getJwtPluginOptions } from "./utils";
+import { getJwtPluginOptions, revokedTag } from "./utils";
 
 /**
  * Verifies a **JWT** using JOSE. Common code for `verifyJWT` and `verifyJWTWithKey`.
@@ -130,7 +130,7 @@ export async function verifyJwtInternal(
 			options,
 		);
 
-		if (protectedHeader.kid?.endsWith(" revoked"))
+		if (protectedHeader.kid?.endsWith(revokedTag))
 			throw new BetterAuthError(
 				`Failed to verify the JWT: Cannot verify the JWT using a revoked JWK with ID "${protectedHeader.kid}"`,
 				protectedHeader.kid,
@@ -196,7 +196,7 @@ export async function verifyJwtWithKeyInternal(
 ): Promise<JWTPayload | null> {
 	if (!jwt) return null;
 
-	if (typeof jwk === "string" && jwk?.endsWith(" revoked"))
+	if (typeof jwk === "string" && jwk?.endsWith(revokedTag))
 		throw new BetterAuthError(
 			`Failed to verify the JWT: Cannot verify the JWT using a revoked JWK with ID "${jwk}"`,
 			jwk,
