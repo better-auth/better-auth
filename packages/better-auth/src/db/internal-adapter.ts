@@ -69,7 +69,7 @@ export const createInternalAdapter = (
 						session: parsed.session,
 						user,
 					}),
-					Math.floor(sessionTTL),
+					sessionTTL,
 				);
 			}),
 		);
