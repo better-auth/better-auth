@@ -640,9 +640,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							})
 							.or(z.number())
 							.or(z.boolean())
+							.or(z.string().array())
+							.or(z.number().array())
 							.optional(),
 						filterOperator: z
-							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
+							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "in", "contains"])
 							.meta({
 								description: "The operator to use for the filter",
 							})
@@ -712,11 +714,22 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 
-					if (ctx.query?.filterValue) {
+					let filterValue = ctx.query.filterValue as string | number | boolean | undefined;
+					if (ctx.query.filterOperator === "in") {
+						try {
+							filterValue = typeof filterValue === "string" ? JSON.parse(filterValue) : filterValue;
+						} catch {}
+						if (!Array.isArray(filterValue)) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Value must be an array",
+							});
+						}
+					}
+					if (filterValue) {
 						where.push({
 							field: ctx.query.filterField || "email",
 							operator: ctx.query.filterOperator || "eq",
-							value: ctx.query.filterValue,
+							value: filterValue,
 						});
 					}
 
