@@ -381,7 +381,17 @@ export const magicLink = (options: MagicLinkopts) => {
 						.then((res) => res?.user);
 
 					if (!user) {
-						if (!opts.disableSignUp) {
+						// Handle disableSignUp - can be boolean or function
+						let signUpDisabled = false;
+						if (opts.disableSignUp) {
+							if (typeof opts.disableSignUp === "function") {
+								signUpDisabled = await opts.disableSignUp(ctx.request);
+							} else {
+								signUpDisabled = true;
+							}
+						}
+
+						if (!signUpDisabled) {
 							const newUser = await ctx.context.internalAdapter.createUser(
 								{
 									email: email,

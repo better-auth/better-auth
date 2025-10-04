@@ -484,4 +484,66 @@ describe("magic link disableSignUp as function", async () => {
 		expect(disableSignUpFn).toHaveBeenCalled();
 		expect(capturedEmail).toBe(testUser.email);
 	});
+
+	it("should evaluate disableSignUp function during verification flow", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const disableSignUpFn = vi.fn(() => false); // Allow signup
+		const { customFetchImpl, sessionSetter } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+					disableSignUp: disableSignUpFn,
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		// Send magic link to new user
+		const newEmail = "verification-test@example.com";
+		await client.signIn.magicLink({
+			email: newEmail,
+			name: "Verification Test",
+		});
+
+		expect(disableSignUpFn).toHaveBeenCalledTimes(1); // Called during send
+
+		// Verify the magic link - should call function again during verification
+		const headers = new Headers();
+		await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		// Should be called twice total: once during send, once during verify
+		expect(disableSignUpFn).toHaveBeenCalledTimes(2);
+
+		// Verify user was created since function returned false
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user).toMatchObject({
+			email: newEmail,
+			name: "Verification Test",
+		});
+	});
 });
