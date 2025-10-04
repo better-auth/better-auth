@@ -60,6 +60,6 @@
   },
   "dependencies": {
     "better-call": "catalog:",
-    "zod": "^4.1.5"
+    "zod": "^4.1.11"
   }
 }
