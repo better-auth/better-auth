@@ -706,8 +706,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					if (ctx.query?.searchValue) {
 						const operator = ctx.query.searchOperator || "contains";
 						const value = ctx.query.searchValue;
+						const searchFields =
+							!ctx.query.searchField || ctx.query.searchField.length === 0
+								? ["email"]
+								: ctx.query.searchField;
 						where.push(
-							...(ctx.query.searchField ?? ["email"]).map(
+							...searchFields.map(
 								(field) =>
 									({
 										field,
