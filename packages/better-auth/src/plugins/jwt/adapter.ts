@@ -1,11 +1,8 @@
 import type { Adapter } from "../../types";
 import type { Jwk } from "./types";
-import {
-	decryptPrivateKey,
-	encryptPrivateKey,
-	isPrivateKeyEncrypted,
-} from "./utils";
+import { ensureProperEncryption, getPublicJwk, revokedTag } from "./utils";
 import { BetterAuthError } from "../../error";
+import type { JWK } from "jose";
 
 export const getJwksAdapter = (adapter: Adapter) => {
 	return {
@@ -36,46 +33,54 @@ export const getJwksAdapter = (adapter: Adapter) => {
 			secret: string,
 			disablePrivateKeyEncryption: boolean,
 		) => {
-			try {
-				const jwks = await adapter.findMany<Jwk>({
-					model: "jwks",
-				});
-
-				for (let jwk of jwks) {
-					if (disablePrivateKeyEncryption) {
-						if (isPrivateKeyEncrypted(jwk.privateKey)) {
-							jwk.privateKey = await decryptPrivateKey(secret, jwk.privateKey);
-							await adapter.update({
-								model: "jwks",
-								where: [{ field: "id", value: jwk.id }],
-								update: jwk,
-							});
-						}
-					} else {
-						if (!isPrivateKeyEncrypted(jwk.privateKey)) {
-							jwk.privateKey = await encryptPrivateKey(secret, jwk.privateKey);
-							await adapter.update({
-								model: "jwks",
-								where: [{ field: "id", value: jwk.id }],
-								update: jwk,
-							});
-						}
-					}
-				}
-			} catch {
-				// It throws exception when "jwks" table does not exist, but there is no work to be done
-			}
-		},
-		createKey: async (key: Omit<Jwk, "id">) => {
-			const jwk = await adapter.create<Omit<Jwk, "id">, Jwk>({
+			const jwks = await adapter.findMany<Jwk>({
 				model: "jwks",
-				data: {
-					...key,
-					createdAt: new Date(),
-				},
 			});
 
-			return jwk;
+			for (let jwk of jwks) {
+				const privateKey = await ensureProperEncryption(
+					secret,
+					jwk.privateKey,
+					disablePrivateKeyEncryption,
+				);
+				if (privateKey !== jwk.privateKey) {
+					jwk.privateKey = privateKey;
+					await adapter.update({
+						model: "jwks",
+						where: [{ field: "id", value: jwk.id }],
+						update: jwk,
+					});
+				}
+			}
+		},
+		createKey: async (key: Omit<Jwk, "id">): Promise<Jwk> => {
+			// This is one of "whys" database migration adding "revoked" field would be better
+			// todo: check if it is possible to make it an optional field and implement it without a breaking change
+			for (let step = 0; step < 10; step++) {
+				// todo: If can't do the /todo above, check if we can create ID and check it instead of creating then deleting the key
+				const jwk = await adapter.create<Omit<Jwk, "id">, Jwk>({
+					model: "jwks",
+					data: {
+						...key,
+						createdAt: new Date(),
+					},
+				});
+
+				const revokedJwk = await adapter.findOne<Jwk>({
+					model: "jwks",
+					where: [{ field: "id", value: jwk.id + revokedTag }],
+				});
+
+				if (revokedJwk !== null) {
+					await adapter.delete({
+						model: "jwks",
+						where: [{ field: "id", value: jwk.id }],
+					});
+				} else return jwk;
+			}
+			throw new BetterAuthError(
+				"Failed to create a new JWK: Could not generate a key with an ID that is not revoked",
+			);
 		},
 		importKey: async (key: Jwk): Promise<Jwk> => {
 			if (key.id) {
@@ -85,18 +90,30 @@ export const getJwksAdapter = (adapter: Adapter) => {
 				});
 				if (oldKey !== null)
 					throw new BetterAuthError(
-						`Cannot import JWK with ID "${key.id}": Already exists!`,
+						`Failed to import JWK: ID "${key.id}" already exists in the database`,
+						key.id,
+					);
+				// This is one of "whys" database migration adding "revoked" field would be better
+				const revokedKey = await adapter.findOne<Jwk>({
+					model: "jwks",
+					where: [{ field: "id", value: key.id + revokedTag }],
+				});
+				if (revokedKey !== null)
+					throw new BetterAuthError(
+						`Failed to import JWK: ID "${key.id}" has already been revoked!`,
 						key.id,
 					);
 			}
-			if (key.id === undefined)
+			if (key.id === undefined) {
+				const { id, ...keyWithoutId } = key; // Even if `id` is set to `undefined`, it's seen and throws a warning
 				return adapter.create<Omit<Jwk, "id">, Jwk>({
 					model: "jwks",
 					data: {
-						...key,
+						...keyWithoutId,
 						createdAt: new Date(),
 					},
 				});
+			}
 			return adapter.create<Jwk>({
 				model: "jwks",
 				forceAllowId: true,
@@ -112,11 +129,26 @@ export const getJwksAdapter = (adapter: Adapter) => {
 				where: [{ field: "id", value: keyId }],
 			});
 			if (key === null) return undefined;
-			key.id = keyId + " revoked";
+			key.id = keyId + revokedTag;
 			return await adapter.update({
 				model: "jwks",
 				where: [{ field: "id", value: keyId }],
 				update: key,
+			});
+		},
+		revokeRemoteKey: async (key: JWK): Promise<Jwk> => {
+			return adapter.create<Jwk>({
+				model: "jwks",
+				forceAllowId: true,
+				data: {
+					// Fight with TypeScript to allow "id" here
+					...{
+						id: key.kid! + revokedTag,
+						privateKey: "",
+						publicKey: JSON.stringify(getPublicJwk(key)),
+					},
+					createdAt: new Date(),
+				},
 			});
 		},
 	};

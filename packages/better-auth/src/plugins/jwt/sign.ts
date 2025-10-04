@@ -6,7 +6,7 @@ import type {
 } from "./types";
 import type { JWTPayload } from "jose";
 import { BetterAuthError } from "../../error";
-import { createJwkInternal, getJwk } from "./jwk";
+import { createJwkInternal, getJwkInternal } from "./jwk";
 import {
 	decryptPrivateKey,
 	getJwtPluginOptions,
@@ -50,14 +50,15 @@ async function signJwtPayload(
 			jwk,
 		);
 
-	let privateKey = await getJwk(
+	let privateKey = await getJwkInternal(
 		ctx,
 		true,
+		pluginOpts,
 		jwk ?? pluginOpts?.jwks?.defaultKeyId,
 	);
 	if (!privateKey) {
 		// This happens only if there are no JWKs in the database, so create one
-		const newKey = await createJwkInternal(ctx, pluginOpts?.jwks);
+		const newKey = await createJwkInternal(ctx, pluginOpts);
 
 		const alg = JSON.parse(newKey.publicKey).alg;
 		if (!alg)
@@ -71,22 +72,24 @@ async function signJwtPayload(
 				? await decryptPrivateKey(ctx.context.secret, newKey.privateKey)
 				: newKey.privateKey,
 		);
-
 		privateKey = {
 			id: newKey.id,
 			alg: alg,
 			key: (await importJWK(privateKeyJSON, alg)) as CryptoKey,
 		};
 	}
-
-	if (privateKey.id && privateKey.id.endsWith(" revoked"))
+	if (!privateKey.alg)
 		throw new BetterAuthError(
-			`Failed to sign a JWT: Cannot sign the JWT using a revoked JWK with id "${privateKey.id}"`,
+			`Failed to sign a JWT: Cannot sign the JWT using a JWK without a specified algorithm name"`,
+		);
+	if (privateKey.id && privateKey.id.endsWith(revokedTag))
+		throw new BetterAuthError(
+			`Failed to sign a JWT: Cannot sign the JWT using a revoked JWK with an ID "${privateKey.id}"`,
 			privateKey.id,
 		);
 
 	const jwt = new SignJWT(payload).setProtectedHeader({
-		alg: privateKey.alg,
+		alg: privateKey.alg!,
 		kid: privateKey.id,
 		typ: customType === "" ? undefined : (customType ?? "JWT"),
 	});

@@ -11,8 +11,7 @@ import type {
 	JwtVerifyOptions,
 } from "./types";
 import { BetterAuthError } from "../../error";
-import { getJwksAdapter } from "./adapter";
-import { getJwk } from "./jwk";
+import { getAllJwksInternal, getCachedJwks, getJwk } from "./jwk";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import { getJwtPluginOptions, revokedTag } from "./utils";
 
@@ -109,13 +108,9 @@ export async function verifyJwtInternal(
 	pluginOpts?: JwtPluginOptions,
 	options?: JwtVerifyOptions,
 ): Promise<JWTPayload> {
-	const adapter = getJwksAdapter(ctx.context.adapter);
-	const jwks = await ctx.json({
-		keys: ((await adapter.getAllKeys()) ?? []).map((keySet) => ({
-			...JSON.parse(keySet.publicKey),
-			kid: keySet.id,
-		})),
-	});
+	const jwks = pluginOpts?.jwks?.disableJwksCaching
+		? await getAllJwksInternal(ctx, pluginOpts)
+		: await getCachedJwks(ctx, pluginOpts);
 	const localJwks = createLocalJWKSet(jwks);
 
 	try {

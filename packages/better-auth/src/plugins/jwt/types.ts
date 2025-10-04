@@ -547,3 +547,14 @@ export const jwkExportedSchema = jwkParametersSchema
 		priv: z.string().optional(),
 	})
 	.describe("Exported CryptoKey");
+
+export interface JwkCache extends Omit<Jwk, "publicKey" | "createdAt"> {
+	publicKey: JWK;
+}
+
+export interface JwksCache {
+	keys: JwkCache[];
+	remoteKeys: JwkCache[];
+	jwks: JSONWebKeySet;
+	cachedAt: Date;
+}

@@ -2,16 +2,18 @@ import type { GenericEndpointContext } from "../../types";
 import type {
 	CryptoKeyIdAlg,
 	Jwk,
+	JwkAlgorithm,
+	JwkCache,
 	JwkOptions,
-	JwksOptions,
+	JwksCache,
 	JwtPluginOptions,
 } from "./types";
-import type { JWK } from "jose";
+import type { JSONWebKeySet, JWK } from "jose";
 import { BetterAuthError } from "../../error";
 import { getJwksAdapter } from "./adapter";
 import {
 	decryptPrivateKey,
-	encryptPrivateKey,
+	ensureProperEncryption,
 	getJwtPluginOptions,
 	getPublicJwk,
 	isPrivateKeyEncrypted,
@@ -19,6 +21,13 @@ import {
 	revokedTag,
 } from "./utils";
 import { exportJWK, generateKeyPair, importJWK } from "jose";
+
+const jwksCache: JwksCache = {
+	keys: [],
+	remoteKeys: [],
+	jwks: { keys: [] },
+	cachedAt: new Date(),
+};
 
 /**
  * Generates a new **JSON Web Key (JWK) pair** in a serializable format.
@@ -58,6 +67,95 @@ export async function generateExportedKeyPair(
 
 /**
  * Returns a **private** or **public key** as a {`CryptoKey`}.
+ * @todo: correct this description
+ * @description
+ * - If `jwk` is a {`CryptoKeyWithId`}, returns it directly.
+ * - If `jwk` is a {`string`}, treats it as a **key ID** and fetches it from the database. If the key is not found, throws {`BetterAuthError`}.
+ * - If `jwk` is **`undefined`**, returns the **latest key** from the database. Returns `undefined` if the database is **empty**.
+ *
+ * @param ctx - Endpoint context.
+ * @param isPrivate - Whether to return the **private key** or the **public key**.
+ * @param jwk - Optional. Either a **key ID** ({`string`}) or a {`CryptoKeyWithId`} object containing a {`CryptoKey`} and an optional `id` field to uniquely identify external keys.
+ *
+ * @throws {BetterAuthError} - If a **key ID** is provided but not found in the database.
+ * @throws {TypeError | JOSENotSupported} - If `importJWK` fails due to **invalid key**.
+ *
+ * @returns An object containing:
+ * - `keyId` — the **key ID** in the database or `undefined` if it's an external key without manually assigned **ID**
+ * - `key` — the key: `CryptoKey` instance or `undefined` if the database is empty
+ * - `alg` — the algorithm name or `undefined` if the database is empty
+ */
+export async function getJwkInternal(
+	ctx: GenericEndpointContext,
+	isPrivate: boolean,
+	pluginOpts?: JwtPluginOptions,
+	jwk?: string | CryptoKeyIdAlg,
+): Promise<CryptoKeyIdAlg | undefined> {
+	if (jwk !== undefined && typeof jwk !== "string") return jwk;
+
+	let keyFromDb: JwkCache | undefined = undefined;
+	if (pluginOpts?.jwks?.disableJwksCaching) {
+		const adapter = getJwksAdapter(ctx.context.adapter);
+		const fetchedKey =
+			jwk === undefined
+				? await adapter.getLatestKey()
+				: await adapter.getKeyById(jwk);
+		if (fetchedKey)
+			keyFromDb = {
+				...fetchedKey,
+				publicKey: JSON.parse(fetchedKey?.publicKey),
+			};
+	} else
+		keyFromDb =
+			jwk === undefined
+				? jwksCache.keys.at(-1)
+				: (jwksCache.keys.find((cachedJwk) => cachedJwk.id === jwk) ??
+					jwksCache.remoteKeys.find(
+						(cachedRemoteJwk) => cachedRemoteJwk.id === jwk,
+					));
+
+	if (!keyFromDb) {
+		if (jwk !== undefined)
+			// We are provided with keyId and we didn't find it in the database
+			throw new BetterAuthError(
+				`Failed to access JWT: Could not find a JWK with provided ID: "${jwk}"`,
+			);
+		return undefined;
+	}
+
+	const alg = keyFromDb.publicKey.alg;
+	if (!alg)
+		throw new BetterAuthError(
+			`Failed to access JWK: the public key with ID "${keyFromDb.id}" does not contain its algorithm name`,
+			keyFromDb.id,
+		);
+	/*
+    if (!isJwkAlgValid(alg))
+		throw new BetterAuthError(
+			`Failed to access JWK: the public key with ID "${keyFromDb.id}" has invalid algorithm name`,
+			keyFromDb.id,
+		);
+    */
+
+	if (isPrivate) {
+		const privateKeyJSON = JSON.parse(
+			isPrivateKeyEncrypted(keyFromDb.privateKey)
+				? await decryptPrivateKey(ctx.context.secret, keyFromDb.privateKey)
+				: keyFromDb.privateKey,
+		);
+
+		const privateKey = (await importJWK(privateKeyJSON, alg)) as CryptoKey;
+		return { id: keyFromDb.id, alg: alg as JwkAlgorithm, key: privateKey };
+	}
+	const publicKey = (await importJWK(
+		getPublicJwk(keyFromDb.publicKey),
+		alg,
+	)) as CryptoKey;
+	return { id: keyFromDb.id, alg: alg as JwkAlgorithm, key: publicKey };
+}
+
+/**
+ * Returns a **private** or **public key** as a {`CryptoKey`}.
  *
  * @description
  * - If `jwk` is a {`CryptoKeyWithId`}, returns it directly.
@@ -81,44 +179,7 @@ export async function getJwk(
 	isPrivate: boolean,
 	jwk?: string | CryptoKeyIdAlg,
 ): Promise<CryptoKeyIdAlg | undefined> {
-	if (jwk !== undefined && typeof jwk !== "string") return jwk;
-
-	const adapter = getJwksAdapter(ctx.context.adapter);
-
-	let keyFromDb =
-		jwk === undefined
-			? await adapter.getLatestKey()
-			: await adapter.getKeyById(jwk);
-	if (!keyFromDb) {
-		if (jwk !== undefined)
-			// We are provided with keyId and we didn't find it in the database
-			throw new BetterAuthError(
-				`Failed to sign JWT: Could not find a JWK with provided ID: "${jwk}"`,
-			);
-		return undefined;
-	}
-
-	const publicKeyJSON = JSON.parse(keyFromDb.publicKey);
-	const alg = publicKeyJSON.alg;
-	if (!alg)
-		throw new BetterAuthError(
-			"Failed to create JWK: the public key does not contain its algorithm name",
-			keyFromDb.publicKey,
-		);
-
-	if (isPrivate) {
-		const privateKeyJSON = JSON.parse(
-			isPrivateKeyEncrypted(keyFromDb.privateKey)
-				? await decryptPrivateKey(ctx.context.secret, keyFromDb.privateKey)
-				: keyFromDb.privateKey,
-		);
-
-		const privateKey = (await importJWK(privateKeyJSON, alg)) as CryptoKey;
-		return { id: keyFromDb.id, alg: alg, key: privateKey };
-	}
-
-	const publicKey = (await importJWK(publicKeyJSON, alg)) as CryptoKey;
-	return { id: keyFromDb.id, alg: alg, key: publicKey };
+	return getJwkInternal(ctx, isPrivate, getJwtPluginOptions(ctx.context), jwk);
 }
 
 /**
@@ -136,10 +197,9 @@ export async function getJwk(
  */
 export async function createJwkInternal(
 	ctx: GenericEndpointContext,
-	jwksOpts?: JwksOptions,
-	keyId?: string,
+	pluginOpts?: JwtPluginOptions,
 ): Promise<Jwk> {
-	const jwkOpts = jwksOpts?.keyPairConfig;
+	const jwkOpts = pluginOpts?.jwks?.keyPairConfig;
 
 	const { publicKey, privateKey } = await generateExportedKeyPair(jwkOpts);
 	const stringifiedPrivateKey = JSON.stringify(privateKey);
@@ -149,15 +209,18 @@ export async function createJwkInternal(
 			alg: jwkOpts?.alg ?? "EdDSA",
 			...publicKey,
 		}),
-		privateKey: jwksOpts?.disablePrivateKeyEncryption
-			? stringifiedPrivateKey
-			: await encryptPrivateKey(ctx.context.secret, stringifiedPrivateKey),
+		privateKey: await ensureProperEncryption(
+			ctx.context.secret,
+			stringifiedPrivateKey,
+			pluginOpts?.jwks?.disablePrivateKeyEncryption ?? false,
+		),
 		createdAt: new Date(),
 	};
 
 	const adapter = getJwksAdapter(ctx.context.adapter);
-
-	return adapter.createKey(jwk as Jwk);
+	const newKey = await adapter.createKey(jwk as Jwk);
+	await updateCachedJwks(ctx, pluginOpts);
+	return newKey;
 }
 
 /**
@@ -179,11 +242,15 @@ export async function createJwk(
 		jwkOpts?: JwkOptions;
 	},
 ): Promise<Jwk> {
-	const jwksOpts = getJwtPluginOptions(ctx.context)?.jwks || {
-		keyPairConfig: options?.jwkOpts,
-	};
+	const pluginOpts = getJwtPluginOptions(ctx.context);
 
-	return createJwkInternal(ctx, jwksOpts);
+	return createJwkInternal(ctx, {
+		...pluginOpts,
+		jwks: {
+			...pluginOpts?.jwks,
+			keyPairConfig: options?.jwkOpts ?? pluginOpts?.jwks?.keyPairConfig,
+		},
+	});
 }
 
 /**
@@ -210,13 +277,18 @@ export async function importJwkInternal(
 		);
 
 	const privateKeyStringified = JSON.stringify(privateKey);
-	return adapter.importKey({
+	const importedKey = await adapter.importKey({
 		id: privateKey.kid,
 		publicKey: JSON.stringify(getPublicJwk(privateKey)),
-		privateKey: pluginOpts?.jwks?.disablePrivateKeyEncryption
-			? privateKeyStringified
-			: await encryptPrivateKey(ctx.context.secret, privateKeyStringified),
+		privateKey: await ensureProperEncryption(
+			ctx.context.secret,
+			privateKeyStringified,
+			pluginOpts?.jwks?.disablePrivateKeyEncryption ?? false,
+		),
 	} as Jwk);
+
+	await updateCachedJwks(ctx, pluginOpts);
+	return importedKey;
 }
 
 /**
@@ -250,6 +322,38 @@ export async function importJwk(
 		getJwtPluginOptions(ctx.context),
 	);
 }
+/**
+ * Revokes **JWK pair**, it is still kept in the database with different `id` for transparency.
+ *
+ * @param ctx - Endpoint context.
+ * @param keyId - **Key Id** of the pair to be revoked.
+ *
+ * @throws {Error} - If the database update fails.
+ *
+ * @returns The revoked **JWK** in the database.
+ */
+export async function revokeJwkInternal(
+	ctx: GenericEndpointContext,
+	keyId: string,
+	pluginOpts?: JwtPluginOptions,
+): Promise<Jwk> {
+	const adapter = getJwksAdapter(ctx.context.adapter);
+
+	let revokedKey = await adapter.revokeKey(keyId);
+	if (!revokedKey) {
+		const jwks = await getAllKeysInternal(ctx, pluginOpts); // Do not use cache
+		const remoteKey = jwks.remoteKeys.find((key) => key.kid === keyId);
+		if (remoteKey === undefined)
+			throw new BetterAuthError(
+				`Failed to revoke a JWK: No such key found with ID "${keyId}"`,
+				keyId,
+			);
+
+		revokedKey = await adapter.revokeRemoteKey(remoteKey);
+	}
+	await updateCachedJwks(ctx, pluginOpts);
+	return revokedKey satisfies Jwk as Jwk;
+}
 
 /**
  * Revokes **JWK pair**, it is still kept in the database with different `id` for transparency.
@@ -265,14 +369,206 @@ export async function revokeJwk(
 	ctx: GenericEndpointContext,
 	keyId: string,
 ): Promise<Jwk> {
+	return revokeJwkInternal(ctx, keyId, getJwtPluginOptions(ctx.context));
+}
+
+/**
+ * @todo: JSDocs
+ */
+export async function getJwksInternal(
+	ctx: GenericEndpointContext,
+	pluginOpts?: JwtPluginOptions,
+): Promise<Jwk[]> {
 	const adapter = getJwksAdapter(ctx.context.adapter);
 
-	const revokedKey = await adapter.revokeKey(keyId);
-	if (!revokedKey)
-		throw new BetterAuthError(
-			`Failed to revoke a JWK: No such key found with ID "${keyId}"`,
-			keyId,
-		);
+	const jwks = ((await adapter.getAllKeys()) ?? []).filter(
+		(k) => !k.id.endsWith(revokedTag),
+	);
 
-	return revokedKey as Jwk;
+	if (jwks.length === 0) {
+		const key = await createJwkInternal(ctx, pluginOpts);
+		jwks.push(key);
+	}
+
+	return jwks;
+}
+
+/**
+ * @todo: JSDocs
+ */
+export async function getJwks(ctx: GenericEndpointContext): Promise<Jwk[]> {
+	return getJwksInternal(ctx, getJwtPluginOptions(ctx.context));
+}
+
+export async function updateCachedJwks(
+	ctx: GenericEndpointContext,
+	pluginOpts?: JwtPluginOptions,
+): Promise<JwksCache> {
+	invalidateCachedJwks();
+	const { keys: keysRaw, remoteKeys: remoteKeysRaw } = await getAllKeysInternal(
+		ctx,
+		pluginOpts,
+	);
+	const { keys, remoteKeys, jwks } = await parseAllKeys(
+		ctx,
+		keysRaw,
+		remoteKeysRaw,
+		pluginOpts,
+	);
+	jwksCache.keys = keys;
+	jwksCache.remoteKeys = remoteKeys;
+	jwksCache.jwks = jwks;
+	jwksCache.cachedAt = new Date();
+	return jwksCache;
+}
+
+export async function getCachedJwks(
+	ctx: GenericEndpointContext,
+	pluginOpts?: JwtPluginOptions,
+): Promise<JSONWebKeySet> {
+	if (pluginOpts?.jwks?.disableJwksCaching)
+		throw new BetterAuthError(
+			"Failed to use JWKS cache: `getCachedJwks` was called but JWKS caching is disabled",
+		);
+	if (jwksCache.jwks.keys.length === 0) await updateCachedJwks(ctx, pluginOpts); // Will create a default JWK indirectly
+	return structuredClone(jwksCache.jwks); // drop the cloning?
+}
+
+export async function getCachedDatabaseKeys(
+	ctx: GenericEndpointContext,
+	pluginOpts?: JwtPluginOptions,
+): Promise<JwkCache[]> {
+	if (pluginOpts?.jwks?.disableJwksCaching)
+		throw new BetterAuthError(
+			"Failed to use JWKS cache: `getCachedDatabaseKeys` was called but JWKS caching is disabled",
+		);
+	if (jwksCache.keys.length === 0) await updateCachedJwks(ctx, pluginOpts); // Will create a default JWK indirectly
+	return structuredClone(jwksCache.keys); // drop the cloning?
+}
+
+export async function getCachedRemoteKeys(
+	ctx: GenericEndpointContext,
+	pluginOpts?: JwtPluginOptions,
+): Promise<JwkCache[]> {
+	if (pluginOpts?.jwks?.disableJwksCaching)
+		throw new BetterAuthError(
+			"Failed to use JWKS cache: `getCachedRemoteKeys` was called but JWKS caching is disabled",
+		);
+	if (jwksCache.keys.length === 0) await updateCachedJwks(ctx, pluginOpts); // Will create a default JWK indirectly
+	return structuredClone(jwksCache.remoteKeys); // drop the cloning?
+}
+
+export function invalidateCachedJwks() {
+	jwksCache.jwks = { keys: [] };
+	jwksCache.keys = [];
+	jwksCache.remoteKeys = [];
+}
+
+/**
+ * @todo: JSDocs
+ */
+export async function getAllKeysInternal(
+	ctx: GenericEndpointContext,
+	pluginOpts?: JwtPluginOptions,
+): Promise<{ keys: Jwk[]; remoteKeys: JWK[] }> {
+	const jwks = await getJwksInternal(ctx, pluginOpts);
+	let remoteKeys: JWK[] = [];
+
+	if (pluginOpts?.jwks?.remoteJwks)
+		for (const remoteKeyFetcher of pluginOpts.jwks.remoteJwks) {
+			// Contains only keys with "id", "alg" defined and not marked as revoked
+			remoteKeys = (await remoteKeyFetcher()).keys.filter(
+				(remoteKey) =>
+					remoteKey.kid !== undefined &&
+					!jwks.some((key) => key.id === remoteKey.kid + revokedTag),
+			);
+		}
+
+	return { keys: jwks, remoteKeys };
+}
+/**
+ * @todo: JSDocs
+ */
+export async function getAllKeys(
+	ctx: GenericEndpointContext,
+): Promise<{ keys: Jwk[]; remoteKeys: JWK[] }> {
+	return getAllKeysInternal(ctx, getJwtPluginOptions(ctx.context));
+}
+
+async function parseAllKeys(
+	ctx: GenericEndpointContext,
+	keys: Jwk[],
+	remoteKeys: JWK[],
+	pluginOpts?: JwtPluginOptions,
+): Promise<{ keys: JwkCache[]; remoteKeys: JwkCache[]; jwks: JSONWebKeySet }> {
+	const parsedKeys = await Promise.all(
+		keys.map(async (key) => {
+			return {
+				id: key.id,
+				publicKey: JSON.parse(key.publicKey),
+				privateKey: await ensureProperEncryption(
+					ctx.context.secret,
+					key.privateKey,
+					pluginOpts?.jwks?.disablePrivateKeyEncryption ?? false,
+				),
+			} satisfies JwkCache;
+		}),
+	);
+
+	const parsedRemoteKeys = await Promise.all(
+		remoteKeys.map(async (remoteKey) => {
+			return {
+				id: remoteKey.kid!,
+				publicKey: getPublicJwk(remoteKey),
+				privateKey: isPublicKey(remoteKey)
+					? ""
+					: await ensureProperEncryption(
+							ctx.context.secret,
+							JSON.stringify(remoteKey),
+							pluginOpts?.jwks?.disablePrivateKeyEncryption ?? false,
+						),
+			} satisfies JwkCache;
+		}),
+	);
+
+	const keyPairConfig = pluginOpts?.jwks?.keyPairConfig;
+	const defaultCrv = keyPairConfig
+		? "crv" in keyPairConfig
+			? (keyPairConfig as { crv: string }).crv
+			: undefined
+		: undefined;
+
+	const jwks = {
+		keys: parsedKeys.concat(parsedRemoteKeys).map((cachedKey) => {
+			const publicKey: JWK = cachedKey.publicKey;
+			return {
+				alg: publicKey.alg ?? keyPairConfig?.alg ?? "EdDSA",
+				crv: publicKey.crv ?? defaultCrv,
+				...publicKey,
+				kid: cachedKey.id,
+			} satisfies JWK as JWK;
+		}),
+	} satisfies JSONWebKeySet as JSONWebKeySet;
+
+	return { keys: parsedKeys, remoteKeys: parsedRemoteKeys, jwks };
+}
+
+/**
+ * @todo: JSDocs
+ */
+export async function getAllJwksInternal(
+	ctx: GenericEndpointContext,
+	pluginOpts?: JwtPluginOptions,
+): Promise<JSONWebKeySet> {
+	const { keys, remoteKeys } = await getAllKeysInternal(ctx, pluginOpts);
+	const { jwks } = await parseAllKeys(ctx, keys, remoteKeys, pluginOpts);
+	return jwks;
+}
+/**
+ * @todo: JSDocs
+ */
+export async function getAllJwks(
+	ctx: GenericEndpointContext,
+): Promise<JSONWebKeySet> {
+	return getAllJwksInternal(ctx, getJwtPluginOptions(ctx.context));
 }

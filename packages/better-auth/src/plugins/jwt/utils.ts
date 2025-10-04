@@ -73,6 +73,19 @@ export async function decryptPrivateKey(
 	});
 }
 
+export async function ensureProperEncryption(
+	secret: string,
+	stringifiedPrivateWebKey: string,
+	disablePrivateKeyEncryption: boolean,
+): Promise<string> {
+	if (disablePrivateKeyEncryption) {
+		if (isPrivateKeyEncrypted(stringifiedPrivateWebKey))
+			return decryptPrivateKey(secret, stringifiedPrivateWebKey);
+	} else if (!isPrivateKeyEncrypted(stringifiedPrivateWebKey))
+		return encryptPrivateKey(secret, stringifiedPrivateWebKey);
+	return stringifiedPrivateWebKey;
+}
+
 /**
  * @todo: JSDoc
  */

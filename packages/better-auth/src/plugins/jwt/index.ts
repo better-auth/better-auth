@@ -6,7 +6,6 @@ import {
 	JwtVerifyOptionsSchema,
 	type JwtCustomClaims,
 	type JwkOptions,
-	type JwksOptions,
 	type JwtPluginOptions,
 	type JwtVerifyOptions,
 } from "./types";
@@ -19,7 +18,16 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import { mergeSchema } from "../../db/schema";
-import { createJwkInternal, getJwk, importJwkInternal, revokeJwk } from "./jwk";
+import {
+	createJwkInternal,
+	getAllJwksInternal,
+	getCachedDatabaseKeys,
+	getCachedJwks,
+	getJwksInternal,
+	importJwkInternal,
+	invalidateCachedJwks,
+	revokeJwk,
+} from "./jwk";
 import { getSessionJwtInternal, signJwtInternal } from "./sign";
 import { verifyJwtInternal, verifyJwtWithKeyInternal } from "./verify";
 import { type JSONWebKeySet, type JWK, type JWTPayload } from "jose";
@@ -28,7 +36,7 @@ import { parseJwk } from "./utils";
 import { BetterAuthError } from "../../error";
 import { JWTExpired } from "jose/errors";
 export type * from "./types";
-export { createJwk, getJwk, importJwk } from "./jwk";
+export { createJwk, getJwk, getJwks, getAllJwks, importJwk } from "./jwk";
 export { getSessionJwt, signJwt } from "./sign";
 export { verifyJwt, verifyJwtWithKey } from "./verify";
 
@@ -36,11 +44,14 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 	return {
 		id: "jwt",
 		async init(ctx) {
-			const adapter = getJwksAdapter(ctx.adapter);
-			await adapter.updateKeysEncryption(
-				ctx.secret,
-				pluginOpts?.jwks?.disablePrivateKeyEncryption ?? false,
-			);
+			invalidateCachedJwks();
+			try {
+				const adapter = getJwksAdapter(ctx.adapter);
+				await adapter.updateKeysEncryption(
+					ctx.secret,
+					pluginOpts?.jwks?.disablePrivateKeyEncryption ?? false,
+				);
+			} catch {}
 		},
 		options: pluginOpts,
 		endpoints: {
@@ -50,7 +61,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 					method: "GET",
 					metadata: {
 						openapi: {
-							description: "Get the JSON Web Key Set",
+							description: "Get the JSON Web Key Set without remote keys",
 							responses: {
 								200: {
 									description: "JSON Web Key Set retrieved successfully",
@@ -132,16 +143,9 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 					},
 				},
 				async (ctx) => {
-					const adapter = getJwksAdapter(ctx.context.adapter);
-
-					const keySets = ((await adapter.getAllKeys()) ?? []).filter(
-						(k) => !k.id.endsWith(" revoked"),
-					);
-
-					if (keySets.length === 0) {
-						const key = await createJwkInternal(ctx, pluginOpts?.jwks);
-						keySets.push(key);
-					}
+					const jwks = pluginOpts?.jwks?.disableJwksCaching
+						? await getJwksInternal(ctx, pluginOpts)
+						: await getCachedDatabaseKeys(ctx, pluginOpts);
 					const keyPairConfig = pluginOpts?.jwks?.keyPairConfig;
 					const defaultCrv = keyPairConfig
 						? "crv" in keyPairConfig
@@ -150,19 +154,114 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 						: undefined;
 
 					return ctx.json({
-						keys: keySets.map((keySet) => {
-							const publicKey = JSON.parse(keySet.publicKey);
+						keys: jwks.map((keySet) => {
+							const publicKey =
+								typeof keySet.publicKey === "string"
+									? JSON.parse(keySet.publicKey)
+									: keySet.publicKey;
 							return {
-								alg:
-									publicKey.alg ??
-									pluginOpts?.jwks?.keyPairConfig?.alg ??
-									"EdDSA",
+								alg: publicKey.alg ?? keyPairConfig?.alg ?? "EdDSA",
 								crv: publicKey.crv ?? defaultCrv,
 								...publicKey,
 								kid: keySet.id,
-							};
+							} satisfies JWK as JWK;
 						}),
 					} satisfies JSONWebKeySet as JSONWebKeySet);
+				},
+			),
+			getAllJwks: createAuthEndpoint(
+				"/jwks-all",
+				{
+					method: "GET",
+					metadata: {
+						openapi: {
+							description: "Get the JSON Web Key Set with remote keys included",
+							responses: {
+								200: {
+									description: "JSON Web Key Set retrieved successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													keys: {
+														type: "array",
+														description: "Array of public JSON Web Keys",
+														items: {
+															type: "object",
+															properties: {
+																kid: {
+																	type: "string",
+																	description:
+																		"Key ID uniquely identifying the key, corresponds to the 'id' from the stored Jwk",
+																},
+																kty: {
+																	type: "string",
+																	description:
+																		"Key type (e.g., 'RSA', 'EC', 'OKP')",
+																},
+																alg: {
+																	type: "string",
+																	description:
+																		"Algorithm intended for use with the key (e.g., 'EdDSA', 'RS256')",
+																},
+																use: {
+																	type: "string",
+																	description:
+																		"Intended use of the public key (e.g., 'sig' for signature)",
+																	enum: ["sig"],
+																	nullable: true,
+																},
+																n: {
+																	type: "string",
+																	description:
+																		"Modulus for RSA keys (base64url-encoded)",
+																	nullable: true,
+																},
+																e: {
+																	type: "string",
+																	description:
+																		"Exponent for RSA keys (base64url-encoded)",
+																	nullable: true,
+																},
+																crv: {
+																	type: "string",
+																	description:
+																		"Curve name for elliptic curve keys (e.g., 'Ed25519', 'P-256')",
+																	nullable: true,
+																},
+																x: {
+																	type: "string",
+																	description:
+																		"X coordinate for elliptic curve keys (base64url-encoded)",
+																	nullable: true,
+																},
+																y: {
+																	type: "string",
+																	description:
+																		"Y coordinate for elliptic curve keys (base64url-encoded)",
+																	nullable: true,
+																},
+															},
+															required: ["kid", "kty", "alg"],
+														},
+													},
+												},
+												required: ["keys"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return ctx.json(
+						pluginOpts?.jwks?.disableJwksCaching
+							? getAllJwksInternal(ctx, pluginOpts)
+							: getCachedJwks(ctx, pluginOpts),
+					);
 				},
 			),
 			getToken: createAuthEndpoint(
@@ -337,9 +436,8 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 						});
 
 					if (jwk === undefined || typeof jwk === "string") {
-						const privateKey = await getJwk(ctx, true, jwk);
 						const jwt = await signJwtInternal(ctx, data, pluginOpts, {
-							jwk: privateKey,
+							jwk: jwk,
 							claims: claims,
 						});
 						return ctx.json({ token: jwt });
@@ -453,12 +551,14 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 						.optional(),
 				},
 				async (ctx) => {
-					const jwkOptions = ctx.body?.jwkOptions;
-					const jwksOptions: JwksOptions = {
-						...pluginOpts?.jwks,
-						keyPairConfig: jwkOptions ?? pluginOpts?.jwks?.keyPairConfig,
-					};
-					const key = await createJwkInternal(ctx, jwksOptions);
+					const key = await createJwkInternal(ctx, {
+						...pluginOpts,
+						jwks: {
+							...pluginOpts?.jwks,
+							keyPairConfig:
+								ctx.body?.jwkOptions ?? pluginOpts?.jwks?.keyPairConfig,
+						},
+					});
 
 					return ctx.json({
 						jwk: { ...(await JSON.parse(key.publicKey)), kid: key.id },
@@ -571,14 +671,14 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 
 						return ctx.json({ key: key });
 					} catch (error: unknown) {
+						// Custom display of adapter errors to not write "Could not import the JWK: " twice
 						if (error instanceof BetterAuthError) {
 							if (
 								exportedPrivateKey.kid &&
 								error.cause === exportedPrivateKey.kid
 							)
 								throw new APIError("BAD_REQUEST", {
-									message:
-										"Could not import the JWK: A JWK with the same ID exists already",
+									message: error.message,
 								});
 						}
 						ctx.context.logger.error(`Could not import the JWK: ${error}`);
