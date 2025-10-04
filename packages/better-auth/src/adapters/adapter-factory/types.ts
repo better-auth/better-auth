@@ -3,6 +3,7 @@ import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import type {
 	AdapterSchemaCreation,
 	BetterAuthOptions,
+	SortBy,
 	TransactionAdapter,
 	Where,
 } from "../../types";
@@ -376,7 +377,7 @@ export interface CustomAdapter {
 		model: string;
 		where?: CleanedWhere[];
 		limit: number;
-		sortBy?: { field: string; direction: "asc" | "desc" };
+		sortBy?: SortBy | SortBy[];
 		offset?: number;
 	}) => Promise<T[]>;
 	delete: ({

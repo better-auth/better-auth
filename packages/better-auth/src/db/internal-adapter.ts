@@ -5,6 +5,7 @@ import type {
 	AuthContext,
 	BetterAuthOptions,
 	GenericEndpointContext,
+	SortBy,
 	Where,
 } from "../types";
 import {
@@ -200,10 +201,7 @@ export const createInternalAdapter = (
 		listUsers: async (
 			limit?: number,
 			offset?: number,
-			sortBy?: {
-				field: string;
-				direction: "asc" | "desc";
-			},
+			sortBy?: SortBy | SortBy[],
 			where?: Where[],
 		) => {
 			const users = await (await getCurrentAdapter(adapter)).findMany<User>({
