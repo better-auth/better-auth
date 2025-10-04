@@ -570,11 +570,11 @@ You can configure trial periods for your plans:
             // Called when a trial starts
             await sendTrialStartEmail(subscription.referenceId);
         },
-        onTrialEnd: async ({ subscription, user }, request) => {
+        onTrialEnd: async ({ subscription }, ctx) => {
             // Called when a trial ends
-            await sendTrialEndEmail(user.email);
+            await sendTrialEndEmail(subscription.referenceId);
         },
-        onTrialExpired: async (subscription) => {
+        onTrialExpired: async (subscription, ctx) => {
             // Called when a trial expires without conversion
             await sendTrialExpiredEmail(subscription.referenceId);
         }
@@ -748,8 +748,8 @@ Each plan can have the following properties:
 **freeTrial**: Object containing trial configuration:
   - **days**: `number` - Number of trial days.
   - **onTrialStart**: `(subscription: Subscription) => Promise<void>` - Called when a trial starts.
-  - **onTrialEnd**: `(data: { subscription: Subscription, user: User }, request?: Request) => Promise<void>` - Called when a trial ends.
-  - **onTrialExpired**: `(subscription: Subscription) => Promise<void>` - Called when a trial expires without conversion.
+  - **onTrialEnd**: `(data: { subscription: Subscription }, ctx: GenericEndpointContext) => Promise<void>` - Called when a trial ends.
+  - **onTrialExpired**: `(subscription: Subscription, ctx: GenericEndpointContext) => Promise<void>` - Called when a trial expires without conversion.
 
 ## Advanced Usage
 
@@ -795,7 +795,7 @@ subscription: {
 You can customize the Stripe Checkout session with additional parameters:
 
 ```ts title="auth.ts"
-getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
     return {
         params: {
             allow_promotion_codes: true,
@@ -827,7 +827,7 @@ To collect tax IDs from the customer, set `tax_id_collection` to true:
 ```ts title="auth.ts"
 subscription: {
     // ... other options
-    getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+    getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
         return {
             params: {
                 tax_id_collection: {
@@ -846,7 +846,7 @@ To enable automatic tax calculation using the customer's location, set `automati
 ```ts title="auth.ts"
 subscription: {
     // ... other options
-    getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+    getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
         return {
             params: {
                 automatic_tax: {
