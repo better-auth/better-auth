@@ -211,6 +211,34 @@ If you would like to view a completed example, you can check out the <Link href=
 
 </Steps>
 
+## Usage Notes
+
+### Avoid Using `authClient` Directly in Content Scripts
+
+Content scripts run in an isolated world and cannot directly communicate with your authentication server in the same way as background scripts or UI scripts. For security and stability, do not call authClient directly from a content script.
+
+For security and stability, **do not** call authClient directly from a content script.
+
+Instead, call authentication functions from your background script, and forward responses to your content script.
+
+```typescript title="background.ts"
+import { authClient } from "./auth/auth-client"
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "getSession") {
+    authClient.getSession().then(session => { // [!code highlight]
+      sendResponse(session) // [!code highlight]
+    }) // [!code highlight]
+    return true // Keep message channel open for async sendResponse
+  }
+})
+```
+
+```typescript title="content-script.ts"
+chrome.runtime.sendMessage({ type: "getSession" }, (session) => {
+  console.log("Session from background:", session) // [!code highlight]
+})
+```
 
 ## Wrapping Up
 
