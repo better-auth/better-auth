@@ -579,10 +579,10 @@ function adapterTest(
 					},
 				],
 			});
-			expect(res[0].name).toBe("a");
-			expect(res[0].email).toBe("test-multi-sortby-b@email.com");
-			expect(res[1].email).toBe("test-multi-sortby-a@email.com");
-			expect(res[res.length - 1].name).toBe("b");
+			expect(res[0]?.name).toBe("a");
+			expect(res[0]?.email).toBe("test-multi-sortby-b@email.com");
+			expect(res[1]?.email).toBe("test-multi-sortby-a@email.com");
+			expect(res[res.length - 1]?.name).toBe("b");
 		},
 	);
 
