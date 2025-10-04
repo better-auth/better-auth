@@ -8,8 +8,8 @@ import { detectSystemInfo } from "./detectors/detect-system-info";
 import { detectPackageManager } from "./detectors/detect-project-info";
 import { betterFetch } from "@better-fetch/fetch";
 import type { TelemetryContext, TelemetryEvent } from "./types";
-import { logger } from "../utils";
 import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
+import { globalLog } from "../utils";
 
 export async function createTelemetry(
 	options: BetterAuthOptions,
@@ -27,7 +27,12 @@ export async function createTelemetry(
 			} else {
 				if (debugEnabled) {
 					await Promise.resolve(
-						logger.info("telemetry event", JSON.stringify(event, null, 2)),
+						globalLog(
+							"info",
+							"telemetry event",
+							null, // Debug is explicitly enabled; it is globally logged, even if the logger options would normally not allow it
+							JSON.stringify(event, null, 2),
+						),
 					);
 				} else {
 					await betterFetch(TELEMETRY_ENDPOINT, {

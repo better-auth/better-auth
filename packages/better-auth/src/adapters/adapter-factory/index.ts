@@ -574,10 +574,10 @@ export const createAdapterFactory =
 							// hide warning in adapter tests
 						} else {
 							globalLog(
-    							"warn",
-    							`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
-    							options,
-    						);
+								"warn",
+								`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
+								options,
+							);
 						}
 						lazyLoadTransaction = createAsIsTransaction(adapter);
 					} else {
