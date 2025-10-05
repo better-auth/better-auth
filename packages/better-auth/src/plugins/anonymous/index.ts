@@ -7,7 +7,6 @@ import {
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
-	BetterAuthPluginDBSchema,
 	Session,
 	User,
 	AuthContext,
@@ -17,6 +16,7 @@ import { getOrigin } from "../../utils/url";
 import { mergeSchema } from "../../db/schema";
 import type { EndpointContext } from "better-call";
 import { generateId } from "../../utils/id";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
