@@ -1254,6 +1254,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							message: `Webhook Error: ${err.message}`,
 						});
 					}
+					if (!event) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Failed to construct event",
+						});
+					}
 					try {
 						switch (event.type) {
 							case "checkout.session.completed":
