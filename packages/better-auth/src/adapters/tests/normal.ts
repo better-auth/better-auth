@@ -217,9 +217,11 @@ export const getNormalTestSuiteTests = ({
 				},
 				true,
 			);
-			const [user] = await insertRandom("user");
+			const [user_] = await insertRandom("user");
+			const user = user_ as User & { customField: string };
+			expect(user).toHaveProperty("customField");
 			expect(user.customField).toBe("default-value");
-			const result = await adapter.findOne<User>({
+			const result = await adapter.findOne<User & { customField: string }>({
 				model: "user",
 				where: [{ field: "customField", value: user.customField }],
 			});
