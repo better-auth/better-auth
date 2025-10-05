@@ -1488,7 +1488,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							.meta({
 								description: "The new password",
 							}),
-						userId: z.string().nonempty("userId cannot be empty").meta({
+						userId: z.coerce.string().nonempty("userId cannot be empty").meta({
 							description: "The user id",
 						}),
 					}),
