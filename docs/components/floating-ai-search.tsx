@@ -98,13 +98,13 @@ function SearchAIInput(props: ComponentProps<"form">) {
 				className={cn(
 					buttonVariants({
 						color: "secondary",
-						className: "transition-all rounded-full mt-2",
+						className: "mt-2 rounded-full transition-all",
 					}),
 				)}
 				disabled={input.length === 0 || isLoading}
 			>
 				{isLoading ? (
-					<Loader2 className="size-4 animate-spin" />
+					<Loader2 className="animate-spin size-4" />
 				) : (
 					<Send className="size-4" />
 				)}
@@ -166,11 +166,11 @@ function Input(props: ComponentProps<"textarea">) {
 				id="nd-ai-input"
 				{...props}
 				className={cn(
-					"resize-none bg-transparent placeholder:text-fd-muted-foreground focus-visible:outline-none",
+					"bg-transparent resize-none placeholder:text-fd-muted-foreground focus-visible:outline-none",
 					shared,
 				)}
 			/>
-			<div ref={ref} className={cn(shared, "break-all invisible")}>
+			<div ref={ref} className={cn(shared, "invisible break-all")}>
 				{`${props.value?.toString() ?? ""}\n`}
 			</div>
 		</div>
@@ -202,16 +202,16 @@ function Message({
 					message.role === "assistant" && "text-fd-primary",
 				)}
 			></p>
-			<div className="prose text-sm">
+			<div className="text-sm prose">
 				<Markdown text={message.content} />
 				{message.isStreaming && (
-					<span className="inline-block w-2 h-4 bg-fd-primary ml-1 animate-pulse" />
+					<span className="inline-block ml-1 w-2 h-4 animate-pulse bg-fd-primary" />
 				)}
 			</div>
 			{message.references &&
 				message.references.length > 0 &&
 				!message.isStreaming && (
-					<div className="mt-3 flex flex-col gap-2">
+					<div className="flex flex-col gap-2 mt-3">
 						<p className="text-xs font-medium text-fd-muted-foreground">
 							References:
 						</p>
@@ -220,7 +220,7 @@ function Message({
 								<Link
 									key={i}
 									href={ref.link}
-									className="flex items-center gap-2 text-xs rounded-lg border p-2 hover:bg-fd-accent hover:text-fd-accent-foreground transition-colors"
+									className="flex gap-2 items-center p-2 text-xs rounded-lg border transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground"
 									target="_blank"
 									rel="noopener noreferrer"
 								>
@@ -228,7 +228,7 @@ function Message({
 										<img
 											src={ref.icon}
 											alt=""
-											className="w-4 h-4 flex-shrink-0"
+											className="flex-shrink-0 w-4 h-4"
 											onError={(e) => {
 												e.currentTarget.style.display = "none";
 											}}
@@ -540,7 +540,7 @@ export function AISearchTrigger() {
 						}}
 					>
 						<div className="sticky top-0 flex gap-2 items-center py-2 w-full max-w-[600px]">
-							<p className="text-xs flex-1 text-fd-muted-foreground"></p>
+							<p className="flex-1 text-xs text-fd-muted-foreground"></p>
 							<button
 								aria-label="Close"
 								tabIndex={-1}
@@ -568,8 +568,8 @@ export function AISearchTrigger() {
 									<Message key={item.id} message={item} />
 								))}
 								{isLoading && (
-									<div className="flex items-center gap-2 text-sm text-fd-muted-foreground">
-										<Loader2 className="size-4 animate-spin" />
+									<div className="flex gap-2 items-center text-sm text-fd-muted-foreground">
+										<Loader2 className="animate-spin size-4" />
 										AI is thinking...
 									</div>
 								)}
@@ -579,10 +579,10 @@ export function AISearchTrigger() {
 				</Presence>
 				<div
 					className={cn(
-						"fixed bottom-2 transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 rounded-2xl border shadow-xl z-50 overflow-hidden",
+						"fixed bottom-2 transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 border shadow-lg z-50 overflow-hidden",
 						open
 							? "w-[min(600px,90vw)] bg-fd-popover h-32"
-							: "w-40 h-10 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background",
+							: "w-40 h-10 bg-card text-fd-secondary-foreground shadow-fd-foreground/50 dark:shadow-fd-background",
 					)}
 					style={{
 						left: "calc(50% - var(--removed-body-scroll-bar-size,0px)/2)",
@@ -591,10 +591,10 @@ export function AISearchTrigger() {
 					<Presence present={!open}>
 						<button
 							className={cn(
-								"absolute inset-0 text-center p-2 text-fd-muted-foreground text-sm transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground",
+								"absolute inset-0 p-2 text-sm text-center transition-colors text-fd-muted-foreground hover:bg-secondary hover:text-fd-accent-foreground",
 								!open
 									? "animate-fd-fade-in"
-									: "animate-fd-fade-out bg-fd-accent",
+									: "animate-fd-fade-out",
 							)}
 							onClick={() => setOpen(true)}
 						>
@@ -605,7 +605,7 @@ export function AISearchTrigger() {
 					<Presence present={open}>
 						<div
 							className={cn(
-								"absolute inset-0 flex flex-col",
+								"flex absolute inset-0 flex-col",
 								open ? "animate-fd-fade-in" : "animate-fd-fade-out",
 							)}
 						>
