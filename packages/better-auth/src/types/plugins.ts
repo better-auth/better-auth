@@ -10,17 +10,7 @@ import type {
 
 import type { AuthContext, BetterAuthOptions } from ".";
 import type { Endpoint, Middleware } from "better-call";
-import type { DBFieldAttribute } from "@better-auth/core/db";
-
-export type AuthPluginSchema = {
-	[table in string]: {
-		fields: {
-			[field in string]: DBFieldAttribute;
-		};
-		disableMigration?: boolean;
-		modelName?: string;
-	};
-};
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 export type BetterAuthPlugin = {
 	id: LiteralString;
@@ -97,7 +87,7 @@ export type BetterAuthPlugin = {
 	 * } as AuthPluginSchema
 	 * ```
 	 */
-	schema?: AuthPluginSchema;
+	schema?: BetterAuthPluginDBSchema;
 	/**
 	 * The migrations of the plugin. If you define schema that will automatically create
 	 * migrations for you.
@@ -128,19 +118,17 @@ export type BetterAuthPlugin = {
 	$ERROR_CODES?: Record<string, string>;
 };
 
-export type InferOptionSchema<S extends AuthPluginSchema> = S extends Record<
-	string,
-	{ fields: infer Fields }
->
-	? {
-			[K in keyof S]?: {
-				modelName?: string;
-				fields?: {
-					[P in keyof Fields]?: string;
+export type InferOptionSchema<S extends BetterAuthPluginDBSchema> =
+	S extends Record<string, { fields: infer Fields }>
+		? {
+				[K in keyof S]?: {
+					modelName?: string;
+					fields?: {
+						[P in keyof Fields]?: string;
+					};
 				};
-			};
-		}
-	: never;
+			}
+		: never;
 
 export type InferPluginErrorCodes<O extends BetterAuthOptions> =
 	O["plugins"] extends Array<infer P>
