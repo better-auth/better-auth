@@ -65,6 +65,55 @@ export async function generateExportedKeyPair(
 	return { publicKey: publicWebKey, privateKey: privateWebKey };
 }
 
+async function getKeySet(
+	ctx: GenericEndpointContext,
+	pluginOpts: JwtPluginOptions | undefined,
+	jwk?: string,
+): Promise<JwkCache | undefined> {
+	if (pluginOpts?.jwks?.disableJwksCaching) {
+		if (jwk === undefined) {
+			const fetchedKey = await getJwksAdapter(
+				ctx.context.adapter,
+			).getLatestKey();
+			if (!fetchedKey) return undefined;
+			return {
+				...fetchedKey,
+				publicKey: JSON.parse(fetchedKey?.publicKey),
+			};
+		} else {
+			const { keys: keysRaw, remoteKeys: remoteKeysRaw } =
+				await getAllKeys(ctx);
+			const { keys, remoteKeys } = await parseAllKeys(
+				ctx,
+				pluginOpts,
+				keysRaw,
+				remoteKeysRaw,
+			);
+			return (
+				keys.find((key) => key.id === jwk) ??
+				remoteKeys.find((key) => key.id === jwk)
+			);
+		}
+	} else {
+		const cachedKey: JwkCache | undefined =
+			jwk === undefined
+				? jwksCache.keys.at(-1)
+				: (jwksCache.keys.find((cachedJwk) => cachedJwk.id === jwk) ??
+					jwksCache.remoteKeys.find(
+						(cachedRemoteJwk) => cachedRemoteJwk.id === jwk,
+					));
+		if (!cachedKey) await updateCachedJwks(ctx, pluginOpts);
+		else return cachedKey;
+
+		return jwk === undefined
+			? jwksCache.keys.at(-1)
+			: (jwksCache.keys.find((cachedJwk) => cachedJwk.id === jwk) ??
+					jwksCache.remoteKeys.find(
+						(cachedRemoteJwk) => cachedRemoteJwk.id === jwk,
+					));
+	}
+}
+
 /**
  * Returns a **private** or **public key** as a {`CryptoKey`}.
  * @todo: correct this description
@@ -93,26 +142,7 @@ export async function getJwkInternal(
 ): Promise<CryptoKeyIdAlg | undefined> {
 	if (jwk !== undefined && typeof jwk !== "string") return jwk;
 
-	let keyFromDb: JwkCache | undefined = undefined;
-	if (pluginOpts?.jwks?.disableJwksCaching) {
-		const adapter = getJwksAdapter(ctx.context.adapter);
-		const fetchedKey =
-			jwk === undefined
-				? await adapter.getLatestKey()
-				: await adapter.getKeyById(jwk);
-		if (fetchedKey)
-			keyFromDb = {
-				...fetchedKey,
-				publicKey: JSON.parse(fetchedKey?.publicKey),
-			};
-	} else
-		keyFromDb =
-			jwk === undefined
-				? jwksCache.keys.at(-1)
-				: (jwksCache.keys.find((cachedJwk) => cachedJwk.id === jwk) ??
-					jwksCache.remoteKeys.find(
-						(cachedRemoteJwk) => cachedRemoteJwk.id === jwk,
-					));
+	let keyFromDb = await getKeySet(ctx, pluginOpts, jwk);
 
 	if (!keyFromDb) {
 		if (jwk !== undefined)
@@ -139,6 +169,11 @@ export async function getJwkInternal(
     */
 
 	if (isPrivate) {
+		if (keyFromDb.privateKey.trim() === "")
+			throw new BetterAuthError(
+				`Failed to access the JWK: Tried to access a private key from a public-only entry with ID "${keyFromDb.id}"`,
+				keyFromDb.id,
+			);
 		const privateKeyJSON = JSON.parse(
 			isPrivateKeyEncrypted(keyFromDb.privateKey)
 				? await decryptPrivateKey(ctx.context.secret, keyFromDb.privateKey)
@@ -258,7 +293,7 @@ export async function createJwk(
  * Imports existing **JSON Web Key (JWK)** pair into the database.
  *
  * @param ctx - Endpoint context.
- * @param privateKey - Private key. **Must** have `id`.
+ * @param jwk - Imported key. **Must** have `id`.
  *
  * @throws {Error} - If private key encryption or the database insert fails.
  *
@@ -297,7 +332,7 @@ export async function importJwkInternal(
  * Imports existing **JSON Web Key (JWK)** pair into the database.
  *
  * @param ctx - Endpoint context.
- * @param jwk - Imported key. **Must** have `id`.
+ * @param privateKey - Private key. **Must** have `id`.
  *
  * @throws {Error} - If private key encryption or the database insert fails.
  *
