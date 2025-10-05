@@ -231,6 +231,7 @@ export const getAuthTables = (
 					onUpdate: () => new Date(),
 				},
 				...account?.fields,
+				...options.account?.additionalFields,
 			},
 			order: 3,
 		},

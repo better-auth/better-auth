@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "../types";
 import { isDevelopment, isTest } from "../utils/env";
+import { z } from "zod";
 
 export function getIp(
 	req: Request | Headers,
@@ -36,12 +37,16 @@ export function getIp(
 }
 
 function isValidIP(ip: string): boolean {
-	const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-	if (ipv4Regex.test(ip)) {
-		const parts = ip.split(".").map(Number);
-		return parts.every((part) => part >= 0 && part <= 255);
+	const ipv4 = z.ipv4().safeParse(ip);
+
+	if (ipv4.success) {
+		return true;
 	}
 
-	const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
-	return ipv6Regex.test(ip);
+	const ipv6 = z.ipv6().safeParse(ip);
+	if (ipv6.success) {
+		return true;
+	}
+
+	return false;
 }

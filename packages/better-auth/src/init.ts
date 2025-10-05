@@ -91,8 +91,8 @@ export const init = async (options: BetterAuthOptions) => {
 		.filter((x) => x !== null);
 
 	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
-		if (typeof options.advanced?.generateId === "function") {
-			return options.advanced.generateId({ model, size });
+		if (typeof (options.advanced as any)?.generateId === "function") {
+			return (options.advanced as any).generateId({ model, size });
 		}
 		if (typeof options?.advanced?.database?.generateId === "function") {
 			return options.advanced.database.generateId({ model, size });
@@ -100,13 +100,17 @@ export const init = async (options: BetterAuthOptions) => {
 		return generateId(size);
 	};
 
-	const { publish } = await createTelemetry(options, {
-		adapter: adapter.id,
-		database:
-			typeof options.database === "function"
-				? "adapter"
-				: getKyselyDatabaseType(options.database) || "unknown",
-	});
+	const { publish } = options.telemetry?.enabled
+		? await createTelemetry(options, {
+				adapter: adapter.id,
+				database:
+					typeof options.database === "function"
+						? "adapter"
+						: getKyselyDatabaseType(options.database) || "unknown",
+			})
+		: {
+				publish: async () => {},
+			};
 
 	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
@@ -189,6 +193,12 @@ export type AuthContext = {
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
+	oauthConfig?: {
+		/**
+		 * This is dangerous and should only be used in dev or staging environments.
+		 */
+		skipStateCookieCheck?: boolean;
+	};
 	/**
 	 * New session that will be set after the request
 	 * meaning: there is a `set-cookie` header that will set
