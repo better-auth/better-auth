@@ -24,6 +24,7 @@ import type {
 } from "./types";
 import { getPlugin } from "../../utils";
 import type { organization } from "../organization";
+import { BetterAuthError } from "../../error";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -1586,18 +1587,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 			{
 				method: "GET",
 			},
-			async (ctx) => {
-				const orgPlugin = getPlugin<ReturnType<typeof organization<any>>>(
-					"organization",
-					ctx.context,
-				);
-
-				if (!orgPlugin) {
-					throw ctx.error("SERVICE_UNAVAILABLE", {
-						message: "The organizations plugin is not set up",
-					});
-				}
-			},
+			async (ctx) => {},
 		),
 	};
 
@@ -1613,7 +1603,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 	return {
 		id: "admin",
-		init() {
+		init(ctx) {
+			if (
+				options?.organizations?.enabled &&
+				!getPlugin<ReturnType<typeof organization<any>>>("organization", ctx)
+			) {
+				throw new BetterAuthError(
+					"Organization support is enabled, but the organization plugin is set up.",
+				);
+			}
+
 			return {
 				options: {
 					databaseHooks: {
