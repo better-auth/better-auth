@@ -85,8 +85,8 @@ export async function detectSystemInfo() {
 			systemRelease: os.release(),
 			systemArchitecture: os.arch(),
 			cpuCount: cpus.length,
-			cpuModel: cpus.length ? cpus[0].model : null,
-			cpuSpeed: cpus.length ? cpus[0].speed : null,
+			cpuModel: cpus.length ? cpus[0]!.model : null,
+			cpuSpeed: cpus.length ? cpus[0]!.speed : null,
 			memory: os.totalmem(),
 			isWSL: await isWsl(),
 			isDocker: await isDocker(),
@@ -148,7 +148,7 @@ async function isDocker() {
 async function isWsl() {
 	try {
 		if (getVendor() === "cloudflare") return false;
-		if (typeof process === "undefined" || process.platform !== "linux") {
+		if (typeof process === "undefined" || process?.platform !== "linux") {
 			return false;
 		}
 		const fs = await importRuntime<typeof import("fs")>("fs");

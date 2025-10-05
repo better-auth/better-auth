@@ -1,6 +1,6 @@
 import { afterAll, describe, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { mcp } from ".";
+import { mcp, withMcpAuth } from ".";
 import { genericOAuth } from "../generic-oauth";
 import type { Client } from "../oidc-provider/types";
 import { createAuthClient } from "../../client";
@@ -21,7 +21,7 @@ describe("mcp", async () => {
 	const baseURL = `http://localhost:${port}`;
 	await tempServer.close();
 
-	const { auth, signInWithTestUser, customFetchImpl, testUser } =
+	const { auth, signInWithTestUser, customFetchImpl, testUser, cookieSetter } =
 		await getTestInstance({
 			baseURL,
 			plugins: [
@@ -79,6 +79,9 @@ describe("mcp", async () => {
 			},
 			onResponse(context) {
 				expect(context.response.status).toBe(201);
+				expect(context.response.headers.get("Content-Type")).toBe(
+					"application/json",
+				);
 			},
 		});
 
@@ -158,28 +161,29 @@ describe("mcp", async () => {
 	});
 
 	it("should authenticate public client with PKCE only", async ({ expect }) => {
-		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
-			account: {
-				accountLinking: {
-					trustedProviders: ["test-public"],
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test-public"],
+					},
 				},
-			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: "test-public",
-							clientId: publicClient.clientId,
-							clientSecret: "", // Public client has no secret
-							authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
-							tokenUrl: `${baseURL}/api/auth/mcp/token`,
-							scopes: ["openid", "profile", "email"],
-							pkce: true,
-						},
-					],
-				}),
-			],
-		});
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-public",
+								clientId: publicClient.clientId,
+								clientSecret: "", // Public client has no secret
+								authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
+								tokenUrl: `${baseURL}/api/auth/mcp/token`,
+								scopes: ["openid", "profile", "email"],
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
 
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
@@ -188,7 +192,7 @@ describe("mcp", async () => {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
-
+		const oAuthHeaders = new Headers();
 		const data = await client.signIn.oauth2(
 			{
 				providerId: "test-public",
@@ -196,6 +200,7 @@ describe("mcp", async () => {
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(oAuthHeaders),
 			},
 		);
 
@@ -217,6 +222,7 @@ describe("mcp", async () => {
 
 		let callbackURL = "";
 		await client.$fetch(redirectURI, {
+			headers: oAuthHeaders,
 			onError(context: any) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
@@ -251,29 +257,30 @@ describe("mcp", async () => {
 	it("should still support confidential clients in MCP context", async ({
 		expect,
 	}) => {
-		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
-			account: {
-				accountLinking: {
-					trustedProviders: ["test-confidential"],
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test-confidential"],
+					},
 				},
-			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: "test-confidential",
-							clientId: confidentialClient.clientId,
-							clientSecret: confidentialClient.clientSecret || "",
-							authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
-							tokenUrl: `${baseURL}/api/auth/mcp/token`,
-							scopes: ["openid", "profile", "email"],
-							pkce: true,
-						},
-					],
-				}),
-			],
-		});
-
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-confidential",
+								clientId: confidentialClient.clientId,
+								clientSecret: confidentialClient.clientSecret || "",
+								authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
+								tokenUrl: `${baseURL}/api/auth/mcp/token`,
+								scopes: ["openid", "profile", "email"],
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+		const oAuthHeaders = new Headers();
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5001",
@@ -289,6 +296,7 @@ describe("mcp", async () => {
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(oAuthHeaders),
 			},
 		);
 
@@ -308,6 +316,7 @@ describe("mcp", async () => {
 
 		let callbackURL = "";
 		await client.$fetch(redirectURI, {
+			headers: oAuthHeaders,
 			onError(context: any) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
@@ -351,6 +360,21 @@ describe("mcp", async () => {
 				"email_verified",
 				"name",
 			],
+		});
+	});
+
+	it("should expose OAuth protected resource metadata", async ({ expect }) => {
+		const metadata = await serverClient.$fetch(
+			"/.well-known/oauth-protected-resource",
+		);
+
+		expect(metadata.data).toMatchObject({
+			resource: baseURL,
+			authorization_servers: [`${baseURL}/api/auth`],
+			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
+			scopes_supported: ["openid", "profile", "email", "offline_access"],
+			bearer_methods_supported: ["header"],
+			resource_signing_alg_values_supported: ["RS256", "none"],
 		});
 	});
 
@@ -510,5 +534,25 @@ describe("mcp", async () => {
 		expect((tokenRequest.error as any).error_description).toContain(
 			"code verifier is missing",
 		);
+	});
+
+	describe("withMCPAuth", () => {
+		it("should return 401 if the request is not authenticated returning the right WWW-Authenticate header", async ({
+			expect,
+		}) => {
+			// Test the handler using a newly instantiated Request instead of the server, since this route isn't handled by the server
+			const response = await withMcpAuth(auth, async () => {
+				// it will never be reached since the request is not authenticated
+				return new Response("unnecessary");
+			})(new Request(`${baseURL}/mcp`));
+
+			expect(response.status).toBe(401);
+			expect(response.headers.get("WWW-Authenticate")).toBe(
+				`Bearer resource_metadata="${baseURL}/api/auth/.well-known/oauth-protected-resource"`,
+			);
+			expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
+				"WWW-Authenticate",
+			);
+		});
 	});
 });

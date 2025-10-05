@@ -38,10 +38,10 @@ const isPrimitive = (
 };
 
 export const merge = (objects: object[]): object => {
-	const target = clone(objects[0]);
+	const target = clone(objects[0]!);
 
 	for (let i = 1, l = objects.length; i < l; i++) {
-		mergeObjects(target, objects[i]);
+		mergeObjects(target, objects[i]!);
 	}
 
 	return target;

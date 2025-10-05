@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
 import { createEmailVerificationToken } from "./email-verification";
@@ -518,11 +518,10 @@ export const signInEmail = createAuthEndpoint(
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${
-					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${
-					ctx.body.callbackURL || "/"
-				}`;
+				const callbackURL = ctx.body.callbackURL
+					? encodeURIComponent(ctx.body.callbackURL)
+					: encodeURIComponent("/");
+				const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 				await ctx.context.options.emailVerification.sendVerificationEmail(
 					{
 						user: user.user,

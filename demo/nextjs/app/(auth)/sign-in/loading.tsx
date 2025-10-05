@@ -1,15 +1,9 @@
-export default function Loading() {
+export default function SignInLoading() {
 	return (
-		<div className="w-full">
-			<div className="flex items-center flex-col justify-center w-full md:py-10">
-				<div className="md:w-[400px] animate-pulse">
-					<div className="h-10 bg-gray-200 rounded-lg mb-4"></div>
-					<div className="space-y-4">
-						<div className="h-12 bg-gray-200 rounded"></div>
-						<div className="h-12 bg-gray-200 rounded"></div>
-						<div className="h-10 bg-gray-200 rounded"></div>
-					</div>
-				</div>
+		<div className="flex min-h-screen items-center justify-center">
+			<div className="text-center">
+				<div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-gray-900 mx-auto"></div>
+				<p className="mt-4 text-gray-600">Loading...</p>
 			</div>
 		</div>
 	);

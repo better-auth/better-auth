@@ -7,7 +7,6 @@ import {
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
-	AuthPluginSchema,
 	Session,
 	User,
 	AuthContext,
@@ -17,6 +16,7 @@ import { getOrigin } from "../../utils/url";
 import { mergeSchema } from "../../db/schema";
 import type { EndpointContext } from "better-call";
 import { generateId } from "../../utils/id";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
@@ -75,7 +75,7 @@ const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;
 
 export const anonymous = (options?: AnonymousOptions) => {
 	const ERROR_CODES = {
@@ -118,6 +118,20 @@ export const anonymous = (options?: AnonymousOptions) => {
 					},
 				},
 				async (ctx) => {
+					// If the current request already has a valid anonymous session, we should
+					// reject any further attempts to create another anonymous user. This
+					// prevents an anonymous user from signing in anonymously again while they
+					// are already authenticated.
+					const existingSession = await getSessionFromCtx<{
+						isAnonymous: boolean;
+					}>(ctx, { disableRefresh: true });
+					if (existingSession?.user.isAnonymous) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
+						});
+					}
+
 					const { emailDomainName = getOrigin(ctx.context.baseURL) } =
 						options || {};
 					const id = generateId();
@@ -197,7 +211,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						 */
 						const sessionCookie = parseSetCookieHeader(setCookie || "")
 							.get(sessionTokenName)
-							?.value.split(".")[0];
+							?.value.split(".")[0]!;
 
 						if (!sessionCookie) {
 							return;
@@ -216,7 +230,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 							return;
 						}
 
-						if (ctx.path === "/sign-in/anonymous") {
+						if (ctx.path === "/sign-in/anonymous" && !ctx.context.newSession) {
 							throw new APIError("BAD_REQUEST", {
 								message:
 									ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
@@ -226,6 +240,10 @@ export const anonymous = (options?: AnonymousOptions) => {
 						if (!newSession) {
 							return;
 						}
+						// At this point the user is linking their previous anonymous account with a
+						// new credential (email / social). Invoke the provided callback so that the
+						// integrator can perform any additional logic such as transferring data
+						// from the anonymous user to the new user.
 						if (options?.onLinkAccount) {
 							await options?.onLinkAccount?.({
 								anonymousUser: session,

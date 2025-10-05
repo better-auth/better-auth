@@ -15,7 +15,7 @@ export function listApiKeys({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/list",
@@ -64,7 +64,7 @@ export function listApiKeys({
 													type: "number",
 													nullable: true,
 													description:
-														"The interval in which the `remaining` count is refilled by day. Example: 1 // every day",
+														"The interval in milliseconds between refills of the `remaining` count. Example: 3600000 // refill every hour (3600000ms = 1h)",
 												},
 												refillAmount: {
 													type: "number",
@@ -191,10 +191,7 @@ export function listApiKeys({
 					permissions: returningApiKey.permissions
 						? safeJSONParse<{
 								[key: string]: string[];
-							}>(
-								//@ts-ignore - From DB this is always a string
-								returningApiKey.permissions,
-							)
+							}>(returningApiKey.permissions)
 						: null,
 				};
 			});

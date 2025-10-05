@@ -4,12 +4,23 @@ import { sso } from ".";
 import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
 import { organization } from "../organization";
+import { createAuthClient } from "../../client";
+import { ssoClient } from "./client";
 
 let server = new OAuth2Server();
 
 describe("SSO", async () => {
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		plugins: [sso(), organization()],
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			plugins: [sso(), organization()],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
 	});
 
 	beforeAll(async () => {
@@ -56,7 +67,7 @@ describe("SSO", async () => {
 		});
 
 		if (!location) throw new Error("No redirect location found");
-
+		const newHeaders = new Headers();
 		let callbackURL = "";
 		await betterFetch(location, {
 			method: "GET",
@@ -64,10 +75,11 @@ describe("SSO", async () => {
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
 			},
 		});
 
-		return callbackURL;
+		return { callbackURL, headers: newHeaders };
 	}
 
 	it("should register a new SSO provider", async () => {
@@ -141,58 +153,74 @@ describe("SSO", async () => {
 	});
 
 	it("should sign in with SSO provider with email matching", async () => {
-		const res = await auth.api.signInSSO({
-			body: {
-				email: "my-email@localhost.com",
-				callbackURL: "/dashboard",
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "my-email@localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(res.url, headers);
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
 
 	it("should sign in with SSO provider with domain", async () => {
-		const res = await auth.api.signInSSO({
-			body: {
-				email: "my-email@test.com",
-				domain: "localhost.com",
-				callbackURL: "/dashboard",
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "my-email@test.com",
+			domain: "localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(res.url, headers);
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
 
 	it("should sign in with SSO provider with providerId", async () => {
-		const res = await auth.api.signInSSO({
-			body: {
-				providerId: "test",
-				callbackURL: "/dashboard",
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "test",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(res.url, headers);
+
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
 });
 
 describe("SSO disable implicit sign in", async () => {
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		plugins: [sso({ disableImplicitSignUp: true }), organization()],
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			plugins: [sso({ disableImplicitSignUp: true }), organization()],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
 	});
 
 	beforeAll(async () => {
@@ -239,7 +267,7 @@ describe("SSO disable implicit sign in", async () => {
 		});
 
 		if (!location) throw new Error("No redirect location found");
-
+		const newHeaders = new Headers(headers);
 		let callbackURL = "";
 		await betterFetch(location, {
 			method: "GET",
@@ -247,10 +275,11 @@ describe("SSO disable implicit sign in", async () => {
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
 			},
 		});
 
-		return callbackURL;
+		return { callbackURL, headers: newHeaders };
 	}
 
 	it("should register a new SSO provider", async () => {
@@ -300,44 +329,57 @@ describe("SSO disable implicit sign in", async () => {
 	});
 
 	it("should not create user with SSO provider when sign ups are disabled", async () => {
-		const res = await auth.api.signInSSO({
-			body: {
-				email: "my-email@localhost.com",
-				callbackURL: "/dashboard",
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "my-email@localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(res.url, headers);
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain(
 			"/api/auth/error/error?error=signup disabled",
 		);
 	});
 
 	it("should create user with SSO provider when sign ups are disabled but sign up is requested", async () => {
-		const res = await auth.api.signInSSO({
-			body: {
-				email: "my-email@localhost.com",
-				callbackURL: "/dashboard",
-				requestSignUp: true,
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "my-email@localhost.com",
+			callbackURL: "/dashboard",
+			requestSignUp: true,
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(res.url, headers);
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
 });
 
 describe("provisioning", async (ctx) => {
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		plugins: [sso(), organization()],
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter, db } =
+		await getTestInstance({
+			plugins: [sso(), organization()],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
 	});
 
 	beforeAll(async () => {
@@ -367,12 +409,14 @@ describe("provisioning", async (ctx) => {
 		if (!location) throw new Error("No redirect location found");
 
 		let callbackURL = "";
+		const newHeaders = new Headers();
 		await betterFetch(location, {
 			method: "GET",
 			customFetchImpl: fetchImpl || customFetchImpl,
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
 			},
 		});
 
@@ -429,18 +473,20 @@ describe("provisioning", async (ctx) => {
 		expect(provider).toMatchObject({
 			organizationId: organization?.id,
 		});
-
-		const res = await auth.api.signInSSO({
-			body: {
-				email: "my-email@localhost.com",
-				callbackURL: "/dashboard",
+		const newHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "my-email@localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(newHeaders),
+				throw: true,
 			},
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const newHeaders = new Headers();
+
 		const callbackURL = await simulateOAuthFlow(res.url, newHeaders);
 		expect(callbackURL).toContain("/dashboard");
 		const org = await auth.api.getFullOrganization({
@@ -472,5 +518,74 @@ describe("provisioning", async (ctx) => {
 		});
 
 		expect(res.url).toContain("http://localhost:8080/authorize");
+	});
+
+	it("should not delete SSO provider when creator user is deleted", async () => {
+		const { headers, user } = await signInWithTestUser();
+
+		await auth.api.createOIDCProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "delete-test.com",
+				clientId: "test-delete",
+				clientSecret: "test-delete",
+				authorizationEndpoint: `${server.issuer.url}/authorize`,
+				tokenEndpoint: `${server.issuer.url}/token`,
+				jwksEndpoint: `${server.issuer.url}/jwks`,
+				mapping: {
+					id: "sub",
+					email: "email",
+					emailVerified: "email_verified",
+					name: "name",
+					image: "picture",
+				},
+				providerId: "test-delete",
+			},
+			headers,
+		});
+
+		// Verify provider exists before deletion and has the correct userId
+		const providerBeforeDelete = await db.findOne<{
+			userId: string | null;
+			domain: string;
+			providerId: string;
+		}>({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: "test-delete" }],
+		});
+
+		expect(providerBeforeDelete).toBeTruthy();
+		expect(providerBeforeDelete?.userId).toBe(user.id);
+
+		// Delete the user who created the SSO provider
+		// The database foreign key constraint with SET NULL should handle setting userId to null
+		await db.delete({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					value: user.id,
+				},
+			],
+		});
+
+		// Verify SSO provider still exists but userId is null
+		const ssoProvider = await db.findOne<{
+			userId: string | null;
+			domain: string;
+			providerId: string;
+		}>({
+			model: "ssoProvider",
+			where: [
+				{
+					field: "providerId",
+					value: "test-delete",
+				},
+			],
+		});
+
+		expect(ssoProvider).toBeTruthy();
+		expect(ssoProvider?.userId).toBeNull();
+		expect(ssoProvider?.domain).toBe("delete-test.com");
 	});
 });

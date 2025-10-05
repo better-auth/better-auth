@@ -393,7 +393,6 @@ export default function UserCard(props: {
 												setIsPendingTwoFa(true);
 												if (session?.user.twoFactorEnabled) {
 													const res = await client.twoFactor.disable({
-														//@ts-ignore
 														password: twoFaPassword,
 														fetchOptions: {
 															onError(context) {

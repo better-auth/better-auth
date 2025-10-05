@@ -5,6 +5,5 @@ export default defineConfig({
 	test: {
 		clearMocks: true,
 		globals: true,
-		setupFiles: ["dotenv/config"],
 	},
 });

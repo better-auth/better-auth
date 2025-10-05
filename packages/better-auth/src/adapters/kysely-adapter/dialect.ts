@@ -57,6 +57,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		return {
 			kysely: null,
 			databaseType: null,
+			transaction: undefined,
 		};
 	}
 
@@ -64,6 +65,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		return {
 			kysely: db.db,
 			databaseType: db.type,
+			transaction: db.transaction,
 		};
 	}
 
@@ -71,6 +73,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		return {
 			kysely: new Kysely<any>({ dialect: db.dialect }),
 			databaseType: db.type,
+			transaction: db.transaction,
 		};
 	}
 
@@ -89,7 +92,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	}
 
 	if ("getConnection" in db) {
-		// @ts-ignore - mysql2/promise
+		// @ts-expect-error - mysql2/promise
 		dialect = new MysqlDialect(db);
 	}
 
@@ -106,11 +109,18 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		});
 	}
 
-	if ("createSession" in db) {
+	if ("createSession" in db && typeof window === "undefined") {
 		let DatabaseSync: typeof import("node:sqlite").DatabaseSync | undefined =
 			undefined;
 		try {
-			({ DatabaseSync } = await import("node:sqlite"));
+			let nodeSqlite: string = "node:sqlite";
+			// Ignore both Vite and Webpack for dynamic import as they both try to pre-bundle 'node:sqlite' which might fail
+			// It's okay because we are in a try-catch block
+			({ DatabaseSync } = await import(
+				/* @vite-ignore */
+				/* webpackIgnore: true */
+				nodeSqlite
+			));
 		} catch (error: unknown) {
 			if (
 				error !== null &&
@@ -132,5 +142,6 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	return {
 		kysely: dialect ? new Kysely<any>({ dialect }) : null,
 		databaseType,
+		transaction: undefined,
 	};
 };

@@ -88,7 +88,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			charactersLength:
 				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
-		disableSessionForAPIKeys: options?.disableSessionForAPIKeys ?? false,
+		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(
@@ -135,8 +135,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		hooks: {
 			before: [
 				{
-					matcher: (ctx) =>
-						!!getter(ctx) && opts.disableSessionForAPIKeys === false,
+					matcher: (ctx) => !!getter(ctx) && opts.enableSessionForAPIKeys,
 					handler: createAuthMiddleware(async (ctx) => {
 						const key = getter(ctx)!;
 
@@ -176,7 +175,12 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						});
 
 						//for cleanup purposes
-						deleteAllExpiredApiKeys(ctx.context);
+						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
+							ctx.context.logger.error(
+								"Failed to delete expired API keys:",
+								err,
+							);
+						});
 
 						const user = await ctx.context.internalAdapter.findUserById(
 							apiKey.userId,

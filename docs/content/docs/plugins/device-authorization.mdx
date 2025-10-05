@@ -227,7 +227,7 @@ export default function DeviceAuthorizationPage() {
       const formattedCode = userCode.trim().replace(/-/g, "").toUpperCase();
 
       // Check if the code is valid using GET /device endpoint
-      const response = await authClient.device.deviceVerify({
+      const response = await authClient.device({
         query: { user_code: formattedCode },
       });
       
@@ -306,7 +306,7 @@ export default function DeviceApprovalPage() {
   const handleApprove = async () => {
     setIsProcessing(true);
     try {
-      await authClient.device.deviceApprove({
+      await authClient.device.approve({
         userCode: userCode,
       });
       // Show success message
@@ -321,7 +321,7 @@ export default function DeviceApprovalPage() {
   const handleDeny = async () => {
     setIsProcessing(true);
     try {
-      await authClient.device.deviceDeny({
+      await authClient.device.deny({
         userCode: userCode,
       });
       alert("Device denied");
@@ -485,7 +485,7 @@ async function pollForToken(deviceCode: string, interval: number) {
         });
         
         if (data?.access_token) {
-          console.log("\n✅ Authorization Successful!");
+          console.log("\nAuthorization Successful!");
           console.log("Access token received!");
           
           // Get user session
@@ -576,11 +576,11 @@ authenticateCLI().catch((err) => {
 
 No client-specific configuration options. The plugin adds the following methods:
 
+- **device()**: Verify user code validity
 - **device.code()**: Request device and user codes
 - **device.token()**: Poll for access token  
-- **device.deviceVerify()**: Verify user code validity
-- **device.deviceApprove()**: Approve device (requires authentication)
-- **device.deviceDeny()**: Deny device (requires authentication)
+- **device.approve()**: Approve device (requires authentication)
+- **device.deny()**: Deny device (requires authentication)
 
 ## Schema
 

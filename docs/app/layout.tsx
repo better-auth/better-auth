@@ -9,6 +9,7 @@ import { baseUrl, createMetadata } from "@/lib/metadata";
 import { Analytics } from "@vercel/analytics/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { CustomSearchDialog } from "@/components/search-dialog";
 
 export const metadata = createMetadata({
 	title: {
@@ -49,6 +50,12 @@ export default function Layout({ children }: { children: ReactNode }) {
 						theme={{
 							enableSystem: true,
 							defaultTheme: "dark",
+						}}
+						search={{
+							enabled: true,
+							SearchDialog: process.env.ORAMA_PRIVATE_API_KEY
+								? CustomSearchDialog
+								: undefined,
 						}}
 					>
 						<NavbarProvider>

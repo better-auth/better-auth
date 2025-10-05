@@ -46,13 +46,14 @@ export function createAuthClient<Option extends ClientOptions>(
 	options?: Option,
 ) {
 	const {
+		baseURL,
 		pluginPathMethods,
 		pluginsActions,
 		pluginsAtoms,
 		$fetch,
 		$store,
 		atomListeners,
-	} = getClientConfig(options);
+	} = getClientConfig(options, false);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
@@ -92,12 +93,8 @@ export function createAuthClient<Option extends ClientOptions>(
 		useFetch?: UseFetch,
 	) {
 		if (useFetch) {
-			const ref = useStore(pluginsAtoms.$sessionSignal);
-			const baseURL = options?.fetchOptions?.baseURL || options?.baseURL;
-			let authPath = baseURL ? new URL(baseURL).pathname : "/api/auth";
-			authPath = authPath === "/" ? "/api/auth" : authPath; //fix for root path
-			authPath = authPath.endsWith("/") ? authPath.slice(0, -1) : authPath; //fix for trailing slash
-			return useFetch(`${authPath}/get-session`, {
+			const ref = useStore(pluginsAtoms.$sessionSignal!);
+			return useFetch(`${baseURL}/get-session`, {
 				ref,
 			}).then((res: any) => {
 				return {

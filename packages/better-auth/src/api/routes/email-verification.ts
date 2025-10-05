@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
@@ -51,9 +51,10 @@ export async function sendVerificationEmailFn(
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
 	);
-	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
-		ctx.body.callbackURL || "/"
-	}`;
+	const callbackURL = ctx.body.callbackURL
+		? encodeURIComponent(ctx.body.callbackURL)
+		: encodeURIComponent("/");
+	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 	await ctx.context.options.emailVerification.sendVerificationEmail(
 		{
 			user: user,
@@ -359,14 +360,13 @@ export const verifyEmail = createAuthEndpoint(
 			);
 
 			//send verification email to the new email
+			const updateCallbackURL = ctx.query.callbackURL
+				? encodeURIComponent(ctx.query.callbackURL)
+				: encodeURIComponent("/");
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
 				{
 					user: updatedUser,
-					url: `${
-						ctx.context.baseURL
-					}/verify-email?token=${newToken}&callbackURL=${
-						ctx.query.callbackURL || "/"
-					}`,
+					url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
 					token: newToken,
 				},
 				ctx.request,

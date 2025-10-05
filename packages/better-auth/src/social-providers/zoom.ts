@@ -140,6 +140,7 @@ export interface ZoomProfile extends Record<string, any> {
 }
 
 export interface ZoomOptions extends ProviderOptions<ZoomProfile> {
+	clientId: string;
 	pkce?: boolean;
 }
 

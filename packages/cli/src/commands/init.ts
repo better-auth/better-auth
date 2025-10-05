@@ -704,7 +704,7 @@ export async function initAction(opts: any) {
 				const { dependencies, envs, generatedCode } = await generateAuthConfig({
 					current_user_config,
 					format,
-					//@ts-ignore
+					//@ts-expect-error
 					s,
 					plugins: add_plugins,
 					database,

@@ -93,7 +93,7 @@ export async function getTestInstanceMemory<
 			...options?.advanced,
 		},
 		plugins: [bearer(), ...(options?.plugins || [])],
-	} as O extends undefined ? typeof opts : O & typeof opts);
+	} as unknown as O extends undefined ? typeof opts : O & typeof opts);
 
 	const testUser = {
 		email: "test@test.com",

@@ -17,6 +17,7 @@ export interface RedditProfile {
 }
 
 export interface RedditOptions extends ProviderOptions<RedditProfile> {
+	clientId: string;
 	duration?: string;
 }
 
@@ -110,7 +111,7 @@ export const reddit = (options: RedditOptions) => {
 					name: profile.name,
 					email: profile.oauth_client_id,
 					emailVerified: profile.has_verified_email,
-					image: profile.icon_img?.split("?")[0],
+					image: profile.icon_img?.split("?")[0]!,
 					...userMap,
 				},
 				data: profile,

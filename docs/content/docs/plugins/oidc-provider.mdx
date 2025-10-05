@@ -182,8 +182,6 @@ This endpoint supports [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) 
 
 Once the application is created, you will receive a `client_id` and `client_secret` that you can display to the user.
 
-This Endpoint support [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
-  
 ### Trusted Clients
 
 For first-party applications and internal services, you can configure trusted clients directly in your OIDC provider configuration. Trusted clients bypass database lookups for better performance and can optionally skip consent screens for improved user experience.
@@ -443,7 +441,8 @@ Table Name: `oauthApplication`
       name: "userId", 
       type: "string", 
       description: "ID of the user who owns the client. (optional)",
-      isOptional: true
+      isOptional: true,
+      references: { model: "user", field: "id" }
     },
     { 
       name: "createdAt", 
@@ -498,7 +497,7 @@ Table Name: `oauthAccessToken`
       type: "string", 
       description: "ID of the OAuth client",
       isForeignKey: true,
-      references: { model: "oauthClient", field: "clientId" }
+      references: { model: "oauthApplication", field: "clientId" }
     },
     { 
       name: "userId", 
@@ -550,7 +549,7 @@ Table Name: `oauthConsent`
       type: "string", 
       description: "ID of the OAuth client",
       isForeignKey: true,
-      references: { model: "oauthClient", field: "clientId" }
+      references: { model: "oauthApplication", field: "clientId" }
     },
     { 
       name: "scopes", 

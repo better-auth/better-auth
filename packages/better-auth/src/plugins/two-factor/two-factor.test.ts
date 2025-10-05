@@ -72,7 +72,7 @@ describe("two factor", async () => {
 				},
 			],
 		});
-		expect(dbUser?.twoFactorEnabled).toBe(null);
+		expect(dbUser?.twoFactorEnabled).toBe(false);
 		expect(twoFactor?.secret).toBeDefined();
 		expect(twoFactor?.backupCodes).toBeDefined();
 	});
@@ -243,7 +243,7 @@ describe("two factor", async () => {
 				},
 			},
 		});
-		const backupCode = backupCodes[0];
+		const backupCode = backupCodes[0]!;
 
 		let parsedCookies = new Map();
 		await client.twoFactor.verifyBackupCode({

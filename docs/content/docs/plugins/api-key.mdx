@@ -82,58 +82,58 @@ You can view the list of API Key plugin options [here](/docs/plugins/api-key#api
 ```ts
 type createApiKey = {
     /**
-     * Name of the Api Key. 
+     * Name of the Api Key.
      */
     name?: string = 'project-api-key'
     /**
-     * Expiration time of the Api Key in seconds. 
+     * Expiration time of the Api Key in seconds.
      */
     expiresIn?: number = 60 * 60 * 24 * 7
     /**
-     * User Id of the user that the Api Key belongs to. server-only. 
+     * User Id of the user that the Api Key belongs to. server-only.
      * @serverOnly
      */
     userId?: string = "user-id"
     /**
-     * Prefix of the Api Key. 
+     * Prefix of the Api Key.
      */
     prefix?: string = 'project-api-key'
     /**
-     * Remaining number of requests. server-only. 
+     * Remaining number of requests. server-only.
      * @serverOnly
      */
     remaining?: number = 100
     /**
-     * Metadata of the Api Key. 
+     * Metadata of the Api Key.
      */
     metadata?: any | null = { someKey: 'someValue' }
     /**
-     * Amount to refill the remaining count of the Api Key. server-only. 
+     * Amount to refill the remaining count of the Api Key. server-only.
      * @serverOnly
      */
     refillAmount?: number = 100
     /**
-     * Interval to refill the Api Key in milliseconds. server-only. 
+     * Interval to refill the Api Key in milliseconds. server-only.
      * @serverOnly
      */
     refillInterval?: number = 1000
     /**
-     * The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. 
+     * The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only.
      * @serverOnly
      */
     rateLimitTimeWindow?: number = 1000
     /**
-     * Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. 
+     * Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only.
      * @serverOnly
      */
     rateLimitMax?: number = 100
     /**
-     * Whether the key has rate limiting enabled. server-only. 
+     * Whether the key has rate limiting enabled. server-only.
      * @serverOnly
      */
     rateLimitEnabled?: boolean = true
     /**
-     * Permissions of the Api Key. 
+     * Permissions of the Api Key.
      */
     permissions?: Record<string, string[]>
 }
@@ -163,7 +163,7 @@ const permissions = { // Permissions to check are optional.
 
 type verifyApiKey = {
     /**
-     * The key to verify. 
+     * The key to verify.
      */
     key: string = "your_api_key_here"
     /**
@@ -197,7 +197,7 @@ type Result = {
 ```ts
 type getApiKey = {
     /**
-     * The id of the Api Key. 
+     * The id of the Api Key.
      */
     id: string = "some-api-key-id"
 }
@@ -221,65 +221,65 @@ type Result = Omit<ApiKey, "key">;
 ```ts
 type updateApiKey = {
     /**
-     * The id of the Api Key to update. 
+     * The id of the Api Key to update.
      */
     keyId: string = "some-api-key-id"
     /**
-     * The id of the user which the api key belongs to. server-only. 
+     * The id of the user which the api key belongs to. server-only.
      * @serverOnly
      */
     userId?: string = "some-user-id"
     /**
-     * The name of the key. 
+     * The name of the key.
      */
     name?: string = "some-api-key-name"
     /**
-     * Whether the Api Key is enabled or not. server-only. 
+     * Whether the Api Key is enabled or not. server-only.
      * @serverOnly
      */
     enabled?: boolean = true
     /**
-     * The number of remaining requests. server-only. 
+     * The number of remaining requests. server-only.
      * @serverOnly
      */
     remaining?: number = 100
     /**
-     * The refill amount. server-only. 
+     * The refill amount. server-only.
      * @serverOnly
      */
     refillAmount?: number = 100
     /**
-     * The refill interval in milliseconds. server-only. 
+     * The refill interval in milliseconds. server-only.
      * @serverOnly
      */
     refillInterval?: number = 1000
     /**
-     * The metadata of the Api Key. server-only. 
+     * The metadata of the Api Key. server-only.
      * @serverOnly
      */
     metadata?: any | null = { "key": "value" }
     /**
-     * Expiration time of the Api Key in seconds. server-only. 
+     * Expiration time of the Api Key in seconds. server-only.
      * @serverOnly
      */
     expiresIn?: number = 60 * 60 * 24 * 7
     /**
-     * Whether the key has rate limiting enabled. server-only. 
+     * Whether the key has rate limiting enabled. server-only.
      * @serverOnly
      */
     rateLimitEnabled?: boolean = true
     /**
-     * The duration in milliseconds where each request is counted. server-only. 
+     * The duration in milliseconds where each request is counted. server-only.
      * @serverOnly
      */
     rateLimitTimeWindow?: number = 1000
     /**
-     * Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. 
+     * Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only.
      * @serverOnly
      */
     rateLimitMax?: number = 100
     /**
-     * Update the permissions on the API Key. server-only. 
+     * Update the permissions on the API Key. server-only.
      * @serverOnly
      */
     permissions?: Record<string, string[]>
@@ -305,7 +305,7 @@ Otherwise, you'll receive the API Key details, except for the `key` value itself
 ```ts
 type deleteApiKey = {
     /**
-     * The id of the Api Key to delete. 
+     * The id of the Api Key to delete.
      */
     keyId: string = "some-api-key-id"
 }
@@ -374,7 +374,21 @@ type deleteAllExpiredApiKeys = {
 
 ## Sessions from API keys
 
-Any time an endpoint in Better Auth is called that has a valid API key in the headers, we will automatically create a mock session to represent the user.
+Any time an endpoint in Better Auth is called that has a valid API key in the headers, you can automatically create a mock session to represent the user by enabling `sessionForAPIKeys` option.
+
+<Callout type="warn">
+ This is generally not recommended, as it can lead to security issues if not used carefully. A leaked api key can be used to impersonate a user.
+</Callout>
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      sessionForAPIKeys: true,
+    }),
+  ],
+});
+```
 
 <Tabs items={['Server']}>
     <Tab value="Server">
@@ -459,34 +473,34 @@ const apiKey = await auth.api.createApiKey({
 
 ### How does it work?
 
-For each request, a counter (internally called `requestCount`) is incremented.  
+For each request, a counter (internally called `requestCount`) is incremented.
 If the `rateLimitMax` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
 
 ## Remaining, refill, and expiration
 
-The remaining count is the number of requests left before the API key is disabled.  
-The refill interval is the interval in milliseconds where the `remaining` count is refilled by day.  
+The remaining count is the number of requests left before the API key is disabled.
+The refill interval is the interval in milliseconds where the `remaining` count is refilled by day.
 The expiration time is the expiration date of the API key.
 
 ### How does it work?
 
 #### Remaining:
 
-Whenever an API key is used, the `remaining` count is updated.  
-If the `remaining` count is `null`, then there is no cap to key usage.  
-Otherwise, the `remaining` count is decremented by 1.  
+Whenever an API key is used, the `remaining` count is updated.
+If the `remaining` count is `null`, then there is no cap to key usage.
+Otherwise, the `remaining` count is decremented by 1.
 If the `remaining` count is 0, then the API key is disabled & removed.
 
 #### refillInterval & refillAmount:
 
-Whenever an API key is created, the `refillInterval` and `refillAmount` are set to `null`.  
-This means that the API key will not be refilled automatically.  
+Whenever an API key is created, the `refillInterval` and `refillAmount` are set to `null`.
+This means that the API key will not be refilled automatically.
 However, if `refillInterval` & `refillAmount` are set, then the API key will be refilled accordingly.
 
 #### Expiration:
 
-Whenever an API key is created, the `expiresAt` is set to `null`.  
-This means that the API key will never expire.  
+Whenever an API key is created, the `expiresAt` is set to `null`.
+This means that the API key will never expire.
 However, if the `expiresIn` is set, then the API key will expire after the `expiresIn` time.
 
 ## Custom Key generation & verification

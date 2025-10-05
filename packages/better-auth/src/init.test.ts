@@ -197,4 +197,26 @@ describe("init", async () => {
 		const githubProvider = ctx.socialProviders.find((p) => p.id === "github");
 		expect(githubProvider).toBeDefined();
 	});
+
+	it("should init async plugin", async () => {
+		const initFn = vi.fn(async () => {
+			await new Promise((r) => setTimeout(r, 100));
+			return {
+				context: {
+					baseURL: "http://async.test",
+				},
+			};
+		});
+		await init({
+			baseURL: "http://localhost:3000",
+			database,
+			plugins: [
+				{
+					id: "test-async",
+					init: initFn,
+				},
+			],
+		});
+		expect(initFn).toHaveBeenCalled();
+	});
 });

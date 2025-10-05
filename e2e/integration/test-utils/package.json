@@ -1,0 +1,11 @@
+{
+  "name": "@better-auth/test-utils",
+  "type": "module",
+  "exports": {
+    "./playwright": "./src/playwright.ts"
+  },
+  "private": true,
+  "devDependencies": {
+    "terminate": "^2.8.0"
+  }
+}

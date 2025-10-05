@@ -1,17 +1,18 @@
 import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { Account } from "../../types";
 
 describe("forget password", async (it) => {
 	const mockSendEmail = vi.fn();
 	const mockonPasswordReset = vi.fn();
 	let token = "";
 
-	const { client, testUser, auth } = await getTestInstance(
+	const { client, testUser, db } = await getTestInstance(
 		{
 			emailAndPassword: {
 				enabled: true,
 				async sendResetPassword({ url }) {
-					token = url.split("?")[0].split("/").pop() || "";
+					token = url.split("?")[0]!.split("/").pop() || "";
 					await mockSendEmail();
 				},
 				onPasswordReset: async ({ user }) => {
@@ -62,6 +63,95 @@ describe("forget password", async (it) => {
 		});
 	});
 
+	it("should update account's updatedAt when resetting password", async () => {
+		// Create a new user to test with
+		const newHeaders = new Headers();
+		const signUpRes = await client.signUp.email({
+			name: "Test Reset User",
+			email: "test-reset-updated@email.com",
+			password: "originalPassword123",
+			fetchOptions: {
+				onSuccess(ctx) {
+					const setCookie = ctx.response.headers.get("set-cookie");
+					if (setCookie) {
+						newHeaders.set("cookie", setCookie);
+					}
+				},
+			},
+		});
+
+		const userId = signUpRes.data?.user.id;
+		expect(userId).toBeDefined();
+
+		// Get initial account data
+		const initialAccounts: Account[] = await db.findMany({
+			model: "account",
+			where: [
+				{
+					field: "userId",
+					value: userId!,
+				},
+				{
+					field: "providerId",
+					value: "credential",
+				},
+			],
+		});
+		expect(initialAccounts.length).toBe(1);
+		const initialUpdatedAt = initialAccounts[0]!.updatedAt;
+
+		// Request password reset
+		let resetToken = "";
+		await client.requestPasswordReset({
+			email: "test-reset-updated@email.com",
+			redirectTo: "http://localhost:3000",
+		});
+
+		// Extract token from mock send email
+		expect(token).toBeDefined();
+		resetToken = token;
+
+		// Wait a bit to ensure time difference
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		// Reset password
+		const resetRes = await client.resetPassword({
+			newPassword: "newResetPassword123",
+			token: resetToken,
+		});
+		expect(resetRes.data?.status).toBe(true);
+
+		// Get updated account data
+		const updatedAccounts: Account[] = await db.findMany({
+			model: "account",
+			where: [
+				{
+					field: "userId",
+					value: userId!,
+				},
+				{
+					field: "providerId",
+					value: "credential",
+				},
+			],
+		});
+		expect(updatedAccounts.length).toBe(1);
+		const newUpdatedAt = updatedAccounts[0]!.updatedAt;
+
+		// Verify updatedAt was refreshed
+		expect(newUpdatedAt).not.toBe(initialUpdatedAt);
+		expect(new Date(newUpdatedAt).getTime()).toBeGreaterThan(
+			new Date(initialUpdatedAt).getTime(),
+		);
+
+		// Verify user can sign in with new password
+		const signInRes = await client.signIn.email({
+			email: "test-reset-updated@email.com",
+			password: "newResetPassword123",
+		});
+		expect(signInRes.data?.user).toBeDefined();
+	});
+
 	it("should sign-in with the new password", async () => {
 		const withOldCred = await client.signIn.email({
 			email: testUser.email,
@@ -102,13 +192,12 @@ describe("forget password", async (it) => {
 				resetPasswordTokenExpiresIn: 10,
 			},
 		});
-		const { headers } = await signInWithTestUser();
-		await client.requestPasswordReset({
-			email: testUser.email,
-			redirectTo: "/sign-in",
-			fetchOptions: {
-				headers,
-			},
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			await client.requestPasswordReset({
+				email: testUser.email,
+				redirectTo: "/sign-in",
+			});
 		});
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 9);
@@ -130,12 +219,11 @@ describe("forget password", async (it) => {
 			token,
 		});
 		expect(res.data?.status).toBe(true);
-		await client.requestPasswordReset({
-			email: testUser.email,
-			redirectTo: "/sign-in",
-			fetchOptions: {
-				headers,
-			},
+		await runWithUser(async () => {
+			await client.requestPasswordReset({
+				email: testUser.email,
+				redirectTo: "/sign-in",
+			});
 		});
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 11);
@@ -183,7 +271,7 @@ describe("revoke sessions on password reset", async (it) => {
 			emailAndPassword: {
 				enabled: true,
 				async sendResetPassword({ url }) {
-					token = url.split("?")[0].split("/").pop() || "";
+					token = url.split("?")[0]!.split("/").pop() || "";
 					await mockSendEmail();
 				},
 				revokeSessionsOnPasswordReset: true,
@@ -195,7 +283,7 @@ describe("revoke sessions on password reset", async (it) => {
 	);
 
 	it("should revoke other sessions when revokeSessionsOnPasswordReset is enabled", async () => {
-		const { headers } = await signInWithTestUser();
+		const { runWithUser } = await signInWithTestUser();
 
 		await client.requestPasswordReset({
 			email: testUser.email,
@@ -213,12 +301,10 @@ describe("revoke sessions on password reset", async (it) => {
 			},
 		);
 
-		const sessionAttempt = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
+		await runWithUser(async () => {
+			const sessionAttempt = await client.getSession();
+			expect(sessionAttempt.data).toBeNull();
 		});
-		expect(sessionAttempt.data).toBeNull();
 	});
 
 	it("should not revoke other sessions by default", async () => {
@@ -227,7 +313,7 @@ describe("revoke sessions on password reset", async (it) => {
 				emailAndPassword: {
 					enabled: true,
 					async sendResetPassword({ url }) {
-						token = url.split("?")[0].split("/").pop() || "";
+						token = url.split("?")[0]!.split("/").pop() || "";
 						await mockSendEmail();
 					},
 				},
@@ -237,7 +323,7 @@ describe("revoke sessions on password reset", async (it) => {
 			},
 		);
 
-		const { headers } = await signInWithTestUser();
+		const { runWithUser } = await signInWithTestUser();
 
 		await client.requestPasswordReset({
 			email: testUser.email,
@@ -255,11 +341,9 @@ describe("revoke sessions on password reset", async (it) => {
 			},
 		);
 
-		const sessionAttempt = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
+		await runWithUser(async () => {
+			const sessionAttempt = await client.getSession();
+			expect(sessionAttempt.data?.user).toBeDefined();
 		});
-		expect(sessionAttempt.data?.user).toBeDefined();
 	});
 });

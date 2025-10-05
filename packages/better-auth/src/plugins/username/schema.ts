@@ -1,4 +1,4 @@
-import type { AuthPluginSchema } from "../../types";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 export const getSchema = (normalizer: {
 	username: (username: string) => string;
@@ -34,7 +34,7 @@ export const getSchema = (normalizer: {
 				},
 			},
 		},
-	} satisfies AuthPluginSchema;
+	} satisfies BetterAuthPluginDBSchema;
 };
 
 export type UsernameSchema = ReturnType<typeof getSchema>;

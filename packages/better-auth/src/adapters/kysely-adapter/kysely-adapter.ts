@@ -1,7 +1,16 @@
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
-import type { Where } from "../../types";
+import {
+	createAdapterFactory,
+	type AdapterDebugLogs,
+	type AdapterFactoryCustomizeAdapterCreator,
+	type AdapterFactoryOptions,
+} from "../adapter-factory";
+import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
-import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
+import {
+	type InsertQueryBuilder,
+	type Kysely,
+	type UpdateQueryBuilder,
+} from "kysely";
 
 interface KyselyAdapterConfig {
 	/**
@@ -20,26 +29,25 @@ interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+	/**
+	 * Whether to execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions,
+	 * set this to `false` and operations will be executed sequentially.
+	 * @default true
+	 */
+	transaction?: boolean;
 }
 
-export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
-	createAdapter({
-		config: {
-			adapterId: "kysely",
-			adapterName: "Kysely Adapter",
-			usePlural: config?.usePlural,
-			debugLogs: config?.debugLogs,
-			supportsBooleans:
-				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
-					? false
-					: true,
-			supportsDates:
-				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
-					? false
-					: true,
-			supportsJSON: false,
-		},
-		adapter: ({ getFieldName, schema }) => {
+export const kyselyAdapter = (
+	db: Kysely<any>,
+	config?: KyselyAdapterConfig,
+) => {
+	let lazyOptions: BetterAuthOptions | null = null;
+	const createCustomAdapter = (
+		db: Kysely<any>,
+	): AdapterFactoryCustomizeAdapterCreator => {
+		return ({ getFieldName, schema, getDefaultModelName }) => {
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -55,7 +63,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					await builder.execute();
 					const field = values.id
 						? "id"
-						: where.length > 0 && where[0].field
+						: where.length > 0 && where[0]?.field
 							? where[0].field
 							: "id";
 
@@ -69,7 +77,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 						return res;
 					}
 
-					const value = values[field] || where[0].value;
+					const value = values[field] || where[0]?.value;
 					res = await db
 						.selectFrom(model)
 						.selectAll()
@@ -97,16 +105,46 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					f = Object.values(schema).find((f) => f.modelName === model)!;
 				}
 				if (
-					f.type === "boolean" &&
+					f!.type === "boolean" &&
 					(type === "sqlite" || type === "mssql") &&
 					value !== null &&
 					value !== undefined
 				) {
 					return value ? 1 : 0;
 				}
-				if (f.type === "date" && value && value instanceof Date) {
-					return type === "sqlite" ? value.toISOString() : value;
+				if (f!.type === "date" && value && value instanceof Date) {
+					if (type === "sqlite") return value.toISOString();
+					return value;
 				}
+				return value;
+			}
+
+			function transformValueFromDB(value: any) {
+				function transformObject(obj: any) {
+					for (const key in obj) {
+						if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+
+						const field = obj[key];
+
+						if (field instanceof Date && config?.type === "mysql") {
+							// obj[key] = ensureUTC(field);
+						} else if (typeof field === "object" && field !== null) {
+							transformObject(field);
+						}
+					}
+				}
+
+				if (Array.isArray(value)) {
+					for (let i = 0; i < value.length; i++) {
+						const item = value[i];
+						if (typeof item === "object" && item !== null) {
+							transformObject(item);
+						}
+					}
+				} else if (typeof value === "object" && value !== null) {
+					transformObject(value);
+				}
+
 				return value;
 			}
 
@@ -134,6 +172,14 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					const expr = (eb: any) => {
 						if (operator.toLowerCase() === "in") {
 							return eb(field, "in", Array.isArray(value) ? value : [value]);
+						}
+
+						if (operator.toLowerCase() === "not_in") {
+							return eb(
+								field,
+								"not in",
+								Array.isArray(value) ? value : [value],
+							);
 						}
 
 						if (operator === "contains") {
@@ -190,8 +236,8 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 			return {
 				async create({ data, model }) {
 					const builder = db.insertInto(model).values(data);
-
-					return (await withReturning(data, builder, model, [])) as any;
+					const returned = await withReturning(data, builder, model, []);
+					return transformValueFromDB(returned) as any;
 				},
 				async findOne({ model, where, select }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -204,7 +250,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					}
 					const res = await query.executeTakeFirst();
 					if (!res) return null;
-					return res as any;
+					return transformValueFromDB(res) as any;
 				},
 				async findMany({ model, where, limit, offset, sortBy }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -241,7 +287,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 
 					const res = await query.selectAll().execute();
 					if (!res) return [];
-					return res as any;
+					return transformValueFromDB(res) as any;
 				},
 				async update({ model, where, update: values }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -253,7 +299,9 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					return await withReturning(values as any, query, model, where);
+					return transformValueFromDB(
+						await withReturning(values as any, query, model, where),
+					);
 				},
 				async updateMany({ model, where, update: values }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -280,7 +328,13 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					const res = await query.execute();
-					return res[0].count as number;
+					if (typeof res[0]!.count === "number") {
+						return res[0]!.count;
+					}
+					if (typeof res[0]!.count === "bigint") {
+						return Number(res[0]!.count);
+					}
+					return parseInt(res[0]!.count);
 				},
 				async delete({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -307,5 +361,46 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				},
 				options: config,
 			};
+		};
+	};
+	let adapterOptions: AdapterFactoryOptions | null = null;
+	adapterOptions = {
+		config: {
+			adapterId: "kysely",
+			adapterName: "Kysely Adapter",
+			usePlural: config?.usePlural,
+			debugLogs: config?.debugLogs,
+			supportsBooleans:
+				config?.type === "sqlite" ||
+				config?.type === "mssql" ||
+				config?.type === "mysql" ||
+				!config?.type
+					? false
+					: true,
+			supportsDates:
+				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
+					? false
+					: true,
+			supportsJSON: false,
+			transaction:
+				(config?.transaction ?? false)
+					? (cb) =>
+							db.transaction().execute((trx) => {
+								const adapter = createAdapterFactory({
+									config: adapterOptions!.config,
+									adapter: createCustomAdapter(trx),
+								})(lazyOptions!);
+								return cb(adapter);
+							})
+					: false,
 		},
-	});
+		adapter: createCustomAdapter(db),
+	};
+
+	const adapter = createAdapterFactory(adapterOptions);
+
+	return (options: BetterAuthOptions): Adapter => {
+		lazyOptions = options;
+		return adapter(options);
+	};
+};
