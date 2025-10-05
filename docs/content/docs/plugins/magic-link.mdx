@@ -134,11 +134,11 @@ and a `request` object as the second parameter.
 
 **expiresIn**: specifies the time in seconds after which the magic link will expire. The default value is `300` seconds (5 minutes).
 
-**disableSignUp**: Controls whether new users can sign up via magic link. Can be a boolean or a function that receives the request context and returns a boolean (sync or async). The default value is `false`.
+**disableSignUp**: Controls whether new users can sign up via magic link. Can be a boolean or a function that receives the endpoint context and returns a boolean (sync or async). The default value is `false`.
 
 - When set to `true`, only existing users can sign in with magic links.
 - When set to a function, you can conditionally disable signups based on your application logic.
-- The function receives `Request | undefined` as a parameter (the request may be undefined in some contexts).
+- The function receives the endpoint context with access to `body`, `context`, and `request`.
 
 Example with function handler:
 ```ts
@@ -146,10 +146,12 @@ magicLink({
     sendMagicLink: async ({ email, token, url }, request) => {
         // send email
     },
-    disableSignUp: (request) => {
-        if (!request) return false;
-        const referer = request.headers.get("referer");
-        return referer?.includes("/admin") ?? false;
+    disableSignUp: (ctx) => {
+        // Only allow signups from specific email domains
+        const email = ctx.body.email;
+        const allowedDomains = ["company.com", "partner.com"];
+        const domain = email.split("@")[1];
+        return !allowedDomains.includes(domain);
     }
 })
 ```
@@ -160,9 +162,10 @@ magicLink({
     sendMagicLink: async ({ email, token, url }, request) => {
         // send email
     },
-    disableSignUp: async (request) => {
-        const isMaintenanceMode = await checkMaintenanceMode();
-        return isMaintenanceMode;
+    disableSignUp: async (ctx) => {
+        // Check feature flag or application state
+        const signupsEnabled = await checkFeatureFlag("magic-link-signups");
+        return !signupsEnabled;
     }
 })
 ```

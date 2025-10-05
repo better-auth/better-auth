@@ -29,16 +29,14 @@ interface MagicLinkopts {
 	/**
 	 * Disable sign up if user is not found.
 	 *
-	 * Can be a boolean or a function that receives the request (if available) and returns a boolean.
+	 * Can be a boolean or a function that receives the endpoint context and returns a boolean.
 	 * This allows you to conditionally disable signups based on request context.
-	 *
-	 * Note: The request may be undefined in some contexts. Make sure to handle this case.
 	 *
 	 * @default false
 	 */
 	disableSignUp?:
 		| boolean
-		| ((request: Request | undefined) => boolean | Promise<boolean>);
+		| ((ctx: GenericEndpointContext) => boolean | Promise<boolean>);
 	/**
 	 * Rate limit configuration.
 	 *
@@ -175,7 +173,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					if (opts.disableSignUp) {
 						let signUpDisabled = false;
 						if (typeof opts.disableSignUp === "function") {
-							signUpDisabled = await opts.disableSignUp(ctx.request);
+							signUpDisabled = await opts.disableSignUp(ctx);
 						} else {
 							signUpDisabled = true;
 						}
@@ -381,7 +379,10 @@ export const magicLink = (options: MagicLinkopts) => {
 						.then((res) => res?.user);
 
 					if (!user) {
-						const signUpDisabled = typeof opts.disableSignUp === "function" ? await opts.disableSignUp(ctx.request) : opts.disableSignUp
+						const signUpDisabled =
+							typeof opts.disableSignUp === "function"
+								? await opts.disableSignUp(ctx)
+								: opts.disableSignUp;
 
 						if (!signUpDisabled) {
 							const newUser = await ctx.context.internalAdapter.createUser(

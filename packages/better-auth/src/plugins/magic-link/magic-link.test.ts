@@ -4,6 +4,7 @@ import { magicLink } from ".";
 import { createAuthClient } from "../../client";
 import { magicLinkClient } from "./client";
 import { defaultKeyHasher } from "./utils";
+import type { GenericEndpointContext } from "../../types";
 
 type VerificationEmail = {
 	email: string;
@@ -373,12 +374,10 @@ describe("magic link disableSignUp as function", async () => {
 		expect(capturedEmail).toBe(newEmail);
 	});
 
-	it("should receive request context in disableSignUp function", async () => {
-		const disableSignUpFn = vi.fn((request: Request | undefined) => {
-			// Handle undefined request case
-			if (!request) return false;
-			const referer = request.headers.get("referer");
-			return referer?.includes("blocked-path") ?? false;
+	it("should receive context in disableSignUp function", async () => {
+		const disableSignUpFn = vi.fn((ctx: GenericEndpointContext) => {
+			// Check if email is from blocked domain
+			return ctx.body.email?.endsWith("@blocked.com") ?? false;
 		});
 
 		const { customFetchImpl } = await getTestInstance({
@@ -399,21 +398,23 @@ describe("magic link disableSignUp as function", async () => {
 			basePath: "/api/auth",
 		});
 
-		// Test - should succeed since request doesn't have blocked path
+		// Test - should succeed since email is not from blocked domain
 		await client.signIn.magicLink({
 			email: "test-user@example.com",
 		});
 
 		expect(disableSignUpFn).toHaveBeenCalled();
 
-		// Verify function received request (may be undefined or Request)
+		// Verify function received context with body
 		const callArg = disableSignUpFn.mock.calls[0]?.[0];
-		expect(callArg === undefined || callArg instanceof Request).toBe(true);
+		expect(callArg).toBeDefined();
+		expect(callArg?.body).toBeDefined();
+		expect(callArg?.body.email).toBe("test-user@example.com");
 	});
 
 	it("should handle async disableSignUp function", async () => {
 		let wasCalledAsync = false;
-		const disableSignUpFn = vi.fn(async (request: Request | undefined) => {
+		const disableSignUpFn = vi.fn(async (ctx: GenericEndpointContext) => {
 			// Simulate async operation
 			await Promise.resolve();
 			wasCalledAsync = true;
