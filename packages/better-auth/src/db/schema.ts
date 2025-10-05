@@ -1,4 +1,4 @@
-import type { BetterAuthPluginDBSchema } from "../types/plugins";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
