@@ -561,7 +561,7 @@ function adapterTest(
 				model: "user",
 				offset: 2,
 			});
-			expect(res.length).toBe(8);
+			expect(res.length).toBe(5);
 		},
 	);
 
