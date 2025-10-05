@@ -23,7 +23,7 @@ import type {
 	UserWithRole,
 } from "./types";
 import { getPlugin } from "../../utils";
-import type { organization } from "../organization";
+import type { Organization, organization } from "../organization";
 import { BetterAuthError } from "../../error";
 
 function parseRoles(roles: string | string[]): string {
@@ -1585,9 +1585,177 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		adminListOrganizations: createAuthEndpoint(
 			"/admin/list-organizations",
 			{
+				use: [adminMiddleware],
 				method: "GET",
+				query: z.object({
+					searchValue: z.string().optional().meta({
+						description: 'The value to search for. Eg: "some name"',
+					}),
+					searchField: z
+						.enum(["slug", "name"])
+						.meta({
+							description:
+								'The field to search in, defaults to name. Can be `slug` or `name`. Eg: "slug"',
+						})
+						.optional(),
+					searchOperator: z
+						.enum(["contains", "starts_with", "ends_with"])
+						.meta({
+							description:
+								'The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. Eg: "contains"',
+						})
+						.optional(),
+					limit: z
+						.string()
+						.meta({
+							description: "The number of organizations to return",
+						})
+						.or(z.number())
+						.optional(),
+					offset: z
+						.string()
+						.meta({
+							description: "The offset to start from",
+						})
+						.or(z.number())
+						.optional(),
+					sortBy: z
+						.string()
+						.meta({
+							description: "The field to sort by",
+						})
+						.optional(),
+					sortDirection: z
+						.enum(["asc", "desc"])
+						.meta({
+							description: "The direction to sort by",
+						})
+						.optional(),
+					filterField: z
+						.string()
+						.meta({
+							description: "The field to filter by",
+						})
+						.optional(),
+					filterValue: z
+						.string()
+						.meta({
+							description: "The value to filter by",
+						})
+						.or(z.number())
+						.or(z.boolean())
+						.optional(),
+					filterOperator: z
+						.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
+						.meta({
+							description: "The operator to use for the filter",
+						})
+						.optional(),
+				}),
+				metadata: {
+					openapi: {
+						operationId: "adminListOrganizations",
+						summary: "List organizations",
+						description: "List organizations",
+						responses: {
+							200: {
+								description: "List of organizations",
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												organizations: {
+													type: "array",
+													items: {
+														$ref: "#/components/schemas/Organization",
+													},
+												},
+												total: {
+													type: "number",
+												},
+												limit: {
+													type: "number",
+												},
+												offset: {
+													type: "number",
+												},
+											},
+											required: ["organizations", "total"],
+										},
+									},
+								},
+							},
+						},
+					},
+				},
 			},
-			async (ctx) => {},
+			async (ctx) => {
+				const session = ctx.context.session;
+				const canListOrgs = hasPermission({
+					userId: ctx.context.session.user.id,
+					role: session.user.role,
+					options: opts,
+					permissions: {
+						user: ["list-organizations"],
+					},
+				});
+				if (!canListOrgs) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_ORGANIZATIONS,
+					});
+				}
+
+				const where: Where[] = [];
+
+				if (ctx.query?.searchValue) {
+					where.push({
+						field: ctx.query.searchField || "name",
+						operator: ctx.query.searchOperator || "contains",
+						value: ctx.query.searchValue,
+					});
+				}
+
+				if (ctx.query?.filterValue) {
+					where.push({
+						field: ctx.query.filterField || "name",
+						operator: ctx.query.filterOperator || "eq",
+						value: ctx.query.filterValue,
+					});
+				}
+
+				try {
+					const organizations =
+						await ctx.context.adapter.findMany<Organization>({
+							model: "organization",
+							limit: Number(ctx.query?.limit) || undefined,
+							offset: Number(ctx.query?.offset) || undefined,
+							sortBy: ctx.query.sortBy
+								? {
+										field: ctx.query.sortBy,
+										direction: ctx.query.sortDirection || "asc",
+									}
+								: undefined,
+							where: where.length ? where : undefined,
+						});
+					const total = await ctx.context.adapter.count({
+						model: "organization",
+						where: where.length ? where : undefined,
+					});
+					return ctx.json({
+						organizations,
+						total,
+						limit: Number(ctx.query?.limit) || undefined,
+						offset: Number(ctx.query?.offset) || undefined,
+					});
+				} catch (e) {
+					return ctx.json({
+						organizations: [],
+						total: 0,
+					});
+				}
+			},
 		),
 	};
 
