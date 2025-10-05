@@ -1,4 +1,4 @@
-import type { AuthPluginSchema } from "..";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import parseJSON from "../../client/parser";
 
 export const apiKeySchema = ({
@@ -193,4 +193,4 @@ export const apiKeySchema = ({
 				},
 			},
 		},
-	}) satisfies AuthPluginSchema;
+	}) satisfies BetterAuthPluginDBSchema;
