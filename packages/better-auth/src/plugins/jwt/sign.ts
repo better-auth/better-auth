@@ -37,8 +37,8 @@ import { importJWK, SignJWT } from "jose";
  */
 async function signJwtPayload(
 	ctx: GenericEndpointContext,
+	pluginOpts: JwtPluginOptions | undefined,
 	payload: JWTPayload,
-	pluginOpts?: JwtPluginOptions,
 	keyChain?: never,
 	jwk?: string | CryptoKeyIdAlg,
 	skipClaims?: { aud?: boolean; iat?: boolean; iss?: boolean; exp?: boolean },
@@ -52,8 +52,8 @@ async function signJwtPayload(
 
 	let privateKey = await getJwkInternal(
 		ctx,
-		true,
 		pluginOpts,
+		true,
 		jwk ?? pluginOpts?.jwks?.defaultKeyId,
 	);
 	if (!privateKey) {
@@ -78,10 +78,12 @@ async function signJwtPayload(
 			key: (await importJWK(privateKeyJSON, alg)) as CryptoKey,
 		};
 	}
+
 	if (!privateKey.alg)
 		throw new BetterAuthError(
 			`Failed to sign a JWT: Cannot sign the JWT using a JWK without a specified algorithm name"`,
 		);
+
 	if (privateKey.id && privateKey.id.endsWith(revokedTag))
 		throw new BetterAuthError(
 			`Failed to sign a JWT: Cannot sign the JWT using a revoked JWK with an ID "${privateKey.id}"`,
@@ -134,8 +136,8 @@ async function signJwtPayload(
  */
 export async function signJwtInternal(
 	ctx: GenericEndpointContext,
+	pluginOpts: JwtPluginOptions | undefined,
 	data: Record<string, unknown>,
-	pluginOpts?: JwtPluginOptions,
 	options?: {
 		keyChain?: never;
 		jwk?: string | CryptoKeyIdAlg;
@@ -158,8 +160,8 @@ export async function signJwtInternal(
 
 	return await signJwtPayload(
 		ctx,
-		payload,
 		pluginOpts,
+		payload,
 		options?.keyChain,
 		options?.jwk,
 		{
@@ -204,8 +206,8 @@ export async function signJwt(
 ): Promise<string> {
 	return await signJwtInternal(
 		ctx,
-		data,
 		getJwtPluginOptions(ctx.context),
+		data,
 		options,
 	);
 }
@@ -233,7 +235,7 @@ export async function signJwt(
  */
 export async function getSessionJwtInternal(
 	ctx: GenericEndpointContext,
-	pluginOpts?: JwtPluginOptions,
+	pluginOpts: JwtPluginOptions | undefined,
 	keyChain?: never,
 	jwk?: string | CryptoKeyIdAlg,
 ): Promise<string> {
@@ -249,7 +251,7 @@ export async function getSessionJwtInternal(
 		? await pluginOpts?.jwt?.defineSessionJwtSubject(session)
 		: session.user.id;
 
-	return await signJwtPayload(ctx, sanitizedPayload, pluginOpts, keyChain, jwk);
+	return await signJwtPayload(ctx, pluginOpts, sanitizedPayload, keyChain, jwk);
 }
 
 /**

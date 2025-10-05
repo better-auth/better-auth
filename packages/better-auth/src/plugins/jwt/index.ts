@@ -350,21 +350,21 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 							if (typeof jwk === "string")
 								payload = await verifyJwtWithKeyInternal(
 									ctx,
+									pluginOpts,
 									jwt,
 									jwk,
-									pluginOpts,
 									options,
 								);
 							else
 								payload = await verifyJwtWithKeyInternal(
 									ctx,
+									pluginOpts,
 									jwt,
 									await parseJwk(jwk),
-									pluginOpts,
 									options,
 								);
 						} else
-							payload = await verifyJwtInternal(ctx, jwt, pluginOpts, options);
+							payload = await verifyJwtInternal(ctx, pluginOpts, jwt, options);
 
 						if (payload && !payload.exp)
 							throw new APIError("BAD_REQUEST", {
@@ -436,7 +436,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 						});
 
 					if (jwk === undefined || typeof jwk === "string") {
-						const jwt = await signJwtInternal(ctx, data, pluginOpts, {
+						const jwt = await signJwtInternal(ctx, pluginOpts, data, {
 							jwk: jwk,
 							claims: claims,
 						});
@@ -445,7 +445,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 
 					const privateKey = await parseJwk(jwk);
 
-					const jwt = await signJwtInternal(ctx, data, pluginOpts, {
+					const jwt = await signJwtInternal(ctx, pluginOpts, data, {
 						jwk: privateKey,
 						claims: claims,
 					});
@@ -665,8 +665,8 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 					try {
 						const key = await importJwkInternal(
 							ctx,
-							exportedPrivateKey,
 							pluginOpts,
+							exportedPrivateKey,
 						);
 
 						return ctx.json({ key: key });

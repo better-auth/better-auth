@@ -37,9 +37,9 @@ import { getJwtPluginOptions, revokedTag } from "./utils";
  */
 async function verifyJwtJose(
 	ctx: GenericEndpointContext,
+	pluginOpts: JwtPluginOptions | undefined,
 	jwt: string,
 	jwk: CryptoKey | JWTVerifyGetKey,
-	pluginOpts?: JwtPluginOptions,
 	options?: JwtVerifyOptions,
 ): Promise<JWTVerifyResult<JWTPayload>> {
 	const audiences = options?.allowedAudiences;
@@ -104,8 +104,8 @@ async function verifyJwtJose(
  */
 export async function verifyJwtInternal(
 	ctx: GenericEndpointContext,
+	pluginOpts: JwtPluginOptions | undefined,
 	jwt: string,
-	pluginOpts?: JwtPluginOptions,
 	options?: JwtVerifyOptions,
 ): Promise<JWTPayload> {
 	const jwks = pluginOpts?.jwks?.disableJwksCaching
@@ -116,9 +116,9 @@ export async function verifyJwtInternal(
 	try {
 		const { payload, protectedHeader } = await verifyJwtJose(
 			ctx,
+			pluginOpts,
 			jwt,
 			localJwks,
-			pluginOpts,
 			options,
 		);
 
@@ -156,7 +156,7 @@ export async function verifyJwt(
 	jwt: string,
 	options?: JwtVerifyOptions,
 ): Promise<JWTPayload> {
-	return verifyJwtInternal(ctx, jwt, getJwtPluginOptions(ctx.context), options);
+	return verifyJwtInternal(ctx, getJwtPluginOptions(ctx.context), jwt, options);
 }
 
 /**
@@ -181,9 +181,9 @@ export async function verifyJwt(
  */
 export async function verifyJwtWithKeyInternal(
 	ctx: GenericEndpointContext,
+	pluginOpts: JwtPluginOptions | undefined,
 	jwt: string,
 	jwk: string | CryptoKeyIdAlg,
-	pluginOpts?: JwtPluginOptions,
 	options?: JwtVerifyOptions,
 ): Promise<JWTPayload | null> {
 	if (!jwt) return null;
@@ -202,9 +202,9 @@ export async function verifyJwtWithKeyInternal(
 
 	const { payload, protectedHeader } = await verifyJwtJose(
 		ctx,
+		pluginOpts,
 		jwt,
 		publicKey.key,
-		pluginOpts,
 		options,
 	);
 
@@ -245,9 +245,9 @@ export async function verifyJwtWithKey(
 ): Promise<JWTPayload | null> {
 	return verifyJwtWithKeyInternal(
 		ctx,
+		getJwtPluginOptions(ctx.context),
 		jwt,
 		jwk,
-		getJwtPluginOptions(ctx.context),
 		options,
 	);
 }
