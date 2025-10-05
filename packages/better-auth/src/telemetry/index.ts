@@ -5,9 +5,7 @@ let lazyImportCreateTelemetry: Promise<
 export const createTelemetry: typeof import("./create-telemetry").createTelemetry =
 	async (...args) => {
 		if (!lazyImportCreateTelemetry) {
-			// keep esbuild from following dynamic import during bundling
-			const importPath = "./create-telemetry";
-			lazyImportCreateTelemetry = import(importPath).then(
+			lazyImportCreateTelemetry = import("./create-telemetry").then(
 				(mod) => mod.createTelemetry,
 			);
 		}
