@@ -1018,7 +1018,7 @@ describe("Admin plugin with organizations", async () => {
 		expect(res.data?.organizations.length).toBe(1);
 	});
 
-	it("should allow to filter organizations by role", async () => {
+	it("should allow to filter organizations", async () => {
 		const res = await client.admin.listOrganizations({
 			query: {
 				filterValue: "test",
