@@ -306,12 +306,6 @@ export async function importJwkInternal(
 ): Promise<Jwk> {
 	const adapter = getJwksAdapter(ctx.context.adapter);
 
-	if (isPublicKey(jwk))
-		ctx.context.logger.warn(
-			"Failed to import the JWK: Private key is expected, received a public key",
-			JSON.stringify(jwk),
-		);
-
 	const importedKey = await adapter.importKey({
 		id: jwk.kid,
 		publicKey: JSON.stringify(getPublicJwk(jwk)),
@@ -323,6 +317,12 @@ export async function importJwkInternal(
 					pluginOpts?.jwks?.disablePrivateKeyEncryption ?? false,
 				),
 	} as Jwk);
+
+	if (isPublicKey(jwk))
+		ctx.context.logger.warn(
+			"Importing JWK: Added a public key into the database",
+			JSON.stringify(jwk),
+		);
 
 	await updateCachedJwks(ctx, pluginOpts);
 	return importedKey;
@@ -440,8 +440,9 @@ export async function getJwks(ctx: GenericEndpointContext): Promise<Jwk[]> {
 export async function updateCachedJwks(
 	ctx: GenericEndpointContext,
 	pluginOpts: JwtPluginOptions | undefined,
-): Promise<JwksCache> {
+): Promise<void> {
 	invalidateCachedJwks();
+	if (pluginOpts?.jwks?.disableJwksCaching) return;
 	const { keys: keysRaw, remoteKeys: remoteKeysRaw } = await getAllKeysInternal(
 		ctx,
 		pluginOpts,
@@ -456,7 +457,6 @@ export async function updateCachedJwks(
 	jwksCache.remoteKeys = remoteKeys;
 	jwksCache.jwks = await keysToJwks(ctx, pluginOpts, keys.concat(remoteKeys));
 	jwksCache.cachedAt = new Date();
-	return jwksCache;
 }
 
 export async function getCachedJwks(
@@ -543,11 +543,14 @@ async function parseAllKeys(
 			return {
 				id: key.id,
 				publicKey: JSON.parse(key.publicKey),
-				privateKey: await ensureProperEncryption(
-					ctx.context.secret,
-					key.privateKey,
-					pluginOpts?.jwks?.disablePrivateKeyEncryption ?? false,
-				),
+				privateKey:
+					key.privateKey.trim() === ""
+						? ""
+						: await ensureProperEncryption(
+								ctx.context.secret,
+								key.privateKey,
+								false, // Cache is always encrypted
+							),
 			} satisfies JwkCache;
 		}),
 	);
@@ -562,7 +565,7 @@ async function parseAllKeys(
 					: await ensureProperEncryption(
 							ctx.context.secret,
 							JSON.stringify(remoteKey),
-							pluginOpts?.jwks?.disablePrivateKeyEncryption ?? false,
+							false, // Cache is always encrypted
 						),
 			} satisfies JwkCache;
 		}),

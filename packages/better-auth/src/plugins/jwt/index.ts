@@ -671,7 +671,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 
 						return ctx.json({ key: key });
 					} catch (error: unknown) {
-						// Custom display of adapter errors to not write "Could not import the JWK: " twice
+						// Custom display of adapter errors to not write "Faile to import the JWK: " twice
 						if (error instanceof BetterAuthError) {
 							if (
 								exportedPrivateKey.kid &&
@@ -681,9 +681,9 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 									message: error.message,
 								});
 						}
-						ctx.context.logger.error(`Could not import the JWK: ${error}`);
+						ctx.context.logger.error(`Failed to import the JWK: ${error}`);
 						throw new APIError("BAD_REQUEST", {
-							message: `Could not import the JWK: ${error}`,
+							message: `Failed to import the JWK: ${error}`,
 						});
 					}
 				},

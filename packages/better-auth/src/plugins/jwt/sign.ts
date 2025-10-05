@@ -56,6 +56,7 @@ async function signJwtPayload(
 		true,
 		jwk ?? pluginOpts?.jwks?.defaultKeyId,
 	);
+
 	if (!privateKey) {
 		// This happens only if there are no JWKs in the database, so create one
 		const newKey = await createJwkInternal(ctx, pluginOpts);
