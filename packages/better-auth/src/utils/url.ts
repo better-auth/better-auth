@@ -19,14 +19,14 @@ function withPath(url: string, path = "/api/auth") {
 		return url;
 	}
 
-	const cleanedUrl = url.replace(/\/+$/, "");
+	const trimmedUrl = url.replace(/\/+$/, "");
 
 	if (!path || path === "/") {
-		return cleanedUrl;
+		return trimmedUrl;
 	}
 
 	path = path.startsWith("/") ? path : `/${path}`;
-	return `${cleanedUrl}${path}`;
+	return `${trimmedUrl}${path}`;
 }
 
 export function getBaseURL(
