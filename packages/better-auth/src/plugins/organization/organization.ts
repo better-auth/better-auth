@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import * as z from "zod";
-import type { AuthPluginSchema } from "../../types";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";
@@ -657,7 +657,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						},
 					},
 				},
-			} satisfies AuthPluginSchema)
+			} satisfies BetterAuthPluginDBSchema)
 		: {};
 
 	const organizationRoleSchema = options?.dynamicAccessControl?.enabled
@@ -700,7 +700,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 					modelName: options?.schema?.organizationRole?.modelName,
 				},
-			} satisfies AuthPluginSchema)
+			} satisfies BetterAuthPluginDBSchema)
 		: {};
 
 	const schema = {
@@ -835,7 +835,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					...(options?.schema?.invitation?.additionalFields || {}),
 				},
 			},
-		} satisfies AuthPluginSchema),
+		} satisfies BetterAuthPluginDBSchema),
 	};
 
 	/**
@@ -1007,7 +1007,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			),
 		},
 		schema: {
-			...(schema as AuthPluginSchema),
+			...(schema as BetterAuthPluginDBSchema),
 			session: {
 				fields: {
 					activeOrganizationId: {
