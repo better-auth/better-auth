@@ -144,7 +144,7 @@ describe("organization", async (it) => {
 		expect(organization.data?.name).toBe("test2");
 	});
 
-	it("should prevent updating organization to duplicate slug", async () => { 
+	it("should prevent updating organization to duplicate slug", async () => {
 		const { headers } = await signInWithTestUser();
 
 		// Try to update organization2 (slug: "test2") to use organization1's slug ("test")
@@ -161,7 +161,7 @@ describe("organization", async (it) => {
 		// This should fail with duplicate slug error
 		expect(organization.error?.status).toBe(400);
 		expect(organization.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
 		);
 	});
 

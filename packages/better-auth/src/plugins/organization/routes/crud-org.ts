@@ -489,7 +489,10 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				const existingOrganization = await adapter.findOrganizationBySlug(
 					ctx.body.data.slug,
 				);
-				if (existingOrganization && existingOrganization.id !== organizationId) {
+				if (
+					existingOrganization &&
+					existingOrganization.id !== organizationId
+				) {
 					throw new APIError("BAD_REQUEST", {
 						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
 					});
