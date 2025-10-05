@@ -9,6 +9,8 @@ import type { GoogleProfile } from "../../social-providers";
 import { signJWT } from "../../crypto";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "../../oauth2";
+import { organization } from "../organization";
+import { BetterAuthError } from "../../error";
 
 vi.mock("../../oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
@@ -800,6 +802,248 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS");
+	});
+});
+
+describe("Admin plugin with organizations", async () => {
+	const organizationSchema = {
+		organization: {
+			additionalFields: {
+				requiredField: {
+					type: "string",
+					required: true,
+				},
+				nonRequiredField: {
+					type: "string",
+					required: false,
+					defaultValue: "default-value",
+				},
+			},
+		},
+	} as const;
+
+	const {
+		auth,
+		signInWithTestUser,
+		signInWithUser,
+		cookieSetter,
+		customFetchImpl,
+	} = await getTestInstance(
+		{
+			plugins: [
+				organization({
+					schema: organizationSchema,
+				}),
+				admin({
+					organizations: {
+						enabled: true,
+						schema: organizationSchema,
+					},
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
+						},
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+	const client = createAuthClient({
+		fetchOptions: {
+			customFetchImpl,
+		},
+		plugins: [
+			adminClient({
+				organizations: {
+					enabled: true,
+					schema: organizationSchema,
+				},
+			}),
+		],
+		baseURL: "http://localhost:3000",
+	});
+
+	const { headers: adminHeaders } = await signInWithTestUser();
+	const testNonAdminUser = {
+		id: "123",
+		email: "user@test.com",
+		password: "password",
+		name: "Test User",
+	};
+	const { data: testNonAdminUserRes } =
+		await client.signUp.email(testNonAdminUser);
+	testNonAdminUser.id = testNonAdminUserRes?.user.id || "";
+	const { headers: userHeaders } = await signInWithUser(
+		testNonAdminUser.email,
+		testNonAdminUser.password,
+	);
+
+	for (const { name, slug } of [
+		{
+			name: "Test",
+			slug: "test",
+		},
+		{
+			name: "Test org",
+			slug: "test-org",
+		},
+	]) {
+		await auth.api.createOrganization({
+			headers: userHeaders,
+			body: {
+				name,
+				slug,
+				requiredField: "",
+			},
+		});
+	}
+
+	it("should allow admin to list organizations", async () => {
+		const res = await client.admin.listOrganizations({
+			query: {
+				limit: 2,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.organizations.length).toBe(2);
+	});
+
+	it("should list organizations with search query", async () => {
+		const res = await client.admin.listOrganizations({
+			query: {
+				filterField: "name",
+				filterOperator: "eq",
+				filterValue: "Test",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.total).toBe(1);
+	});
+
+	it("should not allow non-admin to list organizations", async () => {
+		const res = await client.admin.listOrganizations({
+			query: {
+				limit: 2,
+			},
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("should allow admin to count organizations", async () => {
+		const res = await client.admin.listOrganizations({
+			query: {
+				limit: 1,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.organizations.length).toBe(1);
+		expect(res.data?.total).toBe(2);
+	});
+
+	it("should allow to sort organizations by name", async () => {
+		const res = await client.admin.listOrganizations({
+			query: {
+				sortBy: "name",
+				sortDirection: "desc",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.organizations[0]!.name).toBe("Test org");
+
+		const res2 = await client.admin.listOrganizations({
+			query: {
+				sortBy: "name",
+				sortDirection: "asc",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res2.data?.organizations[0]!.name).toBe("Test");
+	});
+
+	it("should allow offset and limit", async () => {
+		const res = await client.admin.listOrganizations({
+			query: {
+				limit: 1,
+				offset: 1,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.organizations.length).toBe(1);
+		expect(res.data?.organizations[0]!.name).toBe("Test org");
+	});
+
+	it("should allow to search organizations by name", async () => {
+		const res = await client.admin.listOrganizations({
+			query: {
+				searchValue: "Test org",
+				searchField: "name",
+				searchOperator: "contains",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.organizations.length).toBe(1);
+	});
+
+	it("should allow to filter organizations by role", async () => {
+		const res = await client.admin.listOrganizations({
+			query: {
+				filterValue: "test",
+				filterField: "slug",
+				filterOperator: "eq",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.organizations.length).toBe(1);
+	});
+
+	it("should throw error when organization plugin is not set up", async () => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					admin({
+						organizations: {
+							enabled: true,
+						},
+					}),
+				],
+			}),
+		).rejects.toThrowError(BetterAuthError);
 	});
 });
 
