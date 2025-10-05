@@ -57,25 +57,10 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		return null;
 	};
 
-	// Create the fallback resolve method
-	const resolveMethod = userConfig?.customResolveMethod
-		? (ctx: GenericEndpointContext) => {
-				// Try user's custom method first
-				const customResult = userConfig.customResolveMethod!(ctx);
-				if (!customResult) {
-					return customResult;
-				}
-				// Fall back to default method if custom returns null
-				return defaultResolveMethod(ctx);
-			}
-		: defaultResolveMethod;
-
 	const config = {
 		cookieName: "better-auth.last_used_login_method",
 		maxAge: 60 * 60 * 24 * 30,
 		...userConfig,
-		// Override customResolveMethod with our fallback logic
-		customResolveMethod: resolveMethod,
 	} satisfies LastLoginMethodOptions;
 
 	return {
@@ -90,7 +75,8 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 									if (!config.storeInDatabase) return;
 									if (!context) return;
 									const lastUsedLoginMethod =
-										config.customResolveMethod(context);
+										config.customResolveMethod?.(context) ??
+										defaultResolveMethod(context);
 									if (lastUsedLoginMethod) {
 										return {
 											data: {
@@ -98,6 +84,29 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 												lastLoginMethod: lastUsedLoginMethod,
 											},
 										};
+									}
+								},
+							},
+						},
+						session: {
+							create: {
+								async after(session, context) {
+									if (!config.storeInDatabase) return;
+									if (!context) return;
+									const lastUsedLoginMethod =
+										config.customResolveMethod?.(context) ??
+										defaultResolveMethod(context);
+									if (lastUsedLoginMethod && session?.userId) {
+										try {
+											await ctx.internalAdapter.updateUser(session.userId, {
+												lastLoginMethod: lastUsedLoginMethod,
+											});
+										} catch (error) {
+											ctx.logger.error(
+												"Failed to update lastLoginMethod",
+												error,
+											);
+										}
 									}
 								},
 							},
@@ -113,7 +122,8 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const lastUsedLoginMethod = config.customResolveMethod(ctx);
+						const lastUsedLoginMethod =
+							config.customResolveMethod?.(ctx) ?? defaultResolveMethod(ctx);
 						if (lastUsedLoginMethod) {
 							const setCookie = ctx.context.responseHeaders?.get("set-cookie");
 							const sessionTokenName =

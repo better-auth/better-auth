@@ -10,7 +10,6 @@ import {
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
 import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
-import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../middlewares";
@@ -99,17 +98,12 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					status: true,
 				});
 			}
-			const additionalFields = parseUserInput(
-				ctx.context.options,
-				rest,
-				"update",
-			);
 			const user = await ctx.context.internalAdapter.updateUser(
 				session.user.id,
 				{
 					name,
 					image,
-					...additionalFields,
+					...rest,
 				},
 				ctx,
 			);
@@ -537,8 +531,8 @@ export const deleteUser = createAuthEndpoint(
 		if (beforeDelete) {
 			await beforeDelete(session.user, ctx.request);
 		}
-		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		await ctx.context.internalAdapter.deleteUser(session.user.id, ctx);
+		await ctx.context.internalAdapter.deleteSessions(session.user.id, ctx);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		deleteSessionCookie(ctx);
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
@@ -629,10 +623,10 @@ export const deleteUserCallback = createAuthEndpoint(
 		if (beforeDelete) {
 			await beforeDelete(session.user, ctx.request);
 		}
-		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		await ctx.context.internalAdapter.deleteUser(session.user.id, ctx);
+		await ctx.context.internalAdapter.deleteSessions(session.user.id, ctx);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
-		await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+		await ctx.context.internalAdapter.deleteVerificationValue(token.id, ctx);
 
 		deleteSessionCookie(ctx);
 
@@ -744,7 +738,7 @@ export const changeEmail = createAuthEndpoint(
 				await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (existing) {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
+					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				});
 			}
 			await ctx.context.internalAdapter.updateUserByEmail(

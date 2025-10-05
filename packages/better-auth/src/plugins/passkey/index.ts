@@ -16,15 +16,12 @@ import * as z from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
-import type {
-	BetterAuthPlugin,
-	InferOptionSchema,
-	AuthPluginSchema,
-} from "../../types/plugins";
+import type { BetterAuthPlugin, InferOptionSchema } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
 import { generateId } from "../../utils";
 import { mergeSchema } from "../../db/schema";
 import { base64 } from "@better-auth/utils/base64";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
@@ -61,7 +58,7 @@ export interface PasskeyOptions {
 	 * if this isn't provided. The client itself will
 	 * pass this value.
 	 */
-	origin?: string | null;
+	origin?: string | string[] | null;
 
 	/**
 	 * Allow customization of the authenticatorSelection options
@@ -146,13 +143,13 @@ export const passkey = (options?: PasskeyOptions) => {
 									parameters: {
 										query: {
 											authenticatorAttachment: {
-												description: `Type of authenticator to use for registration. 
-                          "platform" for device-specific authenticators, 
+												description: `Type of authenticator to use for registration.
+                          "platform" for device-specific authenticators,
                           "cross-platform" for authenticators that can be used across devices.`,
 												required: false,
 											},
 											name: {
-												description: `Optional custom name for the passkey. 
+												description: `Optional custom name for the passkey.
                           This can help identify the passkey when managing multiple credentials.`,
 												required: false,
 											},
@@ -332,16 +329,6 @@ export const passkey = (options?: PasskeyOptions) => {
 				"/passkey/generate-authenticate-options",
 				{
 					method: "POST",
-					body: z
-						.object({
-							email: z
-								.string()
-								.meta({
-									description: "The email address of the user",
-								})
-								.optional(),
-						})
-						.optional(),
 					metadata: {
 						openapi: {
 							description: "Generate authentication options for a passkey",
@@ -1064,4 +1051,4 @@ const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;

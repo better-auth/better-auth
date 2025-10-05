@@ -85,17 +85,17 @@ describe("account", async () => {
 		googleGetUserInfoMock.mockClear();
 	});
 
-	const { runWithDefaultUser } = await signInWithTestUser();
+	const { runWithUser } = await signInWithTestUser();
 
 	it("should list all accounts", async () => {
-		await runWithDefaultUser(async () => {
+		await runWithUser(async () => {
 			const accounts = await client.listAccounts();
 			expect(accounts.data?.length).toBe(1);
 		});
 	});
 
 	it("should link first account", async () => {
-		await runWithDefaultUser(async (headers) => {
+		await runWithUser(async (headers) => {
 			const linkAccountRes = await client.linkSocial(
 				{
 					provider: "google",
@@ -136,7 +136,7 @@ describe("account", async () => {
 				},
 			});
 		});
-		const { runWithDefaultUser: runWithClient2 } = await signInWithTestUser();
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async () => {
 			const accounts = await client.listAccounts();
 			expect(accounts.data?.length).toBe(2);
@@ -144,7 +144,7 @@ describe("account", async () => {
 	});
 
 	it("should encrypt access token and refresh token", async () => {
-		const { runWithDefaultUser: runWithClient2 } = await signInWithTestUser();
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		const account = await ctx.adapter.findOne<Account>({
 			model: "account",
 			where: [{ field: "providerId", value: "google" }],
@@ -160,7 +160,7 @@ describe("account", async () => {
 	});
 
 	it("should pass custom scopes to authorization URL", async () => {
-		const { runWithDefaultUser: runWithClient2 } = await signInWithTestUser();
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async () => {
 			const customScope = "https://www.googleapis.com/auth/drive.readonly";
 			const linkAccountRes = await client.linkSocial({
@@ -184,7 +184,7 @@ describe("account", async () => {
 	});
 
 	it("should link second account from the same provider", async () => {
-		const { runWithDefaultUser: runWithClient2 } = await signInWithTestUser();
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async (headers) => {
 			const linkAccountRes = await client.linkSocial(
 				{
@@ -227,7 +227,7 @@ describe("account", async () => {
 			});
 		});
 
-		const { runWithDefaultUser: runWithClient3 } = await signInWithTestUser();
+		const { runWithUser: runWithClient3 } = await signInWithTestUser();
 		await runWithClient3(async () => {
 			const accounts = await client.listAccounts();
 			expect(accounts.data?.length).toBe(2);
@@ -249,7 +249,7 @@ describe("account", async () => {
 		};
 		googleGetUserInfoMock.mockResolvedValueOnce(userInfo);
 
-		const { runWithDefaultUser: runWithClient2 } = await signInWithTestUser();
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async (headers) => {
 			await client.linkSocial(
 				{
@@ -274,7 +274,7 @@ describe("account", async () => {
 		expect(googleVerifyIdTokenMock).toHaveBeenCalledOnce();
 		expect(googleGetUserInfoMock).toHaveBeenCalledOnce();
 
-		const { runWithDefaultUser: runWithClient3 } = await signInWithTestUser();
+		const { runWithUser: runWithClient3 } = await signInWithTestUser();
 		await runWithClient3(async () => {
 			const accounts = await client.listAccounts();
 			expect(accounts.data?.length).toBe(3);
@@ -282,11 +282,11 @@ describe("account", async () => {
 	});
 
 	it("should unlink account", async () => {
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const previousAccounts = await client.listAccounts();
 			expect(previousAccounts.data?.length).toBe(3);
-			const unlinkAccountId = previousAccounts.data![1].accountId;
+			const unlinkAccountId = previousAccounts.data![1]!.accountId;
 			const unlinkRes = await client.unlinkAccount({
 				providerId: "google",
 				accountId: unlinkAccountId!,
@@ -298,8 +298,8 @@ describe("account", async () => {
 	});
 
 	it("should fail to unlink the last account of a provider", async () => {
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const previousAccounts = await client.listAccounts();
 			await ctx.adapter.delete({
 				model: "account",
@@ -310,7 +310,7 @@ describe("account", async () => {
 					},
 				],
 			});
-			const unlinkAccountId = previousAccounts.data![0].accountId;
+			const unlinkAccountId = previousAccounts.data![0]!.accountId;
 			const unlinkRes = await client.unlinkAccount({
 				providerId: "credential",
 				accountId: unlinkAccountId,
@@ -322,12 +322,12 @@ describe("account", async () => {
 	});
 
 	it("should unlink account with specific accountId", async () => {
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const previousAccounts = await client.listAccounts();
 			expect(previousAccounts.data?.length).toBeGreaterThan(0);
 
-			const accountToUnlink = previousAccounts.data![0];
+			const accountToUnlink = previousAccounts.data![0]!;
 			const unlinkAccountId = accountToUnlink.accountId;
 			const providerId = accountToUnlink.providerId;
 			const accountsWithSameProvider = previousAccounts.data!.filter(
@@ -356,7 +356,7 @@ describe("account", async () => {
 	});
 
 	it("should unlink all accounts with specific providerId", async () => {
-		const { runWithDefaultUser, user } = await signInWithTestUser();
+		const { runWithUser, user } = await signInWithTestUser();
 		await ctx.adapter.create({
 			model: "account",
 			data: {
@@ -379,7 +379,7 @@ describe("account", async () => {
 			},
 		});
 
-		await runWithDefaultUser(async () => {
+		await runWithUser(async () => {
 			const previousAccounts = await client.listAccounts();
 
 			const googleAccounts = previousAccounts.data!.filter(
@@ -390,7 +390,7 @@ describe("account", async () => {
 			for (let i = 0; i < googleAccounts.length - 1; i++) {
 				const unlinkRes = await client.unlinkAccount({
 					providerId: "google",
-					accountId: googleAccounts[i].accountId!,
+					accountId: googleAccounts[i]!.accountId!,
 				});
 				expect(unlinkRes.data?.status).toBe(true);
 			}

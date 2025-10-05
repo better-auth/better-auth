@@ -344,6 +344,7 @@ export const auth = betterAuth({
                     return "saml"
                 }
                 
+                // Track magic link authentication
                 if (ctx.path === "/magic-link/verify") {
                     return "magic-link"
                 }

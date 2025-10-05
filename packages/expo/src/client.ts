@@ -1,8 +1,8 @@
-import { BetterAuthClientPlugin, Store } from "better-auth/types";
+import type { BetterAuthClientPlugin, Store } from "better-auth/types";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
-import { BetterFetchOption } from "@better-fetch/fetch";
+import type { BetterFetchOption } from "@better-fetch/fetch";
 
 interface CookieAttributes {
 	value: string;
@@ -23,15 +23,15 @@ export function parseSetCookieHeader(
 	cookies.forEach((cookie) => {
 		const parts = cookie.split(";").map((p) => p.trim());
 		const [nameValue, ...attributes] = parts;
-		const [name, ...valueParts] = nameValue.split("=");
+		const [name, ...valueParts] = nameValue!.split("=");
 		const value = valueParts.join("=");
 		const cookieObj: CookieAttributes = { value };
 		attributes.forEach((attr) => {
 			const [attrName, ...attrValueParts] = attr.split("=");
 			const attrValue = attrValueParts.join("=");
-			cookieObj[attrName.toLowerCase() as "value"] = attrValue;
+			cookieObj[attrName!.toLowerCase() as "value"] = attrValue;
 		});
-		cookieMap.set(name, cookieObj);
+		cookieMap.set(name!, cookieObj);
 	});
 	return cookieMap;
 }
@@ -221,7 +221,8 @@ export const expoClient = (opts: ExpoClientOptions) => {
 									},
 								);
 							}
-							const result = await Browser.openAuthSessionAsync(signInURL, to);
+							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;
+							const result = await Browser.openAuthSessionAsync(proxyURL, to);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
 							const cookie = String(url.searchParams.get("cookie"));

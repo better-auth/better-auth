@@ -7,7 +7,6 @@ import {
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
-	AuthPluginSchema,
 	Session,
 	User,
 	AuthContext,
@@ -17,6 +16,7 @@ import { getOrigin } from "../../utils/url";
 import { mergeSchema } from "../../db/schema";
 import type { EndpointContext } from "better-call";
 import { generateId } from "../../utils/id";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
@@ -75,7 +75,7 @@ const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;
 
 export const anonymous = (options?: AnonymousOptions) => {
 	const ERROR_CODES = {
@@ -211,7 +211,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						 */
 						const sessionCookie = parseSetCookieHeader(setCookie || "")
 							.get(sessionTokenName)
-							?.value.split(".")[0];
+							?.value.split(".")[0]!;
 
 						if (!sessionCookie) {
 							return;

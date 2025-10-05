@@ -14,41 +14,12 @@ import type {
 	AdapterTestDebugLogs,
 	CleanedWhere,
 } from "./types";
-import type { FieldAttribute } from "../../db";
+import { colors } from "../../utils/colors";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 export * from "./types";
 
-let debugLogs: any[] = [];
+let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
-
-const colors = {
-	reset: "\x1b[0m",
-	bright: "\x1b[1m",
-	dim: "\x1b[2m",
-	underscore: "\x1b[4m",
-	blink: "\x1b[5m",
-	reverse: "\x1b[7m",
-	hidden: "\x1b[8m",
-	fg: {
-		black: "\x1b[30m",
-		red: "\x1b[31m",
-		green: "\x1b[32m",
-		yellow: "\x1b[33m",
-		blue: "\x1b[34m",
-		magenta: "\x1b[35m",
-		cyan: "\x1b[36m",
-		white: "\x1b[37m",
-	},
-	bg: {
-		black: "\x1b[40m",
-		red: "\x1b[41m",
-		green: "\x1b[42m",
-		yellow: "\x1b[43m",
-		blue: "\x1b[44m",
-		magenta: "\x1b[45m",
-		cyan: "\x1b[46m",
-		white: "\x1b[47m",
-	},
-};
 
 const createAsIsTransaction =
 	(adapter: Adapter) =>
@@ -63,6 +34,10 @@ export const createAdapterFactory =
 		config: cfg,
 	}: AdapterFactoryOptions): AdapterFactory =>
 	(options: BetterAuthOptions): Adapter => {
+		const uniqueAdapterFactoryInstanceId = Math.random()
+			.toString(36)
+			.substring(2, 15);
+
 		const config = {
 			...cfg,
 			supportsBooleans: cfg.supportsBooleans ?? true,
@@ -71,6 +46,8 @@ export const createAdapterFactory =
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 			transaction: cfg.transaction ?? false,
+			disableTransformInput: cfg.disableTransformInput ?? false,
+			disableTransformOutput: cfg.disableTransformOutput ?? false,
 		} satisfies AdapterFactoryConfig;
 
 		if (
@@ -112,10 +89,13 @@ export const createAdapterFactory =
 
 			let f = schema[model]?.fields[field];
 			if (!f) {
-				//@ts-expect-error
-				f = Object.values(schema[model]?.fields).find(
-					(f) => f.fieldName === field,
+				const result = Object.entries(schema[model]!.fields!).find(
+					([_, f]) => f.fieldName === field,
 				);
+				if (result) {
+					f = result[1];
+					field = result[0];
+				}
 			}
 			if (!f) {
 				debugLog(`Field ${field} not found in model ${model}`);
@@ -181,8 +161,8 @@ export const createAdapterFactory =
 
 			if (useCustomModelName) {
 				return usePlural
-					? `${schema[defaultModelKey].modelName}s`
-					: schema[defaultModelKey].modelName;
+					? `${schema[defaultModelKey]!.modelName}s`
+					: schema[defaultModelKey]!.modelName;
 			}
 
 			return usePlural ? `${model}s` : model;
@@ -216,7 +196,7 @@ export const createAdapterFactory =
 				) {
 					if (config.debugLogs.isRunningAdapterTests) {
 						args.shift(); // Removes the {method: "..."} object from the args array.
-						debugLogs.push(args);
+						debugLogs.push({ instance: uniqueAdapterFactoryInstanceId, args });
 					}
 					return;
 				}
@@ -304,7 +284,7 @@ export const createAdapterFactory =
 							},
 						}
 					: {}),
-			} satisfies FieldAttribute;
+			} satisfies DBFieldAttribute;
 		};
 
 		const getFieldAttributes = ({
@@ -317,40 +297,30 @@ export const createAdapterFactory =
 			const defaultModelName = getDefaultModelName(model);
 			const defaultFieldName = getDefaultFieldName({
 				field: field,
-				model: model,
+				model: defaultModelName,
 			});
 
-			const fields = schema[defaultModelName].fields;
+			const fields = schema[defaultModelName]!.fields;
 			fields.id = idField({ customModelName: defaultModelName });
-			return fields[defaultFieldName];
+			return fields[defaultFieldName]!;
 		};
-
-		const adapterInstance = customAdapter({
-			options,
-			schema,
-			debugLog,
-			getFieldName,
-			getModelName,
-			getDefaultModelName,
-			getDefaultFieldName,
-			getFieldAttributes,
-		});
 
 		const transformInput = async (
 			data: Record<string, any>,
-			unsafe_model: string,
+			defaultModelName: string,
 			action: "create" | "update",
 			forceAllowId?: boolean,
 		) => {
 			const transformedData: Record<string, any> = {};
-			const fields = schema[unsafe_model].fields;
+			const fields = schema[defaultModelName]!.fields;
+
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
 			if (
 				!config.disableIdGeneration &&
 				!options.advanced?.database?.useNumberId
 			) {
 				fields.id = idField({
-					customModelName: unsafe_model,
+					customModelName: defaultModelName,
 					forceAllowId: forceAllowId && "id" in data,
 				});
 			}
@@ -359,44 +329,44 @@ export const createAdapterFactory =
 				const fieldAttributes = fields[field];
 
 				let newFieldName: string =
-					newMappedKeys[field] || fields[field].fieldName || field;
+					newMappedKeys[field] || fields[field]!.fieldName || field;
 				if (
 					value === undefined &&
-					((fieldAttributes.defaultValue === undefined &&
-						!fieldAttributes.transform?.input &&
-						!(action === "update" && fieldAttributes.onUpdate)) ||
-						(action === "update" && !fieldAttributes.onUpdate))
+					((fieldAttributes!.defaultValue === undefined &&
+						!fieldAttributes!.transform?.input &&
+						!(action === "update" && fieldAttributes!.onUpdate)) ||
+						(action === "update" && !fieldAttributes!.onUpdate))
 				) {
 					continue;
 				}
 				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
-				let newValue = withApplyDefault(value, fieldAttributes, action);
+				let newValue = withApplyDefault(value, fieldAttributes!, action);
 
 				// If the field attr provides a custom transform input, then we'll let it handle the value transformation.
 				// Afterwards, we'll continue to apply the default transformations just to make sure it saves in the correct format.
-				if (fieldAttributes.transform?.input) {
-					newValue = await fieldAttributes.transform.input(newValue);
+				if (fieldAttributes!.transform?.input) {
+					newValue = await fieldAttributes!.transform.input(newValue);
 				}
 
 				if (
-					fieldAttributes.references?.field === "id" &&
+					fieldAttributes!.references?.field === "id" &&
 					options.advanced?.database?.useNumberId
 				) {
 					if (Array.isArray(newValue)) {
-						newValue = newValue.map(Number);
+						newValue = newValue.map((x) => (x !== null ? Number(x) : null));
 					} else {
-						newValue = Number(newValue);
+						newValue = newValue !== null ? Number(newValue) : null;
 					}
 				} else if (
 					config.supportsJSON === false &&
 					typeof newValue === "object" &&
-					fieldAttributes.type === "json"
+					fieldAttributes!.type === "json"
 				) {
 					newValue = JSON.stringify(newValue);
 				} else if (
 					config.supportsDates === false &&
 					newValue instanceof Date &&
-					fieldAttributes.type === "date"
+					fieldAttributes!.type === "date"
 				) {
 					newValue = newValue.toISOString();
 				} else if (
@@ -411,8 +381,8 @@ export const createAdapterFactory =
 						data: newValue,
 						action,
 						field: newFieldName,
-						fieldAttributes: fieldAttributes,
-						model: unsafe_model,
+						fieldAttributes: fieldAttributes!,
+						model: defaultModelName,
 						schema,
 						options,
 					});
@@ -433,7 +403,7 @@ export const createAdapterFactory =
 			if (!data) return null;
 			const newMappedKeys = config.mapKeysTransformOutput ?? {};
 			const transformedData: Record<string, any> = {};
-			const tableSchema = schema[unsafe_model].fields;
+			const tableSchema = schema[unsafe_model]!.fields;
 			const idKey = Object.entries(newMappedKeys).find(
 				([_, v]) => v === "id",
 			)?.[0];
@@ -447,6 +417,7 @@ export const createAdapterFactory =
 				const field = tableSchema[key];
 				if (field) {
 					const originalKey = field.fieldName || key;
+
 					// If the field is mapped, we'll use the mapped key. Otherwise, we'll use the original key.
 					let newValue =
 						data[
@@ -543,7 +514,10 @@ export const createAdapterFactory =
 					model: defaultModelName,
 				});
 
-				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
+				if (
+					defaultFieldName === "id" ||
+					fieldAttr!.references?.field === "id"
+				) {
 					if (options.advanced?.database?.useNumberId) {
 						if (Array.isArray(value)) {
 							return {
@@ -571,14 +545,36 @@ export const createAdapterFactory =
 			}) as any;
 		};
 
+		const adapterInstance = customAdapter({
+			options,
+			schema,
+			debugLog,
+			getFieldName,
+			getModelName,
+			getDefaultModelName,
+			getDefaultFieldName,
+			getFieldAttributes,
+			transformInput,
+			transformOutput,
+			transformWhereClause,
+		});
+
 		let lazyLoadTransaction: Adapter["transaction"] | null = null;
 		const adapter: Adapter = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
-						logger.warn(
-							`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
-						);
+						if (
+							typeof config.debugLogs === "object" &&
+							"isRunningAdapterTests" in config.debugLogs &&
+							config.debugLogs.isRunningAdapterTests
+						) {
+							// hide warning in adapter tests
+						} else {
+							logger.warn(
+								`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
+							);
+						}
 						lazyLoadTransaction = createAsIsTransaction(adapter);
 					} else {
 						logger.debug(
@@ -624,12 +620,15 @@ export const createAdapterFactory =
 					`${formatMethod("create")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
-				const data = (await transformInput(
-					unsafeData,
-					unsafeModel,
-					"create",
-					forceAllowId,
-				)) as T;
+				let data = unsafeData;
+				if (!config.disableTransformInput) {
+					data = (await transformInput(
+						unsafeData,
+						unsafeModel,
+						"create",
+						forceAllowId,
+					)) as T;
+				}
 				debugLog(
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
@@ -643,7 +642,10 @@ export const createAdapterFactory =
 					`${formatMethod("create")} ${formatAction("DB Result")}:`,
 					{ model, res },
 				);
-				const transformed = await transformOutput(res, unsafeModel, select);
+				let transformed = res as any;
+				if (!config.disableTransformOutput) {
+					transformed = await transformOutput(res as any, unsafeModel, select);
+				}
 				debugLog(
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
@@ -674,11 +676,10 @@ export const createAdapterFactory =
 					`${formatMethod("update")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
-				const data = (await transformInput(
-					unsafeData,
-					unsafeModel,
-					"update",
-				)) as T;
+				let data = unsafeData as T;
+				if (!config.disableTransformInput) {
+					data = (await transformInput(unsafeData, unsafeModel, "update")) as T;
+				}
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
@@ -696,7 +697,10 @@ export const createAdapterFactory =
 					`${formatMethod("update")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
-				const transformed = await transformOutput(res as any, unsafeModel);
+				let transformed = res as any;
+				if (!config.disableTransformOutput) {
+					transformed = await transformOutput(res as any, unsafeModel);
+				}
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
@@ -727,7 +731,10 @@ export const createAdapterFactory =
 					`${formatMethod("updateMany")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
-				const data = await transformInput(unsafeData, unsafeModel, "update");
+				let data = unsafeData;
+				if (!config.disableTransformInput) {
+					data = await transformInput(unsafeData, unsafeModel, "update");
+				}
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
@@ -787,11 +794,10 @@ export const createAdapterFactory =
 					`${formatMethod("findOne")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
-				const transformed = await transformOutput(
-					res as any,
-					unsafeModel,
-					select,
-				);
+				let transformed = res as any;
+				if (!config.disableTransformOutput) {
+					transformed = await transformOutput(res as any, unsafeModel, select);
+				}
 				debugLog(
 					{ method: "findOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
@@ -843,9 +849,12 @@ export const createAdapterFactory =
 					`${formatMethod("findMany")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
-				const transformed = await Promise.all(
-					res.map(async (r) => await transformOutput(r as any, unsafeModel)),
-				);
+				let transformed = res as any;
+				if (!config.disableTransformOutput) {
+					transformed = await Promise.all(
+						res.map(async (r) => await transformOutput(r as any, unsafeModel)),
+					);
+				}
 				debugLog(
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
@@ -1019,17 +1028,25 @@ export const createAdapterFactory =
 				? {
 						adapterTestDebugLogs: {
 							resetDebugLogs() {
-								debugLogs = [];
+								debugLogs = debugLogs.filter(
+									(log) => log.instance !== uniqueAdapterFactoryInstanceId,
+								);
 							},
 							printDebugLogs() {
 								const separator = `─`.repeat(80);
+								const logs = debugLogs.filter(
+									(log) => log.instance === uniqueAdapterFactoryInstanceId,
+								);
+								if (logs.length === 0) {
+									return;
+								}
 
 								//`${colors.fg.blue}|${colors.reset} `,
-								let log: any[] = debugLogs
+								let log: any[] = logs
 									.reverse()
 									.map((log) => {
-										log[0] = `\n${log[0]}`;
-										return [...log, "\n"];
+										log.args[0] = `\n${log.args[0]}`;
+										return [...log.args, "\n"];
 									})
 									.reduce(
 										(prev, curr) => {

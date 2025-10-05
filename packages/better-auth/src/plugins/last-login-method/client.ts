@@ -20,7 +20,7 @@ function getCookieValue(name: string): string | null {
 		.split("; ")
 		.find((row) => row.startsWith(`${name}=`));
 
-	return cookie ? cookie.split("=")[1] : null;
+	return cookie ? cookie.split("=")[1]! : null;
 }
 
 /**

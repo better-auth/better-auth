@@ -8,10 +8,10 @@ import type {
 	BetterAuthOptions,
 	User,
 } from "../../types";
-import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
 import { runWithTransaction } from "../../context/transaction";
+import { parseUserInput } from "../../db";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -179,7 +179,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					image,
 					callbackURL,
 					rememberMe,
-					...additionalFields
+					...rest
 				} = body;
 				const isValidEmail = z.email().safeParse(email);
 
@@ -210,14 +210,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						`Sign-up attempt for existing email: ${email}`,
 					);
 					throw new APIError("UNPROCESSABLE_ENTITY", {
-						message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
+						message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 					});
 				}
-
-				const additionalData = parseUserInput(
-					ctx.context.options,
-					additionalFields as any,
-				);
 				/**
 				 * Hash the password
 				 *
@@ -229,12 +224,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const hash = await ctx.context.password.hash(password);
 				let createdUser: User;
 				try {
+					const data = parseUserInput(ctx.context.options, rest, "create");
 					createdUser = await ctx.context.internalAdapter.createUser(
 						{
 							email: email.toLowerCase(),
 							name,
 							image,
-							...additionalData,
+							...data,
 							emailVerified: false,
 						},
 						ctx,
@@ -251,6 +247,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					if (e instanceof APIError) {
 						throw e;
 					}
+					ctx.context.logger?.error("Failed to create user", e);
 					throw new APIError("UNPROCESSABLE_ENTITY", {
 						message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 						details: e,
@@ -280,16 +277,34 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
 					);
-					const url = `${
-						ctx.context.baseURL
-					}/verify-email?token=${token}&callbackURL=${body.callbackURL || "/"}`;
+					const callbackURL = body.callbackURL
+						? encodeURIComponent(body.callbackURL)
+						: encodeURIComponent("/");
+					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+
+					const args: Parameters<
+						Required<
+							Required<BetterAuthOptions>["emailVerification"]
+						>["sendVerificationEmail"]
+					> = ctx.request
+						? [
+								{
+									user: createdUser,
+									url,
+									token,
+								},
+								ctx.request,
+							]
+						: [
+								{
+									user: createdUser,
+									url,
+									token,
+								},
+							];
+
 					await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-						{
-							user: createdUser,
-							url,
-							token,
-						},
-						ctx.request,
+						...args,
 					);
 				}
 

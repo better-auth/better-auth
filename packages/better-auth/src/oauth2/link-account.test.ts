@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import { parseSetCookieHeader } from "../cookies";
 import type { GoogleProfile } from "../social-providers";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { getOAuth2Tokens } from "../oauth2";
@@ -43,7 +42,7 @@ vi.mock("../oauth2", async (importOriginal) => {
 });
 
 describe("oauth2 - email verification on link", async () => {
-	const { auth, client } = await getTestInstance({
+	const { auth, client, cookieSetter } = await getTestInstance({
 		socialProviders: {
 			google: {
 				clientId: "test",
@@ -66,25 +65,19 @@ describe("oauth2 - email verification on link", async () => {
 	const ctx = await auth.$context;
 
 	async function linkGoogleAccount() {
+		const oAuthHeaders = new Headers();
 		const signInRes = await client.signIn.social({
 			provider: "google",
 			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
 		});
-
 		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-		const headers = new Headers();
-		const cookies = parseSetCookieHeader(
-			(signInRes as any).headers?.["set-cookie"] || "",
-		);
-		headers.set(
-			"cookie",
-			`better-auth.state=${cookies.get("better-auth.state")?.value}`,
-		);
-
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test_code" },
 			method: "GET",
-			headers,
+			headers: oAuthHeaders,
 			onError(context) {
 				expect(context.response.status).toBe(302);
 			},
