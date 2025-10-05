@@ -153,3 +153,5 @@ export type BetterAuthDBSchema = Record<
 		order?: number;
 	}
 >;
+
+export type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";

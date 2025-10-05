@@ -1,11 +1,104 @@
+/// <reference types="bun" />
+/// <reference types="node" />
 import type { CookieOptions } from "better-call";
 import type { LiteralUnion } from "./helper";
-import type { Models } from "../db/type";
+import type { KyselyDatabaseType, Models } from "../db/type";
+import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
+import type { AdapterInstance } from "better-auth";
+import type { Database as BunDatabase } from "bun:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import type { Database } from "better-sqlite3";
 
 export type GenerateIdFn = (options: {
 	model: LiteralUnion<Models, string>;
 	size?: number;
 }) => string | false;
+
+type AdapterDebugLogs =
+	| boolean
+	| {
+			/**
+			 * Useful when you want to log only certain conditions.
+			 */
+			logCondition?: (() => boolean) | undefined;
+			create?: boolean;
+			update?: boolean;
+			updateMany?: boolean;
+			findOne?: boolean;
+			findMany?: boolean;
+			delete?: boolean;
+			deleteMany?: boolean;
+			count?: boolean;
+	  }
+	| {
+			/**
+			 * Only used for adapter tests to show debug logs if a test fails.
+			 *
+			 * @deprecated Not actually deprecated. Doing this for IDEs to show this option at the very bottom and stop end-users from using this.
+			 */
+			isRunningAdapterTests: boolean;
+	  };
+
+export type BetterAuthDatabaseOptions =
+	| PostgresPool
+	| MysqlPool
+	| Database
+	| Dialect
+	| AdapterInstance
+	| BunDatabase
+	| DatabaseSync
+	| {
+			dialect: Dialect;
+			type: KyselyDatabaseType;
+			/**
+			 * casing for table names
+			 *
+			 * @default "camel"
+			 */
+			casing?: "snake" | "camel";
+			/**
+			 * Enable debug logs for the adapter
+			 *
+			 * @default false
+			 */
+			debugLogs?: AdapterDebugLogs;
+			/**
+			 * Whether to execute multiple operations in a transaction.
+			 * If the database doesn't support transactions,
+			 * set this to `false` and operations will be executed sequentially.
+			 * @default true
+			 */
+			transaction?: boolean;
+	  }
+	| {
+			/**
+			 * Kysely instance
+			 */
+			db: Kysely<any>;
+			/**
+			 * Database type between postgres, mysql and sqlite
+			 */
+			type: KyselyDatabaseType;
+			/**
+			 * casing for table names
+			 *
+			 * @default "camel"
+			 */
+			casing?: "snake" | "camel";
+			/**
+			 * Enable debug logs for the adapter
+			 *
+			 * @default false
+			 */
+			debugLogs?: AdapterDebugLogs;
+			/**
+			 * Whether to execute multiple operations in a transaction.
+			 * If the database doesn't support transactions,
+			 * set this to `false` and operations will be executed sequentially.
+			 * @default true
+			 */
+			transaction?: boolean;
+	  };
 
 export type BetterAuthAdvancedOptions = {
 	/**

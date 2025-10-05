@@ -5,7 +5,7 @@ import {
 	type AdapterFactoryOptions,
 } from "../adapter-factory";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
-import type { KyselyDatabaseType } from "./types";
+import type { KyselyDatabaseType } from "@better-auth/core/db";
 import {
 	type InsertQueryBuilder,
 	type Kysely,

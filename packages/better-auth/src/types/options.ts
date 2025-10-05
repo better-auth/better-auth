@@ -1,4 +1,3 @@
-import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type {
 	Account,
 	GenericEndpointContext,
@@ -8,19 +7,17 @@ import type {
 } from "../types";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { AdapterInstance, SecondaryStorage } from "./adapter";
-import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
+import type { SecondaryStorage } from "./adapter";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { RateLimit } from "./models";
 import type { AuthContext } from ".";
-import type { BetterAuthAdvancedOptions } from "@better-auth/core";
-import type { Database } from "better-sqlite3";
+import type {
+	BetterAuthAdvancedOptions,
+	BetterAuthDatabaseOptions,
+} from "@better-auth/core";
 import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
-import type { AdapterDebugLogs } from "../adapters";
-import type { Database as BunDatabase } from "bun:sqlite";
-import type { DatabaseSync } from "node:sqlite";
 
 export type BetterAuthOptions = {
 	/**
@@ -75,66 +72,7 @@ export type BetterAuthOptions = {
 	/**
 	 * Database configuration
 	 */
-	database?:
-		| PostgresPool
-		| MysqlPool
-		| Database
-		| Dialect
-		| AdapterInstance
-		| BunDatabase
-		| DatabaseSync
-		| {
-				dialect: Dialect;
-				type: KyselyDatabaseType;
-				/**
-				 * casing for table names
-				 *
-				 * @default "camel"
-				 */
-				casing?: "snake" | "camel";
-				/**
-				 * Enable debug logs for the adapter
-				 *
-				 * @default false
-				 */
-				debugLogs?: AdapterDebugLogs;
-				/**
-				 * Whether to execute multiple operations in a transaction.
-				 * If the database doesn't support transactions,
-				 * set this to `false` and operations will be executed sequentially.
-				 * @default true
-				 */
-				transaction?: boolean;
-		  }
-		| {
-				/**
-				 * Kysely instance
-				 */
-				db: Kysely<any>;
-				/**
-				 * Database type between postgres, mysql and sqlite
-				 */
-				type: KyselyDatabaseType;
-				/**
-				 * casing for table names
-				 *
-				 * @default "camel"
-				 */
-				casing?: "snake" | "camel";
-				/**
-				 * Enable debug logs for the adapter
-				 *
-				 * @default false
-				 */
-				debugLogs?: AdapterDebugLogs;
-				/**
-				 * Whether to execute multiple operations in a transaction.
-				 * If the database doesn't support transactions,
-				 * set this to `false` and operations will be executed sequentially.
-				 * @default true
-				 */
-				transaction?: boolean;
-		  };
+	database?: BetterAuthDatabaseOptions;
 	/**
 	 * Secondary storage configuration
 	 *

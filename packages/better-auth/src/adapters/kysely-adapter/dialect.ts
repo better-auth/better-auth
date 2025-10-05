@@ -6,7 +6,7 @@ import {
 	SqliteDialect,
 } from "kysely";
 import type { BetterAuthOptions } from "../../types";
-import type { KyselyDatabaseType } from "./types";
+import type { KyselyDatabaseType } from "@better-auth/core/db";
 
 export function getKyselyDatabaseType(
 	db: BetterAuthOptions["database"],

@@ -1,3 +1,4 @@
+/// <reference types="node" />
 /**
  * AsyncLocalStorage will be import directly in 1.5.x
  */

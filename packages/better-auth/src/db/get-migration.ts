@@ -7,7 +7,7 @@ import { sql } from "kysely";
 import { createLogger } from "../utils/logger";
 import type { BetterAuthOptions } from "../types";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
-import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
+import type { KyselyDatabaseType } from "@better-auth/core/db";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {

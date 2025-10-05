@@ -56,10 +56,16 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
+    "better-sqlite3": "^12.4.1",
+    "kysely": "^0.28.5",
     "unbuild": "catalog:"
   },
   "dependencies": {
     "better-call": "catalog:",
     "zod": "^4.1.5"
+  },
+  "peerDependencies": {
+    "better-sqlite3": "^12.4.1",
+    "kysely": "^0.28.5"
   }
 }

@@ -8,6 +8,7 @@ import type {
 import type { BetterAuthPluginDBSchema } from "./plugin";
 export type { BetterAuthPluginDBSchema } from "./plugin";
 
+export type { KyselyDatabaseType } from "./type";
 export { coreSchema } from "./schema/shared";
 export { userSchema, type User } from "./schema/user";
 export { accountSchema, type Account } from "./schema/account";
