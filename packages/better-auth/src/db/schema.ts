@@ -1,4 +1,4 @@
-import type { AuthPluginSchema } from "../types/plugins";
+import type { BetterAuthPluginDBSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
@@ -163,7 +163,7 @@ export function parseSessionInput(
 	return parseInputData(session, { fields: schema });
 }
 
-export function mergeSchema<S extends AuthPluginSchema>(
+export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	schema: S,
 	newSchema?: {
 		[K in keyof S]?: {

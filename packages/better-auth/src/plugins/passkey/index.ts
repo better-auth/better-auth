@@ -19,7 +19,7 @@ import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
-	AuthPluginSchema,
+	BetterAuthPluginDBSchema,
 } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
 import { generateId } from "../../utils";
@@ -1054,4 +1054,4 @@ const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;

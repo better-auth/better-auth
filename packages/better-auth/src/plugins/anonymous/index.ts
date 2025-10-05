@@ -7,7 +7,7 @@ import {
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
-	AuthPluginSchema,
+	BetterAuthPluginDBSchema,
 	Session,
 	User,
 	AuthContext,
@@ -75,7 +75,7 @@ const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;
 
 export const anonymous = (options?: AnonymousOptions) => {
 	const ERROR_CODES = {
