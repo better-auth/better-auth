@@ -1,3 +1,4 @@
+import type { DBFieldAttribute } from "../../db";
 import { type Session, type User } from "../../types";
 import { type InferOptionSchema } from "../../types";
 import { type AccessControl, type Role } from "../access";
@@ -77,6 +78,13 @@ export interface AdminOptions {
 	bannedUserMessage?: string;
 	organizations?: {
 		enabled?: boolean;
+		schema?: {
+			organization?: {
+				additionalFields?: {
+					[key: string]: DBFieldAttribute;
+				};
+			};
+		};
 	};
 }
 

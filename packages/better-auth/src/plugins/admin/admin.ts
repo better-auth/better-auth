@@ -25,6 +25,7 @@ import type {
 import { getPlugin } from "../../utils";
 import type { Organization, organization } from "../organization";
 import { BetterAuthError } from "../../error";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -1744,7 +1745,13 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						where: where.length ? where : undefined,
 					});
 					return ctx.json({
-						organizations,
+						organizations: organizations as (Organization &
+							(O["organizations"] extends never
+								? {}
+								: InferAdditionalFieldsFromPluginOptions<
+										"organization",
+										Exclude<O["organizations"], undefined>
+									>))[],
 						total,
 						limit: Number(ctx.query?.limit) || undefined,
 						offset: Number(ctx.query?.offset) || undefined,
