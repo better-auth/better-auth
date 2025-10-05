@@ -1593,7 +1593,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 	const endpoints = {
 		...baseEndpoints,
-		...orgEndpoints,
+		...(options?.organizations?.enabled ? orgEndpoints : {}),
 	} as any as typeof baseEndpoints &
 		(O extends { organizations: infer T }
 			? T extends { enabled: true }
