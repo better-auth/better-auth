@@ -9,6 +9,9 @@ interface AdminClientOptions {
 	roles?: {
 		[key in string]: Role;
 	};
+	organizations?: {
+		enabled?: boolean;
+	};
 }
 
 export const adminClient = <O extends AdminClientOptions>(options?: O) => {
@@ -55,6 +58,13 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 							admin: Role;
 							user: Role;
 						};
+				organizations: {
+					enabled: O["organizations"] extends { enabled: infer T }
+						? T extends true
+							? true
+							: false
+						: false;
+				};
 			}>
 		>,
 		getActions: () => ({
