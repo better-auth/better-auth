@@ -451,44 +451,45 @@ export const getNormalTestSuiteTests = ({
 					users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(2, 4),
 				);
 			},
-		"findMany - should find many with with multiple sortBy": async () => {
-			const users = [
-				{ name: "a", email: "a@email.com" },
-				{ name: "a", email: "b@email.com" },
-				{ name: "b", email: "c@email.com" },
-			];
+		"findMany - should find many models with with multiple sortBy":
+			async () => {
+				const users = [
+					{ name: "a", email: "a@email.com" },
+					{ name: "a", email: "b@email.com" },
+					{ name: "b", email: "c@email.com" },
+				];
 
-			for (const user of users) {
-				await adapter.create<User>({
+				for (const user of users) {
+					await adapter.create<User>({
+						model: "user",
+						data: {
+							...user,
+							emailVerified: true,
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+					});
+				}
+
+				const res = await adapter.findMany<User>({
 					model: "user",
-					data: {
-						...user,
-						emailVerified: true,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
+					sortBy: [
+						{
+							field: "name",
+							direction: "asc",
+						},
+						{
+							field: "email",
+							direction: "desc",
+						},
+					],
 				});
-			}
 
-			const res = await adapter.findMany<User>({
-				model: "user",
-				sortBy: [
-					{
-						field: "name",
-						direction: "asc",
-					},
-					{
-						field: "email",
-						direction: "desc",
-					},
-				],
-			});
-
-			expect(res[0]?.name).toBe("a");
-			expect(res[0]?.email).toBe("b@email.com");
-			expect(res[1]?.email).toBe("a@email.com");
-			expect(res[res.length - 1]?.name).toBe("b");
-		},
+				expect(res[0]?.name).toBe("a");
+				expect(res[0]?.email).toBe("b@email.com");
+				expect(res[1]?.email).toBe("a@email.com");
+				expect(res[res.length - 1]?.name).toBe("b");
+			},
 		"update - should update a model": async () => {
 			const [user] = await insertRandom("user");
 			const result = await adapter.update<User>({
