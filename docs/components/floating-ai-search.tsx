@@ -592,9 +592,7 @@ export function AISearchTrigger() {
 						<button
 							className={cn(
 								"absolute inset-0 p-2 text-sm text-center transition-colors text-fd-muted-foreground hover:bg-secondary hover:text-fd-accent-foreground",
-								!open
-									? "animate-fd-fade-in"
-									: "animate-fd-fade-out",
+								!open ? "animate-fd-fade-in" : "animate-fd-fade-out",
 							)}
 							onClick={() => setOpen(true)}
 						>
