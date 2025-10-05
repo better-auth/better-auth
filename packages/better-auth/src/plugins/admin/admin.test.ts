@@ -734,8 +734,8 @@ describe("Admin plugin", async () => {
 	it("should not allow admin to set user password with empty new password", async () => {
 		const res = await client.admin.setUserPassword(
 			{
-				userId: "",
-				newPassword: "newPassword",
+				userId: newUser?.id || "",
+				newPassword: "",
 			},
 			{
 				headers: adminHeaders,
