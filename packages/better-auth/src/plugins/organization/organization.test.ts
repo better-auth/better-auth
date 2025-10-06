@@ -324,7 +324,8 @@ describe("organization", async (it) => {
 			},
 		});
 		if (!invite.data) throw new Error("Invitation not created");
-		expect(invite.data?.email).toBe(user.email);
+		expect(invite.data.createdAt).toBeInstanceOf(Date);
+		expect(invite.data.email).toBe(user.email);
 
 		const inviteAgain = await client.organization.inviteMember({
 			organizationId,
@@ -1893,6 +1894,7 @@ describe("Additional Fields", async () => {
 			email: string;
 			role: "member" | "admin" | "owner";
 			status: InvitationStatus;
+			createdAt: Date;
 			expiresAt: Date;
 			inviterId: string;
 			invitationRequiredField: string;
