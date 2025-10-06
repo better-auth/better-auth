@@ -1,4 +1,4 @@
-import type { ProviderOptions } from "@better-auth/core/oauth2";
+import type { ProviderOptions } from "./index";
 import { generateCodeChallenge } from "./utils";
 
 export async function createAuthorizationURL({

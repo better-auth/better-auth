@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuth2Tokens, ProviderOptions } from "@better-auth/core/oauth2";
+import type { OAuth2Tokens, ProviderOptions } from "./index";
 import { base64 } from "@better-auth/utils/base64";
 
 export function createRefreshAccessTokenRequest({
