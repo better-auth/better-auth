@@ -35,6 +35,16 @@
         "types": "./dist/db/index.d.cts",
         "default": "./dist/db/index.cjs"
       }
+    },
+    "./db/adapter": {
+      "import": {
+        "types": "./dist/db/adapter/index.d.ts",
+        "default": "./dist/db/adapter/index.mjs"
+      },
+      "require": {
+        "types": "./dist/db/adapter/index.d.cts",
+        "default": "./dist/db/adapter/index.cjs"
+      }
     }
   },
   "typesVersions": {

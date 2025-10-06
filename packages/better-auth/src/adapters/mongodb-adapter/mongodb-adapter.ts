@@ -2,10 +2,10 @@ import { ClientSession, ObjectId, type Db, type MongoClient } from "mongodb";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
 	createAdapterFactory,
-	type AdapterDebugLogs,
 	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
+import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -18,7 +18,7 @@ export interface MongoDBAdapterConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 	/**
 	 * Use plural table names
 	 *

@@ -18,9 +18,9 @@ import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
-import type { AdapterDebugLogs } from "../adapters";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
+import type { DBAdapterDebugLogOption } from "packages/core/dist/db/adapter";
 
 export type BetterAuthOptions = {
 	/**
@@ -97,7 +97,7 @@ export type BetterAuthOptions = {
 				 *
 				 * @default false
 				 */
-				debugLogs?: AdapterDebugLogs;
+				debugLogs?: DBAdapterDebugLogOption;
 				/**
 				 * Whether to execute multiple operations in a transaction.
 				 * If the database doesn't support transactions,
@@ -126,7 +126,7 @@ export type BetterAuthOptions = {
 				 *
 				 * @default false
 				 */
-				debugLogs?: AdapterDebugLogs;
+				debugLogs?: DBAdapterDebugLogOption;
 				/**
 				 * Whether to execute multiple operations in a transaction.
 				 * If the database doesn't support transactions,
