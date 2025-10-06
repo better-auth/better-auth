@@ -1698,7 +1698,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					role: session.user.role,
 					options: opts,
 					permissions: {
-						user: ["list-organizations"],
+						organization: ["admin-list"],
 					},
 				});
 				if (!canListOrgs) {

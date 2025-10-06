@@ -11,9 +11,9 @@ export const defaultStatements = {
 		"set-password",
 		"get",
 		"update",
-		"list-organizations",
 	],
 	session: ["list", "revoke", "delete"],
+	organization: ["admin-list"],
 } as const;
 
 export const defaultAc = createAccessControl(defaultStatements);
@@ -29,14 +29,15 @@ export const adminAc = defaultAc.newRole({
 		"set-password",
 		"get",
 		"update",
-		"list-organizations",
 	],
 	session: ["list", "revoke", "delete"],
+	organization: ["admin-list"],
 });
 
 export const userAc = defaultAc.newRole({
 	user: [],
 	session: [],
+	organization: [],
 });
 
 export const defaultRoles = {
