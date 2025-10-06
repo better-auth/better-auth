@@ -8,9 +8,9 @@ import type {
 } from "../types";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { AdapterInstance, SecondaryStorage } from "./adapter";
+import type { AdapterInstance } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
-import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { DBFieldAttribute, SecondaryStorage } from "@better-auth/core/db";
 import type { RateLimit } from "./models";
 import type { AuthContext } from ".";
 import type { BetterAuthAdvancedOptions } from "@better-auth/core";
