@@ -1,10 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL } from "../oauth2";
+import { createAuthorizationURL, createBasicHeader } from "../oauth2";
 import { logger } from "../utils/logger";
 import { decodeJwt } from "jose";
-import { base64 } from "@better-auth/utils/base64";
 
 export interface PayPalProfile {
 	user_id: string;
@@ -109,16 +108,14 @@ export const paypal = (options: PayPalOptions) => {
 			/**
 			 * PayPal requires Basic Auth for token exchange
 			 **/
-
-			const credentials = base64.encode(
-				`${options.clientId}:${options.clientSecret}`,
-			);
-
 			try {
 				const response = await betterFetch(tokenEndpoint, {
 					method: "POST",
 					headers: {
-						Authorization: `Basic ${credentials}`,
+						Authorization: await createBasicHeader(
+							options.clientId,
+							options.clientSecret,
+						),
 						Accept: "application/json",
 						"Accept-Language": "en_US",
 						"Content-Type": "application/x-www-form-urlencoded",
@@ -155,15 +152,14 @@ export const paypal = (options: PayPalOptions) => {
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
 			: async (refreshToken) => {
-					const credentials = base64.encode(
-						`${options.clientId}:${options.clientSecret}`,
-					);
-
 					try {
 						const response = await betterFetch(tokenEndpoint, {
 							method: "POST",
 							headers: {
-								Authorization: `Basic ${credentials}`,
+								Authorization: await createBasicHeader(
+									options.clientId,
+									options.clientSecret,
+								),
 								Accept: "application/json",
 								"Accept-Language": "en_US",
 								"Content-Type": "application/x-www-form-urlencoded",

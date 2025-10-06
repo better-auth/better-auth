@@ -1,4 +1,4 @@
-import type { LiteralString } from "../types/helper";
+import type { Awaitable, LiteralString } from "../types/helper";
 
 export interface OAuth2Tokens {
 	tokenType?: string;
@@ -93,7 +93,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
 	 * The client secret of your application
 	 */
-	clientSecret?: string;
+	clientSecret?: string | (() => Awaitable<string>);
 	/**
 	 * The scopes you want to request from the provider
 	 */

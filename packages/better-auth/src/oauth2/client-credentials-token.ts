@@ -1,15 +1,16 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens } from "./types";
 import type { ProviderOptions } from "./types";
-import { base64Url } from "@better-auth/utils/base64";
+import type { MakeRequired } from "../types/helper";
+import { createBasicHeader, toClientSecret } from "./utils";
 
-export function createClientCredentialsTokenRequest({
+export async function createClientCredentialsTokenRequest({
 	options,
 	scope,
 	authentication,
 	resource,
 }: {
-	options: ProviderOptions & { clientSecret: string };
+	options: MakeRequired<ProviderOptions, "clientSecret">;
 	scope?: string;
 	authentication?: "basic" | "post";
 	resource?: string | string[];
@@ -35,16 +36,16 @@ export function createClientCredentialsTokenRequest({
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
-		const encodedCredentials = base64Url.encode(
-			`${primaryClientId}:${options.clientSecret}`,
+		headers["authorization"] = await createBasicHeader(
+			primaryClientId,
+			options.clientSecret,
 		);
-		headers["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
 		body.set("client_id", primaryClientId);
-		body.set("client_secret", options.clientSecret);
+		body.set("client_secret", await toClientSecret(options.clientSecret));
 	}
 
 	return {
@@ -60,13 +61,13 @@ export async function clientCredentialsToken({
 	authentication,
 	resource,
 }: {
-	options: ProviderOptions & { clientSecret: string };
+	options: MakeRequired<ProviderOptions, "clientSecret">;
 	tokenEndpoint: string;
 	scope: string;
 	authentication?: "basic" | "post";
 	resource?: string | string[];
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = createClientCredentialsTokenRequest({
+	const { body, headers } = await createClientCredentialsTokenRequest({
 		options,
 		scope,
 		authentication,
