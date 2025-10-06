@@ -465,6 +465,9 @@ By default, there are two resources with up to six permissions.
 **session**:
   `list` `revoke` `delete`
 
+**organization**:
+  `admin-list`
+
 Users with the admin role have full control over all the resources and actions. Users with the user role have no control over any of those actions.
 
 ### Custom Permissions
@@ -698,6 +701,78 @@ const canDeleteUserAndRevokeSession = authClient.admin.checkRolePermission({
   role: "admin",
 });
 ```
+
+## Organization Support
+
+Organization support is disabled by default.
+To enable it, add the following to both your plugin and client plugin options:
+
+```ts
+organizations: {
+  enabled: true,
+}
+```
+
+### List Organizations
+
+Allows an admin to list all organizations in the database.
+
+<APIMethod
+  path="/admin/list-organizations"
+  method="GET"
+  requireSession
+  resultVariable={"organizations"}
+>
+```ts
+type adminListOrganizations = {
+    /**
+     * Query parameters for filtering, searching, and pagination.
+     */
+    query?: {
+        /**
+         * The value to search for. 
+         */
+        searchValue?: string = "some name"
+        /**
+         * The field to search in, defaults to name. Can be `slug` or `name`. 
+         */
+        searchField?: "slug" | "name" = "name"
+        /**
+         * The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. 
+         */
+        searchOperator?: "contains" | "starts_with" | "ends_with" = "contains"
+        /**
+         * The number of organizations to return. Defaults to 100.
+         */
+        limit?: string | number = 100
+        /**
+         * The offset to start from. 
+         */
+        offset?: string | number = 100
+        /**
+         * The field to sort by. 
+         */
+        sortBy?: string = "name"
+        /**
+         * The direction to sort by. 
+         */
+        sortDirection?: "asc" | "desc" = "desc"
+        /**
+         * The field to filter by. 
+         */
+        filterField?: string = "slug"
+        /**
+         * The value to filter by. 
+         */
+        filterValue?: string | number | boolean = "some-slug"
+        /**
+         * The operator to use for the filter. 
+         */
+        filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" = "eq"
+    }
+}
+```
+</APIMethod>
 
 ## Schema
 

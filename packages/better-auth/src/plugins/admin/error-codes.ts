@@ -26,4 +26,6 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 	NO_DATA_TO_UPDATE: "No data to update",
 	YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS: "You are not allowed to update users",
 	YOU_CANNOT_REMOVE_YOURSELF: "You cannot remove yourself",
+	YOU_ARE_NOT_ALLOWED_TO_LIST_ORGANIZATIONS:
+		"You are not allowed to list organizations",
 });

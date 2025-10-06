@@ -1,3 +1,4 @@
+import type { DBFieldAttribute } from "../../db";
 import type { BetterAuthClientPlugin } from "../../types";
 import { type AccessControl, type Role } from "../access";
 import { adminAc, defaultStatements, userAc } from "./access";
@@ -8,6 +9,16 @@ interface AdminClientOptions {
 	ac?: AccessControl;
 	roles?: {
 		[key in string]: Role;
+	};
+	organizations?: {
+		enabled?: boolean;
+		schema?: {
+			organization?: {
+				additionalFields?: {
+					[key: string]: DBFieldAttribute;
+				};
+			};
+		};
 	};
 }
 
@@ -55,6 +66,7 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 							admin: Role;
 							user: Role;
 						};
+				organizations: O["organizations"];
 			}>
 		>,
 		getActions: () => ({
