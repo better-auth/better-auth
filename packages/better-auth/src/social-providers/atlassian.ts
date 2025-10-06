@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 import { logger } from "@better-auth/core/env";
 import { refreshAccessToken } from "../oauth2/refresh-access-token";

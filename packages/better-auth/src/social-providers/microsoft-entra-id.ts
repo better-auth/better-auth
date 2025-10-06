@@ -1,10 +1,9 @@
-import type { ProviderOptions } from "../oauth2";
 import {
 	validateAuthorizationCode,
 	createAuthorizationURL,
 	refreshAccessToken,
 } from "../oauth2";
-import type { OAuthProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "@better-auth/core/env";
 import { decodeJwt } from "jose";
