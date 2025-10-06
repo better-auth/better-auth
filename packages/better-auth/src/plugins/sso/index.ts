@@ -8,12 +8,12 @@ import {
 	setTokenUtil,
 	validateAuthorizationCode,
 	validateToken,
-	type OAuth2Tokens,
 } from "../../oauth2";
 import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { setSessionCookie } from "../../cookies";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 
 export interface SSOOptions {
 	/**

@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
 import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
 export interface DiscordProfile extends Record<string, any> {
 	/** the user's id (i.e. the numerical snowflake) */
