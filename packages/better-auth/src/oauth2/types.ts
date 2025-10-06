@@ -30,6 +30,10 @@ export interface OAuthProvider<
 		redirectURI: string;
 		display?: string;
 		loginHint?: string;
+		/**
+		 * Additional provider-specific parameters
+		 */
+		[key: string]: unknown;
 	}) => Promise<URL> | URL;
 	name: string;
 	validateAuthorizationCode: (data: {

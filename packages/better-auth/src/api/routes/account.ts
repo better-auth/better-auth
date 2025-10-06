@@ -161,6 +161,18 @@ export const linkSocialAccount = createAuthEndpoint(
 						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
+			/**
+			 * Provider-specific OAuth parameters to pass during authorization.
+			 * This allows dynamic customization of parameters like accessType, prompt, etc.
+			 * For example, for Google: { accessType: "offline", prompt: "consent" }
+			 */
+			options: z
+				.record(z.string(), z.unknown())
+				.meta({
+					description:
+						"Provider-specific OAuth parameters (e.g., accessType, prompt)",
+				})
+				.optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
@@ -355,6 +367,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			codeVerifier: state.codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			scopes: c.body.scopes,
+			...(c.body.options ?? {}),
 		});
 
 		return c.json({
