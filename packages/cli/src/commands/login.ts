@@ -77,7 +77,7 @@ export async function loginAction(opts: any) {
 				"error",
 				`Failed to request device authorization: ${error?.error_description || "Unknown error"}`,
 				null,
-			); // Can't set the better auth's logger options here!
+			); 
 			process.exit(1);
 		}
 
@@ -160,7 +160,7 @@ export async function loginAction(opts: any) {
 			"error",
 			`Login failed: ${err instanceof Error ? err.message : "Unknown error"}`,
 			null,
-		); // Can't set the better auth's logger options here!
+		);
 		process.exit(1);
 	}
 }
@@ -213,7 +213,7 @@ async function pollForToken(
 							break;
 						case "access_denied":
 							spinner.stop();
-							globalLog("error", "Access was denied by the user", null); // Can't set the better auth's logger options here!
+							globalLog("error", "Access was denied by the user", null);
 							process.exit(1);
 							break;
 						case "expired_token":
@@ -222,12 +222,12 @@ async function pollForToken(
 								"error",
 								"The device code has expired. Please try again.",
 								null,
-							); // Can't set the better auth's logger options here!
+							); 
 							process.exit(1);
 							break;
 						default:
 							spinner.stop();
-							globalLog("error", `Error: ${error.error_description}`, null); // Can't set the better auth's logger options here!
+							globalLog("error", `Error: ${error.error_description}`, null); 
 							process.exit(1);
 					}
 				}
@@ -237,7 +237,7 @@ async function pollForToken(
 					"error",
 					`Network error: ${err instanceof Error ? err.message : "Unknown error"}`,
 					null,
-				); // Can't set the better auth's logger options here!
+				);
 				process.exit(1);
 			}
 
@@ -264,7 +264,7 @@ async function storeToken(token: any): Promise<void> {
 
 		await fs.writeFile(TOKEN_FILE, JSON.stringify(tokenData, null, 2), "utf-8");
 	} catch (error) {
-		globalLog("warn", "Failed to store authentication token locally", null); // Can't set the better auth's logger options here!
+		globalLog("warn", "Failed to store authentication token locally", null); 
 	}
 }
 

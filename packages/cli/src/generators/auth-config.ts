@@ -548,7 +548,7 @@ export async function generateAuthConfig({
 				`Something went wrong while generating/updating your new auth config file.`,
 				1,
 			);
-			globalLog("error", error.message, null); // Can't set the better auth's logger options here!
+			globalLog("error", error.message, null);
 			process.exit(1);
 		}
 	}
@@ -569,7 +569,7 @@ export async function generateAuthConfig({
 				`Something went wrong while generating/updating your new auth config file.`,
 				1,
 			);
-			globalLog("error", error.message, null); // Can't set the better auth's logger options here!
+			globalLog("error", error.message, null);
 			process.exit(1);
 		}
 	}
