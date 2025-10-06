@@ -23,6 +23,7 @@ export async function POST(request: Request) {
 		);
 		if (!response.ok) {
 			const errorText = await response.text();
+			console.error("Gurubase API error:", response.status, errorText);
 			if (response.status === 400) {
 				return NextResponse.json(
 					{
