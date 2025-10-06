@@ -37,7 +37,7 @@ export const generateSchema = (opts: {
 	globalLog(
 		"error",
 		`${adapter.id} is not supported. If it is a custom adapter, please request the maintainer to implement createSchema`,
-		opts.options,
+		null,
 	);
 	process.exit(1);
 };
