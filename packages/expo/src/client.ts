@@ -121,7 +121,9 @@ export function getCookie(cookie: string) {
 		if (value.expires && new Date(value.expires) < new Date()) {
 			return acc;
 		}
-		return `${acc}; ${key}=${value.value}`;
+		return acc.length === 0
+			? `${key}=${value.value}`
+			: `${acc}; ${key}=${value.value}`;
 	}, "");
 	return toSend;
 }
