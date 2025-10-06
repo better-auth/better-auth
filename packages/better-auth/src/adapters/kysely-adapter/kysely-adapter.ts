@@ -1,6 +1,5 @@
 import {
 	createAdapterFactory,
-	type AdapterDebugLogs,
 	type AdapterFactoryCustomizeAdapterCreator,
 	type AdapterFactoryOptions,
 } from "../adapter-factory";
@@ -11,6 +10,7 @@ import {
 	type Kysely,
 	type UpdateQueryBuilder,
 } from "kysely";
+import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
 
 interface KyselyAdapterConfig {
 	/**
@@ -22,7 +22,7 @@ interface KyselyAdapterConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 	/**
 	 * Use plural for table names.
 	 *

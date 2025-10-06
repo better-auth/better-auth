@@ -880,6 +880,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				data: {
 					status: "pending",
 					expiresAt,
+					createdAt: new Date(),
 					inviterId: user.id,
 					...invitation,
 					teamId:
