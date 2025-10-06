@@ -38,7 +38,7 @@ export async function migrateAction(opts: any) {
 			"error",
 			"No configuration file found. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
 			null,
-		); 
+		);
 		return;
 	}
 
@@ -49,7 +49,7 @@ export async function migrateAction(opts: any) {
 			"error",
 			"Invalid database configuration. Make sure you're not using adapters. Migrate command only works with built-in Kysely adapter.",
 			null,
-		); 
+		);
 		process.exit(1);
 	}
 
@@ -59,7 +59,7 @@ export async function migrateAction(opts: any) {
 				"error",
 				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx @better-auth/cli generate` to create the schema, then use Prisma’s migrate or push to apply it.",
 				null,
-			); 
+			);
 			try {
 				const telemetry = await createTelemetry(config);
 				await telemetry.publish({
@@ -132,7 +132,7 @@ export async function migrateAction(opts: any) {
 	}
 
 	spinner.stop();
-	globalLog("info", `🔑 The migration will affect the following:`, null); 
+	globalLog("info", `🔑 The migration will affect the following:`, null);
 
 	for (const table of [...toBeCreated, ...toBeAdded]) {
 		console.log(

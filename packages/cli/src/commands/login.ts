@@ -77,7 +77,7 @@ export async function loginAction(opts: any) {
 				"error",
 				`Failed to request device authorization: ${error?.error_description || "Unknown error"}`,
 				null,
-			); 
+			);
 			process.exit(1);
 		}
 
@@ -222,12 +222,12 @@ async function pollForToken(
 								"error",
 								"The device code has expired. Please try again.",
 								null,
-							); 
+							);
 							process.exit(1);
 							break;
 						default:
 							spinner.stop();
-							globalLog("error", `Error: ${error.error_description}`, null); 
+							globalLog("error", `Error: ${error.error_description}`, null);
 							process.exit(1);
 					}
 				}
@@ -264,7 +264,7 @@ async function storeToken(token: any): Promise<void> {
 
 		await fs.writeFile(TOKEN_FILE, JSON.stringify(tokenData, null, 2), "utf-8");
 	} catch (error) {
-		globalLog("warn", "Failed to store authentication token locally", null); 
+		globalLog("warn", "Failed to store authentication token locally", null);
 	}
 }
 
