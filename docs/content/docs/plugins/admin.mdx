@@ -466,7 +466,7 @@ By default, there are two resources with up to six permissions.
   `list` `revoke` `delete`
 
 **organization**:
-  `admin-list`
+  `admin-list` `admin-list-members`
 
 Users with the admin role have full control over all the resources and actions. Users with the user role have no control over any of those actions.
 
@@ -770,6 +770,54 @@ type adminListOrganizations = {
          */
         filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" = "eq"
     }
+}
+```
+</APIMethod>
+
+### List Members
+
+Allows an admin to list all members of an organization.
+
+<APIMethod
+  path="/admin/list-members"
+  method="GET"
+  requireSession
+  resultVariable={"members"}
+>
+```ts
+type adminListMembers = {
+    /**
+     * The organization ID to list members for.
+     */
+    organizationId?: string = "organization-id"
+    /**
+     * The limit of members to return.
+     */
+    limit?: number = 100
+    /**
+     * The offset to start from.
+     */
+    offset?: number = 0
+    /**
+     * The field to sort by.
+     */
+    sortBy?: string = "createdAt"
+    /**
+     * The direction to sort by.
+     */
+    sortDirection?: "asc" | "desc" = "desc"
+    /**
+     * The field to filter by.
+     */
+    filterField?: string = "createdAt"
+    /**
+     * The operator to filter by.
+     */
+    filterOperator?: "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "in" | "nin" | "contains" = "eq"
+    /**
+     * The value to filter by.
+     */
+    filterValue?: string = "value"
 }
 ```
 </APIMethod>
