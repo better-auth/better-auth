@@ -108,4 +108,29 @@ describe("sign-in", async (it) => {
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
+
+	it("should return full user on sign-in (includes additional fields)", async () => {
+		const { auth, testUser } = await getTestInstance({
+			user: {
+				additionalFields: {
+					newField: { type: "string", defaultValue: "default-value" },
+					nonRequiredFiled: { type: "string", required: false },
+				},
+			},
+		});
+
+		const res = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		const json = await res.json();
+		expect(json.user).toBeDefined();
+		expect(json.user.id).toBeDefined();
+		expect(json.user.email).toBe(testUser.email);
+		expect(json.user.newField).toBe("default-value");
+		expect(json.user.nonRequiredFiled).toBeNull();
+	});
 });
