@@ -820,6 +820,20 @@ describe("Admin plugin with organizations", async () => {
 				},
 			},
 		},
+		member: {
+			additionalFields: {
+				requiredField: {
+					type: "string",
+					required: true,
+					defaultValue: "default-value",
+				},
+				nonRequiredField: {
+					type: "string",
+					required: false,
+					defaultValue: "default-value",
+				},
+			},
+		},
 	} as const;
 
 	const {
@@ -879,7 +893,8 @@ describe("Admin plugin with organizations", async () => {
 		baseURL: "http://localhost:3000",
 	});
 
-	const { headers: adminHeaders } = await signInWithTestUser();
+	const { headers: adminHeaders, user: testAdminUser } =
+		await signInWithTestUser();
 	const testNonAdminUser = {
 		id: "123",
 		email: "user@test.com",
@@ -894,25 +909,32 @@ describe("Admin plugin with organizations", async () => {
 		testNonAdminUser.password,
 	);
 
-	for (const { name, slug } of [
-		{
+	const testOrg = await auth.api.createOrganization({
+		headers: userHeaders,
+		body: {
 			name: "Test",
 			slug: "test",
+			requiredField: "",
 		},
-		{
+	});
+	await auth.api.addMember({
+		body: {
+			userId: testAdminUser.id,
+			role: "admin",
+			organizationId: testOrg!.id,
+			requiredField: "some value",
+		},
+		headers: userHeaders,
+	});
+
+	const testOrg2 = await auth.api.createOrganization({
+		headers: userHeaders,
+		body: {
 			name: "Test org",
 			slug: "test-org",
+			requiredField: "",
 		},
-	]) {
-		await auth.api.createOrganization({
-			headers: userHeaders,
-			body: {
-				name,
-				slug,
-				requiredField: "",
-			},
-		});
-	}
+	});
 
 	it("should allow admin to list organizations", async () => {
 		const res = await client.admin.listOrganizations({
@@ -1030,6 +1052,103 @@ describe("Admin plugin with organizations", async () => {
 			},
 		});
 		expect(res.data?.organizations.length).toBe(1);
+	});
+
+	it("should allow admin to list members", async () => {
+		const res = await client.admin.listMembers({
+			query: {
+				organizationId: testOrg!.id,
+				limit: 2,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.members.length).toBe(2);
+	});
+
+	it("should not allow non-admin to list members", async () => {
+		const res = await client.admin.listMembers({
+			query: {
+				organizationId: testOrg2!.id,
+				limit: 2,
+			},
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("should allow admin to count members", async () => {
+		const res = await client.admin.listMembers({
+			query: {
+				organizationId: testOrg!.id,
+				limit: 1,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.members.length).toBe(1);
+		expect(res.data?.total).toBe(2);
+	});
+
+	it("should allow to sort members", async () => {
+		const res = await client.admin.listMembers({
+			query: {
+				organizationId: testOrg!.id,
+				sortBy: "requiredField",
+				sortDirection: "desc",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.members[0]!.requiredField).toBe("some value");
+
+		const res2 = await client.admin.listMembers({
+			query: {
+				organizationId: testOrg!.id,
+				sortBy: "requiredField",
+				sortDirection: "asc",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res2.data?.members[0]!.requiredField).toBe("default-value");
+	});
+
+	it("should allow offset and limit when listing members", async () => {
+		const res = await client.admin.listMembers({
+			query: {
+				organizationId: testOrg!.id,
+				limit: 1,
+				offset: 1,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.members.length).toBe(1);
+		expect(res.data?.members[0]!.requiredField).toBe("some value");
+	});
+
+	it("should allow to filter members", async () => {
+		const res = await client.admin.listMembers({
+			query: {
+				organizationId: testOrg!.id,
+				filterField: "userId",
+				filterOperator: "eq",
+				filterValue: testNonAdminUser.id,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.members.length).toBe(1);
 	});
 
 	it("should throw error when organization plugin is not set up", async () => {
