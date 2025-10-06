@@ -1,4 +1,4 @@
-import { env } from "../../utils/env";
+import { env } from "@better-auth/core/env";
 import { importRuntime } from "../../utils/import-util";
 
 function getVendor() {

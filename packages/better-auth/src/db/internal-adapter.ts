@@ -17,7 +17,9 @@ import {
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
-import { generateId, type InternalLogger } from "../utils";
+import { generateId } from "../utils";
+import { getCurrentAdapter, runWithTransaction } from "../context/transaction";
+import type { InternalLogger } from "@better-auth/core/env";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
