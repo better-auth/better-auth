@@ -599,7 +599,7 @@ export const createAdapterFactory =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
-
+				unsafeModel = getDefaultModelName(unsafeModel);
 				if ("id" in unsafeData && !forceAllowId) {
 					logger.warn(
 						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you, unless you pass in the \`forceAllowId\` parameter. The id will be ignored.`,
@@ -665,6 +665,7 @@ export const createAdapterFactory =
 			}): Promise<T | null> => {
 				transactionId++;
 				let thisTransactionId = transactionId;
+				unsafeModel = getDefaultModelName(unsafeModel);
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -725,6 +726,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
@@ -777,6 +779,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "findOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
@@ -830,6 +833,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
@@ -877,6 +881,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "delete" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -908,6 +913,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "deleteMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -940,6 +946,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "count" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
