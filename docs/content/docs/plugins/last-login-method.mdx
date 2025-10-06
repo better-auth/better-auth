@@ -260,6 +260,7 @@ export const auth = betterAuth({
 **cookieName**: `string`
 - The name of the cookie used to store the last login method
 - Default: `"better-auth.last_used_login_method"`
+- **Note**: This cookie is `httpOnly: false` to allow client-side JavaScript access for UI features
 
 **maxAge**: `number`  
 - Cookie expiration time in seconds
@@ -314,6 +315,15 @@ The plugin automatically detects the method from these endpoints:
 - `/sign-in/email` - Email sign in
 - `/sign-up/email` - Email sign up
 
+## Cross-Domain Support
+
+The plugin automatically inherits cookie settings from Better Auth's centralized cookie system. This solves the problem where the last login method wouldn't persist across:
+
+- **Cross-subdomain setups**: `auth.example.com` → `app.example.com`
+- **Cross-origin setups**: `api.company.com` → `app.different.com`
+
+When you enable `crossSubDomainCookies` or `crossOriginCookies` in your Better Auth config, the plugin will automatically use the same domain, secure, and sameSite settings as your session cookies, ensuring consistent behavior across your application.
+
 ## Advanced Examples
 
 ### Custom Provider Tracking
@@ -334,7 +344,7 @@ export const auth = betterAuth({
                 }
                 
                 // Track magic link authentication
-                if (ctx.path === "/verify-magic-link") {
+                if (ctx.path === "/magic-link/verify") {
                     return "magic-link"
                 }
                 

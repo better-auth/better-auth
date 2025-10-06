@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -59,9 +59,9 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 						role:
 							| InferOrganizationRolesFromOption<O>
 							| InferOrganizationRolesFromOption<O>[];
-						organizationId?: string;
+						organizationId?: string | undefined;
 					} & (O extends { teams: { enabled: true } }
-						? { teamId?: string }
+						? { teamId?: string | undefined }
 						: {}) &
 						InferAdditionalFieldsFromPluginOptions<"member", O>,
 				},
@@ -384,7 +384,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				session.session.activeOrganizationId ===
 					toBeRemovedMember.organizationId
 			) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 
 			// Run afterRemoveMember hook
@@ -794,7 +794,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			}
 			await adapter.deleteMember(member.id);
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 			return ctx.json(member);
 		},
@@ -901,6 +901,63 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 			return ctx.json({
 				members,
 				total,
+			});
+		},
+	);
+
+export const getActiveMemberRole = <O extends OrganizationOptions>(
+	options: O,
+) =>
+	createAuthEndpoint(
+		"/organization/get-active-member-role",
+		{
+			method: "GET",
+			query: z
+				.object({
+					userId: z
+						.string()
+						.meta({
+							description:
+								"The user ID to get the role for. If not provided, will default to the current user's",
+						})
+						.optional(),
+					organizationId: z
+						.string()
+						.meta({
+							description:
+								'The organization ID to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-id"',
+						})
+						.optional(),
+				})
+				.optional(),
+			use: [orgMiddleware, orgSessionMiddleware],
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const organizationId =
+				ctx.query?.organizationId || session.session.activeOrganizationId;
+			if (!organizationId) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				});
+			}
+			const userId = ctx.query?.userId || session.user.id;
+
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+
+			const member = await adapter.findMemberByOrgId({
+				userId,
+				organizationId,
+			});
+			if (!member) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+				});
+			}
+
+			return ctx.json({
+				role: member?.role,
 			});
 		},
 	);

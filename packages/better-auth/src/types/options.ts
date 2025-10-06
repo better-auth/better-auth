@@ -10,17 +10,17 @@ import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
-import type { FieldAttribute } from "../db";
-import type { Models, RateLimit } from "./models";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { RateLimit } from "./models";
 import type { AuthContext } from ".";
-import type { CookieOptions } from "better-call";
+import type { BetterAuthAdvancedOptions } from "@better-auth/core";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
-import type { AdapterDebugLogs } from "../adapters";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
+import type { DBAdapterDebugLogOption } from "packages/core/dist/db/adapter";
 
 export type BetterAuthOptions = {
 	/**
@@ -38,8 +38,6 @@ export type BetterAuthOptions = {
 	 * the system will check the following environment variable:
 	 *
 	 * process.env.BETTER_AUTH_URL
-	 *
-	 * If not set it will throw an error.
 	 */
 	baseURL?: string;
 	/**
@@ -99,7 +97,14 @@ export type BetterAuthOptions = {
 				 *
 				 * @default false
 				 */
-				debugLogs?: AdapterDebugLogs;
+				debugLogs?: DBAdapterDebugLogOption;
+				/**
+				 * Whether to execute multiple operations in a transaction.
+				 * If the database doesn't support transactions,
+				 * set this to `false` and operations will be executed sequentially.
+				 * @default true
+				 */
+				transaction?: boolean;
 		  }
 		| {
 				/**
@@ -121,7 +126,14 @@ export type BetterAuthOptions = {
 				 *
 				 * @default false
 				 */
-				debugLogs?: AdapterDebugLogs;
+				debugLogs?: DBAdapterDebugLogOption;
+				/**
+				 * Whether to execute multiple operations in a transaction.
+				 * If the database doesn't support transactions,
+				 * set this to `false` and operations will be executed sequentially.
+				 * @default true
+				 */
+				transaction?: boolean;
 		  };
 	/**
 	 * Secondary storage configuration
@@ -291,7 +303,7 @@ export type BetterAuthOptions = {
 	/**
 	 * List of Better Auth plugins
 	 */
-	plugins?: BetterAuthPlugin[];
+	plugins?: [] | BetterAuthPlugin[];
 	/**
 	 * User configuration
 	 */
@@ -312,10 +324,10 @@ export type BetterAuthOptions = {
 		 */
 		fields?: Partial<Record<keyof OmitId<User>, string>>;
 		/**
-		 * Additional fields for the session
+		 * Additional fields for the user
 		 */
 		additionalFields?: {
-			[key: string]: FieldAttribute;
+			[key: string]: DBFieldAttribute;
 		};
 		/**
 		 * Changing email configuration
@@ -425,7 +437,7 @@ export type BetterAuthOptions = {
 		 * Additional fields for the session
 		 */
 		additionalFields?: {
-			[key: string]: FieldAttribute;
+			[key: string]: DBFieldAttribute;
 		};
 		/**
 		 * By default if secondary storage is provided
@@ -488,6 +500,12 @@ export type BetterAuthOptions = {
 		 * Map fields
 		 */
 		fields?: Partial<Record<keyof OmitId<Account>, string>>;
+		/**
+		 * Additional fields for the account
+		 */
+		additionalFields?: {
+			[key: string]: DBFieldAttribute;
+		};
 		/**
 		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 		 * will be updated on sign in with the latest data from the provider.
@@ -656,134 +674,11 @@ export type BetterAuthOptions = {
 	/**
 	 * Advanced options
 	 */
-	advanced?: {
+	advanced?: BetterAuthAdvancedOptions & {
 		/**
-		 * Ip address configuration
+		 * @deprecated Please use `database.generateId` instead.
 		 */
-		ipAddress?: {
-			/**
-			 * List of headers to use for ip address
-			 *
-			 * Ip address is used for rate limiting and session tracking
-			 *
-			 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
-			 *
-			 * @default
-			 * @link https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/utils/get-request-ip.ts#L8
-			 */
-			ipAddressHeaders?: string[];
-			/**
-			 * Disable ip tracking
-			 *
-			 * ⚠︎ This is a security risk and it may expose your application to abuse
-			 */
-			disableIpTracking?: boolean;
-		};
-		/**
-		 * Use secure cookies
-		 *
-		 * @default false
-		 */
-		useSecureCookies?: boolean;
-		/**
-		 * Disable trusted origins check
-		 *
-		 * ⚠︎ This is a security risk and it may expose your application to CSRF attacks
-		 */
-		disableCSRFCheck?: boolean;
-		/**
-		 * Configure cookies to be cross subdomains
-		 */
-		crossSubDomainCookies?: {
-			/**
-			 * Enable cross subdomain cookies
-			 */
-			enabled: boolean;
-			/**
-			 * Additional cookies to be shared across subdomains
-			 */
-			additionalCookies?: string[];
-			/**
-			 * The domain to use for the cookies
-			 *
-			 * By default, the domain will be the root
-			 * domain from the base URL.
-			 */
-			domain?: string;
-		};
-		/*
-		 * Allows you to change default cookie names and attributes
-		 *
-		 * default cookie names:
-		 * - "session_token"
-		 * - "session_data"
-		 * - "dont_remember"
-		 *
-		 * plugins can also add additional cookies
-		 */
-		cookies?: {
-			[key: string]: {
-				name?: string;
-				attributes?: CookieOptions;
-			};
-		};
-		defaultCookieAttributes?: CookieOptions;
-		/**
-		 * Prefix for cookies. If a cookie name is provided
-		 * in cookies config, this will be overridden.
-		 *
-		 * @default
-		 * ```txt
-		 * "appName" -> which defaults to "better-auth"
-		 * ```
-		 */
-		cookiePrefix?: string;
-		/**
-		 * Database configuration.
-		 */
-		database?: {
-			/**
-			 * The default number of records to return from the database
-			 * when using the `findMany` adapter method.
-			 *
-			 * @default 100
-			 */
-			defaultFindManyLimit?: number;
-			/**
-			 * If your database auto increments number ids, set this to `true`.
-			 *
-			 * Note: If enabled, we will not handle ID generation (including if you use `generateId`), and it would be expected that your database will provide the ID automatically.
-			 *
-			 * @default false
-			 */
-			useNumberId?: boolean;
-			/**
-			 * Custom generateId function.
-			 *
-			 * If not provided, random ids will be generated.
-			 * If set to false, the database's auto generated id will be used.
-			 */
-			generateId?:
-				| ((options: {
-						model: LiteralUnion<Models, string>;
-						size?: number;
-				  }) => string | false)
-				| false;
-		};
-		/**
-		 * Custom generateId function.
-		 *
-		 * If not provided, random ids will be generated.
-		 * If set to false, the database's auto generated id will be used.
-		 *
-		 * @deprecated Please use `database.generateId` instead. This will be potentially removed in future releases.
-		 */
-		generateId?:
-			| ((options: {
-					model: LiteralUnion<Models, string>;
-					size?: number;
-			  }) => string)
-			| false;
+		generateId?: never;
 	};
 	logger?: Logger;
 	/**
@@ -844,6 +739,23 @@ export type BetterAuthOptions = {
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
+			delete?: {
+				/**
+				 * Hook that is called before a user is deleted.
+				 * if the hook returns false, the user will not be deleted.
+				 */
+				before?: (
+					user: User & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<boolean | void>;
+				/**
+				 * Hook that is called after a user is deleted.
+				 */
+				after?: (
+					user: User & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
+			};
 		};
 		/**
 		 * Session Hook
@@ -889,11 +801,28 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Session & Record<string, any>;
+							data: Partial<Session & Record<string, any>>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a session is updated.
+				 */
+				after?: (
+					session: Session & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
+			};
+			delete?: {
+				/**
+				 * Hook that is called before a session is deleted.
+				 * if the hook returns false, the session will not be deleted.
+				 */
+				before?: (
+					session: Session & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<boolean | void>;
+				/**
+				 * Hook that is called after a session is deleted.
 				 */
 				after?: (
 					session: Session & Record<string, unknown>,
@@ -956,6 +885,23 @@ export type BetterAuthOptions = {
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
+			delete?: {
+				/**
+				 * Hook that is called before an account is deleted.
+				 * if the hook returns false, the account will not be deleted.
+				 */
+				before?: (
+					account: Account & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<boolean | void>;
+				/**
+				 * Hook that is called after an account is deleted.
+				 */
+				after?: (
+					account: Account & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
+			};
 		};
 		/**
 		 * Verification Hook
@@ -1003,6 +949,23 @@ export type BetterAuthOptions = {
 				>;
 				/**
 				 * Hook that is called after a verification is updated.
+				 */
+				after?: (
+					verification: Verification & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
+			};
+			delete?: {
+				/**
+				 * Hook that is called before a verification is deleted.
+				 * if the hook returns false, the verification will not be deleted.
+				 */
+				before?: (
+					verification: Verification & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<boolean | void>;
+				/**
+				 * Hook that is called after a verification is deleted.
 				 */
 				after?: (
 					verification: Verification & Record<string, unknown>,

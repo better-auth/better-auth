@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -16,7 +16,7 @@ import { APIError, getSessionFromCtx } from "../../api";
 import { base64 } from "@better-auth/utils/base64";
 import { generateRandomString } from "../../crypto";
 import { createHash } from "@better-auth/utils/hash";
-import { subtle } from "@better-auth/utils";
+import { getWebcryptoSubtle } from "@better-auth/utils";
 import { SignJWT } from "jose";
 import type { BetterAuthOptions, GenericEndpointContext } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
@@ -153,7 +153,7 @@ export const mcp = (options: MCPOptions) => {
 							maxAge: 0,
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-						const sessionToken = sessionCookie?.split(".")[0];
+						const sessionToken = sessionCookie?.split(".")[0]!;
 						if (!sessionToken) {
 							return;
 						}
@@ -203,7 +203,7 @@ export const mcp = (options: MCPOptions) => {
 					return c.json(metadata);
 				},
 			),
-			mcpOAuthAuthroize: createAuthEndpoint(
+			mcpOAuthAuthorize: createAuthEndpoint(
 				"/mcp/authorize",
 				{
 					method: "GET",
@@ -568,7 +568,7 @@ export const mcp = (options: MCPOptions) => {
 					}
 					let secretKey = {
 						alg: "HS256",
-						key: await subtle.generateKey(
+						key: await getWebcryptoSubtle().generateKey(
 							{
 								name: "HMAC",
 								hash: "SHA-256",
@@ -578,8 +578,8 @@ export const mcp = (options: MCPOptions) => {
 						),
 					};
 					const profile = {
-						given_name: user.name.split(" ")[0],
-						family_name: user.name.split(" ")[1],
+						given_name: user.name.split(" ")[0]!,
+						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
 						updated_at: user.updatedAt.toISOString(),
@@ -884,6 +884,7 @@ export const mcp = (options: MCPOptions) => {
 					return new Response(JSON.stringify(responseData), {
 						status: 201,
 						headers: {
+							"Content-Type": "application/json",
 							"Cache-Control": "no-store",
 							Pragma: "no-cache",
 						},
