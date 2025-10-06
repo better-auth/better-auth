@@ -1,5 +1,5 @@
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { logger } from "../utils";
+import { logger } from "@better-auth/core/env";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,

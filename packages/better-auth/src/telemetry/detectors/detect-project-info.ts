@@ -1,5 +1,5 @@
 // https://github.com/zkochan/packages/blob/main/which-pm-runs/index.js
-import { env } from "../../utils/env";
+import { env } from "@better-auth/core/env";
 
 export function detectPackageManager() {
 	const userAgent = env.npm_config_user_agent;

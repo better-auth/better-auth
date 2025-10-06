@@ -18,11 +18,11 @@ import {
 	createCookieGetter,
 	getCookies,
 } from "./cookies";
-import { createLogger } from "./utils/logger";
+import { createLogger } from "@better-auth/core/env";
 import { type SocialProviders, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
-import { env, isProduction } from "./utils/env";
+import { env, isProduction } from "@better-auth/core/env";
 import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
