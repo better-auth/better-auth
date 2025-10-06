@@ -75,6 +75,10 @@ interface ExpoClientOptions {
 		getItem: (key: string) => string | null;
 	};
 	storagePrefix?: string;
+	/**
+	 * @deprecated This option is ignored and will be removed in a future release.
+	 */
+	disableCache?: boolean;
 }
 
 interface StoredCookie {
