@@ -15,7 +15,7 @@ import type { RateLimit } from "./models";
 import type { AuthContext } from ".";
 import type { BetterAuthAdvancedOptions } from "@better-auth/core";
 import type { Database } from "better-sqlite3";
-import type { Logger } from "../utils";
+import type { Logger } from "@better-auth/core/env";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
 import type { Database as BunDatabase } from "bun:sqlite";
