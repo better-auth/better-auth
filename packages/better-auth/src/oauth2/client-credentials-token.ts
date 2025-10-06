@@ -1,7 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuth2Tokens } from "./types";
-import type { ProviderOptions } from "./types";
 import { base64Url } from "@better-auth/utils/base64";
+import type { OAuth2Tokens, ProviderOptions } from "@better-auth/core/oauth2";
 
 export function createClientCredentialsTokenRequest({
 	options,

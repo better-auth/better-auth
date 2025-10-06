@@ -1,11 +1,12 @@
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
-import { setTokenUtil, type OAuth2Tokens } from "../../oauth2";
+import { setTokenUtil } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { createAuthEndpoint } from "../call";
 import { safeJSONParse } from "../../utils/json";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 
 const schema = z.object({
 	code: z.string().optional(),

@@ -1,4 +1,4 @@
-import type { OAuth2Tokens } from "./types";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { getDate } from "../utils/date";
 import { createHash } from "@better-auth/utils/hash";
 import { base64Url } from "@better-auth/utils/base64";

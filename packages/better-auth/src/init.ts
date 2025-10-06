@@ -19,7 +19,7 @@ import {
 } from "./cookies";
 import { createLogger } from "@better-auth/core/env";
 import { type SocialProviders, socialProviders } from "./social-providers";
-import type { OAuthProvider } from "./oauth2";
+import type { OAuthProvider } from "@better-auth/core/oauth2";
 import { generateId } from "./utils";
 import { env, isProduction } from "@better-auth/core/env";
 import { checkPassword } from "./utils/password";

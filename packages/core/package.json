@@ -55,6 +55,16 @@
         "types": "./dist/db/adapter/index.d.cts",
         "default": "./dist/db/adapter/index.cjs"
       }
+    },
+    "./oauth2": {
+      "import": {
+        "types": "./dist/oauth2/index.d.ts",
+        "default": "./dist/oauth2/index.mjs"
+      },
+      "require": {
+        "types": "./dist/oauth2/index.d.cts",
+        "default": "./dist/oauth2/index.cjs"
+      }
     }
   },
   "typesVersions": {
