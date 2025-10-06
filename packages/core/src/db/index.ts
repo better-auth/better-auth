@@ -7,7 +7,6 @@ import type {
 } from "./type";
 import type { BetterAuthPluginDBSchema } from "./plugin";
 export type { BetterAuthPluginDBSchema } from "./plugin";
-
 export { coreSchema } from "./schema/shared";
 export { userSchema, type User } from "./schema/user";
 export { accountSchema, type Account } from "./schema/account";
