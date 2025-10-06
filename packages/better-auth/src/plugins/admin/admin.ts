@@ -23,7 +23,7 @@ import type {
 	UserWithRole,
 } from "./types";
 import { getPlugin } from "../../utils";
-import type { Organization, organization } from "../organization";
+import type { Member, Organization, organization } from "../organization";
 import { BetterAuthError } from "../../error";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 
@@ -1759,6 +1759,172 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				} catch (e) {
 					return ctx.json({
 						organizations: [],
+						total: 0,
+					});
+				}
+			},
+		),
+		adminListMembers: createAuthEndpoint(
+			"/admin/list-members",
+			{
+				use: [adminMiddleware],
+				method: "GET",
+				query: z.object({
+					limit: z
+						.string()
+						.meta({
+							description: "The number of users to return",
+						})
+						.or(z.number())
+						.optional(),
+					offset: z
+						.string()
+						.meta({
+							description: "The offset to start from",
+						})
+						.or(z.number())
+						.optional(),
+					sortBy: z
+						.string()
+						.meta({
+							description: "The field to sort by",
+						})
+						.optional(),
+					sortDirection: z
+						.enum(["asc", "desc"])
+						.meta({
+							description: "The direction to sort by",
+						})
+						.optional(),
+					filterField: z
+						.string()
+						.meta({
+							description: "The field to filter by",
+						})
+						.optional(),
+					filterValue: z
+						.string()
+						.meta({
+							description: "The value to filter by",
+						})
+						.or(z.number())
+						.or(z.boolean())
+						.optional(),
+					filterOperator: z
+						.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
+						.meta({
+							description: "The operator to use for the filter",
+						})
+						.optional(),
+					organizationId: z.string().nonempty().meta({
+						description: "The organization ID to list members for.",
+					}),
+				}),
+				metadata: {
+					openapi: {
+						operationId: "adminListMembers",
+						summary: "List organization members",
+						description: "List organization members",
+						responses: {
+							200: {
+								description: "List of organization members",
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												members: {
+													type: "array",
+													items: {
+														$ref: "#/components/schemas/Member",
+													},
+												},
+												total: {
+													type: "number",
+												},
+												limit: {
+													type: "number",
+												},
+												offset: {
+													type: "number",
+												},
+											},
+											required: ["members", "total"],
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			async (ctx) => {
+				const session = ctx.context.session;
+
+				const canListMembers = hasPermission({
+					userId: ctx.context.session.user.id,
+					role: session.user.role,
+					options: opts,
+					permissions: {
+						user: ["list-members"],
+					},
+				});
+				if (!canListMembers) {
+					throw new APIError("FORBIDDEN", {
+						message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_MEMBERS,
+					});
+				}
+
+				const where: Where[] = [
+					{
+						field: "organizationId",
+						value: ctx.query.organizationId,
+					},
+				];
+
+				if (ctx.query.filterField && ctx.query?.filterValue) {
+					where.push({
+						field: ctx.query.filterField,
+						operator: ctx.query.filterOperator || "eq",
+						value: ctx.query.filterValue,
+					});
+				}
+
+				try {
+					const [members, total] = await Promise.all([
+						ctx.context.adapter.findMany<Member>({
+							model: "member",
+							where,
+							limit: Number(ctx.query?.limit) || undefined,
+							offset: Number(ctx.query?.offset) || undefined,
+							sortBy: ctx.query.sortBy
+								? {
+										field: ctx.query.sortBy,
+										direction: ctx.query.sortDirection || "asc",
+									}
+								: undefined,
+						}),
+						ctx.context.adapter.count({
+							model: "member",
+							where,
+						}),
+					]);
+
+					return ctx.json({
+						members: members as (Member &
+							(O["organizations"] extends never
+								? {}
+								: InferAdditionalFieldsFromPluginOptions<
+										"member",
+										Exclude<O["organizations"], undefined>
+									>))[],
+						total,
+						limit: Number(ctx.query?.limit) || undefined,
+						offset: Number(ctx.query?.offset) || undefined,
+					});
+				} catch (e) {
+					return ctx.json({
+						members: [],
 						total: 0,
 					});
 				}
