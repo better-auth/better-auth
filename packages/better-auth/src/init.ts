@@ -8,7 +8,6 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	Models,
-	SecondaryStorage,
 	Session,
 	User,
 } from "./types";
@@ -32,7 +31,10 @@ import type { TelemetryEvent } from "./telemetry/types";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
 import { isPromise } from "./utils/is-promise";
-import type { BetterAuthDBSchema } from "@better-auth/core/db";
+import type {
+	BetterAuthDBSchema,
+	SecondaryStorage,
+} from "@better-auth/core/db";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
