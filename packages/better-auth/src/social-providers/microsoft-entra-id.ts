@@ -6,7 +6,7 @@ import {
 } from "../oauth2";
 import type { OAuthProvider } from "../oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import { logger } from "../utils/logger";
+import { logger } from "@better-auth/core/env";
 import { decodeJwt } from "jose";
 import { base64 } from "@better-auth/utils/base64";
 

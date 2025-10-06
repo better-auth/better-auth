@@ -1,6 +1,5 @@
 // Source code copied & modified from node internals: https://github.com/nodejs/node/blob/5b32bb1573dace2dd058c05ac4fab1e4e446c775/lib/internal/tty.js#L123
-
-import { env, getEnvVar } from "./env";
+import { env, getEnvVar } from "./env-impl";
 
 const COLORS_2 = 1;
 const COLORS_16 = 4;
@@ -58,7 +57,7 @@ const TERM_ENVS_REG_EXP = [
 // The `getColorDepth` API got inspired by multiple sources such as
 // https://github.com/chalk/supports-color,
 // https://github.com/isaacs/color-support.
-export function getColorDepth() {
+export function getColorDepth(): number {
 	// Use level 0-3 to support the same levels as `chalk` does. This is done for
 	// consistency throughout the ecosystem.
 	if (getEnvVar("FORCE_COLOR") !== undefined) {
