@@ -18,6 +18,11 @@ interface AdminClientOptions {
 					[key: string]: DBFieldAttribute;
 				};
 			};
+			member?: {
+				additionalFields?: {
+					[key: string]: DBFieldAttribute;
+				};
+			};
 		};
 	};
 }

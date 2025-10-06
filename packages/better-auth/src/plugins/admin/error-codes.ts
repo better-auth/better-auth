@@ -28,4 +28,5 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 	YOU_CANNOT_REMOVE_YOURSELF: "You cannot remove yourself",
 	YOU_ARE_NOT_ALLOWED_TO_LIST_ORGANIZATIONS:
 		"You are not allowed to list organizations",
+	YOU_ARE_NOT_ALLOWED_TO_LIST_MEMBERS: "You are not allowed to list members",
 });

@@ -84,6 +84,11 @@ export interface AdminOptions {
 					[key: string]: DBFieldAttribute;
 				};
 			};
+			member?: {
+				additionalFields?: {
+					[key: string]: DBFieldAttribute;
+				};
+			};
 		};
 	};
 }
