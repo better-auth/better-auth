@@ -15,7 +15,7 @@ export const getSchema = (normalizer: {
 					returned: true,
 					transform: {
 						input(value) {
-							return value == null
+							return typeof value !== "string"
 								? value
 								: normalizer.username(value as string);
 						},
@@ -26,7 +26,7 @@ export const getSchema = (normalizer: {
 					required: false,
 					transform: {
 						input(value) {
-							return value == null
+							return typeof value !== "string"
 								? value
 								: normalizer.displayUsername(value as string);
 						},
