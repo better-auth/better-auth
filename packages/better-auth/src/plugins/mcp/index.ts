@@ -946,7 +946,7 @@ export const withMcpAuth = <
 			globalLog(
 				"warn",
 				"Unable to get the baseURL, please check your config!",
-				auth.options,
+				null,
 			);
 		}
 		const session = await auth.api.getMcpSession({
