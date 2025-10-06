@@ -485,7 +485,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				});
 			}
 			// Check if slug is being updated and validate uniqueness
-			if (ctx.body.data.slug) {
+			if (typeof ctx.body.data.slug === "string") {
 				const existingOrganization = await adapter.findOrganizationBySlug(
 					ctx.body.data.slug,
 				);
