@@ -1,12 +1,8 @@
 import * as z from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
-import {
-	generateState,
-	decryptOAuthToken,
-	setTokenUtil,
-	type OAuth2Tokens,
-} from "../../oauth2";
+import { generateState, decryptOAuthToken, setTokenUtil } from "../../oauth2";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
