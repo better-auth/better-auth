@@ -7,15 +7,15 @@ import type {
 	TransactionAdapter,
 	Where,
 } from "../../types";
-import { generateId as defaultGenerateId, logger } from "../../utils";
+import { generateId as defaultGenerateId } from "../../utils";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 	CleanedWhere,
 } from "./types";
-import { colors } from "../../utils/colors";
 import type { DBFieldAttribute } from "@better-auth/core/db";
+import { logger, TTY_COLORS, getColorDepth } from "@better-auth/core/env";
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
@@ -1072,19 +1072,22 @@ export const createAdapterFactory =
 	};
 
 function formatTransactionId(transactionId: number) {
-	return `${colors.fg.magenta}#${transactionId}${colors.reset}`;
+	if (getColorDepth() < 8) {
+		return `#${transactionId}`;
+	}
+	return `${TTY_COLORS.fg.magenta}#${transactionId}${TTY_COLORS.reset}`;
 }
 
 function formatStep(step: number, total: number) {
-	return `${colors.bg.black}${colors.fg.yellow}[${step}/${total}]${colors.reset}`;
+	return `${TTY_COLORS.bg.black}${TTY_COLORS.fg.yellow}[${step}/${total}]${TTY_COLORS.reset}`;
 }
 
 function formatMethod(method: string) {
-	return `${colors.bright}${method}${colors.reset}`;
+	return `${TTY_COLORS.bright}${method}${TTY_COLORS.reset}`;
 }
 
 function formatAction(action: string) {
-	return `${colors.dim}(${action})${colors.reset}`;
+	return `${TTY_COLORS.dim}(${action})${TTY_COLORS.reset}`;
 }
 
 /**

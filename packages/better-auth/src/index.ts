@@ -1,3 +1,8 @@
+//#region Re-exports necessaries from core module
+export * from "@better-auth/core/env";
+export * from "@better-auth/core";
+//#endregion
+export { getCurrentAdapter } from "./context/transaction";
 export * from "./auth";
 export * from "./types";
 export * from "./error";

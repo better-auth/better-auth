@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe } from "vitest";
 import type { Adapter, BetterAuthOptions } from "../types";
 import { getAuthTables } from "../db";
 import type { createTestSuite } from "./create-test-suite";
-import { colors } from "../utils/colors";
+import { TTY_COLORS } from "@better-auth/core/env";
 import { deepmerge } from "./utils";
 
 export type Logger = {
@@ -108,27 +108,27 @@ export const testAdapter = async ({
 		return {
 			info: (...args: any[]) =>
 				console.log(
-					`${colors.fg.blue}INFO   ${colors.reset} [${adapterDisplayName}]`,
+					`${TTY_COLORS.fg.blue}INFO   ${TTY_COLORS.reset} [${adapterDisplayName}]`,
 					...args,
 				),
 			success: (...args: any[]) =>
 				console.log(
-					`${colors.fg.green}SUCCESS${colors.reset} [${adapterDisplayName}]`,
+					`${TTY_COLORS.fg.green}SUCCESS${TTY_COLORS.reset} [${adapterDisplayName}]`,
 					...args,
 				),
 			warn: (...args: any[]) =>
 				console.log(
-					`${colors.fg.yellow}WARN   ${colors.reset} [${adapterDisplayName}]`,
+					`${TTY_COLORS.fg.yellow}WARN   ${TTY_COLORS.reset} [${adapterDisplayName}]`,
 					...args,
 				),
 			error: (...args: any[]) =>
 				console.log(
-					`${colors.fg.red}ERROR  ${colors.reset} [${adapterDisplayName}]`,
+					`${TTY_COLORS.fg.red}ERROR  ${TTY_COLORS.reset} [${adapterDisplayName}]`,
 					...args,
 				),
 			debug: (...args: any[]) =>
 				console.log(
-					`${colors.fg.magenta}DEBUG  ${colors.reset} [${adapterDisplayName}]`,
+					`${TTY_COLORS.fg.magenta}DEBUG  ${TTY_COLORS.reset} [${adapterDisplayName}]`,
 					...args,
 				),
 		};
@@ -167,7 +167,7 @@ export const testAdapter = async ({
 		}
 		await refreshAdapter(betterAuthOptions);
 		log.success(
-			`${colors.bright}CLEAN-UP${colors.reset} completed successfully (${(performance.now() - start).toFixed(3)}ms)`,
+			`${TTY_COLORS.bright}CLEAN-UP${TTY_COLORS.reset} completed successfully (${(performance.now() - start).toFixed(3)}ms)`,
 		);
 	};
 
@@ -187,7 +187,7 @@ export const testAdapter = async ({
 			});
 		}
 		log.success(
-			`${colors.bright}MIGRATIONS${colors.reset} completed successfully (${(performance.now() - start).toFixed(3)}ms)`,
+			`${TTY_COLORS.bright}MIGRATIONS${TTY_COLORS.reset} completed successfully (${(performance.now() - start).toFixed(3)}ms)`,
 		);
 	};
 

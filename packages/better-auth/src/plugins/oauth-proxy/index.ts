@@ -6,7 +6,7 @@ import {
 } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types";
-import { env } from "../../utils/env";
+import { env } from "@better-auth/core/env";
 import { getOrigin } from "../../utils/url";
 import type { EndpointContext } from "better-call";
 

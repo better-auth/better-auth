@@ -8,7 +8,7 @@ import {
 import type { AuthEndpoint, AuthMiddleware } from "./call";
 import type { AuthContext, HookEndpointContext } from "../types";
 import { createDefu } from "defu";
-import { shouldPublishLog } from "../utils";
+import { shouldPublishLog } from "@better-auth/core/env";
 
 type InternalContext = InputContext<string, any> &
 	EndpointContext<string, any> & {
