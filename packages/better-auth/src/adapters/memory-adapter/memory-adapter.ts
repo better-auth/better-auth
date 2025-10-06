@@ -50,7 +50,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 					globalLog(
 						"error",
 						`[MemoryAdapter] Model ${model} not found in the DB`,
-						options,
+						null,
 						Object.keys(db),
 					);
 					throw new Error(`Model ${model} not found`);

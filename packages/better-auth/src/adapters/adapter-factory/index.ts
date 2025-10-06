@@ -237,9 +237,9 @@ export const createAdapterFactory =
 							return;
 						}
 					}
-					globalLog("info", `[${config.adapterName}]`, options, ...args);
+					globalLog("info", `[${config.adapterName}]`, null, ...args);
 				} else {
-					globalLog("info", `[${config.adapterName}]`, options, ...args);
+					globalLog("info", `[${config.adapterName}]`, null, ...args);
 				}
 			}
 		};
@@ -610,7 +610,7 @@ export const createAdapterFactory =
 					globalLog(
 						"warn",
 						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you, unless you pass in the \`forceAllowId\` parameter. The id will be ignored.`,
-						options,
+						null,
 					);
 					const err = new Error();
 					const stack = err.stack
