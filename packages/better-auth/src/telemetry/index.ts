@@ -1,4 +1,9 @@
-import { globalLog, ENV, getBooleanEnvVar, isTest } from "@better-auth/core/env";
+import {
+	globalLog,
+	ENV,
+	getBooleanEnvVar,
+	isTest,
+} from "@better-auth/core/env";
 import { getProjectId } from "./project-id";
 import type { BetterAuthOptions } from "../types";
 import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";

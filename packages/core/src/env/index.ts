@@ -11,7 +11,7 @@ export {
 } from "./env-impl";
 export { getColorDepth } from "./color-depth";
 export {
-	logger,
+	globalLog,
 	createLogger,
 	levels,
 	type Logger,
