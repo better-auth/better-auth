@@ -88,6 +88,7 @@
   "devDependencies": {
     "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
+    "jose": "^6.1.0",
     "unbuild": "catalog:"
   },
   "dependencies": {
@@ -96,6 +97,7 @@
   },
   "peerDependencies": {
     "@better-auth/utils": "0.3.0",
-    "@better-fetch/fetch": "catalog:"
+    "@better-fetch/fetch": "catalog:",
+    "jose": "^6.1.0"
   }
 }
