@@ -74,6 +74,9 @@ export interface SSOOptions {
 	defaultOverrideUserInfo?: boolean;
 }
 
+/**
+ * @deprecated Install and use `@better-auth/sso` plugin instead. This export will be removed in the next major version.
+ */
 export const sso = (options?: SSOOptions) => {
 	return {
 		id: "sso",
