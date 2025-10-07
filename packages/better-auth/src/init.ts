@@ -18,14 +18,17 @@ import {
 	getCookies,
 } from "./cookies";
 import { createLogger } from "@better-auth/core/env";
-import { type SocialProviders, socialProviders } from "./social-providers";
+import {
+	type SocialProviders,
+	socialProviders,
+} from "@better-auth/core/social-providers";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import { generateId } from "./utils";
 import { env, isProduction } from "@better-auth/core/env";
 import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
-import { BetterAuthError } from "./error";
+import { BetterAuthError } from "@better-auth/core/error";
 import { createTelemetry, type TelemetryEvent } from "@better-auth/telemetry";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
