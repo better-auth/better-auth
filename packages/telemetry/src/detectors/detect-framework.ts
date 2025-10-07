@@ -1,4 +1,4 @@
-import { getPackageVersion } from "../../utils/package-json";
+import { getPackageVersion } from "../utils/package-json";
 
 const FRAMEWORKS: Record<string, string> = {
 	next: "next",
