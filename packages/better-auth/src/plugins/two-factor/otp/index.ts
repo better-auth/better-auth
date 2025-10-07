@@ -10,7 +10,7 @@ import {
 	symmetricEncrypt,
 } from "../../../crypto";
 import { setSessionCookie } from "../../../cookies";
-import { BASE_ERROR_CODES } from "../../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { GenericEndpointContext } from "../../../types";
 import { defaultKeyHasher } from "../utils";
 

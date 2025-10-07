@@ -4,7 +4,7 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { originCheck } from "../../api";
 import { defaultKeyHasher } from "./utils";
 import type { GenericEndpointContext } from "../../types";

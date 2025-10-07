@@ -4,7 +4,7 @@ import { APIError } from "better-call";
 import type { AuthContext } from "../../init";
 import { getDate } from "../../utils/date";
 import { generateId } from "../../utils";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { originCheck } from "../middlewares";
 
 function redirectError(
