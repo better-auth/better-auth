@@ -1,4 +1,4 @@
-import type { AuthPluginSchema } from "../../types";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 export const schema = {
 	oauthApplication: {
@@ -129,4 +129,4 @@ export const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;

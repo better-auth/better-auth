@@ -175,9 +175,10 @@ export interface ApiKeyOptions {
 	/**
 	 * An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
 	 *
+	 * ⚠︎ This is not recommended for production use, as it can lead to security issues.
 	 * @default false
 	 */
-	disableSessionForAPIKeys?: boolean;
+	enableSessionForAPIKeys?: boolean;
 	/**
 	 * Permissions for the API key.
 	 */

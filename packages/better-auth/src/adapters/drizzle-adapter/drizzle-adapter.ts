@@ -20,10 +20,10 @@ import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
 	createAdapterFactory,
-	type AdapterDebugLogs,
 	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
+import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
 
 export interface DB {
 	[key: string]: any;
@@ -49,7 +49,7 @@ export interface DrizzleAdapterConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 	/**
 	 * By default snake case is used for table and field names
 	 * when the CLI is used to generate the schema. If you want

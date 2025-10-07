@@ -1,10 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
 import {
 	createAuthorizationURL,
-	type OAuthProvider,
-	type ProviderOptions,
 	validateAuthorizationCode,
-} from "../oauth2";
+} from "@better-auth/core/oauth2";
+import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
 
 export interface KickProfile {
 	/**

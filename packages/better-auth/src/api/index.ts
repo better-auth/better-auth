@@ -41,7 +41,7 @@ import {
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
-import { type InternalLogger, logger } from "../utils/logger";
+import { type InternalLogger, logger } from "@better-auth/core/env";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";

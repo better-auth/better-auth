@@ -1,5 +1,5 @@
 import type { BetterAuthOptions } from "../types";
-import { isDevelopment, isTest } from "../utils/env";
+import { isDevelopment, isTest } from "@better-auth/core/env";
 import { z } from "zod";
 
 export function getIp(

@@ -1,3 +1,5 @@
+/// <reference types="node" />
+/// <reference types="bun" />
 //https://github.com/unjs/std-env/blob/main/src/env.ts
 
 const _envShim = Object.create(null);
@@ -93,7 +95,7 @@ export function getBooleanEnvVar(key: string, fallback = true): boolean {
 /**
  * Common environment variables used in Better Auth
  */
-export const ENV = {
+export const ENV = Object.freeze({
 	get BETTER_AUTH_SECRET() {
 		return getEnvVar("BETTER_AUTH_SECRET");
 	},
@@ -118,4 +120,4 @@ export const ENV = {
 			"https://telemetry.better-auth.com/v1/track",
 		);
 	},
-} as const;
+});

@@ -1,4 +1,4 @@
-import type { LiteralString } from "../types/helper";
+import type { LiteralString } from "../types";
 
 export interface OAuth2Tokens {
 	tokenType?: string;

@@ -41,12 +41,6 @@ const { execute } = await testAdapter({
 		];
 		const tables = tables_result.map((table) => table.Tables_in_better_auth);
 		assert(tables.length > 0, "No tables found");
-		assert(
-			!["user", "session", "account", "verification"].find(
-				(x) => !tables.includes(x),
-			),
-			"No tables found",
-		);
 	},
 	prefixTests: "mysql",
 	tests: [

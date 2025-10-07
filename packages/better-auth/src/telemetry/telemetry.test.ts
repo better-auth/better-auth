@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createTelemetry } from "./create-telemetry";
+import { createTelemetry } from "./index";
 import type { TelemetryEvent } from "./types";
 
 vi.mock("@better-fetch/fetch", () => ({

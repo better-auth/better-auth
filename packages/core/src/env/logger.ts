@@ -1,5 +1,35 @@
 import { getColorDepth } from "./color-depth";
-import { colors } from "./colors";
+
+export const TTY_COLORS = {
+	reset: "\x1b[0m",
+	bright: "\x1b[1m",
+	dim: "\x1b[2m",
+	undim: "\x1b[22m",
+	underscore: "\x1b[4m",
+	blink: "\x1b[5m",
+	reverse: "\x1b[7m",
+	hidden: "\x1b[8m",
+	fg: {
+		black: "\x1b[30m",
+		red: "\x1b[31m",
+		green: "\x1b[32m",
+		yellow: "\x1b[33m",
+		blue: "\x1b[34m",
+		magenta: "\x1b[35m",
+		cyan: "\x1b[36m",
+		white: "\x1b[37m",
+	},
+	bg: {
+		black: "\x1b[40m",
+		red: "\x1b[41m",
+		green: "\x1b[42m",
+		yellow: "\x1b[43m",
+		blue: "\x1b[44m",
+		magenta: "\x1b[45m",
+		cyan: "\x1b[46m",
+		white: "\x1b[47m",
+	},
+} as const;
 
 export type LogLevel = "info" | "success" | "warn" | "error" | "debug";
 
@@ -31,11 +61,11 @@ export type LogHandlerParams = Parameters<NonNullable<Logger["log"]>> extends [
 	: never;
 
 const levelColors: Record<LogLevel, string> = {
-	info: colors.fg.blue,
-	success: colors.fg.green,
-	warn: colors.fg.yellow,
-	error: colors.fg.red,
-	debug: colors.fg.magenta,
+	info: TTY_COLORS.fg.blue,
+	success: TTY_COLORS.fg.green,
+	warn: TTY_COLORS.fg.yellow,
+	error: TTY_COLORS.fg.red,
+	debug: TTY_COLORS.fg.magenta,
 };
 
 const formatMessage = (
@@ -46,10 +76,10 @@ const formatMessage = (
 	const timestamp = new Date().toISOString();
 
 	if (colorsEnabled) {
-		return `${colors.dim}${timestamp}${colors.reset} ${
+		return `${TTY_COLORS.dim}${timestamp}${TTY_COLORS.reset} ${
 			levelColors[level]
-		}${level.toUpperCase()}${colors.reset} ${colors.bright}[Better Auth]:${
-			colors.reset
+		}${level.toUpperCase()}${TTY_COLORS.reset} ${TTY_COLORS.bright}[Better Auth]:${
+			TTY_COLORS.reset
 		} ${message}`;
 	}
 
