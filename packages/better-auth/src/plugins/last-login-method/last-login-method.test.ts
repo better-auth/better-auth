@@ -5,11 +5,11 @@ import { lastLoginMethodClient } from "./client";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import type { GoogleProfile } from "../../social-providers/google";
-import { getOAuth2Tokens } from "../../oauth2";
+import { getOAuth2Tokens } from "@better-auth/core/oauth2";
 import { signJWT } from "../../crypto/jwt";
 
 // Mock OAuth2 functions to return valid tokens for testing
-vi.mock("../../oauth2", async (importOriginal) => {
+vi.mock("@better-auth/core/oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
 	return {
 		...original,

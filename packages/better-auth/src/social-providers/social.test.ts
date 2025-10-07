@@ -3,7 +3,7 @@ import { getTestInstance } from "../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../utils/constants";
 import type { GoogleProfile } from "./google";
 import { parseSetCookieHeader } from "../cookies";
-import { getOAuth2Tokens, refreshAccessToken } from "../oauth2";
+import { getOAuth2Tokens, refreshAccessToken } from "@better-auth/core/oauth2";
 import { signJWT } from "../crypto/jwt";
 import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
@@ -13,7 +13,7 @@ import { getMigrations } from "../db";
 let server = new OAuth2Server();
 let port = 8005;
 
-vi.mock("../oauth2", async (importOriginal) => {
+vi.mock("@better-auth/core/oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
 	return {
 		...original,
