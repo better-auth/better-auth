@@ -17,5 +17,9 @@ export type * from "./types/helper";
 // export this as we are referencing OAuth2Tokens in the `refresh-token` api as return type
 
 // telemetry exports for CLI and consumers
-export { createTelemetry, getTelemetryAuthConfig, type TelemetryEvent } from "@better-auth/telemetry";
+export {
+	createTelemetry,
+	getTelemetryAuthConfig,
+	type TelemetryEvent,
+} from "@better-auth/telemetry";
 export { APIError } from "./api";
