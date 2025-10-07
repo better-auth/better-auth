@@ -494,7 +494,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					existingOrganization.id !== organizationId
 				) {
 					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
+						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
 					});
 				}
 			}

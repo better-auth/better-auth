@@ -161,7 +161,7 @@ describe("organization", async (it) => {
 		// This should fail with duplicate slug error
 		expect(organization.error?.status).toBe(400);
 		expect(organization.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
 		);
 	});
 
