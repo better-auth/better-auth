@@ -14,7 +14,7 @@ import type {
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import { useStore } from "./react-store";
-import type { BASE_ERROR_CODES } from "../../error/codes";
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { SessionQueryParams } from "../types";
 
 function getAtomKey(str: string) {

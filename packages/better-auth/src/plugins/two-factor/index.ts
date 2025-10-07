@@ -14,7 +14,7 @@ import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { schema } from "./schema";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";

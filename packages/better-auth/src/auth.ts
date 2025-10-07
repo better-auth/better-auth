@@ -11,8 +11,9 @@ import type {
 } from "./types";
 import type { PrettifyDeep, Expand } from "./types/helper";
 import { getBaseURL, getOrigin } from "./utils/url";
-import { BASE_ERROR_CODES } from "./error/codes";
-import { BetterAuthError } from "./error";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { BetterAuthError } from "@better-auth/core/error";
+import { runWithAdapter } from "./context/transaction";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
 

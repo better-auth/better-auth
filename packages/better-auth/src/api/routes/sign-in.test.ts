@@ -2,7 +2,7 @@ import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import { APIError } from "better-call";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 
 /**
  * More test can be found in `session.test.ts`

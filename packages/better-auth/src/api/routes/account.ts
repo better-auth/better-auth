@@ -7,8 +7,8 @@ import {
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "./session";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { SocialProviderListEnum } from "../../social-providers";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 

@@ -5,7 +5,7 @@ import { type UserWithRole } from "./types";
 import { adminClient } from "./client";
 import { createAccessControl } from "../access";
 import { createAuthClient } from "../../client";
-import type { GoogleProfile } from "../../social-providers";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { signJWT } from "../../crypto";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "@better-auth/core/oauth2";

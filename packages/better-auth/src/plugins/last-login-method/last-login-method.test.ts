@@ -4,7 +4,7 @@ import { lastLoginMethod } from ".";
 import { lastLoginMethodClient } from "./client";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import type { GoogleProfile } from "../../social-providers/google";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { getOAuth2Tokens } from "@better-auth/core/oauth2";
 import { signJWT } from "../../crypto/jwt";
 

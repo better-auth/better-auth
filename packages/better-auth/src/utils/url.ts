@@ -1,5 +1,5 @@
 import { env } from "@better-auth/core/env";
-import { BetterAuthError } from "../error";
+import { BetterAuthError } from "@better-auth/core/error";
 
 function checkHasPath(url: string): boolean {
 	try {

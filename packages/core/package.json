@@ -36,6 +36,36 @@
         "default": "./dist/env/index.cjs"
       }
     },
+    "./error": {
+      "import": {
+        "types": "./dist/error/index.d.ts",
+        "default": "./dist/error/index.mjs"
+      },
+      "require": {
+        "types": "./dist/error/index.d.cts",
+        "default": "./dist/error/index.cjs"
+      }
+    },
+    "./utils": {
+      "import": {
+        "types": "./dist/utils/index.d.ts",
+        "default": "./dist/utils/index.mjs"
+      },
+      "require": {
+        "types": "./dist/utils/index.d.cts",
+        "default": "./dist/utils/index.cjs"
+      }
+    },
+    "./social-providers": {
+      "import": {
+        "types": "./dist/social-providers/index.d.ts",
+        "default": "./dist/social-providers/index.mjs"
+      },
+      "require": {
+        "types": "./dist/social-providers/index.d.cts",
+        "default": "./dist/social-providers/index.cjs"
+      }
+    },
     "./db": {
       "import": {
         "types": "./dist/db/index.d.ts",

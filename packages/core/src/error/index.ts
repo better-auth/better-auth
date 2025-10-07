@@ -7,11 +7,5 @@ export class BetterAuthError extends Error {
 		this.stack = "";
 	}
 }
-export class MissingDependencyError extends BetterAuthError {
-	constructor(pkgName: string) {
-		super(
-			`The package "${pkgName}" is required. Make sure it is installed.`,
-			pkgName,
-		);
-	}
-}
+
+export { BASE_ERROR_CODES } from "./codes";
