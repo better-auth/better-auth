@@ -296,7 +296,7 @@ describe("Admin plugin", async () => {
 			},
 		});
 
-		expect(res.data?.users[0].name).toBe("Test User");
+		expect(res.data?.users[0]!.name).toBe("Test User");
 
 		const res2 = await client.admin.listUsers({
 			query: {
@@ -307,7 +307,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
-		expect(res2.data?.users[0].name).toBe("Admin");
+		expect(res2.data?.users[0]!.name).toBe("Admin");
 	});
 
 	it("should allow offset and limit", async () => {
@@ -321,7 +321,7 @@ describe("Admin plugin", async () => {
 			},
 		});
 		expect(res.data?.users.length).toBe(1);
-		expect(res.data?.users[0].name).toBe("Test User");
+		expect(res.data?.users[0]!.name).toBe("Test User");
 	});
 
 	it("should allow to search users by name", async () => {
@@ -461,12 +461,14 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow banned user to sign in with social provider", async () => {
+		const headers = new Headers();
 		const res = await client.signIn.social(
 			{
 				provider: "google",
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		const state = new URL(res.url!).searchParams.get("state");
@@ -476,6 +478,7 @@ describe("Admin plugin", async () => {
 				state,
 				code: "test",
 			},
+			headers,
 			method: "GET",
 			onError(context) {
 				expect(context.response.status).toBe(302);
@@ -648,7 +651,7 @@ describe("Admin plugin", async () => {
 		);
 		expect(sessions.data?.sessions.length).toBe(3);
 		const res = await client.admin.revokeUserSession(
-			{ sessionToken: sessions.data?.sessions[0].token || "" },
+			{ sessionToken: sessions.data?.sessions[0]!.token || "" },
 			{ headers: adminHeaders },
 		);
 		expect(res.data?.success).toBe(true);

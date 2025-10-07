@@ -10,7 +10,6 @@ import {
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
 import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
-import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../middlewares";
@@ -101,17 +100,12 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					status: true,
 				});
 			}
-			const additionalFields = parseUserInput(
-				ctx.context.options,
-				rest,
-				"update",
-			);
 			const user = await ctx.context.internalAdapter.updateUser(
 				session.user.id,
 				{
 					name,
 					image,
-					...additionalFields,
+					...rest,
 				},
 				ctx,
 			);
@@ -779,7 +773,7 @@ export const changeEmail = createAuthEndpoint(
 				await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (existing) {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
+					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				});
 			}
 			await ctx.context.internalAdapter.updateUserByEmail(

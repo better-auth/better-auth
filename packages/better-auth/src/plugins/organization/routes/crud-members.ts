@@ -59,9 +59,9 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 						role:
 							| InferOrganizationRolesFromOption<O>
 							| InferOrganizationRolesFromOption<O>[];
-						organizationId?: string;
+						organizationId?: string | undefined;
 					} & (O extends { teams: { enabled: true } }
-						? { teamId?: string }
+						? { teamId?: string | undefined }
 						: {}) &
 						InferAdditionalFieldsFromPluginOptions<"member", O>,
 				},
@@ -388,7 +388,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				session.session.activeOrganizationId ===
 					toBeRemovedMember.organizationId
 			) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 
 			// Run afterRemoveMember hook
@@ -799,7 +799,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			}
 			await adapter.deleteMember(member.id);
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 			return ctx.json(member);
 		},

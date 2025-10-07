@@ -101,6 +101,31 @@ describe("organization", async (it) => {
 		expect(existingSlug.error?.status).toBe(400);
 		expect(existingSlug.error?.message).toBe("slug is taken");
 	});
+
+	it("should prevent creating organization with empty slug", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.create({
+			name: "test-empty-slug",
+			slug: "",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(organization.error?.status).toBe(400);
+	});
+
+	it("should prevent creating organization with empty name", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.create({
+			name: "",
+			slug: "test-empty-name",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(organization.error?.status).toBe(400);
+	});
+
 	it("should create organization directly in the server without cookie", async () => {
 		const session = await client.getSession({
 			fetchOptions: {
@@ -158,6 +183,34 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(organization.data?.metadata?.test).toBe("test2");
+	});
+
+	it("should prevent updating organization to empty slug", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.update({
+			organizationId,
+			data: {
+				slug: "",
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(organization.error?.status).toBe(400);
+	});
+
+	it("should prevent updating organization to empty name", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.update({
+			organizationId,
+			data: {
+				name: "",
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(organization.error?.status).toBe(400);
 	});
 
 	it("should allow activating organization and set session", async () => {
@@ -270,7 +323,7 @@ describe("organization", async (it) => {
 		expect(wrongInvitation.error?.status).toBe(400);
 
 		const wrongPerson = await client.organization.acceptInvitation({
-			invitationId: invite.data.id,
+			invitationId: invite.data!.id!,
 			fetchOptions: {
 				headers,
 			},
@@ -278,7 +331,7 @@ describe("organization", async (it) => {
 		expect(wrongPerson.error?.status).toBe(403);
 
 		const invitation = await client.organization.acceptInvitation({
-			invitationId: invite.data.id,
+			invitationId: invite.data!.id!,
 			fetchOptions: {
 				headers: headers2,
 			},
@@ -360,7 +413,7 @@ describe("organization", async (it) => {
 			user.password,
 		);
 		const acceptRes = await client.organization.acceptInvitation({
-			invitationId: invite.data.id,
+			invitationId: invite.data!.id!,
 			fetchOptions: {
 				headers: userHeaders,
 			},
@@ -421,10 +474,10 @@ describe("organization", async (it) => {
 			},
 		});
 		if (!org.data) throw new Error("Organization not found");
-		expect(org.data?.members[3].role).toBe("member");
+		expect(org.data.members[3]!.role).toBe("member");
 		const member = await client.organization.updateMemberRole({
-			organizationId: org.data.id,
-			memberId: org.data.members[3].id,
+			organizationId: org.data!.id,
+			memberId: org.data!.members[3]!.id,
 			role: "admin",
 			fetchOptions: {
 				headers,
@@ -444,9 +497,9 @@ describe("organization", async (it) => {
 			},
 		});
 		const c = await client.organization.updateMemberRole({
-			organizationId: org.data?.id as string,
+			organizationId: org.data!.id,
 			role: ["member", "admin"],
-			memberId: org.data?.members[1].id as string,
+			memberId: org.data!.members[1]!.id,
 			fetchOptions: {
 				headers,
 			},
@@ -905,7 +958,7 @@ describe("organization", async (it) => {
 		);
 
 		const invitation = await client.organization.acceptInvitation({
-			invitationId: invite.data.id,
+			invitationId: invite.data!.id!,
 			fetchOptions: {
 				headers: headers2,
 			},
@@ -985,7 +1038,7 @@ describe("organization", async (it) => {
 				headers: headers2,
 			},
 		});
-		expect(userInvitations.data?.[0].id).toBe(invitation.data?.id);
+		expect(userInvitations.data?.[0]!.id).toBe(invitation.data?.id);
 		expect(userInvitations.data?.length).toBe(1);
 	});
 
@@ -996,29 +1049,29 @@ describe("organization", async (it) => {
 			},
 		});
 
-		if (!orgInvitations.data?.[0].email) throw new Error("No email found");
+		if (!orgInvitations.data?.[0]!.email) throw new Error("No email found");
 
 		const invitations = await auth.api.listUserInvitations({
 			query: {
-				email: orgInvitations.data?.[0].email,
+				email: orgInvitations.data?.[0]!.email,
 			},
 		});
 
 		expect(invitations?.length).toBe(
-			orgInvitations.data.filter(
-				(x) => x.email === orgInvitations.data?.[0].email,
+			orgInvitations.data!.filter(
+				(x) => x.email === orgInvitations.data?.[0]!.email,
 			).length,
 		);
 
 		const invitationsUpper = await auth.api.listUserInvitations({
 			query: {
-				email: orgInvitations.data?.[0].email.toUpperCase(),
+				email: orgInvitations.data?.[0]!.email.toUpperCase(),
 			},
 		});
 
 		expect(invitationsUpper?.length).toBe(
-			orgInvitations.data.filter(
-				(x) => x.email === orgInvitations.data?.[0].email,
+			orgInvitations.data!.filter(
+				(x) => x.email === orgInvitations.data?.[0]!.email,
 			).length,
 		);
 	});
@@ -1419,7 +1472,7 @@ describe("owner can update roles", async () => {
 		},
 	});
 
-	const adminCookie = headers.getSetCookie()[0];
+	const adminCookie = headers.getSetCookie()[0]!;
 
 	const org = await auth.api.createOrganization({
 		headers: { cookie: adminCookie },
@@ -1481,7 +1534,7 @@ describe("owner can update roles", async () => {
 			},
 		});
 
-		const userCookie = signInRes.headers.getSetCookie()[0];
+		const userCookie = signInRes.headers.getSetCookie()[0]!;
 
 		const permissionRes = await auth.api.hasPermission({
 			headers: { cookie: userCookie },
@@ -1545,7 +1598,7 @@ describe("owner can update roles", async () => {
 				},
 			});
 
-			const userCookie = signInRes.headers.getSetCookie()[0];
+			const userCookie = signInRes.headers.getSetCookie()[0]!;
 
 			await auth.api
 				.updateMemberRole({
@@ -1865,14 +1918,11 @@ describe("Additional Fields", async () => {
 			headers,
 		});
 
-		expect(invitation?.invitationRequiredField).toBe("hey");
-		expectTypeOf<
-			typeof invitation.invitationRequiredField
-		>().toEqualTypeOf<string>();
-		expect(invitation?.invitationOptionalField).toBe("hey2");
-		expectTypeOf<typeof invitation.invitationOptionalField>().toEqualTypeOf<
-			string | undefined
-		>();
+		const invitationWithFields = invitation as any;
+		expect(invitationWithFields.invitationRequiredField).toBe("hey");
+		expectTypeOf<string>().toEqualTypeOf<string>();
+		expect(invitationWithFields.invitationOptionalField).toBe("hey2");
+		expectTypeOf<string | undefined>().toEqualTypeOf<string | undefined>();
 		const row = db.invitation.find((x) => x.id === invitation?.id)!;
 		expect(row).toBeDefined();
 		expect(row.invitationRequiredField).toBe("hey");

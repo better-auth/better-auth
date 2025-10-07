@@ -20,10 +20,10 @@ import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
 	createAdapterFactory,
-	type AdapterDebugLogs,
 	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
+import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
 
 export interface DB {
 	[key: string]: any;
@@ -49,7 +49,7 @@ export interface DrizzleAdapterConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 	/**
 	 * By default snake case is used for table and field names
 	 * when the CLI is used to generate the schema. If you want
@@ -101,7 +101,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				const schemaModel = getSchema(model);
 				const builderVal = builder.config?.values;
 				if (where?.length) {
-					const clause = convertWhereClause(where, model);
+					// If we're updating a field that's in the where clause, use the new value
+					const updatedWhere = where.map((w) => {
+						// If this field was updated, use the new value for lookup
+						if (data[w.field] !== undefined) {
+							return { ...w, value: data[w.field] };
+						}
+						return w;
+					});
+
+					const clause = convertWhereClause(updatedWhere, model);
 					const res = await db
 						.select()
 						.from(schemaModel)

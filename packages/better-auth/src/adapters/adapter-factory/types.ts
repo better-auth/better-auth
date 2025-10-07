@@ -1,5 +1,5 @@
-import type { FieldAttribute } from "../../db";
-import type { BetterAuthDbSchema } from "../../db/get-tables";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import type {
 	AdapterSchemaCreation,
 	BetterAuthOptions,
@@ -7,31 +7,7 @@ import type {
 	Where,
 } from "../../types";
 import type { Prettify } from "../../types/helper";
-
-export type AdapterDebugLogs =
-	| boolean
-	| {
-			/**
-			 * Useful when you want to log only certain conditions.
-			 */
-			logCondition?: (() => boolean) | undefined;
-			create?: boolean;
-			update?: boolean;
-			updateMany?: boolean;
-			findOne?: boolean;
-			findMany?: boolean;
-			delete?: boolean;
-			deleteMany?: boolean;
-			count?: boolean;
-	  }
-	| {
-			/**
-			 * Only used for adapter tests to show debug logs if a test fails.
-			 *
-			 * @deprecated Not actually deprecated. Doing this for IDEs to show this option at the very bottom and stop end-users from using this.
-			 */
-			isRunningAdapterTests: boolean;
-	  };
+import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
 
 export type AdapterFactoryOptions = {
 	config: AdapterFactoryConfig;
@@ -52,7 +28,7 @@ export interface AdapterFactoryConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 	/**
 	 * Name of the adapter.
 	 *
@@ -164,7 +140,7 @@ export interface AdapterFactoryConfig {
 		/**
 		 * The fields of the model.
 		 */
-		fieldAttributes: FieldAttribute;
+		fieldAttributes: DBFieldAttribute;
 		/**
 		 * The field to transform.
 		 */
@@ -180,7 +156,7 @@ export interface AdapterFactoryConfig {
 		/**
 		 * The schema of the user's Better-Auth instance.
 		 */
-		schema: BetterAuthDbSchema;
+		schema: BetterAuthDBSchema;
 		/**
 		 * The options of the user's Better-Auth instance.
 		 */
@@ -196,7 +172,7 @@ export interface AdapterFactoryConfig {
 		/**
 		 * The fields of the model.
 		 */
-		fieldAttributes: FieldAttribute;
+		fieldAttributes: DBFieldAttribute;
 		/**
 		 * The field to transform.
 		 */
@@ -212,7 +188,7 @@ export interface AdapterFactoryConfig {
 		/**
 		 * The schema of the user's Better-Auth instance.
 		 */
-		schema: BetterAuthDbSchema;
+		schema: BetterAuthDBSchema;
 		/**
 		 * The options of the user's Better-Auth instance.
 		 */
@@ -239,6 +215,18 @@ export interface AdapterFactoryConfig {
 	 * ```
 	 */
 	customIdGenerator?: (props: { model: string }) => string;
+	/**
+	 * Whether to disable the transform output.
+	 * Do not use this option unless you know what you are doing.
+	 * @default false
+	 */
+	disableTransformOutput?: boolean;
+	/**
+	 * Whether to disable the transform input.
+	 * Do not use this option unless you know what you are doing.
+	 * @default false
+	 */
+	disableTransformInput?: boolean;
 }
 
 export type AdapterFactoryCustomizeAdapterCreator = (config: {
@@ -246,7 +234,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	/**
 	 * The schema of the user's Better-Auth instance.
 	 */
-	schema: BetterAuthDbSchema;
+	schema: BetterAuthDBSchema;
 	/**
 	 * The debug log function.
 	 *
@@ -303,7 +291,26 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	}: {
 		model: string;
 		field: string;
-	}) => FieldAttribute;
+	}) => DBFieldAttribute;
+	// The following functions are exposed primarily for the purpose of having wrapper adapters.
+	transformInput: (
+		data: Record<string, any>,
+		defaultModelName: string,
+		action: "create" | "update",
+		forceAllowId?: boolean,
+	) => Promise<Record<string, any>>;
+	transformOutput: (
+		data: Record<string, any>,
+		defaultModelName: string,
+		select?: string[],
+	) => Promise<Record<string, any>>;
+	transformWhereClause: <W extends Where[] | undefined>({
+		model,
+		where,
+	}: {
+		where: W;
+		model: string;
+	}) => W extends undefined ? undefined : CleanedWhere[];
 }) => CustomAdapter;
 
 export interface CustomAdapter {
@@ -377,7 +384,7 @@ export interface CustomAdapter {
 		/**
 		 * The tables from the user's Better-Auth instance schema.
 		 */
-		tables: BetterAuthDbSchema;
+		tables: BetterAuthDBSchema;
 	}) => Promise<AdapterSchemaCreation>;
 	/**
 	 * Your adapter's options.

@@ -126,7 +126,7 @@ export async function validateApiKey({
 		if (refillInterval && refillAmount) {
 			// if they provide refill info, then we should refill once the interval is reached.
 
-			const timeSinceLastRequest = (now - lastTime) / (1000 * 60 * 60 * 24); // in days
+			const timeSinceLastRequest = now - lastTime;
 			if (timeSinceLastRequest > refillInterval) {
 				remaining = refillAmount;
 				lastRefillAt = new Date();

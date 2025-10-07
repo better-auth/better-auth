@@ -74,6 +74,9 @@ export interface SSOOptions {
 	defaultOverrideUserInfo?: boolean;
 }
 
+/**
+ * @deprecated Install and use `@better-auth/sso` plugin instead. This export will be removed in the next major version.
+ */
 export const sso = (options?: SSOOptions) => {
 	return {
 		id: "sso",
@@ -605,7 +608,7 @@ export const sso = (options?: SSOOptions) => {
 								"email, organizationSlug, domain or providerId is required",
 						});
 					}
-					domain = body.domain || email?.split("@")[1];
+					domain = body.domain || email?.split("@")[1]!;
 					let orgId = "";
 					if (organizationSlug) {
 						orgId = await ctx.context.adapter
@@ -1026,9 +1029,11 @@ export const sso = (options?: SSOOptions) => {
 					},
 					userId: {
 						type: "string",
+						required: false,
 						references: {
 							model: "user",
 							field: "id",
+							onDelete: "set null",
 						},
 					},
 					providerId: {
@@ -1053,7 +1058,7 @@ export const sso = (options?: SSOOptions) => {
 export interface SSOProvider {
 	issuer: string;
 	oidcConfig: OIDCConfig;
-	userId: string;
+	userId?: string;
 	providerId: string;
 	organizationId?: string;
 }
