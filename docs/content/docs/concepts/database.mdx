@@ -501,7 +501,7 @@ export const auth = betterAuth({
   database: db,
   advanced: {
     database: {
-      generateId: () => "my-super-unique-id",
+      generateId: () => crypto.randomUUID(),
     },
   },
 });
