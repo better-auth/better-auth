@@ -14,7 +14,7 @@ import { type AccessControl } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { schema } from "./schema";
 import type {
 	AdminOptions,
