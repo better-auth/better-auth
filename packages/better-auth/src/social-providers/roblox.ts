@@ -1,6 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
-import { validateAuthorizationCode, refreshAccessToken } from "../oauth2";
+import {
+	validateAuthorizationCode,
+	refreshAccessToken,
+} from "@better-auth/core/oauth2";
 
 export interface RobloxProfile extends Record<string, any> {
 	/** the user's id */

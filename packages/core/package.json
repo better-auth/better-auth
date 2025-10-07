@@ -86,10 +86,18 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
+    "@better-auth/utils": "0.3.0",
+    "@better-fetch/fetch": "catalog:",
+    "jose": "^6.1.0",
     "unbuild": "catalog:"
   },
   "dependencies": {
     "better-call": "catalog:",
     "zod": "^4.1.5"
+  },
+  "peerDependencies": {
+    "@better-auth/utils": "0.3.0",
+    "@better-fetch/fetch": "catalog:",
+    "jose": "^6.1.0"
   }
 }
