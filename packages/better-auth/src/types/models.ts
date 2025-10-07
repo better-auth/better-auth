@@ -68,25 +68,10 @@ export type InferPluginTypes<O extends BetterAuthOptions> =
 			>
 		: {};
 
-interface RateLimit {
-	/**
-	 * The key to use for rate limiting
-	 */
-	key: string;
-	/**
-	 * The number of requests made
-	 */
-	count: number;
-	/**
-	 * The last request time in milliseconds
-	 */
-	lastRequest: number;
-}
-
 export type {
 	User,
 	Account,
 	Session,
 	Verification,
+	RateLimit,
 } from "@better-auth/core/db";
-export type { RateLimit };

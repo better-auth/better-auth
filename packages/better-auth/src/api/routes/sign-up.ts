@@ -9,7 +9,7 @@ import type {
 	User,
 } from "../../types";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { isDevelopment } from "../../utils/env";
+import { isDevelopment } from "@better-auth/core/env";
 import { runWithTransaction } from "../../context/transaction";
 import { parseUserInput } from "../../db";
 
@@ -277,9 +277,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
 					);
-					const url = `${
-						ctx.context.baseURL
-					}/verify-email?token=${token}&callbackURL=${body.callbackURL || "/"}`;
+					const callbackURL = body.callbackURL
+						? encodeURIComponent(body.callbackURL)
+						: encodeURIComponent("/");
+					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 
 					const args: Parameters<
 						Required<

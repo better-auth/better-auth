@@ -6,7 +6,7 @@ import {
 } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types";
-import { env } from "../../utils/env";
+import { env } from "@better-auth/core/env";
 import { getOrigin } from "../../utils/url";
 import type { EndpointContext } from "better-call";
 
@@ -231,7 +231,6 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx);
-						console.log("skipProxy", skipProxy);
 						if (skipProxy) {
 							return;
 						}
