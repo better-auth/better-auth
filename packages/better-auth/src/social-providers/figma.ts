@@ -1,9 +1,12 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
-import { refreshAccessToken } from "../oauth2/refresh-access-token";
-import { globalLog } from "../utils";
+import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
+import {
+	createAuthorizationURL,
+	validateAuthorizationCode,
+} from "@better-auth/core/oauth2";
+import { refreshAccessToken } from "@better-auth/core/oauth2";
+import { globalLog } from "@better-auth/core/env";
 
 export interface FigmaProfile {
 	id: string;

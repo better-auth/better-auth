@@ -23,8 +23,7 @@ import { parseSetCookieHeader } from "../../cookies";
 import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
 import { getBaseURL } from "../../utils/url";
-import { isProduction } from "../../utils/env";
-import { globalLog } from "../../utils";
+import { isProduction, globalLog } from "@better-auth/core/env";
 
 interface MCPOptions {
 	loginPage: string;

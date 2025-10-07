@@ -1,4 +1,4 @@
-import { globalLog } from "../../utils";
+import { globalLog } from "@better-auth/core/env";
 import { createAdapterFactory, type CleanedWhere } from "../adapter-factory";
 import type { BetterAuthOptions } from "../../types";
 import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
