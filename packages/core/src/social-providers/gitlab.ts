@@ -120,7 +120,7 @@ export const gitlab = (options: GitlabOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://gitlab.com/oauth/token",
+						tokenEndpoint: tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
