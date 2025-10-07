@@ -1,19 +1,16 @@
 import * as z from "zod";
 import { createAuthEndpoint } from "../../api/call";
-import type {
-	BetterAuthPlugin,
-	InferOptionSchema,
-	AuthPluginSchema,
-} from "../../types/plugins";
+import type { BetterAuthPlugin, InferOptionSchema } from "../../types/plugins";
 import { APIError } from "better-call";
 import { mergeSchema } from "../../db/schema";
 import { generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx } from "../../api";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { User } from "../../types";
 import { ERROR_CODES } from "./phone-number-error";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
@@ -1037,4 +1034,4 @@ const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;

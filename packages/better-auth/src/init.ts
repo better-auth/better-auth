@@ -8,7 +8,6 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	Models,
-	SecondaryStorage,
 	Session,
 	User,
 } from "./types";
@@ -18,21 +17,26 @@ import {
 	createCookieGetter,
 	getCookies,
 } from "./cookies";
-import { createLogger } from "./utils/logger";
-import { type SocialProviders, socialProviders } from "./social-providers";
-import type { OAuthProvider } from "./oauth2";
+import { createLogger } from "@better-auth/core/env";
+import {
+	type SocialProviders,
+	socialProviders,
+} from "@better-auth/core/social-providers";
+import type { OAuthProvider } from "@better-auth/core/oauth2";
 import { generateId } from "./utils";
-import { env, isProduction } from "./utils/env";
+import { env, isProduction } from "@better-auth/core/env";
 import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
-import { BetterAuthError } from "./error";
-import { createTelemetry } from "./telemetry";
-import type { TelemetryEvent } from "./telemetry/types";
+import { BetterAuthError } from "@better-auth/core/error";
+import { createTelemetry, type TelemetryEvent } from "@better-auth/telemetry";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
 import { isPromise } from "./utils/is-promise";
-import type { BetterAuthDBSchema } from "@better-auth/core/db";
+import type {
+	BetterAuthDBSchema,
+	SecondaryStorage,
+} from "@better-auth/core/db";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -91,8 +95,8 @@ export const init = async (options: BetterAuthOptions) => {
 		.filter((x) => x !== null);
 
 	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
-		if (typeof options.advanced?.generateId === "function") {
-			return options.advanced.generateId({ model, size });
+		if (typeof (options.advanced as any)?.generateId === "function") {
+			return (options.advanced as any).generateId({ model, size });
 		}
 		if (typeof options?.advanced?.database?.generateId === "function") {
 			return options.advanced.database.generateId({ model, size });

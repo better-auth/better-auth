@@ -1,6 +1,6 @@
 import { importJWK, SignJWT, type JWTPayload } from "jose";
 import type { GenericEndpointContext } from "../../types";
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import { symmetricDecrypt } from "../../crypto";
 import type { JwtOptions } from "./types";
 import { getJwksAdapter } from "./adapter";

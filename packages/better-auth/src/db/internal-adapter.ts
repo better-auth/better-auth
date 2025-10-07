@@ -16,8 +16,9 @@ import {
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
-import { generateId, type InternalLogger } from "../utils";
+import { generateId } from "../utils";
 import { getCurrentAdapter, runWithTransaction } from "../context/transaction";
+import type { InternalLogger } from "@better-auth/core/env";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -622,27 +623,32 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		deleteAccounts: async (userId: string) => {
-			await (await getCurrentAdapter(adapter)).deleteMany({
-				model: "account",
-				where: [
+		deleteAccounts: async (
+			userId: string,
+			context?: GenericEndpointContext,
+		) => {
+			await deleteManyWithHooks(
+				[
 					{
 						field: "userId",
 						value: userId,
 					},
 				],
-			});
+				"account",
+				undefined,
+				context,
+			);
 		},
-		deleteAccount: async (accountId: string) => {
-			await (await getCurrentAdapter(adapter)).delete({
-				model: "account",
-				where: [
-					{
-						field: "id",
-						value: accountId,
-					},
-				],
-			});
+		deleteAccount: async (
+			accountId: string,
+			context?: GenericEndpointContext,
+		) => {
+			await deleteWithHooks(
+				[{ field: "id", value: accountId }],
+				"account",
+				undefined,
+				context,
+			);
 		},
 		deleteSessions: async (
 			userIdOrSessionTokens: string | string[],

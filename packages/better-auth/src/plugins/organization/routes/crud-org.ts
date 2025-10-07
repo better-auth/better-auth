@@ -29,10 +29,10 @@ export const createOrganization = <O extends OrganizationOptions>(
 		isClientSide: true,
 	});
 	const baseSchema = z.object({
-		name: z.string().meta({
+		name: z.string().min(1).meta({
 			description: "The name of the organization",
 		}),
-		slug: z.string().meta({
+		slug: z.string().min(1).meta({
 			description: "The slug of the organization",
 		}),
 		userId: z.coerce
@@ -386,12 +386,14 @@ export const updateOrganization = <O extends OrganizationOptions>(
 						...additionalFieldsSchema.shape,
 						name: z
 							.string()
+							.min(1)
 							.meta({
 								description: "The name of the organization",
 							})
 							.optional(),
 						slug: z
 							.string()
+							.min(1)
 							.meta({
 								description: "The slug of the organization",
 							})

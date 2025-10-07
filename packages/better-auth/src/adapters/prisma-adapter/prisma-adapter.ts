@@ -1,11 +1,11 @@
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
 	createAdapterFactory,
-	type AdapterDebugLogs,
 	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
+import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
 
 export interface PrismaConfig {
 	/**
@@ -24,7 +24,7 @@ export interface PrismaConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 
 	/**
 	 * Use plural table names
