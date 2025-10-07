@@ -4,9 +4,9 @@ import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
-	refreshAccessToken,
-} from "../oauth2";
+} from "@better-auth/core/oauth2";
 import { logger } from "@better-auth/core/env";
+import { refreshAccessToken } from "@better-auth/core/oauth2";
 
 export interface AtlassianProfile {
 	account_type?: string;
