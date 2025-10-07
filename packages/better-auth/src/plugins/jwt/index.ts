@@ -11,7 +11,7 @@ import {
 } from "../../api";
 import { mergeSchema } from "../../db/schema";
 import * as z from "zod";
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
 export type * from "./types";

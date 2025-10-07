@@ -4,7 +4,7 @@ import { decodeJwt } from "jose";
 import * as z from "zod";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,

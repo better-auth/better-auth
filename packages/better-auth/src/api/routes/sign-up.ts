@@ -8,7 +8,7 @@ import type {
 	BetterAuthOptions,
 	User,
 } from "../../types";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { isDevelopment } from "@better-auth/core/env";
 import { runWithTransaction } from "../../context/transaction";
 import { parseUserInput } from "../../db";

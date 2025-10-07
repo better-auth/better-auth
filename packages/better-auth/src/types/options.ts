@@ -7,7 +7,10 @@ import type {
 	Verification,
 } from "../types";
 import type { BetterAuthPlugin } from "./plugins";
-import type { SocialProviderList, SocialProviders } from "../social-providers";
+import type {
+	SocialProviderList,
+	SocialProviders,
+} from "@better-auth/core/social-providers";
 import type { AdapterInstance } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { DBFieldAttribute, SecondaryStorage } from "@better-auth/core/db";

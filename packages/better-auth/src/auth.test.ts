@@ -23,7 +23,9 @@ describe("auth type", () => {
 
 		type T = typeof auth.$ERROR_CODES;
 		expectTypeOf<T>().toEqualTypeOf<
-			{ CUSTOM_ERROR: string } & typeof import("./error/codes").BASE_ERROR_CODES
+			{
+				CUSTOM_ERROR: string;
+			} & typeof import("@better-auth/core/error").BASE_ERROR_CODES
 		>();
 	});
 

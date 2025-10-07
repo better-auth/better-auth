@@ -64,7 +64,6 @@ export default defineBuildConfig({
 	],
 	entries: [
 		"./src/index.ts",
-		"./src/social-providers/index.ts",
 		"./src/client/index.ts",
 		"./src/client/plugins/index.ts",
 		"./src/types/index.ts",

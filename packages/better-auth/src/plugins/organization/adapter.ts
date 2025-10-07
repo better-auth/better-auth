@@ -14,7 +14,7 @@ import type {
 	TeamInput,
 	TeamMember,
 } from "./schema";
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { AuthContext } from "../../init";
 import parseJSON from "../../client/parser";
 import { type InferAdditionalFieldsFromPluginOptions } from "../../db";
