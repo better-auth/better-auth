@@ -1,5 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { generateCodeChallenge, validateAuthorizationCode } from "../oauth2";
+import {
+	generateCodeChallenge,
+	validateAuthorizationCode,
+} from "@better-auth/core/oauth2";
 import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
 
 export type LoginType =

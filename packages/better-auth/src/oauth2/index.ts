@@ -1,6 +1,4 @@
-export * from "./create-authorization-url";
-export * from "./validate-authorization-code";
-export * from "./refresh-access-token";
+export * from "@better-auth/core/oauth2";
 export * from "./utils";
 export * from "./state";
 export * from "./link-account";

@@ -6,7 +6,7 @@ import {
 	refreshAccessToken,
 	createAuthorizationURL,
 	validateAuthorizationCode,
-} from "../oauth2";
+} from "@better-auth/core/oauth2";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
