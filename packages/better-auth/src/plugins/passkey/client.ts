@@ -234,7 +234,6 @@ export const passkeyClient = () => {
 		atomListeners: [
 			{
 				matcher(path) {
-					console.log("path", path);
 					return (
 						path === "/passkey/verify-registration" ||
 						path === "/passkey/delete-passkey" ||
