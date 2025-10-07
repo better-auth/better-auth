@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+	type MockInstance,
+} from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../utils/constants";
 import type { GoogleProfile } from "./google";
@@ -9,6 +17,8 @@ import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
 import Database from "better-sqlite3";
 import { getMigrations } from "../db";
+import { logger } from "../utils";
+import { afterEach } from "node:test";
 
 let server = new OAuth2Server();
 let port = 8005;
@@ -148,15 +158,26 @@ describe("Social Providers", async (c) => {
 		},
 	);
 
+	const ctx = await auth.$context;
+	let googleVerifyIdTokenMock: MockInstance;
+
 	beforeAll(async () => {
 		await server.issuer.keys.generate("RS256");
 		server.issuer.on;
 		await server.start(port, "localhost");
 		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:${port}
+
+		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+		expect(googleProvider).toBeTruthy();
+		googleVerifyIdTokenMock = vi.spyOn(googleProvider, "verifyIdToken");
+	});
+	afterEach(async () => {
+		googleVerifyIdTokenMock.mockClear();
 	});
 	afterAll(async () => {
 		await server.stop().catch(console.error);
 	});
+
 	server.service.on("beforeRsponse", (tokenResponse, req) => {
 		tokenResponse.body = {
 			accessToken: "access-token",
