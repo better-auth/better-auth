@@ -1,5 +1,5 @@
 import { env } from "@better-auth/core/env";
-import { importRuntime } from "../../utils/import-util";
+import { importRuntime } from "../utils/import-util";
 
 function getVendor() {
 	const hasAny = (...keys: string[]) =>
