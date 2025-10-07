@@ -706,6 +706,7 @@
   },
   "dependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/telemetry": "workspace:*",
     "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.0.0",

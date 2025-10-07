@@ -843,6 +843,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       '@better-auth/utils':
         specifier: 0.3.0
         version: 0.3.0
@@ -1209,6 +1212,25 @@ importers:
       stripe:
         specifier: ^18.5.0
         version: 18.5.0(@types/node@24.4.0)
+      unbuild:
+        specifier: 'catalog:'
+        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
+
+  packages/telemetry:
+    dependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+      '@better-auth/utils':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@better-fetch/fetch':
+        specifier: 'catalog:'
+        version: 1.1.18
+    devDependencies:
+      type-fest:
+        specifier: ^4.31.0
+        version: 4.41.0
       unbuild:
         specifier: 'catalog:'
         version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
@@ -15254,7 +15276,7 @@ snapshots:
       postcss: 8.4.49
       resolve-from: 5.0.0
     optionalDependencies:
-      expo: 54.0.10(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.8)(graphql@16.11.0)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@types/react@19.1.12)(react@19.1.1))(react@19.1.1)
+      expo: 54.0.10(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.8)(graphql@16.11.0)(react-native@0.81.4(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.1.12)(react@19.1.1))(react@19.1.1)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -15339,7 +15361,7 @@ snapshots:
       '@expo/json-file': 10.0.7
       '@react-native/normalize-colors': 0.81.4
       debug: 4.4.1
-      expo: 54.0.10(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.8)(graphql@16.11.0)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@types/react@19.1.12)(react@19.1.1))(react@19.1.1)
+      expo: 54.0.10(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.8)(graphql@16.11.0)(react-native@0.81.4(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.1.12)(react@19.1.1))(react@19.1.1)
       resolve-from: 5.0.0
       semver: 7.7.2
       xml2js: 0.6.0
@@ -19502,7 +19524,7 @@ snapshots:
       resolve-from: 5.0.0
     optionalDependencies:
       '@babel/runtime': 7.28.4
-      expo: 54.0.10(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.8)(graphql@16.11.0)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@types/react@19.1.12)(react@19.1.1))(react@19.1.1)
+      expo: 54.0.10(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.8)(graphql@16.11.0)(react-native@0.81.4(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.1.12)(react@19.1.1))(react@19.1.1)
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color
@@ -21102,7 +21124,7 @@ snapshots:
 
   expo-keep-awake@15.0.7(expo@54.0.10)(react@19.1.1):
     dependencies:
-      expo: 54.0.10(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.8)(graphql@16.11.0)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@types/react@19.1.12)(react@19.1.1))(react@19.1.1)
+      expo: 54.0.10(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.8)(graphql@16.11.0)(react-native@0.81.4(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.1.12)(react@19.1.1))(react@19.1.1)
       react: 19.1.1
 
   expo-linking@7.1.7(expo@54.0.10)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@types/react@19.1.12)(react@19.1.1))(react@19.1.1):
@@ -24012,7 +24034,7 @@ snapshots:
       citty: 0.1.6
       cssnano: 7.0.7(postcss@8.5.6)
       defu: 6.1.4
-      esbuild: 0.25.9
+      esbuild: 0.25.10
       jiti: 1.21.7
       mlly: 1.7.4
       pathe: 2.0.3
@@ -26988,7 +27010,7 @@ snapshots:
       citty: 0.1.6
       consola: 3.4.2
       defu: 6.1.4
-      esbuild: 0.25.9
+      esbuild: 0.25.10
       fix-dts-default-cjs-exports: 1.0.1
       hookable: 5.5.3
       jiti: 2.6.0
