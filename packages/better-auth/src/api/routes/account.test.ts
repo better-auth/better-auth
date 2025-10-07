@@ -11,13 +11,13 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import type { GoogleProfile } from "../../social-providers";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { getOAuth2Tokens } from "../../oauth2";
+import { getOAuth2Tokens } from "@better-auth/core/oauth2";
 import { signJWT } from "../../crypto/jwt";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import type { Account } from "../../types";
 
 let email = "";
-vi.mock("../../oauth2", async (importOriginal) => {
+vi.mock("@better-auth/core/oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
 	return {
 		...original,

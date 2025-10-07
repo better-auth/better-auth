@@ -4,7 +4,7 @@ import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
 	refreshAccessToken,
-} from "../oauth2";
+} from "@better-auth/core/oauth2";
 
 interface Partner {
 	/** Partner-specific ID (consent required: kakaotalk_message) */

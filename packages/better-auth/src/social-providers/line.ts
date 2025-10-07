@@ -5,7 +5,7 @@ import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
-} from "../oauth2";
+} from "@better-auth/core/oauth2";
 
 export interface LineIdTokenPayload {
 	iss: string;

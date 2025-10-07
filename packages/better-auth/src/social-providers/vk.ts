@@ -7,7 +7,7 @@ import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
 	refreshAccessToken,
-} from "../oauth2";
+} from "@better-auth/core/oauth2";
 
 export interface VkProfile {
 	user: {
