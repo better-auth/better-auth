@@ -61,7 +61,6 @@ export async function authorizeMCPOAuth(
 	}
 
 	const query = ctx.query as AuthorizationQuery;
-	console.log(query);
 	if (!query.client_id) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
@@ -92,15 +91,14 @@ export async function authorizeMCPOAuth(
 			}
 			return {
 				...res,
-				redirectURLs: res.redirectURLs.split(","),
+				redirectUrls: res.redirectUrls.split(","),
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
 			} as Client;
 		});
-	console.log(client);
 	if (!client) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
-	const redirectURI = client.redirectURLs.find(
+	const redirectURI = client.redirectUrls.find(
 		(url) => url === ctx.query.redirect_uri,
 	);
 

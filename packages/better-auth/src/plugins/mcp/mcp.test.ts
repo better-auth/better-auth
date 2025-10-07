@@ -434,7 +434,7 @@ describe("mcp", async () => {
 		const userinfoClient = {
 			clientId: (createdClient.data as any).client_id,
 			clientSecret: (createdClient.data as any).client_secret,
-			redirectURLs: (createdClient.data as any).redirect_uris,
+			redirectUrls: (createdClient.data as any).redirect_uris,
 		};
 
 		// Set up OAuth flow
