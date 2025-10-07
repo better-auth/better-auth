@@ -16,7 +16,7 @@ import type {
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import { useStore } from "./solid-store";
-import type { BASE_ERROR_CODES } from "../../error/codes";
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;

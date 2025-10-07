@@ -16,7 +16,7 @@ import {
 	sql,
 	SQL,
 } from "drizzle-orm";
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import {
 	createAdapterFactory,
