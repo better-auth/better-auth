@@ -59,6 +59,20 @@ interface MagicLinkopts {
 		| "plain"
 		| "hashed"
 		| { type: "custom-hasher"; hash: (token: string) => Promise<string> };
+
+	/**
+	 * Require the "name" field when creating a new user via magic link.
+	 *
+	 * If set to true, sign-in attempts that trigger user creation
+	 * (i.e. when the email is not yet registered) will fail unless
+	 * the request body includes a non-empty `name` value.
+	 *
+	 * If `disableSignUp` is set to true, this option has no effect.
+	 *
+	 * @see {@link MagicLinkopts.disableSignUp}
+	 * @default false
+	 */
+	requireNameForSignUp?: boolean;
 }
 
 export const magicLink = (options: MagicLinkopts) => {
@@ -365,6 +379,15 @@ export const magicLink = (options: MagicLinkopts) => {
 
 					if (!user) {
 						if (!opts.disableSignUp) {
+							if (
+								opts.requireNameForSignUp &&
+								(typeof name !== "string" || name.trim() === "")
+							) {
+								throw ctx.redirect(
+									`${errorCallbackURL}?error=NAME_REQUIRED_FOR_SIGNUP`,
+								);
+							}
+
 							const newUser = await ctx.context.internalAdapter.createUser(
 								{
 									email: email,
