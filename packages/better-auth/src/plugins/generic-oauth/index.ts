@@ -8,14 +8,14 @@ import { BASE_ERROR_CODES } from "../../error/codes";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
-} from "../../oauth2";
+} from "@better-auth/core/oauth2";
 import type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
 	OAuthProvider,
 } from "@better-auth/core/oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { refreshAccessToken } from "../../oauth2/refresh-access-token";
+import { refreshAccessToken } from "@better-auth/core/oauth2";
 import { generateState, parseState } from "../../oauth2/state";
 import type {
 	BetterAuthPlugin,

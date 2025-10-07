@@ -8,9 +8,9 @@ import { createAuthClient } from "../../client";
 import type { GoogleProfile } from "../../social-providers";
 import { signJWT } from "../../crypto";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { getOAuth2Tokens } from "../../oauth2";
+import { getOAuth2Tokens } from "@better-auth/core/oauth2";
 
-vi.mock("../../oauth2", async (importOriginal) => {
+vi.mock("@better-auth/core/oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
 	return {
 		...original,

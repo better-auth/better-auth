@@ -2,9 +2,12 @@ import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	validateAuthorizationCode,
+} from "@better-auth/core/oauth2";
 import { logger } from "@better-auth/core/env";
-import { refreshAccessToken } from "../oauth2/refresh-access-token";
+import { refreshAccessToken } from "@better-auth/core/oauth2";
 
 export interface GoogleProfile {
 	aud: string;

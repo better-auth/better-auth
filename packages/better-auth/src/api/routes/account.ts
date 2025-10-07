@@ -1,7 +1,6 @@
 import * as z from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
-import { generateState, decryptOAuthToken, setTokenUtil } from "../../oauth2";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import {
 	freshSessionMiddleware,
@@ -10,6 +9,8 @@ import {
 } from "./session";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { SocialProviderListEnum } from "../../social-providers";
+import { generateState } from "../../oauth2/state";
+import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
