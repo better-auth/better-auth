@@ -1,4 +1,4 @@
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "better-auth";
 import { getColorDepth } from "./color-depth";
 
 export const TTY_COLORS = {
