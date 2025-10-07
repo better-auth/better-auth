@@ -384,7 +384,7 @@ export const magicLink = (options: MagicLinkopts) => {
 								(typeof name !== "string" || name.trim() === "")
 							) {
 								throw ctx.redirect(
-									`${errorCallbackURL}?error=NAME_REQUIRED_FOR_SIGNUP`,
+									`${errorCallbackURL}?error=name_required_for_signup`,
 								);
 							}
 
