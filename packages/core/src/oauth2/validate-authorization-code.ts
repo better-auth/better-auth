@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { jwtVerify } from "jose";
-import type { ProviderOptions } from "@better-auth/core/oauth2";
-import { getOAuth2Tokens } from "./utils";
+import type { ProviderOptions } from "./index";
+import { getOAuth2Tokens } from "./index";
 import { base64 } from "@better-auth/utils/base64";
 
 export function createAuthorizationCodeRequest({

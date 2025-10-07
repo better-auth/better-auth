@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
-import { setTokenUtil } from "../../oauth2";
+import { setTokenUtil } from "../../oauth2/utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";

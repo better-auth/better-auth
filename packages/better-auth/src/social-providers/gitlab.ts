@@ -4,7 +4,7 @@ import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
 	refreshAccessToken,
-} from "../oauth2";
+} from "@better-auth/core/oauth2";
 
 export interface GitlabProfile extends Record<string, any> {
 	id: number;
@@ -120,7 +120,7 @@ export const gitlab = (options: GitlabOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://gitlab.com/oauth/token",
+						tokenEndpoint: tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
