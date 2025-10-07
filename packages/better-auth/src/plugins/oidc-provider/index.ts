@@ -236,10 +236,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						const oidcLoginPromptCookieName = "oidc_login_prompt";
 						const cookie = await ctx.getSignedCookie(
-							"oidc_login_prompt",
+							oidcLoginPromptCookieName,
 							ctx.context.secret,
 						);
+						ctx.setCookie(oidcLoginPromptCookieName, "", {
+							maxAge: 0,
+						});
 						const cookieName = ctx.context.authCookies.sessionToken.name;
 						const parsedSetCookieHeader = parseSetCookieHeader(
 							ctx.context.responseHeaders?.get("set-cookie") || "",
@@ -248,9 +252,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						if (!cookie || !hasSessionToken) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
-						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
 						if (!sessionToken) {
