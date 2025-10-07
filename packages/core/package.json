@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.0-beta.6",
+  "version": "1.4.0-beta.8",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -26,6 +26,16 @@
         "default": "./dist/async_hooks/index.cjs"
       }
     },
+    "./env": {
+      "import": {
+        "types": "./dist/env/index.d.ts",
+        "default": "./dist/env/index.mjs"
+      },
+      "require": {
+        "types": "./dist/env/index.d.cts",
+        "default": "./dist/env/index.cjs"
+      }
+    },
     "./db": {
       "import": {
         "types": "./dist/db/index.d.ts",
@@ -44,6 +54,16 @@
       "require": {
         "types": "./dist/db/adapter/index.d.cts",
         "default": "./dist/db/adapter/index.cjs"
+      }
+    },
+    "./oauth2": {
+      "import": {
+        "types": "./dist/oauth2/index.d.ts",
+        "default": "./dist/oauth2/index.mjs"
+      },
+      "require": {
+        "types": "./dist/oauth2/index.d.cts",
+        "default": "./dist/oauth2/index.cjs"
       }
     }
   },
@@ -66,10 +86,18 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
+    "@better-auth/utils": "0.3.0",
+    "@better-fetch/fetch": "catalog:",
+    "jose": "^6.1.0",
     "unbuild": "catalog:"
   },
   "dependencies": {
     "better-call": "catalog:",
     "zod": "^4.1.5"
+  },
+  "peerDependencies": {
+    "@better-auth/utils": "0.3.0",
+    "@better-fetch/fetch": "catalog:",
+    "jose": "^6.1.0"
   }
 }
