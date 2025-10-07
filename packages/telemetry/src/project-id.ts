@@ -1,6 +1,6 @@
-import { generateId } from "../utils";
-import { hashToBase64 } from "../crypto";
-import { getNameFromLocalPackageJson } from "../utils/package-json";
+import { generateId } from "./utils/id";
+import { hashToBase64 } from "./utils/hash";
+import { getNameFromLocalPackageJson } from "./utils/package-json";
 
 let projectIdCached: string | null = null;
 

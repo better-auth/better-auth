@@ -1,4 +1,4 @@
-import { getPackageVersion } from "../../utils/package-json";
+import { getPackageVersion } from "../utils/package-json";
 import type { DetectionInfo } from "../types";
 
 const DATABASES: Record<string, string> = {
