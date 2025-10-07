@@ -8,19 +8,19 @@ import type {
 } from "../types";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { AdapterInstance, SecondaryStorage } from "./adapter";
+import type { AdapterInstance } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
-import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { DBFieldAttribute, SecondaryStorage } from "@better-auth/core/db";
 import type { RateLimit } from "./models";
 import type { AuthContext } from ".";
 import type { BetterAuthAdvancedOptions } from "@better-auth/core";
 import type { Database } from "better-sqlite3";
-import type { Logger } from "../utils";
+import type { Logger } from "@better-auth/core/env";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
-import type { AdapterDebugLogs } from "../adapters";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
+import type { DBAdapterDebugLogOption } from "packages/core/dist/db/adapter";
 
 export type BetterAuthOptions = {
 	/**
@@ -97,7 +97,7 @@ export type BetterAuthOptions = {
 				 *
 				 * @default false
 				 */
-				debugLogs?: AdapterDebugLogs;
+				debugLogs?: DBAdapterDebugLogOption;
 				/**
 				 * Whether to execute multiple operations in a transaction.
 				 * If the database doesn't support transactions,
@@ -126,7 +126,7 @@ export type BetterAuthOptions = {
 				 *
 				 * @default false
 				 */
-				debugLogs?: AdapterDebugLogs;
+				debugLogs?: DBAdapterDebugLogOption;
 				/**
 				 * Whether to execute multiple operations in a transaction.
 				 * If the database doesn't support transactions,
