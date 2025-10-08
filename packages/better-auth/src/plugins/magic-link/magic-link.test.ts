@@ -136,39 +136,6 @@ describe("magic link", async () => {
 		});
 	});
 
-	it("should fail sign up if requireNameForSignUp is true and name is missing", async () => {
-		const email = "new-user-no-name@email.com";
-
-		const { customFetchImpl } = await getTestInstance({
-			plugins: [
-				magicLink({
-					requireNameForSignUp: true,
-					async sendMagicLink(data) {
-						verificationEmail = data;
-					},
-				}),
-			],
-		});
-
-		const client = createAuthClient({
-			plugins: [magicLinkClient()],
-			fetchOptions: { customFetchImpl },
-			baseURL: "http://localhost:3000/api/auth",
-		});
-
-		await client.signIn.magicLink(
-			{
-				email,
-			},
-			{
-				onError(context) {
-					const location = context.response.headers.get("location");
-					expect(location).toContain("?error=NAME_REQUIRED_FOR_SIGNUP");
-				},
-			},
-		);
-	});
-
 	it("should use custom generateToken function", async () => {
 		const customGenerateToken = vi.fn(() => "custom_token");
 
@@ -197,6 +164,61 @@ describe("magic link", async () => {
 
 		expect(customGenerateToken).toHaveBeenCalled();
 		expect(verificationEmail.token).toBe("custom_token");
+	});
+});
+
+describe("magic link require name for signup", async () => {
+	let verificationEmail: VerificationEmail = {
+		email: "",
+		token: "",
+		url: "",
+	};
+	const email = "new-user-no-name@email.com";
+
+	const { customFetchImpl, auth } = await getTestInstance({
+		plugins: [
+			magicLink({
+				requireNameForSignUp: true,
+				expiresIn: 1000 * 60 * 5,
+				async sendMagicLink(data) {
+					verificationEmail = data;
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [magicLinkClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+		baseURL: "http://localhost:3000",
+		basePath: "/api/auth",
+	});
+
+	await client.signIn.magicLink(
+		{
+			email,
+		}
+	);
+	
+	it("should fail sign up if requireNameForSignUp is true and name is missing", async () => {
+		await client.magicLink.verify(
+			{
+				query: {
+					token: verificationEmail.token,
+				},
+				fetchOptions: {
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("?error=name_required_for_signup");
+					},
+					onSuccess(context) {
+						throw new Error("Should not succeed");
+					},
+				},
+			},
+		);
 	});
 });
 
