@@ -50,10 +50,7 @@ export const linear = (options: LinearOptions) => {
 				state,
 				redirectURI,
 				loginHint,
-				additionalParams:
-					Object.keys(additionalParams).length > 0
-						? additionalParams
-						: undefined,
+				additionalParams: additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
