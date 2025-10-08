@@ -74,6 +74,7 @@ describe("stripe", async () => {
 					priceId: process.env.STRIPE_PRICE_ID_1!,
 					name: "starter",
 					lookupKey: "lookup_key_123",
+					annualDiscountPriceId: "price_annual_starter_123",
 				},
 				{
 					priceId: process.env.STRIPE_PRICE_ID_2!,
@@ -901,6 +902,7 @@ describe("stripe", async () => {
 		);
 
 		const headers = new Headers();
+
 		await authClient.signIn.email(
 			{
 				...testUser,
@@ -914,7 +916,6 @@ describe("stripe", async () => {
 
 		await authClient.subscription.upgrade({
 			plan: "starter",
-			subscriptionId: "sub_personal_active_123",
 			seats: 3,
 			fetchOptions: {
 				headers,
@@ -926,6 +927,7 @@ describe("stripe", async () => {
 			update: {
 				status: "active",
 				seats: 3,
+				stripeSubscriptionId: "sub_personal_active_123",
 			},
 			where: [
 				{
@@ -936,7 +938,7 @@ describe("stripe", async () => {
 		});
 
 		// Mock Stripe subscriptions.list to return the active subscription with price ID
-		mockStripe.subscriptions.list.mockResolvedValueOnce({
+		mockStripe.subscriptions.list.mockResolvedValue({
 			data: [
 				{
 					id: "sub_personal_active_123",
@@ -965,6 +967,87 @@ describe("stripe", async () => {
 
 		expect(upgradeRes.error).toBeDefined();
 		expect(upgradeRes.error?.message).toContain("already subscribed");
+	});
+
+	it("should allow upgrade for annual switch", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "annual-switch@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "annual-switch@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		// First, subscribe to monthly plan
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				seats: 3,
+				stripeSubscriptionId: "sub_monthly_123",
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Mock Stripe subscriptions.list to return the monthly subscription
+		mockStripe.subscriptions.list.mockResolvedValue({
+			data: [
+				{
+					id: "sub_monthly_123",
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_monthly",
+								price: { id: process.env.STRIPE_PRICE_ID_1 }, // Monthly price
+								quantity: 3,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		// Now upgrade to annual - should be allowed because price ID is different
+		const upgradeRes = await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			annual: true, // Switch to annual
+			subscriptionId: "sub_monthly_123",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Should succeed and return a checkout URL
+		expect(upgradeRes.data?.url).toBeDefined();
 	});
 
 	it("should only call Stripe customers.create once for signup and upgrade", async () => {
