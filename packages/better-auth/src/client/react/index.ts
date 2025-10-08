@@ -87,6 +87,7 @@ export function createAuthClient<Option extends ClientOptions>(
 			useSession: () => {
 				data: Session;
 				isPending: boolean;
+				isRefetching: boolean;
 				error: BetterFetchError | null;
 				refetch: (queryParams?: { query?: SessionQueryParams }) => void;
 			};
