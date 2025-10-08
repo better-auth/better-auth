@@ -1,4 +1,4 @@
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	BetterAuthDBSchema,
 	DBFieldAttribute,
