@@ -151,10 +151,10 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 							condition = { [field]: { $regex: `.*${value}.*` } };
 							break;
 						case "starts_with":
-							condition = { [field]: { $regex: `^${value}`, $options: "i" } };
+							condition = { [field]: { $regex: `^${value}` } };
 							break;
 						case "ends_with":
-							condition = { [field]: { $regex: `${value}$`, $options: "i" } };
+							condition = { [field]: { $regex: `${value}$` } };
 							break;
 						default:
 							throw new Error(`Unsupported operator: ${operator}`);
