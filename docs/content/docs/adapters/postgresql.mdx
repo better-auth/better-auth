@@ -59,8 +59,28 @@ npx @better-auth/cli@latest generate
 npx @better-auth/cli@latest migrate
 ```
 
+## Use a non-default schema
+
+In most cases, the default schema is `public`. To have Better Auth use a
+non-default schema (e.g., `auth`) for its tables,
+set the PostgreSQL user's default schema before generating or migrating:
+
+```sql
+ALTER USER authuser SET SEARCH_PATH TO auth;
+```
+
+alternatively, append the option to your connection URI, for example:
+
+```
+postgres://<DATABASE_URL>?option=-c search_path=auth
+```
+URL-encode if needed: `?option=-c%20search_path%3Dauth`.
+
+Ensure the target schema exists and the database user has the required permissions.
+
 ## Additional Information
 
 PostgreSQL is supported under the hood via the [Kysely](https://kysely.dev/) adapter, any database supported by Kysely would also be supported. (<Link href="/docs/adapters/other-relational-databases">Read more here</Link>)
 
 If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
+
