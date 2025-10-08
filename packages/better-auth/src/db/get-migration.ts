@@ -2,10 +2,10 @@ import type {
 	AlterTableColumnAlteringBuilder,
 	CreateTableBuilder,
 } from "kysely";
-import type { FieldAttribute, FieldType } from ".";
+import type { FieldAttribute, FieldAttributeFor, FieldType, schema } from ".";
 import { sql } from "kysely";
 import { createLogger } from "../utils/logger";
-import type { BetterAuthOptions } from "../types";
+import type { AuthPluginSchema, BetterAuthOptions } from "../types";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
@@ -82,8 +82,8 @@ export function matchType(
 	return expected.includes(normalize(columnDataType));
 }
 
-export async function getMigrations(config: BetterAuthOptions) {
-	const betterAuthSchema = getSchema(config);
+export async function getMigrations<S extends AuthPluginSchema>(config: BetterAuthOptions<S>) {
+	const betterAuthSchema = getSchema<S>(config);
 	const logger = createLogger(config.logger);
 
 	let { kysely: db, databaseType: dbType } = await createKyselyAdapter(config);
@@ -141,7 +141,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 			continue;
 		}
-		let toBeAddedFields: Record<string, FieldAttribute> = {};
+		let toBeAddedFields: Record<string, FieldAttributeFor<any>> = {};
 		for (const [fieldName, field] of Object.entries(value.fields)) {
 			const column = table.columns.find((c) => c.name === fieldName);
 			if (!column) {
@@ -171,7 +171,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| CreateTableBuilder<string, string>
 	)[] = [];
 
-	function getType(field: FieldAttribute, fieldName: string) {
+	function getType(field: FieldAttributeFor<any>, fieldName: string) {
 		const type = field.type;
 		const typeMap = {
 			string: {

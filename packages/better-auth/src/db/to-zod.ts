@@ -1,9 +1,9 @@
 import * as z from "zod";
 import type { ZodType } from "zod";
-import type { FieldAttribute } from ".";
+import type { FieldAttribute, FieldAttributeFor, FieldType } from ".";
 
 export function toZodSchema<
-	Fields extends Record<string, FieldAttribute | never>,
+	Fields extends Record<string, FieldAttributeFor<FieldType> | never>,
 	IsClientSide extends boolean,
 >({
 	fields,
@@ -56,14 +56,14 @@ export function toZodSchema<
 }
 
 export type FieldAttributeToSchema<
-	Field extends FieldAttribute | Record<string, never>,
+	Field extends FieldAttributeFor<FieldType> | Record<string, never>,
 	// if it's client side, then field attributes of `input` that are false should be removed
 	isClientSide extends boolean = false,
 > = Field extends { type: any }
 	? GetInput<isClientSide, Field, GetRequired<Field, GetType<Field>>>
 	: Record<string, never>;
 
-type GetType<F extends FieldAttribute> = F extends {
+type GetType<F extends FieldAttributeFor<FieldType>> = F extends {
 	type: "string";
 }
 	? z.ZodString
@@ -76,7 +76,7 @@ type GetType<F extends FieldAttribute> = F extends {
 				: z.ZodAny;
 
 type GetRequired<
-	F extends FieldAttribute,
+	F extends FieldAttributeFor<FieldType>,
 	Schema extends z.core.SomeType,
 > = F extends {
 	required: true;
@@ -86,7 +86,7 @@ type GetRequired<
 
 type GetInput<
 	isClientSide extends boolean,
-	Field extends FieldAttribute,
+	Field extends FieldAttributeFor<FieldType>,
 	Schema extends z.core.SomeType,
 > = Field extends {
 	input: false;

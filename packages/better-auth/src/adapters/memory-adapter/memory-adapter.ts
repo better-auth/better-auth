@@ -4,9 +4,10 @@ import {
 	type AdapterDebugLogs,
 	type CleanedWhere,
 } from "../adapter-factory";
-import type { BetterAuthOptions } from "../../types";
+import type { AuthPluginSchema, BetterAuthOptions } from "../../types";
+import type { schema } from "../../db";
 
-export interface MemoryDB {
+export interface MemoryDB<S extends AuthPluginSchema> {
 	[key: string]: any[];
 }
 
@@ -14,9 +15,9 @@ export interface MemoryAdapterConfig {
 	debugLogs?: AdapterDebugLogs;
 }
 
-export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
-	let lazyOptions: BetterAuthOptions | null = null;
-	let adapterCreator = createAdapterFactory({
+export const memoryAdapter = <S extends AuthPluginSchema>(db: MemoryDB<S>, config?: MemoryAdapterConfig) => {
+	let lazyOptions: BetterAuthOptions<S> | null = null;
+	let adapterCreator = createAdapterFactory<S>({
 		config: {
 			adapterId: "memory",
 			adapterName: "Memory Adapter",
@@ -179,7 +180,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 			};
 		},
 	});
-	return (options: BetterAuthOptions) => {
+	return (options: BetterAuthOptions<S>) => {
 		lazyOptions = options;
 		return adapterCreator(options);
 	};

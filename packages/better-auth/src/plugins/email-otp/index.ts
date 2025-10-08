@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
-import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+import type { AuthPluginSchema, BetterAuthPlugin, GenericEndpointContext } from "../../types";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -10,6 +10,7 @@ import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
+import type { schema } from "../../db";
 
 export interface EmailOTPOptions {
 	/**
@@ -91,7 +92,7 @@ const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const defaultOTPGenerator = (options: EmailOTPOptions) =>
 	generateRandomString(options.otpLength ?? 6, "0-9");
 
-export const emailOTP = (options: EmailOTPOptions) => {
+export const emailOTP = <S extends AuthPluginSchema<typeof schema>>(options: EmailOTPOptions) => {
 	const opts = {
 		expiresIn: 5 * 60,
 		generateOTP: () => defaultOTPGenerator(options),
@@ -106,7 +107,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		TOO_MANY_ATTEMPTS: "Too many attempts",
 	} as const;
 
-	async function storeOTP(ctx: GenericEndpointContext, otp: string) {
+	async function storeOTP<S extends AuthPluginSchema>(ctx: GenericEndpointContext<S>, otp: string) {
 		if (opts.storeOTP === "encrypted") {
 			return await symmetricEncrypt({
 				key: ctx.context.secret,
@@ -126,8 +127,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		return otp;
 	}
 
-	async function verifyStoredOTP(
-		ctx: GenericEndpointContext,
+	async function verifyStoredOTP<S extends AuthPluginSchema>(
+		ctx: GenericEndpointContext<S>,
 		storedOtp: string,
 		otp: string,
 	): Promise<boolean> {
@@ -1208,5 +1209,5 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				max: 3,
 			},
 		],
-	} satisfies BetterAuthPlugin;
+	} satisfies BetterAuthPlugin<S>;
 };

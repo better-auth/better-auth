@@ -7,4 +7,3 @@ export type * from "./adapter";
 export type * from "./helper";
 export * from "../client/types";
 export * from "./api";
-export * from "./standardSchema";

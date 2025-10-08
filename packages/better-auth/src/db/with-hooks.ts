@@ -1,11 +1,11 @@
+import type { EndpointContext } from "better-call";
 import type {
 	Adapter,
+	AuthContext,
 	AuthPluginSchema,
 	BetterAuthOptions,
-	Ensure,
 	GenericEndpointContext,
 	Models,
-	OmitId,
 	SchemaTypes,
 	TransactionAdapter,
 	Where,
@@ -22,22 +22,31 @@ export function getWithHooks<S extends AuthPluginSchema>(
 	type BaseModels = Extract<
 		Models,
 		"user" | "account" | "session" | "verification"
-	>;
-	async function createWithHooks<M extends BaseModels, D extends Omit<SchemaTypes<Required<S[M]>>, "id"> = Omit<SchemaTypes<S[M]>, "id">>(
+		>;
+	
+	async function createWithHooks<
+		M extends BaseModels,
+		D extends Omit<SchemaTypes<S[M], true>, "id"> = Omit<
+			SchemaTypes<S[M]>,
+			"id"
+		>
+	>(
 		data: D,
 		model: M,
 		customCreateFn?: {
 			fn: (data: D) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
-		context?: GenericEndpointContext,
-		trxAdapter?: TransactionAdapter<S>,
-	): Promise<SchemaTypes<S[M]>> {
+		context?:
+			| GenericEndpointContext<S>
+			| EndpointContext<any, any, AuthContext<S>>,
+		trxAdapter?: TransactionAdapter<S>
+	): Promise<SchemaTypes<S[M]> | null> {
 		let actualData = data;
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.before;
 			if (toRun) {
-				const result = await toRun(actualData as any, context);
+				const result = await toRun(actualData as any, context as any);
 				if (result === false) {
 					return null;
 				}
@@ -60,36 +69,42 @@ export function getWithHooks<S extends AuthPluginSchema>(
 						model,
 						data: actualData,
 						forceAllowId: true,
-					})
+				  })
 				: customCreated;
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.after;
 			if (toRun) {
-				await toRun(created as any, context);
+				await toRun(created as any, context as any);
 			}
 		}
 
 		return created;
 	}
 
-	async function updateWithHooks<M extends BaseModels, D extends Partial<SchemaTypes<S[M]>> = Partial<SchemaTypes<S[M]>>>(
+	async function updateWithHooks<
+		M extends BaseModels,
+		R extends any,
+		D extends Partial<SchemaTypes<S[M]>> = Partial<SchemaTypes<S[M]>>
+		>(
 		data: D,
-		where: Where<S[M], keyof S[M]["fields"]>[],
+		where: Where<S[M], keyof S[M]["fields"] & string>[],
 		model: M,
 		customUpdateFn?: {
-			fn: (data: D) => void | Promise<any>;
+			fn: (data: D) => void | Promise<R>;
 			executeMainFn?: boolean;
 		},
-		context?: GenericEndpointContext,
-		trxAdapter?: TransactionAdapter<S>,
+		context?:
+			| GenericEndpointContext<S>
+			| EndpointContext<any, any, AuthContext<S>>,
+		trxAdapter?: TransactionAdapter<S>
 	) {
 		let actualData = data;
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.before;
 			if (toRun) {
-				const result = await toRun(data as any, context);
+				const result = await toRun(data as any, context as any);
 				if (result === false) {
 					return null;
 				}
@@ -108,35 +123,40 @@ export function getWithHooks<S extends AuthPluginSchema>(
 						model,
 						update: actualData,
 						where,
-					})
+				  })
 				: customUpdated;
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.after;
 			if (toRun) {
-				await toRun(updated as any, context);
+				await toRun(updated as any, context as any);
 			}
 		}
 		return updated;
 	}
 
-	async function updateManyWithHooks<M extends BaseModels, D extends Partial<SchemaTypes<S[M]>> = Partial<SchemaTypes<S[M]>>>(
+	async function updateManyWithHooks<
+		M extends BaseModels,
+		D extends Partial<SchemaTypes<S[M]>> = Partial<SchemaTypes<S[M]>>
+	>(
 		data: D,
-		where: Where<S[M], keyof S[M]["fields"]>[],
+		where: Where<S[M], keyof S[M]["fields"] & string>[],
 		model: M,
 		customUpdateFn?: {
 			fn: (data: D) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
-		context?: GenericEndpointContext,
-		trxAdapter?: TransactionAdapter<S>,
+		context?:
+			| GenericEndpointContext<S>
+			| EndpointContext<any, any, AuthContext<S>>,
+		trxAdapter?: TransactionAdapter<S>
 	) {
 		let actualData = data;
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.before;
 			if (toRun) {
-				const result = await toRun(data as any, context);
+				const result = await toRun(data as any, context as any);
 				if (result === false) {
 					return null;
 				}
@@ -155,13 +175,13 @@ export function getWithHooks<S extends AuthPluginSchema>(
 						model,
 						update: actualData,
 						where,
-					})
+				  })
 				: customUpdated;
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.after;
 			if (toRun) {
-				await toRun(updated as any, context);
+				await toRun(updated as any, context as any);
 			}
 		}
 

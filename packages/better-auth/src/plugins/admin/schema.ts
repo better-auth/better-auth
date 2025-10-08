@@ -1,37 +1,33 @@
+import { field } from "../../db";
 import { type AuthPluginSchema } from "../../types";
 
 export const schema = {
 	user: {
 		fields: {
-			role: {
-				type: "string",
+			role: field("string", {
 				required: false,
 				input: false,
-			},
-			banned: {
-				type: "boolean",
+			}),
+			banned: field("boolean", {
 				defaultValue: false,
 				required: false,
 				input: false,
-			},
-			banReason: {
-				type: "string",
+			}),
+			banReason: field("string", {
 				required: false,
 				input: false,
-			},
-			banExpires: {
-				type: "date",
+			}),
+			banExpires: field("date", {
 				required: false,
 				input: false,
-			},
+			}),
 		},
 	},
 	session: {
 		fields: {
-			impersonatedBy: {
-				type: "string",
+			impersonatedBy: field("string", {
 				required: false,
-			},
+			}),
 		},
 	},
 } satisfies AuthPluginSchema;

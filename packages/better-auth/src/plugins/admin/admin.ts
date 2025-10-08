@@ -5,7 +5,7 @@ import {
 	createAuthMiddleware,
 	getSessionFromCtx,
 } from "../../api";
-import { type BetterAuthPlugin, type Session, type Where } from "../../types";
+import { type BetterAuthPlugin, type MergeSchema, type Session, type Where } from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
@@ -15,6 +15,7 @@ import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import type { schema as SCHEMA} from "../../db/schema"
 import { schema } from "./schema";
 import type {
 	AdminOptions,
@@ -22,6 +23,8 @@ import type {
 	SessionWithImpersonatedBy,
 	UserWithRole,
 } from "./types";
+
+type S = MergeSchema<typeof SCHEMA, typeof schema>;
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -37,8 +40,8 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		...options,
 	};
 	type DefaultStatements = typeof defaultStatements;
-	type Statements = O["ac"] extends AccessControl<infer S>
-		? S
+	type Statements = O["ac"] extends AccessControl<infer Statement>
+		? Statement
 		: DefaultStatements;
 
 	type PermissionType = {
@@ -263,13 +266,14 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 
-					const updatedUser = await ctx.context.internalAdapter.updateUser(
-						ctx.body.userId,
-						{
-							role: parseRoles(ctx.body.role),
-						},
-						ctx,
-					);
+					const updatedUser =
+						await ctx.context.internalAdapter.updateUser(
+							ctx.body.userId,
+							{
+								role: parseRoles(ctx.body.role),
+							},
+							ctx as any
+						);
 					return ctx.json({
 						user: updatedUser as UserWithRole,
 					});
@@ -457,7 +461,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 					const user =
-						await ctx.context.internalAdapter.createUser<UserWithRole>(
+						await ctx.context.internalAdapter.createUser(
 							{
 								email: ctx.body.email,
 								name: ctx.body.name,
@@ -467,7 +471,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									"user",
 								...ctx.body.data,
 							},
-							ctx,
+							ctx as any,
 						);
 
 					if (!user) {
@@ -557,7 +561,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						ctx.body.data,
-						ctx,
+						ctx as any,
 					);
 
 					return ctx.json(updatedUser as UserWithRole);
@@ -687,11 +691,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 
-					const where: Where[] = [];
+					const where: Where<S["user"], keyof S["user"]["fields"]>[] = [];
 
 					if (ctx.query?.searchValue) {
 						where.push({
-							field: ctx.query.searchField || "email",
+							field: (ctx.query.searchField || "email") as (keyof S["user"]["fields"] & string),
 							operator: ctx.query.searchOperator || "contains",
 							value: ctx.query.searchValue,
 						});
@@ -804,8 +808,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 
-					const sessions: SessionWithImpersonatedBy[] =
+					const sessions =
 						await ctx.context.internalAdapter.listSessions(ctx.body.userId);
+					sessions.forEach((s) => s.userId)
 					return {
 						sessions: sessions,
 					};
@@ -1664,7 +1669,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 			),
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
-		schema: mergeSchema(schema, opts.schema),
+		schema: mergeSchema(schema, opts.schema) as typeof schema,
 		options: options as any,
 	} satisfies BetterAuthPlugin;
 };

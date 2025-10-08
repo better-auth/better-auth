@@ -1,10 +1,11 @@
 import * as z from "zod";
-import type { GenericEndpointContext } from "../types";
+import type { AuthPluginSchema, GenericEndpointContext } from "../types";
 import { APIError } from "better-call";
 import { generateRandomString } from "../crypto";
+import type { schema } from "../db";
 
-export async function generateState(
-	c: GenericEndpointContext,
+export async function generateState<S extends AuthPluginSchema>(
+	c: GenericEndpointContext<S>,
 	link?: {
 		email: string;
 		userId: string;
@@ -38,7 +39,8 @@ export async function generateState(
 			identifier: state,
 			expiresAt,
 		},
-		c,
+		// Doesn't like GenericEndpointContext<S> to schema, despite schema being the base for S
+		c as any as GenericEndpointContext<typeof schema>,
 	);
 	if (!verification) {
 		c.context.logger.error(
@@ -54,7 +56,7 @@ export async function generateState(
 	};
 }
 
-export async function parseState(c: GenericEndpointContext) {
+export async function parseState<S extends AuthPluginSchema>(c: GenericEndpointContext<S>) {
 	const state = c.query.state || c.body.state;
 	const data = await c.context.internalAdapter.findVerificationValue(state);
 	if (!data) {

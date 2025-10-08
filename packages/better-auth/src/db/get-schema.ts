@@ -1,19 +1,15 @@
-import { getAuthTables, type FieldAttribute } from ".";
-import type { BetterAuthOptions } from "../types";
+import { getAuthTables, type BetterAuthDbSchema, type FieldAttributeFor } from ".";
+import type { AuthPluginSchema, BetterAuthOptions } from "../types";
+import { schema } from "./schema";
 
-export function getSchema(config: BetterAuthOptions) {
+export function getSchema<S extends AuthPluginSchema>(config: BetterAuthOptions<S>): BetterAuthDbSchema<S> {
 	const tables = getAuthTables(config);
-	let schema: Record<
-		string,
-		{
-			fields: Record<string, FieldAttribute>;
-			order: number;
-		}
-	> = {};
+	// @ts-expect-error - It is populated further on
+	let schema: BetterAuthDbSchema<S> = {};
 	for (const key in tables) {
 		const table = tables[key];
 		const fields = table.fields;
-		let actualFields: Record<string, FieldAttribute> = {};
+		let actualFields: Record<string, FieldAttributeFor<any>> = {};
 		Object.entries(fields).forEach(([key, field]) => {
 			actualFields[field.fieldName || key] = field;
 			if (field.references) {

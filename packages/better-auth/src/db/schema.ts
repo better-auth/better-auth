@@ -1,9 +1,10 @@
-import * as z from "zod";
-import { field, type FieldAttribute } from ".";
+import { field, type FieldAttributeFor } from ".";
 import type { AuthPluginSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
-import type { Account, Session, User } from "../types";
+import type { SchemaTypes } from "../types";
+
+type SCHEMA = typeof schema;
 
 export const coreSchema = {
 	id: field("string"),
@@ -38,7 +39,9 @@ export const accountSchema = {
 
 
 		...coreSchema
-	}
+	},
+
+	modelName: "account"
 }
 
 export const userSchema = {
@@ -49,7 +52,8 @@ export const userSchema = {
 		image: field("string", { required: false }),
 
 		...coreSchema
-	}
+	},
+	modelName: "user"
 }
 
 export const sessionSchema = {
@@ -61,7 +65,8 @@ export const sessionSchema = {
 		userAgent: field("string", { required: false }),
 
 		...coreSchema
-	}
+	},
+	modelName: "session"
 }
 
 export const verificationSchema = {
@@ -71,24 +76,38 @@ export const verificationSchema = {
 		identifier: field("string"),
 
 		...coreSchema
-	}
+	},
+	modelName: "verification"
+}
+
+export const rateLimitSchema = {
+	fields: {
+		key: field("string"),
+		count: field("number"),
+		lastRequest: field("number", { bigint: true }),
+
+		...coreSchema
+	},
+	modelName: "rateLimit"
 }
 
 export const schema = {
 	account: accountSchema,
 	user: userSchema,
 	session: sessionSchema,
-	verification: verificationSchema
+	verification: verificationSchema,
+	ratelimit: rateLimitSchema
 };
 
-export function parseOutputData<T extends Record<string, any>>(
-	data: T,
+export function parseOutputData<S extends AuthPluginSchema, M extends keyof S & string> (
+	data: SchemaTypes<S[M]>,
 	schema: {
-		fields: Record<string, FieldAttribute>;
+		fields: S[M]["fields"];
 	},
 ) {
 	const fields = schema.fields;
-	const parsedData: Record<string, any> = {};
+	// @ts-expect-error - It will be populated further on
+	const parsedData: SchemaTypes<S[M]> = {};
 	for (const key in data) {
 		const field = fields[key];
 		if (!field) {
@@ -100,11 +119,11 @@ export function parseOutputData<T extends Record<string, any>>(
 		}
 		parsedData[key] = data[key];
 	}
-	return parsedData as T;
+	return parsedData;
 }
 
-export function getAllFields<S extends AuthPluginSchema, T extends keyof S>(options: BetterAuthOptions<S>, table: T) {
-	let schema: Record<string, FieldAttribute> = {
+export function getAllFields<S extends AuthPluginSchema, T extends keyof S>(options: BetterAuthOptions<S>, table: T): S[T]["fields"] {
+	let schema: Record<string, FieldAttributeFor<any>> = {
 		...(table === "user" ? options.user?.additionalFields : {}),
 		...(table === "session" ? options.session?.additionalFields : {}),
 	};
@@ -119,22 +138,22 @@ export function getAllFields<S extends AuthPluginSchema, T extends keyof S>(opti
 	return schema;
 }
 
-export function parseUserOutput<S extends AuthPluginSchema>(options: BetterAuthOptions<S>, user: User) {
+export function parseUserOutput<S extends AuthPluginSchema<SCHEMA>>(options: BetterAuthOptions<S>, user: SchemaTypes<S["user"]>) {
 	const schema = getAllFields(options, "user");
 	return parseOutputData(user, { fields: schema });
 }
 
-export function parseAccountOutput(
-	options: BetterAuthOptions,
-	account: Account,
+export function parseAccountOutput<S extends AuthPluginSchema<SCHEMA>>(
+	options: BetterAuthOptions<S>,
+	account: SchemaTypes<S["account"]>,
 ) {
 	const schema = getAllFields(options, "account");
 	return parseOutputData(account, { fields: schema });
 }
 
-export function parseSessionOutput(
-	options: BetterAuthOptions,
-	session: Session,
+export function parseSessionOutput<S extends AuthPluginSchema<SCHEMA>>(
+	options: BetterAuthOptions<S>,
+	session: SchemaTypes<S["session"]>,
 ) {
 	const schema = getAllFields(options, "session");
 	return parseOutputData(session, { fields: schema });
@@ -143,7 +162,7 @@ export function parseSessionOutput(
 export function parseInputData<T extends Record<string, any>>(
 	data: T,
 	schema: {
-		fields: Record<string, FieldAttribute>;
+		fields: Record<string, FieldAttributeFor<any>>;
 		action?: "create" | "update";
 	},
 ) {
@@ -160,7 +179,7 @@ export function parseInputData<T extends Record<string, any>>(
 				continue;
 			}
 			if (fields[key].validator?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key].validator.input.parse(data[key]);
+				parsedData[key] = fields[key].validator.input?.parse(data[key]);
 				continue;
 			}
 			if (fields[key].transform?.input && data[key] !== undefined) {
@@ -185,34 +204,34 @@ export function parseInputData<T extends Record<string, any>>(
 	return parsedData as Partial<T>;
 }
 
-export function parseUserInput(
-	options: BetterAuthOptions,
-	user?: Record<string, any>,
+export function parseUserInput<S extends AuthPluginSchema<SCHEMA>>(
+	options: BetterAuthOptions<S>,
+	user?: Partial<SchemaTypes<S["user"]>>,
 	action?: "create" | "update",
 ) {
 	const schema = getAllFields(options, "user");
 	return parseInputData(user || {}, { fields: schema, action });
 }
 
-export function parseAdditionalUserInput(
-	options: BetterAuthOptions,
+export function parseAdditionalUserInput<S extends AuthPluginSchema>(
+	options: BetterAuthOptions<S>,
 	user?: Record<string, any>,
 ) {
 	const schema = getAllFields(options, "user");
 	return parseInputData(user || {}, { fields: schema });
 }
 
-export function parseAccountInput(
-	options: BetterAuthOptions,
-	account: Partial<Account>,
+export function parseAccountInput<S extends AuthPluginSchema<SCHEMA>>(
+	options: BetterAuthOptions<S>,
+	account: Partial<SchemaTypes<S["account"]>>,
 ) {
 	const schema = getAllFields(options, "account");
 	return parseInputData(account, { fields: schema });
 }
 
-export function parseSessionInput(
-	options: BetterAuthOptions,
-	session: Partial<Session>,
+export function parseSessionInput<S extends AuthPluginSchema<SCHEMA>>(
+	options: BetterAuthOptions<S>,
+	session: Partial<SchemaTypes<S["session"]>>,
 ) {
 	const schema = getAllFields(options, "session");
 	return parseInputData(session, { fields: schema });

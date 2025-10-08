@@ -6,6 +6,7 @@ import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { shimContext } from "../../utils/shim";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../db/field";
 import { type AccessControl } from "../access";
 import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";

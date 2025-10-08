@@ -6,15 +6,16 @@ import {
 	type InputContext,
 } from "better-call";
 import type { AuthEndpoint, AuthMiddleware } from "./call";
-import type { AuthContext, HookEndpointContext } from "../types";
+import type { AuthContext, AuthPluginSchema, HookEndpointContext } from "../types";
 import { createDefu } from "defu";
 import { shouldPublishLog } from "../utils";
+import type { schema } from "../db";
 
-type InternalContext = InputContext<string, any> &
+type InternalContext<S extends AuthPluginSchema> = InputContext<string, any> &
 	EndpointContext<string, any> & {
 		asResponse?: boolean;
-		context: AuthContext & {
-			logger: AuthContext["logger"];
+		context: AuthContext<S> & {
+			logger: AuthContext<S>["logger"];
 			returned?: unknown;
 			responseHeaders?: Headers;
 		};
@@ -26,9 +27,9 @@ const defuReplaceArrays = createDefu((obj, key, value) => {
 	}
 });
 
-export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
+export function toAuthEndpoints<E extends Record<string, AuthEndpoint<S>>, S extends AuthPluginSchema>(
 	endpoints: E,
-	ctx: AuthContext | Promise<AuthContext>,
+	ctx: AuthContext<S> | Promise<AuthContext<S>>,
 ) {
 	const api: Record<
 		string,
@@ -43,7 +44,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 	for (const [key, endpoint] of Object.entries(endpoints)) {
 		api[key] = async (context) => {
 			const authContext = await ctx;
-			let internalContext: InternalContext = {
+			let internalContext: InternalContext<S> = {
 				...context,
 				context: {
 					...authContext,
@@ -147,10 +148,10 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 	return api as E;
 }
 
-async function runBeforeHooks(
-	context: InternalContext,
+async function runBeforeHooks<S extends AuthPluginSchema>(
+	context: InternalContext<S>,
 	hooks: {
-		matcher: (context: HookEndpointContext) => boolean;
+		matcher: (context: HookEndpointContext<S>) => boolean;
 		handler: AuthMiddleware;
 	}[],
 ) {
@@ -199,10 +200,10 @@ async function runBeforeHooks(
 	return { context: modifiedContext };
 }
 
-async function runAfterHooks(
-	context: InternalContext,
+async function runAfterHooks<S extends AuthPluginSchema>(
+	context: InternalContext<S>,
 	hooks: {
-		matcher: (context: HookEndpointContext) => boolean;
+		matcher: (context: HookEndpointContext<S>) => boolean;
 		handler: AuthMiddleware;
 	}[],
 ) {
@@ -250,14 +251,14 @@ async function runAfterHooks(
 	};
 }
 
-function getHooks(authContext: AuthContext) {
+function getHooks<S extends AuthPluginSchema>(authContext: AuthContext<S>) {
 	const plugins = authContext.options.plugins || [];
 	const beforeHooks: {
-		matcher: (context: HookEndpointContext) => boolean;
+		matcher: (context: HookEndpointContext<S>) => boolean;
 		handler: AuthMiddleware;
 	}[] = [];
 	const afterHooks: {
-		matcher: (context: HookEndpointContext) => boolean;
+		matcher: (context: HookEndpointContext<S>) => boolean;
 		handler: AuthMiddleware;
 	}[] = [];
 	if (authContext.options.hooks?.before) {

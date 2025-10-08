@@ -2,7 +2,7 @@ import type { OAuth2Tokens } from "./types";
 import { getDate } from "../utils/date";
 import { createHash } from "@better-auth/utils/hash";
 import { base64Url } from "@better-auth/utils/base64";
-import type { AuthContext } from "../types";
+import type { AuthContext, AuthPluginSchema } from "../types";
 import { symmetricDecrypt, symmetricEncrypt } from "../crypto";
 
 export async function generateCodeChallenge(codeVerifier: string) {
@@ -35,7 +35,7 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 export const encodeOAuthParameter = (value: string) =>
 	encodeURIComponent(value).replace(/%20/g, "+");
 
-export function decryptOAuthToken(token: string, ctx: AuthContext) {
+export function decryptOAuthToken<S extends AuthPluginSchema>(token: string, ctx: AuthContext<S>) {
 	if (!token) return token;
 	if (ctx.options.account?.encryptOAuthTokens) {
 		return symmetricDecrypt({
@@ -46,9 +46,9 @@ export function decryptOAuthToken(token: string, ctx: AuthContext) {
 	return token;
 }
 
-export function setTokenUtil(
+export function setTokenUtil<S extends AuthPluginSchema>(
 	token: string | null | undefined,
-	ctx: AuthContext,
+	ctx: AuthContext<S>,
 ) {
 	if (ctx.options.account?.encryptOAuthTokens && token) {
 		return symmetricEncrypt({

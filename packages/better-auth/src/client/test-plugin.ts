@@ -1,9 +1,29 @@
 import { atom, computed } from "nanostores";
 import type { BetterAuthClientPlugin } from "./types";
-import type { BetterAuthPlugin } from "../types/plugins";
+import type { AuthPluginSchema, BetterAuthPlugin } from "../types/plugins";
 import { createAuthEndpoint } from "../api/call";
 import { useAuthQuery } from "./query";
 import z from "zod";
+import { field, type schema } from "../db";
+
+const dbSchema = {
+		user: {
+			fields: {
+				testField: field("string", {
+					required: false,
+				}),
+				testField2: field("number", {
+					required: false,
+				}),
+				testField3: field("string", {
+					returned: false,
+				}),
+				testField4: field("string", {
+					defaultValue: "test",
+				}),
+			},
+		},
+	} satisfies AuthPluginSchema
 
 const serverPlugin = {
 	id: "test",
@@ -19,6 +39,13 @@ const serverPlugin = {
 				}),
 			},
 			async (c) => {
+				c.context.adapter.create({
+					model: "user",
+					data: {
+						testField4: "abc",
+						r: true,
+					}
+				})
 				return {
 					data: "test",
 				};
@@ -34,29 +61,8 @@ const serverPlugin = {
 			},
 		),
 	},
-	schema: {
-		user: {
-			fields: {
-				testField: {
-					type: "string",
-					required: false,
-				},
-				testField2: {
-					type: "number",
-					required: false,
-				},
-				testField3: {
-					type: "string",
-					returned: false,
-				},
-				testField4: {
-					type: "string",
-					defaultValue: "test",
-				},
-			},
-		},
-	},
-} satisfies BetterAuthPlugin;
+	schema: dbSchema
+} satisfies BetterAuthPlugin<typeof dbSchema>;
 
 export const testClientPlugin = () => {
 	const $test = atom(false);
@@ -101,6 +107,7 @@ export const testClientPlugin = () => {
 		],
 	} satisfies BetterAuthClientPlugin;
 };
+
 export const testClientPlugin2 = () => {
 	const $test2 = atom(false);
 	let testValue = 0;

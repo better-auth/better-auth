@@ -11,16 +11,15 @@ import type {
 } from "./types";
 import type { PrettifyDeep, Expand } from "./types/helper";
 import { getBaseURL, getOrigin } from "./utils/url";
-import type { FilterActions, InferAPI } from "./types";
+import type { FilterActions } from "./types";
 import { BASE_ERROR_CODES } from "./error/codes";
 import { BetterAuthError } from "./error";
+import type { schema } from "./db";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
 
-export const betterAuth = <O extends BetterAuthOptions<S>, S extends AuthPluginSchema>(
-	options: O &
-		// fixme(alex): do we need Record<never, never> here?
-		Record<never, never>,
+export const betterAuth = <O extends BetterAuthOptions<S>, S extends typeof schema>(
+	options: O
 ) => {
 	const authContext = init(options);
 	const { api } = getEndpoints(authContext, options);
@@ -59,7 +58,7 @@ export const betterAuth = <O extends BetterAuthOptions<S>, S extends AuthPluginS
 			const { handler } = router(ctx, options);
 			return handler(request);
 		},
-		api: api as InferAPI<typeof api>,
+		api,
 		options: options as O,
 		$context: authContext,
 		$Infer: {} as {

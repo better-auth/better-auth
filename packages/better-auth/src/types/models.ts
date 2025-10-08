@@ -9,8 +9,7 @@ import type {
 import type { Auth } from "../auth";
 import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../db";
 import type { SchemaTypes, StripEmptyObjects, UnionToIntersection } from "./helper";
-import type { AuthPluginSchema, BetterAuthPlugin } from "./plugins";
-import type * as z from "zod";
+import type { AuthPluginSchema, AuthPluginTableSchema, BetterAuthPlugin } from "./plugins";
 
 export type Models =
 	| "user"
@@ -25,25 +24,25 @@ export type Models =
 	| "passkey"
 	| "two-factor";
 
-export type AdditionalUserFieldsInput<Options extends BetterAuthOptions<S>, S extends AuthPluginSchema> = InferFieldsFromPlugins<Options, "user", "input"> &
-	InferFieldsFromPlugins<Options, "user", "input"> &
-		InferFieldsFromOptions<Options, "user", "input">;
+export type AdditionalUserFieldsInput<Options extends BetterAuthOptions<S>, S extends AuthPluginSchema> = InferFieldsFromPlugins<Options, "user", S, "input"> &
+	InferFieldsFromPlugins<Options, "user", S, "input"> &
+		InferFieldsFromOptions<Options, "user", S, "input">;
 
 export type AdditionalUserFieldsOutput<Options extends BetterAuthOptions<S>, S extends AuthPluginSchema> =
-	InferFieldsFromPlugins<Options, "user"> &
-		InferFieldsFromOptions<Options, "user">;
+	InferFieldsFromPlugins<Options, "user", S> &
+		InferFieldsFromOptions<Options, "user", S>;
 
 export type AdditionalSessionFieldsInput<Options extends BetterAuthOptions<S>, S extends AuthPluginSchema> =
-	InferFieldsFromPlugins<Options, "session", "input"> &
-		InferFieldsFromOptions<Options, "session", "input">;
+	InferFieldsFromPlugins<Options, "session", S, "input"> &
+		InferFieldsFromOptions<Options, "session", S, "input">;
 
 export type AdditionalSessionFieldsOutput<Options extends BetterAuthOptions<S>, S extends AuthPluginSchema> =
-	InferFieldsFromPlugins<Options, "session"> &
-		InferFieldsFromOptions<Options, "session">;
+	InferFieldsFromPlugins<Options, "session", S> &
+		InferFieldsFromOptions<Options, "session", S>;
 
-export type InferUser<O extends BetterAuthOptions<S> | Auth<S>, S extends AuthPluginSchema> = UnionToIntersection<
+export type InferUser<O extends BetterAuthOptions<S> | Auth<S>, S extends AuthPluginSchema<typeof schema>> = UnionToIntersection<
 	StripEmptyObjects<
-		User &
+		S["user"] &
 			(O extends BetterAuthOptions<S>
 				? AdditionalUserFieldsOutput<O, S>
 				: O extends Auth<S>
@@ -52,10 +51,10 @@ export type InferUser<O extends BetterAuthOptions<S> | Auth<S>, S extends AuthPl
 	>
 >;
 
-export type InferSession<O extends BetterAuthOptions<S> | Auth<S>, S extends AuthPluginSchema> =
+export type InferSession<O extends BetterAuthOptions<S> | Auth<S>, S extends AuthPluginSchema<typeof schema>> =
 	UnionToIntersection<
 		StripEmptyObjects<
-			Session &
+			S["session"] &
 				(O extends BetterAuthOptions<S>
 					? AdditionalSessionFieldsOutput<O, S>
 					: O extends Auth<S>
@@ -64,7 +63,7 @@ export type InferSession<O extends BetterAuthOptions<S> | Auth<S>, S extends Aut
 		>
 	>;
 
-export type InferPluginTypes<O extends BetterAuthOptions<S>, S extends AuthPluginSchema> =
+export type InferPluginTypes<O extends BetterAuthOptions<S>, S extends AuthPluginSchema<typeof schema>> =
 	O["plugins"] extends Array<infer P>
 		? UnionToIntersection<
 				P extends BetterAuthPlugin<S>

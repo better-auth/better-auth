@@ -353,7 +353,8 @@ export const auth = betterAuth({
 
 <Callout>
   Type inference in your code will still use the original field names (e.g.,
-  `user.name`, not `user.full_name`).
+  `user.name`, not `user.full_name`), including when you change the model
+  name (e.g. `user` will still be `user`, not `users`).
 </Callout>
 
 To customize table names and column name for plugins, you can use the `schema` property in the plugin config:

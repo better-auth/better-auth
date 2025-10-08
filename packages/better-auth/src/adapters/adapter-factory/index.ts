@@ -3,7 +3,9 @@ import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
 import type {
 	Adapter,
+	AuthPluginSchema,
 	BetterAuthOptions,
+	OmitSchemaCore,
 	TransactionAdapter,
 	Where,
 } from "../../types";
@@ -14,9 +16,9 @@ import type {
 	AdapterTestDebugLogs,
 	CleanedWhere,
 } from "./types";
-import type { FieldAttribute } from "../../db";
+import type { BetterAuthDbSchema, FieldAttribute, FieldAttributeFor, FieldType, schema } from "../../db";
 export * from "./types";
-
+type SCHEMA = typeof schema;
 let debugLogs: any[] = [];
 let transactionId = -1;
 
@@ -51,18 +53,18 @@ const colors = {
 };
 
 const createAsIsTransaction =
-	(adapter: Adapter) =>
-	<R>(fn: (trx: TransactionAdapter) => Promise<R>) =>
+	<S extends AuthPluginSchema>(adapter: Adapter<S>) =>
+	<R>(fn: (trx: TransactionAdapter<S>) => Promise<R>) =>
 		fn(adapter);
 
-export type AdapterFactory = (options: BetterAuthOptions) => Adapter;
+export type AdapterFactory<S extends AuthPluginSchema> = (options: BetterAuthOptions<S>) => Adapter<S>;
 
 export const createAdapterFactory =
-	({
+	<S extends AuthPluginSchema = AuthPluginSchema>({
 		adapter: customAdapter,
 		config: cfg,
-	}: AdapterFactoryOptions): AdapterFactory =>
-	(options: BetterAuthOptions): Adapter => {
+	}: AdapterFactoryOptions<S>): AdapterFactory<S> =>
+	(options: BetterAuthOptions<S>): Adapter<S> => {
 		const config = {
 			...cfg,
 			supportsBooleans: cfg.supportsBooleans ?? true,
@@ -71,7 +73,7 @@ export const createAdapterFactory =
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 			transaction: cfg.transaction ?? false,
-		} satisfies AdapterFactoryConfig;
+		} satisfies AdapterFactoryConfig<S>;
 
 		if (
 			options.advanced?.database?.useNumberId === true &&
@@ -95,24 +97,23 @@ export const createAdapterFactory =
 		 * 1. User can define a custom fieldName.
 		 * 2. When using a custom fieldName, doing something like `schema[model].fields[field]` will not work.
 		 */
-		const getDefaultFieldName = ({
+		const getDefaultFieldName = <M extends keyof S & string, F extends keyof (S[M]["fields"]) & string>({
 			field,
 			model: unsafe_model,
 		}: {
-			model: string;
-			field: string;
+			model: M;
+			field: F;
 		}) => {
 			// Plugin `schema`s can't define their own `id`. Better-auth auto provides `id` to every schema model.
 			// Given this, we can't just check if the `field` (that being `id`) is within the schema's fields, since it is never defined.
 			// So we check if the `field` is `id` and if so, we return `id` itself. Otherwise, we return the `field` from the schema.
 			if (field === "id" || field === "_id") {
-				return "id";
+				return "id" as F;
 			}
 			const model = getDefaultModelName(unsafe_model); // Just to make sure the model name is correct.
 
 			let f = schema[model]?.fields[field];
 			if (!f) {
-				//@ts-expect-error
 				f = Object.values(schema[model]?.fields).find(
 					(f) => f.fieldName === field,
 				);
@@ -136,16 +137,17 @@ export const createAdapterFactory =
 		 * 2. When using a custom modelName, doing something like `schema[model]` will not work.
 		 * 3. Using this function helps us get the actual model name based on the user's defined custom modelName.
 		 */
-		const getDefaultModelName = (model: string) => {
+		const getDefaultModelName = <M extends keyof S & string>(model: M): M => {
 			// It's possible this `model` could had applied `usePlural`.
 			// Thus we'll try the search but without the trailing `s`.
+			model as string;
 			if (config.usePlural && model.charAt(model.length - 1) === "s") {
-				let pluralessModel = model.slice(0, -1);
+				let pluralessModel = model.slice(0, -1) as M;
 				let m = schema[pluralessModel] ? pluralessModel : undefined;
 				if (!m) {
 					m = Object.entries(schema).find(
 						([_, f]) => f.modelName === pluralessModel,
-					)?.[0];
+					)?.[0] as M;
 				}
 
 				if (m) {
@@ -155,7 +157,7 @@ export const createAdapterFactory =
 
 			let m = schema[model] ? model : undefined;
 			if (!m) {
-				m = Object.entries(schema).find(([_, f]) => f.modelName === model)?.[0];
+				m = Object.entries(schema).find(([_, f]) => f.modelName === model)?.[0] as M;
 			}
 
 			if (!m) {
@@ -171,7 +173,7 @@ export const createAdapterFactory =
 		 * Furthermore, if the user passes `usePlural` as true in their adapter config,
 		 * then we should return the model name ending with an `s`.
 		 */
-		const getModelName = (model: string) => {
+		const getModelName = <M extends keyof SCHEMA>(model: M): M => {
 			const defaultModelKey = getDefaultModelName(model);
 			const usePlural = config && config.usePlural;
 			const useCustomModelName =
@@ -181,11 +183,11 @@ export const createAdapterFactory =
 
 			if (useCustomModelName) {
 				return usePlural
-					? `${schema[defaultModelKey].modelName}s`
-					: schema[defaultModelKey].modelName;
+					? `${schema[defaultModelKey].modelName}s` as M
+					: schema[defaultModelKey].modelName as M;
 			}
 
-			return usePlural ? `${model}s` : model;
+			return usePlural ? `${model}s` as M : model;
 		};
 		/**
 		 * Get the field name which is expected to be saved in the database based on the user's schema.
@@ -264,11 +266,11 @@ export const createAdapterFactory =
 			}
 		};
 
-		const idField = ({
+		const idField = <M extends keyof S & string>({
 			customModelName,
 			forceAllowId,
 		}: {
-			customModelName?: string;
+			customModelName?: M;
 			forceAllowId?: boolean;
 		}) => {
 			const shouldGenerateId =
@@ -277,7 +279,7 @@ export const createAdapterFactory =
 				!forceAllowId;
 			const model = getDefaultModelName(customModelName ?? "id");
 			return {
-				type: options.advanced?.database?.useNumberId ? "number" : "string",
+				type: (options.advanced?.database?.useNumberId ? "number" : "string") as "string" | "number",
 				required: shouldGenerateId ? true : false,
 				...(shouldGenerateId
 					? {
@@ -295,7 +297,7 @@ export const createAdapterFactory =
 								if (generateId) {
 									return generateId({
 										model,
-									});
+									}) as string;
 								}
 								if (config.customIdGenerator) {
 									return config.customIdGenerator({ model });
@@ -304,7 +306,7 @@ export const createAdapterFactory =
 							},
 						}
 					: {}),
-			} satisfies FieldAttribute;
+			} satisfies FieldAttributeFor<"string" | "number">;
 		};
 
 		const getFieldAttributes = ({
@@ -356,10 +358,10 @@ export const createAdapterFactory =
 			}
 			for (const field in fields) {
 				const value = data[field];
-				const fieldAttributes = fields[field];
+				const fieldAttributes = fields[field]!;
 
 				let newFieldName: string =
-					newMappedKeys[field] || fields[field].fieldName || field;
+					newMappedKeys[field] || fields[field]!.fieldName || field;
 				if (
 					value === undefined &&
 					((fieldAttributes.defaultValue === undefined &&
@@ -437,6 +439,7 @@ export const createAdapterFactory =
 			const idKey = Object.entries(newMappedKeys).find(
 				([_, v]) => v === "id",
 			)?.[0];
+			// @ts-expect-error - This is a valid field name
 			tableSchema[idKey ?? "id"] = {
 				type: options.advanced?.database?.useNumberId ? "number" : "string",
 			};
@@ -492,8 +495,8 @@ export const createAdapterFactory =
 							fieldAttributes: field,
 							select,
 							model: unsafe_model,
-							schema,
-							options,
+							schema: schema as BetterAuthDbSchema,
+							options: options as any as BetterAuthOptions<SCHEMA>,
 						});
 					}
 
@@ -503,13 +506,13 @@ export const createAdapterFactory =
 			return transformedData as any;
 		};
 
-		const transformWhereClause = <W extends Where[] | undefined>({
+		const transformWhereClause = <W extends Where<S[M], keyof S[M]["fields"] & string>[] | undefined, M extends keyof S & string>({
 			model,
 			where,
 		}: {
 			where: W;
-			model: string;
-		}): W extends undefined ? undefined : CleanedWhere[] => {
+			model: M;
+		}): W extends undefined ? undefined : CleanedWhere<S, M>[] => {
 			if (!where) return undefined as any;
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
 
@@ -551,14 +554,14 @@ export const createAdapterFactory =
 								connector,
 								field: fieldName,
 								value: value.map(Number),
-							} satisfies CleanedWhere;
+							} satisfies CleanedWhere<S, M>;
 						}
 						return {
 							operator,
 							connector,
 							field: fieldName,
 							value: Number(value),
-						} satisfies CleanedWhere;
+						} satisfies CleanedWhere<S, M>;
 					}
 				}
 
@@ -571,35 +574,32 @@ export const createAdapterFactory =
 			}) as any;
 		};
 
-		let lazyLoadTransaction: Adapter["transaction"] | null = null;
-		const adapter: Adapter = {
+		let lazyLoadTransaction: Adapter<S>["transaction"] | null = null;
+		const adapter: Adapter<S> = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
 						logger.warn(
 							`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
 						);
-						lazyLoadTransaction = createAsIsTransaction(adapter);
+						// @ts-expect-error - IDK why this is failing
+						lazyLoadTransaction = createAsIsTransaction<S>(adapter);
 					} else {
 						logger.debug(
 							`[${config.adapterName}] - Using provided transaction implementation.`,
 						);
+						// @ts-expect-error - IDK why this is failing
 						lazyLoadTransaction = config.transaction;
 					}
 				}
-				return lazyLoadTransaction(cb);
+				return lazyLoadTransaction!(cb);
 			},
-			create: async <T extends Record<string, any>, R = T>({
+			create: async ({
 				data: unsafeData,
 				model: unsafeModel,
 				select,
 				forceAllowId = false,
-			}: {
-				model: string;
-				data: T;
-				select?: string[];
-				forceAllowId?: boolean;
-			}): Promise<R> => {
+			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -629,14 +629,14 @@ export const createAdapterFactory =
 					unsafeModel,
 					"create",
 					forceAllowId,
-				)) as T;
+				));
 				debugLog(
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
 					`${formatMethod("create")} ${formatAction("Parsed Input")}:`,
 					{ model, data },
 				);
-				const res = await adapterInstance.create<T>({ data, model });
+				const res = await adapterInstance.create({ data, model });
 				debugLog(
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
@@ -652,15 +652,11 @@ export const createAdapterFactory =
 				);
 				return transformed;
 			},
-			update: async <T>({
+			update: async ({
 				model: unsafeModel,
 				where: unsafeWhere,
 				update: unsafeData,
-			}: {
-				model: string;
-				where: Where[];
-				update: Record<string, any>;
-			}): Promise<T | null> => {
+			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -678,16 +674,16 @@ export const createAdapterFactory =
 					unsafeData,
 					unsafeModel,
 					"update",
-				)) as T;
+				));
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
 					`${formatMethod("update")} ${formatAction("Parsed Input")}:`,
 					{ model, data },
 				);
-				const res = await adapterInstance.update<T>({
+				const res = await adapterInstance.update({
 					model,
-					where,
+					where: where!,
 					update: data,
 				});
 				debugLog(
@@ -709,10 +705,6 @@ export const createAdapterFactory =
 				model: unsafeModel,
 				where: unsafeWhere,
 				update: unsafeData,
-			}: {
-				model: string;
-				where: Where[];
-				update: Record<string, any>;
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -754,14 +746,10 @@ export const createAdapterFactory =
 				);
 				return updatedCount;
 			},
-			findOne: async <T extends Record<string, any>>({
+			findOne: async ({
 				model: unsafeModel,
 				where: unsafeWhere,
 				select,
-			}: {
-				model: string;
-				where: Where[];
-				select?: string[];
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -776,7 +764,7 @@ export const createAdapterFactory =
 					`${formatMethod("findOne")}:`,
 					{ model, where, select },
 				);
-				const res = await adapterInstance.findOne<T>({
+				const res = await adapterInstance.findOne({
 					model,
 					where,
 					select,
@@ -800,18 +788,12 @@ export const createAdapterFactory =
 				);
 				return transformed;
 			},
-			findMany: async <T extends Record<string, any>>({
+			findMany: async ({
 				model: unsafeModel,
 				where: unsafeWhere,
 				limit: unsafeLimit,
 				sortBy,
 				offset,
-			}: {
-				model: string;
-				where?: Where[];
-				limit?: number;
-				sortBy?: { field: string; direction: "asc" | "desc" };
-				offset?: number;
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -830,7 +812,7 @@ export const createAdapterFactory =
 					`${formatMethod("findMany")}:`,
 					{ model, where, limit, sortBy, offset },
 				);
-				const res = await adapterInstance.findMany<T>({
+				const res = await adapterInstance.findMany({
 					model,
 					where,
 					limit: limit,
@@ -857,9 +839,6 @@ export const createAdapterFactory =
 			delete: async ({
 				model: unsafeModel,
 				where: unsafeWhere,
-			}: {
-				model: string;
-				where: Where[];
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -888,9 +867,6 @@ export const createAdapterFactory =
 			deleteMany: async ({
 				model: unsafeModel,
 				where: unsafeWhere,
-			}: {
-				model: string;
-				where: Where[];
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -920,9 +896,6 @@ export const createAdapterFactory =
 			count: async ({
 				model: unsafeModel,
 				where: unsafeWhere,
-			}: {
-				model: string;
-				where?: Where[];
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -964,7 +937,7 @@ export const createAdapterFactory =
 							!options.session?.storeSessionInDatabase
 						) {
 							// biome-ignore lint/performance/noDelete: If the user has enabled secondaryStorage, as well as not specifying to store session table in DB, then createSchema shouldn't generate schema table.
-							delete tables.session;
+							delete (tables.session as S["session"] | undefined);
 						}
 
 						if (
@@ -978,7 +951,7 @@ export const createAdapterFactory =
 								// thus we should also generate rate-limit table schema
 								options.rateLimit.enabled === true)
 						) {
-							tables.ratelimit = {
+							(tables as OmitSchemaCore<BetterAuthDbSchema<SCHEMA>>).ratelimit = {
 								modelName: options.rateLimit.modelName ?? "ratelimit",
 								fields: {
 									key: {
@@ -1003,7 +976,7 @@ export const createAdapterFactory =
 								},
 							};
 						}
-						return adapterInstance.createSchema!({ file, tables });
+						return adapterInstance.createSchema!({ file, tables: tables });
 					}
 				: undefined,
 			options: {

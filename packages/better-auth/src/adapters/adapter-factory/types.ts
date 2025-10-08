@@ -1,4 +1,4 @@
-import type { FieldAttribute } from "../../db";
+import type { FieldAttribute, FieldAttributeFor, FieldType, schema } from "../../db";
 import type { BetterAuthDbSchema } from "../../db/get-tables";
 import type {
 	AdapterSchemaCreation,
@@ -7,7 +7,7 @@ import type {
 	TransactionAdapter,
 	Where,
 } from "../../types";
-import type { Prettify } from "../../types/helper";
+import type { Prettify, SchemaTypes } from "../../types/helper";
 
 export type AdapterDebugLogs =
 	| boolean
@@ -105,7 +105,7 @@ export interface AdapterFactoryConfig<S extends AuthPluginSchema> {
 	 */
 	transaction?:
 		| false
-		| (<R>(callback: (trx: TransactionAdapter) => Promise<R>) => Promise<R>);
+		| (<R>(callback: (trx: TransactionAdapter<S>) => Promise<R>) => Promise<R>);
 	/**
 	 * Disable id generation for the `create` method.
 	 *
@@ -165,7 +165,7 @@ export interface AdapterFactoryConfig<S extends AuthPluginSchema> {
 		/**
 		 * The fields of the model.
 		 */
-		fieldAttributes: FieldAttribute;
+		fieldAttributes: FieldAttributeFor<FieldType>;
 		/**
 		 * The field to transform.
 		 */
@@ -181,7 +181,7 @@ export interface AdapterFactoryConfig<S extends AuthPluginSchema> {
 		/**
 		 * The schema of the user's Better-Auth instance.
 		 */
-		schema: BetterAuthDbSchema;
+		schema: BetterAuthDbSchema<S>;
 		/**
 		 * The options of the user's Better-Auth instance.
 		 */
@@ -197,7 +197,7 @@ export interface AdapterFactoryConfig<S extends AuthPluginSchema> {
 		/**
 		 * The fields of the model.
 		 */
-		fieldAttributes: FieldAttribute;
+		fieldAttributes: FieldAttributeFor<any>;
 		/**
 		 * The field to transform.
 		 */
@@ -213,11 +213,11 @@ export interface AdapterFactoryConfig<S extends AuthPluginSchema> {
 		/**
 		 * The schema of the user's Better-Auth instance.
 		 */
-		schema: BetterAuthDbSchema;
+		schema: BetterAuthDbSchema<S>;
 		/**
 		 * The options of the user's Better-Auth instance.
 		 */
-		options: BetterAuthOptions;
+		options: BetterAuthOptions<S>;
 	}) => any;
 	/**
 	 * Custom ID generator function.
@@ -305,70 +305,70 @@ export type AdapterFactoryCustomizeAdapterCreator = <S extends AuthPluginSchema>
 		model: string;
 		field: string;
 	}) => FieldAttribute;
-}) => CustomAdapter;
+}) => CustomAdapter<S>;
 
-export interface CustomAdapter {
-	create: <T extends Record<string, any>>({
+export interface CustomAdapter<S extends AuthPluginSchema> {
+	create: <M extends keyof S>({
 		data,
 		model,
 		select,
 	}: {
-		model: string;
-		data: T;
+		model: M;
+		data: SchemaTypes<S[M], true>;
 		select?: string[];
-	}) => Promise<T>;
-	update: <T>(data: {
-		model: string;
-		where: CleanedWhere[];
-		update: T;
-	}) => Promise<T | null>;
-	updateMany: (data: {
-		model: string;
-		where: CleanedWhere[];
-		update: Record<string, any>;
+	}) => Promise<SchemaTypes<S[M]>>;
+	update: <M extends keyof S>(data: {
+		model: M;
+		where: CleanedWhere<S, M>[];
+		update: Partial<Omit<SchemaTypes<S[M]>, "id">>;
+	}) => Promise<SchemaTypes<S[M]> | null>;
+	updateMany: <M extends keyof S>(data: {
+		model: M;
+		where: CleanedWhere<S, M>[];
+		update: Partial<Omit<SchemaTypes<S[M]>, "id">>;
 	}) => Promise<number>;
-	findOne: <T>({
+	findOne: <M extends keyof S>({
 		model,
 		where,
 		select,
 	}: {
-		model: string;
-		where: CleanedWhere[];
+		model: M;
+		where: CleanedWhere<S, M>[];
 		select?: string[];
-	}) => Promise<T | null>;
-	findMany: <T>({
+	}) => Promise<SchemaTypes<S[M]> | null>;
+	findMany: <M extends keyof S>({
 		model,
 		where,
 		limit,
 		sortBy,
 		offset,
 	}: {
-		model: string;
-		where?: CleanedWhere[];
+		model: M;
+		where?: CleanedWhere<S, M>[];
 		limit: number;
-		sortBy?: { field: string; direction: "asc" | "desc" };
+		sortBy?: { field: keyof S[M]["fields"]; direction: "asc" | "desc" };
 		offset?: number;
-	}) => Promise<T[]>;
-	delete: ({
+	}) => Promise<SchemaTypes<S[M]>[]>;
+	delete: <M extends keyof S>({
 		model,
 		where,
 	}: {
-		model: string;
-		where: CleanedWhere[];
+		model: M;
+		where: CleanedWhere<S, M>[];
 	}) => Promise<void>;
-	deleteMany: ({
+	deleteMany: <M extends keyof S>({
 		model,
 		where,
 	}: {
-		model: string;
-		where: CleanedWhere[];
+		model: M;
+		where: CleanedWhere<S, M>[];
 	}) => Promise<number>;
-	count: ({
+	count: <M extends keyof S>({
 		model,
 		where,
 	}: {
-		model: string;
-		where?: CleanedWhere[];
+		model: M;
+		where?: CleanedWhere<S, M>[];
 	}) => Promise<number>;
 	createSchema?: (props: {
 		/**
@@ -386,7 +386,7 @@ export interface CustomAdapter {
 	options?: Record<string, any> | undefined;
 }
 
-export type CleanedWhere = Prettify<Required<Where>>;
+export type CleanedWhere<S extends AuthPluginSchema, M extends keyof S> = Prettify<Required<Where<S[M], keyof S[M]["fields"]>>>;
 
 export type AdapterTestDebugLogs = {
 	resetDebugLogs: () => void;
@@ -396,12 +396,12 @@ export type AdapterTestDebugLogs = {
 /**
  * @deprecated Use `AdapterFactoryOptions` instead. This export will be removed in a future version.
  */
-export type CreateAdapterOptions = AdapterFactoryOptions;
+export type CreateAdapterOptions<S extends AuthPluginSchema> = AdapterFactoryOptions<S>;
 
 /**
  * @deprecated Use `AdapterFactoryConfig` instead. This export will be removed in a future version.
  */
-export type AdapterConfig = AdapterFactoryConfig;
+export type AdapterConfig<S extends AuthPluginSchema> = AdapterFactoryConfig<S>;
 
 /**
  * @deprecated Use `AdapterFactoryCustomizeAdapterCreator` instead. This export will be removed in a future version.

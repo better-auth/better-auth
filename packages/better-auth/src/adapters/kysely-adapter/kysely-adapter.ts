@@ -4,10 +4,11 @@ import {
 	type AdapterFactoryCustomizeAdapterCreator,
 	type AdapterFactoryOptions,
 } from "../adapter-factory";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type { Adapter, AuthPluginSchema, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 import { ensureUTC } from "../../utils/ensure-utc";
+import type { FieldPrimitive } from "../../db";
 
 interface KyselyAdapterConfig {
 	/**
@@ -36,22 +37,22 @@ interface KyselyAdapterConfig {
 	transaction?: boolean;
 }
 
-export const kyselyAdapter = (
-	db: Kysely<any>,
+export const kyselyAdapter = <S extends AuthPluginSchema>(
+	db: Kysely<S>,
 	config?: KyselyAdapterConfig,
 ) => {
-	let lazyOptions: BetterAuthOptions | null = null;
+	let lazyOptions: BetterAuthOptions<S> | null = null;
 	const createCustomAdapter = (
-		db: Kysely<any>,
+		db: Kysely<S>,
 	): AdapterFactoryCustomizeAdapterCreator => {
 		return ({ getFieldName, schema }) => {
-			const withReturning = async (
+			const withReturning = async <M extends keyof S & string>(
 				values: Record<string, any>,
 				builder:
 					| InsertQueryBuilder<any, any, any>
 					| UpdateQueryBuilder<any, string, string, any>,
-				model: string,
-				where: Where[],
+				model: M,
+				where: Where<S[M], keyof S[M]["fields"] & string>[],
 			) => {
 				let res: any;
 				if (config?.type === "mysql") {
@@ -68,6 +69,7 @@ export const kyselyAdapter = (
 						res = await db
 							.selectFrom(model)
 							.selectAll()
+							// @ts-expect-error - Replace with non-deprecated method
 							.orderBy(getFieldName({ model, field }), "desc")
 							.limit(1)
 							.executeTakeFirst();
@@ -78,6 +80,7 @@ export const kyselyAdapter = (
 					res = await db
 						.selectFrom(model)
 						.selectAll()
+						// @ts-expect-error - Replace with non-deprecated method
 						.orderBy(getFieldName({ model, field }), "desc")
 						.where(getFieldName({ model, field }), "=", value)
 						.limit(1)
@@ -91,14 +94,13 @@ export const kyselyAdapter = (
 				res = await builder.returningAll().executeTakeFirst();
 				return res;
 			};
-			function transformValueToDB(value: any, model: string, field: string) {
+			function transformValueToDB<M extends keyof typeof schema, F extends keyof S[M]["fields"]>(value: FieldPrimitive<S[M]["fields"][F]["type"]>, model: M, field: F) {
 				if (field === "id") {
 					return value;
 				}
 				const { type = "sqlite" } = config || {};
 				let f = schema[model]?.fields[field];
 				if (!f) {
-					//@ts-expect-error - The model name can be a sanitized, thus using the custom model name, not one of the default ones.
 					f = Object.values(schema).find((f) => f.modelName === model)!;
 				}
 				if (
@@ -388,7 +390,7 @@ export const kyselyAdapter = (
 
 	const adapter = createAdapterFactory(adapterOptions);
 
-	return (options: BetterAuthOptions): Adapter => {
+	return (options: BetterAuthOptions<S>): Adapter<S> => {
 		lazyOptions = options;
 		return adapter(options);
 	};

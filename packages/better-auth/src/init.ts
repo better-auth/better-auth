@@ -3,6 +3,7 @@ import { hashPassword, verifyPassword } from "./crypto/password";
 import {
 	type BetterAuthDbSchema,
 	createInternalAdapter,
+	type InternalAdapter,
 	getAuthTables,
 	getMigrations,
 	schema,
@@ -16,8 +17,6 @@ import type {
 	BetterAuthPlugin,
 	Models,
 	SecondaryStorage,
-	Session,
-	User,
 } from "./types";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
@@ -32,7 +31,7 @@ import { generateId } from "./utils";
 import { env, isProduction } from "./utils/env";
 import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
-import type { LiteralUnion } from "./types/helper";
+import type { LiteralUnion, MergeSchema, SchemaTypes } from "./types/helper";
 import { BetterAuthError } from "./error";
 import { createTelemetry } from "./telemetry";
 import type { TelemetryEvent } from "./telemetry/types";
@@ -40,7 +39,7 @@ import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
 import { isPromise } from "./utils/is-promise";
 
-export const init = async <S extends AuthPluginSchema>(options: BetterAuthOptions<S>) => {
+export const init = async <S extends typeof schema = typeof schema>(options: BetterAuthOptions<S>) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
@@ -118,7 +117,7 @@ export const init = async <S extends AuthPluginSchema>(options: BetterAuthOption
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
-		tables,
+		tables: tables as BetterAuthDbSchema<typeof schema>,
 		trustedOrigins: getTrustedOrigins(options),
 		baseURL: baseURL || "",
 		sessionConfig: {
@@ -161,8 +160,8 @@ export const init = async <S extends AuthPluginSchema>(options: BetterAuthOption
 		},
 		newSession: null,
 		adapter: adapter,
-		internalAdapter: createInternalAdapter(adapter, {
-			options,
+		internalAdapter: createInternalAdapter(adapter as Adapter<typeof schema>, {
+			options: options as any as BetterAuthOptions<typeof schema>,
 			logger,
 			hooks: options.databaseHooks ? [options.databaseHooks] : [],
 			generateId: generateIdFunc,
@@ -190,8 +189,8 @@ export const init = async <S extends AuthPluginSchema>(options: BetterAuthOption
 	return context;
 };
 
-export type AuthContext<S extends AuthPluginSchema> = {
-	options: BetterAuthOptions<S>;
+export type AuthContext<T extends AuthPluginSchema, S extends MergeSchema<typeof schema, T> = MergeSchema<typeof schema, T>> = {
+	options: BetterAuthOptions<T, S>;
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
@@ -202,17 +201,17 @@ export type AuthContext<S extends AuthPluginSchema> = {
 	 * by `setNewSession` method.
 	 */
 	newSession: {
-		session: Session & Record<string, any>;
-		user: User & Record<string, any>;
+		session: SchemaTypes<S["session"]> & Record<string, any>;
+		user: SchemaTypes<S["user"]> & Record<string, any>;
 	} | null;
 	session: {
-		session: Session & Record<string, any>;
-		user: User & Record<string, any>;
+		session: SchemaTypes<S["session"]> & Record<string, any>;
+		user: SchemaTypes<S["user"]> & Record<string, any>;
 	} | null;
 	setNewSession: (
 		session: {
-			session: Session & Record<string, any>;
-			user: User & Record<string, any>;
+			session: SchemaTypes<S["session"]> & Record<string, any>;
+			user: SchemaTypes<S["user"]> & Record<string, any>;
 		} | null,
 	) => void;
 	socialProviders: OAuthProvider[];
@@ -224,9 +223,9 @@ export type AuthContext<S extends AuthPluginSchema> = {
 		max: number;
 		storage: "memory" | "database" | "secondary-storage";
 	} & BetterAuthOptions<S>["rateLimit"];
-	adapter: Adapter;
-	internalAdapter: ReturnType<typeof createInternalAdapter>;
-	createAuthCookie: ReturnType<typeof createCookieGetter>;
+	adapter: Adapter<S>;
+	internalAdapter: InternalAdapter<S>;
+	createAuthCookie: ReturnType<typeof createCookieGetter<S>>;
 	secret: string;
 	sessionConfig: {
 		updateAge: number;
@@ -255,7 +254,7 @@ export type AuthContext<S extends AuthPluginSchema> = {
 async function runPluginInit<S extends AuthPluginSchema>(ctx: AuthContext<S>) {
 	let options = ctx.options;
 	const plugins = options.plugins || [];
-	let context: AuthContext<S> = ctx;
+	let context = ctx;
 	const dbHooks: BetterAuthOptions<S>["databaseHooks"][] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
@@ -285,9 +284,10 @@ async function runPluginInit<S extends AuthPluginSchema>(ctx: AuthContext<S>) {
 	}
 	// Add the global database hooks last
 	dbHooks.push(options.databaseHooks);
-	context.internalAdapter = createInternalAdapter(ctx.adapter, {
-		options,
+	context.internalAdapter = createInternalAdapter(ctx.adapter as Adapter<typeof schema>, {
+		options: options as any as BetterAuthOptions<typeof schema>,
 		logger: ctx.logger,
+		// @ts-expect-error - databaseHooks is correctly typed
 		hooks: dbHooks.filter((u) => u !== undefined),
 		generateId: ctx.generateId,
 	});

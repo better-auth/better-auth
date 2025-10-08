@@ -1,50 +1,45 @@
-import type { FieldAttribute } from "../../db";
-import type { BetterAuthClientPlugin, BetterAuthOptions } from "../../types";
+import type { FieldAttribute, FieldAttributeFor } from "../../db";
+import type { AuthPluginTableSchema, BetterAuthClientPlugin, BetterAuthOptions } from "../../types";
 import type { BetterAuthPlugin } from "../../types";
 
 export const inferAdditionalFields = <
-	T,
-	S extends {
+	T extends BetterAuthOptions<S>,
+	A extends {
 		user?: {
-			[key: string]: FieldAttribute;
+			[key: string]: FieldAttributeFor<any>;
 		};
 		session?: {
-			[key: string]: FieldAttribute;
+			[key: string]: FieldAttributeFor<any>;
 		};
 	} = {},
+	S extends {
+		user?: AuthPluginTableSchema,
+		session?: AuthPluginTableSchema
+	} = {
+		user: A["user"] extends undefined ? undefined : {
+			fields: A["user"]
+		} & AuthPluginTableSchema,
+		session: A["session"] extends undefined ? undefined : {
+			fields: A["session"]
+		} & AuthPluginTableSchema
+	}
 >(
-	schema?: S,
+	schema?: A,
 ) => {
-	type Opts = T extends BetterAuthOptions
+	type Opts = T extends BetterAuthOptions<S>
 		? T
 		: T extends {
-					options: BetterAuthOptions;
+					options: BetterAuthOptions<S>;
 				}
 			? T["options"]
 			: never;
 
 	type Plugin = Opts extends never
-		? S extends {
-				user?: {
-					[key: string]: FieldAttribute;
-				};
-				session?: {
-					[key: string]: FieldAttribute;
-				};
-			}
-			? {
+		?  {
 					id: "additional-fields-client";
-					schema: {
-						user: {
-							fields: S["user"] extends object ? S["user"] : {};
-						};
-						session: {
-							fields: S["session"] extends object ? S["session"] : {};
-						};
-					};
+					schema: S
 				}
-			: never
-		: Opts extends BetterAuthOptions
+		: Opts extends BetterAuthOptions<S>
 			? {
 					id: "additional-fields";
 					schema: {

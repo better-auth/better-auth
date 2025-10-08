@@ -1,4 +1,5 @@
-import type { BetterAuthOptions, LiteralString, StandardSchemaV1 } from "../types";
+import type { AuthPluginSchema, BetterAuthOptions, LiteralString } from "../types";
+import { ZodType } from "zod";
 
 export type FieldType =
 	| "string"
@@ -22,6 +23,7 @@ type Primitive =
 export type FieldPrimitive<T extends FieldType> = T extends "string" ? string : T extends "number" ? number : T extends "boolean" ? boolean : T extends "date" ? Date : T extends "json" ? string : T extends "string[]" ? string[] : T extends "number[]" ? number[] : T extends Array<any> ? T[number] : never;
 type Promiseable<T> = T | Promise<T>;
 
+// TODO: Make P based on whether the field is required or not
 export type FieldAttributeConfig<F extends FieldType = FieldType, P extends Primitive = FieldPrimitive<F>> = {
 	/**
 	 * If the field should be required on a new record.
@@ -44,7 +46,7 @@ export type FieldAttributeConfig<F extends FieldType = FieldType, P extends Prim
 	 * Note: This will not create a default value on the database level. It will only
 	 * be used when creating a new record.
 	 */
-	defaultValue?: P | (() => P);
+	defaultValue?: P | undefined | (() => P | undefined);
 	/**
 	 * Update value for the field
 	 *
@@ -91,8 +93,8 @@ export type FieldAttributeConfig<F extends FieldType = FieldType, P extends Prim
 	 * A zod schema to validate the value.
 	 */
 	validator?: {
-		input?: StandardSchemaV1.Types;
-		output?: StandardSchemaV1.Types;
+		input?:  ZodType;
+		output?: ZodType;
 	};
 	/**
 	 * The name of the field on the database.
@@ -108,8 +110,10 @@ export type FieldAttributeConfig<F extends FieldType = FieldType, P extends Prim
 };
 
 export type FieldAttributeFor<
-    T extends FieldType,
-> = { type: T } & FieldAttributeConfig<T>
+	T extends FieldType,
+	> = {
+		type: T;
+	} & FieldAttributeConfig<T>
 
 type DistributeFieldAttribute<T extends FieldType> = T extends FieldType
     ? FieldAttributeFor<T>
@@ -165,7 +169,7 @@ export type InferValueType<T extends FieldType> = T extends "string"
 
 export type InferFieldsOutput<Field> = Field extends Record<
 	infer Key,
-	FieldAttribute
+	FieldAttributeFor<any>
 >
 	? {
 			[key in Key as Field[key]["required"] extends false
@@ -237,7 +241,7 @@ type InferFieldOutput<T extends FieldAttribute> = T["returned"] extends false
  * with keys and value types inferred from FieldAttribute["type"].
  */
 export type FieldAttributeToObject<
-	Fields extends Record<string, FieldAttribute>,
+	Fields extends Record<string, FieldAttributeFor<any>>,
 > = AddOptionalFields<
 	{
 		[K in keyof Fields]: InferValueType<Fields[K]["type"]>;
@@ -268,14 +272,14 @@ export type InferAdditionalFieldsFromPluginOptions<
 	Options extends {
 		schema?: {
 			[key in SchemaName]?: {
-				additionalFields?: Record<string, FieldAttribute>;
+				additionalFields?: Record<string, FieldAttributeFor<any>>;
 			};
 		};
 	},
 	isClientSide extends boolean = true,
 > = Options["schema"] extends {
 	[key in SchemaName]?: {
-		additionalFields: infer Field extends Record<string, FieldAttribute>;
+		additionalFields: infer Field extends Record<string, FieldAttributeFor<any>>;
 	};
 }
 	? isClientSide extends true
@@ -290,14 +294,15 @@ type RemoveFieldsWithInputFalse<T extends Record<string, FieldAttribute>> = {
 type InferFieldInput<T extends FieldAttribute> = InferValueType<T["type"]>;
 
 export type PluginFieldAttribute = Omit<
-	FieldAttribute,
+	FieldAttributeFor<any>,
 	"transform" | "defaultValue" | "hashValue"
 >;
 
 export type InferFieldsFromPlugins<
-	Options extends BetterAuthOptions<any>,
+	Options extends BetterAuthOptions<S>,
 	Key extends string,
-	Format extends "output" | "input" = "output",
+	S extends AuthPluginSchema,
+	Format extends "output" | "input" = "output"
 > = Options["plugins"] extends []
 	? {}
 	: Options["plugins"] extends Array<infer T>
@@ -315,8 +320,9 @@ export type InferFieldsFromPlugins<
 		: {};
 
 export type InferFieldsFromOptions<
-	Options extends BetterAuthOptions<any>,
+	Options extends BetterAuthOptions<S>,
 	Key extends "session" | "user",
+	S extends AuthPluginSchema,
 	Format extends "output" | "input" = "output",
 > = Options[Key] extends {
 	additionalFields: infer Field;

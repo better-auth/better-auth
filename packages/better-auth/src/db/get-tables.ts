@@ -1,17 +1,16 @@
-import type { AuthPluginSchema, BetterAuthOptions } from "../types";
+import type { AuthPluginSchema, BetterAuthOptions, OptionalSchemaId } from "../types";
+import type { schema } from "./schema";
 
-export type BetterAuthDbSchema = AuthPluginSchema & {
-	[table in keyof AuthPluginSchema]: {
-			/**
-		 * The order of the table
-		 */
-			order?: number;
+export type BetterAuthDbSchema<S extends AuthPluginSchema = typeof schema> = {
+	[table in keyof S]: S[table] & {
+		order?: number;
 	}
-}
+};
 
+// TODO: Make type definitions for schema based on return type of this or a type with same logic
 export const getAuthTables = <S extends AuthPluginSchema>(
 	options: BetterAuthOptions<S>,
-): BetterAuthDbSchema => {
+): OptionalSchemaId<BetterAuthDbSchema<S>> => {
 	const pluginSchema = (options.plugins ?? []).reduce(
 		(acc, plugin) => {
 			const schema = plugin.schema;
@@ -50,7 +49,7 @@ export const getAuthTables = <S extends AuthPluginSchema>(
 				},
 			},
 		},
-	} satisfies BetterAuthDbSchema;
+	};
 
 	const { user, session, account, ...pluginTables } = pluginSchema;
 
@@ -106,7 +105,7 @@ export const getAuthTables = <S extends AuthPluginSchema>(
 			},
 			order: 2,
 		},
-	} satisfies BetterAuthDbSchema;
+	};
 
 	return {
 		user: {
@@ -272,5 +271,5 @@ export const getAuthTables = <S extends AuthPluginSchema>(
 		},
 		...pluginTables,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
-	} satisfies BetterAuthDbSchema;
+	} as OptionalSchemaId<BetterAuthDbSchema<S>>;
 };

@@ -1,10 +1,10 @@
 import { env } from "../utils/env";
 import { BetterAuthError } from "../error";
 
-function checkHasPath(url: string): boolean {
+function checkHasPath<U extends string>(url: U): U extends "/" ? false : true {
 	try {
 		const parsedUrl = new URL(url);
-		return parsedUrl.pathname !== "/";
+		return (parsedUrl.pathname !== "/") as U extends "/" ? false : true;
 	} catch (error) {
 		throw new BetterAuthError(
 			`Invalid base URL: ${url}. Please provide a valid base URL.`,

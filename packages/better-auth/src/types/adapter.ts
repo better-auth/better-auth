@@ -6,20 +6,50 @@ import type { schema } from "../db";
 
 /**
  * Adapter where clause
+ * 
+ * Todo:
+ *  - Make F inferred from the value of field
+ *  - Fix the operand type issue (probably fixed by making F inferred) 
  */
-export type Where<S extends AuthPluginTableSchema, F extends keyof S["fields"]> = GenericWhere<S, F> | InWhere<S, F>;
+export type Where<
+	S extends AuthPluginTableSchema,
+	F extends keyof S["fields"],
+	// O extends
+	// 	| "eq"
+	// 	| "ne"
+	// 	| "lt"
+	// 	| "lte"
+	// 	| "gt"
+	// 	| "gte"
+	// 	| "contains"
+	// 	| "starts_with"
+	// 	| "ends_with"
+	// 	| "in"
+	// 	| "not_in" = "eq"
+	// > = O extends "in" | "not_in" ? InWhere<S, F> : GenericWhere<S, F>;
+	> = GenericWhere<S, F> | InWhere<S, F>;
 	
-type GenericWhere<S extends AuthPluginTableSchema, F extends keyof S["fields"]> = {
-	operator?:
-		| "eq"
-		| "ne"
-		| S["fields"][F]["type"] extends "number" ? "lt" : never
-		| S["fields"][F]["type"] extends "number" ? "lte" : never
-		| S["fields"][F]["type"] extends "number" ? "gt" : never
-		| S["fields"][F]["type"] extends "number" ? "gte" : never
-		| S["fields"][F]["type"] extends `${string}[]` ? "contains" : never
-		| "starts_with"
-		| "ends_with"; //eq by default
+type GenericWhere<
+	S extends AuthPluginTableSchema,
+	F extends keyof S["fields"]
+> = {
+	operator?: S["fields"][F]["type"] extends "number" | "date"
+		?
+				| "lt"
+				| "lte"
+				| "gt"
+				| "gte"
+				| "eq"
+				| "ne"
+				| "starts_with"
+				| "ends_with"
+		: S["fields"][F]["type"] extends `${string}[]`
+		? "contains" | "eq" | "ne" | "starts_with" | "ends_with"
+		:
+				| "eq"
+				| "ne"
+				| "starts_with"
+				| "ends_with"; //eq by default
 	value: FieldPrimitive<S["fields"][F]["type"]>;
 	field: F;
 	connector?: "AND" | "OR"; //AND by default
@@ -41,7 +71,7 @@ export type Adapter<
 	id: string;
 	create: <M extends keyof S>(data: {
 		model: M;
-		data: Omit<SchemaTypes<S[M]>, "id">;
+		data: Omit<SchemaTypes<S[M], true>, "id">;
 		select?: string[];
 		/**
 		 * By default, any `id` provided in `data` will be ignored.
@@ -50,44 +80,44 @@ export type Adapter<
 		 */
 		forceAllowId?: boolean;
 	}) => Promise<SchemaTypes<S[M]>>;
-	findOne: <M extends keyof S>(data: {
+	findOne: <M extends keyof S & string>(data: {
 		model: M;
-		where: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"]>[];
+		where: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"] & string>[];
 		select?: string[];
 	}) => Promise<SchemaTypes<S[M]> | null>;
-	findMany: <M extends keyof S>(data: {
+	findMany: <M extends keyof S & string, W extends Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"] & string>>(data: {
 		model: M;
-		where?: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"]>[];
+		where?: W[];
 		limit?: number;
 		sortBy?: {
 			field: string;
 			direction: "asc" | "desc";
 		};
 		offset?: number;
-	}) => Promise<S[M][]>;
-	count: <M extends keyof S>(data: { model: M; where?: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"]>[] }) => Promise<number>;
+	}) => Promise<SchemaTypes<S[M]>[]>;
+	count: <M extends keyof S & string>(data: { model: M; where?: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"] & string>[] }) => Promise<number>;
 	/**
 	 * ⚠︎ Update may not return the updated data
 	 * if multiple where clauses are provided
 	 */
-	update: <M extends keyof S>(data: {
+	update: <M extends keyof S & string>(data: {
 		model: M;
-		where: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"]>[];
+		where: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"] & string>[];
 		update: Partial<SchemaTypes<S[M]>>;
 	}) => Promise<SchemaTypes<S[M]> | null>;
-	updateMany: <M extends keyof S>(data: {
+	updateMany: <M extends keyof S & string>(data: {
 		model: M;
-		where: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"]>[];
+		where: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"] & string>[];
 		update: Partial<SchemaTypes<S[M]>>;
 	}) => Promise<number>;
-	delete: <M extends keyof S>(data: { model: M; where: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"]>[] }) => Promise<void>;
-	deleteMany: <M extends keyof S>(data: { model: M; where: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"]>[] }) => Promise<number>;
+	delete: <M extends keyof S & string>(data: { model: M; where: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"] & string>[] }) => Promise<void>;
+	deleteMany: <M extends keyof S & string>(data: { model: M; where: Where<Ensure<S[M], AuthPluginTableSchema>, keyof S[M]["fields"] & string>[] }) => Promise<number>;
 	/**
 	 * Execute multiple operations in a transaction.
 	 * If the adapter doesn't support transactions, operations will be executed sequentially.
 	 */
 	transaction: <R>(
-		callback: (tx: Omit<Adapter, "transaction">) => Promise<R>,
+		callback: (tx: TransactionAdapter<S>) => Promise<R>,
 	) => Promise<R>;
 	/**
 	 *
@@ -100,7 +130,7 @@ export type Adapter<
 	) => Promise<AdapterSchemaCreation>;
 	options?: {
 		adapterConfig: AdapterFactoryConfig<S>;
-	} & CustomAdapter["options"];
+	} & CustomAdapter<S>["options"];
 };
 
 export type AdapterSchemaCreation = {

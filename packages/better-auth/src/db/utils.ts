@@ -1,15 +1,15 @@
-import { getAuthTables, type FieldAttribute } from ".";
+import { getAuthTables, schema, type FieldAttribute } from ".";
 import { BetterAuthError } from "../error";
-import type { Adapter, BetterAuthOptions } from "../types";
+import type { Adapter, AuthPluginSchema, BetterAuthOptions } from "../types";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import { kyselyAdapter } from "../adapters/kysely-adapter";
 import { memoryAdapter, type MemoryDB } from "../adapters/memory-adapter";
 import { logger } from "../utils";
 
-export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
+export async function getAdapter<S extends AuthPluginSchema>(options: BetterAuthOptions<S>): Promise<Adapter<S>> {
 	if (!options.database) {
 		const tables = getAuthTables(options);
-		const memoryDB = Object.keys(tables).reduce<MemoryDB>((acc, key) => {
+		const memoryDB = Object.keys(tables).reduce<MemoryDB<S>>((acc, key) => {
 			acc[key] = [];
 			return acc;
 		}, {});

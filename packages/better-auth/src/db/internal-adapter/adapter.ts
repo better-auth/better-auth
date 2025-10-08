@@ -1,28 +1,23 @@
-import { getDate } from "../utils/date";
-import { parseSessionOutput, parseUserOutput, schema } from "./schema";
+import { getDate } from "../../utils/date";
+import { parseSessionOutput, parseUserOutput, schema } from "../schema";
 import type {
 	Adapter,
 	AuthContext,
 	AuthPluginSchema,
 	BetterAuthOptions,
-	Ensure,
 	GenericEndpointContext,
 	SchemaTypes,
 	TransactionAdapter,
 	Where,
-} from "../types";
-import {
-	type Account,
-	type Session,
-	type User,
-	type Verification,
-} from "../types";
-import { getWithHooks } from "./with-hooks";
-import { getIp } from "../utils/get-request-ip";
-import { safeJSONParse } from "../utils/json";
-import { generateId, type InternalLogger } from "../utils";
+} from "../../types";
+import { getWithHooks } from "../with-hooks";
+import { getIp } from "../../utils/get-request-ip";
+import { safeJSONParse } from "../../utils/json";
+import { generateId, type InternalLogger } from "../../utils";
+import type { EndpointContext } from "better-call";
+import type { InternalAdapter } from "."
 
-export const createInternalAdapter = <S extends typeof schema = typeof schema>(
+export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>(
 	adapter: Adapter<S>,
 	ctx: {
 		options: Omit<BetterAuthOptions<S>, "logger">;
@@ -30,7 +25,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 		hooks: Exclude<BetterAuthOptions<S>["databaseHooks"], undefined>[];
 		generateId: AuthContext<S>["generateId"];
 	},
-) => {
+): InternalAdapter<S> => {
 	const logger = ctx.logger;
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
@@ -38,7 +33,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 	const { createWithHooks, updateWithHooks, updateManyWithHooks } =
 		getWithHooks(adapter, ctx);
 
-	async function refreshUserSessions(user: User) {
+	async function refreshUserSessions(user: SchemaTypes<S["user"]>) {
 		if (!secondaryStorage) return;
 
 		const listRaw = await secondaryStorage.get(`active-sessions-${user.id}`);
@@ -53,7 +48,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			validSessions.map(async ({ token }) => {
 				const cached = await secondaryStorage.get(token);
 				if (!cached) return;
-				const parsed = safeJSONParse<{ session: Session; user: User }>(cached);
+				const parsed = safeJSONParse<{ session: SchemaTypes<S["session"]>; user: SchemaTypes<S["user"]> }>(cached);
 				if (!parsed) return;
 
 				const sessionTTL = Math.max(
@@ -75,18 +70,17 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 
 	return {
 		createOAuthUser: async (
-			user: Omit<SchemaTypes<S["user"]>, "id" | "createdAt" | "updatedAt">,
-			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
-				Partial<Account>,
-			context?: GenericEndpointContext,
+			user,
+			account,
+			context
 		) => {
-			return adapter.transaction(async (trgitxAdapter) => {
+			return adapter.transaction(async (trxAdapter) => {
 				const createdUser = await createWithHooks(
 					user,
 					"user",
 					undefined,
 					context,
-					trxAdapter,
+					trxAdapter
 				);
 				const createdAccount = await createWithHooks(
 					{
@@ -95,24 +89,22 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 						createdAt: new Date(),
 						updatedAt: new Date(),
-					},
+					} as Omit<SchemaTypes<S["account"], true>, "id">,
 					"account",
 					undefined,
 					context,
-					trxAdapter,
+					trxAdapter
 				);
 				return {
-					user: createdUser,
-					account: createdAccount,
+					user: createdUser!,
+					account: createdAccount!,
 				};
 			});
 		},
-		createUser: async <T>(
-			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
-				Partial<User> &
-				Record<string, any>,
-			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
+		createUser: async (
+			user,
+			context,
+			trxAdapter
 		) => {
 			const createdUser = await createWithHooks(
 				{
@@ -121,21 +113,19 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 					updatedAt: new Date(),
 					...user,
 					email: user.email?.toLowerCase(),
-				},
+				} as Omit<SchemaTypes<S["user"], true>, "id">,
 				"user",
 				undefined,
 				context,
-				trxAdapter,
+				trxAdapter
 			);
 
-			return createdUser as T & User;
+			return createdUser!;
 		},
-		createAccount: async <T extends Record<string, any>>(
-			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
-				Partial<Account> &
-				T,
-			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter<S>,
+		createAccount: async (
+			account,
+			context,
+			trxAdapter
 		) => {
 			const createdAccount = await createWithHooks(
 				{
@@ -143,18 +133,21 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...account,
-				},
+				} as Omit<SchemaTypes<S["account"]>, "id">,
 				"account",
 				undefined,
 				context,
-				trxAdapter,
+				trxAdapter
 			);
-			return createdAccount as T & Account;
+			return createdAccount!;
 		},
-		listSessions: async (userId: string, trxAdapter?: TransactionAdapter) => {
+		listSessions: async (
+			userId,
+			trxAdapter
+		) => {
 			if (secondaryStorage) {
 				const currentList = await secondaryStorage.get(
-					`active-sessions-${userId}`,
+					`active-sessions-${userId}`
 				);
 				if (!currentList) return [];
 
@@ -166,11 +159,13 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				const sessions = [];
 
 				for (const session of validSessions) {
-					const sessionStringified = await secondaryStorage.get(session.token);
+					const sessionStringified = await secondaryStorage.get(
+						session.token
+					);
 					if (sessionStringified) {
 						const s = safeJSONParse<{
-							session: Session;
-							user: User;
+							session: SchemaTypes<S["session"]>;
+							user: SchemaTypes<S["user"]>;
 						}>(sessionStringified);
 						if (!s) return [];
 						const parsedSession = parseSessionOutput(ctx.options, {
@@ -183,7 +178,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				return sessions;
 			}
 
-			const sessions = await (trxAdapter || adapter).findMany<Session>({
+			const sessions = await (trxAdapter || adapter).findMany({
 				model: "session",
 				where: [
 					{
@@ -195,16 +190,13 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			return sessions;
 		},
 		listUsers: async (
-			limit?: number,
-			offset?: number,
-			sortBy?: {
-				field: string;
-				direction: "asc" | "desc";
-			},
-			where?: Where[],
-			trxAdapter?: TransactionAdapter,
+			limit,
+			offset,
+			sortBy,
+			where,
+			trxAdapter
 		) => {
-			const users = await (trxAdapter || adapter).findMany<User>({
+			const users = await (trxAdapter || adapter).findMany({
 				model: "user",
 				limit,
 				offset,
@@ -214,8 +206,8 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			return users;
 		},
 		countTotalUsers: async (
-			where?: Where[],
-			trxAdapter?: TransactionAdapter,
+			where,
+			trxAdapter
 		) => {
 			const total = await (trxAdapter || adapter).count({
 				model: "user",
@@ -226,7 +218,10 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			}
 			return total;
 		},
-		deleteUser: async (userId: string, trxAdapter?: TransactionAdapter) => {
+		deleteUser: async (
+			userId,
+			trxAdapter
+		) => {
 			if (secondaryStorage) {
 				await secondaryStorage.delete(`active-sessions-${userId}`);
 			}
@@ -263,19 +258,22 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			});
 		},
 		createSession: async (
-			userId: string,
-			ctx: GenericEndpointContext,
-			dontRememberMe?: boolean,
-			override?: Partial<Session> & Record<string, any>,
-			overrideAll?: boolean,
-			trxAdapter?: TransactionAdapter<S>,
+			userId,
+			ctx,
+			dontRememberMe,
+			override,
+			overrideAll,
+			trxAdapter
 		) => {
 			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
-			const data: Omit<Session, "id"> = {
+			const data: Omit<SchemaTypes<S["session"]>, "id"> = {
 				ipAddress:
 					ctx.request || ctx.headers
-						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
+						? getIp(
+								ctx.request || ctx.headers!,
+								ctx.context.options
+						  ) || ""
 						: "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
@@ -305,15 +303,20 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 								 * so we can retrieve it later for listing sessions
 								 */
 								const currentList = await secondaryStorage.get(
-									`active-sessions-${userId}`,
+									`active-sessions-${userId}`
 								);
 
-								let list: { token: string; expiresAt: number }[] = [];
+								let list: {
+									token: string;
+									expiresAt: number;
+								}[] = [];
 								const now = Date.now();
 
 								if (currentList) {
 									list = safeJSONParse(currentList) || [];
-									list = list.filter((session) => session.expiresAt > now);
+									list = list.filter(
+										(session) => session.expiresAt > now
+									);
 								}
 
 								list.push({
@@ -324,35 +327,36 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 								await secondaryStorage.set(
 									`active-sessions-${userId}`,
 									JSON.stringify(list),
-									sessionExpiration,
+									sessionExpiration
 								);
 
 								return sessionData;
 							},
-							executeMainFn: options.session?.storeSessionInDatabase,
-						}
+							executeMainFn:
+								options.session?.storeSessionInDatabase,
+					  }
 					: undefined,
 				ctx,
-				trxAdapter,
+				trxAdapter
 			);
-			return res as Session;
+			return res!;
 		},
 		findSession: async (
-			token: string,
-			trxAdapter?: TransactionAdapter,
-		): Promise<{
-			session: Session & Record<string, any>;
-			user: User & Record<string, any>;
-		} | null> => {
+			token,
+			trxAdapter
+		) => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
-				if (!sessionStringified && !options.session?.storeSessionInDatabase) {
+				if (
+					!sessionStringified &&
+					!options.session?.storeSessionInDatabase
+				) {
 					return null;
 				}
 				if (sessionStringified) {
 					const s = safeJSONParse<{
-						session: Session;
-						user: User;
+						session: SchemaTypes<S["session"]>;
+						user: SchemaTypes<S["user"]>;
 					}>(sessionStringified);
 					if (!s) return null;
 					const parsedSession = parseSessionOutput(ctx.options, {
@@ -373,7 +377,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				}
 			}
 
-			const session = await (trxAdapter || adapter).findOne<Session>({
+			const session = await (trxAdapter || adapter).findOne({
 				model: "session",
 				where: [
 					{
@@ -387,7 +391,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				return null;
 			}
 
-			const user = await (trxAdapter || adapter).findOne<User>({
+			const user = await (trxAdapter || adapter).findOne<"user">({
 				model: "user",
 				where: [
 					{
@@ -408,20 +412,22 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			};
 		},
 		findSessions: async (
-			sessionTokens: string[],
-			trxAdapter?: TransactionAdapter,
+			sessionTokens,
+			trxAdapter
 		) => {
 			if (secondaryStorage) {
 				const sessions: {
-					session: Session;
-					user: User;
+					session: SchemaTypes<S["session"]>;
+					user: SchemaTypes<S["user"]>;
 				}[] = [];
 				for (const sessionToken of sessionTokens) {
-					const sessionStringified = await secondaryStorage.get(sessionToken);
+					const sessionStringified = await secondaryStorage.get(
+						sessionToken
+					);
 					if (sessionStringified) {
 						const s = safeJSONParse<{
-							session: Session;
-							user: User;
+							session: SchemaTypes<S["session"]>;
+							user: SchemaTypes<S["user"]>;
 						}>(sessionStringified);
 						if (!s) return [];
 						const session = {
@@ -435,8 +441,8 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 								updatedAt: new Date(s.user.updatedAt),
 							},
 						} as {
-							session: Session;
-							user: User;
+							session: SchemaTypes<S["session"]>;
+							user: SchemaTypes<S["user"]>;
 						};
 						sessions.push(session);
 					}
@@ -444,7 +450,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				return sessions;
 			}
 
-			const sessions = await (trxAdapter || adapter).findMany<Session>({
+			const sessions = await (trxAdapter || adapter).findMany({
 				model: "session",
 				where: [
 					{
@@ -458,7 +464,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				return session.userId;
 			});
 			if (!userIds.length) return [];
-			const users = await (trxAdapter || adapter).findMany<User>({
+			const users = await (trxAdapter || adapter).findMany({
 				model: "user",
 				where: [
 					{
@@ -476,29 +482,32 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 					user,
 				};
 			}) as {
-				session: Session;
-				user: User;
+				session: SchemaTypes<S["session"]>;
+				user: SchemaTypes<S["user"]>;
 			}[];
 		},
 		updateSession: async (
-			sessionToken: string,
-			session: Partial<Session> & Record<string, any>,
-			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
+			sessionToken,
+			session,
+			context,
+			trxAdapter
 		) => {
-			const updatedSession = await updateWithHooks<Session>(
+			const updatedSession = await updateWithHooks(
 				session,
 				[{ field: "token", value: sessionToken }],
 				"session",
 				secondaryStorage
 					? {
 							async fn(data) {
-								const currentSession = await secondaryStorage.get(sessionToken);
-								let updatedSession: Session | null = null;
+								const currentSession =
+									await secondaryStorage.get(sessionToken);
+								let updatedSession: SchemaTypes<
+									S["session"]
+								> | null = null;
 								if (currentSession) {
 									const parsedSession = safeJSONParse<{
-										session: Session;
-										user: User;
+										session: SchemaTypes<S["session"]>;
+										user: SchemaTypes<S["user"]>;
 									}>(currentSession);
 									if (!parsedSession) return null;
 									updatedSession = {
@@ -510,23 +519,27 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 									return null;
 								}
 							},
-							executeMainFn: options.session?.storeSessionInDatabase,
-						}
+							executeMainFn:
+								options.session?.storeSessionInDatabase,
+					  }
 					: undefined,
 				context,
-				trxAdapter,
+				trxAdapter
 			);
 			return updatedSession;
 		},
-		deleteSession: async (token: string, trxAdapter?: TransactionAdapter) => {
+		deleteSession: async (
+			token,
+			trxAdapter
+		) => {
 			if (secondaryStorage) {
 				// remove the session from the active sessions list
 				const data = await secondaryStorage.get(token);
 				if (data) {
 					const { session } =
 						safeJSONParse<{
-							session: Session;
-							user: User;
+							session: SchemaTypes<S["session"]>;
+							user: SchemaTypes<S["user"]>;
 						}>(data) ?? {};
 					if (!session) {
 						logger.error("Session not found in secondary storage");
@@ -535,7 +548,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 					const userId = session.userId;
 
 					const currentList = await secondaryStorage.get(
-						`active-sessions-${userId}`,
+						`active-sessions-${userId}`
 					);
 					if (currentList) {
 						let list: { token: string; expiresAt: number }[] =
@@ -546,13 +559,17 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 							await secondaryStorage.set(
 								`active-sessions-${userId}`,
 								JSON.stringify(list),
-								sessionExpiration,
+								sessionExpiration
 							);
 						} else {
-							await secondaryStorage.delete(`active-sessions-${userId}`);
+							await secondaryStorage.delete(
+								`active-sessions-${userId}`
+							);
 						}
 					} else {
-						logger.error("Active sessions list not found in secondary storage");
+						logger.error(
+							"Active sessions list not found in secondary storage"
+						);
 					}
 				}
 
@@ -565,7 +582,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 					return;
 				}
 			}
-			await (trxAdapter || adapter).delete<Session>({
+			await (trxAdapter || adapter).delete({
 				model: "session",
 				where: [
 					{
@@ -575,7 +592,10 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				],
 			});
 		},
-		deleteAccounts: async (userId: string, trxAdapter?: TransactionAdapter) => {
+		deleteAccounts: async (
+			userId,
+			trxAdapter
+		) => {
 			await (trxAdapter || adapter).deleteMany({
 				model: "account",
 				where: [
@@ -587,8 +607,8 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			});
 		},
 		deleteAccount: async (
-			accountId: string,
-			trxAdapter?: TransactionAdapter,
+			accountId,
+			trxAdapter
 		) => {
 			await (trxAdapter || adapter).delete({
 				model: "account",
@@ -601,13 +621,13 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			});
 		},
 		deleteSessions: async (
-			userIdOrSessionTokens: string | string[],
-			trxAdapter?: TransactionAdapter,
+			userIdOrSessionTokens,
+			trxAdapter
 		) => {
 			if (secondaryStorage) {
 				if (typeof userIdOrSessionTokens === "string") {
 					const activeSession = await secondaryStorage.get(
-						`active-sessions-${userIdOrSessionTokens}`,
+						`active-sessions-${userIdOrSessionTokens}`
 					);
 					const sessions = activeSession
 						? safeJSONParse<{ token: string }[]>(activeSession)
@@ -618,7 +638,9 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 					}
 				} else {
 					for (const sessionToken of userIdOrSessionTokens) {
-						const session = await secondaryStorage.get(sessionToken);
+						const session = await secondaryStorage.get(
+							sessionToken
+						);
 						if (session) {
 							await secondaryStorage.delete(sessionToken);
 						}
@@ -635,23 +657,28 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			await (trxAdapter || adapter).deleteMany({
 				model: "session",
 				where: [
-					{
-						field: Array.isArray(userIdOrSessionTokens) ? "token" : "userId",
-						value: userIdOrSessionTokens,
-						operator: Array.isArray(userIdOrSessionTokens) ? "in" : undefined,
-					},
+					Array.isArray(userIdOrSessionTokens)
+						? {
+								field: "token",
+								value: userIdOrSessionTokens,
+								operator: "in",
+						  }
+						: {
+								field: "userId",
+								value: userIdOrSessionTokens,
+						  },
 				],
 			});
 		},
 		findOAuthUser: async (
-			email: string,
-			accountId: string,
-			providerId: string,
-			trxAdapter?: TransactionAdapter,
+			email,
+			accountId,
+			providerId,
+			trxAdapter
 		) => {
 			// we need to find account first to avoid missing user if the email changed with the provider for the same account
 			const account = await (trxAdapter || adapter)
-				.findMany<Account>({
+				.findMany({
 					model: "account",
 					where: [
 						{
@@ -664,7 +691,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 					return accounts.find((a) => a.providerId === providerId);
 				});
 			if (account) {
-				const user = await (trxAdapter || adapter).findOne<User>({
+				const user = await (trxAdapter || adapter).findOne<"user">({
 					model: "user",
 					where: [
 						{
@@ -679,7 +706,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 						accounts: [account],
 					};
 				} else {
-					const user = await (trxAdapter || adapter).findOne<User>({
+					const user = await (trxAdapter || adapter).findOne({
 						model: "user",
 						where: [
 							{
@@ -697,7 +724,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 					return null;
 				}
 			} else {
-				const user = await (trxAdapter || adapter).findOne<User>({
+				const user = await (trxAdapter || adapter).findOne({
 					model: "user",
 					where: [
 						{
@@ -707,7 +734,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 					],
 				});
 				if (user) {
-					const accounts = await (trxAdapter || adapter).findMany<Account>({
+					const accounts = await (trxAdapter || adapter).findMany({
 						model: "account",
 						where: [
 							{
@@ -726,11 +753,11 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			}
 		},
 		findUserByEmail: async (
-			email: string,
-			options?: { includeAccounts: boolean },
-			trxAdapter?: TransactionAdapter,
+			email,
+			options,
+			trxAdapter
 		) => {
-			const user = await (trxAdapter || adapter).findOne<User>({
+			const user = await (trxAdapter || adapter).findOne({
 				model: "user",
 				where: [
 					{
@@ -741,7 +768,7 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			});
 			if (!user) return null;
 			if (options?.includeAccounts) {
-				const accounts = await (trxAdapter || adapter).findMany<Account>({
+				const accounts = await (trxAdapter || adapter).findMany({
 					model: "account",
 					where: [
 						{
@@ -760,8 +787,11 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				accounts: [],
 			};
 		},
-		findUserById: async (userId: string, trxAdapter?: TransactionAdapter) => {
-			const user = await (trxAdapter || adapter).findOne<User>({
+		findUserById: async (
+			userId,
+			trxAdapter
+		) => {
+			const user = await (trxAdapter || adapter).findOne({
 				model: "user",
 				where: [
 					{
@@ -773,10 +803,9 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			return user;
 		},
 		linkAccount: async (
-			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
-				Partial<Account>,
-			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
+			account,
+			context,
+			trxAdapter
 		) => {
 			const _account = await createWithHooks(
 				{
@@ -788,17 +817,17 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				"account",
 				undefined,
 				context,
-				trxAdapter,
+				trxAdapter
 			);
 			return _account;
 		},
 		updateUser: async (
-			userId: string,
-			data: Partial<User> & Record<string, any>,
-			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
+			userId,
+			data,
+			context,
+			trxAdapter
 		) => {
-			const user = await updateWithHooks<User>(
+			const user = await updateWithHooks(
 				data,
 				[
 					{
@@ -809,18 +838,18 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				"user",
 				undefined,
 				context,
-				trxAdapter,
+				trxAdapter
 			);
 			await refreshUserSessions(user);
 			return user;
 		},
 		updateUserByEmail: async (
-			email: string,
-			data: Partial<User & Record<string, any>>,
-			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
+			email,
+			data,
+			context,
+			trxAdapter
 		) => {
-			const user = await updateWithHooks<User>(
+			const user = await updateWithHooks(
 				data,
 				[
 					{
@@ -831,16 +860,16 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				"user",
 				undefined,
 				context,
-				trxAdapter,
+				trxAdapter
 			);
 			await refreshUserSessions(user);
 			return user;
 		},
 		updatePassword: async (
-			userId: string,
-			password: string,
-			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
+			userId,
+			password,
+			context
+			trxAdapter
 		) => {
 			await updateManyWithHooks(
 				{
@@ -859,11 +888,14 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				"account",
 				undefined,
 				context,
-				trxAdapter,
+				trxAdapter
 			);
 		},
-		findAccounts: async (userId: string, trxAdapter?: TransactionAdapter) => {
-			const accounts = await (trxAdapter || adapter).findMany<Account>({
+		findAccounts: async (
+			userId,
+			trxAdapter
+		) => {
+			const accounts = await (trxAdapter || adapter).findMany({
 				model: "account",
 				where: [
 					{
@@ -874,8 +906,11 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			});
 			return accounts;
 		},
-		findAccount: async (accountId: string, trxAdapter?: TransactionAdapter) => {
-			const account = await (trxAdapter || adapter).findOne<Account>({
+		findAccount: async (
+			accountId,
+			trxAdapter
+		) => {
+			const account = await (trxAdapter || adapter).findOne({
 				model: "account",
 				where: [
 					{
@@ -887,11 +922,11 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			return account;
 		},
 		findAccountByProviderId: async (
-			accountId: string,
-			providerId: string,
-			trxAdapter?: TransactionAdapter,
+			accountId,
+			providerId,
+			trxAdapter
 		) => {
-			const account = await (trxAdapter || adapter).findOne<Account>({
+			const account = await (trxAdapter || adapter).findOne({
 				model: "account",
 				where: [
 					{
@@ -907,10 +942,10 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			return account;
 		},
 		findAccountByUserId: async (
-			userId: string,
-			trxAdapter?: TransactionAdapter,
+			userId,
+			trxAdapter
 		) => {
-			const account = await (trxAdapter || adapter).findMany<Account>({
+			const account = await (trxAdapter || adapter).findMany({
 				model: "account",
 				where: [
 					{
@@ -922,26 +957,25 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			return account;
 		},
 		updateAccount: async (
-			id: string,
-			data: Partial<Account>,
-			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
+			id,
+			data,
+			context,
+			trxAdapter
 		) => {
-			const account = await updateWithHooks<Account>(
+			const account = await updateWithHooks(
 				data,
 				[{ field: "id", value: id }],
 				"account",
 				undefined,
 				context,
-				trxAdapter,
+				trxAdapter
 			);
 			return account;
 		},
 		createVerificationValue: async (
-			data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
-				Partial<Verification>,
-			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
+			data,
+			context,
+			trxAdapter
 		) => {
 			const verification = await createWithHooks(
 				{
@@ -953,30 +987,28 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 				"verification",
 				undefined,
 				context,
-				trxAdapter,
+				trxAdapter
 			);
-			return verification as Verification;
+			return verification!;
 		},
 		findVerificationValue: async (
-			identifier: string,
-			trxAdapter?: TransactionAdapter,
+			identifier,
+			trxAdapter
 		) => {
-			const verification = await (trxAdapter || adapter).findMany<Verification>(
-				{
-					model: "verification",
-					where: [
-						{
-							field: "identifier",
-							value: identifier,
-						},
-					],
-					sortBy: {
-						field: "createdAt",
-						direction: "desc",
+			const verification = await (trxAdapter || adapter).findMany({
+				model: "verification",
+				where: [
+					{
+						field: "identifier",
+						value: identifier,
 					},
-					limit: 1,
+				],
+				sortBy: {
+					field: "createdAt",
+					direction: "desc",
 				},
-			);
+				limit: 1,
+			});
 			if (!options.verification?.disableCleanup) {
 				await (trxAdapter || adapter).deleteMany({
 					model: "verification",
@@ -984,19 +1016,20 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 						{
 							field: "expiresAt",
 							value: new Date(),
+							// @ts-expect-error - Todo: Fix this - currently only allows types valid for all values
 							operator: "lt",
 						},
 					],
 				});
 			}
 			const lastVerification = verification[0];
-			return lastVerification as Verification | null;
+			return lastVerification;
 		},
 		deleteVerificationValue: async (
-			id: string,
-			trxAdapter?: TransactionAdapter,
+			id,
+			trxAdapter
 		) => {
-			await (trxAdapter || adapter).delete<Verification>({
+			await (trxAdapter || adapter).delete({
 				model: "verification",
 				where: [
 					{
@@ -1007,10 +1040,10 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			});
 		},
 		deleteVerificationByIdentifier: async (
-			identifier: string,
-			trxAdapter?: TransactionAdapter,
+			identifier,
+			trxAdapter
 		) => {
-			await (trxAdapter || adapter).delete<Verification>({
+			await (trxAdapter || adapter).delete({
 				model: "verification",
 				where: [
 					{
@@ -1021,22 +1054,20 @@ export const createInternalAdapter = <S extends typeof schema = typeof schema>(
 			});
 		},
 		updateVerificationValue: async (
-			id: string,
-			data: Partial<Verification>,
-			context?: GenericEndpointContext,
-			trxAdapter?: TransactionAdapter,
+			id,
+			data,
+			context,
+			trxAdapter
 		) => {
-			const verification = await updateWithHooks<Verification>(
+			const verification = await updateWithHooks(
 				data,
 				[{ field: "id", value: id }],
 				"verification",
 				undefined,
 				context,
-				trxAdapter,
+				trxAdapter
 			);
 			return verification;
 		},
-	};
-};
-
-export type InternalAdapter = ReturnType<typeof createInternalAdapter>;
+	} satisfies InternalAdapter<S>;
+}

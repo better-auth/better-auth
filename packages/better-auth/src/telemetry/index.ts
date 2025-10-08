@@ -1,6 +1,6 @@
 import { ENV, getBooleanEnvVar, isTest } from "../utils/env";
 import { getProjectId } from "./project-id";
-import type { BetterAuthOptions } from "../types";
+import type { AuthPluginSchema, BetterAuthOptions } from "../types";
 import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
 import { detectDatabase } from "./detectors/detect-database";
 import { detectFramework } from "./detectors/detect-framework";
@@ -10,9 +10,10 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { TelemetryContext, TelemetryEvent } from "./types";
 import { logger } from "../utils";
 import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
+import type { schema } from "../db";
 
-export async function createTelemetry(
-	options: BetterAuthOptions,
+export async function createTelemetry<S extends AuthPluginSchema<typeof schema>>(
+	options: BetterAuthOptions<S>,
 	context?: TelemetryContext,
 ) {
 	const debugEnabled =

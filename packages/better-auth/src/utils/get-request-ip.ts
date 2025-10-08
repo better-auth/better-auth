@@ -1,9 +1,10 @@
-import type { BetterAuthOptions } from "../types";
+import type { schema } from "../db";
+import type { AuthPluginSchema, BetterAuthOptions } from "../types";
 import { isDevelopment, isTest } from "../utils/env";
 
-export function getIp(
+export function getIp<S extends AuthPluginSchema<typeof schema>>(
 	req: Request | Headers,
-	options: BetterAuthOptions,
+	options: BetterAuthOptions<S>,
 ): string | null {
 	if (options.advanced?.ipAddress?.disableIpTracking) {
 		return null;

@@ -1,22 +1,31 @@
 import type { Endpoint, Middleware } from "better-call";
 import type { Migration } from "kysely";
-import type { AuthMiddleware } from "../api/call";
+import type { AuthEndpoint, AuthMiddleware } from "../api/call";
 import type { FieldAttributeFor } from "../db/field";
 import type { HookEndpointContext } from ".";
-import type { DeepPartial, LiteralString, UnionToIntersection } from "./helper";
+import type {
+	DeepPartial,
+	LiteralString,
+	MergeSchema,
+	UnionToIntersection,
+} from "./helper";
 import type { AuthContext, BetterAuthOptions } from ".";
+import type { schema } from "../db";
 
 export type AuthPluginTableSchema = {
-    fields: { [field in string]: FieldAttributeFor<any> };
-    disableMigration?: boolean;
-    modelName?: string;
-}
-
-export type AuthPluginSchema = {
-	[table in string]: AuthPluginTableSchema;
+	fields: { [field: string]: FieldAttributeFor<any> };
+	disableMigration?: boolean;
+	modelName?: string;
 };
 
-export type BetterAuthPlugin<T extends AuthPluginSchema> = {
+export type AuthPluginSchema<B extends AuthPluginSchema = {}> = B & {
+	[K in string]: AuthPluginTableSchema;
+};
+
+export type BetterAuthPlugin<
+	S extends AuthPluginSchema = {},
+	T extends MergeSchema<typeof schema, S> = MergeSchema<typeof schema, S>
+> = {
 	id: LiteralString;
 	/**
 	 * The init function is called when the plugin is initialized.
@@ -27,7 +36,7 @@ export type BetterAuthPlugin<T extends AuthPluginSchema> = {
 		options?: Partial<BetterAuthOptions<T>>;
 	} | void;
 	endpoints?: {
-		[key: string]: Endpoint;
+		[key: string]: AuthEndpoint<T>;
 	};
 	middlewares?: {
 		path: string;
@@ -35,7 +44,7 @@ export type BetterAuthPlugin<T extends AuthPluginSchema> = {
 	}[];
 	onRequest?: (
 		request: Request,
-		ctx: AuthContext<T>,
+		ctx: AuthContext<T>
 	) => Promise<
 		| {
 				response: Response;
@@ -47,17 +56,17 @@ export type BetterAuthPlugin<T extends AuthPluginSchema> = {
 	>;
 	onResponse?: (
 		response: Response,
-		ctx: AuthContext<T>,
+		ctx: AuthContext<T>
 	) => Promise<{
 		response: Response;
 	} | void>;
 	hooks?: {
 		before?: {
-			matcher: (context: HookEndpointContext) => boolean;
+			matcher: (context: HookEndpointContext<T>) => boolean;
 			handler: AuthMiddleware;
 		}[];
 		after?: {
-			matcher: (context: HookEndpointContext) => boolean;
+			matcher: (context: HookEndpointContext<T>) => boolean;
 			handler: AuthMiddleware;
 		}[];
 	};
@@ -88,7 +97,7 @@ export type BetterAuthPlugin<T extends AuthPluginSchema> = {
 	 * } as AuthPluginSchema
 	 * ```
 	 */
-	schema?: T;
+	schema?: S;
 	/**
 	 * The migrations of the plugin. If you define schema that will automatically create
 	 * migrations for you.
@@ -130,7 +139,7 @@ export type InferOptionSchema<S extends AuthPluginSchema> = S extends Record<
 					[P in keyof Fields]?: string;
 				};
 			};
-		}
+	  }
 	: never;
 
 export type InferPluginErrorCodes<O extends BetterAuthOptions<any>> =
@@ -141,5 +150,5 @@ export type InferPluginErrorCodes<O extends BetterAuthOptions<any>> =
 						? P["$ERROR_CODES"]
 						: {}
 					: {}
-			>
+		  >
 		: {};

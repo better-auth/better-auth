@@ -5,11 +5,12 @@ import {
 	PostgresDialect,
 	SqliteDialect,
 } from "kysely";
-import type { BetterAuthOptions } from "../../types";
+import type { AuthPluginSchema, BetterAuthOptions } from "../../types";
 import type { KyselyDatabaseType } from "./types";
+import type { schema } from "../../db";
 
-export function getKyselyDatabaseType(
-	db: BetterAuthOptions["database"],
+export function getKyselyDatabaseType<S extends AuthPluginSchema>(
+	db: BetterAuthOptions<S>["database"],
 ): KyselyDatabaseType | null {
 	if (!db) {
 		return null;
@@ -50,7 +51,7 @@ export function getKyselyDatabaseType(
 	return null;
 }
 
-export const createKyselyAdapter = async (config: BetterAuthOptions) => {
+export const createKyselyAdapter = async <S extends AuthPluginSchema>(config: BetterAuthOptions<S>) => {
 	const db = config.database;
 
 	if (!db) {
@@ -71,7 +72,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 
 	if ("dialect" in db) {
 		return {
-			kysely: new Kysely<any>({ dialect: db.dialect }),
+			kysely: new Kysely<S>({ dialect: db.dialect }),
 			databaseType: db.type,
 			transaction: db.transaction,
 		};
@@ -140,7 +141,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	}
 
 	return {
-		kysely: dialect ? new Kysely<any>({ dialect }) : null,
+		kysely: dialect ? new Kysely<S>({ dialect }) : null,
 		databaseType,
 		transaction: undefined,
 	};

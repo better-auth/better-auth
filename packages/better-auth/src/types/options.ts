@@ -1,29 +1,24 @@
 import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type {
-	Account,
 	AuthPluginSchema,
 	GenericEndpointContext,
-	Session,
-	User,
-	Verification,
 } from "../types";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttributeFor, schema } from "../db";
-import type { Models, RateLimit } from "./models";
 import type { AuthContext } from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
-import type { MergeAdditionalFields, LiteralUnion, OmitId } from "./helper";
+import type { LiteralUnion, SchemaTypes, MergeSchema } from "./helper";
 import type { AdapterDebugLogs } from "../adapters";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
 
-export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
+export type BetterAuthOptions<T extends AuthPluginSchema = {}, S extends MergeSchema<typeof schema, T> = MergeSchema<typeof schema, T>> = {
 	/**
 	 * The name of the application
 	 *
@@ -113,7 +108,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 				/**
 				 * Kysely instance
 				 */
-				db: Kysely<any>;
+				db: Kysely<S>;
 				/**
 				 * Database type between postgres, mysql and sqlite
 				 */
@@ -162,7 +157,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 			 * @param token the token to send the verification email to
 			 */
 			data: {
-				user: S["user"];
+				user: SchemaTypes<S["user"]>;
 				url: string;
 				token: string;
 			},
@@ -200,13 +195,13 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 		 * @param user the user that verified their email
 		 * @param request the request object
 		 */
-		onEmailVerification?: (user: S["user"], request?: Request) => Promise<void>;
+		onEmailVerification?: (user: SchemaTypes<S["user"]>, request?: Request) => Promise<void>;
 		/**
 		 * A function that is called when a user's email is updated to verified
 		 * @param user the user that verified their email
 		 * @param request the request object
 		 */
-		afterEmailVerification?: (user: S["user"], request?: Request) => Promise<void>;
+		afterEmailVerification?: (user: SchemaTypes<S["user"]>, request?: Request) => Promise<void>;
 	};
 	/**
 	 * Email and password authentication
@@ -255,7 +250,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 			 * @param token the token to send to the user (could be used instead of sending the url
 			 * if you need to redirect the user to custom route)
 			 */
-			data: { user: S["user"], url: string; token: string },
+			data: { user: SchemaTypes<S["user"]>, url: string; token: string },
 			/**
 			 * The request object
 			 */
@@ -325,7 +320,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 		 * }
 		 * ```
 		 */
-		fields?: Partial<Record<keyof OmitId<User>, string>>;
+		fields?: Partial<Record<keyof Omit<SchemaTypes<S["user"]>, "id">, string>>;
 		/**
 		 * Additional fields for the session
 		 */
@@ -348,7 +343,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 			 */
 			sendChangeEmailVerification?: (
 				data: {
-					user: S["user"];
+					user: SchemaTypes<S["user"]>;
 					newEmail: string;
 					url: string;
 					token: string;
@@ -373,7 +368,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 			 */
 			sendDeleteAccountVerification?: (
 				data: {
-					user: User;
+					user: SchemaTypes<S["user"]>;
 					url: string;
 					token: string;
 				},
@@ -384,13 +379,13 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 			 *
 			 * to interrupt with error you can throw `APIError`
 			 */
-			beforeDelete?: (user: S["user"], request?: Request) => Promise<void>;
+			beforeDelete?: (user: SchemaTypes<S["user"]>, request?: Request) => Promise<void>;
 			/**
 			 * A function that is called after a user is deleted.
 			 *
 			 * This is useful for cleaning up user data
 			 */
-			afterDelete?: (user: S["user"], request?: Request) => Promise<void>;
+			afterDelete?: (user: SchemaTypes<S["user"]>, request?: Request) => Promise<void>;
 			/**
 			 * The expiration time for the delete token.
 			 *
@@ -415,7 +410,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 		 *  userId: "user_id"
 		 * }
 		 */
-		fields?: Partial<Record<keyof OmitId<Session>, string>>;
+		fields?: Partial<Record<keyof Omit<SchemaTypes<S["session"]>, "id">, string>>;
 		/**
 		 * Expiration time for the session token. The value
 		 * should be in seconds.
@@ -502,7 +497,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 		/**
 		 * Map fields
 		 */
-		fields?: Partial<Record<keyof OmitId<Account>, string>>;
+		fields?: Partial<Record<keyof Omit<SchemaTypes<S["account"]>, "id">, string>>;
 		/**
 		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 		 * will be updated on sign in with the latest data from the provider.
@@ -573,7 +568,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 		/**
 		 * Map verification fields
 		 */
-		fields?: Partial<Record<keyof OmitId<Verification>, string>>;
+		fields?: Partial<Record<keyof Omit<SchemaTypes<S["verification"]>, "id">, string>>;
 		/**
 		 * disable cleaning up expired values when a verification value is
 		 * fetched
@@ -656,7 +651,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 		/**
 		 * Custom field names for the rate limit table
 		 */
-		fields?: Record<keyof RateLimit, string>;
+		fields?: Record<keyof SchemaTypes<S["ratelimit"]>, string>;
 		/**
 		 * custom storage configuration.
 		 *
@@ -664,8 +659,8 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 		 * is ignored
 		 */
 		customStorage?: {
-			get: (key: string) => Promise<RateLimit | undefined>;
-			set: (key: string, value: RateLimit) => Promise<void>;
+			get: (key: string) => Promise<SchemaTypes<S["ratelimit"]> | undefined>;
+			set: (key: string, value: SchemaTypes<S["ratelimit"]>) => Promise<void>;
 		};
 	};
 	/**
@@ -780,7 +775,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 			 */
 			generateId?:
 				| ((options: {
-						model: LiteralUnion<Models, string>;
+						model: LiteralUnion<keyof S, string>;
 						size?: number;
 				  }) => string | false)
 				| false;
@@ -795,7 +790,7 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 		 */
 		generateId?:
 			| ((options: {
-					model: LiteralUnion<Models, string>;
+					model: LiteralUnion<keyof S, string>;
 					size?: number;
 			  }) => string)
 			| false;
@@ -818,21 +813,21 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					user: S["user"] & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					user: SchemaTypes<S["user"]> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<User> & Record<string, any>;
+							data: Partial<SchemaTypes<S["user"]>> & Record<string, any>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a user is created.
 				 */
 				after?: (
-					user: S["user"] & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					user: SchemaTypes<S["user"]> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<void>;
 			};
 			update?: {
@@ -842,21 +837,21 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					user: Partial<S["user"]> & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					user: Partial<SchemaTypes<S["user"]>> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<User & Record<string, any>>;
+							data: Partial<SchemaTypes<S["user"]> & Record<string, any>>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a user is updated.
 				 */
 				after?: (
-					user: User & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					user: SchemaTypes<S["user"]> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<void>;
 			};
 		};
@@ -871,21 +866,21 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					session: Session & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					session: SchemaTypes<S["session"]> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<Session> & Record<string, any>;
+							data: Partial<SchemaTypes<S["session"]>> & Record<string, any>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a session is created.
 				 */
 				after?: (
-					session: Session & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					session: SchemaTypes<S["session"]> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<void>;
 			};
 			/**
@@ -898,21 +893,21 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					session: Partial<Session> & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					session: Partial<SchemaTypes<S["session"]>> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Session & Record<string, any>;
+							data: SchemaTypes<S["session"]> & Record<string, any>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a session is updated.
 				 */
 				after?: (
-					session: Session & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					session: SchemaTypes<S["session"]> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<void>;
 			};
 		};
@@ -927,21 +922,21 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					account: Account,
-					context?: GenericEndpointContext,
+					account: SchemaTypes<S["account"]>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<Account> & Record<string, any>;
+							data: Partial<SchemaTypes<S["account"]>> & Record<string, any>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a account is created.
 				 */
 				after?: (
-					account: Account,
-					context?: GenericEndpointContext,
+					account: SchemaTypes<S["account"]>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<void>;
 			};
 			/**
@@ -954,21 +949,21 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					account: Partial<Account> & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					account: Partial<SchemaTypes<S["account"]>> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<Account & Record<string, any>>;
+							data: Partial<SchemaTypes<S["account"]> & Record<string, any>>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a account is updated.
 				 */
 				after?: (
-					account: Account & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					account: SchemaTypes<S["account"]> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<void>;
 			};
 		};
@@ -983,21 +978,21 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					verification: Verification & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					verification: SchemaTypes<S["verification"]> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<Verification> & Record<string, any>;
+							data: Partial<SchemaTypes<S["verification"]>> & Record<string, any>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a verification is created.
 				 */
 				after?: (
-					verification: Verification & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					verification: SchemaTypes<S["verification"]> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<void>;
 			};
 			update?: {
@@ -1007,21 +1002,21 @@ export type BetterAuthOptions<S extends AuthPluginSchema = typeof schema> = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					verification: Partial<Verification> & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					verification: Partial<SchemaTypes<S["verification"]>> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<Verification & Record<string, any>>;
+							data: Partial<SchemaTypes<S["verification"]> & Record<string, any>>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a verification is updated.
 				 */
 				after?: (
-					verification: Verification & Record<string, unknown>,
-					context?: GenericEndpointContext,
+					verification: SchemaTypes<S["verification"]> & Record<string, unknown>,
+					context?: GenericEndpointContext<S>,
 				) => Promise<void>;
 			};
 		};

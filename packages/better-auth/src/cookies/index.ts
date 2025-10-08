@@ -1,6 +1,6 @@
 import type { CookieOptions } from "better-call";
 import { BetterAuthError } from "../error";
-import type { Session, User } from "../types";
+import type { AuthPluginSchema, SchemaTypes, Session, User } from "../types";
 import type { GenericEndpointContext } from "../types/context";
 import type { BetterAuthOptions } from "../types/options";
 import { getDate } from "../utils/date";
@@ -12,7 +12,7 @@ import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
 import { binary } from "@better-auth/utils/binary";
 
-export function createCookieGetter(options: BetterAuthOptions) {
+export function createCookieGetter<S extends AuthPluginSchema>(options: BetterAuthOptions<S>) {	
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
@@ -62,7 +62,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	return createCookie;
 }
 
-export function getCookies(options: BetterAuthOptions) {
+export function getCookies<S extends AuthPluginSchema>(options: BetterAuthOptions<S>) {
 	const createCookie = createCookieGetter(options);
 	const sessionMaxAge = options.session?.expiresIn || ms("7d") / 1000;
 	const sessionToken = createCookie("session_token", {
@@ -94,11 +94,11 @@ export function getCookies(options: BetterAuthOptions) {
 
 export type BetterAuthCookies = ReturnType<typeof getCookies>;
 
-export async function setCookieCache(
-	ctx: GenericEndpointContext,
+export async function setCookieCache<S extends AuthPluginSchema>(
+	ctx: GenericEndpointContext<S>,
 	session: {
-		session: Session & Record<string, any>;
-		user: User;
+		session: SchemaTypes<S["session"]> & Record<string, any>;
+		user: SchemaTypes<S["user"]>;
 	},
 	dontRememberMe: boolean,
 ) {
@@ -153,11 +153,11 @@ export async function setCookieCache(
 	}
 }
 
-export async function setSessionCookie(
-	ctx: GenericEndpointContext,
+export async function setSessionCookie<S extends AuthPluginSchema>(
+	ctx: GenericEndpointContext<S>,
 	session: {
-		session: Session & Record<string, any>;
-		user: User;
+		session: SchemaTypes<S["session"]> & Record<string, any>;
+		user: SchemaTypes<S["user"]>;
 	},
 	dontRememberMe?: boolean,
 	overrides?: Partial<CookieOptions>,
@@ -214,8 +214,8 @@ export async function setSessionCookie(
 	}
 }
 
-export function deleteSessionCookie(
-	ctx: GenericEndpointContext,
+export function deleteSessionCookie<S extends AuthPluginSchema>(
+	ctx: GenericEndpointContext<S>,
 	skipDontRememberMe?: boolean,
 ) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {

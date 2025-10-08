@@ -1,8 +1,9 @@
 import { APIError } from "better-call";
 import type { GenericEndpointContext } from "../types/context";
+import type { AuthPluginSchema } from "../plugins";
 
-export async function validatePassword(
-	ctx: GenericEndpointContext,
+export async function validatePassword<S extends AuthPluginSchema>(
+	ctx: GenericEndpointContext<S>,
 	data: {
 		password: string;
 		userId: string;
@@ -23,7 +24,7 @@ export async function validatePassword(
 	return compare;
 }
 
-export async function checkPassword(userId: string, c: GenericEndpointContext) {
+export async function checkPassword<S extends AuthPluginSchema>(userId: string, c: GenericEndpointContext<S>) {
 	const accounts = await c.context.internalAdapter.findAccounts(userId);
 	const credentialAccount = accounts?.find(
 		(account) => account.providerId === "credential",

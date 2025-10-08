@@ -1,10 +1,10 @@
 import { parseCookies } from "../cookies";
-import type { AuthContext } from "../types";
+import type { AuthContext, AuthPluginSchema } from "../types";
 
-export const checkAuthCookie = async (
+export const checkAuthCookie = async <S extends AuthPluginSchema>(
 	request: Request | Headers,
 	auth: {
-		$context: Promise<AuthContext>;
+		$context: Promise<AuthContext<S>>;
 	},
 ) => {
 	const headers = request instanceof Headers ? request : request.headers;

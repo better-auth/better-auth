@@ -1,4 +1,4 @@
-import type { Session, User } from "../../types";
+import type { MergeSchema, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
 import type { OrganizationOptions } from "./types";
 import type {
@@ -17,10 +17,10 @@ import type {
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../init";
 import parseJSON from "../../client/parser";
-import { type InferAdditionalFieldsFromPluginOptions } from "../../db";
+import { schema, type InferAdditionalFieldsFromPluginOptions } from "../../db";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
-	context: AuthContext,
+	context: AuthContext<MergeSchema<typeof schema, O["schema"]>>,
 	options?: O,
 ) => {
 	const adapter = context.adapter;
@@ -188,7 +188,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 		}) => {
 			const [member, user] = await Promise.all([
-				await adapter.findOne<Member>({
+				await adapter.findOne({
 					model: "member",
 					where: [
 						{
@@ -201,7 +201,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						},
 					],
 				}),
-				await adapter.findOne<User>({
+				await adapter.findOne({
 					model: "user",
 					where: [
 						{
