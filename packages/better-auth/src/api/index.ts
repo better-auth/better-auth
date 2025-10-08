@@ -152,10 +152,10 @@ To resolve this, you can:
 	}
 }
 
-export function getEndpoints<Option extends BetterAuthOptions<S>, S extends AuthPluginSchema>(
-	ctx: Promise<AuthContext<S>> | AuthContext<S>,
-	options: Option,
-) {
+export function getEndpoints<
+	Option extends BetterAuthOptions<S>,
+	S extends AuthPluginSchema,
+>(ctx: Promise<AuthContext<S>> | AuthContext<S>, options: Option) {
 	const pluginEndpoints = options.plugins?.reduce(
 		(acc, plugin) => {
 			return {
@@ -245,7 +245,10 @@ export function getEndpoints<Option extends BetterAuthOptions<S>, S extends Auth
 		middlewares,
 	};
 }
-export const router = <Option extends BetterAuthOptions<S>, S extends AuthPluginSchema>(
+export const router = <
+	Option extends BetterAuthOptions<S>,
+	S extends AuthPluginSchema,
+>(
 	ctx: AuthContext<S>,
 	options: Option,
 ) => {

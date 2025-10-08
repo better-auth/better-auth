@@ -7,23 +7,23 @@ import z from "zod";
 import { field, type schema } from "../db";
 
 const dbSchema = {
-		user: {
-			fields: {
-				testField: field("string", {
-					required: false,
-				}),
-				testField2: field("number", {
-					required: false,
-				}),
-				testField3: field("string", {
-					returned: false,
-				}),
-				testField4: field("string", {
-					defaultValue: "test",
-				}),
-			},
+	user: {
+		fields: {
+			testField: field("string", {
+				required: false,
+			}),
+			testField2: field("number", {
+				required: false,
+			}),
+			testField3: field("string", {
+				returned: false,
+			}),
+			testField4: field("string", {
+				defaultValue: "test",
+			}),
 		},
-	} satisfies AuthPluginSchema
+	},
+} satisfies AuthPluginSchema;
 
 const serverPlugin = {
 	id: "test",
@@ -44,8 +44,8 @@ const serverPlugin = {
 					data: {
 						testField4: "abc",
 						r: true,
-					}
-				})
+					},
+				});
 				return {
 					data: "test",
 				};
@@ -61,7 +61,7 @@ const serverPlugin = {
 			},
 		),
 	},
-	schema: dbSchema
+	schema: dbSchema,
 } satisfies BetterAuthPlugin<typeof dbSchema>;
 
 export const testClientPlugin = () => {

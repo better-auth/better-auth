@@ -15,7 +15,10 @@ export interface MemoryAdapterConfig {
 	debugLogs?: AdapterDebugLogs;
 }
 
-export const memoryAdapter = <S extends AuthPluginSchema>(db: MemoryDB<S>, config?: MemoryAdapterConfig) => {
+export const memoryAdapter = <S extends AuthPluginSchema>(
+	db: MemoryDB<S>,
+	config?: MemoryAdapterConfig,
+) => {
 	let lazyOptions: BetterAuthOptions<S> | null = null;
 	let adapterCreator = createAdapterFactory<S>({
 		config: {

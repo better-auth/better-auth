@@ -6,7 +6,9 @@ import { kyselyAdapter } from "../adapters/kysely-adapter";
 import { memoryAdapter, type MemoryDB } from "../adapters/memory-adapter";
 import { logger } from "../utils";
 
-export async function getAdapter<S extends AuthPluginSchema>(options: BetterAuthOptions<S>): Promise<Adapter<S>> {
+export async function getAdapter<S extends AuthPluginSchema>(
+	options: BetterAuthOptions<S>,
+): Promise<Adapter<S>> {
 	if (!options.database) {
 		const tables = getAuthTables(options);
 		const memoryDB = Object.keys(tables).reduce<MemoryDB<S>>((acc, key) => {

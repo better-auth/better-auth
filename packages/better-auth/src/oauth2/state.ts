@@ -56,7 +56,9 @@ export async function generateState<S extends AuthPluginSchema>(
 	};
 }
 
-export async function parseState<S extends AuthPluginSchema>(c: GenericEndpointContext<S>) {
+export async function parseState<S extends AuthPluginSchema>(
+	c: GenericEndpointContext<S>,
+) {
 	const state = c.query.state || c.body.state;
 	const data = await c.context.internalAdapter.findVerificationValue(state);
 	if (!data) {

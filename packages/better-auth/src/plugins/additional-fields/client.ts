@@ -1,5 +1,9 @@
 import type { FieldAttribute, FieldAttributeFor } from "../../db";
-import type { AuthPluginTableSchema, BetterAuthClientPlugin, BetterAuthOptions } from "../../types";
+import type {
+	AuthPluginTableSchema,
+	BetterAuthClientPlugin,
+	BetterAuthOptions,
+} from "../../types";
 import type { BetterAuthPlugin } from "../../types";
 
 export const inferAdditionalFields = <
@@ -13,16 +17,20 @@ export const inferAdditionalFields = <
 		};
 	} = {},
 	S extends {
-		user?: AuthPluginTableSchema,
-		session?: AuthPluginTableSchema
+		user?: AuthPluginTableSchema;
+		session?: AuthPluginTableSchema;
 	} = {
-		user: A["user"] extends undefined ? undefined : {
-			fields: A["user"]
-		} & AuthPluginTableSchema,
-		session: A["session"] extends undefined ? undefined : {
-			fields: A["session"]
-		} & AuthPluginTableSchema
-	}
+		user: A["user"] extends undefined
+			? undefined
+			: {
+					fields: A["user"];
+				} & AuthPluginTableSchema;
+		session: A["session"] extends undefined
+			? undefined
+			: {
+					fields: A["session"];
+				} & AuthPluginTableSchema;
+	},
 >(
 	schema?: A,
 ) => {
@@ -35,10 +43,10 @@ export const inferAdditionalFields = <
 			: never;
 
 	type Plugin = Opts extends never
-		?  {
-					id: "additional-fields-client";
-					schema: S
-				}
+		? {
+				id: "additional-fields-client";
+				schema: S;
+			}
 		: Opts extends BetterAuthOptions<S>
 			? {
 					id: "additional-fields";

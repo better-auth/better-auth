@@ -10,7 +10,7 @@ export const coreSchema = {
 	id: field("string"),
 	createdAt: field("date", { defaultValue: () => new Date() }),
 	updatedAt: field("date", { defaultValue: () => new Date() }),
-}
+};
 
 export const accountSchema = {
 	fields: {
@@ -37,24 +37,25 @@ export const accountSchema = {
 		 */
 		password: field("string", { required: false }),
 
-
-		...coreSchema
+		...coreSchema,
 	},
 
-	modelName: "account"
-}
+	modelName: "account",
+};
 
 export const userSchema = {
 	fields: {
-		email: field("string", { transform: { input: (val) => val.toLowerCase() } }),
+		email: field("string", {
+			transform: { input: (val) => val.toLowerCase() },
+		}),
 		emailVerified: field("boolean", { defaultValue: false }),
 		name: field("string"),
 		image: field("string", { required: false }),
 
-		...coreSchema
+		...coreSchema,
 	},
-	modelName: "user"
-}
+	modelName: "user",
+};
 
 export const sessionSchema = {
 	fields: {
@@ -64,10 +65,10 @@ export const sessionSchema = {
 		ipAddress: field("string", { required: false }),
 		userAgent: field("string", { required: false }),
 
-		...coreSchema
+		...coreSchema,
 	},
-	modelName: "session"
-}
+	modelName: "session",
+};
 
 export const verificationSchema = {
 	fields: {
@@ -75,10 +76,10 @@ export const verificationSchema = {
 		expiresAt: field("date"),
 		identifier: field("string"),
 
-		...coreSchema
+		...coreSchema,
 	},
-	modelName: "verification"
-}
+	modelName: "verification",
+};
 
 export const rateLimitSchema = {
 	fields: {
@@ -86,20 +87,23 @@ export const rateLimitSchema = {
 		count: field("number"),
 		lastRequest: field("number", { bigint: true }),
 
-		...coreSchema
+		...coreSchema,
 	},
-	modelName: "rateLimit"
-}
+	modelName: "rateLimit",
+};
 
 export const schema = {
 	account: accountSchema,
 	user: userSchema,
 	session: sessionSchema,
 	verification: verificationSchema,
-	ratelimit: rateLimitSchema
+	ratelimit: rateLimitSchema,
 };
 
-export function parseOutputData<S extends AuthPluginSchema, M extends keyof S & string> (
+export function parseOutputData<
+	S extends AuthPluginSchema,
+	M extends keyof S & string,
+>(
 	data: SchemaTypes<S[M]>,
 	schema: {
 		fields: S[M]["fields"];
@@ -122,7 +126,10 @@ export function parseOutputData<S extends AuthPluginSchema, M extends keyof S & 
 	return parsedData;
 }
 
-export function getAllFields<S extends AuthPluginSchema, T extends keyof S>(options: BetterAuthOptions<S>, table: T): S[T]["fields"] {
+export function getAllFields<S extends AuthPluginSchema, T extends keyof S>(
+	options: BetterAuthOptions<S>,
+	table: T,
+): S[T]["fields"] {
 	let schema: Record<string, FieldAttributeFor<any>> = {
 		...(table === "user" ? options.user?.additionalFields : {}),
 		...(table === "session" ? options.session?.additionalFields : {}),
@@ -138,7 +145,10 @@ export function getAllFields<S extends AuthPluginSchema, T extends keyof S>(opti
 	return schema;
 }
 
-export function parseUserOutput<S extends AuthPluginSchema<SCHEMA>>(options: BetterAuthOptions<S>, user: SchemaTypes<S["user"]>) {
+export function parseUserOutput<S extends AuthPluginSchema<SCHEMA>>(
+	options: BetterAuthOptions<S>,
+	user: SchemaTypes<S["user"]>,
+) {
 	const schema = getAllFields(options, "user");
 	return parseOutputData(user, { fields: schema });
 }

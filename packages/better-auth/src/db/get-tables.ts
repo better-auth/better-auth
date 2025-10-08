@@ -1,33 +1,34 @@
-import type { AuthPluginSchema, BetterAuthOptions, OptionalSchemaId } from "../types";
+import type {
+	AuthPluginSchema,
+	BetterAuthOptions,
+	OptionalSchemaId,
+} from "../types";
 import type { schema } from "./schema";
 
 export type BetterAuthDbSchema<S extends AuthPluginSchema = typeof schema> = {
 	[table in keyof S]: S[table] & {
 		order?: number;
-	}
+	};
 };
 
 // TODO: Make type definitions for schema based on return type of this or a type with same logic
 export const getAuthTables = <S extends AuthPluginSchema>(
 	options: BetterAuthOptions<S>,
 ): OptionalSchemaId<BetterAuthDbSchema<S>> => {
-	const pluginSchema = (options.plugins ?? []).reduce(
-		(acc, plugin) => {
-			const schema = plugin.schema;
-			if (!schema) return acc;
-			for (const [key, value] of Object.entries(schema)) {
-				acc[key] = {
-					fields: {
-						...acc[key]?.fields,
-						...value.fields,
-					},
-					modelName: value.modelName || key,
-				};
-			}
-			return acc;
-		},
-		{} as AuthPluginSchema
-	);
+	const pluginSchema = (options.plugins ?? []).reduce((acc, plugin) => {
+		const schema = plugin.schema;
+		if (!schema) return acc;
+		for (const [key, value] of Object.entries(schema)) {
+			acc[key] = {
+				fields: {
+					...acc[key]?.fields,
+					...value.fields,
+				},
+				modelName: value.modelName || key,
+			};
+		}
+		return acc;
+	}, {} as AuthPluginSchema);
 
 	const shouldAddRateLimitTable = options.rateLimit?.storage === "database";
 	const rateLimitTable = {

@@ -24,7 +24,10 @@ export const shimContext = <T extends Record<string, any>>(
 	return shimmedObj as T;
 };
 
-export const shimEndpoint = <S extends AuthPluginSchema>(ctx: AuthContext<S>, value: any) => {
+export const shimEndpoint = <S extends AuthPluginSchema>(
+	ctx: AuthContext<S>,
+	value: any,
+) => {
 	return async (context: any) => {
 		for (const plugin of ctx.options.plugins || []) {
 			if (plugin.hooks?.before) {

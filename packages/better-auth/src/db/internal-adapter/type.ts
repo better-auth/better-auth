@@ -21,7 +21,7 @@ export type InternalAdapter<S extends AuthPluginSchema<typeof schema>> = {
 		>,
 		context?:
 			| GenericEndpointContext<S>
-			| EndpointContext<any, any, AuthContext<S>>
+			| EndpointContext<any, any, AuthContext<S>>,
 	) => Promise<{
 		user: SchemaTypes<S["user"]>;
 		account: SchemaTypes<S["account"]>;
@@ -36,22 +36,19 @@ export type InternalAdapter<S extends AuthPluginSchema<typeof schema>> = {
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["user"]>>;
 	createAccount: (
-		account: Omit<
-			SchemaTypes<S["account"]>,
-			"id" | "createdAt" | "updatedAt"
-		> &
+		account: Omit<SchemaTypes<S["account"]>, "id" | "createdAt" | "updatedAt"> &
 			Partial<SchemaTypes<S["account"]>>,
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["account"]>>;
 	listSessions: (
 		userId: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["session"]>[]>;
 	listUsers: (
 		limit?: number,
@@ -61,36 +58,34 @@ export type InternalAdapter<S extends AuthPluginSchema<typeof schema>> = {
 			direction: "asc" | "desc";
 		},
 		where?: Where<S["user"], keyof S["user"]["fields"] & string>[],
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["user"]>[]>;
 	countTotalUsers: (
 		where?: Where<S["user"], keyof S["user"]["fields"] & string>[],
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<number>;
 	deleteUser: (
 		userId: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<void>;
 	createSession: (
 		userId: string,
-		ctx:
-			| GenericEndpointContext<S>
-			| EndpointContext<any, any, AuthContext<S>>,
+		ctx: GenericEndpointContext<S> | EndpointContext<any, any, AuthContext<S>>,
 		dontRememberMe?: boolean,
 		override?: Partial<SchemaTypes<S["session"]>>,
 		overrideAll?: boolean,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["session"]>>;
 	findSession: (
 		token: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<{
 		session: SchemaTypes<S["session"]> & Record<string, any>;
 		user: SchemaTypes<S["user"]> & Record<string, any>;
 	} | null>;
 	findSessions: (
 		sessionTokens: string[],
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => {
 		session: SchemaTypes<S["session"]>;
 		user: SchemaTypes<S["user"]>;
@@ -101,29 +96,29 @@ export type InternalAdapter<S extends AuthPluginSchema<typeof schema>> = {
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => SchemaTypes<S["session"]>;
 	deleteSession: (
 		token: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<void>;
 	deleteAccounts: (
 		userId: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<void>;
 	deleteAccount: (
 		accountId: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<void>;
 	deleteSessions: (
 		userIdOrSessionTokens: string | string[],
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<void>;
 	findOAuthUser: (
 		email: string,
 		accountId: string,
 		providerId: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<{
 		user: SchemaTypes<S["user"]>;
 		accounts: SchemaTypes<S["account"]>[];
@@ -131,14 +126,14 @@ export type InternalAdapter<S extends AuthPluginSchema<typeof schema>> = {
 	findUserByEmail: (
 		email: string,
 		options?: { includeAccounts: boolean },
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<{
 		user: SchemaTypes<S["user"]>;
 		accounts: SchemaTypes<S["account"]>[];
 	} | null>;
 	findUserById: (
 		userId: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["user"]> | null>;
 	linkAccount: (
 		account: Omit<
@@ -149,7 +144,7 @@ export type InternalAdapter<S extends AuthPluginSchema<typeof schema>> = {
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["account"]>>;
 	updateUser: (
 		userId: string,
@@ -157,7 +152,7 @@ export type InternalAdapter<S extends AuthPluginSchema<typeof schema>> = {
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["user"]> | null>;
 	updateUserByEmail: (
 		email: string,
@@ -165,7 +160,7 @@ export type InternalAdapter<S extends AuthPluginSchema<typeof schema>> = {
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["user"]> | null>;
 	updatePassword: (
 		userId: string,
@@ -173,24 +168,24 @@ export type InternalAdapter<S extends AuthPluginSchema<typeof schema>> = {
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<void>;
 	findAccounts: (
 		userId: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["account"]>[]>;
 	findAccount: (
 		accountId: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["account"]> | null>;
 	findAccountByProviderId: (
 		accountId: string,
 		providerId: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["account"]> | null>;
 	findAccountByUserId: (
 		userId: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["account"]>[]>;
 	updateAccount: (
 		id: string,
@@ -198,7 +193,7 @@ export type InternalAdapter<S extends AuthPluginSchema<typeof schema>> = {
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["account"]> | null>;
 	createVerificationValue: (
 		data: Omit<
@@ -209,19 +204,19 @@ export type InternalAdapter<S extends AuthPluginSchema<typeof schema>> = {
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["verification"]>>;
 	findVerificationValue: (
 		identifier: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["verification"]> | null>;
 	deleteVerificationValue: (
 		id: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<void>;
 	deleteVerificationByIdentifier: (
 		identifier: string,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<void>;
 	updateVerificationValue: (
 		id: string,
@@ -229,11 +224,13 @@ export type InternalAdapter<S extends AuthPluginSchema<typeof schema>> = {
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) => Promise<SchemaTypes<S["verification"]> | null>;
 };
 
-export type InternalAdapterInitializer<S extends AuthPluginSchema<typeof schema>> = (
+export type InternalAdapterInitializer<
+	S extends AuthPluginSchema<typeof schema>,
+> = (
 	adapter: Adapter<S>,
 	ctx: {
 		options: Omit<BetterAuthOptions<S>, "logger">;
@@ -241,4 +238,4 @@ export type InternalAdapterInitializer<S extends AuthPluginSchema<typeof schema>
 		hooks: Exclude<BetterAuthOptions<S>["databaseHooks"], undefined>[];
 		generateId: AuthContext<S>["generateId"];
 	},
-) => InternalAdapter<S>
+) => InternalAdapter<S>;

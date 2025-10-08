@@ -6,7 +6,11 @@ import {
 	type InputContext,
 } from "better-call";
 import type { AuthEndpoint, AuthMiddleware } from "./call";
-import type { AuthContext, AuthPluginSchema, HookEndpointContext } from "../types";
+import type {
+	AuthContext,
+	AuthPluginSchema,
+	HookEndpointContext,
+} from "../types";
 import { createDefu } from "defu";
 import { shouldPublishLog } from "../utils";
 import type { schema } from "../db";
@@ -27,10 +31,10 @@ const defuReplaceArrays = createDefu((obj, key, value) => {
 	}
 });
 
-export function toAuthEndpoints<E extends Record<string, AuthEndpoint<S>>, S extends AuthPluginSchema>(
-	endpoints: E,
-	ctx: AuthContext<S> | Promise<AuthContext<S>>,
-) {
+export function toAuthEndpoints<
+	E extends Record<string, AuthEndpoint<S>>,
+	S extends AuthPluginSchema,
+>(endpoints: E, ctx: AuthContext<S> | Promise<AuthContext<S>>) {
 	const api: Record<
 		string,
 		((

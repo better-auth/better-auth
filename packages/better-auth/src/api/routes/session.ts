@@ -45,7 +45,10 @@ export const getSessionQuerySchema = z.optional(
 	}),
 );
 
-export const getSession = <Option extends BetterAuthOptions<S>, S extends AuthPluginSchema>() =>
+export const getSession = <
+	Option extends BetterAuthOptions<S>,
+	S extends AuthPluginSchema,
+>() =>
 	createAuthEndpoint(
 		"/get-session",
 		{

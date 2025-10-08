@@ -3,10 +3,9 @@ import type { SocialProviders } from "../../social-providers";
 import type { AuthPluginSchema, BetterAuthOptions } from "../../types";
 import type { TelemetryContext } from "../types";
 
-export function getTelemetryAuthConfig<S extends AuthPluginSchema<typeof schema>>(
-	options: BetterAuthOptions<S>,
-	context?: TelemetryContext,
-) {
+export function getTelemetryAuthConfig<
+	S extends AuthPluginSchema<typeof schema>,
+>(options: BetterAuthOptions<S>, context?: TelemetryContext) {
 	return {
 		database: context?.database,
 		adapter: context?.adapter,

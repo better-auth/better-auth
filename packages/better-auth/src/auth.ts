@@ -18,8 +18,11 @@ import type { schema } from "./db";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
 
-export const betterAuth = <O extends BetterAuthOptions<S>, S extends typeof schema>(
-	options: O
+export const betterAuth = <
+	O extends BetterAuthOptions<S>,
+	S extends typeof schema,
+>(
+	options: O,
 ) => {
 	const authContext = init(options);
 	const { api } = getEndpoints(authContext, options);

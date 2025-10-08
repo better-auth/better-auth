@@ -22,14 +22,14 @@ export function getWithHooks<S extends AuthPluginSchema>(
 	type BaseModels = Extract<
 		Models,
 		"user" | "account" | "session" | "verification"
-		>;
-	
+	>;
+
 	async function createWithHooks<
 		M extends BaseModels,
 		D extends Omit<SchemaTypes<S[M], true>, "id"> = Omit<
 			SchemaTypes<S[M]>,
 			"id"
-		>
+		>,
 	>(
 		data: D,
 		model: M,
@@ -40,7 +40,7 @@ export function getWithHooks<S extends AuthPluginSchema>(
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	): Promise<SchemaTypes<S[M]> | null> {
 		let actualData = data;
 		for (const hook of hooks || []) {
@@ -69,7 +69,7 @@ export function getWithHooks<S extends AuthPluginSchema>(
 						model,
 						data: actualData,
 						forceAllowId: true,
-				  })
+					})
 				: customCreated;
 
 		for (const hook of hooks || []) {
@@ -85,8 +85,8 @@ export function getWithHooks<S extends AuthPluginSchema>(
 	async function updateWithHooks<
 		M extends BaseModels,
 		R extends any,
-		D extends Partial<SchemaTypes<S[M]>> = Partial<SchemaTypes<S[M]>>
-		>(
+		D extends Partial<SchemaTypes<S[M]>> = Partial<SchemaTypes<S[M]>>,
+	>(
 		data: D,
 		where: Where<S[M], keyof S[M]["fields"] & string>[],
 		model: M,
@@ -97,7 +97,7 @@ export function getWithHooks<S extends AuthPluginSchema>(
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) {
 		let actualData = data;
 
@@ -123,7 +123,7 @@ export function getWithHooks<S extends AuthPluginSchema>(
 						model,
 						update: actualData,
 						where,
-				  })
+					})
 				: customUpdated;
 
 		for (const hook of hooks || []) {
@@ -137,7 +137,7 @@ export function getWithHooks<S extends AuthPluginSchema>(
 
 	async function updateManyWithHooks<
 		M extends BaseModels,
-		D extends Partial<SchemaTypes<S[M]>> = Partial<SchemaTypes<S[M]>>
+		D extends Partial<SchemaTypes<S[M]>> = Partial<SchemaTypes<S[M]>>,
 	>(
 		data: D,
 		where: Where<S[M], keyof S[M]["fields"] & string>[],
@@ -149,7 +149,7 @@ export function getWithHooks<S extends AuthPluginSchema>(
 		context?:
 			| GenericEndpointContext<S>
 			| EndpointContext<any, any, AuthContext<S>>,
-		trxAdapter?: TransactionAdapter<S>
+		trxAdapter?: TransactionAdapter<S>,
 	) {
 		let actualData = data;
 
@@ -175,7 +175,7 @@ export function getWithHooks<S extends AuthPluginSchema>(
 						model,
 						update: actualData,
 						where,
-				  })
+					})
 				: customUpdated;
 
 		for (const hook of hooks || []) {

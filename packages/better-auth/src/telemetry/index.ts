@@ -12,10 +12,9 @@ import { logger } from "../utils";
 import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
 import type { schema } from "../db";
 
-export async function createTelemetry<S extends AuthPluginSchema<typeof schema>>(
-	options: BetterAuthOptions<S>,
-	context?: TelemetryContext,
-) {
+export async function createTelemetry<
+	S extends AuthPluginSchema<typeof schema>,
+>(options: BetterAuthOptions<S>, context?: TelemetryContext) {
 	const debugEnabled =
 		options.telemetry?.debug ||
 		getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);

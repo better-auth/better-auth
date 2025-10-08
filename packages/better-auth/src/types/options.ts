@@ -1,8 +1,5 @@
 import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
-import type {
-	AuthPluginSchema,
-	GenericEndpointContext,
-} from "../types";
+import type { AuthPluginSchema, GenericEndpointContext } from "../types";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AdapterInstance, SecondaryStorage } from "./adapter";
@@ -18,7 +15,10 @@ import type { AdapterDebugLogs } from "../adapters";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
 
-export type BetterAuthOptions<T extends AuthPluginSchema = {}, S extends MergeSchema<typeof schema, T> = MergeSchema<typeof schema, T>> = {
+export type BetterAuthOptions<
+	T extends AuthPluginSchema = {},
+	S extends MergeSchema<typeof schema, T> = MergeSchema<typeof schema, T>,
+> = {
 	/**
 	 * The name of the application
 	 *
@@ -195,13 +195,19 @@ export type BetterAuthOptions<T extends AuthPluginSchema = {}, S extends MergeSc
 		 * @param user the user that verified their email
 		 * @param request the request object
 		 */
-		onEmailVerification?: (user: SchemaTypes<S["user"]>, request?: Request) => Promise<void>;
+		onEmailVerification?: (
+			user: SchemaTypes<S["user"]>,
+			request?: Request,
+		) => Promise<void>;
 		/**
 		 * A function that is called when a user's email is updated to verified
 		 * @param user the user that verified their email
 		 * @param request the request object
 		 */
-		afterEmailVerification?: (user: SchemaTypes<S["user"]>, request?: Request) => Promise<void>;
+		afterEmailVerification?: (
+			user: SchemaTypes<S["user"]>,
+			request?: Request,
+		) => Promise<void>;
 	};
 	/**
 	 * Email and password authentication
@@ -250,7 +256,7 @@ export type BetterAuthOptions<T extends AuthPluginSchema = {}, S extends MergeSc
 			 * @param token the token to send to the user (could be used instead of sending the url
 			 * if you need to redirect the user to custom route)
 			 */
-			data: { user: SchemaTypes<S["user"]>, url: string; token: string },
+			data: { user: SchemaTypes<S["user"]>; url: string; token: string },
 			/**
 			 * The request object
 			 */
@@ -379,13 +385,19 @@ export type BetterAuthOptions<T extends AuthPluginSchema = {}, S extends MergeSc
 			 *
 			 * to interrupt with error you can throw `APIError`
 			 */
-			beforeDelete?: (user: SchemaTypes<S["user"]>, request?: Request) => Promise<void>;
+			beforeDelete?: (
+				user: SchemaTypes<S["user"]>,
+				request?: Request,
+			) => Promise<void>;
 			/**
 			 * A function that is called after a user is deleted.
 			 *
 			 * This is useful for cleaning up user data
 			 */
-			afterDelete?: (user: SchemaTypes<S["user"]>, request?: Request) => Promise<void>;
+			afterDelete?: (
+				user: SchemaTypes<S["user"]>,
+				request?: Request,
+			) => Promise<void>;
 			/**
 			 * The expiration time for the delete token.
 			 *
@@ -410,7 +422,9 @@ export type BetterAuthOptions<T extends AuthPluginSchema = {}, S extends MergeSc
 		 *  userId: "user_id"
 		 * }
 		 */
-		fields?: Partial<Record<keyof Omit<SchemaTypes<S["session"]>, "id">, string>>;
+		fields?: Partial<
+			Record<keyof Omit<SchemaTypes<S["session"]>, "id">, string>
+		>;
 		/**
 		 * Expiration time for the session token. The value
 		 * should be in seconds.
@@ -497,7 +511,9 @@ export type BetterAuthOptions<T extends AuthPluginSchema = {}, S extends MergeSc
 		/**
 		 * Map fields
 		 */
-		fields?: Partial<Record<keyof Omit<SchemaTypes<S["account"]>, "id">, string>>;
+		fields?: Partial<
+			Record<keyof Omit<SchemaTypes<S["account"]>, "id">, string>
+		>;
 		/**
 		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 		 * will be updated on sign in with the latest data from the provider.
@@ -568,7 +584,9 @@ export type BetterAuthOptions<T extends AuthPluginSchema = {}, S extends MergeSc
 		/**
 		 * Map verification fields
 		 */
-		fields?: Partial<Record<keyof Omit<SchemaTypes<S["verification"]>, "id">, string>>;
+		fields?: Partial<
+			Record<keyof Omit<SchemaTypes<S["verification"]>, "id">, string>
+		>;
 		/**
 		 * disable cleaning up expired values when a verification value is
 		 * fetched
@@ -978,20 +996,23 @@ export type BetterAuthOptions<T extends AuthPluginSchema = {}, S extends MergeSc
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					verification: SchemaTypes<S["verification"]> & Record<string, unknown>,
+					verification: SchemaTypes<S["verification"]> &
+						Record<string, unknown>,
 					context?: GenericEndpointContext<S>,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<SchemaTypes<S["verification"]>> & Record<string, any>;
+							data: Partial<SchemaTypes<S["verification"]>> &
+								Record<string, any>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a verification is created.
 				 */
 				after?: (
-					verification: SchemaTypes<S["verification"]> & Record<string, unknown>,
+					verification: SchemaTypes<S["verification"]> &
+						Record<string, unknown>,
 					context?: GenericEndpointContext<S>,
 				) => Promise<void>;
 			};
@@ -1002,20 +1023,24 @@ export type BetterAuthOptions<T extends AuthPluginSchema = {}, S extends MergeSc
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					verification: Partial<SchemaTypes<S["verification"]>> & Record<string, unknown>,
+					verification: Partial<SchemaTypes<S["verification"]>> &
+						Record<string, unknown>,
 					context?: GenericEndpointContext<S>,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<SchemaTypes<S["verification"]> & Record<string, any>>;
+							data: Partial<
+								SchemaTypes<S["verification"]> & Record<string, any>
+							>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a verification is updated.
 				 */
 				after?: (
-					verification: SchemaTypes<S["verification"]> & Record<string, unknown>,
+					verification: SchemaTypes<S["verification"]> &
+						Record<string, unknown>,
 					context?: GenericEndpointContext<S>,
 				) => Promise<void>;
 			};

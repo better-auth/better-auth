@@ -24,7 +24,7 @@ export type AuthPluginSchema<B extends AuthPluginSchema = {}> = B & {
 
 export type BetterAuthPlugin<
 	S extends AuthPluginSchema = {},
-	T extends MergeSchema<typeof schema, S> = MergeSchema<typeof schema, S>
+	T extends MergeSchema<typeof schema, S> = MergeSchema<typeof schema, S>,
 > = {
 	id: LiteralString;
 	/**
@@ -44,7 +44,7 @@ export type BetterAuthPlugin<
 	}[];
 	onRequest?: (
 		request: Request,
-		ctx: AuthContext<T>
+		ctx: AuthContext<T>,
 	) => Promise<
 		| {
 				response: Response;
@@ -56,7 +56,7 @@ export type BetterAuthPlugin<
 	>;
 	onResponse?: (
 		response: Response,
-		ctx: AuthContext<T>
+		ctx: AuthContext<T>,
 	) => Promise<{
 		response: Response;
 	} | void>;
@@ -139,7 +139,7 @@ export type InferOptionSchema<S extends AuthPluginSchema> = S extends Record<
 					[P in keyof Fields]?: string;
 				};
 			};
-	  }
+		}
 	: never;
 
 export type InferPluginErrorCodes<O extends BetterAuthOptions<any>> =
@@ -150,5 +150,5 @@ export type InferPluginErrorCodes<O extends BetterAuthOptions<any>> =
 						? P["$ERROR_CODES"]
 						: {}
 					: {}
-		  >
+			>
 		: {};

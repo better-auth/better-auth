@@ -82,7 +82,9 @@ export function matchType(
 	return expected.includes(normalize(columnDataType));
 }
 
-export async function getMigrations<S extends AuthPluginSchema>(config: BetterAuthOptions<S>) {
+export async function getMigrations<S extends AuthPluginSchema>(
+	config: BetterAuthOptions<S>,
+) {
 	const betterAuthSchema = getSchema<S>(config);
 	const logger = createLogger(config.logger);
 

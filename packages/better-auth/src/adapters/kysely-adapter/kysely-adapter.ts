@@ -4,7 +4,12 @@ import {
 	type AdapterFactoryCustomizeAdapterCreator,
 	type AdapterFactoryOptions,
 } from "../adapter-factory";
-import type { Adapter, AuthPluginSchema, BetterAuthOptions, Where } from "../../types";
+import type {
+	Adapter,
+	AuthPluginSchema,
+	BetterAuthOptions,
+	Where,
+} from "../../types";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 import { ensureUTC } from "../../utils/ensure-utc";
@@ -94,7 +99,10 @@ export const kyselyAdapter = <S extends AuthPluginSchema>(
 				res = await builder.returningAll().executeTakeFirst();
 				return res;
 			};
-			function transformValueToDB<M extends keyof typeof schema, F extends keyof S[M]["fields"]>(value: FieldPrimitive<S[M]["fields"][F]["type"]>, model: M, field: F) {
+			function transformValueToDB<
+				M extends keyof typeof schema,
+				F extends keyof S[M]["fields"],
+			>(value: FieldPrimitive<S[M]["fields"][F]["type"]>, model: M, field: F) {
 				if (field === "id") {
 					return value;
 				}

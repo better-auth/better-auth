@@ -13,7 +13,10 @@ import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
 
-export const signUpEmail = <O extends BetterAuthOptions<S>, S extends AuthPluginSchema>() =>
+export const signUpEmail = <
+	O extends BetterAuthOptions<S>,
+	S extends AuthPluginSchema,
+>() =>
 	createAuthEndpoint(
 		"/sign-up/email",
 		{

@@ -1,11 +1,18 @@
 import { APIError, createEmailVerificationToken } from "../api";
 import type { schema } from "../db";
-import type { AuthPluginSchema, GenericEndpointContext, SchemaTypes, User } from "../types";
+import type {
+	AuthPluginSchema,
+	GenericEndpointContext,
+	SchemaTypes,
+	User,
+} from "../types";
 import { logger } from "../utils";
 import { isDevelopment } from "../utils/env";
 import { setTokenUtil } from "./utils";
 
-export async function handleOAuthUserInfo<S extends AuthPluginSchema<typeof schema>>(
+export async function handleOAuthUserInfo<
+	S extends AuthPluginSchema<typeof schema>,
+>(
 	c: GenericEndpointContext<S>,
 	{
 		userInfo,
@@ -15,7 +22,10 @@ export async function handleOAuthUserInfo<S extends AuthPluginSchema<typeof sche
 		overrideUserInfo,
 	}: {
 		userInfo: Omit<SchemaTypes<S["user"], true>, "createdAt" | "updatedAt">;
-		account: Omit<SchemaTypes<S["account"]>, "id" | "userId" | "createdAt" | "updatedAt">;
+		account: Omit<
+			SchemaTypes<S["account"]>,
+			"id" | "userId" | "createdAt" | "updatedAt"
+		>;
 		callbackURL?: string;
 		disableSignUp?: boolean;
 		overrideUserInfo?: boolean;
@@ -79,7 +89,7 @@ export async function handleOAuthUserInfo<S extends AuthPluginSchema<typeof sche
 						scope: account.scope,
 						password: undefined,
 					},
-				  c as any as GenericEndpointContext<typeof schema>,
+					c as any as GenericEndpointContext<typeof schema>,
 				);
 			} catch (e) {
 				logger.error("Unable to link account", e);
@@ -137,9 +147,9 @@ export async function handleOAuthUserInfo<S extends AuthPluginSchema<typeof sche
 				...restUserInfo,
 				email: userInfo.email.toLowerCase(),
 				emailVerified:
-					userInfo.email.toLowerCase() as string === dbUser.user.email
-						? dbUser.user.emailVerified || userInfo.emailVerified as boolean
-						: userInfo.emailVerified as boolean,
+					(userInfo.email.toLowerCase() as string) === dbUser.user.email
+						? dbUser.user.emailVerified || (userInfo.emailVerified as boolean)
+						: (userInfo.emailVerified as boolean),
 			});
 		}
 	} else {
@@ -155,7 +165,7 @@ export async function handleOAuthUserInfo<S extends AuthPluginSchema<typeof sche
 			user = await c.context.internalAdapter
 				.createOAuthUser(
 					{
-						...restUserInfo as Omit<User, "id" | "createdAt" | "updatedAt">,
+						...(restUserInfo as Omit<User, "id" | "createdAt" | "updatedAt">),
 						email: userInfo.email.toLowerCase(),
 						createdAt: undefined,
 						updatedAt: undefined,

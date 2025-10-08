@@ -5,7 +5,12 @@ import {
 	createAuthMiddleware,
 	getSessionFromCtx,
 } from "../../api";
-import { type BetterAuthPlugin, type MergeSchema, type Session, type Where } from "../../types";
+import {
+	type BetterAuthPlugin,
+	type MergeSchema,
+	type Session,
+	type Where,
+} from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
@@ -15,7 +20,7 @@ import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import type { schema as SCHEMA} from "../../db/schema"
+import type { schema as SCHEMA } from "../../db/schema";
 import { schema } from "./schema";
 import type {
 	AdminOptions,
@@ -266,14 +271,13 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 
-					const updatedUser =
-						await ctx.context.internalAdapter.updateUser(
-							ctx.body.userId,
-							{
-								role: parseRoles(ctx.body.role),
-							},
-							ctx as any
-						);
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						ctx.body.userId,
+						{
+							role: parseRoles(ctx.body.role),
+						},
+						ctx as any,
+					);
 					return ctx.json({
 						user: updatedUser as UserWithRole,
 					});
@@ -460,19 +464,18 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS,
 						});
 					}
-					const user =
-						await ctx.context.internalAdapter.createUser(
-							{
-								email: ctx.body.email,
-								name: ctx.body.name,
-								role:
-									(ctx.body.role && parseRoles(ctx.body.role)) ??
-									options?.defaultRole ??
-									"user",
-								...ctx.body.data,
-							},
-							ctx as any,
-						);
+					const user = await ctx.context.internalAdapter.createUser(
+						{
+							email: ctx.body.email,
+							name: ctx.body.name,
+							role:
+								(ctx.body.role && parseRoles(ctx.body.role)) ??
+								options?.defaultRole ??
+								"user",
+							...ctx.body.data,
+						},
+						ctx as any,
+					);
 
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -695,7 +698,8 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 					if (ctx.query?.searchValue) {
 						where.push({
-							field: (ctx.query.searchField || "email") as (keyof S["user"]["fields"] & string),
+							field: (ctx.query.searchField ||
+								"email") as keyof S["user"]["fields"] & string,
 							operator: ctx.query.searchOperator || "contains",
 							value: ctx.query.searchValue,
 						});
@@ -808,9 +812,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 
-					const sessions =
-						await ctx.context.internalAdapter.listSessions(ctx.body.userId);
-					sessions.forEach((s) => s.userId)
+					const sessions = await ctx.context.internalAdapter.listSessions(
+						ctx.body.userId,
+					);
+					sessions.forEach((s) => s.userId);
 					return {
 						sessions: sessions,
 					};

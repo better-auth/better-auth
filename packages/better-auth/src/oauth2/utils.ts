@@ -35,7 +35,10 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 export const encodeOAuthParameter = (value: string) =>
 	encodeURIComponent(value).replace(/%20/g, "+");
 
-export function decryptOAuthToken<S extends AuthPluginSchema>(token: string, ctx: AuthContext<S>) {
+export function decryptOAuthToken<S extends AuthPluginSchema>(
+	token: string,
+	ctx: AuthContext<S>,
+) {
 	if (!token) return token;
 	if (ctx.options.account?.encryptOAuthTokens) {
 		return symmetricDecrypt({

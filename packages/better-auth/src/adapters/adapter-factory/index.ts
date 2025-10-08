@@ -16,7 +16,13 @@ import type {
 	AdapterTestDebugLogs,
 	CleanedWhere,
 } from "./types";
-import type { BetterAuthDbSchema, FieldAttribute, FieldAttributeFor, FieldType, schema } from "../../db";
+import type {
+	BetterAuthDbSchema,
+	FieldAttribute,
+	FieldAttributeFor,
+	FieldType,
+	schema,
+} from "../../db";
 export * from "./types";
 type SCHEMA = typeof schema;
 let debugLogs: any[] = [];
@@ -57,7 +63,9 @@ const createAsIsTransaction =
 	<R>(fn: (trx: TransactionAdapter<S>) => Promise<R>) =>
 		fn(adapter);
 
-export type AdapterFactory<S extends AuthPluginSchema> = (options: BetterAuthOptions<S>) => Adapter<S>;
+export type AdapterFactory<S extends AuthPluginSchema> = (
+	options: BetterAuthOptions<S>,
+) => Adapter<S>;
 
 export const createAdapterFactory =
 	<S extends AuthPluginSchema = AuthPluginSchema>({
@@ -97,7 +105,10 @@ export const createAdapterFactory =
 		 * 1. User can define a custom fieldName.
 		 * 2. When using a custom fieldName, doing something like `schema[model].fields[field]` will not work.
 		 */
-		const getDefaultFieldName = <M extends keyof S & string, F extends keyof (S[M]["fields"]) & string>({
+		const getDefaultFieldName = <
+			M extends keyof S & string,
+			F extends keyof S[M]["fields"] & string,
+		>({
 			field,
 			model: unsafe_model,
 		}: {
@@ -157,7 +168,9 @@ export const createAdapterFactory =
 
 			let m = schema[model] ? model : undefined;
 			if (!m) {
-				m = Object.entries(schema).find(([_, f]) => f.modelName === model)?.[0] as M;
+				m = Object.entries(schema).find(
+					([_, f]) => f.modelName === model,
+				)?.[0] as M;
 			}
 
 			if (!m) {
@@ -183,11 +196,11 @@ export const createAdapterFactory =
 
 			if (useCustomModelName) {
 				return usePlural
-					? `${schema[defaultModelKey].modelName}s` as M
-					: schema[defaultModelKey].modelName as M;
+					? (`${schema[defaultModelKey].modelName}s` as M)
+					: (schema[defaultModelKey].modelName as M);
 			}
 
-			return usePlural ? `${model}s` as M : model;
+			return usePlural ? (`${model}s` as M) : model;
 		};
 		/**
 		 * Get the field name which is expected to be saved in the database based on the user's schema.
@@ -279,7 +292,9 @@ export const createAdapterFactory =
 				!forceAllowId;
 			const model = getDefaultModelName(customModelName ?? "id");
 			return {
-				type: (options.advanced?.database?.useNumberId ? "number" : "string") as "string" | "number",
+				type: (options.advanced?.database?.useNumberId ? "number" : "string") as
+					| "string"
+					| "number",
 				required: shouldGenerateId ? true : false,
 				...(shouldGenerateId
 					? {
@@ -506,7 +521,10 @@ export const createAdapterFactory =
 			return transformedData as any;
 		};
 
-		const transformWhereClause = <W extends Where<S[M], keyof S[M]["fields"] & string>[] | undefined, M extends keyof S & string>({
+		const transformWhereClause = <
+			W extends Where<S[M], keyof S[M]["fields"] & string>[] | undefined,
+			M extends keyof S & string,
+		>({
 			model,
 			where,
 		}: {
@@ -624,12 +642,12 @@ export const createAdapterFactory =
 					`${formatMethod("create")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
-				const data = (await transformInput(
+				const data = await transformInput(
 					unsafeData,
 					unsafeModel,
 					"create",
 					forceAllowId,
-				));
+				);
 				debugLog(
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
@@ -670,11 +688,7 @@ export const createAdapterFactory =
 					`${formatMethod("update")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
-				const data = (await transformInput(
-					unsafeData,
-					unsafeModel,
-					"update",
-				));
+				const data = await transformInput(unsafeData, unsafeModel, "update");
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
@@ -746,11 +760,7 @@ export const createAdapterFactory =
 				);
 				return updatedCount;
 			},
-			findOne: async ({
-				model: unsafeModel,
-				where: unsafeWhere,
-				select,
-			}) => {
+			findOne: async ({ model: unsafeModel, where: unsafeWhere, select }) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -836,10 +846,7 @@ export const createAdapterFactory =
 				);
 				return transformed;
 			},
-			delete: async ({
-				model: unsafeModel,
-				where: unsafeWhere,
-			}) => {
+			delete: async ({ model: unsafeModel, where: unsafeWhere }) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -864,10 +871,7 @@ export const createAdapterFactory =
 					{ model },
 				);
 			},
-			deleteMany: async ({
-				model: unsafeModel,
-				where: unsafeWhere,
-			}) => {
+			deleteMany: async ({ model: unsafeModel, where: unsafeWhere }) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -893,10 +897,7 @@ export const createAdapterFactory =
 				);
 				return res;
 			},
-			count: async ({
-				model: unsafeModel,
-				where: unsafeWhere,
-			}) => {
+			count: async ({ model: unsafeModel, where: unsafeWhere }) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -951,30 +952,31 @@ export const createAdapterFactory =
 								// thus we should also generate rate-limit table schema
 								options.rateLimit.enabled === true)
 						) {
-							(tables as OmitSchemaCore<BetterAuthDbSchema<SCHEMA>>).ratelimit = {
-								modelName: options.rateLimit.modelName ?? "ratelimit",
-								fields: {
-									key: {
-										type: "string",
-										unique: true,
-										required: true,
-										fieldName: options.rateLimit.fields?.key ?? "key",
+							(tables as OmitSchemaCore<BetterAuthDbSchema<SCHEMA>>).ratelimit =
+								{
+									modelName: options.rateLimit.modelName ?? "ratelimit",
+									fields: {
+										key: {
+											type: "string",
+											unique: true,
+											required: true,
+											fieldName: options.rateLimit.fields?.key ?? "key",
+										},
+										count: {
+											type: "number",
+											required: true,
+											fieldName: options.rateLimit.fields?.count ?? "count",
+										},
+										lastRequest: {
+											type: "number",
+											required: true,
+											bigint: true,
+											defaultValue: () => Date.now(),
+											fieldName:
+												options.rateLimit.fields?.lastRequest ?? "lastRequest",
+										},
 									},
-									count: {
-										type: "number",
-										required: true,
-										fieldName: options.rateLimit.fields?.count ?? "count",
-									},
-									lastRequest: {
-										type: "number",
-										required: true,
-										bigint: true,
-										defaultValue: () => Date.now(),
-										fieldName:
-											options.rateLimit.fields?.lastRequest ?? "lastRequest",
-									},
-								},
-							};
+								};
 						}
 						return adapterInstance.createSchema!({ file, tables: tables });
 					}

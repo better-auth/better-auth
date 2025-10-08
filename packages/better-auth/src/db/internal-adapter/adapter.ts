@@ -15,9 +15,11 @@ import { getIp } from "../../utils/get-request-ip";
 import { safeJSONParse } from "../../utils/json";
 import { generateId, type InternalLogger } from "../../utils";
 import type { EndpointContext } from "better-call";
-import type { InternalAdapter } from "."
+import type { InternalAdapter } from ".";
 
-export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>(
+export const createInternalAdapter = <
+	S extends AuthPluginSchema<typeof schema>,
+>(
 	adapter: Adapter<S>,
 	ctx: {
 		options: Omit<BetterAuthOptions<S>, "logger">;
@@ -48,7 +50,10 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 			validSessions.map(async ({ token }) => {
 				const cached = await secondaryStorage.get(token);
 				if (!cached) return;
-				const parsed = safeJSONParse<{ session: SchemaTypes<S["session"]>; user: SchemaTypes<S["user"]> }>(cached);
+				const parsed = safeJSONParse<{
+					session: SchemaTypes<S["session"]>;
+					user: SchemaTypes<S["user"]>;
+				}>(cached);
 				if (!parsed) return;
 
 				const sessionTTL = Math.max(
@@ -69,18 +74,14 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 	}
 
 	return {
-		createOAuthUser: async (
-			user,
-			account,
-			context
-		) => {
+		createOAuthUser: async (user, account, context) => {
 			return adapter.transaction(async (trxAdapter) => {
 				const createdUser = await createWithHooks(
 					user,
 					"user",
 					undefined,
 					context,
-					trxAdapter
+					trxAdapter,
 				);
 				const createdAccount = await createWithHooks(
 					{
@@ -93,7 +94,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 					"account",
 					undefined,
 					context,
-					trxAdapter
+					trxAdapter,
 				);
 				return {
 					user: createdUser!,
@@ -101,11 +102,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				};
 			});
 		},
-		createUser: async (
-			user,
-			context,
-			trxAdapter
-		) => {
+		createUser: async (user, context, trxAdapter) => {
 			const createdUser = await createWithHooks(
 				{
 					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
@@ -117,16 +114,12 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				"user",
 				undefined,
 				context,
-				trxAdapter
+				trxAdapter,
 			);
 
 			return createdUser!;
 		},
-		createAccount: async (
-			account,
-			context,
-			trxAdapter
-		) => {
+		createAccount: async (account, context, trxAdapter) => {
 			const createdAccount = await createWithHooks(
 				{
 					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
@@ -137,17 +130,14 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				"account",
 				undefined,
 				context,
-				trxAdapter
+				trxAdapter,
 			);
 			return createdAccount!;
 		},
-		listSessions: async (
-			userId,
-			trxAdapter
-		) => {
+		listSessions: async (userId, trxAdapter) => {
 			if (secondaryStorage) {
 				const currentList = await secondaryStorage.get(
-					`active-sessions-${userId}`
+					`active-sessions-${userId}`,
 				);
 				if (!currentList) return [];
 
@@ -159,9 +149,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				const sessions = [];
 
 				for (const session of validSessions) {
-					const sessionStringified = await secondaryStorage.get(
-						session.token
-					);
+					const sessionStringified = await secondaryStorage.get(session.token);
 					if (sessionStringified) {
 						const s = safeJSONParse<{
 							session: SchemaTypes<S["session"]>;
@@ -189,13 +177,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 			});
 			return sessions;
 		},
-		listUsers: async (
-			limit,
-			offset,
-			sortBy,
-			where,
-			trxAdapter
-		) => {
+		listUsers: async (limit, offset, sortBy, where, trxAdapter) => {
 			const users = await (trxAdapter || adapter).findMany({
 				model: "user",
 				limit,
@@ -205,10 +187,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 			});
 			return users;
 		},
-		countTotalUsers: async (
-			where,
-			trxAdapter
-		) => {
+		countTotalUsers: async (where, trxAdapter) => {
 			const total = await (trxAdapter || adapter).count({
 				model: "user",
 				where,
@@ -218,10 +197,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 			}
 			return total;
 		},
-		deleteUser: async (
-			userId,
-			trxAdapter
-		) => {
+		deleteUser: async (userId, trxAdapter) => {
 			if (secondaryStorage) {
 				await secondaryStorage.delete(`active-sessions-${userId}`);
 			}
@@ -263,17 +239,14 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 			dontRememberMe,
 			override,
 			overrideAll,
-			trxAdapter
+			trxAdapter,
 		) => {
 			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
 			const data: Omit<SchemaTypes<S["session"]>, "id"> = {
 				ipAddress:
 					ctx.request || ctx.headers
-						? getIp(
-								ctx.request || ctx.headers!,
-								ctx.context.options
-						  ) || ""
+						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
 						: "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
@@ -303,7 +276,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 								 * so we can retrieve it later for listing sessions
 								 */
 								const currentList = await secondaryStorage.get(
-									`active-sessions-${userId}`
+									`active-sessions-${userId}`,
 								);
 
 								let list: {
@@ -314,9 +287,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 
 								if (currentList) {
 									list = safeJSONParse(currentList) || [];
-									list = list.filter(
-										(session) => session.expiresAt > now
-									);
+									list = list.filter((session) => session.expiresAt > now);
 								}
 
 								list.push({
@@ -327,30 +298,23 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 								await secondaryStorage.set(
 									`active-sessions-${userId}`,
 									JSON.stringify(list),
-									sessionExpiration
+									sessionExpiration,
 								);
 
 								return sessionData;
 							},
-							executeMainFn:
-								options.session?.storeSessionInDatabase,
-					  }
+							executeMainFn: options.session?.storeSessionInDatabase,
+						}
 					: undefined,
 				ctx,
-				trxAdapter
+				trxAdapter,
 			);
 			return res!;
 		},
-		findSession: async (
-			token,
-			trxAdapter
-		) => {
+		findSession: async (token, trxAdapter) => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
-				if (
-					!sessionStringified &&
-					!options.session?.storeSessionInDatabase
-				) {
+				if (!sessionStringified && !options.session?.storeSessionInDatabase) {
 					return null;
 				}
 				if (sessionStringified) {
@@ -411,19 +375,14 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				user: parsedUser,
 			};
 		},
-		findSessions: async (
-			sessionTokens,
-			trxAdapter
-		) => {
+		findSessions: async (sessionTokens, trxAdapter) => {
 			if (secondaryStorage) {
 				const sessions: {
 					session: SchemaTypes<S["session"]>;
 					user: SchemaTypes<S["user"]>;
 				}[] = [];
 				for (const sessionToken of sessionTokens) {
-					const sessionStringified = await secondaryStorage.get(
-						sessionToken
-					);
+					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
 						const s = safeJSONParse<{
 							session: SchemaTypes<S["session"]>;
@@ -486,12 +445,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				user: SchemaTypes<S["user"]>;
 			}[];
 		},
-		updateSession: async (
-			sessionToken,
-			session,
-			context,
-			trxAdapter
-		) => {
+		updateSession: async (sessionToken, session, context, trxAdapter) => {
 			const updatedSession = await updateWithHooks(
 				session,
 				[{ field: "token", value: sessionToken }],
@@ -499,11 +453,8 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				secondaryStorage
 					? {
 							async fn(data) {
-								const currentSession =
-									await secondaryStorage.get(sessionToken);
-								let updatedSession: SchemaTypes<
-									S["session"]
-								> | null = null;
+								const currentSession = await secondaryStorage.get(sessionToken);
+								let updatedSession: SchemaTypes<S["session"]> | null = null;
 								if (currentSession) {
 									const parsedSession = safeJSONParse<{
 										session: SchemaTypes<S["session"]>;
@@ -519,19 +470,15 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 									return null;
 								}
 							},
-							executeMainFn:
-								options.session?.storeSessionInDatabase,
-					  }
+							executeMainFn: options.session?.storeSessionInDatabase,
+						}
 					: undefined,
 				context,
-				trxAdapter
+				trxAdapter,
 			);
 			return updatedSession;
 		},
-		deleteSession: async (
-			token,
-			trxAdapter
-		) => {
+		deleteSession: async (token, trxAdapter) => {
 			if (secondaryStorage) {
 				// remove the session from the active sessions list
 				const data = await secondaryStorage.get(token);
@@ -548,7 +495,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 					const userId = session.userId;
 
 					const currentList = await secondaryStorage.get(
-						`active-sessions-${userId}`
+						`active-sessions-${userId}`,
 					);
 					if (currentList) {
 						let list: { token: string; expiresAt: number }[] =
@@ -559,17 +506,13 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 							await secondaryStorage.set(
 								`active-sessions-${userId}`,
 								JSON.stringify(list),
-								sessionExpiration
+								sessionExpiration,
 							);
 						} else {
-							await secondaryStorage.delete(
-								`active-sessions-${userId}`
-							);
+							await secondaryStorage.delete(`active-sessions-${userId}`);
 						}
 					} else {
-						logger.error(
-							"Active sessions list not found in secondary storage"
-						);
+						logger.error("Active sessions list not found in secondary storage");
 					}
 				}
 
@@ -592,10 +535,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				],
 			});
 		},
-		deleteAccounts: async (
-			userId,
-			trxAdapter
-		) => {
+		deleteAccounts: async (userId, trxAdapter) => {
 			await (trxAdapter || adapter).deleteMany({
 				model: "account",
 				where: [
@@ -606,10 +546,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				],
 			});
 		},
-		deleteAccount: async (
-			accountId,
-			trxAdapter
-		) => {
+		deleteAccount: async (accountId, trxAdapter) => {
 			await (trxAdapter || adapter).delete({
 				model: "account",
 				where: [
@@ -620,14 +557,11 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				],
 			});
 		},
-		deleteSessions: async (
-			userIdOrSessionTokens,
-			trxAdapter
-		) => {
+		deleteSessions: async (userIdOrSessionTokens, trxAdapter) => {
 			if (secondaryStorage) {
 				if (typeof userIdOrSessionTokens === "string") {
 					const activeSession = await secondaryStorage.get(
-						`active-sessions-${userIdOrSessionTokens}`
+						`active-sessions-${userIdOrSessionTokens}`,
 					);
 					const sessions = activeSession
 						? safeJSONParse<{ token: string }[]>(activeSession)
@@ -638,9 +572,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 					}
 				} else {
 					for (const sessionToken of userIdOrSessionTokens) {
-						const session = await secondaryStorage.get(
-							sessionToken
-						);
+						const session = await secondaryStorage.get(sessionToken);
 						if (session) {
 							await secondaryStorage.delete(sessionToken);
 						}
@@ -662,20 +594,15 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 								field: "token",
 								value: userIdOrSessionTokens,
 								operator: "in",
-						  }
+							}
 						: {
 								field: "userId",
 								value: userIdOrSessionTokens,
-						  },
+							},
 				],
 			});
 		},
-		findOAuthUser: async (
-			email,
-			accountId,
-			providerId,
-			trxAdapter
-		) => {
+		findOAuthUser: async (email, accountId, providerId, trxAdapter) => {
 			// we need to find account first to avoid missing user if the email changed with the provider for the same account
 			const account = await (trxAdapter || adapter)
 				.findMany({
@@ -752,11 +679,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				}
 			}
 		},
-		findUserByEmail: async (
-			email,
-			options,
-			trxAdapter
-		) => {
+		findUserByEmail: async (email, options, trxAdapter) => {
 			const user = await (trxAdapter || adapter).findOne({
 				model: "user",
 				where: [
@@ -787,10 +710,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				accounts: [],
 			};
 		},
-		findUserById: async (
-			userId,
-			trxAdapter
-		) => {
+		findUserById: async (userId, trxAdapter) => {
 			const user = await (trxAdapter || adapter).findOne({
 				model: "user",
 				where: [
@@ -802,11 +722,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 			});
 			return user;
 		},
-		linkAccount: async (
-			account,
-			context,
-			trxAdapter
-		) => {
+		linkAccount: async (account, context, trxAdapter) => {
 			const _account = await createWithHooks(
 				{
 					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
@@ -817,16 +733,11 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				"account",
 				undefined,
 				context,
-				trxAdapter
+				trxAdapter,
 			);
 			return _account;
 		},
-		updateUser: async (
-			userId,
-			data,
-			context,
-			trxAdapter
-		) => {
+		updateUser: async (userId, data, context, trxAdapter) => {
 			const user = await updateWithHooks(
 				data,
 				[
@@ -838,17 +749,12 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				"user",
 				undefined,
 				context,
-				trxAdapter
+				trxAdapter,
 			);
 			await refreshUserSessions(user);
 			return user;
 		},
-		updateUserByEmail: async (
-			email,
-			data,
-			context,
-			trxAdapter
-		) => {
+		updateUserByEmail: async (email, data, context, trxAdapter) => {
 			const user = await updateWithHooks(
 				data,
 				[
@@ -860,17 +766,12 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				"user",
 				undefined,
 				context,
-				trxAdapter
+				trxAdapter,
 			);
 			await refreshUserSessions(user);
 			return user;
 		},
-		updatePassword: async (
-			userId,
-			password,
-			context
-			trxAdapter
-		) => {
+		updatePassword: async (userId, password, context, trxAdapter) => {
 			await updateManyWithHooks(
 				{
 					password,
@@ -888,13 +789,10 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				"account",
 				undefined,
 				context,
-				trxAdapter
+				trxAdapter,
 			);
 		},
-		findAccounts: async (
-			userId,
-			trxAdapter
-		) => {
+		findAccounts: async (userId, trxAdapter) => {
 			const accounts = await (trxAdapter || adapter).findMany({
 				model: "account",
 				where: [
@@ -906,10 +804,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 			});
 			return accounts;
 		},
-		findAccount: async (
-			accountId,
-			trxAdapter
-		) => {
+		findAccount: async (accountId, trxAdapter) => {
 			const account = await (trxAdapter || adapter).findOne({
 				model: "account",
 				where: [
@@ -921,11 +816,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 			});
 			return account;
 		},
-		findAccountByProviderId: async (
-			accountId,
-			providerId,
-			trxAdapter
-		) => {
+		findAccountByProviderId: async (accountId, providerId, trxAdapter) => {
 			const account = await (trxAdapter || adapter).findOne({
 				model: "account",
 				where: [
@@ -941,10 +832,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 			});
 			return account;
 		},
-		findAccountByUserId: async (
-			userId,
-			trxAdapter
-		) => {
+		findAccountByUserId: async (userId, trxAdapter) => {
 			const account = await (trxAdapter || adapter).findMany({
 				model: "account",
 				where: [
@@ -956,27 +844,18 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 			});
 			return account;
 		},
-		updateAccount: async (
-			id,
-			data,
-			context,
-			trxAdapter
-		) => {
+		updateAccount: async (id, data, context, trxAdapter) => {
 			const account = await updateWithHooks(
 				data,
 				[{ field: "id", value: id }],
 				"account",
 				undefined,
 				context,
-				trxAdapter
+				trxAdapter,
 			);
 			return account;
 		},
-		createVerificationValue: async (
-			data,
-			context,
-			trxAdapter
-		) => {
+		createVerificationValue: async (data, context, trxAdapter) => {
 			const verification = await createWithHooks(
 				{
 					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
@@ -987,14 +866,11 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				"verification",
 				undefined,
 				context,
-				trxAdapter
+				trxAdapter,
 			);
 			return verification!;
 		},
-		findVerificationValue: async (
-			identifier,
-			trxAdapter
-		) => {
+		findVerificationValue: async (identifier, trxAdapter) => {
 			const verification = await (trxAdapter || adapter).findMany({
 				model: "verification",
 				where: [
@@ -1025,10 +901,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 			const lastVerification = verification[0];
 			return lastVerification;
 		},
-		deleteVerificationValue: async (
-			id,
-			trxAdapter
-		) => {
+		deleteVerificationValue: async (id, trxAdapter) => {
 			await (trxAdapter || adapter).delete({
 				model: "verification",
 				where: [
@@ -1039,10 +912,7 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				],
 			});
 		},
-		deleteVerificationByIdentifier: async (
-			identifier,
-			trxAdapter
-		) => {
+		deleteVerificationByIdentifier: async (identifier, trxAdapter) => {
 			await (trxAdapter || adapter).delete({
 				model: "verification",
 				where: [
@@ -1053,21 +923,16 @@ export const createInternalAdapter = <S extends AuthPluginSchema<typeof schema>>
 				],
 			});
 		},
-		updateVerificationValue: async (
-			id,
-			data,
-			context,
-			trxAdapter
-		) => {
+		updateVerificationValue: async (id, data, context, trxAdapter) => {
 			const verification = await updateWithHooks(
 				data,
 				[{ field: "id", value: id }],
 				"verification",
 				undefined,
 				context,
-				trxAdapter
+				trxAdapter,
 			);
 			return verification;
 		},
 	} satisfies InternalAdapter<S>;
-}
+};

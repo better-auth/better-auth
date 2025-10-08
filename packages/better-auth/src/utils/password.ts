@@ -24,7 +24,10 @@ export async function validatePassword<S extends AuthPluginSchema>(
 	return compare;
 }
 
-export async function checkPassword<S extends AuthPluginSchema>(userId: string, c: GenericEndpointContext<S>) {
+export async function checkPassword<S extends AuthPluginSchema>(
+	userId: string,
+	c: GenericEndpointContext<S>,
+) {
 	const accounts = await c.context.internalAdapter.findAccounts(userId);
 	const credentialAccount = accounts?.find(
 		(account) => account.providerId === "credential",

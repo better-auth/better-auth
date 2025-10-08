@@ -1,4 +1,9 @@
-import type { FieldAttribute, FieldAttributeFor, FieldType, schema } from "../../db";
+import type {
+	FieldAttribute,
+	FieldAttributeFor,
+	FieldType,
+	schema,
+} from "../../db";
 import type { BetterAuthDbSchema } from "../../db/get-tables";
 import type {
 	AdapterSchemaCreation,
@@ -242,7 +247,9 @@ export interface AdapterFactoryConfig<S extends AuthPluginSchema> {
 	customIdGenerator?: (props: { model: string }) => string;
 }
 
-export type AdapterFactoryCustomizeAdapterCreator = <S extends AuthPluginSchema>(config: {
+export type AdapterFactoryCustomizeAdapterCreator = <
+	S extends AuthPluginSchema,
+>(config: {
 	options: BetterAuthOptions<S>;
 	/**
 	 * The schema of the user's Better-Auth instance.
@@ -386,7 +393,10 @@ export interface CustomAdapter<S extends AuthPluginSchema> {
 	options?: Record<string, any> | undefined;
 }
 
-export type CleanedWhere<S extends AuthPluginSchema, M extends keyof S> = Prettify<Required<Where<S[M], keyof S[M]["fields"]>>>;
+export type CleanedWhere<
+	S extends AuthPluginSchema,
+	M extends keyof S,
+> = Prettify<Required<Where<S[M], keyof S[M]["fields"]>>>;
 
 export type AdapterTestDebugLogs = {
 	resetDebugLogs: () => void;
@@ -396,7 +406,8 @@ export type AdapterTestDebugLogs = {
 /**
  * @deprecated Use `AdapterFactoryOptions` instead. This export will be removed in a future version.
  */
-export type CreateAdapterOptions<S extends AuthPluginSchema> = AdapterFactoryOptions<S>;
+export type CreateAdapterOptions<S extends AuthPluginSchema> =
+	AdapterFactoryOptions<S>;
 
 /**
  * @deprecated Use `AdapterFactoryConfig` instead. This export will be removed in a future version.

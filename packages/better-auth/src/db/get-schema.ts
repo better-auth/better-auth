@@ -1,8 +1,14 @@
-import { getAuthTables, type BetterAuthDbSchema, type FieldAttributeFor } from ".";
+import {
+	getAuthTables,
+	type BetterAuthDbSchema,
+	type FieldAttributeFor,
+} from ".";
 import type { AuthPluginSchema, BetterAuthOptions } from "../types";
 import { schema } from "./schema";
 
-export function getSchema<S extends AuthPluginSchema>(config: BetterAuthOptions<S>): BetterAuthDbSchema<S> {
+export function getSchema<S extends AuthPluginSchema>(
+	config: BetterAuthOptions<S>,
+): BetterAuthDbSchema<S> {
 	const tables = getAuthTables(config);
 	// @ts-expect-error - It is populated further on
 	let schema: BetterAuthDbSchema<S> = {};

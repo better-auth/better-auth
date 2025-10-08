@@ -1,4 +1,8 @@
-import type { AuthPluginSchema, BetterAuthClientPlugin, BetterAuthOptions } from "../../types";
+import type {
+	AuthPluginSchema,
+	BetterAuthClientPlugin,
+	BetterAuthOptions,
+} from "../../types";
 
 export const InferServerPlugin = <
 	AuthOrOption extends

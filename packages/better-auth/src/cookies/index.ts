@@ -12,7 +12,9 @@ import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
 import { binary } from "@better-auth/utils/binary";
 
-export function createCookieGetter<S extends AuthPluginSchema>(options: BetterAuthOptions<S>) {	
+export function createCookieGetter<S extends AuthPluginSchema>(
+	options: BetterAuthOptions<S>,
+) {
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
@@ -62,7 +64,9 @@ export function createCookieGetter<S extends AuthPluginSchema>(options: BetterAu
 	return createCookie;
 }
 
-export function getCookies<S extends AuthPluginSchema>(options: BetterAuthOptions<S>) {
+export function getCookies<S extends AuthPluginSchema>(
+	options: BetterAuthOptions<S>,
+) {
 	const createCookie = createCookieGetter(options);
 	const sessionMaxAge = options.session?.expiresIn || ms("7d") / 1000;
 	const sessionToken = createCookie("session_token", {

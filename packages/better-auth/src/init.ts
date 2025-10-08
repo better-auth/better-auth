@@ -39,7 +39,9 @@ import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
 import { isPromise } from "./utils/is-promise";
 
-export const init = async <S extends typeof schema = typeof schema>(options: BetterAuthOptions<S>) => {
+export const init = async <S extends AuthPluginSchema = typeof schema>(
+	options: BetterAuthOptions<S>,
+) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
@@ -189,7 +191,10 @@ export const init = async <S extends typeof schema = typeof schema>(options: Bet
 	return context;
 };
 
-export type AuthContext<T extends AuthPluginSchema, S extends MergeSchema<typeof schema, T> = MergeSchema<typeof schema, T>> = {
+export type AuthContext<
+	T extends AuthPluginSchema,
+	S extends MergeSchema<typeof schema, T> = MergeSchema<typeof schema, T>,
+> = {
 	options: BetterAuthOptions<T, S>;
 	appName: string;
 	baseURL: string;
@@ -284,18 +289,23 @@ async function runPluginInit<S extends AuthPluginSchema>(ctx: AuthContext<S>) {
 	}
 	// Add the global database hooks last
 	dbHooks.push(options.databaseHooks);
-	context.internalAdapter = createInternalAdapter(ctx.adapter as Adapter<typeof schema>, {
-		options: options as any as BetterAuthOptions<typeof schema>,
-		logger: ctx.logger,
-		// @ts-expect-error - databaseHooks is correctly typed
-		hooks: dbHooks.filter((u) => u !== undefined),
-		generateId: ctx.generateId,
-	});
+	context.internalAdapter = createInternalAdapter(
+		ctx.adapter as Adapter<typeof schema>,
+		{
+			options: options as any as BetterAuthOptions<typeof schema>,
+			logger: ctx.logger,
+			// @ts-expect-error - databaseHooks is correctly typed
+			hooks: dbHooks.filter((u) => u !== undefined),
+			generateId: ctx.generateId,
+		},
+	);
 	context.options = options;
 	return { context };
 }
 
-function getInternalPlugins<S extends AuthPluginSchema>(options: BetterAuthOptions<S>) {
+function getInternalPlugins<S extends AuthPluginSchema>(
+	options: BetterAuthOptions<S>,
+) {
 	const plugins: BetterAuthPlugin<S>[] = [];
 	if (options.advanced?.crossSubDomainCookies?.enabled) {
 		//TODO: add internal plugin
@@ -303,7 +313,9 @@ function getInternalPlugins<S extends AuthPluginSchema>(options: BetterAuthOptio
 	return plugins;
 }
 
-function getTrustedOrigins<S extends AuthPluginSchema>(options: BetterAuthOptions<S>) {
+function getTrustedOrigins<S extends AuthPluginSchema>(
+	options: BetterAuthOptions<S>,
+) {
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 	if (!baseURL) {
 		return [];

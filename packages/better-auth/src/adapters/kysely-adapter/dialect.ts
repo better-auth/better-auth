@@ -51,7 +51,9 @@ export function getKyselyDatabaseType<S extends AuthPluginSchema>(
 	return null;
 }
 
-export const createKyselyAdapter = async <S extends AuthPluginSchema>(config: BetterAuthOptions<S>) => {
+export const createKyselyAdapter = async <S extends AuthPluginSchema>(
+	config: BetterAuthOptions<S>,
+) => {
 	const db = config.database;
 
 	if (!db) {
