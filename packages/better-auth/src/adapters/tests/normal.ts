@@ -31,10 +31,19 @@ export const getNormalTestSuiteTests = ({
 	 * Because of the inconsistency, as a bare minimum for testing sorting functionality, we should
 	 * remove all capitalizations and numbers from the `name` field
 	 */
-	const createBinarySortFriendlyUsers = async (count: number) => {
+	const createBinarySortFriendlyUsers = async (
+		count: number,
+		TEST?: boolean,
+	) => {
 		let users: User[] = [];
 		for (let i = 0; i < count; i++) {
+			if (TEST) {
+				console.log("pre?");
+			}
 			const user = await generate("user");
+			if (TEST) {
+				console.log("post?");
+			}
 			const userResult = await adapter.create<User>({
 				model: "user",
 				data: {
@@ -517,21 +526,22 @@ export const getNormalTestSuiteTests = ({
 			},
 		"findMany - should find many models with sortBy and limit and offset and where":
 			async () => {
-				let users = await createBinarySortFriendlyUsers(10);
+				let users = await createBinarySortFriendlyUsers(10, true);
 
 				// update the last three users to end with "last"
-				await Promise.all(
-					users.slice(5).map(async (user, i) => {
-						const result = await adapter.update<User>({
-							model: "user",
-							where: [{ field: "id", value: user.id }],
-							update: { name: user.name + "-last" },
-						});
-						if (!result) throw new Error("No result");
-						users[i + 5]!.name = result.name;
-						users[i + 5]!.updatedAt = result.updatedAt;
-					}),
-				);
+				let i = -1;
+				for (const user of users) {
+					i++;
+					if (i < 5) continue;
+					const result = await adapter.update<User>({
+						model: "user",
+						where: [{ field: "id", value: user.id }],
+						update: { name: user.name + "-last" },
+					});
+					if (!result) throw new Error("No result");
+					users[i]!.name = result.name;
+					users[i]!.updatedAt = result.updatedAt;
+				}
 
 				const result = await adapter.findMany<User>({
 					model: "user",
@@ -540,7 +550,7 @@ export const getNormalTestSuiteTests = ({
 					offset: 2,
 					where: [{ field: "name", value: "last", operator: "ends_with" }],
 				});
-			
+
 				// Order of operation for most DBs:
 				// FROM → WHERE → SORT BY → OFFSET → LIMIT
 
