@@ -521,7 +521,7 @@ export const auth = betterAuth({
       generateId: (options) => {
         // Let database auto-generate for specific models
         if (options.model === "user" || options.model === "users") {
-          return false; // or return undefined as any
+          return false; // Let database generate ID
         }
         // Generate UUIDs for other tables
         return crypto.randomUUID();
@@ -611,7 +611,7 @@ export const auth = betterAuth({
       // Do NOT set useNumberId - it's global and affects all tables
       generateId: (options) => {
         if (options.model === "user" || options.model === "users") {
-          return undefined as any; // Let PostgreSQL serial generate it
+          return false; // Let PostgreSQL serial generate it
         }
         return crypto.randomUUID(); // UUIDs for session, account, verification
       },
