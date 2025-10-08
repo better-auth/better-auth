@@ -388,6 +388,8 @@ To add custom fields, use the `additionalFields` property in the `user` or `sess
 - `required`: A boolean indicating if the field is mandatory.
 - `defaultValue`: The default value for the field (note: this only applies in the JavaScript layer; in the database, the field will be optional).
 - `input`: This determines whether a value can be provided when creating a new record (default: `true`). If there are additional fields, like `role`, that should not be provided by the user during signup, you can set this to `false`.
+- `returned`: Controls whether the field is included in SELECT queries (default: `true`). Set to `false` if you want the field stored in the database but not retrieved in read operations.
+- `fieldName`: The actual column name in the database if it differs from the JavaScript property name.
 
 Here's an example of how to extend the user schema with additional fields:
 
@@ -408,10 +410,23 @@ export const auth = betterAuth({
         required: false,
         defaultValue: "en",
       },
+      firstName: {
+        type: "string",
+        fieldName: "first_name", // Database column name
+        returned: true, // Required to include field in SELECT queries
+      },
+      internalNotes: {
+        type: "string",
+        returned: false, // Stored but not retrieved in normal queries
+      },
     },
   },
 });
 ```
+
+<Callout type="warn">
+  **Important**: If you add a custom field with a `fieldName` that differs from the property name, you must set `returned: true` to ensure the field is included in SELECT queries. Without this, the field will be stored but not retrieved from the database.
+</Callout>
 
 Now you can access the additional fields in your application logic.
 
@@ -471,11 +486,11 @@ export const auth = betterAuth({
 
 ### ID Generation
 
-Better Auth by default will generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced.database.generateId` option in your auth config.
+Better Auth by default will generate unique IDs for users, sessions, and other entities. You can customize ID generation behavior using the `advanced.database.generateId` option.
 
-You can also disable ID generation by setting the `advanced.database.generateId` option to `false`. This will assume your database will generate the ID automatically.
+#### Option 1: Disable ID Generation for All Tables
 
-**Example: Automatic Database IDs**
+Setting `generateId` to `false` disables ID generation globally, letting your database handle all ID generation (useful for auto-increment/serial columns):
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -485,13 +500,44 @@ export const auth = betterAuth({
   database: db,
   advanced: {
     database: {
-      generateId: false,
+      generateId: false, // Database generates all IDs
     },
   },
 });
 ```
 
-**Example: Using a Custom ID Generator**
+#### Option 2: Custom ID Generation Function
+
+Use a function to generate IDs. You can return `false` or `undefined` from the function to let the database generate the ID for specific models:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+  database: db,
+  advanced: {
+    database: {
+      generateId: (options) => {
+        // Let database auto-generate for specific models
+        if (options.model === "user" || options.model === "users") {
+          return false; // or return undefined as any
+        }
+        // Generate UUIDs for other tables
+        return crypto.randomUUID();
+      },
+    },
+  },
+});
+```
+
+<Callout type="info">
+  **Important**: Returning `false` or `undefined` from the `generateId` function lets the database handle ID generation for that specific model. Setting `generateId: false` (without a function) disables ID generation for **all** tables.
+</Callout>
+
+#### Option 3: Consistent Custom ID Generator
+
+Generate the same type of ID for all tables:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -538,6 +584,50 @@ export const auth = betterAuth({
   this is normal. It's also expected that all id values passed to Better-Auth (eg via an endpoint body) is expected to be a string.
 </Callout>
 
+### Mixed ID Types
+
+If you need different ID types across tables (e.g., integer IDs for users, UUID strings for sessions/accounts/verification), use a `generateId` function instead of `useNumberId`.
+
+<Callout type="warn">
+  **Do NOT use `useNumberId` when mixing ID types**. The `useNumberId` option is global and affects all tables. It will disable internal ID generation and expect all IDs to be numbers.
+</Callout>
+
+**Example: Integer IDs for Users, UUIDs for Other Tables**
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+  database: db,
+  user: {
+    modelName: "users", // PostgreSQL: id serial primary key
+  },
+  session: {
+    modelName: "session", // PostgreSQL: id text primary key
+  },
+  advanced: {
+    database: {
+      // Do NOT set useNumberId - it's global and affects all tables
+      generateId: (options) => {
+        if (options.model === "user" || options.model === "users") {
+          return undefined as any; // Let PostgreSQL serial generate it
+        }
+        return crypto.randomUUID(); // UUIDs for session, account, verification
+      },
+    },
+  },
+});
+```
+
+This configuration allows you to:
+- Use database auto-increment (serial, auto_increment, etc.) for the users table
+- Generate UUIDs for all other tables (session, account, verification)
+- Maintain compatibility with existing schemas that use different ID types
+
+<Callout type="info">
+  **Use Case**: This is particularly useful when migrating from other authentication providers (like Clerk) where you have existing users with integer IDs but want UUID strings for new tables.
+</Callout>
 
 ### Database Hooks
 
@@ -615,6 +705,10 @@ export const auth = betterAuth({
   },
 });
 ```
+
+<Callout type="info">
+  **Property Names**: In `databaseHooks`, always use JavaScript property names (e.g., `firstName`) not database column names (e.g., `first_name`). Better Auth handles the mapping internally based on your `fieldName` configuration.
+</Callout>
 
 #### Throwing Errors
 
