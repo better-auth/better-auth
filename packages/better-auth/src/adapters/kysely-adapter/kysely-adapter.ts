@@ -48,12 +48,7 @@ export const kyselyAdapter = (
 	const createCustomAdapter = (
 		db: Kysely<any>,
 	): AdapterFactoryCustomizeAdapterCreator => {
-		return ({
-			getFieldName,
-			schema,
-			getDefaultModelName,
-			getDefaultFieldName,
-		}) => {
+		return ({ getFieldName }) => {
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -124,14 +119,6 @@ export const kyselyAdapter = (
 						model,
 						field: _field,
 					});
-					const fieldAttr =
-						schema[getDefaultModelName(model)]?.fields[
-							getDefaultFieldName({ model, field: _field })
-						];
-
-					if (!fieldAttr) {
-						throw new Error(`Field ${_field} not found in model ${model}`);
-					}
 
 					const expr = (eb: any) => {
 						if (operator.toLowerCase() === "in") {

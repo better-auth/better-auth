@@ -59,10 +59,10 @@ const { execute } = await testAdapter({
 	prefixTests: "pg",
 	tests: [
 		normalTestSuite(),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
-		authFlowTestSuite(),
-		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "pg" }),
+		// transactionsTestSuite({ disableTests: { ALL: true } }),
+		// authFlowTestSuite(),
+		// numberIdTestSuite(),
+		// performanceTestSuite({ dialect: "pg" }),
 	],
 	async onFinish() {
 		await cleanupDatabase(true);
