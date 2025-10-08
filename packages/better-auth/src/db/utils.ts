@@ -1,5 +1,5 @@
 import { getAuthTables } from ".";
-import { BetterAuthError } from "../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { Adapter, BetterAuthOptions } from "../types";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import { kyselyAdapter } from "../adapters/kysely-adapter";
