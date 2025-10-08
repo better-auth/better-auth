@@ -413,7 +413,6 @@ export const auth = betterAuth({
       firstName: {
         type: "string",
         fieldName: "first_name", // Database column name
-        returned: true, // Required to include field in SELECT queries
       },
       internalNotes: {
         type: "string",
@@ -424,8 +423,8 @@ export const auth = betterAuth({
 });
 ```
 
-<Callout type="warn">
-  **Important**: If you add a custom field with a `fieldName` that differs from the property name, you must set `returned: true` to ensure the field is included in SELECT queries. Without this, the field will be stored but not retrieved from the database.
+<Callout type="info">
+  **Field Retrieval**: The `returned` property controls whether a field appears in query results (default: `true`). Set `returned: false` only when you want to store a field in the database but exclude it from being retrieved in normal operations (e.g., internal metadata or audit fields).
 </Callout>
 
 Now you can access the additional fields in your application logic.
