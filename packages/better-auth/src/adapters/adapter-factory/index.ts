@@ -497,6 +497,8 @@ export const createAdapterFactory =
 					}
 				}
 
+				let newValue = value;
+
 				const defaultModelName = getDefaultModelName(model);
 				const defaultFieldName = getDefaultFieldName({
 					field: unsafe_field,
@@ -520,27 +522,44 @@ export const createAdapterFactory =
 				) {
 					if (options.advanced?.database?.useNumberId) {
 						if (Array.isArray(value)) {
-							return {
-								operator,
-								connector,
-								field: fieldName,
-								value: value.map(Number),
-							} satisfies CleanedWhere;
+							newValue = value.map(Number);
+						} else {
+							newValue = Number(value);
 						}
-						return {
-							operator,
-							connector,
-							field: fieldName,
-							value: Number(value),
-						} satisfies CleanedWhere;
 					}
+				}
+
+				if (
+					fieldAttr.type === "date" &&
+					value instanceof Date &&
+					!config.supportsDates
+				) {
+					newValue = value.toISOString();
+				}
+
+				
+				if (
+					fieldAttr.type === "boolean" &&
+					typeof value === "boolean" &&
+					!config.supportsBooleans
+				) {
+					newValue = value ? 1 : 0;
+				}
+
+				if (
+					fieldAttr.type === "json" &&
+					value &&
+					typeof value === "string" &&
+					!config.supportsJSON
+				) {
+					newValue = JSON.stringify(value);
 				}
 
 				return {
 					operator,
 					connector,
 					field: fieldName,
-					value: value,
+					value: newValue,
 				} satisfies CleanedWhere;
 			}) as any;
 		};
