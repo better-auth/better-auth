@@ -161,6 +161,40 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							const attr = fields[field]!;
 							const fieldName = attr.fieldName || field;
 							let type = getType(fieldName, attr);
+
+							if (
+								attr.defaultValue !== null &&
+								typeof attr.defaultValue !== "undefined"
+							) {
+								if (typeof attr.defaultValue === "function") {
+									if (
+										attr.type === "date" &&
+										attr.defaultValue.toString().includes("new Date()")
+									) {
+										if (databaseType === "sqlite") {
+											type += `.default(sql\`(cast(unixepoch('subsecond') * 1000 as integer))\`)`;
+										} else {
+											type += `.defaultNow()`;
+										}
+									} else {
+										// we are intentionally not adding .$defaultFn(${attr.defaultValue})
+										// this is because if the defaultValue is a function, it could have
+										// custom logic within that function that might not work in drizzle's context.
+									}
+								} else if (typeof attr.defaultValue === "string") {
+									type += `.default("${attr.defaultValue}")`;
+								} else {
+									type += `.default(${attr.defaultValue})`;
+								}
+							}
+							// Add .$onUpdate() for fields with onUpdate property
+							// Supported for all database types: PostgreSQL, MySQL, and SQLite
+							if (attr.onUpdate && attr.type === "date") {
+								if (typeof attr.onUpdate === "function") {
+									type += `.$onUpdate(${attr.onUpdate})`;
+								}
+							}
+
 							return `${fieldName}: ${type}${attr.required ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
@@ -270,6 +304,23 @@ function generateImport({
 		if (databaseType === "pg") coreImports.push("jsonb");
 		if (databaseType === "mysql") coreImports.push("json");
 		// sqlite uses text for JSON, so there's no need to handle this case
+	}
+
+	// Add sql import for SQLite timestamps with defaultNow
+	const hasSQLiteTimestamp =
+		databaseType === "sqlite" &&
+		Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) =>
+					field.type === "date" &&
+					field.defaultValue &&
+					typeof field.defaultValue === "function" &&
+					field.defaultValue.toString().includes("new Date()"),
+			),
+		);
+
+	if (hasSQLiteTimestamp) {
+		rootImports.push("sql");
 	}
 
 	return `${rootImports.length > 0 ? `import { ${rootImports.join(", ")} } from "drizzle-orm";\n` : ""}import { ${coreImports
