@@ -29,7 +29,8 @@ import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "@better-auth/core/error";
-import { createTelemetry, type TelemetryEvent } from "@better-auth/telemetry";
+import type { TelemetryEvent } from "@better-auth/telemetry";
+import { getBooleanEnvVar, isTest } from "@better-auth/core/env";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
 import { isPromise } from "./utils/is-promise";
@@ -104,13 +105,34 @@ export const init = async (options: BetterAuthOptions) => {
 		return generateId(size);
 	};
 
-	const { publish } = await createTelemetry(options, {
-		adapter: adapter.id,
-		database:
-			typeof options.database === "function"
-				? "adapter"
-				: getKyselyDatabaseType(options.database) || "unknown",
-	});
+	const isTelemetryEnabled = () => {
+		const telemetryEnabled =
+			options.telemetry?.enabled !== undefined
+				? options.telemetry.enabled
+				: false;
+		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", false);
+		return (envEnabled || telemetryEnabled) && !isTest();
+	};
+
+	let publish: (event: TelemetryEvent) => Promise<void>;
+
+	if (isTelemetryEnabled()) {
+		try {
+			const { createTelemetry } = await import("@better-auth/telemetry");
+			const telemetry = await createTelemetry(options, {
+				adapter: adapter.id,
+				database:
+					typeof options.database === "function"
+						? "adapter"
+						: getKyselyDatabaseType(options.database) || "unknown",
+			});
+			publish = telemetry.publish;
+		} catch (error) {
+			publish = async () => {};
+		}
+	} else {
+		publish = async () => {};
+	}
 
 	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
