@@ -537,7 +537,6 @@ export const createAdapterFactory =
 					newValue = value.toISOString();
 				}
 
-				
 				if (
 					fieldAttr.type === "boolean" &&
 					typeof value === "boolean" &&

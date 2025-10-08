@@ -6,7 +6,6 @@ import {
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 import {
-	sql,
 	type InsertQueryBuilder,
 	type Kysely,
 	type RawBuilder,
@@ -133,18 +132,6 @@ export const kyselyAdapter = (
 					if (!fieldAttr) {
 						throw new Error(`Field ${_field} not found in model ${model}`);
 					}
-
-					// if (
-					// 	fieldAttr.type === "date" &&
-					// 	value &&
-					// 	typeof value === "string" &&
-					// 	(!config?.type || config?.type === "sqlite")
-					// ) {
-					// 	// field = sql`datetime(${sql.ref(field)}, 'utc')`;
-					// 	// value = sql`datetime(${value}, 'utc')`;
-					// 	field = sql`strftime('%Y-%m-%dT%H:%M:%fZ', ${sql.ref(field)}, 'utc')`;
-					// 	value = sql`strftime('%Y-%m-%dT%H:%M:%fZ', ${value}, 'utc')`;
-					// }
 
 					const expr = (eb: any) => {
 						if (operator.toLowerCase() === "in") {
