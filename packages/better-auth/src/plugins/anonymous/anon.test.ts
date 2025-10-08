@@ -3,7 +3,7 @@ import { anonymous } from ".";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { anonymousClient } from "./client";
-import type { GoogleProfile } from "../../social-providers";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "@better-auth/core/oauth2";
 import { signJWT } from "../../crypto/jwt";
