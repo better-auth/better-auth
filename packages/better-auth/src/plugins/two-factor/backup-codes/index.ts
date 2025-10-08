@@ -515,13 +515,9 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
-					const decryptedBackupCodes = await decryptBackupCodes(
-						ctx,
-						twoFactor.backupCodes,
-					);
 					return ctx.json({
 						status: true,
-						backupCodes: decryptedBackupCodes,
+						backupCodes: backupCodes,
 					});
 				},
 			),
