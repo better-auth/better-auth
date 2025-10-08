@@ -1,6 +1,6 @@
 import { ENV, getBooleanEnvVar, isTest } from "@better-auth/core/env";
 import { getProjectId } from "./project-id";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "./types";
 import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
 import { detectDatabase } from "./detectors/detect-database";
 import { detectFramework } from "./detectors/detect-framework";
@@ -10,6 +10,9 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { TelemetryContext, TelemetryEvent } from "./types";
 import { logger } from "@better-auth/core/env";
 import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
+
+export * from "./types";
+export { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
 
 export async function createTelemetry(
 	options: BetterAuthOptions,
