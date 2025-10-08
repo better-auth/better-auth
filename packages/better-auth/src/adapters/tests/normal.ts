@@ -39,7 +39,8 @@ export const getNormalTestSuiteTests = ({
 				model: "user",
 				data: {
 					...user,
-					name: user.name.replace(/[0-9]/g, "").toLowerCase(),
+					name:
+						`user-` + crypto.randomUUID().replace(/[0-9]/g, "").toLowerCase(),
 				},
 				forceAllowId: true,
 			});
@@ -262,30 +263,58 @@ export const getNormalTestSuiteTests = ({
 				expect(sortModels(result)).toEqual(sortModels(users));
 			},
 		"findMany - should find many models with ends_with operator": async () => {
-			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const users = await createBinarySortFriendlyUsers(3);
+			const ends_with = users[0]!.name.slice(-1);
 			const result = await adapter.findMany<User>({
 				model: "user",
 				where: [
 					{
 						field: "name",
-						value: users[0]!.name.slice(-1),
+						value: ends_with,
 						operator: "ends_with",
 					},
 				],
 			});
 			const expectedResult = sortModels(
-				users.filter((user) => user.name.endsWith(users[0]!.name.slice(-1))),
+				users.filter((user) => user.name.endsWith(ends_with)),
 			);
-			expect(sortModels(result)).toEqual(sortModels(expectedResult));
+			if (result.length !== expectedResult.length) {
+				console.log(`Result length: ${result.length}`);
+				console.log(result);
+				console.log("--------------------------------");
+				console.log(`Expected result length: ${expectedResult.length}`);
+				console.log(expectedResult);
+			}
+			expect(sortModels(result)).toEqual(expectedResult);
 		},
 		"findMany - should find many models with contains operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+
+			// if this check fails, the test will fail.
+			// insertRandom needs to generate emails that contain `@email.com`
+			expect(users[0]!.email).toContain("@email.com");
+
 			const result = await adapter.findMany<User>({
 				model: "user",
-				where: [{ field: "email", value: "@", operator: "contains" }],
+				where: [
+					{
+						field: "email",
+						value: "mail", // all emails contains `@email.com` from `insertRandom`
+						operator: "contains",
+					},
+				],
 			});
 			expect(sortModels(result)).toEqual(sortModels(users));
 		},
+		"findMany - should find many models with contains operator (using symbol)":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "email", value: "@", operator: "contains" }],
+				});
+				expect(sortModels(result)).toEqual(sortModels(users));
+			},
 		"findMany - should find many models with eq operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const result = await adapter.findMany<User>({
@@ -481,22 +510,46 @@ export const getNormalTestSuiteTests = ({
 					limit: 2,
 					offset: 2,
 				});
+				expect(result.length).toBe(2);
 				expect(result).toEqual(
 					users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(2, 4),
 				);
 			},
 		"findMany - should find many models with sortBy and limit and offset and where":
 			async () => {
-				const users = await createBinarySortFriendlyUsers(5);
+				let users = await createBinarySortFriendlyUsers(10);
+
+				// update the last three users to end with "last"
+				await Promise.all(
+					users.slice(5).map(async (user, i) => {
+						const result = await adapter.update<User>({
+							model: "user",
+							where: [{ field: "id", value: user.id }],
+							update: { name: user.name + "-last" },
+						});
+						if (!result) throw new Error("No result");
+						users[i + 5]!.name = result.name;
+						users[i + 5]!.updatedAt = result.updatedAt;
+					}),
+				);
+
 				const result = await adapter.findMany<User>({
 					model: "user",
 					sortBy: { field: "name", direction: "asc" },
 					limit: 2,
 					offset: 2,
-					where: [{ field: "name", value: "user", operator: "starts_with" }],
+					where: [{ field: "name", value: "last", operator: "ends_with" }],
 				});
+			
+				// Order of operation for most DBs:
+				// FROM → WHERE → SORT BY → OFFSET → LIMIT
+
+				expect(result.length).toBe(2);
 				expect(result).toEqual(
-					users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(2, 4),
+					users
+						.filter((user) => user.name.endsWith("last"))
+						.sort((a, b) => a["name"].localeCompare(b["name"]))
+						.slice(2, 4),
 				);
 			},
 		"update - should update a model": async () => {
