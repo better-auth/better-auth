@@ -24,6 +24,7 @@ export interface LinearProfile {
 
 export interface LinearOptions extends ProviderOptions<LinearUser> {
 	clientId: string;
+	actor?: "app" | "user";
 }
 
 export const linear = (options: LinearOptions) => {
@@ -35,6 +36,12 @@ export const linear = (options: LinearOptions) => {
 			const _scopes = options.disableDefaultScope ? [] : ["read"];
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
+			
+			const additionalParams: Record<string, string> = {};
+			if (options.actor) {
+				additionalParams.actor = options.actor;
+			}
+			
 			return createAuthorizationURL({
 				id: "linear",
 				options,
@@ -43,6 +50,7 @@ export const linear = (options: LinearOptions) => {
 				state,
 				redirectURI,
 				loginHint,
+				additionalParams: Object.keys(additionalParams).length > 0 ? additionalParams : undefined,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -96,7 +104,12 @@ export const linear = (options: LinearOptions) => {
 					}),
 				},
 			);
+			
+			// Handle app-actor tokens that may not have a user profile
 			if (error || !profile?.data?.viewer) {
+				// For app-actor flows, we might not have a user profile
+				// In this case, return null to indicate no user should be created/linked
+				// The token is still valid for API calls, but there's no associated user
 				return null;
 			}
 
