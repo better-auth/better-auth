@@ -947,7 +947,7 @@ describe("stripe", async () => {
 						data: [
 							{
 								id: "si_1",
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: { id: "price_lookup_123" },
 								quantity: 3,
 							},
 						],
