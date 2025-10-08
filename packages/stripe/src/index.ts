@@ -370,15 +370,39 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					return false;
 				});
 
+				const stripeSubscriptionPriceId =
+					activeSubscription?.items.data[0]?.price.id;
+
 				// Also find any incomplete subscription that we can reuse
 				const incompleteSubscription = subscriptions.find(
 					(sub) => sub.status === "incomplete",
 				);
 
+				// Resolve price ID if using lookup keys
+				let priceIdToUse: string | undefined = undefined;
+				if (ctx.body.annual) {
+					priceIdToUse = plan.annualDiscountPriceId;
+					if (!priceIdToUse && plan.annualDiscountLookupKey) {
+						priceIdToUse = await resolvePriceIdFromLookupKey(
+							client,
+							plan.annualDiscountLookupKey,
+						);
+					}
+				} else {
+					priceIdToUse = plan.priceId;
+					if (!priceIdToUse && plan.lookupKey) {
+						priceIdToUse = await resolvePriceIdFromLookupKey(
+							client,
+							plan.lookupKey,
+						);
+					}
+				}
+
 				if (
 					activeOrTrialingSubscription &&
 					activeOrTrialingSubscription.status === "active" &&
 					activeOrTrialingSubscription.plan === ctx.body.plan &&
+					stripeSubscriptionPriceId === priceIdToUse &&
 					activeOrTrialingSubscription.seats === (ctx.body.seats || 1)
 				) {
 					throw new APIError("BAD_REQUEST", {
@@ -414,26 +438,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							],
 						});
 						dbSubscription = activeOrTrialingSubscription;
-					}
-
-					// Resolve price ID if using lookup keys
-					let priceIdToUse: string | undefined = undefined;
-					if (ctx.body.annual) {
-						priceIdToUse = plan.annualDiscountPriceId;
-						if (!priceIdToUse && plan.annualDiscountLookupKey) {
-							priceIdToUse = await resolvePriceIdFromLookupKey(
-								client,
-								plan.annualDiscountLookupKey,
-							);
-						}
-					} else {
-						priceIdToUse = plan.priceId;
-						if (!priceIdToUse && plan.lookupKey) {
-							priceIdToUse = await resolvePriceIdFromLookupKey(
-								client,
-								plan.lookupKey,
-							);
-						}
 					}
 
 					if (!priceIdToUse) {
@@ -545,24 +549,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						? { trial_period_days: plan.freeTrial.days }
 						: undefined;
 
-				let priceIdToUse: string | undefined = undefined;
-				if (ctx.body.annual) {
-					priceIdToUse = plan.annualDiscountPriceId;
-					if (!priceIdToUse && plan.annualDiscountLookupKey) {
-						priceIdToUse = await resolvePriceIdFromLookupKey(
-							client,
-							plan.annualDiscountLookupKey,
-						);
-					}
-				} else {
-					priceIdToUse = plan.priceId;
-					if (!priceIdToUse && plan.lookupKey) {
-						priceIdToUse = await resolvePriceIdFromLookupKey(
-							client,
-							plan.lookupKey,
-						);
-					}
-				}
 				const checkoutSession = await client.checkout.sessions
 					.create(
 						{

@@ -914,6 +914,7 @@ describe("stripe", async () => {
 
 		await authClient.subscription.upgrade({
 			plan: "starter",
+			subscriptionId: "sub_personal_active_123",
 			seats: 3,
 			fetchOptions: {
 				headers,
@@ -934,9 +935,29 @@ describe("stripe", async () => {
 			],
 		});
 
+		// Mock Stripe subscriptions.list to return the active subscription with price ID
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_personal_active_123",
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_1",
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 3,
+							},
+						],
+					},
+				},
+			],
+		});
+
 		const upgradeRes = await authClient.subscription.upgrade({
 			plan: "starter",
 			seats: 3,
+			subscriptionId: "sub_personal_active_123",
 			fetchOptions: {
 				headers,
 			},
