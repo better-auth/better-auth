@@ -393,7 +393,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
  * Safely escape user input for use in a MongoDB regex.
  * This ensures the resulting pattern is treated as literal text,
  * and not as a regex with special syntax.
- * 
+ *
  * @param input - The input string to escape. Any type that isn't a string will be converted to an empty string.
  * @param maxLength - The maximum length of the input string to escape. Defaults to 256. This is to prevent DOS attacks.
  * @returns The escaped string.

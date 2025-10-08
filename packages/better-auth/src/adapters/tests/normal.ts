@@ -279,9 +279,7 @@ export const getNormalTestSuiteTests = ({
 
 			const result = await adapter.findMany<User>({
 				model: "user",
-				where: [
-					{ field: "name", value: ".*", operator: "starts_with" },
-				],
+				where: [{ field: "name", value: ".*", operator: "starts_with" }],
 			});
 
 			// Should only match the literal ".*" prefix, not treat it as a regex matching everything
@@ -306,9 +304,7 @@ export const getNormalTestSuiteTests = ({
 
 			const result = await adapter.findMany<User>({
 				model: "user",
-				where: [
-					{ field: "name", value: ".*", operator: "ends_with" },
-				],
+				where: [{ field: "name", value: ".*", operator: "ends_with" }],
 			});
 
 			// Should only match the literal ".*" suffix, not treat it as a regex matching everything
@@ -333,9 +329,7 @@ export const getNormalTestSuiteTests = ({
 
 			const result = await adapter.findMany<User>({
 				model: "user",
-				where: [
-					{ field: "name", value: ".*", operator: "contains" },
-				],
+				where: [{ field: "name", value: ".*", operator: "contains" }],
 			});
 
 			// Should only match the literal substring ".*", not treat it as a regex matching everything
@@ -747,44 +741,43 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(sortModels(result)).toEqual(sortModels(users.slice(2)));
 		},
-		"deleteMany - starts_with should not interpret regex patterns": async () => {
-			// Create a user whose name literally starts with the regex-like prefix
-			const userTemplate = await generate("user");
-			const literalRegexUser = await adapter.create<User>({
-				model: "user",
-				data: {
-					...userTemplate,
-					name: ".*danger",
-				},
-				forceAllowId: true,
-			});
-
-			// Also create some normal users that do NOT start with ".*"
-			const normalUsers = (await insertRandom("user", 3)).map((x) => x[0]);
-
-			await adapter.deleteMany({
-				model: "user",
-				where: [
-					{ field: "name", value: ".*", operator: "starts_with" },
-				],
-			});
-
-			// The literal ".*danger" user should be deleted
-			const deleted = await adapter.findOne<User>({
-				model: "user",
-				where: [{ field: "id", value: literalRegexUser.id }],
-			});
-			expect(deleted).toBeNull();
-
-			// Normal users should remain
-			for (const user of normalUsers) {
-				const stillThere = await adapter.findOne<User>({
+		"deleteMany - starts_with should not interpret regex patterns":
+			async () => {
+				// Create a user whose name literally starts with the regex-like prefix
+				const userTemplate = await generate("user");
+				const literalRegexUser = await adapter.create<User>({
 					model: "user",
-					where: [{ field: "id", value: user.id }],
+					data: {
+						...userTemplate,
+						name: ".*danger",
+					},
+					forceAllowId: true,
 				});
-				expect(stillThere).not.toBeNull();
-			}
-		},
+
+				// Also create some normal users that do NOT start with ".*"
+				const normalUsers = (await insertRandom("user", 3)).map((x) => x[0]);
+
+				await adapter.deleteMany({
+					model: "user",
+					where: [{ field: "name", value: ".*", operator: "starts_with" }],
+				});
+
+				// The literal ".*danger" user should be deleted
+				const deleted = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: literalRegexUser.id }],
+				});
+				expect(deleted).toBeNull();
+
+				// Normal users should remain
+				for (const user of normalUsers) {
+					const stillThere = await adapter.findOne<User>({
+						model: "user",
+						where: [{ field: "id", value: user.id }],
+					});
+					expect(stillThere).not.toBeNull();
+				}
+			},
 		"deleteMany - ends_with should not interpret regex patterns": async () => {
 			// Create a user whose name literally ends with the regex-like suffix
 			const userTemplate = await generate("user");
@@ -801,9 +794,7 @@ export const getNormalTestSuiteTests = ({
 
 			await adapter.deleteMany({
 				model: "user",
-				where: [
-					{ field: "name", value: ".*", operator: "ends_with" },
-				],
+				where: [{ field: "name", value: ".*", operator: "ends_with" }],
 			});
 
 			const deleted = await adapter.findOne<User>({
@@ -836,9 +827,7 @@ export const getNormalTestSuiteTests = ({
 
 			await adapter.deleteMany({
 				model: "user",
-				where: [
-					{ field: "name", value: ".*", operator: "contains" },
-				],
+				where: [{ field: "name", value: ".*", operator: "contains" }],
 			});
 
 			const deleted = await adapter.findOne<User>({
