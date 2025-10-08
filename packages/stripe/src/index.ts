@@ -379,7 +379,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				);
 
 				// Resolve price ID if using lookup keys
-				let priceIdToUse: string | undefined = undefined;
+				let priceIdToUse: string | undefined;
 				if (ctx.body.annual) {
 					priceIdToUse = plan.annualDiscountPriceId;
 					if (!priceIdToUse && plan.annualDiscountLookupKey) {

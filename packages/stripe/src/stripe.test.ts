@@ -902,7 +902,6 @@ describe("stripe", async () => {
 		);
 
 		const headers = new Headers();
-
 		await authClient.signIn.email(
 			{
 				...testUser,
