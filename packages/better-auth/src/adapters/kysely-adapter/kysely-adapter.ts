@@ -295,7 +295,6 @@ export const kyselyAdapter = (
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					query = query.limit(1);
 					await query.execute();
 				},
 				async deleteMany({ model, where }) {

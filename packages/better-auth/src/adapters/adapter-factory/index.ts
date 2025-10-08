@@ -547,11 +547,18 @@ export const createAdapterFactory =
 
 				if (
 					fieldAttr.type === "json" &&
-					value &&
-					typeof value === "string" &&
+					typeof value === "object" &&
 					!config.supportsJSON
 				) {
-					newValue = JSON.stringify(value);
+					try {
+						const stringifiedJSON = JSON.stringify(value);
+						newValue = stringifiedJSON;
+					} catch (error) {
+						throw new Error(
+							`Failed to stringify JSON value for field ${fieldName}`,
+							{ cause: error },
+						);
+					}
 				}
 
 				return {
