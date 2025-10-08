@@ -31,19 +31,10 @@ export const getNormalTestSuiteTests = ({
 	 * Because of the inconsistency, as a bare minimum for testing sorting functionality, we should
 	 * remove all capitalizations and numbers from the `name` field
 	 */
-	const createBinarySortFriendlyUsers = async (
-		count: number,
-		TEST?: boolean,
-	) => {
+	const createBinarySortFriendlyUsers = async (count: number) => {
 		let users: User[] = [];
 		for (let i = 0; i < count; i++) {
-			if (TEST) {
-				console.log("pre?");
-			}
 			const user = await generate("user");
-			if (TEST) {
-				console.log("post?");
-			}
 			const userResult = await adapter.create<User>({
 				model: "user",
 				data: {
@@ -289,7 +280,7 @@ export const getNormalTestSuiteTests = ({
 			);
 			if (result.length !== expectedResult.length) {
 				console.log(`Result length: ${result.length}`);
-				console.log(result);
+				console.log(sortModels(result));
 				console.log("--------------------------------");
 				console.log(`Expected result length: ${expectedResult.length}`);
 				console.log(expectedResult);
@@ -526,7 +517,7 @@ export const getNormalTestSuiteTests = ({
 			},
 		"findMany - should find many models with sortBy and limit and offset and where":
 			async () => {
-				let users = await createBinarySortFriendlyUsers(10, true);
+				let users = await createBinarySortFriendlyUsers(10);
 
 				// update the last three users to end with "last"
 				let i = -1;
