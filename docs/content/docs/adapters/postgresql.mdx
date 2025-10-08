@@ -59,9 +59,10 @@ npx @better-auth/cli@latest generate
 npx @better-auth/cli@latest migrate
 ```
 
-## Set tables under a non-default schema
+## Use a non-default schema
 
-To create Better Auth tables in a non-default schema like `auth`,
+In most cases, the default schema is `public`. To have Better Auth use a
+non-default schema (e.g., `auth`) for its tables,
 set the PostgreSQL user's default schema before generating or migrating:
 
 ```sql
