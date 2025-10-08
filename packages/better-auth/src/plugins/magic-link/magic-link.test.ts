@@ -196,29 +196,25 @@ describe("magic link require name for signup", async () => {
 		basePath: "/api/auth",
 	});
 
-	await client.signIn.magicLink(
-		{
-			email,
-		}
-	);
-	
+	await client.signIn.magicLink({
+		email,
+	});
+
 	it("should fail sign up if requireNameForSignUp is true and name is missing", async () => {
-		await client.magicLink.verify(
-			{
-				query: {
-					token: verificationEmail.token,
+		await client.magicLink.verify({
+			query: {
+				token: verificationEmail.token,
+			},
+			fetchOptions: {
+				onError(context) {
+					const location = context.response.headers.get("location");
+					expect(location).toContain("?error=name_required_for_signup");
 				},
-				fetchOptions: {
-					onError(context) {
-						const location = context.response.headers.get("location");
-						expect(location).toContain("?error=name_required_for_signup");
-					},
-					onSuccess(context) {
-						throw new Error("Should not succeed");
-					},
+				onSuccess(context) {
+					throw new Error("Should not succeed");
 				},
 			},
-		);
+		});
 	});
 });
 
