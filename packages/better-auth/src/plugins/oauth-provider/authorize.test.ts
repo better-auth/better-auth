@@ -39,7 +39,7 @@ describe("oauth authorize - unauthenticated", async () => {
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		const response = await auth.api.registerOAuthClient({
+		const response = await auth.api.createOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -120,7 +120,7 @@ describe("oauth authorize - authenticated", async () => {
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		const response = await auth.api.registerOAuthClient({
+		const response = await auth.api.createOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],

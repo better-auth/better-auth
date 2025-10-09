@@ -141,7 +141,7 @@ describe("oauth introspect", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		const response = await auth.api.registerOAuthClient({
+		const response = await auth.api.createOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -437,7 +437,7 @@ describe("oauth introspect - config", async () => {
 			},
 		});
 
-		const registeredClient = await auth.api.registerOAuthClient({
+		const registeredClient = await auth.api.createOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
