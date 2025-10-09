@@ -2,7 +2,6 @@ import { beforeAll, expect, it, describe, vi, afterEach } from "vitest";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
-	GenericEndpointContext,
 	Session,
 	User,
 } from "../types";
@@ -13,6 +12,7 @@ import { getMigrations } from "./get-migration";
 import { Kysely, SqliteDialect } from "kysely";
 import { getTestInstance } from "../test-utils/test-instance";
 import { safeJSONParse } from "../utils/json";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 describe("adapter test", async () => {
 	const sqliteDialect = new SqliteDialect({

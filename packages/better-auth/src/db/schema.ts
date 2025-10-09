@@ -1,5 +1,5 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import type { BetterAuthOptions } from "../types/options";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
 import type { DBFieldAttribute } from "@better-auth/core/db";
@@ -93,7 +93,7 @@ export function parseInputData<T extends Record<string, any>>(
 	for (const key in fields) {
 		if (key in data) {
 			if (fields[key]!.input === false) {
-				if (fields[key]!.defaultValue) {
+				if (fields[key]!.defaultValue !== undefined) {
 					parsedData[key] = fields[key]!.defaultValue;
 					continue;
 				}
@@ -116,7 +116,7 @@ export function parseInputData<T extends Record<string, any>>(
 			continue;
 		}
 
-		if (fields[key]!.defaultValue && action === "create") {
+		if (fields[key]!.defaultValue !== undefined && action === "create") {
 			parsedData[key] = fields[key]!.defaultValue;
 			continue;
 		}
