@@ -48,11 +48,14 @@ export function NavProvider({
 		if (transparentMode !== "top") return;
 
 		const listener = () => {
+			if (document.documentElement.hasAttribute("data-anchor-scrolling")) {
+				return;
+			}
 			setTransparent(window.scrollY < 10);
 		};
 
 		listener();
-		window.addEventListener("scroll", listener);
+		window.addEventListener("scroll", listener, { passive: true });
 		return () => {
 			window.removeEventListener("scroll", listener);
 		};
