@@ -12,6 +12,7 @@ import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
 	OAuthRefreshToken,
+	SchemaClient,
 } from "./types";
 import { getJwtPlugin } from "./utils";
 import { decodeRefreshToken } from "./token";
@@ -83,18 +84,18 @@ async function validateJwtAccessToken(
 		throw new Error(error as unknown as string);
 	}
 
+	let client: SchemaClient | null | undefined;
 	if (jwtPayload.azp) {
+		client = await getClient(ctx, opts, jwtPayload.azp);
+		if (!client || client?.disabled) {
+			return {
+				active: false,
+			};
+		}
 		if (clientId && jwtPayload.azp !== clientId) {
 			return {
 				active: false,
 			};
-		} else if (!clientId) {
-			const client = await getClient(ctx, opts, jwtPayload.azp);
-			if (!client || client?.disabled) {
-				return {
-					active: false,
-				};
-			}
 		}
 	}
 
@@ -113,6 +114,27 @@ async function validateJwtAccessToken(
 		if (!session || session.expiresAt < new Date()) {
 			jwtPayload.sid = undefined;
 		}
+	}
+
+	// Add Custom Claims
+	if (opts.customAccessTokenClaims) {
+		let user: User | null | undefined;
+		if (jwtPayload.sub) {
+			user =
+				(await ctx.context.internalAdapter.findUserById(jwtPayload.sub)) ??
+				undefined;
+		}
+		const customClaims = await opts.customAccessTokenClaims({
+			user,
+			scopes: ((jwtPayload.scopes as string | undefined) ?? "")?.split(" "),
+			resource: ctx.body.resource,
+			referenceId: client?.referenceId,
+			metadata: client?.metadata ? JSON.parse(client.metadata) : undefined,
+		});
+		jwtPayload = {
+			...customClaims,
+			...jwtPayload,
+		};
 	}
 
 	// Return the JWT payload in introspection format
@@ -175,15 +197,25 @@ async function validateOpaqueAccessToken(
 			error: "invalid_token",
 		});
 	}
-	if (clientId && accessToken.clientId !== clientId) {
-		return {
-			active: false,
-		};
-	}
 	if (!accessToken.expiresAt || accessToken.expiresAt < new Date()) {
 		return {
 			active: false,
 		};
+	}
+
+	let client: SchemaClient | null | undefined;
+	if (accessToken.clientId) {
+		client = await getClient(ctx, opts, accessToken.clientId);
+		if (!client || client?.disabled) {
+			return {
+				active: false,
+			};
+		}
+		if (clientId && accessToken.clientId !== clientId) {
+			return {
+				active: false,
+			};
+		}
 	}
 
 	let sessionId = accessToken.sessionId ?? undefined;
@@ -202,12 +234,21 @@ async function validateOpaqueAccessToken(
 		}
 	}
 
-	let user: User | undefined;
+	let user: User | null | undefined;
 	if (accessToken.userId) {
-		user =
-			(await ctx.context.internalAdapter.findUserById(accessToken?.userId)) ??
-			undefined;
+		user = await ctx.context.internalAdapter.findUserById(accessToken?.userId);
 	}
+
+	// Add Custom Claims
+	const customClaims = opts.customAccessTokenClaims
+		? await opts.customAccessTokenClaims({
+				user,
+				scopes: accessToken.scopes,
+				resource: ctx.body.resource,
+				referenceId: client?.referenceId,
+				metadata: client?.metadata ? JSON.parse(client.metadata) : undefined,
+			})
+		: {};
 
 	// Return the access token in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
@@ -216,6 +257,7 @@ async function validateOpaqueAccessToken(
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
 	return {
+		...customClaims,
 		active: true,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		client_id: accessToken.clientId,

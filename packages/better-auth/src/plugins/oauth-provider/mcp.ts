@@ -1,28 +1,15 @@
-import type { BetterAuthOptions } from "../../types";
 import type { Awaitable } from "../../types/helper";
 import { type JWTPayload } from "jose";
 import { APIError } from "better-call";
 import { verifyAccessToken } from "./verify";
-import type { betterAuth } from "../../auth";
-import { logger } from "@better-auth/core/env";
 
 /**
  * A request middleware handler that checks and responds with
  * a WWW-Authenticate header for unauthenticated responses.
  *
- * Passes through authenticated tokens.
- * Provides valid Jwt payloads on `req.context.jwt`.
- *
  * @external
  */
 export const mcpHandler = <
-	Auth extends typeof betterAuth & {
-		api: {
-			oauth2IntrospectVerify: (...args: any) => Promise<JWTPayload | null>;
-		};
-		baseURL: string;
-		options: BetterAuthOptions;
-	},
 	Request extends {
 		readonly url: string;
 		readonly headers: Headers;
@@ -31,11 +18,13 @@ export const mcpHandler = <
 		};
 	},
 >(
-	auth: Auth,
 	/** Resource is the same url as the audience */
-	resource: string,
-	handler: (req: Request) => Awaitable<Response>,
-	opts?: Parameters<typeof verifyAccessToken>[1],
+	verifyOptions: Parameters<typeof verifyAccessToken>[1],
+	handler: (req: Request, jwt: JWTPayload) => Awaitable<Response>,
+	opts?: {
+		/** Maps non-url (ie urn, client) resources to resource_metadata */
+		resourceMetadataMappings: Record<string, string>;
+	},
 ) => {
 	return async (req: Request) => {
 		const authorization = req.headers?.get("authorization") ?? undefined;
@@ -43,54 +32,76 @@ export const mcpHandler = <
 			? authorization.replace("Bearer ", "")
 			: authorization;
 		try {
-			const token = await auth.api.oauth2IntrospectVerify({
-				body: {
-					token: accessToken,
-					verifyOpts: opts,
-				},
-			});
-			if (!req.context) req.context = {};
-			req.context.jwt = token ?? undefined;
+			if (!accessToken?.length) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "missing authorization header",
+				});
+			}
+			const token = await verifyAccessToken(accessToken, verifyOptions);
+			return handler(req, token);
 		} catch (error) {
 			try {
-				return handleMcpErrors(error, resource);
+				handleMcpErrors(error, verifyOptions.verifyOptions.audience, opts);
 			} catch (err) {
-				logger.error(err as unknown as string);
-				if (err instanceof Error) throw err;
+				if (err instanceof APIError) {
+					return new Response(err.message, {
+						...err,
+						status: err.statusCode,
+					});
+				}
 				throw new Error(String(err));
 			}
+			throw new Error(String(error));
 		}
-		return handler(req);
 	};
 };
 
 /**
  * The following handles all MCP errors and API errors
  *
- * @external
+ * @internal
  */
-export function handleMcpErrors(error: unknown, resource: string | URL) {
+export function handleMcpErrors(
+	error: unknown,
+	resource: string | string[],
+	opts?: {
+		/** Maps non-url (ie urn, client) resources to resource_metadata */
+		resourceMetadataMappings?: Record<string, string>;
+	},
+) {
 	if (error instanceof APIError && error.status === "UNAUTHORIZED") {
-		const _resource =
-			typeof resource === "string" ? new URL(resource) : resource;
-		let audiencePath = _resource.pathname + _resource.search;
-		if (audiencePath.endsWith("/")) audiencePath = audiencePath.slice(0, -1);
-
-		const wwwAuthenticateValue = `Bearer resource_metadata="${_resource.origin}/.well-known/oauth-protected-resource${
-			audiencePath
-		}"`;
-		return new Response(error.message, {
-			status: 401,
-			headers: {
-				"Content-Type": "application/json",
+		const _resources = Array.isArray(resource) ? resource : [resource];
+		const wwwAuthenticateValue = _resources
+			.map((v) => {
+				let audiencePath: string;
+				if (URL.canParse?.(v)) {
+					const url = new URL(v);
+					audiencePath = url.pathname.endsWith("/")
+						? url.pathname.slice(0, -1)
+						: url.pathname;
+					return `Bearer resource_metadata="${url.origin}/.well-known/oauth-protected-resource${
+						audiencePath
+					}"`;
+				} else {
+					const resourceMetadata = opts?.resourceMetadataMappings?.[v];
+					if (!resourceMetadata) {
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: `missing resource_metadata mapping for ${v}`,
+						});
+					}
+					return `Bearer resource_metadata=${resourceMetadata}`;
+				}
+			})
+			.join(", ");
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				message: error.message,
+			},
+			{
 				"WWW-Authenticate": wwwAuthenticateValue,
 			},
-		});
-	} else if (error instanceof APIError) {
-		return new Response(error.message, {
-			status: error.statusCode,
-			headers: error.headers,
-		});
+		);
 	} else if (error instanceof Error) {
 		throw error;
 	} else {

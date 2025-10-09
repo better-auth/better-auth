@@ -1,5 +1,6 @@
+import type { JWTPayload } from "jose";
 import type { GrantType } from "../../oauth-2.1/types";
-import type { InferOptionSchema, User } from "../../types";
+import type { InferOptionSchema, Session, User } from "../../types";
 import type { Awaitable } from "../../types/helper";
 import { schema } from "./schema";
 
@@ -53,6 +54,11 @@ export interface OAuthOptions {
 	/**
 	 * Allow unauthenticated dynamic client registration.
 	 *
+	 * Support for `allowUnauthenticatedClientRegistration` **will be deprecated**
+	 * when the MCP protocol standardizes unauthenticated dynamic client registration.
+	 * As of writing, both [Client ID Metadata Documents (CIMD)](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991)
+	 * and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
+	 *
 	 * @default false
 	 */
 	allowUnauthenticatedClientRegistration?: boolean;
@@ -66,7 +72,11 @@ export interface OAuthOptions {
 	 * List of scopes for newly registered clients
 	 * if not requested.
 	 *
-	 * @default undefined
+	 * For scopes that shall automatically adapt to your scopes
+	 * list in the future (ie scopes: undefined), create that client
+	 * using the server's `createOAuthClient` function.
+	 *
+	 * @default scopes
 	 */
 	clientRegistrationDefaultScopes?: string[];
 	/**
@@ -106,6 +116,21 @@ export interface OAuthOptions {
 	 * @default - undefined (does not expire)
 	 */
 	clientRegistrationClientSecretExpiration?: number | string | Date;
+	/**
+	 * Reference id to the owner of the oauth client.
+	 *
+	 * For example, it can be an organization, team, etc.
+	 * When provided, user_id of the client will be undefined
+	 * and the owner is defined under the field `reference_id`.
+	 *
+	 * With the organization plugin: @example ({ session }) => {
+	 * 	return session?.reference_id;
+	 * }
+	 */
+	clientRegistrationReference?: (context: {
+		user?: User & Record<string, unknown>;
+		session?: Session & Record<string, unknown>;
+	}) => Awaitable<string | undefined>;
 	/**
 	 * List of scopes a newly registered client can have.
 	 *
@@ -154,6 +179,29 @@ export interface OAuthOptions {
 	 */
 	loginPage: string;
 	/**
+	 * A URL to the account selection page where the user will be redirected if
+	 * the user must select an account (eg. organization, team, account).
+	 *
+	 * After a user logs in, a user may wish to select set an account active.
+	 *
+	 * one the user selects an account, you need to call the `/oauth2/selected-account`
+	 * to continue the login flow.
+	 */
+	selectAccountPage?: string;
+	/**
+	 * Checks to see if an account is selected for the `/oauth2/authorize`.
+	 *
+	 * Return values:
+	 * - true: intended user or account selected
+	 * - false: account is not selected and needs selection
+	 */
+	selectedAccount?: (context: {
+		client: SchemaClient;
+		user: User & Record<string, unknown>;
+		session: Session & Record<string, unknown>;
+		scopes: string[];
+	}) => Awaitable<boolean>;
+	/**
 	 * A URL to the consent page where the user will be redirected if the client
 	 * requests consent.
 	 *
@@ -187,15 +235,22 @@ export interface OAuthOptions {
 	generateClientSecret?: () => string;
 	/**
 	 * Store the client secret in your database in a secure way
-	 * Note: This will not affect the client secret sent to the user, it will only affect the client secret stored in your database
+	 * Note: This will not affect the client secret sent to the user,
+	 * it will only affect the client secret stored in your database
 	 *
 	 * When disableJwtPlugin = false (recommended):
 	 * - "hashed" - The client secret is hashed using the `hash` function.
-	 * - { hash: (clientSecret: string) => Promise<string> } - A function that hashes the client secret.
+	 * - {
+	 * 	hash: (clientSecret: string) => Awaitable<string>,
+	 * 	verify?: (clientSecret: string) => Awaitable<boolean>
+	 * } - A function that hashes the client secret.
 	 *
 	 * When disableJwtPlugin = true:
 	 * - "encrypted" - The client secret is encrypted using the `encrypt` function.
-	 * - { encrypt: (clientSecret: string) => Promise<string>, decrypt: (clientSecret: string) => Promise<string> } - A function that encrypts and decrypts the client secret.
+	 * - {
+	 * 	encrypt: (clientSecret: string) => Awaitable<string>,
+	 * 	decrypt: (clientSecret: string) => Awaitable<string>
+	 * } - A function that encrypts and decrypts the client secret.
 	 *
 	 * @default
 	 * options.disableJwtPlugin ? "encrypted" : "hashed"
@@ -203,68 +258,91 @@ export interface OAuthOptions {
 	storeClientSecret?:
 		| "hashed"
 		| "encrypted"
-		| { hash: (clientSecret: string) => Promise<string> }
 		| {
-				encrypt: (clientSecret: string) => Promise<string>;
-				decrypt: (clientSecret: string) => Promise<string>;
+				hash: (clientSecret: string) => Awaitable<string>;
+				verify?: (clientSecret: string) => Awaitable<boolean>;
+		  }
+		| {
+				encrypt: (clientSecret: string) => Awaitable<string>;
+				decrypt: (clientSecret: string) => Awaitable<string>;
 		  };
 	/**
 	 * Storage method of opaque access tokens and refresh tokens on your database.
 	 *
 	 * - "hashed" - The client secret is hashed using the `hash` function.
-	 * - { hash: (token: string, type: StoreTokenType) => Promise<string> } - A function that hashes the token
+	 * - {
+	 * 	hash: (token: string, type: StoreTokenType) => Awaitable<string>
+	 * } - A function that hashes the token
 	 *
 	 * @default "hashed"
 	 */
 	storeTokens?:
 		| "hashed"
-		| { hash: (token: string, type: StoreTokenType) => Promise<string> };
+		| { hash: (token: string, type: StoreTokenType) => Awaitable<string> };
 	/**
-	 * Get the additional user info claims
+	 * Custom claims provided at the OIDC `userinfo` endpoint.
 	 *
-	 * This applies only to the OIDC `userinfo` endpoint.
-	 *
-	 * @param user - The user object.
-	 * @param scopes - The scopes that the client requested.
-	 * @returns The user info claim.
+	 * @param info - context that may be useful when creating custom claims
+	 * @returns Additional claims for userinfo request
 	 */
-	getAdditionalUserInfoClaim?: (
-		user: User & Record<string, any>,
-		scopes: string[],
-	) => Awaitable<Record<string, any>>;
+	customUserInfoClaims?: (info?: {
+		/** The user object */
+		user: User & Record<string, unknown>;
+		/** The scopes from the access token used
+		 * in the /userinfo request (matches jwt.scopes) */
+		scopes: string[];
+		/** The access token payload used in the /userinfo request */
+		jwt: JWTPayload;
+	}) => Awaitable<Record<string, any>>;
 	/**
-	 * List of all additional claims returned from
-	 * customIdTokenClaims and customJwtClaims.
+	 * Custom claims attached to OIDC id tokens.
 	 *
-	 * Must be defined when using
-	 * customIdTokenClaims or customJwtClaims
-	 */
-	customClaims?: string[];
-	/**
-	 * Custom claims attached to id tokens.
-	 * To remain OIDC compliant, claims should be
+	 * To remain OIDC-compliant, claims should be
 	 * namespaced with a URI. For example, a site
-	 * example.com should namespace roles at
-	 * https://example.com/roles.
+	 * example.com should namespace an organization at
+	 * https://example.com/organization.
+	 *
+	 * @param info - context that may be useful when creating custom claims
 	 */
-	customIdTokenClaims?: (
-		user: User,
-		scopes: string[],
-	) => Awaitable<Record<string, any>>;
+	customIdTokenClaims?: (info?: {
+		/** The user object if token is associated to a user. */
+		user: User & Record<string, unknown>;
+		/** Scopes granted for this token */
+		scopes: string[];
+		/** oAuthClient metadata */
+		metadata?: Record<string, any>;
+		/** oAuthClient referenceId field (eg. organization, team) */
+		referenceId?: string;
+	}) => Awaitable<Record<string, any>>;
 	/**
 	 * Custom claims attached to access tokens.
+	 *
+	 * Claims are added for both the token and introspect endpoints.
+	 *
+	 * Use the user and referenceId fields to fetch
+	 * for membership roles/permissions to attach for the token.
+	 * Note that scopes are those that requested,
+	 * permissions are what the the user can actually do which
+	 * must be done in this function.
+	 *
+	 * @param info - context that may be useful when creating custom claims
 	 */
-	customJwtClaims?: (
-		user: User,
-		scopes: string[],
-	) => Awaitable<Record<string, any>>;
+	customAccessTokenClaims?: (info?: {
+		/** The user object if token is associated to a user. Null if user doesn't exist. Undefined if user not applicable. */
+		user?: (User & Record<string, unknown>) | null;
+		/** Scopes granted for this token */
+		scopes: string[];
+		/** The resource requesting. */
+		resource?: string;
+		/** oAuthClient metadata */
+		metadata?: Record<string, any>;
+		/** oAuthClient reference (eg. organization, team) */
+		referenceId?: string;
+	}) => Awaitable<Record<string, any>>;
 	/**
 	 * Overwrite specific /.well-known/openid-configuration
 	 * values so they are not available publically.
 	 * This may be important if not all clients need specific scopes.
-	 *
-	 * NOTE: this does not prevent the system from issuing
-	 * these scopes and returning those claims (use scopes and customClaims instead).
 	 */
 	advertisedMetadata?: {
 		/**
@@ -275,9 +353,6 @@ export interface OAuthOptions {
 		scopes_supported?: string[];
 		/**
 		 * Advertised claims_supported located at /.well-known/openid-configuration
-		 *
-		 * All values must be found in the customClaims field or
-		 * be an internally supported claim.
 		 *
 		 * Internally supported claims:
 		 * ["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"]
@@ -525,16 +600,10 @@ export interface OAuthAuthorizationQuery {
  * direct searches by field on the db
  */
 export interface VerificationValue {
-	type: "authorization_code" | "consent";
-	clientId: string;
+	type: "authorization_code" | "consent" | "select_account";
+	query: OAuthAuthorizationQuery;
 	sessionId: string;
 	userId: string;
-	redirectUri?: string;
-	scopes: string;
-	state?: string;
-	codeChallenge?: string;
-	codeChallengeMethod?: "S256";
-	nonce?: string;
 }
 
 /**
@@ -565,9 +634,10 @@ export interface SchemaClient {
 	 *
 	 * If not defined, any scope can be requested.
 	 */
-	allowedScopes?: string[];
+	scopes?: string[];
 	//---- Recommended client data ----//
-	userId?: string;
+	/** User who owns this client */
+	userId?: string | null;
 	/** Created time */
 	createdAt?: Date;
 	/** Last updated time */
@@ -631,6 +701,8 @@ export interface SchemaClient {
 	//---- All other metadata ----//
 	/** Used to indicate if consent screen can be skipped */
 	skipConsent?: boolean;
+	/** Reference to the owner of this client. Eg. Organization, Team, Profile */
+	referenceId?: string;
 	/**
 	 * Additional metadata about the client.
 	 */
