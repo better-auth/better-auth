@@ -17,9 +17,3 @@ export interface Logger {
 		...args: any[]
 	) => void;
 }
-
-export type InternalLogger = {
-	[K in LogLevel]: (...params: LogHandlerParams) => void;
-} & {
-	get level(): LogLevel;
-};

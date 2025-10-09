@@ -1,9 +1,5 @@
 import type { BetterAuthOptions, Logger } from "../types";
-import type {
-	InternalLogger,
-	LogHandlerParams,
-	LogLevel,
-} from "../types/logger";
+import type { LogHandlerParams, LogLevel } from "../types/logger";
 import { getColorDepth } from "./color-depth";
 
 export const TTY_COLORS = {
@@ -45,6 +41,12 @@ const levelColors: Record<LogLevel, string> = {
 	warn: TTY_COLORS.fg.yellow,
 	error: TTY_COLORS.fg.red,
 	debug: TTY_COLORS.fg.magenta,
+};
+
+export type InternalLogger = {
+	[K in LogLevel]: (...params: LogHandlerParams) => void;
+} & {
+	get level(): LogLevel;
 };
 
 export function shouldPublishLog(
