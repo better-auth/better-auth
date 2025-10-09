@@ -18,3 +18,5 @@ export type {
 	ClientStore,
 	ClientAtomListener,
 } from "./plugin-client";
+
+export type { Logger } from "./logger";

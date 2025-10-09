@@ -1,4 +1,9 @@
-import type { BetterAuthOptions } from "../types/options";
+import type { BetterAuthOptions, Logger } from "../types";
+import type {
+	InternalLogger,
+	LogHandlerParams,
+	LogLevel,
+} from "../types/logger";
 import { getColorDepth } from "./color-depth";
 
 export const TTY_COLORS = {
@@ -32,34 +37,7 @@ export const TTY_COLORS = {
 	},
 } as const;
 
-export type LogLevel = "info" | "success" | "warn" | "error" | "debug";
-
-export const levels = ["info", "success", "warn", "error", "debug"] as const;
-
-export function shouldPublishLog(
-	currentLogLevel: LogLevel,
-	logLevel: LogLevel,
-): boolean {
-	return levels.indexOf(logLevel) <= levels.indexOf(currentLogLevel);
-}
-
-export interface Logger {
-	disabled?: boolean;
-	disableColors?: boolean;
-	level?: Exclude<LogLevel, "success">;
-	log?: (
-		level: Exclude<LogLevel, "success">,
-		message: string,
-		...args: any[]
-	) => void;
-}
-
-export type LogHandlerParams = Parameters<NonNullable<Logger["log"]>> extends [
-	LogLevel,
-	...infer Rest,
-]
-	? Rest
-	: never;
+const levels = ["info", "success", "warn", "error", "debug"] as const;
 
 const levelColors: Record<LogLevel, string> = {
 	info: TTY_COLORS.fg.blue,
@@ -69,6 +47,12 @@ const levelColors: Record<LogLevel, string> = {
 	debug: TTY_COLORS.fg.magenta,
 };
 
+export function shouldPublishLog(
+	currentLogLevel: LogLevel,
+	logLevel: LogLevel,
+): boolean {
+	return levels.indexOf(logLevel) <= levels.indexOf(currentLogLevel);
+}
 const formatMessage = (
 	level: LogLevel,
 	message: string,
@@ -85,12 +69,6 @@ const formatMessage = (
 	}
 
 	return `${timestamp} ${level.toUpperCase()} [Better Auth]: ${message}`;
-};
-
-export type InternalLogger = {
-	[K in LogLevel]: (...params: LogHandlerParams) => void;
-} & {
-	get level(): LogLevel;
 };
 
 export const createLogger = (options?: Logger): InternalLogger => {
