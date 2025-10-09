@@ -19,4 +19,4 @@ export type {
 	ClientAtomListener,
 } from "./plugin-client";
 
-export type { Logger } from "./logger";
+export type { LogLevel, Logger } from "./logger";
