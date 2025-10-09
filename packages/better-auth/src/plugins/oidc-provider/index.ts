@@ -1,13 +1,11 @@
 import * as z from "zod";
 import { SignJWT } from "jose";
+import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSessionFromCtx,
-	sessionMiddleware,
-} from "../../api";
-import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+} from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -29,6 +27,7 @@ import { getJwtToken } from "../jwt/sign";
 import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
 import { mergeSchema } from "../../db";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(

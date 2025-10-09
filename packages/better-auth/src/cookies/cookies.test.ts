@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
 import { parseSetCookieHeader } from "./cookie-utils";
-import type { BetterAuthOptions } from "../types/options";
+import type { BetterAuthOptions } from "@better-auth/core";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();

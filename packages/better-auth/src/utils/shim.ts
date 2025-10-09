@@ -1,4 +1,4 @@
-import type { AuthContext } from "../init";
+import type { AuthContext } from "@better-auth/core";
 
 export const shimContext = <T extends Record<string, any>>(
 	originalObject: T,

@@ -1,7 +1,8 @@
-import type { Adapter } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import type { Jwk } from "./types";
 
-export const getJwksAdapter = (adapter: Adapter) => {
+export const getJwksAdapter = (adapter: DBAdapter<BetterAuthOptions>) => {
 	return {
 		getAllKeys: async () => {
 			return await adapter.findMany<Jwk>({

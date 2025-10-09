@@ -1,7 +1,7 @@
 import { serializeSignedCookie } from "better-call";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { parseSetCookieHeader } from "../../cookies";
-import { createAuthMiddleware } from "../../api";
+import { createAuthMiddleware } from "@better-auth/core/middleware";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 interface BearerOptions {

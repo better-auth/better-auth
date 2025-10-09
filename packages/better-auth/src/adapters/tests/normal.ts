@@ -1,6 +1,7 @@
 import { expect } from "vitest";
 import { createTestSuite } from "../create-test-suite";
-import type { BetterAuthPlugin, User } from "../../types";
+import type { User } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
 
 /**
  * This test suite tests the basic CRUD operations of the adapter.

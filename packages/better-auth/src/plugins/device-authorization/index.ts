@@ -1,7 +1,8 @@
 import * as z from "zod";
 import { APIError } from "better-call";
-import { createAuthEndpoint } from "../../api/call";
-import type { BetterAuthPlugin, InferOptionSchema } from "../../types/plugins";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
+import type { InferOptionSchema } from "../../types/plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { generateRandomString } from "../../crypto";
 import { getSessionFromCtx } from "../../api/routes/session";
 import { ms, type StringValue as MSStringValue } from "ms";

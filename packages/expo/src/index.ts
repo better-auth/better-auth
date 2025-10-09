@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "better-auth/types";
+import type { BetterAuthPlugin } from "better-auth";
 import {
 	APIError,
 	createAuthEndpoint,

@@ -1,16 +1,19 @@
 import * as z from "zod";
-import { APIError, createAuthEndpoint } from "../../../api";
+import { APIError } from "../../../api";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import type { OrganizationOptions } from "../types";
 import { orgSessionMiddleware } from "../call";
 import { hasPermission } from "../has-permission";
 import type { Member, OrganizationRole } from "../schema";
-import type { GenericEndpointContext, User, Where } from "../../../types";
+import type { User } from "../../../types";
+import type { Where } from "@better-auth/core/db/adapter";
 import type { AccessControl } from "../../access";
 import {
 	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 	? T extends {} // is assignable to {}
