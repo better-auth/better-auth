@@ -168,16 +168,20 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						);
 					}
 
+					const orderBy = sortBy
+						? Array.isArray(sortBy)
+							? sortBy
+							: [sortBy]
+						: undefined;
 					return (await db[model]!.findMany({
 						where: whereClause,
 						take: limit || 100,
 						skip: offset || 0,
-						...(sortBy?.field
+						...(orderBy?.length && orderBy.length > 0
 							? {
-									orderBy: {
-										[getFieldName({ model, field: sortBy.field })]:
-											sortBy.direction === "desc" ? "desc" : "asc",
-									},
+									orderBy: orderBy.map(({ field, direction }) => ({
+										[getFieldName({ model, field })]: direction,
+									})),
 								}
 							: {}),
 					})) as any[];

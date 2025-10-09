@@ -5,6 +5,7 @@ import type {
 	Adapter,
 	BetterAuthOptions,
 	TransactionAdapter,
+	SortBy,
 	Where,
 } from "../../types";
 import { generateId as defaultGenerateId } from "../../utils";
@@ -819,7 +820,7 @@ export const createAdapterFactory =
 				model: string;
 				where?: Where[];
 				limit?: number;
-				sortBy?: { field: string; direction: "asc" | "desc" };
+				sortBy?: SortBy | SortBy[];
 				offset?: number;
 			}) => {
 				transactionId++;
