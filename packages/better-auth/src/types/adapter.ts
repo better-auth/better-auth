@@ -13,12 +13,12 @@ export type { Where };
  *
  * @deprecated Use `DBAdapter` from `@better-auth/core/db/adapter` instead.
  */
-export type Adapter = DBAdapter<BetterAuthOptions>;
+export type Adapter = DBAdapter;
 
 /**
  * @deprecated Use `DBTransactionAdapter` from `@better-auth/core/db/adapter` instead.
  */
-export type TransactionAdapter = DBTransactionAdapter<BetterAuthOptions>;
+export type TransactionAdapter = DBTransactionAdapter;
 
 /**
  * @deprecated Use `DBAdapterSchemaCreation` from `@better-auth/core/db/adapter` instead.

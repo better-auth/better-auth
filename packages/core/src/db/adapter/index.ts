@@ -47,7 +47,9 @@ export type DBAdapterSchemaCreation = {
 	overwrite?: boolean;
 };
 
-export interface DBAdapterFactoryConfig<Options> {
+export interface DBAdapterFactoryConfig<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> {
 	/**
 	 * Use plural table names.
 	 *
@@ -288,12 +290,11 @@ export type Where = {
 	connector?: "AND" | "OR";
 };
 
-export type DBTransactionAdapter<Options> = Omit<
-	DBAdapter<Options>,
-	"transaction"
->;
+export type DBTransactionAdapter<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> = Omit<DBAdapter<Options>, "transaction">;
 
-export type DBAdapter<Options> = {
+export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	id: string;
 	create: <T extends Record<string, any>, R = T>(data: {
 		model: string;
