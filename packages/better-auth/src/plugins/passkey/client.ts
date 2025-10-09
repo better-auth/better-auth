@@ -11,7 +11,7 @@ import type {
 import type { Session } from "inspector";
 import type { User } from "../../types";
 import type { passkey as passkeyPl, Passkey } from ".";
-import type { BetterAuthClientPlugin } from "../../client/types";
+import type { BetterAuthClientPlugin, Store } from "../../client/types";
 import { useAuthQuery } from "../../client";
 import { atom } from "nanostores";
 
@@ -19,8 +19,10 @@ export const getPasskeyActions = (
 	$fetch: BetterFetch,
 	{
 		$listPasskeys,
+		$store,
 	}: {
 		$listPasskeys: ReturnType<typeof atom<any>>;
+		$store: Store;
 	},
 ) => {
 	const signInPasskey = async (
@@ -57,6 +59,8 @@ export const getPasskeyActions = (
 				method: "POST",
 				throw: false,
 			});
+			$listPasskeys.set(Math.random());
+			$store.notify("$sessionSignal");
 
 			return verified;
 		} catch (e) {
@@ -210,9 +214,10 @@ export const passkeyClient = () => {
 	return {
 		id: "passkey",
 		$InferServerPlugin: {} as ReturnType<typeof passkeyPl>,
-		getActions: ($fetch, _) =>
+		getActions: ($fetch, $store) =>
 			getPasskeyActions($fetch, {
 				$listPasskeys,
+				$store,
 			}),
 		getAtoms($fetch) {
 			const listPasskeys = useAuthQuery<Passkey[]>(
@@ -238,10 +243,15 @@ export const passkeyClient = () => {
 					return (
 						path === "/passkey/verify-registration" ||
 						path === "/passkey/delete-passkey" ||
-						path === "/passkey/update-passkey"
+						path === "/passkey/update-passkey" ||
+						path === "/sign-out"
 					);
 				},
-				signal: "_listPasskeys",
+				signal: "$listPasskeys",
+			},
+			{
+				matcher: (path) => path === "/passkey/verify-authentication",
+				signal: "$sessionSignal",
 			},
 		],
 	} satisfies BetterAuthClientPlugin;

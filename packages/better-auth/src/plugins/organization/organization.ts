@@ -1,10 +1,9 @@
 import { APIError } from "better-call";
 import * as z from "zod";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { createAuthEndpoint } from "../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { getSessionFromCtx } from "../../api/routes";
-import type { AuthContext } from "../../init";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { shimContext } from "../../utils/shim";
 import { type AccessControl } from "../access";
 import { getOrgAdapter } from "./adapter";
@@ -65,6 +64,7 @@ import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 import type { OrganizationOptions } from "./types";
+import type { AuthContext } from "@better-auth/core";
 
 export function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -822,6 +822,12 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "date",
 						required: true,
 						fieldName: options?.schema?.invitation?.fields?.expiresAt,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+						fieldName: options?.schema?.invitation?.fields?.createdAt,
+						defaultValue: () => new Date(),
 					},
 					inviterId: {
 						type: "string",

@@ -1,16 +1,19 @@
 import type { CookieOptions } from "better-call";
-import { BetterAuthError } from "../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { Session, User } from "../types";
-import type { GenericEndpointContext } from "../types/context";
-import type { BetterAuthOptions } from "../types/options";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { getDate } from "../utils/date";
-import { env, isProduction } from "../utils/env";
+import { env, isProduction } from "@better-auth/core/env";
 import { base64Url } from "@better-auth/utils/base64";
 import { ms } from "ms";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
 import { binary } from "@better-auth/utils/binary";
+import type {
+	BetterAuthCookies,
+	GenericEndpointContext,
+} from "@better-auth/core";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -91,8 +94,6 @@ export function getCookies(options: BetterAuthOptions) {
 		},
 	};
 }
-
-export type BetterAuthCookies = ReturnType<typeof getCookies>;
 
 export async function setCookieCache(
 	ctx: GenericEndpointContext,

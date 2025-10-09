@@ -14,7 +14,7 @@ import type {
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import { useStore } from "./react-store";
-import type { BASE_ERROR_CODES } from "../../error/codes";
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { SessionQueryParams } from "../types";
 
 function getAtomKey(str: string) {
@@ -87,6 +87,7 @@ export function createAuthClient<Option extends ClientOptions>(
 			useSession: () => {
 				data: Session;
 				isPending: boolean;
+				isRefetching: boolean;
 				error: BetterFetchError | null;
 				refetch: (queryParams?: { query?: SessionQueryParams }) => void;
 			};
