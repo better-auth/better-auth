@@ -14,7 +14,7 @@ import { consentEndpoint } from "./consent";
 import { tokenEndpoint } from "./token";
 import { userInfoEndpoint } from "./userinfo";
 import { mergeSchema } from "../../db";
-import { dynamicRegisterEndpoint, registerOAuthClient } from "./register";
+import { registerEndpoint } from "./register";
 import {
 	authServerMetadata,
 	oidcServerMetadata,
@@ -26,7 +26,8 @@ import { revokeEndpoint } from "./revoke";
 import { BetterAuthError } from "@better-auth/core/error";
 import { logger } from "@better-auth/core/env";
 import type { ResourceServerMetadata } from "../../oauth-2.1/types";
-import { introspectVerifyEndpoint } from "./verify";
+import * as oauthClientEndpoints from "./oauthClient";
+import { selectedAccountEndpoint } from "./selectedAccount";
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -38,12 +39,13 @@ import { introspectVerifyEndpoint } from "./verify";
 export const oauthProvider = (options: OAuthOptions) => {
 	let clientRegistrationAllowedScopes = options.clientRegistrationAllowedScopes;
 	if (options.clientRegistrationDefaultScopes) {
-		clientRegistrationAllowedScopes = clientRegistrationAllowedScopes
-			? [
+		const _allowedScopes = clientRegistrationAllowedScopes
+			? new Set([
 					...clientRegistrationAllowedScopes,
 					...options.clientRegistrationDefaultScopes,
-				]
-			: [...options.clientRegistrationDefaultScopes];
+				])
+			: new Set([...options.clientRegistrationDefaultScopes]);
+		clientRegistrationAllowedScopes = Array.from(_allowedScopes);
 	}
 
 	// Validate scopes
@@ -83,15 +85,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 		...(scopes.has("profile")
 			? ["name", "picture", "family_name", "given_name"]
 			: []),
-		...(options?.customClaims?.filter((val) => val.length) ?? []),
 	]);
-	for (const cl of options.advertisedMetadata?.claims_supported ?? []) {
-		if (!claims?.has(cl)) {
-			throw new BetterAuthError(
-				`advertisedMetadata.claims_supported ${cl} not found in claims`,
-			);
-		}
-	}
 
 	const opts: OAuthOptions & { claims?: string[] } = {
 		codeExpiresIn: 600, // 10 min
@@ -118,6 +112,16 @@ export const oauthProvider = (options: OAuthOptions) => {
 	) {
 		throw new BetterAuthError(
 			"refresh_token grant requires authorization_code grant",
+		);
+	}
+
+	// Both selectAccountPage and selectedAccount must be defined to process prompt="select_account"
+	if (
+		(opts.selectAccountPage && !opts.selectedAccount) ||
+		(!opts.selectAccountPage && opts.selectedAccount)
+	) {
+		throw new BetterAuthError(
+			"selectAccountPage and selectedAccount should both be defined",
 		);
 	}
 
@@ -226,7 +230,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 						// but clearing the login prompt cookie if forced login prompt
 						ctx.query = JSON.parse(cookie);
 						if (ctx.query?.prompt === "login") {
-							ctx.query!.prompt = undefined; // clear login prompt parameter
+							ctx.query!.prompt = undefined;
 						}
 						ctx.setCookie(loginPromptCookieName, "", {
 							maxAge: 0,
@@ -238,7 +242,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 		},
 		endpoints: {
 			/**
-			 * A server_only endpoint that helps provide the
+			 * A server-only endpoint that helps provide the
 			 * oAuth Server configuration at the well-known endpoint.
 			 *
 			 * Provided at /.well-known/oauth-authorization-server/[issuer-path]
@@ -269,7 +273,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 				},
 			),
 			/**
-			 * A server_only endpoint that helps provide the
+			 * A server-only endpoint that helps provide the
 			 * OpenId configuration at the well-known endpoint.
 			 *
 			 * Provided at [issuer-path]/.well-known/openid-configuration
@@ -342,7 +346,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 						code_challenge: z.string().optional(),
 						code_challenge_method: z.enum(["S256"]).optional(),
 						nonce: z.string().optional(),
-						prompt: z.enum(["consent", "login"]).optional(),
+						prompt: z.enum(["consent", "login", "select_account"]).optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -451,7 +455,13 @@ export const oauthProvider = (options: OAuthOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						accept: z.boolean(),
+						accept: z.boolean().meta({
+							description: "Accept or deny user consent for a set of scopes",
+						}),
+						scope: z.string().optional().meta({
+							description:
+								"List of accept of accepted space-separated scopes. If none is provided, then all originally requested scopes are accepted.",
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -483,6 +493,48 @@ export const oauthProvider = (options: OAuthOptions) => {
 				},
 				async (ctx) => {
 					return consentEndpoint(ctx, opts);
+				},
+			),
+			oauth2SelectedAccount: createAuthEndpoint(
+				"/oauth2/selected-account",
+				{
+					method: "POST",
+					body: z.object({
+						confirm: z.boolean().meta({
+							description:
+								"Confirms an account has been selected and authorization can proceed.",
+						}),
+					}),
+					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Handle OAuth2 account selection",
+							responses: {
+								"200": {
+									description: "Consent processed successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													redirect_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"The URI to redirect to, either with an authorization code or an error",
+													},
+												},
+												required: ["redirect_uri"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return selectedAccountEndpoint(ctx, opts);
 				},
 			),
 			oauth2Token: createAuthEndpoint(
@@ -645,6 +697,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 						token_type_hint: z
 							.enum(["access_token", "refresh_token"])
 							.optional(),
+						resource: z.string().optional(),
 					}),
 					metadata: {
 						isAction: false,
@@ -675,6 +728,11 @@ export const oauthProvider = (options: OAuthOptions) => {
 													enum: ["access_token", "refresh_token"],
 													description:
 														"Hint about the type of the token submitted for introspection",
+												},
+												resource: {
+													type: "string",
+													description:
+														"Introspects a token for a specific resource.",
 												},
 											},
 											required: ["token"],
@@ -768,29 +826,6 @@ export const oauthProvider = (options: OAuthOptions) => {
 				},
 				async (ctx) => {
 					return introspectEndpoint(ctx, opts);
-				},
-			),
-			oauth2IntrospectVerify: createAuthEndpoint(
-				"/oauth2/introspect/verify",
-				{
-					method: "POST",
-					body: z
-						.object({
-							token: z.string().optional(),
-							options: z.object().optional(),
-						})
-						.optional(),
-					metadata: {
-						SERVER_ONLY: true,
-					},
-				},
-				async (ctx) => {
-					return introspectVerifyEndpoint(
-						ctx,
-						opts,
-						ctx.body?.token,
-						ctx.body?.options,
-					);
 				},
 			),
 			oauth2Revoke: createAuthEndpoint(
@@ -995,203 +1030,6 @@ export const oauthProvider = (options: OAuthOptions) => {
 				},
 			),
 			registerOAuthClient: createAuthEndpoint(
-				"/oauth2/server/register",
-				{
-					method: "POST",
-					body: z.object({
-						redirect_uris: z.array(z.string()),
-						scope: z.string().optional(),
-						client_name: z.string().optional(),
-						client_uri: z.string().optional(),
-						logo_uri: z.string().optional(),
-						contacts: z.array(z.string()).optional(),
-						tos_uri: z.string().optional(),
-						policy_uri: z.string().optional(),
-						software_id: z.string().optional(),
-						software_version: z.string().optional(),
-						software_statement: z.string().optional(),
-						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
-							.default("client_secret_basic")
-							.optional(),
-						grant_types: z
-							.array(
-								z.enum([
-									"authorization_code",
-									"client_credentials",
-									"refresh_token",
-								]),
-							)
-							.default(["authorization_code"])
-							.optional(),
-						response_types: z
-							.array(z.enum(["code"]))
-							.default(["code"])
-							.optional(),
-						type: z.enum(["web", "native", "user-agent-based"]).optional(),
-						// SERVER_ONLY applicable fields
-						skip_consent: z.boolean().optional(),
-						metadata: z.object().optional(),
-					}),
-					metadata: {
-						SERVER_ONLY: true,
-						openapi: {
-							description: "Register an OAuth2 application",
-							responses: {
-								"200": {
-									description: "OAuth2 application registered successfully",
-									content: {
-										"application/json": {
-											schema: {
-												/** @returns {OauthClient} */
-												type: "object",
-												properties: {
-													client_id: {
-														type: "string",
-														description: "Unique identifier for the client",
-													},
-													client_secret: {
-														type: "string",
-														description: "Secret key for the client",
-													},
-													client_secret_expires_at: {
-														type: "number",
-														description:
-															"Time the client secret will expire. If 0, the client secret will never expire.",
-													},
-													scope: {
-														type: "string",
-														description:
-															"Space-separated scopes allowed by the client",
-													},
-													user_id: {
-														type: "string",
-														description:
-															"ID of the user who registered the client, null if registered anonymously",
-													},
-													client_id_issued_at: {
-														type: "number",
-														description: "Creation timestamp of this client",
-													},
-													client_name: {
-														type: "string",
-														description: "Name of the OAuth2 application",
-													},
-													client_uri: {
-														type: "string",
-														description: "Name of the OAuth2 application",
-													},
-													logo_uri: {
-														type: "string",
-														description: "Icon URL for the application",
-													},
-													contacts: {
-														type: "array",
-														items: {
-															type: "string",
-														},
-														description:
-															"List representing ways to contact people responsible for this client, typically email addresses",
-													},
-													tos_uri: {
-														type: "string",
-														description: "Client's terms of service uri",
-													},
-													policy_uri: {
-														type: "string",
-														description: "Client's policy uri",
-													},
-													software_id: {
-														type: "string",
-														description:
-															"Unique identifier assigned by the developer to help in the dynamic registration process",
-													},
-													software_version: {
-														type: "string",
-														description:
-															"Version identifier for the software_id",
-													},
-													software_statement: {
-														type: "string",
-														description:
-															"JWT containing metadata values about the client software as claims",
-													},
-													redirect_uris: {
-														type: "array",
-														items: {
-															type: "string",
-															format: "uri",
-														},
-														description: "List of allowed redirect uris",
-													},
-													token_endpoint_auth_method: {
-														type: "string",
-														description:
-															"Requested authentication method for the token endpoint",
-														enum: [
-															"none",
-															"client_secret_basic",
-															"client_secret_post",
-														],
-													},
-													grant_types: {
-														type: "array",
-														items: {
-															type: "string",
-															enum: [
-																"authorization_code",
-																"client_credentials",
-																"refresh_token",
-															],
-														},
-														description:
-															"Requested authentication method for the token endpoint",
-													},
-													response_types: {
-														type: "array",
-														items: {
-															type: "string",
-															enum: ["code"],
-														},
-														description:
-															"Requested authentication method for the token endpoint",
-													},
-													public: {
-														type: "boolean",
-														description:
-															"Whether the client is public as determined by the type",
-													},
-													type: {
-														type: "string",
-														description: "Type of the client",
-														enum: ["web", "native", "user-agent-based"],
-													},
-													disabled: {
-														type: "boolean",
-														description: "Whether the client is disabled",
-													},
-													metadata: {
-														type: "object",
-														additionalProperties: true,
-														nullable: true,
-														description:
-															"Additional metadata for the application",
-													},
-												},
-												required: ["client_id"],
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				async (ctx) => {
-					return registerOAuthClient(ctx, opts);
-				},
-			),
-			dynamicRegisterOAuthClient: createAuthEndpoint(
 				"/oauth2/register",
 				{
 					method: "POST",
@@ -1374,9 +1212,15 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 				},
 				async (ctx) => {
-					return dynamicRegisterEndpoint(ctx, opts);
+					return registerEndpoint(ctx, opts);
 				},
 			),
+			createOAuthClient: oauthClientEndpoints.createOAuthClient(opts),
+			getOAuthClient: oauthClientEndpoints.getOAuthClient(opts),
+			getOAuthClients: oauthClientEndpoints.getOAuthClients(opts),
+			updateOAuthClient: oauthClientEndpoints.updateOAuthClient(opts),
+			rotateClientSecret: oauthClientEndpoints.rotateClientSecret(opts),
+			deleteOAuthClient: oauthClientEndpoints.deleteOAuthClient(opts),
 		},
 		schema: mergeSchema(schema, opts?.schema),
 	} satisfies BetterAuthPlugin;
