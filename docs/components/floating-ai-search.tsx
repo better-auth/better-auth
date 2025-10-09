@@ -76,7 +76,7 @@ function SearchAIInput(props: ComponentProps<"form">) {
 	const { status, sendMessage, stop } = useChatContext();
 	const [input, setInput] = useState("");
 	const isLoading = status === "streaming" || status === "submitted";
-	
+
 	const onStart = (e?: SyntheticEvent) => {
 		e?.preventDefault();
 		void sendMessage({ text: input });
@@ -269,7 +269,6 @@ export function AISearchTrigger() {
 		}),
 	});
 
-
 	const onKeyPress = (e: KeyboardEvent) => {
 		if (e.key === "Escape" && open) {
 			setOpen(false);
@@ -291,12 +290,7 @@ export function AISearchTrigger() {
 	}, []);
 
 	return (
-		<Context
-			value={useMemo(
-				() => ({ chat, open, setOpen }),
-				[chat, open],
-			)}
-		>
+		<Context value={useMemo(() => ({ chat, open, setOpen }), [chat, open])}>
 			<RemoveScroll enabled={open}>
 				<Presence present={open}>
 					<div
