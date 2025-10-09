@@ -36,6 +36,7 @@ export const getPasskeyActions = (
 			"/passkey/generate-authenticate-options",
 			{
 				method: "POST",
+				throw: false,
 			},
 		);
 		if (!response.data) {
@@ -56,6 +57,7 @@ export const getPasskeyActions = (
 				...opts?.fetchOptions,
 				...options,
 				method: "POST",
+				throw: false,
 			});
 			$listPasskeys.set(Math.random());
 			$store.notify("$sessionSignal");
@@ -110,8 +112,10 @@ export const getPasskeyActions = (
 						name: opts.name,
 					}),
 				},
+				throw: false,
 			},
 		);
+
 		if (!options.data) {
 			return options;
 		}
@@ -130,7 +134,9 @@ export const getPasskeyActions = (
 					name: opts?.name,
 				},
 				method: "POST",
+				throw: false,
 			});
+
 			if (!verified.data) {
 				return verified;
 			}
