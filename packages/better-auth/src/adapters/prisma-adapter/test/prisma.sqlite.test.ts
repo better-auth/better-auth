@@ -10,7 +10,7 @@ import { prismaAdapter } from "../prisma-adapter";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
 import { pushPrismaSchema } from "./push-prisma-schema";
-import type { BetterAuthOptions } from "../../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { join } from "path";
 import fs from "node:fs/promises";
 import {

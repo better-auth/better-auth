@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import {
@@ -9,7 +9,8 @@ import {
 } from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
-import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
+import type { AdditionalUserFieldsInput } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { originCheck } from "../middlewares";

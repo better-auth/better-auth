@@ -1,11 +1,15 @@
 import { BetterAuthError } from "@better-auth/core/error";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	createAdapterFactory,
 	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
-import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
+import type {
+	DBAdapterDebugLogOption,
+	DBAdapter,
+	Where,
+} from "@better-auth/core/db/adapter";
 
 export interface PrismaConfig {
 	/**
@@ -257,7 +261,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	};
 
 	const adapter = createAdapterFactory(adapterOptions);
-	return (options: BetterAuthOptions): Adapter => {
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return adapter(options);
 	};

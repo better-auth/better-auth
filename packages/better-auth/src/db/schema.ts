@@ -1,5 +1,5 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import type { BetterAuthOptions } from "../types/options";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
 import type { DBFieldAttribute } from "@better-auth/core/db";

@@ -1,9 +1,12 @@
 import { generateRandomString } from "../../crypto/random";
 import * as z from "zod";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/middleware";
 import { sessionMiddleware } from "../../api";
 import { symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";

@@ -1,9 +1,9 @@
 import { APIError } from "better-call";
-import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
 import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 function formatErrorURL(url: string, error: string, description: string) {
 	return `${

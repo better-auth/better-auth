@@ -1,5 +1,4 @@
 import { defaultRoles } from "./access";
-import type { GenericEndpointContext } from "../../types";
 import type { Role } from "../access";
 import * as z from "zod";
 import { APIError } from "../../api";
@@ -9,6 +8,7 @@ import {
 	hasPermissionFn,
 	type HasPermissionBaseInput,
 } from "./permission";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export const hasPermission = async (
 	input: {

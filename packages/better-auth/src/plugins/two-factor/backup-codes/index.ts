@@ -1,6 +1,6 @@
 import { generateRandomString } from "../../../crypto/random";
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import type {
@@ -11,7 +11,7 @@ import type {
 import { APIError } from "better-call";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { verifyTwoFactor } from "../verify-two-factor";
-import type { GenericEndpointContext } from "../../../types";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export interface BackupCodeOptions {
 	/**

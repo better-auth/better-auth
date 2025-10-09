@@ -1,6 +1,10 @@
 import * as z from "zod";
-import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
-import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+import { APIError } from "../../api";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -10,6 +14,7 @@ import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export interface EmailOTPOptions {
 	/**

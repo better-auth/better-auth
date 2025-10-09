@@ -1,14 +1,13 @@
-import type { BetterAuthPlugin } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import { getJwtToken, signJWT } from "./sign";
 import type { JSONWebKeySet, JWTPayload } from "jose";
+import { APIError, sessionMiddleware } from "../../api";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	sessionMiddleware,
-} from "../../api";
+} from "@better-auth/core/middleware";
 import { mergeSchema } from "../../db/schema";
 import * as z from "zod";
 import { BetterAuthError } from "@better-auth/core/error";

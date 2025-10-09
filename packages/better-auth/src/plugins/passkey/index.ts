@@ -13,10 +13,11 @@ import type {
 import { APIError } from "better-call";
 import { generateRandomString } from "../../crypto/random";
 import * as z from "zod";
-import { createAuthEndpoint } from "../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { sessionMiddleware } from "../../api";
 import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
-import type { BetterAuthPlugin, InferOptionSchema } from "../../types/plugins";
+import type { InferOptionSchema } from "../../types/plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { setSessionCookie } from "../../cookies";
 import { generateId } from "../../utils";
 import { mergeSchema } from "../../db/schema";

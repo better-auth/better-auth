@@ -1,4 +1,4 @@
-import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type { BetterAuthClientPlugin } from "./types";
 export * from "./vanilla";
 export * from "./query";

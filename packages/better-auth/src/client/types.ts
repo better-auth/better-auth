@@ -3,7 +3,7 @@ import type {
 	BetterFetchOption,
 	BetterFetchPlugin,
 } from "@better-fetch/fetch";
-import type { BetterAuthPlugin } from "../types/plugins";
+import type { BetterAuthPlugin, BetterAuthOptions } from "@better-auth/core";
 import type { Atom, WritableAtom } from "nanostores";
 import type {
 	LiteralString,
@@ -12,7 +12,7 @@ import type {
 } from "../types/helper";
 import type { Auth } from "../auth";
 import type { InferRoutes } from "./path-to-object";
-import type { BetterAuthOptions, Session, User } from "../types";
+import type { Session, User } from "../types";
 import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
 
 export type AtomListener = {

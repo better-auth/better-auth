@@ -1,11 +1,15 @@
 import { ClientSession, ObjectId, type Db, type MongoClient } from "mongodb";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	createAdapterFactory,
 	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
-import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
+import type {
+	DBAdapterDebugLogOption,
+	DBAdapter,
+	Where,
+} from "@better-auth/core/db/adapter";
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -261,7 +265,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 			};
 		};
 
-	let lazyAdapter: ((options: BetterAuthOptions) => Adapter) | null = null;
+	let lazyAdapter:
+		| ((options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>)
+		| null = null;
 	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
 		config: {
@@ -376,7 +382,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 	};
 	lazyAdapter = createAdapterFactory(adapterOptions);
 
-	return (options: BetterAuthOptions): Adapter => {
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return lazyAdapter(options);
 	};

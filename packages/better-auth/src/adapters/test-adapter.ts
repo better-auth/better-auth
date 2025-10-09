@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe } from "vitest";
-import type { Adapter, BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { getAuthTables } from "../db";
 import type { createTestSuite } from "./create-test-suite";
 import { TTY_COLORS } from "@better-auth/core/env";
@@ -38,8 +39,8 @@ export const testAdapter = async ({
 	adapter: (
 		options: BetterAuthOptions,
 	) =>
-		| Promise<(options: BetterAuthOptions) => Adapter>
-		| ((options: BetterAuthOptions) => Adapter);
+		| Promise<(options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>>
+		| ((options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>);
 	/**
 	 * A function that will run the database migrations.
 	 */
@@ -89,9 +90,9 @@ export const testAdapter = async ({
 		} satisfies BetterAuthOptions;
 	})();
 
-	let adapter: Adapter = (await getAdapter(betterAuthOptions))(
-		betterAuthOptions,
-	);
+	let adapter: DBAdapter<BetterAuthOptions> = (
+		await getAdapter(betterAuthOptions)
+	)(betterAuthOptions);
 
 	const adapterName = adapter.options?.adapterConfig.adapterName;
 	const adapterId = adapter.options?.adapterConfig.adapterId || adapter.id;

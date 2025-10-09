@@ -5,10 +5,14 @@ import {
 	type InputContext,
 	toResponse,
 } from "better-call";
-import type { AuthEndpoint, AuthMiddleware } from "./call";
-import type { AuthContext, HookEndpointContext } from "../types";
+import type {
+	AuthEndpoint,
+	AuthMiddleware,
+} from "@better-auth/core/middleware";
 import { createDefu } from "defu";
 import { shouldPublishLog } from "@better-auth/core/env";
+import type { AuthContext } from "@better-auth/core";
+import type { HookEndpointContext } from "../types";
 
 type InternalContext = InputContext<string, any> &
 	EndpointContext<string, any> & {

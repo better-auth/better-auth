@@ -4,8 +4,7 @@ import {
 	createRouter,
 	type Endpoint,
 } from "better-call";
-import type { AuthContext } from "../init";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares/origin-check";
 import {
@@ -42,9 +41,10 @@ import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
 import { type InternalLogger, logger } from "@better-auth/core/env";
-import type { BetterAuthPlugin } from "../plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
+import type { AuthContext } from "@better-auth/core";
 
 export function checkEndpointConflicts(
 	options: BetterAuthOptions,
@@ -352,5 +352,11 @@ export const router = <Option extends BetterAuthOptions>(
 
 export * from "./routes";
 export * from "./middlewares";
-export * from "./call";
 export { APIError } from "better-call";
+export {
+	createAuthEndpoint,
+	createAuthMiddleware,
+	optionsMiddleware,
+	type AuthEndpoint,
+	type AuthMiddleware,
+} from "@better-auth/core/middleware";

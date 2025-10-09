@@ -5,7 +5,7 @@ import type {
 import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
 import { sql } from "kysely";
 import { createLogger } from "@better-auth/core/env";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
