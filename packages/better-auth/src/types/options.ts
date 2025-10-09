@@ -23,7 +23,7 @@ import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import type { DBAdapterDebugLogOption } from "packages/core/dist/db/adapter";
+import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
 
 export type BetterAuthOptions = {
 	/**
