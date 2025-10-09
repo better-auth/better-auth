@@ -109,6 +109,10 @@ export const schema = {
 				required: false,
 			},
 			// All other metadata
+			referenceId: {
+				type: "string",
+				required: false,
+			},
 			metadata: {
 				type: "json",
 				required: false,

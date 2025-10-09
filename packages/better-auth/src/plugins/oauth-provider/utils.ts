@@ -8,13 +8,14 @@ import { createHash } from "@better-auth/utils/hash";
 import type { OAuthOptions, StoreTokenType } from "./types";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { databaseToSchema, type DatabaseClient } from "./register";
-import { timingSafeEqual } from "crypto";
+import Crypto from "crypto";
+import type { Auth } from "../../auth";
 
 /**
  * Gets the oAuth Provider Plugin
  * @internal
  */
-export const getOAuthProviderPlugin = (ctx: AuthContext) => {
+export const getOAuthProviderPlugin = (ctx: AuthContext | Auth) => {
 	return ctx.options.plugins?.find(
 		(plugin) => plugin.id === "oauthProvider",
 	) as ReturnType<typeof oauthProvider>;
@@ -24,7 +25,7 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
  * Gets the JWT Plugin
  * @internal
  */
-export const getJwtPlugin = (ctx: AuthContext) => {
+export const getJwtPlugin = (ctx: AuthContext | Auth) => {
 	const plugin = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
 	if (!plugin) {
 		throw new BetterAuthError("jwt_config", "jwt plugin not found");
@@ -44,7 +45,7 @@ export async function getClient(
 		(client) => client.clientId === clientId,
 	);
 	if (trustedClient) {
-		return trustedClient;
+		return Object.assign({}, trustedClient);
 	}
 	const dbClient = await ctx.context.adapter
 		.findOne<DatabaseClient>({
@@ -127,7 +128,7 @@ async function verifyStoredClientSecret(
 		const a = Buffer.from(valueA, "utf8");
 		const b = Buffer.from(valueB, "utf8");
 		// Inputs must be the same length for timingSafeEqual
-		return a.length === b.length && timingSafeEqual(a, b);
+		return a.length === b.length && Crypto.timingSafeEqual(a, b);
 	}
 
 	if (storageMethod === "hashed") {
@@ -139,13 +140,17 @@ async function verifyStoredClientSecret(
 			sideChannelEqual(hashedClientSecret, storedClientSecret)
 		);
 	} else if (typeof storageMethod === "object" && "hash" in storageMethod) {
-		const hashedClientSecret = clientSecret
-			? await storageMethod.hash(clientSecret)
-			: undefined;
-		return (
-			!!hashedClientSecret &&
-			sideChannelEqual(hashedClientSecret, storedClientSecret)
-		);
+		if (storageMethod.verify) {
+			return !!clientSecret && (await storageMethod.verify(clientSecret));
+		} else {
+			const hashedClientSecret = clientSecret
+				? await storageMethod.hash(clientSecret)
+				: undefined;
+			return (
+				!!hashedClientSecret &&
+				sideChannelEqual(hashedClientSecret, storedClientSecret)
+			);
+		}
 	} else if (
 		storageMethod === "encrypted" ||
 		(typeof storageMethod === "object" && "decrypt" in storageMethod)
@@ -331,7 +336,7 @@ export async function validateClientCredentials(
 	}
 
 	// If allowed scopes if set, must check against scopes
-	if (client.allowedScopes) {
+	if (client.scopes) {
 		if (!scopes) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "must request a scope",
@@ -339,7 +344,7 @@ export async function validateClientCredentials(
 			});
 		}
 		for (const sc of scopes) {
-			if (!client.allowedScopes.includes(sc)) {
+			if (!client.scopes.includes(sc)) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: `client does not allow scope ${sc}`,
 					error: "invalid_scope",

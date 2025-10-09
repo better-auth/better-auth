@@ -7,7 +7,6 @@ import type {
 	VerificationValue,
 	OAuthRefreshToken,
 } from "./types";
-import { createHash } from "@better-auth/utils/hash";
 import { generateRandomString } from "../../crypto";
 import {
 	basicToClientCredentials,
@@ -22,6 +21,7 @@ import type { GrantType } from "../../oauth-2.1/types";
 import { SignJWT, type JWTPayload } from "jose";
 import { signJWT } from "../jwt/sign";
 import { toExpJWT } from "../jwt/utils";
+import { generateCodeChallenge } from "../../oauth2";
 
 /**
  * Handles the /oauth2/token endpoint by delegating
@@ -31,18 +31,7 @@ export async function tokenEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
 ) {
-	let { body } = ctx;
-	if (!body) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "request body not found",
-			error: "invalid_request",
-		});
-	}
-	if (body instanceof FormData) {
-		body = Object.fromEntries(body.entries());
-	}
-
-	const grantType: GrantType | undefined = body?.grant_type;
+	const grantType: GrantType | undefined = ctx.body?.grant_type;
 
 	if (opts.grantTypes && grantType && !opts.grantTypes.includes(grantType)) {
 		throw new APIError("BAD_REQUEST", {
@@ -53,11 +42,11 @@ export async function tokenEndpoint(
 
 	switch (grantType) {
 		case "authorization_code":
-			return handleAuthorizationCodeGrant(ctx, opts, body);
+			return handleAuthorizationCodeGrant(ctx, opts);
 		case "client_credentials":
-			return handleClientCredentialsGrant(ctx, opts, body);
+			return handleClientCredentialsGrant(ctx, opts);
 		case "refresh_token":
-			return handleRefreshTokenGrant(ctx, opts, body);
+			return handleRefreshTokenGrant(ctx, opts);
 		case undefined:
 			throw new APIError("BAD_REQUEST", {
 				error_description: "missing required grant_type",
@@ -77,7 +66,7 @@ async function createJwtAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
 	user: User,
-	clientId: string,
+	client: SchemaClient,
 	audience: string | string[],
 	scopes: string[],
 	overrides?: {
@@ -89,8 +78,14 @@ async function createJwtAccessToken(
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
 	const expiresIn = opts.accessTokenExpiresIn ?? 3600;
 	const exp = overrides?.exp ?? iat + expiresIn;
-	const customClaims = opts.customJwtClaims
-		? await opts.customJwtClaims(user, scopes)
+	const customClaims = opts.customAccessTokenClaims
+		? await opts.customAccessTokenClaims({
+				user,
+				scopes,
+				resource: ctx.body.resource,
+				referenceId: client.referenceId,
+				metadata: client.metadata ? JSON.parse(client.metadata) : undefined,
+			})
 		: {};
 
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
@@ -107,7 +102,7 @@ async function createJwtAccessToken(
 					: audience?.length === 1
 						? audience.at(0)
 						: audience,
-			azp: clientId,
+			azp: client.clientId,
 			scope: scopes.join(" "),
 			sid: overrides?.sid,
 			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
@@ -125,8 +120,7 @@ async function createIdToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
 	user: User,
-	clientId: string,
-	clientSecret: string | undefined,
+	client: SchemaClient,
 	scopes: string[],
 	nonce?: string,
 ) {
@@ -144,7 +138,12 @@ async function createIdToken(
 	const acr = "urn:mace:incommon:iap:bronze";
 
 	const customClaims = opts.customIdTokenClaims
-		? await opts.customIdTokenClaims(user, scopes)
+		? await opts.customIdTokenClaims({
+				user,
+				scopes,
+				referenceId: client.referenceId,
+				metadata: client.metadata ? JSON.parse(client.metadata) : undefined,
+			})
 		: {};
 
 	const jwtPluginOptions = opts.disableJwtPlugin
@@ -158,7 +157,7 @@ async function createIdToken(
 		acr,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: user.id,
-		aud: clientId,
+		aud: client.clientId,
 		nonce,
 		iat,
 		exp,
@@ -166,7 +165,7 @@ async function createIdToken(
 
 	// Public clients without a client secret cannot receive an idToken as it can't be verified
 	// Confidential clients would still receive an idToken signed by the clientSecret
-	if (opts.disableJwtPlugin && !clientSecret) {
+	if (opts.disableJwtPlugin && !client.clientSecret) {
 		return undefined;
 	}
 
@@ -178,7 +177,7 @@ async function createIdToken(
 						await decryptStoredClientSecret(
 							ctx,
 							opts.storeClientSecret,
-							clientSecret!,
+							client.clientSecret!,
 						),
 					),
 				)
@@ -240,7 +239,7 @@ async function createOpaqueAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
 	user: User | undefined,
-	clientId: string,
+	client: SchemaClient,
 	scopes: string[],
 	payload: JWTPayload,
 	refreshId?: string,
@@ -255,7 +254,7 @@ async function createOpaqueAccessToken(
 		model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 		data: {
 			token: await storeToken(opts.storeTokens, token, "access_token"),
-			clientId,
+			clientId: client.clientId,
 			sessionId: payload?.sid,
 			userId: user?.id,
 			refreshId,
@@ -271,7 +270,7 @@ async function createRefreshToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
 	user: User,
-	clientId: string,
+	client: SchemaClient,
 	scopes: string[],
 	payload: JWTPayload,
 ) {
@@ -285,7 +284,7 @@ async function createRefreshToken(
 		model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
 		data: {
 			token: await storeToken(opts.storeTokens, token, "refresh_token"),
-			clientId,
+			clientId: client.clientId,
 			sessionId,
 			userId: user.id,
 			scopes: scopes.join(" "), // TODO: remove join when native arrays supported
@@ -372,7 +371,7 @@ async function createUserTokens(
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
 		isRefreshToken && !isJwtAccessToken
-			? await createRefreshToken(ctx, opts, user, client.clientId, scopes, {
+			? await createRefreshToken(ctx, opts, user, client, scopes, {
 					iat,
 					exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
 					sid: sessionId,
@@ -382,24 +381,16 @@ async function createUserTokens(
 	// Sign jwt and refresh tokens in parallel
 	const [accessToken, refreshToken, idToken] = await Promise.all([
 		isJwtAccessToken
-			? createJwtAccessToken(
-					ctx,
-					opts,
-					user,
-					client.clientId,
-					audience,
-					scopes,
-					{
-						iat,
-						exp,
-						sid: sessionId,
-					},
-				)
+			? createJwtAccessToken(ctx, opts, user, client, audience, scopes, {
+					iat,
+					exp,
+					sid: sessionId,
+				})
 			: createOpaqueAccessToken(
 					ctx,
 					opts,
 					user,
-					client.clientId,
+					client,
 					scopes,
 					{
 						iat,
@@ -411,22 +402,14 @@ async function createUserTokens(
 		earlyRefreshToken
 			? earlyRefreshToken
 			: isRefreshToken
-				? createRefreshToken(ctx, opts, user, client.clientId, scopes, {
+				? createRefreshToken(ctx, opts, user, client, scopes, {
 						iat,
 						exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
 						sid: sessionId,
 					})
 				: undefined,
 		isIdToken
-			? createIdToken(
-					ctx,
-					opts,
-					user,
-					client.clientId,
-					client.clientSecret,
-					scopes,
-					nonce,
-				)
+			? createIdToken(ctx, opts, user, client, scopes, nonce)
 			: undefined,
 	]);
 
@@ -497,7 +480,7 @@ async function checkVerificationValue(
 			error: "invalid_verification",
 		});
 	}
-	if (verificationValue.clientId !== client_id) {
+	if (verificationValue.query.client_id !== client_id) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "invalid client_id",
 			error: "invalid_client",
@@ -510,8 +493,8 @@ async function checkVerificationValue(
 		});
 	}
 	if (
-		verificationValue.redirectUri &&
-		verificationValue.redirectUri != redirect_uri
+		verificationValue.query?.redirect_uri &&
+		verificationValue.query?.redirect_uri !== redirect_uri
 	) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "missing verification redirect_uri",
@@ -528,7 +511,6 @@ async function checkVerificationValue(
 async function handleAuthorizationCodeGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
-	body: any,
 ) {
 	let {
 		client_id,
@@ -542,7 +524,7 @@ async function handleAuthorizationCodeGrant(
 		code?: string;
 		code_verifier?: string;
 		redirect_uri?: string;
-	} = body;
+	} = ctx.body;
 	const authorization = ctx.request?.headers.get("authorization") || null;
 
 	// Convert basic authorization
@@ -590,7 +572,7 @@ async function handleAuthorizationCodeGrant(
 		client_id,
 		redirect_uri,
 	);
-	const scopes = verificationValue.scopes?.split(" ");
+	const scopes = verificationValue.query.scope?.split(" ");
 
 	/** Verify Client */
 	const client = await validateClientCredentials(
@@ -603,14 +585,14 @@ async function handleAuthorizationCodeGrant(
 
 	/** Check challenge */
 	const challenge =
-		code_verifier && verificationValue.codeChallengeMethod === "S256"
-			? await createHash("SHA-256", "base64urlnopad").digest(code_verifier)
+		code_verifier && verificationValue.query?.code_challenge_method === "S256"
+			? await generateCodeChallenge(code_verifier)
 			: undefined;
 	if (
 		// AuthCodeWithSecret - Required if sent
 		isAuthCodeWithSecret &&
-		(challenge || verificationValue?.codeChallenge) &&
-		challenge !== verificationValue.codeChallenge
+		(challenge || verificationValue?.query?.code_challenge) &&
+		challenge !== verificationValue.query?.code_challenge
 	) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "code verification failed",
@@ -620,7 +602,7 @@ async function handleAuthorizationCodeGrant(
 	if (
 		// AuthCodeWithPkce - Always required
 		isAuthCodeWithPkce &&
-		challenge !== verificationValue.codeChallenge
+		challenge !== verificationValue.query?.code_challenge
 	) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "code verification failed",
@@ -666,10 +648,10 @@ async function handleAuthorizationCodeGrant(
 		ctx,
 		opts,
 		client,
-		verificationValue.scopes?.split(" ") ?? [],
+		verificationValue.query.scope?.split(" ") ?? [],
 		user,
 		session.id,
-		verificationValue.nonce,
+		verificationValue.query?.nonce,
 	);
 }
 
@@ -682,7 +664,6 @@ async function handleAuthorizationCodeGrant(
 async function handleClientCredentialsGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
-	body: any,
 ) {
 	let {
 		client_id,
@@ -692,7 +673,7 @@ async function handleClientCredentialsGrant(
 		client_id?: string;
 		client_secret?: string;
 		scope?: string;
-	} = body;
+	} = ctx.body;
 	const authorization = ctx.request?.headers.get("authorization") || null;
 
 	// Convert basic authorization
@@ -746,7 +727,7 @@ async function handleClientCredentialsGrant(
 		: getJwtPlugin(ctx.context).options;
 	const audience = await checkResource(ctx, opts, requestedScopes);
 
-	await validateClientCredentials(
+	const client = await validateClientCredentials(
 		ctx,
 		opts,
 		client_id,
@@ -774,7 +755,7 @@ async function handleClientCredentialsGrant(
 					options: jwtPluginOptions,
 					payload: {
 						aud: audience,
-						azp: client_id,
+						azp: client.clientId,
 						scope: requestedScopes.join(" "),
 						iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 						iat,
@@ -785,7 +766,7 @@ async function handleClientCredentialsGrant(
 					ctx,
 					opts,
 					undefined,
-					client_id,
+					client,
 					requestedScopes,
 					{
 						iat,
@@ -819,7 +800,6 @@ async function handleClientCredentialsGrant(
 async function handleRefreshTokenGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
-	body: any,
 ) {
 	let {
 		client_id,
@@ -831,7 +811,7 @@ async function handleRefreshTokenGrant(
 		client_secret?: string;
 		refresh_token?: string;
 		scope?: string;
-	} = body;
+	} = ctx.body;
 
 	const authorization = ctx.request?.headers.get("authorization") || null;
 
@@ -888,7 +868,7 @@ async function handleRefreshTokenGrant(
 			error: "invalid_request",
 		});
 	}
-	if (refreshToken.clientId !== client_id?.toString()) {
+	if (refreshToken.clientId !== client_id) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid client_id",
 			error: "invalid_client",
