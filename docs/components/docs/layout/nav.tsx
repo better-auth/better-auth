@@ -48,7 +48,7 @@ export function NavProvider({
 		if (transparentMode !== "top") return;
 
 		const listener = () => {
-			if (document.documentElement.hasAttribute('data-anchor-scrolling')) {
+			if (document.documentElement.hasAttribute("data-anchor-scrolling")) {
 				return;
 			}
 			setTransparent(window.scrollY < 10);

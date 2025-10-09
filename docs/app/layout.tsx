@@ -59,7 +59,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 								: undefined,
 						}}
 					>
-						<AnchorScroll/>
+						<AnchorScroll />
 						<NavbarProvider>
 							<Navbar />
 							{children}

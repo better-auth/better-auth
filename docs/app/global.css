@@ -270,7 +270,6 @@ html:not([data-anchor-scrolling]) {
 	scroll-behavior: smooth;
 }
 
-
 /* Global, accessible custom scrollbars */
 * {
 	scrollbar-width: thin; /* Firefox */
