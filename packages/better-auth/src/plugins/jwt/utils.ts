@@ -1,5 +1,5 @@
 import type { AuthContext } from "../../types";
-import type { LogHandlerParams, LogLevel } from "../../utils/logger";
+import type { InternalLogger } from "@better-auth/core/env";
 import type { CryptoKeyIdAlg, JwkAlgorithm, JwtPluginOptions } from "./types";
 import { importJWK, type JWK } from "jose";
 import { BetterAuthError } from "../../error";
@@ -139,7 +139,7 @@ export function toJwtTime(time: number | Date | string, iat?: number): number {
  */
 export function withoutJwtClaims(
 	data: Record<string, unknown>,
-	logger?: Record<LogLevel, (...params: LogHandlerParams) => void>,
+	logger?: InternalLogger,
 ): Omit<
 	Record<string, unknown>,
 	"aud" | "exp" | "iat" | "iss" | "jti" | "nbf" | "sub"
