@@ -193,7 +193,7 @@ type CreateCookieGetterFn = (
 
 type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 	userId: string,
-	c: GenericEndpointContext<Options>,
+	ctx: GenericEndpointContext<Options>,
 ) => Promise<boolean>;
 
 export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
