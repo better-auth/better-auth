@@ -1,9 +1,9 @@
-import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	DBAdapter,
 	DBTransactionAdapter,
 	Where,
 	DBAdapterSchemaCreation,
+	DBAdapterInstance,
 } from "@better-auth/core/db/adapter";
 
 export type { Where };
@@ -25,6 +25,7 @@ export type TransactionAdapter = DBTransactionAdapter;
  */
 export type AdapterSchemaCreation = DBAdapterSchemaCreation;
 
-export interface AdapterInstance {
-	(options: BetterAuthOptions): Adapter;
-}
+/**
+ * @deprecated Use `DBAdapterInstance` from `@better-auth/core/db/adapter` instead.
+ */
+export type AdapterInstance = DBAdapterInstance;
