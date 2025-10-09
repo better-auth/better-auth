@@ -11,7 +11,7 @@ import type {
 import type { Session } from "inspector";
 import type { User } from "../../types";
 import type { passkey as passkeyPl, Passkey } from ".";
-import type { BetterAuthClientPlugin, ClientOptions } from "../../client/types";
+import type { BetterAuthClientPlugin } from "../../client/types";
 import { useAuthQuery } from "../../client";
 import { atom } from "nanostores";
 
@@ -22,7 +22,6 @@ export const getPasskeyActions = (
 	}: {
 		$listPasskeys: ReturnType<typeof atom<any>>;
 	},
-	co: ClientOptions = {},
 ) => {
 	const signInPasskey = async (
 		opts?: {
@@ -31,23 +30,6 @@ export const getPasskeyActions = (
 		},
 		options?: BetterFetchOption,
 	) => {
-		const shouldThrowOnError = (() => {
-			if (options?.throw === true) {
-				return true;
-			}
-			if (opts?.fetchOptions?.throw === true && options?.throw !== false) {
-				return true;
-			}
-			if (
-				co.fetchOptions?.throw === true &&
-				options?.throw !== false &&
-				opts?.fetchOptions?.throw !== false
-			) {
-				return true;
-			}
-			return false;
-		})();
-
 		const response = await $fetch<PublicKeyCredentialRequestOptionsJSON>(
 			"/passkey/generate-authenticate-options",
 			{
@@ -55,11 +37,6 @@ export const getPasskeyActions = (
 				throw: false,
 			},
 		);
-
-		if (response.error && shouldThrowOnError) {
-			throw response.error;
-		}
-
 		if (!response.data) {
 			return response;
 		}
@@ -80,10 +57,6 @@ export const getPasskeyActions = (
 				method: "POST",
 				throw: false,
 			});
-
-			if (verified.error && shouldThrowOnError) {
-				throw verified.error;
-			}
 
 			return verified;
 		} catch (e) {
@@ -138,26 +111,6 @@ export const getPasskeyActions = (
 				throw: false,
 			},
 		);
-		const shouldThrowOnError = (() => {
-			if (fetchOpts?.throw === true) {
-				return true;
-			}
-			if (opts?.fetchOptions?.throw === true && fetchOpts?.throw !== false) {
-				return true;
-			}
-			if (
-				co.fetchOptions?.throw === true &&
-				fetchOpts?.throw !== false &&
-				opts?.fetchOptions?.throw !== false
-			) {
-				return true;
-			}
-			return false;
-		})();
-
-		if (options.error && shouldThrowOnError) {
-			throw options.error;
-		}
 
 		if (!options.data) {
 			return options;
@@ -179,10 +132,6 @@ export const getPasskeyActions = (
 				method: "POST",
 				throw: false,
 			});
-
-			if (verified.error && shouldThrowOnError) {
-				throw verified.error;
-			}
 
 			if (!verified.data) {
 				return verified;
@@ -261,14 +210,10 @@ export const passkeyClient = () => {
 	return {
 		id: "passkey",
 		$InferServerPlugin: {} as ReturnType<typeof passkeyPl>,
-		getActions: ($fetch, _, co) =>
-			getPasskeyActions(
-				$fetch,
-				{
-					$listPasskeys,
-				},
-				co,
-			),
+		getActions: ($fetch, _) =>
+			getPasskeyActions($fetch, {
+				$listPasskeys,
+			}),
 		getAtoms($fetch) {
 			const listPasskeys = useAuthQuery<Passkey[]>(
 				$listPasskeys,
