@@ -441,6 +441,8 @@ export interface CustomAdapter {
 	options?: Record<string, any> | undefined;
 }
 
-export interface DBAdapterInstance {
-	(options: BetterAuthOptions): DBAdapter<BetterAuthOptions>;
+export interface DBAdapterInstance<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> {
+	(options: BetterAuthOptions): DBAdapter<Options>;
 }
