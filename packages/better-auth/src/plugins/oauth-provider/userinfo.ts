@@ -54,9 +54,9 @@ export async function userInfoEndpoint(
 			error: "invalid_request",
 		});
 	}
-	const validate = await validateAccessToken(ctx, opts, token);
+	const jwt = await validateAccessToken(ctx, opts, token);
 
-	const scopes = (validate.scope as string | undefined)?.split(" ");
+	const scopes = (jwt.scope as string | undefined)?.split(" ");
 	if (!scopes?.includes("openid")) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "Missing required scope",
@@ -64,14 +64,14 @@ export async function userInfoEndpoint(
 		});
 	}
 
-	if (!validate.sub) {
+	if (!jwt.sub) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "user not found",
 			error: "invalid_request",
 		});
 	}
 
-	const user = await ctx.context.internalAdapter.findUserById(validate.sub);
+	const user = await ctx.context.internalAdapter.findUserById(jwt.sub);
 	if (!user) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "user not found",
@@ -81,8 +81,8 @@ export async function userInfoEndpoint(
 
 	const baseUserClaims = userNormalClaims(user, scopes ?? []);
 	const additionalInfoUserClaims =
-		opts.getAdditionalUserInfoClaim && scopes?.length
-			? await opts.getAdditionalUserInfoClaim(user, scopes)
+		opts.customUserInfoClaims && scopes?.length
+			? await opts.customUserInfoClaims({ user, scopes, jwt })
 			: {};
 	return ctx.json({
 		...baseUserClaims,

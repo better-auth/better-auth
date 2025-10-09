@@ -138,7 +138,7 @@ describe("oauth userinfo", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		const response = await auth.api.registerOAuthClient({
+		const response = await auth.api.createOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -161,7 +161,7 @@ describe("oauth userinfo", async () => {
 
 	it("should fail without the openid scope", async () => {
 		const tokens = await getTokens({
-			scopes: [],
+			scopes: ["profile"],
 		});
 		expect(tokens.data?.access_token).toBeDefined();
 		const userinfo = await client.$fetch<Record<string, string>>(

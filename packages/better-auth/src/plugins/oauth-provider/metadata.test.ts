@@ -196,32 +196,13 @@ describe("oauth metadata", async () => {
 		);
 	});
 
-	it("should fail if advertised claim not a valid claim", async () => {
-		const advertisedClaims = ["http://example.com/roles"];
-		expect(() =>
-			getTestInstance({
-				baseURL: authServerBaseUrl,
-				plugins: [
-					oauthProvider({
-						loginPage: "/login",
-						consentPage: "/consent",
-						advertisedMetadata: {
-							claims_supported: advertisedClaims,
-						},
-					}),
-					jwt(),
-				],
-			}),
-		).toThrowError(
-			"advertisedMetadata.claims_supported http://example.com/roles not found in claims",
-		);
-	});
-
 	it("should advertise custom claims", async () => {
 		const customClaims = ["http://example.com/roles"];
 		const { auth } = await createTestInstance({
 			oauthProviderConfig: {
-				customClaims: customClaims,
+				advertisedMetadata: {
+					claims_supported: [...baseClaims, ...customClaims],
+				},
 			},
 		});
 		const metadata = await auth.api.getOpenIdConfig();

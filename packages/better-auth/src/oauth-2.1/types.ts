@@ -244,7 +244,7 @@ export interface OAuthClient {
 	client_secret_expires_at?: number;
 	scope?: string;
 	//---- Recommended client data ----//
-	user_id?: string;
+	user_id?: string | null;
 	client_id_issued_at?: number;
 	//---- UI Metadata ----//
 	client_name?: string;
@@ -261,7 +261,7 @@ export interface OAuthClient {
 	software_version?: string;
 	software_statement?: string;
 	//---- Authentication Metadata ----//
-	redirect_uris?: string[];
+	redirect_uris: string[];
 	token_endpoint_auth_method?:
 		| "none"
 		| "client_secret_basic"
@@ -276,7 +276,8 @@ export interface OAuthClient {
 	disabled?: boolean;
 	skip_consent?: boolean;
 	//---- All other metadata ----//
-	[key: string]: any;
+	reference_id?: string;
+	[key: string]: unknown;
 }
 
 /**
