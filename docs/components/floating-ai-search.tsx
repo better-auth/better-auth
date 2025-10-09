@@ -220,7 +220,8 @@ function Message({
 
 	for (const part of message.parts ?? []) {
 		if (part.type === "text") {
-			markdown += part.text;
+			const textWithCitations = part.text.replace(/\((\d+)\)/g, '<pre className="font-mono text-xs"> ($1) </pre>');
+			markdown += textWithCitations;
 			continue;
 		}
 
@@ -242,20 +243,26 @@ function Message({
 			<div className="prose text-sm">
 				<Markdown text={markdown} />
 			</div>
-			{links && links.length > 0 ? (
-				<div className="mt-2 flex flex-row flex-wrap items-center gap-1">
-					{links.map((item, i) => (
-						<Link
-							key={i}
-							href={item.url}
-							className="block text-xs rounded-lg border p-3 hover:bg-fd-accent hover:text-fd-accent-foreground"
-						>
-							<p className="font-medium">{item.title}</p>
-							<p className="text-fd-muted-foreground">Reference {item.label}</p>
-						</Link>
-					))}
+			{links && links.length > 0 && (
+				<div className="mt-3 flex flex-col gap-2">
+					<p className="text-xs font-medium text-fd-muted-foreground">
+						References:
+					</p>
+					<div className="flex flex-col gap-1">
+						{links.map((item, i) => (
+							<Link
+								key={i}
+								href={item.url}
+								className="flex items-center gap-2 text-xs rounded-lg border p-2 hover:bg-fd-accent hover:text-fd-accent-foreground transition-colors"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								<span className="truncate">{item.title || item.label}</span>
+							</Link>
+						))}
+					</div>
 				</div>
-			) : null}
+			)}
 		</div>
 	);
 }
@@ -306,9 +313,6 @@ export function AISearchTrigger() {
 						}}
 					>
 						<div className="sticky top-0 flex gap-2 items-center py-2 w-full max-w-[600px]">
-							<p className="text-xs flex-1 text-fd-muted-foreground">
-								Powered by Inkeep AI
-							</p>
 							<button
 								aria-label="Close"
 								tabIndex={-1}
@@ -316,7 +320,7 @@ export function AISearchTrigger() {
 									buttonVariants({
 										size: "icon-sm",
 										color: "secondary",
-										className: "rounded-full",
+										className: "rounded-full ml-auto",
 									}),
 								)}
 								onClick={() => setOpen(false)}
@@ -333,8 +337,8 @@ export function AISearchTrigger() {
 						>
 							<div className="flex flex-col gap-4">
 								{chat.messages
-									.filter((msg) => msg.role !== "system")
-									.map((item) => (
+									.filter((msg: UIMessage) => msg.role !== "system")
+									.map((item: UIMessage) => (
 										<Message key={item.id} message={item} />
 									))}
 							</div>
