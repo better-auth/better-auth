@@ -89,17 +89,6 @@ export const wechat = (options: WeChatOptions) => {
 					options.redirectURI || redirectURI,
 				)}&state=${state}&lang=${options.lang || "cn"}#wechat_redirect`,
 			);
-			const params = new URLSearchParams({
-				appid: options.clientId,
-				redirect_uri: encodeURIComponent(options.redirectURI || redirectURI),
-				response_type: "code",
-				scope: _scopes.join(","),
-				state: state,
-				lang: options.lang || "cn",
-			});
-
-			const url = `${baseUrl}?${params.toString()}#wechat_redirect`;
-			return new URL(url);
 		},
 
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -151,7 +140,7 @@ export const wechat = (options: WeChatOptions) => {
 			? options.refreshAccessToken
 			: async (refreshToken) => {
 					const params = new URLSearchParams({
-						appid: options.appId,
+						appid: options.clientId,
 						grant_type: "refresh_token",
 						refresh_token: refreshToken,
 					});
