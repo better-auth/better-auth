@@ -1,12 +1,18 @@
 import { createFetch } from "@better-fetch/fetch";
 import { getBaseURL } from "../utils/url";
 import { type WritableAtom } from "nanostores";
-import type { AtomListener, ClientOptions } from "./types";
+import type {
+	BetterAuthClientOptions,
+	ClientAtomListener,
+} from "@better-auth/core";
 import { redirectPlugin } from "./fetch-plugins";
 import { getSessionAtom } from "./session-atom";
 import { parseJSON } from "./parser";
 
-export const getClientConfig = (options?: ClientOptions, loadEnv?: boolean) => {
+export const getClientConfig = (
+	options?: BetterAuthClientOptions,
+	loadEnv?: boolean,
+) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
 	const baseURL =
@@ -62,7 +68,7 @@ export const getClientConfig = (options?: ClientOptions, loadEnv?: boolean) => {
 		"/revoke-other-sessions": "POST",
 		"/delete-user": "POST",
 	};
-	const atomListeners: AtomListener[] = [
+	const atomListeners: ClientAtomListener[] = [
 		{
 			signal: "$sessionSignal",
 			matcher(path) {
