@@ -93,7 +93,7 @@ export function parseInputData<T extends Record<string, any>>(
 	for (const key in fields) {
 		if (key in data) {
 			if (fields[key]!.input === false) {
-				if (fields[key]!.defaultValue) {
+				if (fields[key]!.defaultValue !== undefined) {
 					parsedData[key] = fields[key]!.defaultValue;
 					continue;
 				}
@@ -116,7 +116,7 @@ export function parseInputData<T extends Record<string, any>>(
 			continue;
 		}
 
-		if (fields[key]!.defaultValue && action === "create") {
+		if (fields[key]!.defaultValue !== undefined && action === "create") {
 			parsedData[key] = fields[key]!.defaultValue;
 			continue;
 		}
