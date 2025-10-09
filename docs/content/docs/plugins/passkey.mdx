@@ -107,6 +107,10 @@ type addPasskey = {
 ```
 </APIMethod>
 
+<Callout>
+ Setting `throw: true` in the fetch options has no effect for the register and sign-in passkey responses — they will always return a data object containing the error object.
+</Callout>
+
 
 ### Sign in with a passkey
 
