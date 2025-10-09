@@ -1,13 +1,15 @@
 import { getClientConfig } from "../config";
 import { capitalizeFirstLetter } from "../../utils/misc";
 import type {
-	BetterAuthClientPlugin,
-	ClientOptions,
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
 } from "../types";
+import type {
+	BetterAuthClientPlugin,
+	BetterAuthClientOptions,
+} from "@better-auth/core";
 import { createDynamicPathProxy } from "../proxy";
 import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
 import type { Atom } from "nanostores";
@@ -17,25 +19,24 @@ import type {
 } from "@better-fetch/fetch";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 
-type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
-	infer Plugin
->
-	? Plugin extends BetterAuthClientPlugin
-		? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
-			? Atoms extends Record<string, any>
-				? {
-						[key in keyof Atoms as IsSignal<key> extends true
-							? never
-							: key extends string
-								? `use${Capitalize<key>}`
-								: never]: () => Atoms[key];
-					}
+type InferResolvedHooks<O extends BetterAuthClientOptions> =
+	O["plugins"] extends Array<infer Plugin>
+		? Plugin extends BetterAuthClientPlugin
+			? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+				? Atoms extends Record<string, any>
+					? {
+							[key in keyof Atoms as IsSignal<key> extends true
+								? never
+								: key extends string
+									? `use${Capitalize<key>}`
+									: never]: () => Atoms[key];
+						}
+					: {}
 				: {}
 			: {}
-		: {}
-	: {};
+		: {};
 
-export function createAuthClient<Option extends ClientOptions>(
+export function createAuthClient<Option extends BetterAuthClientOptions>(
 	options?: Option,
 ) {
 	const {

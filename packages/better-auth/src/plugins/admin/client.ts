@@ -1,4 +1,4 @@
-import type { BetterAuthClientPlugin } from "../../types";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { type AccessControl, type Role } from "../access";
 import { adminAc, defaultStatements, userAc } from "./access";
 import type { admin } from "./admin";

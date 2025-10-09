@@ -1,5 +1,6 @@
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import type { BetterAuthClientPlugin, BetterAuthOptions } from "../../types";
+import type { BetterAuthOptions } from "../../types";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { BetterAuthPlugin } from "../../types";
 
 export const inferAdditionalFields = <
