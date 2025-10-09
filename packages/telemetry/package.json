@@ -9,7 +9,7 @@
     ".": {
       "import": {
         "types": "./dist/index.d.ts",
-        "default": "./dist/index.mjs"
+        "default": "./dist/index.js"
       },
       "require": {
         "types": "./dist/index.d.cts",
@@ -25,12 +25,12 @@
     }
   },
   "scripts": {
-    "build": "unbuild --clean",
-    "stub": "unbuild --stub",
+    "build": "tsdown",
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
+    "tsdown": "^0.15.6",
     "type-fest": "^4.31.0",
     "unbuild": "catalog:"
   },
