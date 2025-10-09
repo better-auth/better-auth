@@ -1,39 +1,41 @@
 import { safeJSONParse } from "../../utils/json";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type {
-	Adapter,
-	BetterAuthOptions,
-	TransactionAdapter,
-	Where,
-} from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { generateId as defaultGenerateId } from "../../utils";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
-	CleanedWhere,
 } from "./types";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import { logger, TTY_COLORS, getColorDepth } from "@better-auth/core/env";
+import type {
+	DBAdapter,
+	DBTransactionAdapter,
+	Where,
+	CleanedWhere,
+} from "@better-auth/core/db/adapter";
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
 
 const createAsIsTransaction =
-	(adapter: Adapter) =>
-	<R>(fn: (trx: TransactionAdapter) => Promise<R>) =>
+	(adapter: DBAdapter<BetterAuthOptions>) =>
+	<R>(fn: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>) =>
 		fn(adapter);
 
-export type AdapterFactory = (options: BetterAuthOptions) => Adapter;
+export type AdapterFactory = (
+	options: BetterAuthOptions,
+) => DBAdapter<BetterAuthOptions>;
 
 export const createAdapterFactory =
 	({
 		adapter: customAdapter,
 		config: cfg,
 	}: AdapterFactoryOptions): AdapterFactory =>
-	(options: BetterAuthOptions): Adapter => {
+	(options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		const uniqueAdapterFactoryInstanceId = Math.random()
 			.toString(36)
 			.substring(2, 15);
@@ -559,8 +561,10 @@ export const createAdapterFactory =
 			transformWhereClause,
 		});
 
-		let lazyLoadTransaction: Adapter["transaction"] | null = null;
-		const adapter: Adapter = {
+		let lazyLoadTransaction:
+			| DBAdapter<BetterAuthOptions>["transaction"]
+			| null = null;
+		const adapter: DBAdapter<BetterAuthOptions> = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
