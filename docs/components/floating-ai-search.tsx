@@ -220,7 +220,10 @@ function Message({
 
 	for (const part of message.parts ?? []) {
 		if (part.type === "text") {
-			const textWithCitations = part.text.replace(/\((\d+)\)/g, '<pre className="font-mono text-xs"> ($1) </pre>');
+			const textWithCitations = part.text.replace(
+				/\((\d+)\)/g,
+				'<pre className="font-mono text-xs"> ($1) </pre>',
+			);
 			markdown += textWithCitations;
 			continue;
 		}
