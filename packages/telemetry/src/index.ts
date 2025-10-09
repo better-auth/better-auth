@@ -5,7 +5,7 @@ import {
 	isTest,
 } from "@better-auth/core/env";
 import { getProjectId } from "./project-id";
-import type { BetterAuthOptions } from "./types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
 import { detectDatabase } from "./detectors/detect-database";
 import { detectFramework } from "./detectors/detect-framework";
@@ -14,10 +14,8 @@ import { detectPackageManager } from "./detectors/detect-project-info";
 import { betterFetch } from "@better-fetch/fetch";
 import type { TelemetryContext, TelemetryEvent } from "./types";
 import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
-
-export * from "./types";
-export { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
-
+export { getTelemetryAuthConfig };
+export type { TelemetryEvent } from "./types";
 export async function createTelemetry(
 	options: BetterAuthOptions,
 	context?: TelemetryContext,
@@ -28,27 +26,37 @@ export async function createTelemetry(
 
 	const TELEMETRY_ENDPOINT = ENV.BETTER_AUTH_TELEMETRY_ENDPOINT;
 	const track = async (event: TelemetryEvent) => {
-		try {
-			if (context?.customTrack) {
-				await context.customTrack(event);
+		if (context?.customTrack) {
+			await context.customTrack(event).catch((reason: any) => {
+				globalLog(
+					"error",
+					`Telemetry failed (custom): ${reason}\nOn event:`,
+					options,
+					JSON.stringify(event, null, 2),
+				);
+			});
+		} else {
+			if (debugEnabled) {
+				globalLog(
+					"info",
+					"telemetry event",
+					null,
+					JSON.stringify(event, null, 2),
+				);
 			} else {
-				if (debugEnabled) {
-					await Promise.resolve(
-						globalLog(
-							"info",
-							"telemetry event",
-							null,
-							JSON.stringify(event, null, 2),
-						),
+				await betterFetch(TELEMETRY_ENDPOINT, {
+					method: "POST",
+					body: event,
+				}).catch((msg: string) => {
+					globalLog(
+						"error",
+						`Telemetry failed (endpoint): ${msg}\nOn event:`,
+						options,
+						JSON.stringify(event, null, 2),
 					);
-				} else {
-					await betterFetch(TELEMETRY_ENDPOINT, {
-						method: "POST",
-						body: event,
-					});
-				}
+				});
 			}
-		} catch {}
+		}
 	};
 
 	const isEnabled = async () => {
