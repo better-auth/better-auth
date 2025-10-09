@@ -1,4 +1,4 @@
-import type { BetterAuthClientPlugin } from "../../types";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { BetterAuthOptions } from "@better-auth/core";
 
 export const InferServerPlugin = <

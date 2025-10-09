@@ -2,7 +2,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
-import type { ClientOptions, Session, User } from "../types";
+import type { Session, User } from "../types";
+import type { BetterAuthClientOptions } from "@better-auth/core";
 import { getMigrations } from "../db/get-migration";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
@@ -33,7 +34,7 @@ afterAll(async () => {
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
-	C extends ClientOptions,
+	C extends BetterAuthClientOptions,
 >(
 	options?: O,
 	config?: {
