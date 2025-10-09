@@ -506,8 +506,12 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 							message: "Backup codes aren't enabled",
 						});
 					}
-					const backupCodes = await getBackupCodes(
+					const decryptedBackupCodes = await decryptBackupCodes(
+						ctx,
 						twoFactor.backupCodes,
+					);
+					const backupCodes = await getBackupCodes(
+						decryptedBackupCodes,
 						ctx.context.secret,
 					);
 					if (!backupCodes) {
@@ -515,13 +519,9 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
-					const decryptedBackupCodes = await decryptBackupCodes(
-						ctx,
-						twoFactor.backupCodes,
-					);
 					return ctx.json({
 						status: true,
-						backupCodes: decryptedBackupCodes,
+						backupCodes,
 					});
 				},
 			),
