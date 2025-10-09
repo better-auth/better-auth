@@ -72,10 +72,18 @@ function SearchAIActions() {
 	);
 }
 
+const suggestions = [
+	"How do I set up authentication with Better Auth?",
+	"How to integrate Better Auth with NextJs?",
+	"How to add two-factor authentication?",
+	"How to setup SSO with Google?",
+];
+
 function SearchAIInput(props: ComponentProps<"form">) {
-	const { status, sendMessage, stop } = useChatContext();
+	const { status, sendMessage, stop, messages } = useChatContext();
 	const [input, setInput] = useState("");
 	const isLoading = status === "streaming" || status === "submitted";
+	const showSuggestions = messages.length === 0 && !isLoading;
 
 	const onStart = (e?: SyntheticEvent) => {
 		e?.preventDefault();
@@ -83,62 +91,87 @@ function SearchAIInput(props: ComponentProps<"form">) {
 		setInput("");
 	};
 
+	const handleSuggestionClick = (suggestion: string) => {
+		setInput(suggestion);
+		void sendMessage({ text: suggestion });
+	};
+
 	useEffect(() => {
 		if (isLoading) document.getElementById("nd-ai-input")?.focus();
 	}, [isLoading]);
 
 	return (
-		<form
-			{...props}
-			className={cn("flex items-start pe-2", props.className)}
-			onSubmit={onStart}
-		>
-			<Input
-				value={input}
-				placeholder={isLoading ? "AI is answering..." : "Ask AI"}
-				autoFocus
-				className="p-4"
-				disabled={status === "streaming" || status === "submitted"}
-				onChange={(e) => {
-					setInput(e.target.value);
-				}}
-				onKeyDown={(event) => {
-					if (!event.shiftKey && event.key === "Enter") {
-						onStart(event);
-					}
-				}}
-			/>
-			{isLoading ? (
-				<button
-					key="bn"
-					type="button"
-					className={cn(
-						buttonVariants({
-							color: "secondary",
-							className: "transition-all rounded-full mt-2 gap-2",
-						}),
-					)}
-					onClick={stop}
-				>
-					<Loader2 className="size-4 animate-spin text-fd-muted-foreground" />
-					Abort Answer
-				</button>
-			) : (
-				<button
-					key="bn"
-					type="submit"
-					className={cn(
-						buttonVariants({
-							color: "secondary",
-							className: "transition-all rounded-full mt-2",
-						}),
-					)}
-					disabled={input.length === 0}
-				>
-					<Send className="size-4" />
-				</button>
+		<div className="flex flex-col">
+			<form
+				{...props}
+				className={cn("flex items-start pe-2", props.className)}
+				onSubmit={onStart}
+			>
+				<Input
+					value={input}
+					placeholder={isLoading ? "AI is answering..." : "Ask AI"}
+					autoFocus
+					className="p-4"
+					disabled={status === "streaming" || status === "submitted"}
+					onChange={(e) => {
+						setInput(e.target.value);
+					}}
+					onKeyDown={(event) => {
+						if (!event.shiftKey && event.key === "Enter") {
+							onStart(event);
+						}
+					}}
+				/>
+				{isLoading ? (
+					<button
+						key="bn"
+						type="button"
+						className={cn(
+							buttonVariants({
+								color: "secondary",
+								className: "transition-all rounded-full mt-2 gap-2",
+							}),
+						)}
+						onClick={stop}
+					>
+						<Loader2 className="size-4 animate-spin text-fd-muted-foreground" />
+					</button>
+				) : (
+					<button
+						key="bn"
+						type="submit"
+						className={cn(
+							buttonVariants({
+								color: "secondary",
+								className: "transition-all rounded-full mt-2",
+							}),
+						)}
+						disabled={input.length === 0}
+					>
+						<Send className="size-4" />
+					</button>
+				)}
+			</form>
+
+			{showSuggestions && (
+				<div className="mt-3 px-2">
+					<p className="text-xs font-medium text-fd-muted-foreground mb-2">
+						Try asking:
+					</p>
+					<div className="flex flex-wrap gap-2">
+						{suggestions.slice(0, 4).map((suggestion, i) => (
+							<button
+								key={i}
+								onClick={() => handleSuggestionClick(suggestion)}
+								className="text-xs px-3 py-1.5 bg-fd-muted/30 hover:bg-fd-muted/50 text-fd-muted-foreground hover:text-fd-foreground rounded-full border border-fd-border/50 hover:border-fd-border transition-all duration-200 text-left"
+							>
+								{suggestion}
+							</button>
+						))}
+					</div>
+				</div>
 			)}
-		</form>
+		</div>
 	);
 }
 
@@ -279,6 +312,9 @@ export function AISearchTrigger() {
 		}),
 	});
 
+	const showSuggestions =
+		chat.messages.length === 0 && chat.status !== "streaming";
+
 	const onKeyPress = (e: KeyboardEvent) => {
 		if (e.key === "Escape" && open) {
 			setOpen(false);
@@ -352,7 +388,7 @@ export function AISearchTrigger() {
 					className={cn(
 						"fixed bottom-2 transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 rounded-2xl border shadow-xl overflow-hidden z-30",
 						open
-							? "w-[min(600px,90vw)] bg-fd-popover h-32"
+							? `w-[min(600px,90vw)] bg-fd-popover ${showSuggestions ? "h-48" : "h-32"}`
 							: "w-40 h-10 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background",
 					)}
 					style={{
