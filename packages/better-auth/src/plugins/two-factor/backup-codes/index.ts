@@ -445,7 +445,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						ctx,
 						backupCodes.encryptedBackupCodes,
 					);
-					await ctx.context.adapter.update({
+					await ctx.context.adapter.updateMany({
 						model: twoFactorTable,
 						update: {
 							backupCodes: storedBackupCodes,
