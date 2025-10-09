@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { checkEndpointConflicts } from "./index";
-import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { createEndpoint } from "better-call";
 import type { InternalLogger, LogLevel } from "@better-auth/core/env";
 
