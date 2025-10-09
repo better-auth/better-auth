@@ -12,6 +12,7 @@ export {
 export { getColorDepth } from "./color-depth";
 
 export {
+	TTY_COLORS,
 	globalLog,
 	createLogger,
 	shouldPublishLog,
