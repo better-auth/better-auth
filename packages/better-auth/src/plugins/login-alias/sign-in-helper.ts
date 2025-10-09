@@ -190,4 +190,3 @@ export async function findUserByAlias(
 		return null;
 	}
 }
-

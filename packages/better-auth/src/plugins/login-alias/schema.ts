@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * Login Alias Schema
- * 
+ *
  * This table stores alternative login identifiers for users.
  * Each alias points to a user and has a type (email, username, phone, etc.)
  */
@@ -100,4 +100,3 @@ export const AliasType = {
 } as const;
 
 export type AliasType = (typeof AliasType)[keyof typeof AliasType];
-

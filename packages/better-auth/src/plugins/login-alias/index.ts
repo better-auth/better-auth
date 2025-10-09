@@ -1,7 +1,14 @@
 import { z } from "zod";
-import { createAuthEndpoint, createAuthMiddleware } from "@better-auth/core/middleware";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/middleware";
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { loginAlias as loginAliasSchema, type LoginAlias, AliasType } from "./schema";
+import {
+	loginAlias as loginAliasSchema,
+	type LoginAlias,
+	AliasType,
+} from "./schema";
 import type { LoginAliasPluginOptions } from "./types";
 import { APIError } from "better-call";
 import { LOGIN_ALIAS_ERROR_CODES } from "./error-codes";
@@ -18,16 +25,16 @@ export * from "./error-codes";
 
 /**
  * Login Aliases Plugin
- * 
+ *
  * Allows users to have multiple login identifiers (email, username, phone, etc.)
  * all pointing to the same account. This is useful for large applications with
  * multiple identity integrations.
- * 
+ *
  * @example
  * ```ts
  * import { betterAuth } from "better-auth"
  * import { loginAlias } from "better-auth/plugins"
- * 
+ *
  * export const auth = betterAuth({
  *   plugins: [
  *     loginAlias({
@@ -245,7 +252,9 @@ export const loginAliasPlugin = (
 
 					// Check if verification is required
 					const isVerified =
-						verified !== undefined ? verified : !(opts.requireVerification[type] ?? false);
+						verified !== undefined
+							? verified
+							: !(opts.requireVerification[type] ?? false);
 
 					// Create the alias
 					const newAlias = await ctx.context.adapter.create<LoginAlias>({
@@ -323,10 +332,11 @@ export const loginAliasPlugin = (
 					});
 
 					// Also check if user has password in account table
-					const accounts = await ctx.context.internalAdapter.findAccounts(
-						userId,
+					const accounts =
+						await ctx.context.internalAdapter.findAccounts(userId);
+					const hasPassword = accounts.some(
+						(a) => a.providerId === "credential",
 					);
-					const hasPassword = accounts.some((a) => a.providerId === "credential");
 
 					if (userAliases.length === 1 && !hasPassword) {
 						throw new APIError("BAD_REQUEST", {
@@ -592,7 +602,10 @@ export const loginAliasPlugin = (
 							}
 						} catch (error) {
 							// If alias lookup fails, continue with normal sign-in
-							ctx.context.logger.error("Error checking alias on sign-in", error);
+							ctx.context.logger.error(
+								"Error checking alias on sign-in",
+								error,
+							);
 						}
 					}),
 				},
@@ -667,4 +680,3 @@ export const loginAliasPlugin = (
  * Export as named export
  */
 export { loginAliasPlugin as loginAlias };
-

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { loginAliasPlugin, AliasType } from "./index";
 import type { LoginAlias } from "./schema";
@@ -583,4 +583,3 @@ describe("Login Alias Plugin", async () => {
 		expect(overLimitRes.status).toBe(400);
 	});
 });
-

@@ -13,4 +13,3 @@ export const LOGIN_ALIAS_ERROR_CODES = {
 
 export type LoginAliasErrorCode =
 	(typeof LOGIN_ALIAS_ERROR_CODES)[keyof typeof LOGIN_ALIAS_ERROR_CODES];
-
