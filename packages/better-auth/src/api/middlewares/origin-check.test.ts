@@ -1,7 +1,7 @@
 import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
-import { createAuthEndpoint } from "../call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { originCheck } from "./origin-check";
 import * as z from "zod";
 
