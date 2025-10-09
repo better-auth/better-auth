@@ -1122,6 +1122,9 @@ importers:
       kysely:
         specifier: ^0.28.5
         version: 0.28.5
+      nanostores:
+        specifier: ^1.0.1
+        version: 1.0.1
       unbuild:
         specifier: 'catalog:'
         version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
