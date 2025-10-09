@@ -1,6 +1,9 @@
 import * as z from "zod";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { APIError } from "better-call";
 import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
