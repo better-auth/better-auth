@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "../../oauth-2.1/types";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from "../jwt";
 import { oauthProviderClient } from "./client";
+import { organizationClient } from "../organization/client";
+import { organization, type Organization } from "../organization";
 
 describe("oauth register", async () => {
 	const baseUrl = "http://localhost:3000";
@@ -75,18 +77,6 @@ describe("oauth register", async () => {
 		expect(response.data?.client_secret).toBeDefined();
 	});
 
-	it("should register private client with minimum requirements via server", async () => {
-		const response = await auth.api.registerOAuthClient({
-			headers,
-			body: {
-				redirect_uris: [redirectUri],
-			},
-		});
-		expect(response?.client_id).toBeDefined();
-		expect(response?.user_id).toBeDefined();
-		expect(response?.client_secret).toBeDefined();
-	});
-
 	it("should fail authorization_code without response type code", async () => {
 		const response = await serverClient.oauth2.register({
 			// @ts-expect-error testing with a different response type even though unsupported
@@ -120,7 +110,7 @@ describe("oauth register", async () => {
 	it.each(["native", "user-agent-based"] as OAuthClient["type"][])(
 		"should register public '%s' client with minimum requirements via server",
 		async (type) => {
-			const response = await auth.api.registerOAuthClient({
+			const response = await auth.api.createOAuthClient({
 				headers,
 				body: {
 					token_endpoint_auth_method: "none",
@@ -186,8 +176,7 @@ describe("oauth register", async () => {
 			applicationRequest.client_secret,
 		);
 		expect(response.data?.client_secret_expires_at).toEqual(0);
-		expect(response.data?.scope).toBeUndefined();
-		expect(response.data?.scope).not.toEqual(applicationRequest.scope);
+		expect(response.data?.scope).toBe(applicationRequest.scope);
 
 		expect(response.data?.user_id).toBeDefined();
 		expect(response.data?.user_id).not.toEqual(applicationRequest.user_id);
@@ -266,5 +255,74 @@ describe("oauth register - unauthenticated", async () => {
 			redirect_uris: [redirectUri],
 		});
 		expect(response.error?.status).toBe(401);
+	});
+});
+
+describe("oauth register - organization", async () => {
+	const providerId = "test";
+	const baseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: baseUrl,
+		plugins: [
+			organization(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				clientRegistrationReference({ session }) {
+					return (
+						(session?.activeOrganizationId as string | undefined) ?? undefined
+					);
+				},
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+
+	const { headers, user } = await signInWithTestUser();
+	const serverClient = createAuthClient({
+		plugins: [oauthProviderClient(), organizationClient()],
+		baseURL: baseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let org: Organization;
+	beforeAll(async () => {
+		const _org = await auth.api.createOrganization({
+			body: {
+				name: "my-org",
+				slug: "my-org",
+				userId: user.id,
+			},
+		});
+		expect(_org).toBeDefined();
+		org = _org!;
+		await serverClient.organization.setActive({
+			organizationId: org.id,
+			organizationSlug: org.slug,
+		});
+		const session = await serverClient.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect((session.data?.session as any).activeOrganizationId).toBe(org?.id);
+	});
+
+	it("should create organizational oauthClient", async () => {
+		const client = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+		});
+		expect(client.data?.user_id).toBeNull();
+		expect(client.data?.reference_id).toBe(org.id);
 	});
 });

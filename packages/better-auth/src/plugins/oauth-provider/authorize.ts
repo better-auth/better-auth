@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import { generateRandomString } from "../../crypto";
 import { getClient, storeToken } from "./utils";
+import type { Verification } from "../../db";
 
 /**
  * Formats an error url
@@ -28,9 +29,7 @@ export function formatErrorURL(
 }
 
 const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
-	const acceptJson = ctx.request?.headers
-		.get("accept")
-		?.includes("application/json");
+	const acceptJson = ctx.headers?.get("accept")?.includes("application/json");
 	if (acceptJson) {
 		return ctx.json({
 			redirect: true,
@@ -86,6 +85,16 @@ export async function authorizeEndpoint(
 		);
 	}
 
+	if (query?.prompt === "select_account" && !opts.selectAccountPage) {
+		throw ctx.redirect(
+			getErrorURL(
+				ctx,
+				`unsupported_prompt_${query.prompt}`,
+				"unsupported prompt type",
+			),
+		);
+	}
+
 	if (!(query.response_type === "code")) {
 		throw ctx.redirect(
 			getErrorURL(
@@ -108,6 +117,8 @@ export async function authorizeEndpoint(
 			getErrorURL(ctx, "client_disabled", "client is disabled"),
 		);
 	}
+	client.clientSecret = undefined;
+
 	const redirectUri = client.redirectUris?.find(
 		(url) => url === query.redirect_uri,
 	);
@@ -117,11 +128,11 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const requestScope = query.scope?.split(" ").filter((s) => s) ?? [];
-	const invalidScopes = requestScope.filter((scope) => {
+	const requestScopes = query.scope?.split(" ").filter((s) => s) ?? [];
+	const invalidScopes = requestScopes.filter((scope) => {
 		// invalid in scopes list
 		return (
-			!opts.scopes?.includes(scope) ||
+			!(client.scopes ?? opts.scopes)?.includes(scope) ||
 			// offline access must be requested through PKCE
 			(scope === "offline_access" &&
 				(query.code_challenge_method !== "S256" || !query.code_challenge))
@@ -136,6 +147,9 @@ export async function authorizeEndpoint(
 				query.state,
 			),
 		);
+	}
+	if (!query.scope) {
+		query.scope = (client.scopes ?? opts.scopes)?.join(" ");
 	}
 
 	if (!query.code_challenge || !query.code_challenge_method) {
@@ -173,18 +187,48 @@ export async function authorizeEndpoint(
 			ctx.context.secret,
 			cookieAttributes,
 		);
-		const reqestUrl = new URL(ctx.request.url);
-		return handleRedirect(ctx, `${opts.loginPage}${reqestUrl.search}`);
+		const requestUrl = new URL(ctx.request.url);
+		return handleRedirect(ctx, `${opts.loginPage}${requestUrl.search}`);
+	}
+
+	// Force account selection (eg. organization)
+	if (query.prompt === "select_account") {
+		return redirectWithPromptCode(ctx, opts, "select_account", {
+			query,
+			userId: session.user.id,
+			sessionId: session.session.id,
+		});
+	}
+
+	if (
+		// Check if account needs selection
+		opts.selectedAccount &&
+		// User-only scopes do not need to pass through selectedAccount function
+		!requestScopes.every((val) =>
+			["openid", "profile", "email", "offline_access"].includes(val),
+		)
+	) {
+		const selectedAccount = await opts.selectedAccount({
+			client,
+			user: session.user,
+			session: session.session,
+			scopes: requestScopes,
+		});
+		if (!selectedAccount) {
+			return redirectWithPromptCode(ctx, opts, "select_account", {
+				query,
+				userId: session.user.id,
+				sessionId: session.session.id,
+			});
+		}
 	}
 
 	// Force consent screen
 	if (query.prompt === "consent") {
-		return redirectWithConsentCode(ctx, opts, {
+		return redirectWithPromptCode(ctx, opts, "consent", {
 			query,
-			clientId: client.clientId,
 			userId: session.user.id,
 			sessionId: session.session.id,
-			scopes: requestScope.join(" "),
 		});
 	}
 
@@ -195,7 +239,6 @@ export async function authorizeEndpoint(
 			clientId: client.clientId,
 			userId: session.user.id,
 			sessionId: session.session.id,
-			scopes: requestScope.join(" "),
 		});
 	}
 	const consent = await ctx.context.adapter
@@ -220,13 +263,11 @@ export async function authorizeEndpoint(
 			} as OAuthConsent;
 		});
 
-	if (!consent || !requestScope.every((val) => consent.scopes.includes(val))) {
-		return redirectWithConsentCode(ctx, opts, {
+	if (!consent || !requestScopes.every((val) => consent.scopes.includes(val))) {
+		return redirectWithPromptCode(ctx, opts, "consent", {
 			query,
-			clientId: client.clientId,
 			userId: session.user.id,
 			sessionId: session.session.id,
-			scopes: requestScope.join(" "),
 		});
 	}
 
@@ -235,7 +276,6 @@ export async function authorizeEndpoint(
 		clientId: client.clientId,
 		userId: session.user.id,
 		sessionId: session.session.id,
-		scopes: requestScope.join(" "),
 	});
 }
 
@@ -247,39 +287,32 @@ async function redirectWithAuthorizationCode(
 		clientId: string;
 		userId: string;
 		sessionId: string;
-		scopes: string;
 	},
 ) {
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-	const now = Math.floor(Date.now() / 1000);
-	const expiresAt = now + (opts.codeExpiresIn ?? 600);
+	const iat = Math.floor(Date.now() / 1000);
+	const exp = iat + (opts.codeExpiresIn ?? 600);
 
-	await ctx.context.internalAdapter.createVerificationValue(
-		{
-			identifier: await storeToken(
-				opts.storeTokens,
-				code,
-				"authorization_code",
-			),
-			createdAt: new Date(now * 1000),
-			expiresAt: new Date(expiresAt * 1000),
-			value: JSON.stringify({
-				type: "authorization_code",
-				clientId: verificationValue.clientId,
-				userId: verificationValue.userId,
-				sessionId: verificationValue?.sessionId,
-				redirectUri: verificationValue.query.redirect_uri,
-				scopes: verificationValue.scopes,
-				...(verificationValue.query.state !== undefined
-					? { state: verificationValue.query.state }
-					: {}),
-				codeChallenge: verificationValue.query.code_challenge,
-				codeChallengeMethod: verificationValue.query.code_challenge_method,
-				nonce: verificationValue.query.nonce,
-			} satisfies VerificationValue),
-		},
-		ctx,
-	);
+	const data: Omit<Verification, "id" | "createdAt"> = {
+		identifier: await storeToken(opts.storeTokens, code, "authorization_code"),
+		updatedAt: new Date(iat * 1000),
+		expiresAt: new Date(exp * 1000),
+		value: JSON.stringify({
+			type: "authorization_code",
+			query: ctx.query,
+			userId: verificationValue.userId,
+			sessionId: verificationValue?.sessionId,
+		} satisfies VerificationValue),
+	};
+	ctx.context.verification_id
+		? await ctx.context.internalAdapter.updateVerificationValue(
+				ctx.context.verification_id,
+				data,
+			)
+		: await ctx.context.internalAdapter.createVerificationValue({
+				...data,
+				createdAt: new Date(iat * 1000),
+			});
 
 	const redirectUriWithCode = new URL(verificationValue.query.redirect_uri);
 	redirectUriWithCode.searchParams.set("code", code);
@@ -292,48 +325,46 @@ async function redirectWithAuthorizationCode(
 	return handleRedirect(ctx, redirectUriWithCode.toString());
 }
 
-async function redirectWithConsentCode(
+async function redirectWithPromptCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
+	type: "consent" | "select_account",
 	verificationValue: {
 		query: OAuthAuthorizationQuery;
-		clientId: string;
 		userId: string;
 		sessionId: string;
-		scopes: string;
 	},
 ) {
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.codeExpiresIn ?? 600);
 
-	await ctx.context.internalAdapter.createVerificationValue(
-		{
-			identifier: await storeToken(
-				opts.storeTokens,
-				code,
-				"authorization_code",
-			),
-			createdAt: new Date(iat * 1000),
-			expiresAt: new Date(exp * 1000),
-			value: JSON.stringify({
-				type: "consent",
-				clientId: verificationValue.clientId,
-				userId: verificationValue.userId,
-				sessionId: verificationValue.sessionId,
-				redirectUri: verificationValue.query.redirect_uri,
-				scopes: verificationValue.scopes,
-				state: verificationValue.query.state,
-				codeChallenge: verificationValue.query.code_challenge,
-				codeChallengeMethod: verificationValue.query.code_challenge_method,
-				nonce: verificationValue.query.nonce,
-			} satisfies VerificationValue),
-		},
-		ctx,
-	);
+	if (!ctx.query.scope) {
+		ctx.query.scope = opts.scopes?.join(" ");
+	}
+	const data: Omit<Verification, "id" | "createdAt"> = {
+		identifier: await storeToken(opts.storeTokens, code, "authorization_code"),
+		updatedAt: new Date(iat * 1000),
+		expiresAt: new Date(exp * 1000),
+		value: JSON.stringify({
+			type,
+			query: ctx.query,
+			userId: verificationValue.userId,
+			sessionId: verificationValue?.sessionId,
+		} satisfies VerificationValue),
+	};
+	ctx.context.verification_id
+		? await ctx.context.internalAdapter.updateVerificationValue(
+				ctx.context.verification_id,
+				data,
+			)
+		: await ctx.context.internalAdapter.createVerificationValue({
+				...data,
+				createdAt: new Date(iat * 1000),
+			});
 
 	const { name: cookieName, attributes: cookieAttributes } =
-		ctx.context.createAuthCookie("oauth_consent_prompt");
+		ctx.context.createAuthCookie(`oauth_${type}`);
 	await ctx.setSignedCookie(
 		cookieName,
 		code,
@@ -342,11 +373,15 @@ async function redirectWithConsentCode(
 	);
 
 	const params = new URLSearchParams({
-		client_id: verificationValue.clientId,
-		scope: verificationValue.scopes,
+		client_id: ctx.query.client_id,
+		scope: ctx.query.scope,
 		state: verificationValue.query.state,
 	});
-	const consentUri = `${opts.consentPage}?${params.toString()}`;
+	const consentUri = `${
+		type === "select_account" && opts.selectAccountPage
+			? opts.selectAccountPage
+			: opts.consentPage
+	}?${params.toString()}`;
 
 	return handleRedirect(ctx, consentUri);
 }

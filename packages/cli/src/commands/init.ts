@@ -165,7 +165,7 @@ export const supportedPlugins = [
 	},
 	{
 		id: "oauth-provider",
-		name: "oAuthProvider",
+		name: "oauthProvider",
 		clientName: "oauthProviderClient",
 		path: `better-auth/plugins`,
 		clientPath: "better-auth/client/plugins",
