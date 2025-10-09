@@ -12,3 +12,9 @@ export type {
 	InternalAdapter,
 } from "./context";
 export type { BetterAuthPlugin } from "./plugin";
+export type {
+	BetterAuthClientPlugin,
+	BetterAuthClientOptions,
+	ClientStore,
+	ClientAtomListener,
+} from "./plugin-client";
