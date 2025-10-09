@@ -11,6 +11,7 @@ import type { TelemetryContext, TelemetryEvent } from "./types";
 import { logger } from "@better-auth/core/env";
 import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
 export { getTelemetryAuthConfig };
+export type { TelemetryEvent } from "./types";
 export async function createTelemetry(
 	options: BetterAuthOptions,
 	context?: TelemetryContext,
