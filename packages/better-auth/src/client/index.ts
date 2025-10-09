@@ -1,5 +1,5 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
-import type { BetterAuthClientPlugin } from "./types";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 export * from "./vanilla";
 export * from "./query";
 export * from "./types";
@@ -15,6 +15,6 @@ export function InferAuth<O extends { options: BetterAuthOptions }>() {
 	return {} as O["options"];
 }
 
-//@ts-expect-error
+// @ts-expect-error
 export type * from "nanostores";
 export type * from "@better-fetch/fetch";

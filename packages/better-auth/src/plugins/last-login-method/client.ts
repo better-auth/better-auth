@@ -1,4 +1,4 @@
-import type { BetterAuthClientPlugin } from "../../types";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 
 /**
  * Configuration for the client-side last login method plugin
