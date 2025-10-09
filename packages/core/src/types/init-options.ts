@@ -2,7 +2,11 @@ import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Database } from "better-sqlite3";
 import type { CookieOptions } from "better-call";
 import type { LiteralUnion } from "./helper";
-import type { DBFieldAttribute, Models, SecondaryStorage } from "../db/type";
+import type {
+	DBFieldAttribute,
+	DBPreservedModels,
+	SecondaryStorage,
+} from "../db/type";
 import type { Account, RateLimit, Session, User, Verification } from "../db";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
@@ -17,7 +21,7 @@ type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type OmitId<T extends { id: unknown }> = Omit<T, "id">;
 
 export type GenerateIdFn = (options: {
-	model: LiteralUnion<Models, string>;
+	model: LiteralUnion<DBPreservedModels, string>;
 	size?: number;
 }) => string | false;
 

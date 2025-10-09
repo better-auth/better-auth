@@ -1,4 +1,4 @@
-import type { Models } from "../types";
+import type { DBPreservedModels } from "@better-auth/core/db";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { getCurrentAdapter } from "../context/transaction";
@@ -13,7 +13,7 @@ export function getWithHooks(
 ) {
 	const hooks = ctx.hooks;
 	type BaseModels = Extract<
-		Models,
+		DBPreservedModels,
 		"user" | "account" | "session" | "verification"
 	>;
 	async function createWithHooks<T extends Record<string, any>>(
