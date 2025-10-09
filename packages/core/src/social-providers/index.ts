@@ -29,6 +29,7 @@ import { kakao } from "./kakao";
 import { naver } from "./naver";
 import { line } from "./line";
 import { paypal } from "./paypal";
+import { wechat } from "./wechat";
 
 export const socialProviders = {
 	apple,
@@ -61,6 +62,7 @@ export const socialProviders = {
 	naver,
 	line,
 	paypal,
+	wechat,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -114,5 +116,6 @@ export * from "./kakao";
 export * from "./naver";
 export * from "./line";
 export * from "./paypal";
+export * from "./wechat";
 
 export type SocialProviderList = typeof socialProviderList;
