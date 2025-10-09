@@ -517,7 +517,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					}
 					return ctx.json({
 						status: true,
-						backupCodes: backupCodes,
+						backupCodes,
 					});
 				},
 			),
