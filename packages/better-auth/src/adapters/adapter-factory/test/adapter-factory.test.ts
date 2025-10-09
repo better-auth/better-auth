@@ -2,10 +2,11 @@ import { describe, test, expect } from "vitest";
 import { createAdapterFactory } from "..";
 import type {
 	AdapterFactoryConfig,
-	CleanedWhere,
 	AdapterFactoryCustomizeAdapterCreator,
 } from "../types";
-import type { BetterAuthOptions, User, Where } from "../../../types";
+import type { CleanedWhere, Where } from "@better-auth/core/db/adapter";
+import type { User } from "../../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { betterAuth } from "../../../auth";
 
 /*

@@ -1,8 +1,9 @@
 import { APIError, createEmailVerificationToken } from "../api";
 import type { Account } from "../types";
-import type { GenericEndpointContext, User } from "../types";
+import type { User } from "../types";
 import { isDevelopment } from "@better-auth/core/env";
 import { setTokenUtil } from "./utils";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
