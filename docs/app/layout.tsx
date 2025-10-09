@@ -10,6 +10,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { CustomSearchDialog } from "@/components/search-dialog";
+import { AnchorScroll } from "@/components/anchor-scroll-fix";
 
 export const metadata = createMetadata({
 	title: {
@@ -58,6 +59,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 								: undefined,
 						}}
 					>
+						<AnchorScroll />
 						<NavbarProvider>
 							<Navbar />
 							{children}
