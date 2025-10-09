@@ -91,13 +91,28 @@ export interface LoginAliasPluginOptions {
 	 */
 	autoCreateAliases?: boolean;
 	/**
+	 * Whether to create alias entries for OAuth providers
+	 * This creates a unified view of ALL authentication methods.
+	 * Note: OAuth providers are already tracked in the account table.
+	 * This option adds them to loginAlias table too for convenience.
+	 * @default false
+	 */
+	trackOAuthProviders?: boolean;
+	/**
 	 * Whether to allow multiple aliases of the same type per user
 	 * @default true
 	 */
 	allowMultiplePerType?: boolean;
 	/**
-	 * Types of aliases that are allowed
+	 * Types of aliases that are allowed.
+	 * If not specified or empty, all types are allowed.
+	 * This works with any string identifier from better-auth plugins:
+	 * - 'email' (built-in)
+	 * - 'username' (from username plugin)
+	 * - 'phone' (from phone-number plugin)
+	 * - or any custom type you define
 	 * @default ['email', 'username', 'phone']
+	 * @example ['email', 'username', 'phone', 'employee_id', 'student_id']
 	 */
 	allowedTypes?: string[];
 	/**

@@ -9,11 +9,6 @@ import { z } from "zod";
 export const loginAlias = {
 	modelName: "loginAlias",
 	fields: {
-		id: {
-			type: "string" as const,
-			required: true,
-			unique: true,
-		},
 		/**
 		 * The user ID this alias belongs to
 		 */
@@ -45,7 +40,7 @@ export const loginAlias = {
 		 */
 		verified: {
 			type: "boolean" as const,
-			required: true,
+			required: false,
 			defaultValue: false,
 		},
 		/**
@@ -54,7 +49,7 @@ export const loginAlias = {
 		 */
 		isPrimary: {
 			type: "boolean" as const,
-			required: true,
+			required: false,
 			defaultValue: false,
 		},
 		/**
@@ -63,14 +58,6 @@ export const loginAlias = {
 		metadata: {
 			type: "string" as const,
 			required: false,
-		},
-		createdAt: {
-			type: "date" as const,
-			required: true,
-		},
-		updatedAt: {
-			type: "date" as const,
-			required: true,
 		},
 	},
 } as const;
@@ -90,13 +77,48 @@ export const loginAliasSchema = z.object({
 export type LoginAlias = z.infer<typeof loginAliasSchema>;
 
 /**
- * Supported alias types
+ * Standard alias types
+ * These are commonly used types, but the plugin supports any string type
+ * allowing integration with any better-auth plugin or custom identifier
  */
 export const AliasType = {
+	/** Standard email address */
 	EMAIL: "email",
+	/** Username (works with username plugin) */
 	USERNAME: "username",
+	/** Phone number (works with phone-number plugin) */
 	PHONE: "phone",
+	/** OAuth provider prefix (when trackOAuthProviders is enabled) */
+	OAUTH_PREFIX: "oauth_",
+	/** Custom/other identifier types */
 	CUSTOM: "custom",
 } as const;
 
 export type AliasType = (typeof AliasType)[keyof typeof AliasType];
+
+/**
+ * Note: The plugin is not limited to these types!
+ * You can use any string as an alias type, such as:
+ *
+ * **Standard types:**
+ * - 'email' - Email addresses
+ * - 'username' - Usernames
+ * - 'phone' - Phone numbers
+ *
+ * **OAuth providers (if trackOAuthProviders: true):**
+ * - 'oauth_google' - Google account connection
+ * - 'oauth_github' - GitHub account connection
+ * - 'oauth_facebook' - Facebook account connection
+ * - 'oauth_*' - Any social provider from better-auth settings
+ *
+ * Note: OAuth providers are tracked in the 'account' table by default.
+ * Set trackOAuthProviders: true to also show them as aliases for
+ * a unified identity view via /alias/list
+ *
+ * **Custom identifiers:**
+ * - 'employee_id' - Employee identifier
+ * - 'student_id' - Student identifier
+ * - 'social_security' - SSN
+ * - 'passport_number' - Passport
+ * - or any other identifier from your system
+ */

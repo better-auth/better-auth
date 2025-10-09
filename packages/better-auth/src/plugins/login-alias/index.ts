@@ -52,14 +52,16 @@ export * from "./error-codes";
 export const loginAliasPlugin = (
 	options?: LoginAliasPluginOptions,
 ): BetterAuthPlugin => {
-	const opts: Required<LoginAliasPluginOptions> = {
+	const opts = {
 		autoCreateAliases: options?.autoCreateAliases ?? true,
+		trackOAuthProviders: options?.trackOAuthProviders ?? false,
 		allowMultiplePerType: options?.allowMultiplePerType ?? true,
-		allowedTypes: options?.allowedTypes ?? [
-			AliasType.EMAIL,
-			AliasType.USERNAME,
-			AliasType.PHONE,
-		],
+		// By default, allow all standard types. If options.allowedTypes is explicitly set,
+		// use that. If set to undefined or empty array, allow everything.
+		allowedTypes:
+			options?.allowedTypes && options.allowedTypes.length > 0
+				? options.allowedTypes
+				: [AliasType.EMAIL, AliasType.USERNAME, AliasType.PHONE],
 		requireVerification: {
 			[AliasType.EMAIL]: true,
 			[AliasType.PHONE]: true,
@@ -174,8 +176,11 @@ export const loginAliasPlugin = (
 					const userId = ctx.context.session.user.id;
 					const { type, value, verified, isPrimary, metadata } = ctx.body;
 
-					// Validate alias type
-					if (!opts.allowedTypes.includes(type)) {
+					// Validate alias type (if allowedTypes is configured)
+					if (
+						opts.allowedTypes.length > 0 &&
+						!opts.allowedTypes.includes(type)
+					) {
 						throw new APIError("BAD_REQUEST", {
 							message: LOGIN_ALIAS_ERROR_CODES.ALIAS_TYPE_NOT_ALLOWED,
 						});
@@ -251,10 +256,14 @@ export const loginAliasPlugin = (
 					}
 
 					// Check if verification is required
+					const requireVerificationMap = opts.requireVerification as Record<
+						string,
+						boolean
+					>;
 					const isVerified =
 						verified !== undefined
 							? verified
-							: !(opts.requireVerification[type] ?? false);
+							: !(requireVerificationMap[type] ?? false);
 
 					// Create the alias
 					const newAlias = await ctx.context.adapter.create<LoginAlias>({
@@ -616,8 +625,7 @@ export const loginAliasPlugin = (
 						return (
 							opts.autoCreateAliases &&
 							(context.path === "/sign-up/email" ||
-								context.path === "/sign-in/email" ||
-								context.path === "/callback")
+								context.path === "/sign-in/email")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
@@ -667,6 +675,107 @@ export const loginAliasPlugin = (
 									);
 								}
 							}
+						}
+					}),
+				},
+				{
+					matcher(context) {
+						// Match OAuth callback endpoints
+						return (
+							opts.autoCreateAliases && context.path.startsWith("/callback/")
+						);
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						if (!ctx.context.returned) return;
+
+						const returned = ctx.context.returned as any;
+						const userId = returned.user?.id;
+
+						if (!userId) return;
+
+						const user = returned.user;
+
+						// Extract provider from path (e.g., "/callback/google" -> "google")
+						const provider = ctx.path.split("/callback/")[1];
+
+						try {
+							// Create email alias from OAuth if user has email
+							if (user.email) {
+								const normalizedEmail = opts.normalizeValue(
+									user.email,
+									AliasType.EMAIL,
+								);
+
+								const existingEmailAlias =
+									await ctx.context.adapter.findOne<LoginAlias>({
+										model: "loginAlias",
+										where: [
+											{ field: "value", value: normalizedEmail },
+											{ field: "userId", value: userId },
+										],
+									});
+
+								if (!existingEmailAlias) {
+									await ctx.context.adapter.create<LoginAlias>({
+										model: "loginAlias",
+										data: {
+											userId,
+											type: AliasType.EMAIL,
+											value: normalizedEmail,
+											verified: user.emailVerified ?? false,
+											isPrimary: true,
+											createdAt: new Date(),
+											updatedAt: new Date(),
+										},
+									});
+								}
+							}
+
+							// If trackOAuthProviders is enabled, also create an alias entry
+							// for the OAuth provider itself (for unified identity view)
+							if (opts.trackOAuthProviders && provider) {
+								const accounts =
+									await ctx.context.internalAdapter.findAccounts(userId);
+								const providerAccount = accounts.find(
+									(a) => a.providerId === provider,
+								);
+
+								if (providerAccount) {
+									const providerAliasValue = `${provider}:${providerAccount.accountId}`;
+
+									const existingProviderAlias =
+										await ctx.context.adapter.findOne<LoginAlias>({
+											model: "loginAlias",
+											where: [{ field: "value", value: providerAliasValue }],
+										});
+
+									if (!existingProviderAlias) {
+										await ctx.context.adapter.create<LoginAlias>({
+											model: "loginAlias",
+											data: {
+												userId,
+												type: `oauth_${provider}`,
+												value: providerAliasValue,
+												verified: true, // OAuth providers are pre-verified
+												isPrimary: false,
+												metadata: JSON.stringify({
+													providerId: provider,
+													accountId: providerAccount.accountId,
+													connectedAt: new Date().toISOString(),
+												}),
+												createdAt: new Date(),
+												updatedAt: new Date(),
+											},
+										});
+									}
+								}
+							}
+						} catch (error) {
+							// Don't fail OAuth flow if alias creation fails
+							ctx.context.logger.error(
+								"Failed to auto-create aliases from OAuth",
+								error,
+							);
 						}
 					}),
 				},
