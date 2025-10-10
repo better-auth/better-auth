@@ -26,7 +26,15 @@ export const isAdmin = (
 	if (data.userId && options?.adminUserIds?.includes(data.userId)) {
 		return true;
 	}
-	if (data.role && (options?.adminRoles ?? ["admin"]).includes(data.role)) {
+	if (
+		data.role &&
+		(options?.adminRoles
+			? typeof options.adminRoles === "string"
+				? [options.adminRoles]
+				: options.adminRoles
+			: ["admin"]
+		).includes(data.role)
+	) {
 		return true;
 	}
 	return false;
