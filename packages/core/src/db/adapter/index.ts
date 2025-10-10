@@ -7,6 +7,7 @@ import type {
 } from "../type";
 import type { BetterAuthOptions } from "../../types";
 import type { BetterAuthPluginDBSchema, BetterAuthPluginDBTableSchema } from "../plugin";
+import type { schema } from "../schema";
 
 export type DBAdapterDebugLogOption =
 	| boolean
@@ -55,8 +56,8 @@ export type DBAdapterSchemaCreation = {
 };
 
 export interface DBAdapterFactoryConfig<
-		Schema extends BetterAuthPluginDBSchema,
-		Options extends BetterAuthOptions = BetterAuthOptions,
+		Schema extends BetterAuthPluginDBSchema<typeof schema>,
+		Options extends BetterAuthOptions<Schema> = BetterAuthOptions<Schema>,
 	> {
 		/**
 		 * Use plural table names.
@@ -325,13 +326,13 @@ export type Where<
 > = GenericWhere<S, F> | InWhere<S, F>;
 
 export type DBTransactionAdapter<
-		Schema extends BetterAuthPluginDBSchema,
-		Options extends BetterAuthOptions = BetterAuthOptions,
+		Schema extends BetterAuthPluginDBSchema<typeof schema>,
+		Options extends BetterAuthOptions<Schema> = BetterAuthOptions<Schema>,
 	> = Omit<DBAdapter<Schema, Options>, "transaction">;
 
 export type DBAdapter<
-		Schema extends BetterAuthPluginDBSchema,
-		Options extends BetterAuthOptions = BetterAuthOptions,
+		Schema extends BetterAuthPluginDBSchema<typeof schema>,
+		Options extends BetterAuthOptions<Schema> = BetterAuthOptions<Schema>,
 	> = {
 		id: string;
 		create: <M extends keyof Schema>(data: {
@@ -489,8 +490,8 @@ export interface CustomAdapter<Schema extends BetterAuthPluginDBSchema> {
 	}
 
 export interface DBAdapterInstance<
-	Schema extends BetterAuthPluginDBSchema,
-	Options extends BetterAuthOptions = BetterAuthOptions,
-> {
-	(options: BetterAuthOptions): DBAdapter<Schema, Options>;
-}
+		Schema extends BetterAuthPluginDBSchema<typeof schema>,
+		Options extends BetterAuthOptions<Schema> = BetterAuthOptions<Schema>,
+	> {
+		(options: Options): DBAdapter<Schema, Options>;
+	}

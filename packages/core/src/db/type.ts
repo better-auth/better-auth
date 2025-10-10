@@ -52,93 +52,93 @@ export type DBFieldPrimitive<T extends DBFieldType> = T extends "string"
 						: never;
 
 export type DBFieldAttributeConfig<T extends DBFieldType = DBFieldType> = {
-	/**
-	 * If the field should be required on a new record.
-	 * @default true
-	 */
-	required?: boolean;
-	/**
-	 * If the value should be returned on a response body.
-	 * @default true
-	 */
-	returned?: boolean;
-	/**
-	 * If a value should be provided when creating a new record.
-	 * @default true
-	 */
-	input?: boolean;
-	/**
-	 * Default value for the field
-	 *
-	 * Note: This will not create a default value on the database level. It will only
-	 * be used when creating a new record.
-	 */
-	defaultValue?: DBFieldPrimitive<T> | (() => DBFieldPrimitive<T>);
-	/**
-	 * Update value for the field
-	 *
-	 * Note: This will create an onUpdate trigger on the database level for supported adapters.
-	 * It will be called when updating a record.
-	 */
-	onUpdate?: () => DBFieldPrimitive<T>;
-	/**
-	 * transform the value before storing it.
-	 */
-	transform?: {
-		input?: (
-			value: DBFieldPrimitive<T>,
-		) => DBPrimitive | Promise<DBFieldPrimitive<T>>;
-		output?: (
-			value: DBFieldPrimitive<T>,
-		) => DBPrimitive | Promise<DBFieldPrimitive<T>>;
-	};
-	/**
-	 * Reference to another model.
-	 */
-	references?: {
 		/**
-		 * The model to reference.
+		 * If the field should be required on a new record.
+		 * @default true
 		 */
-		model: string;
+		required?: boolean;
 		/**
-		 * The field on the referenced model.
+		 * If the value should be returned on a response body.
+		 * @default true
 		 */
-		field: string;
+		returned?: boolean;
 		/**
-		 * The action to perform when the reference is deleted.
-		 * @default "cascade"
+		 * If a value should be provided when creating a new record.
+		 * @default true
 		 */
-		onDelete?:
-			| "no action"
-			| "restrict"
-			| "cascade"
-			| "set null"
-			| "set default";
+		input?: boolean;
+		/**
+		 * Default value for the field
+		 *
+		 * Note: This will not create a default value on the database level. It will only
+		 * be used when creating a new record.
+		 */
+		defaultValue?: DBFieldPrimitive<T> | (() => DBFieldPrimitive<T>);
+		/**
+		 * Update value for the field
+		 *
+		 * Note: This will create an onUpdate trigger on the database level for supported adapters.
+		 * It will be called when updating a record.
+		 */
+		onUpdate?: () => DBFieldPrimitive<T>;
+		/**
+		 * transform the value before storing it.
+		 */
+		transform?: {
+			input?: (
+				value: DBFieldPrimitive<T>,
+			) => DBFieldPrimitive<T> | Promise<DBFieldPrimitive<T>>;
+			output?: (
+				value: DBFieldPrimitive<T>,
+			) => DBFieldPrimitive<T> | Promise<DBFieldPrimitive<T>>;
+		};
+		/**
+		 * Reference to another model.
+		 */
+		references?: {
+			/**
+			 * The model to reference.
+			 */
+			model: string;
+			/**
+			 * The field on the referenced model.
+			 */
+			field: string;
+			/**
+			 * The action to perform when the reference is deleted.
+			 * @default "cascade"
+			 */
+			onDelete?:
+				| "no action"
+				| "restrict"
+				| "cascade"
+				| "set null"
+				| "set default";
+		};
+		unique?: boolean;
+		/**
+		 * If the field should be a bigint on the database instead of integer.
+		 */
+		bigint?: boolean;
+		/**
+		 * A zod schema to validate the value.
+		 */
+		validator?: {
+			input?: ZodType;
+			output?: ZodType;
+		};
+		/**
+		 * The name of the field on the database.
+		 */
+		fieldName?: string;
+		/**
+		 * If the field should be sortable.
+		 *
+		 * applicable only for `text` type.
+		 * It's useful to mark fields varchar instead of text.
+		 */
+		sortable?: boolean;
 	};
-	unique?: boolean;
-	/**
-	 * If the field should be a bigint on the database instead of integer.
-	 */
-	bigint?: boolean;
-	/**
-	 * A zod schema to validate the value.
-	 */
-	validator?: {
-		input?: ZodType;
-		output?: ZodType;
-	};
-	/**
-	 * The name of the field on the database.
-	 */
-	fieldName?: string;
-	/**
-	 * If the field should be sortable.
-	 *
-	 * applicable only for `text` type.
-	 * It's useful to mark fields varchar instead of text.
-	 */
-	sortable?: boolean;
-};
 
 export type DBFieldAttribute<T extends DBFieldType = any> = {
 	type: T;
@@ -152,28 +152,14 @@ export type InferDBType<S extends BetterAuthPluginDBTableSchema> = {
 	[field in keyof S["fields"] & string]: DBFieldPrimitive<S["fields"][field]["type"]>;
 }
 
-export type BetterAuthDBSchema = Record<
-	string,
-	{
-		/**
-		 * The name of the table in the database
-		 */
-		modelName: string;
-		/**
-		 * The fields of the table
-		 */
-		fields: Record<string, DBFieldAttribute>;
-		/**
-		 * Whether to disable migrations for this table
-		 * @default false
-		 */
-		disableMigrations?: boolean;
+export type BetterAuthDBSchema = BetterAuthPluginDBSchema & {
+	[key in string]: {
 		/**
 		 * The order of the table
 		 */
 		order?: number;
 	}
->;
+}
 
 export interface SecondaryStorage {
 	/**
