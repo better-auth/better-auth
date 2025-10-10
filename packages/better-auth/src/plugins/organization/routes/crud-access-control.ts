@@ -292,12 +292,12 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				.and(
 					z.union([
 						z.object({
-							roleName: z.string().meta({
+							roleName: z.string().nonempty().meta({
 								description: "The name of the role to delete",
 							}),
 						}),
 						z.object({
-							roleId: z.string().meta({
+							roleId: z.string().nonempty().meta({
 								description: "The id of the role to delete",
 							}),
 						}),
@@ -625,12 +625,12 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				.and(
 					z.union([
 						z.object({
-							roleName: z.string().meta({
+							roleName: z.string().nonempty().meta({
 								description: "The name of the role to read",
 							}),
 						}),
 						z.object({
-							roleId: z.string().meta({
+							roleId: z.string().nonempty().meta({
 								description: "The id of the role to read",
 							}),
 						}),
@@ -808,12 +808,12 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				.and(
 					z.union([
 						z.object({
-							roleName: z.string().meta({
+							roleName: z.string().nonempty().meta({
 								description: "The name of the role to update",
 							}),
 						}),
 						z.object({
-							roleId: z.string().meta({
+							roleId: z.string().nonempty().meta({
 								description: "The id of the role to update",
 							}),
 						}),
