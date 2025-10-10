@@ -72,14 +72,17 @@ export const getClientConfig = (
 		{
 			signal: "$sessionSignal",
 			matcher(path) {
-				return (
+				const matchesCommonPaths =
 					path === "/sign-out" ||
 					path === "/update-user" ||
 					path.startsWith("/sign-in") ||
 					path.startsWith("/sign-up") ||
 					path === "/delete-user" ||
-					path === "/verify-email"
-				);
+					path === "/verify-email";
+
+				const explicitlyIgnoredPaths = ["/sign-in/magic-link"];
+
+				return matchesCommonPaths && !explicitlyIgnoredPaths.includes(path);
 			},
 		},
 	];
