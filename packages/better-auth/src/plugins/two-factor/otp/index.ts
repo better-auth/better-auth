@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { verifyTwoFactor } from "../verify-two-factor";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
@@ -11,8 +11,8 @@ import {
 } from "../../../crypto";
 import { setSessionCookie } from "../../../cookies";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import type { GenericEndpointContext } from "../../../types";
 import { defaultKeyHasher } from "../utils";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export interface OTPOptions {
 	/**
