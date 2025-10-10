@@ -738,7 +738,7 @@ When `signInTracking` is enabled, the following field is added (optional):
 <DatabaseTable
   fields={[
     {
-      field: "latestSignInAt",
+      name: "latestSignInAt",
       type: "date",
       description: "The date of the user's most recent successfull sign-in.",
       isOptional: true,
@@ -834,5 +834,21 @@ The message to show when a banned user tries to sign in. Defaults to "You have b
 ```ts title="auth.ts"
 admin({
   bannedUserMessage: "Custom banned user message",
+});
+```
+
+### signInTracking
+
+Enables tracking of the user's last successful sign-in. When enabled, a `latestSignInAt` field is added to the user table and updated each time the user signs in.
+
+```ts title="auth.ts"
+admin({
+  signInTracking: true,
+});
+```
+
+```ts title="authClient.ts"
+adminClient({
+  signInTracking: true,
 });
 ```
