@@ -246,7 +246,7 @@ describe("two factor", async () => {
 		const backupCode = backupCodes[0]!;
 
 		let parsedCookies = new Map();
-		const verifyBackupCodeRes = await client.twoFactor.verifyBackupCode({
+		await client.twoFactor.verifyBackupCode({
 			code: backupCode,
 			fetchOptions: {
 				headers,
@@ -257,7 +257,6 @@ describe("two factor", async () => {
 				},
 			},
 		});
-
 		const token = parsedCookies.get("better-auth.session_token")?.value;
 		expect(token?.length).toBeGreaterThan(0);
 		const currentBackupCodes = await auth.api.viewBackupCodes({
