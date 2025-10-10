@@ -76,9 +76,9 @@ export interface AdminOptions {
 	 */
 	bannedUserMessage?: string;
 	/**
-	 * Whether to track when a user signs in.
-	 *
-	 * Adds `lastSignInAt` field to session table and `latestSignInAt` to user table.
+	 * Enables tracking of the user's last successful sign-in.
+	 * When enabled, a `latestSignInAt` field is added to the user table and
+	 * updated each time the user signs in.
 	 *
 	 * @default false
 	 */
