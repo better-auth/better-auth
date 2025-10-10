@@ -42,7 +42,7 @@ export interface PrismaConfig {
 	 *
 	 * If the database doesn't support transactions,
 	 * set this to `false` and operations will be executed sequentially.
-	 * @default true
+	 * @default false
 	 */
 	transaction?: boolean;
 }

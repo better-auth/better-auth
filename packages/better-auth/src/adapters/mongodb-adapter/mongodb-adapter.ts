@@ -34,7 +34,7 @@ export interface MongoDBAdapterConfig {
 	 *
 	 * If the database doesn't support transactions,
 	 * set this to `false` and operations will be executed sequentially.
-	 * @default true
+	 * @default false
 	 */
 	transaction?: boolean;
 }
@@ -283,7 +283,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 			},
 			supportsNumericIds: false,
 			transaction:
-				config?.client && (config?.transaction ?? false)
+				config?.client && (config?.transaction ?? true)
 					? async (cb) => {
 							if (!config.client) {
 								return cb(lazyAdapter!(lazyOptions!));
