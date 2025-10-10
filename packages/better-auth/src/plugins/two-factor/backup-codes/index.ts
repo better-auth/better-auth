@@ -124,13 +124,8 @@ export async function getBackupCodes(
 	return safeJSONParse<string[]>(backupCodes);
 }
 
-export const backupCode2fa = (options?: BackupCodeOptions) => {
+export const backupCode2fa = (opts: BackupCodeOptions) => {
 	const twoFactorTable = "twoFactor";
-
-	const opts = {
-		storeBackupCodes: "encrypted",
-		...options,
-	} satisfies BackupCodeOptions;
 
 	return {
 		id: "backup_code",
