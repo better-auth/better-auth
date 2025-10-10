@@ -4,7 +4,7 @@ import { setTokenUtil } from "../../oauth2/utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { createAuthEndpoint } from "../call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { safeJSONParse } from "../../utils/json";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 

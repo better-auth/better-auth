@@ -1,7 +1,10 @@
 import { logger } from "@better-auth/core/env";
-import { createAdapterFactory, type CleanedWhere } from "../adapter-factory";
-import type { BetterAuthOptions } from "../../types";
-import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "../adapter-factory";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	DBAdapterDebugLogOption,
+	CleanedWhere,
+} from "@better-auth/core/db/adapter";
 
 export interface MemoryDB {
 	[key: string]: any[];
