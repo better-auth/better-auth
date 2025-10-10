@@ -5,7 +5,8 @@ import Section from "@/components/landing/section";
 
 export const metadata: Metadata = {
 	title: "Community",
-	description: "Join the Better Auth community and connect with developers worldwide.",
+	description: 
+	"Join the Better Auth community and connect with developers worldwide.",
 };
 
 type NpmPackageResp = {
