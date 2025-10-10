@@ -241,7 +241,7 @@ export const auth = betterAuth({
             sendOTP: ({ phoneNumber, code }, request) => {
                 // Implement sending OTP code via SMS
             },
-            callbackOnVerification: async ({ phoneNumber, user }, request) => {
+            callbackOnVerification: async ({ phoneNumber, code, user }, request) => {
                 // Implement callback after phone number verification
             }
         })
