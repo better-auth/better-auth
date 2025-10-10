@@ -66,7 +66,7 @@ export async function signJWT(
 				data: JSON.parse(key.privateKey),
 			}).catch(() => {
 				throw new BetterAuthError(
-					"Failed to decrypt private private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either cleanup your jwks or disable private key encryption.",
+					"Failed to decrypt private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either clean up your JWKS or disable private key encryption.",
 				);
 			})
 		: key.privateKey;
