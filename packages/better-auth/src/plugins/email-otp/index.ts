@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { APIError } from "../../api";
+import { APIError, getSessionFromCtx } from "../../api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -11,7 +11,7 @@ import {
 	symmetricEncrypt,
 } from "../../crypto";
 import { getDate } from "../../utils/date";
-import { setSessionCookie } from "../../cookies";
+import { setCookieCache, setSessionCookie } from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
 import type { GenericEndpointContext } from "@better-auth/core";
@@ -725,7 +725,20 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							},
 						});
 					}
-
+					const currentSession = await getSessionFromCtx(ctx);
+					if (currentSession) {
+						await setCookieCache(
+							ctx,
+							{
+								session: currentSession.session,
+								user: {
+									...currentSession.user,
+									emailVerified: updatedUser.emailVerified ?? false,
+								},
+							},
+							false,
+						);
+					}
 					return ctx.json({
 						status: true,
 						token: null,
