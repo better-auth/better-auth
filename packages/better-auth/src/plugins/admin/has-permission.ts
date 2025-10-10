@@ -66,7 +66,7 @@ export const hasPermission = (
 
 export const getStatements = (input: {
 	userId?: string;
-	role?: string;
+	role?: string | string[];
 	options?: AdminOptions;
 }): Readonly<Record<string, Readonly<string[]>>> => {
 	if (
@@ -80,7 +80,9 @@ export const getStatements = (input: {
 		return input.options?.ac?.statements ?? defaultAc.statements;
 	}
 
-	const roles = (input.role || input.options?.defaultRole || "user").split(",");
+	const roles = Array.isArray(input.role)
+		? input.role
+		: (input.role || input.options?.defaultRole || "user").split(",");
 	const acRoles = input.options?.roles || defaultRoles;
 
 	const statements = mergeUniqueArray(

@@ -83,7 +83,7 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 						? keyof O["roles"] & string
 						: "admin" | "user",
 				>(data: {
-					role: R;
+					role: R | R[];
 				}) => {
 					return getStatements({
 						role: data.role,
