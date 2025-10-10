@@ -68,7 +68,7 @@ The Admin plugin provides a set of administrative functions for user management 
 
 ## Usage
 
-Before performing any admin operations, the user must be authenticated with an admin account. An admin is any user assigned the `admin` role or any user whose ID is included in the `adminUserIds` option.
+Before performing any admin operations, the user must be authenticated with an admin account. An admin is any user assigned the `admin` role or any user whose ID is included in the `adminUserIds`/`adminEmails` options.
 
 ### Create User
 
@@ -783,6 +783,18 @@ admin({
 ```
 
 If a user is in the `adminUserIds` list, they will be able to perform any admin operation.
+
+### Admin emails
+
+You can pass an array of emails (or regular expressions) that should be considered as admin. Default to `[]`.
+
+```ts title="auth.ts"
+admin({
+    adminEmails: ["admin@example.com", /^ceo\+\w+@example\.com$/]
+})
+```
+
+If a user's email matches any of the emails in the `adminEmails` list, they will be able to perform any admin operation. Note that if you pass a string, only an exact match will be considered. If you pass a regular expression like `/@/`, it will match any email that _contains_ an `@` symbol.
 
 ### impersonationSessionDuration
 
