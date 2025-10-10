@@ -245,6 +245,9 @@ function Message({
 }
 
 export function AISearchTrigger() {
+	if (process.env.NEXT_PUBLIC_ENABLE_AI_CHAT !== "true") {
+		return null;
+	}
 	const [open, setOpen] = useState(false);
 	const [messages, setMessages] = useState<
 		Array<{

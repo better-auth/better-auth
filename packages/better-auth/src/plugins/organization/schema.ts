@@ -38,6 +38,7 @@ export const invitationSchema = z.object({
 	teamId: z.string().nullish(),
 	inviterId: z.string(),
 	expiresAt: z.date(),
+	createdAt: z.date().default(() => new Date()),
 });
 
 export const teamSchema = z.object({
@@ -167,6 +168,7 @@ export type InferInvitation<
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
+				createdAt: Date;
 				teamId?: string;
 			}
 		: {
@@ -177,6 +179,7 @@ export type InferInvitation<
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
+				createdAt: Date;
 			}) &
 		InferAdditionalFieldsFromPluginOptions<"invitation", O, isClientSide>
 >;

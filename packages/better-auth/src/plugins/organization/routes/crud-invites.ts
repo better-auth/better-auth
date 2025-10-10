@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { getSessionFromCtx } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -150,6 +150,9 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											expiresAt: {
 												type: "string",
 											},
+											createdAt: {
+												type: "string",
+											},
 										},
 										required: [
 											"id",
@@ -159,6 +162,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											"inviterId",
 											"status",
 											"expiresAt",
+											"createdAt",
 										],
 									},
 								},

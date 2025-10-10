@@ -8,7 +8,7 @@ import type {
 } from "../../plugins/organization/schema";
 import type { Prettify } from "../../types/helper";
 import { type AccessControl, type Role } from "../access";
-import type { BetterAuthClientPlugin } from "../../client/types";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { organization } from "./organization";
 import { useAuthQuery } from "../../client";
 import {

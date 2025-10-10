@@ -10,7 +10,7 @@ import {
 	transactionsTestSuite,
 } from "../../tests";
 import { getMigrations } from "../../../db";
-import type { BetterAuthOptions } from "../../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 
 const pgDB = new Pool({
 	connectionString: "postgres://user:password@localhost:5433/better_auth",

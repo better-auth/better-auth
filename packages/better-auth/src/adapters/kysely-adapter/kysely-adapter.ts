@@ -1,16 +1,20 @@
 import {
 	createAdapterFactory,
-	type AdapterDebugLogs,
 	type AdapterFactoryCustomizeAdapterCreator,
 	type AdapterFactoryOptions,
 } from "../adapter-factory";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type { KyselyDatabaseType } from "./types";
 import {
 	type InsertQueryBuilder,
 	type Kysely,
 	type UpdateQueryBuilder,
 } from "kysely";
+import type {
+	DBAdapterDebugLogOption,
+	DBAdapter,
+	Where,
+} from "@better-auth/core/db/adapter";
 
 interface KyselyAdapterConfig {
 	/**
@@ -22,7 +26,7 @@ interface KyselyAdapterConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 	/**
 	 * Use plural for table names.
 	 *
@@ -399,7 +403,7 @@ export const kyselyAdapter = (
 
 	const adapter = createAdapterFactory(adapterOptions);
 
-	return (options: BetterAuthOptions): Adapter => {
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return adapter(options);
 	};
