@@ -752,7 +752,7 @@ const canDeleteUserAndRevokeSession = authClient.admin.checkRolePermission({
 
 **Check Role Statements**:
 
-Use the `getRolePermissions` function on the client side to retrieve all permissions assigned to a specific **role**. This lets you view all permissions assigned to a role directly on the client.
+Use the `checkRoleStatements` function on the client side to retrieve all permissions assigned to a specific **role**. This lets you view all permissions assigned to a role directly on the client.
 
 Note that this function does **not** check the permissions of the currently logged-in user. It only returns the permissions assigned to the specified role. The function is synchronous, so you don't need to use `await` when calling it.
 
