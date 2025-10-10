@@ -170,15 +170,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					} else if (typeof attr.defaultValue === "boolean") {
 						fieldBuilder.attribute(`default(${attr.defaultValue})`);
 					} else if (typeof attr.defaultValue === "function") {
-						// For other function-based defaults, we'll need to check what they return
-						const defaultVal = attr.defaultValue();
-						if (defaultVal instanceof Date) {
-							fieldBuilder.attribute("default(now())");
-						} else {
-							// we are intentionally not adding the default value here
-							// this is because if the defaultValue is a function, it could have
-							// custom logic within that function that might not work in prisma's context.
-						}
+						// we are intentionally not adding the default value here
+						// this is because if the defaultValue is a function, it could have
+						// custom logic within that function that might not work in prisma's context.
 					}
 				}
 
