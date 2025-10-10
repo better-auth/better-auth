@@ -1,3 +1,4 @@
+import type { LiteralString } from "packages/core/dist";
 import { type Session, type User } from "../../types";
 import { type InferOptionSchema } from "../../types";
 import { type AccessControl, type Role } from "../access";
@@ -11,6 +12,9 @@ export interface UserWithRole extends User {
 	specialPermissions?: SpecialPermissions;
 }
 export type SpecialPermissions = { [key: string]: string[] | undefined } | null;
+export type FinalPermissions = Readonly<{
+	[key: string]: readonly LiteralString[];
+}>;
 
 export interface SessionWithImpersonatedBy extends Session {
 	impersonatedBy?: string;

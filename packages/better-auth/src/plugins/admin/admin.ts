@@ -25,6 +25,7 @@ import type {
 	SpecialPermissions,
 	UserWithRole,
 } from "./types";
+import { getFinalPermissions } from "./final-permissions";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -1735,6 +1736,132 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					return ctx.json({
 						error: null,
 						success: result,
+					});
+				},
+			),
+
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/get-user-final-permissions`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.getUserFinalPermissions`
+			 *
+			 * **client:**
+			 * `authClient.admin.getUserFinalPermissions`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-has-permission)
+			 */
+			getUserFinalPermissions: createAuthEndpoint(
+				"/admin/get-user-final-permissions",
+				{
+					method: "POST",
+					body: z.object({
+						userId: z.coerce.string().optional().meta({
+							description: `The user id. Eg: "user-id"`,
+						}),
+						role: z.string().optional().meta({
+							description: `The role to check permission for. Eg: "admin"`,
+						}),
+						specialPermissions: z
+							.record(z.string(), z.union([z.undefined(), z.array(z.string())]))
+							.optional()
+							.nullable()
+							.meta({
+								description: `The special permissions for special role. Eg: {"user": ["create", "read"]}`,
+							}),
+					}),
+					metadata: {
+						openapi: {
+							description: "Get the final permissions for a user",
+							requestBody: {
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {},
+											required: [],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													finalPermissions: {
+														type: "object",
+														additionalProperties: {
+															type: "array",
+															items: {
+																type: "string",
+															},
+														},
+													},
+												},
+												required: ["finalPermissions"],
+											},
+										},
+									},
+								},
+							},
+						},
+						$Infer: {
+							body: {} as {
+								userId?: string;
+								role?: InferAdminRolesFromOption<O>;
+								specialPermissions?: InferSpecialPermissionsFromOption<O>;
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const session = await getSessionFromCtx(ctx);
+
+					if (!session && (ctx.request || ctx.headers)) {
+						throw new APIError("UNAUTHORIZED");
+					}
+					if (!session && !ctx.body.userId && !ctx.body.role) {
+						throw new APIError("BAD_REQUEST", {
+							message: "user id or role is required",
+						});
+					}
+					const user =
+						session?.user ||
+						(ctx.body.role
+							? {
+									id: ctx.body.userId || "",
+									role: ctx.body.role,
+									specialPermissions: ctx.body.specialPermissions,
+								}
+							: null) ||
+						((await ctx.context.internalAdapter.findUserById(
+							ctx.body.userId as string,
+						)) as {
+							role?: string;
+							id: string;
+							specialPermissions?: SpecialPermissions;
+						});
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: "user not found",
+						});
+					}
+					const finalPermissions = getFinalPermissions({
+						userId: user.id,
+						role: user.role,
+						specialPermissions: user.specialPermissions,
+						options: options as AdminOptions,
+					});
+					return ctx.json({
+						finalPermissions,
 					});
 				},
 			),

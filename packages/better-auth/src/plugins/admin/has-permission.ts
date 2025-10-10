@@ -38,7 +38,6 @@ export const hasPermission = (
 		(input.options?.specialAdminRole &&
 			roles.includes(input.options?.specialAdminRole));
 
-	// console.log(9999, isSpecialRole, roles);
 	if (isSpecialRole) {
 		if (!input.specialPermissions) {
 			return false;

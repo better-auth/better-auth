@@ -1192,6 +1192,7 @@ describe("access control with special roles", async (it) => {
 										role: "adminSpecial",
 										specialPermissions: {
 											user: [
+												"get",
 												"create",
 												"read",
 												"update",
@@ -1435,6 +1436,42 @@ describe("access control with special roles", async (it) => {
 			},
 		});
 		expect(checkWithUserRole.success).toBe(true);
+	});
+
+	it("should get user final permissions", async () => {
+		const user = await client.signUp.email({
+			email: "finalpermissions@test.com",
+			password: "password",
+			name: "Final Permissions Test User",
+		});
+		const resultUser = await auth.api.getUserFinalPermissions({
+			body: {
+				userId: user.data?.user.id,
+			},
+		});
+		expect(resultUser.finalPermissions).toEqual(userAc.statements);
+
+		await client.admin.setRole(
+			{
+				userId: user.data?.user.id || "",
+				role: "adminSpecial",
+				specialPermissions: {
+					user: ["create", "read", "update", "delete"],
+				},
+			},
+			{
+				headers: headers,
+			},
+		);
+		const resultSpecialAdmin = await auth.api.getUserFinalPermissions({
+			body: {
+				userId: user.data?.user.id,
+			},
+		});
+		expect(resultSpecialAdmin.finalPermissions).toEqual({
+			user: ["create", "read", "update", "delete"],
+			order: [],
+		});
 	});
 
 	it("should check permissions correctly for banned user with role provided", async () => {
