@@ -21,6 +21,10 @@ export const subscriptions = {
 				type: "string",
 				required: false,
 			},
+			priceId: {
+				type: "string",
+				required: false,
+			},
 			status: {
 				type: "string",
 				defaultValue: "incomplete",
