@@ -2,7 +2,6 @@ import { beforeAll, expect, it, describe, vi, afterEach } from "vitest";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
-	GenericEndpointContext,
 	Session,
 	User,
 } from "../types";
@@ -13,6 +12,7 @@ import { getMigrations } from "./get-migration";
 import { Kysely, SqliteDialect } from "kysely";
 import { getTestInstance } from "../test-utils/test-instance";
 import { safeJSONParse } from "../utils/json";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 describe("adapter test", async () => {
 	const sqliteDialect = new SqliteDialect({
@@ -529,5 +529,74 @@ describe("adapter test", async () => {
 		);
 		expect(actualExp - expectedExp).toBeLessThanOrEqual(1); // max 1s clock drift between check and set
 		expect(actualExp - expectedExp).toBeGreaterThanOrEqual(0); // max 1s clock drift between check and set
+	});
+
+	it("should delete a single account", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "Account Delete User",
+				email: "account.delete@example.com",
+			},
+			ctx as unknown as GenericEndpointContext,
+		);
+
+		const account = await internalAdapter.createAccount(
+			{
+				userId: user.id,
+				providerId: "test-provider",
+				accountId: "test-account-id-1",
+			},
+			ctx as unknown as GenericEndpointContext,
+		);
+
+		let foundAccount = await internalAdapter.findAccount(account.accountId);
+		expect(foundAccount).toBeDefined();
+
+		await internalAdapter.deleteAccount(
+			account.id,
+			ctx as unknown as GenericEndpointContext,
+		);
+
+		foundAccount = await internalAdapter.findAccount(account.accountId);
+		expect(foundAccount).toBeNull();
+	});
+
+	it("should delete multiple accounts for a user", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "Accounts Delete User",
+				email: "accounts.delete@example.com",
+			},
+			ctx as unknown as GenericEndpointContext,
+		);
+
+		await internalAdapter.createAccount(
+			{
+				userId: user.id,
+				providerId: "test-provider-1",
+				accountId: "test-account-id-2",
+			},
+			ctx as unknown as GenericEndpointContext,
+		);
+
+		await internalAdapter.createAccount(
+			{
+				userId: user.id,
+				providerId: "test-provider-2",
+				accountId: "test-account-id-3",
+			},
+			ctx as unknown as GenericEndpointContext,
+		);
+
+		let accounts = await internalAdapter.findAccounts(user.id);
+		expect(accounts.length).toBe(2);
+
+		await internalAdapter.deleteAccounts(
+			user.id,
+			ctx as unknown as GenericEndpointContext,
+		);
+
+		accounts = await internalAdapter.findAccounts(user.id);
+		expect(accounts.length).toBe(0);
 	});
 });

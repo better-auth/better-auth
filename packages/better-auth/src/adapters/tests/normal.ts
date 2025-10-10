@@ -1,6 +1,7 @@
 import { expect } from "vitest";
 import { createTestSuite } from "../create-test-suite";
-import type { BetterAuthPlugin, User } from "../../types";
+import type { User } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
 
 /**
  * This test suite tests the basic CRUD operations of the adapter.
@@ -179,6 +180,54 @@ export const getNormalTestSuiteTests = ({
 			expect(result).toEqual(user);
 			expect(result?.email).toEqual(user.email);
 			expect(true).toEqual(true);
+		},
+		"findOne - should find a model with a modified model name": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						modelName: "user_custom",
+					},
+				},
+				true,
+			);
+			const [user] = await insertRandom("user");
+			expect(user).toBeDefined();
+			expect(user).toHaveProperty("id");
+			expect(user).toHaveProperty("name");
+			const result = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: user.email }],
+			});
+			expect(result).toEqual(user);
+			expect(result?.email).toEqual(user.email);
+			expect(true).toEqual(true);
+		},
+		"findOne - should find a model with additional fields": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							customField: {
+								type: "string",
+								input: false,
+								required: true,
+								defaultValue: "default-value",
+							},
+						},
+					},
+				},
+				true,
+			);
+			const [user_] = await insertRandom("user");
+			const user = user_ as User & { customField: string };
+			expect(user).toHaveProperty("customField");
+			expect(user.customField).toBe("default-value");
+			const result = await adapter.findOne<User & { customField: string }>({
+				model: "user",
+				where: [{ field: "customField", value: user.customField }],
+			});
+			expect(result).toEqual(user);
+			expect(result?.customField).toEqual("default-value");
 		},
 		"findOne - should select fields": async () => {
 			const [user] = await insertRandom("user");

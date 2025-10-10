@@ -1,7 +1,7 @@
 import * as z from "zod";
-import type { GenericEndpointContext } from "../types";
 import { APIError } from "better-call";
 import { generateRandomString } from "../crypto";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export async function generateState(
 	c: GenericEndpointContext,
