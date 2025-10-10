@@ -5,6 +5,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SessionQueryParams,
 } from "../types";
 import type {
 	BetterAuthClientPlugin,
@@ -82,6 +83,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 				error: BetterFetchError | null;
 				isPending: boolean;
 				isRefetching: boolean;
+				refetch: (queryParams?: { query?: SessionQueryParams }) => void;
 			}>;
 			$fetch: typeof $fetch;
 			$store: typeof $store;

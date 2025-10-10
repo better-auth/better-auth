@@ -102,6 +102,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 					data: res.data,
 					isPending: false,
 					error: res.error,
+					refetch: res.refetch,
 				};
 			});
 		}
