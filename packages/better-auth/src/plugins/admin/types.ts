@@ -8,7 +8,9 @@ export interface UserWithRole extends User {
 	banned?: boolean | null;
 	banReason?: string | null;
 	banExpires?: Date | null;
+	specialPermissions?: SpecialPermissions;
 }
+export type SpecialPermissions = { [key: string]: string[] | undefined } | null;
 
 export interface SessionWithImpersonatedBy extends Session {
 	impersonatedBy?: string;
@@ -75,9 +77,26 @@ export interface AdminOptions {
 	 * By default, the message is "You have been banned from this application"
 	 */
 	bannedUserMessage?: string;
+	/**
+	 * Special admin role that uses per-user custom permissions
+	 * stored in the `specialPermissions` field instead of role-based permissions
+	 */
+	specialAdminRole?: string;
+	/**
+	 * Special non-admin role that uses per-user custom permissions
+	 * stored in the `specialPermissions` field instead of role-based permissions
+	 */
+	specialNonAdminRole?: string;
 }
 
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
 	O extends { roles: Record<string, unknown> }
 		? keyof O["roles"]
 		: "user" | "admin";
+export type InferSpecialPermissionsFromOption<
+	O extends AdminOptions | undefined,
+> = O extends {
+	ac: AccessControl<infer S>;
+}
+	? { [K in keyof S]?: string[] }
+	: Record<string, string[]>;
