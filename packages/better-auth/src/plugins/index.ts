@@ -25,6 +25,7 @@ export * from "./mcp";
 export * from "./siwe";
 export * from "./device-authorization";
 export * from "./last-login-method";
+export * from "./login-alias";
 /**
  * @deprecated Please import from `better-auth/api` directly.
  */
