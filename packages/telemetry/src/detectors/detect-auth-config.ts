@@ -1,4 +1,5 @@
-import type { TelemetryContext, BetterAuthOptions } from "../types";
+import type { TelemetryContext } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 
 export function getTelemetryAuthConfig(
 	options: BetterAuthOptions,
@@ -38,7 +39,8 @@ export function getTelemetryAuthConfig(
 				!!options.emailAndPassword?.revokeSessionsOnPasswordReset,
 		},
 		socialProviders: Object.keys(options.socialProviders || {}).map((p) => {
-			const provider = options.socialProviders?.[p];
+			const provider =
+				options.socialProviders?.[p as keyof typeof options.socialProviders];
 			if (!provider) return {};
 			return {
 				id: p,
