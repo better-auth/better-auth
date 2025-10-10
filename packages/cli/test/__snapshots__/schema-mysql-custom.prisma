@@ -89,7 +89,7 @@ model TwoFactor {
 model Workspace {
   id                   String                @id
   name                 String                @db.Text
-  slug                 String?
+  slug                 String
   logo                 String?               @db.Text
   createdAt            DateTime
   metadata             String?               @db.Text
@@ -120,6 +120,7 @@ model WorkspaceInvitation {
   role           String?   @db.Text
   status         String    @db.Text
   expiresAt      DateTime
+  createdAt      DateTime  @default(now())
   inviterId      String
   user           User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
 

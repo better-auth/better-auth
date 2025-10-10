@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { customSession } from ".";
 import { admin } from "../admin";
@@ -8,6 +8,7 @@ import type { BetterAuthOptions } from "../../types";
 import { adminClient } from "../admin/client";
 import { multiSession } from "../multi-session";
 import { multiSessionClient } from "../multi-session/client";
+import { parseSetCookieHeader } from "../../cookies";
 
 describe("Custom Session Plugin Tests", async () => {
 	const options = {
@@ -15,6 +16,14 @@ describe("Custom Session Plugin Tests", async () => {
 	} satisfies BetterAuthOptions;
 	const { auth, signInWithTestUser, testUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			session: {
+				maxAge: 10,
+				updateAge: 0,
+				cookieCache: {
+					enabled: true,
+					maxAge: 10,
+				},
+			},
 			plugins: [
 				...options.plugins,
 				customSession(
@@ -61,7 +70,12 @@ describe("Custom Session Plugin Tests", async () => {
 			fetchOptions: {
 				headers,
 				onResponse(context) {
-					expect(context.response.headers.get("set-cookie")).toBeDefined();
+					const header = context.response.headers.get("set-cookie");
+					expect(header).toBeDefined();
+
+					const cookies = parseSetCookieHeader(header!);
+					expect(cookies.has("better-auth.session_token")).toBe(true);
+					expect(cookies.has("better-auth.session_data")).toBe(true);
 				},
 			},
 		});
@@ -93,42 +107,64 @@ describe("Custom Session Plugin Tests", async () => {
 		expect(session.newData).toEqual({ message: "Hello, World!" });
 	});
 
-	it("should not create memory leaks with multiple plugin instances", async () => {
-		const initialMemory = process.memoryUsage();
+	it.skipIf(globalThis.gc == null)(
+		"should not create memory leaks with multiple plugin instances",
+		async () => {
+			const initialMemory = process.memoryUsage();
 
-		const pluginInstances = [];
-		const sessionCount = 100;
+			const pluginInstances = [];
+			const sessionCount = 100;
 
-		for (let i = 0; i < sessionCount; i++) {
-			const plugin = customSession(async ({ user, session }) => {
-				return {
-					user: {
-						...user,
-						testField: `test-${i}`,
-					},
-					session,
-					iteration: i,
-				};
-			});
-			pluginInstances.push(plugin);
-		}
+			for (let i = 0; i < sessionCount; i++) {
+				const plugin = customSession(async ({ user, session }) => {
+					return {
+						user: {
+							...user,
+							testField: `test-${i}`,
+						},
+						session,
+						iteration: i,
+					};
+				});
+				pluginInstances.push(plugin);
+			}
+			// Force garbage collection (only works if Node.js is started with --expose-gc)
+			// @ts-expect-error
+			globalThis.gc();
 
-		// Force garbage collection if available (in test environment)
-		if (global.gc) {
-			global.gc();
-		}
+			const afterPluginCreation = process.memoryUsage();
 
-		const afterPluginCreation = process.memoryUsage();
+			const memoryIncrease =
+				afterPluginCreation.heapUsed - initialMemory.heapUsed;
+			const memoryIncreasePerPlugin = memoryIncrease / sessionCount;
+			// Each plugin instance should not use more than <5KB of memory
+			// (this is a reasonable threshold that indicates no major memory leak)
+			expect(memoryIncreasePerPlugin).toBeLessThan(5 * 1024);
+			// Verify that plugins are still functional
+			expect(pluginInstances).toHaveLength(sessionCount);
+			expect(pluginInstances[0]!.id).toBe("custom-session");
+			expect(pluginInstances[sessionCount - 1]!.id).toBe("custom-session");
+		},
+	);
 
-		const memoryIncrease =
-			afterPluginCreation.heapUsed - initialMemory.heapUsed;
-		const memoryIncreasePerPlugin = memoryIncrease / sessionCount;
-		// Each plugin instance should not use more than <5KB of memory
-		// (this is a reasonable threshold that indicates no major memory leak)
-		expect(memoryIncreasePerPlugin).toBeLessThan(5 * 1024);
-		// Verify that plugins are still functional
-		expect(pluginInstances).toHaveLength(sessionCount);
-		expect(pluginInstances[0].id).toBe("custom-session");
-		expect(pluginInstances[sessionCount - 1].id).toBe("custom-session");
+	it("should infer the session type", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				customSession(async ({ user, session }) => {
+					return {
+						custom: {
+							field: "field",
+						},
+					};
+				}),
+			],
+		});
+		type Session = typeof auth.$Infer.Session;
+
+		expectTypeOf<Session>().toEqualTypeOf<{
+			custom: {
+				field: string;
+			};
+		}>();
 	});
 });

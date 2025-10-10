@@ -107,6 +107,10 @@ type addPasskey = {
 ```
 </APIMethod>
 
+<Callout>
+ Setting `throw: true` in the fetch options has no effect for the register and sign-in passkey responses — they will always return a data object containing the error object.
+</Callout>
+
 
 ### Sign in with a passkey
 
@@ -117,20 +121,30 @@ To sign in with a passkey you can use the `signIn.passkey` method. This will pro
 ```ts
 type signInPasskey = {
     /**
-     * The email of the user to sign in.
-     */
-    email: string = "example@gmail.com"
-    /**
      * Browser autofill, a.k.a. Conditional UI. Read more: https://simplewebauthn.dev/docs/packages/browser#browser-autofill-aka-conditional-ui
     */
     autoFill?: boolean = true
-    /**
-     * The URL to redirect to after the user has signed in.
-    */
-    callbackURL?: string = "/dashboard"
 }
 ```
 </APIMethod>
+
+#### Example Usage
+```ts
+// With post authentication redirect
+await authClient.signIn.passkey({
+    autoFill: true,
+    fetchOptions: {
+        onSuccess(context) {
+            // Redirect to dashboard after successful authentication
+            window.location.href = "/dashboard";
+        },
+        onError(context) {
+            // Handle authentication errors
+            console.error("Authentication failed:", context.error.message);
+        }
+    }
+});
+```
 
 ### List passkeys
 

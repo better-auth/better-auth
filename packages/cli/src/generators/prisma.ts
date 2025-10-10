@@ -84,6 +84,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				if (type === "date") {
 					return isOptional ? "DateTime?" : "DateTime";
 				}
+				if (type === "json") {
+					return isOptional ? "Json?" : "Json";
+				}
 				if (type === "string[]") {
 					return isOptional ? "String[]" : "String[]";
 				}
@@ -155,8 +158,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					if (provider === "mongodb") {
 						fieldBuilder.attribute(`map("_id")`);
 					}
-				} else if (fieldName !== field) {
-					fieldBuilder.attribute(`map("${field}")`);
 				}
 
 				if (attr.unique) {
@@ -205,7 +206,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.model(modelName)
 						.field(
 							`${referencedCustomModelName.toLowerCase()}`,
-							capitalizeFirstLetter(referencedCustomModelName),
+							`${capitalizeFirstLetter(referencedCustomModelName)}${
+								!attr.required ? "?" : ""
+							}`,
 						)
 						.attribute(
 							`relation(fields: [${fieldName}], references: [${attr.references.field}], onDelete: ${action})`,

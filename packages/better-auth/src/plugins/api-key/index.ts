@@ -1,5 +1,6 @@
-import { APIError, createAuthMiddleware } from "../../api";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import { APIError } from "../../api";
+import { createAuthMiddleware } from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { mergeSchema } from "../../db";
 import { apiKeySchema } from "./schema";
 import { getIp } from "../../utils/get-request-ip";
@@ -88,7 +89,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			charactersLength:
 				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
-		disableSessionForAPIKeys: options?.disableSessionForAPIKeys ?? false,
+		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(
@@ -135,8 +136,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		hooks: {
 			before: [
 				{
-					matcher: (ctx) =>
-						!!getter(ctx) && opts.disableSessionForAPIKeys === false,
+					matcher: (ctx) => !!getter(ctx) && opts.enableSessionForAPIKeys,
 					handler: createAuthMiddleware(async (ctx) => {
 						const key = getter(ctx)!;
 

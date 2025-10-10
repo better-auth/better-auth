@@ -1,11 +1,11 @@
-import { subtle, getRandomValues } from "@better-auth/utils";
+import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { joseSecs } from "../../utils/time";
 import type { JwtOptions, Jwk } from "./types";
 import { generateKeyPair, exportJWK } from "jose";
-import type { GenericEndpointContext } from "../../types";
 import { symmetricEncrypt } from "../../crypto";
 import { getJwksAdapter } from "./adapter";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 /**
  * Converts an expirationTime to ISO seconds expiration time (the format of JWT exp)
@@ -31,7 +31,8 @@ export function toExpJWT(
 
 async function deriveKey(secretKey: string): Promise<CryptoKey> {
 	const enc = new TextEncoder();
-	const keyMaterial = await crypto.subtle.importKey(
+	const subtle = getWebcryptoSubtle();
+	const keyMaterial = await subtle.importKey(
 		"raw",
 		enc.encode(secretKey),
 		{ name: "PBKDF2" },
@@ -58,10 +59,10 @@ export async function encryptPrivateKey(
 	secretKey: string,
 ): Promise<{ encryptedPrivateKey: string; iv: string; authTag: string }> {
 	const key = await deriveKey(secretKey); // Derive a 32-byte key from the provided secret
-	const iv = getRandomValues(new Uint8Array(12)); // 12-byte IV for AES-GCM
+	const iv = crypto.getRandomValues(new Uint8Array(12)); // 12-byte IV for AES-GCM
 
 	const enc = new TextEncoder();
-	const ciphertext = await subtle.encrypt(
+	const ciphertext = await getWebcryptoSubtle().encrypt(
 		{
 			name: "AES-GCM",
 			iv: iv,
@@ -94,7 +95,7 @@ export async function decryptPrivateKey(
 	const ivBuffer = base64.decode(iv);
 	const ciphertext = base64.decode(encryptedPrivateKey);
 
-	const decrypted = await subtle.decrypt(
+	const decrypted = await getWebcryptoSubtle().decrypt(
 		{
 			name: "AES-GCM",
 			iv: ivBuffer as BufferSource,

@@ -1,14 +1,13 @@
-import * as z from "zod/v4";
-import {
-	createAuthEndpoint,
-	defaultKeyHasher,
-	type BetterAuthPlugin,
-} from "..";
+import * as z from "zod";
+import { defaultKeyHasher } from "..";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { sessionMiddleware } from "../../api";
 import { generateRandomString } from "../../crypto";
-import type { GenericEndpointContext, Session, User } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import type { Session, User } from "../../types";
+import type { GenericEndpointContext } from "@better-auth/core";
 
-interface OneTimeTokenopts {
+interface OneTimeTokenOptions {
 	/**
 	 * Expires in minutes
 	 *
@@ -41,11 +40,11 @@ interface OneTimeTokenopts {
 		| { type: "custom-hasher"; hash: (token: string) => Promise<string> };
 }
 
-export const oneTimeToken = (options?: OneTimeTokenopts) => {
+export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 	const opts = {
 		storeToken: "plain",
 		...options,
-	} satisfies OneTimeTokenopts;
+	} satisfies OneTimeTokenOptions;
 
 	async function storeToken(ctx: GenericEndpointContext, token: string) {
 		if (opts.storeToken === "hashed") {
@@ -146,17 +145,14 @@ export const oneTimeToken = (options?: OneTimeTokenopts) => {
 							message: "Invalid token",
 						});
 					}
+					await c.context.internalAdapter.deleteVerificationValue(
+						verificationValue.id,
+					);
 					if (verificationValue.expiresAt < new Date()) {
-						await c.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
-						);
 						throw c.error("BAD_REQUEST", {
 							message: "Token expired",
 						});
 					}
-					await c.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
-					);
 					const session = await c.context.internalAdapter.findSession(
 						verificationValue.value,
 					);

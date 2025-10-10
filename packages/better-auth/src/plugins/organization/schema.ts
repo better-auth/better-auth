@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./types";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
@@ -38,6 +38,7 @@ export const invitationSchema = z.object({
 	teamId: z.string().nullish(),
 	inviterId: z.string(),
 	expiresAt: z.date(),
+	createdAt: z.date().default(() => new Date()),
 });
 
 export const teamSchema = z.object({
@@ -149,6 +150,7 @@ export type InferInvitation<O extends OrganizationOptions> =
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
+				createdAt: Date;
 				teamId?: string;
 			}
 		: {
@@ -159,5 +161,6 @@ export type InferInvitation<O extends OrganizationOptions> =
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
+				createdAt: Date;
 			}) &
 		InferAdditionalFieldsFromPluginOptions<"invitation", O, false>;

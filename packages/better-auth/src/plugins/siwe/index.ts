@@ -1,7 +1,9 @@
-import { APIError, createAuthEndpoint } from "../../api";
+import { APIError } from "../../api";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { setSessionCookie } from "../../cookies";
-import { z } from "zod";
-import type { BetterAuthPlugin, InferOptionSchema } from "../../types";
+import * as z from "zod";
+import type { InferOptionSchema } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import type {
 	ENSLookupArgs,
 	ENSLookupResult,

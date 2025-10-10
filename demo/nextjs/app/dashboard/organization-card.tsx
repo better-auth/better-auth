@@ -140,7 +140,7 @@ export function OrganizationCard(props: {
 			</CardHeader>
 			<CardContent>
 				<div className="flex gap-8 flex-col md:flex-row">
-					<div className="flex flex-col gap-2 flex-grow">
+					<div className="flex flex-col gap-2 grow">
 						<p className="font-medium border-b-2 border-b-foreground/10">
 							Members
 						</p>
@@ -202,7 +202,7 @@ export function OrganizationCard(props: {
 							)}
 						</div>
 					</div>
-					<div className="flex flex-col gap-2 flex-grow">
+					<div className="flex flex-col gap-2 grow">
 						<p className="font-medium border-b-2 border-b-foreground/10">
 							Invites
 						</p>

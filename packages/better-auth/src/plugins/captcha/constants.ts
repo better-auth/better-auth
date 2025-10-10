@@ -10,7 +10,8 @@ export const Providers = {
 	CLOUDFLARE_TURNSTILE: "cloudflare-turnstile",
 	GOOGLE_RECAPTCHA: "google-recaptcha",
 	HCAPTCHA: "hcaptcha",
-	YANDEX_SMART_CAPTCHA: "yandex-smart-captcha",
+	CAPTCHAFOX: "captchafox",
+  YANDEX_SMART_CAPTCHA: "yandex-smart-captcha",
 } as const;
 
 export const siteVerifyMap: Record<Provider, string> = {
@@ -19,6 +20,7 @@ export const siteVerifyMap: Record<Provider, string> = {
 	[Providers.GOOGLE_RECAPTCHA]:
 		"https://www.google.com/recaptcha/api/siteverify",
 	[Providers.HCAPTCHA]: "https://api.hcaptcha.com/siteverify",
-	[Providers.YANDEX_SMART_CAPTCHA]:
+	[Providers.CAPTCHAFOX]: "https://api.captchafox.com/siteverify",
+  [Providers.YANDEX_SMART_CAPTCHA]:
 		"https://smartcaptcha.yandexcloud.net/validate",
 };

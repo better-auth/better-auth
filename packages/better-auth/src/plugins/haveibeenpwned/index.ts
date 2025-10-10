@@ -1,7 +1,7 @@
 import { APIError } from "../../api";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
 
 const ERROR_CODES = {
 	PASSWORD_COMPROMISED:
@@ -37,7 +37,7 @@ async function checkPasswordCompromise(
 		}
 		const lines = data.split("\n");
 		const found = lines.some(
-			(line) => line.split(":")[0].toUpperCase() === suffix.toUpperCase(),
+			(line) => line.split(":")[0]!.toUpperCase() === suffix.toUpperCase(),
 		);
 
 		if (found) {

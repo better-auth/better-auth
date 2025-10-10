@@ -7,6 +7,7 @@ import {
 	gt,
 	gte,
 	inArray,
+	notInArray,
 	like,
 	lt,
 	lte,
@@ -15,9 +16,18 @@ import {
 	sql,
 	SQL,
 } from "drizzle-orm";
-import { BetterAuthError } from "../../error";
-import type { Where } from "../../types";
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { BetterAuthOptions } from "@better-auth/core";
+import {
+	createAdapterFactory,
+	type AdapterFactoryOptions,
+	type AdapterFactoryCustomizeAdapterCreator,
+} from "../adapter-factory";
+import type {
+	DBAdapterDebugLogOption,
+	DBAdapter,
+	Where,
+} from "@better-auth/core/db/adapter";
 
 export interface DB {
 	[key: string]: any;
@@ -43,7 +53,7 @@ export interface DrizzleAdapterConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 	/**
 	 * By default snake case is used for table and field names
 	 * when the CLI is used to generate the schema. If you want
@@ -51,17 +61,21 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	camelCase?: boolean;
+	/**
+	 * Whether to execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions,
+	 * set this to `false` and operations will be executed sequentially.
+	 * @default true
+	 */
+	transaction?: boolean;
 }
 
-export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
-	createAdapter({
-		config: {
-			adapterId: "drizzle",
-			adapterName: "Drizzle Adapter",
-			usePlural: config.usePlural ?? false,
-			debugLogs: config.debugLogs ?? false,
-		},
-		adapter: ({ getFieldName, debugLog }) => {
+export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
+	let lazyOptions: BetterAuthOptions | null = null;
+	const createCustomAdapter =
+		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
+		({ getFieldName, debugLog }) => {
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
 				if (!schema) {
@@ -91,7 +105,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				const schemaModel = getSchema(model);
 				const builderVal = builder.config?.values;
 				if (where?.length) {
-					const clause = convertWhereClause(where, model);
+					// If we're updating a field that's in the where clause, use the new value
+					const updatedWhere = where.map((w) => {
+						// If this field was updated, use the new value for lookup
+						if (data[w.field] !== undefined) {
+							return { ...w, value: data[w.field] };
+						}
+						return w;
+					});
+
+					const clause = convertWhereClause(updatedWhere, model);
 					const res = await db
 						.select()
 						.from(schemaModel)
@@ -163,6 +186,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 						return [inArray(schemaModel[field], w.value)];
 					}
 
+					if (w.operator === "not_in") {
+						if (!Array.isArray(w.value)) {
+							throw new BetterAuthError(
+								`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
+							);
+						}
+						return [notInArray(schemaModel[field], w.value)];
+					}
+
 					if (w.operator === "contains") {
 						return [like(schemaModel[field], `%${w.value}%`)];
 					}
@@ -212,6 +244,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 								);
 							}
 							return inArray(schemaModel[field], w.value);
+						}
+						if (w.operator === "not_in") {
+							if (!Array.isArray(w.value)) {
+								throw new BetterAuthError(
+									`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
+								);
+							}
+							return notInArray(schemaModel[field], w.value);
 						}
 						return eq(schemaModel[field], w.value);
 					}),
@@ -325,5 +365,31 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				},
 				options: config,
 			};
+		};
+	let adapterOptions: AdapterFactoryOptions | null = null;
+	adapterOptions = {
+		config: {
+			adapterId: "drizzle",
+			adapterName: "Drizzle Adapter",
+			usePlural: config.usePlural ?? false,
+			debugLogs: config.debugLogs ?? false,
+			transaction:
+				(config.transaction ?? false)
+					? (cb) =>
+							db.transaction((tx: DB) => {
+								const adapter = createAdapterFactory({
+									config: adapterOptions!.config,
+									adapter: createCustomAdapter(tx),
+								})(lazyOptions!);
+								return cb(adapter);
+							})
+					: false,
 		},
-	});
+		adapter: createCustomAdapter(db),
+	};
+	const adapter = createAdapterFactory(adapterOptions);
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+		lazyOptions = options;
+		return adapter(options);
+	};
+};

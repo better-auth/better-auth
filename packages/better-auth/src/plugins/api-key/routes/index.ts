@@ -1,4 +1,3 @@
-import type { AuthContext } from "../../../types";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey, ApiKeyOptions } from "../types";
 import { createApiKey } from "./create-api-key";
@@ -9,6 +8,7 @@ import { verifyApiKey } from "./verify-api-key";
 import { listApiKeys } from "./list-api-keys";
 import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
 import { API_KEY_TABLE_NAME } from "..";
+import type { AuthContext } from "@better-auth/core";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
 	Required<
@@ -25,7 +25,7 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "minimumNameLength"
 			| "requireName"
 			| "enableMetadata"
-			| "disableSessionForAPIKeys"
+			| "enableSessionForAPIKeys"
 			| "startingCharactersConfig"
 		>
 	> & {

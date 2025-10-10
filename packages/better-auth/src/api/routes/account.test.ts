@@ -9,15 +9,15 @@ import {
 } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
-import type { GoogleProfile } from "../../social-providers";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { getOAuth2Tokens } from "../../oauth2";
+import { getOAuth2Tokens } from "@better-auth/core/oauth2";
 import { signJWT } from "../../crypto/jwt";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { Account } from "../../types";
 
 let email = "";
-vi.mock("../../oauth2", async (importOriginal) => {
+vi.mock("@better-auth/core/oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
 	return {
 		...original,
@@ -53,7 +53,7 @@ vi.mock("../../oauth2", async (importOriginal) => {
 });
 
 describe("account", async () => {
-	const { auth, client, signInWithTestUser } = await getTestInstance({
+	const { auth, signInWithTestUser, client } = await getTestInstance({
 		socialProviders: {
 			google: {
 				clientId: "test",
@@ -85,157 +85,153 @@ describe("account", async () => {
 		googleGetUserInfoMock.mockClear();
 	});
 
-	const { headers } = await signInWithTestUser();
+	const { runWithUser } = await signInWithTestUser();
 
 	it("should list all accounts", async () => {
-		const accounts = await client.listAccounts({
-			fetchOptions: {
-				headers,
-			},
+		await runWithUser(async () => {
+			const accounts = await client.listAccounts();
+			expect(accounts.data?.length).toBe(1);
 		});
-		expect(accounts.data?.length).toBe(1);
 	});
 
 	it("should link first account", async () => {
-		const linkAccountRes = await client.linkSocial(
-			{
-				provider: "google",
-				callbackURL: "/callback",
-			},
-			{
-				headers,
-				onSuccess(context) {
-					const cookies = parseSetCookieHeader(
-						context.response.headers.get("set-cookie") || "",
-					);
-					headers.set(
-						"cookie",
-						`better-auth.state=${cookies.get("better-auth.state")?.value}`,
-					);
+		await runWithUser(async (headers) => {
+			const linkAccountRes = await client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/callback",
 				},
-			},
-		);
-		expect(linkAccountRes.data).toMatchObject({
-			url: expect.stringContaining("google.com"),
-			redirect: true,
+				{
+					onSuccess(context) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						headers.set(
+							"cookie",
+							`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+						);
+					},
+				},
+			);
+			expect(linkAccountRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+			const state =
+				linkAccountRes.data && "url" in linkAccountRes.data
+					? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+					: "";
+			email = "test@test.com";
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				method: "GET",
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+					expect(location).toContain("/callback");
+				},
+			});
 		});
-		const state =
-			linkAccountRes.data && "url" in linkAccountRes.data
-				? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
-				: "";
-		email = "test@test.com";
-		await client.$fetch("/callback/google", {
-			query: {
-				state,
-				code: "test",
-			},
-			method: "GET",
-			headers,
-			onError(context) {
-				expect(context.response.status).toBe(302);
-				const location = context.response.headers.get("location");
-				expect(location).toBeDefined();
-				expect(location).toContain("/callback");
-			},
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const accounts = await client.listAccounts();
+			expect(accounts.data?.length).toBe(2);
 		});
-		const { headers: headers2 } = await signInWithTestUser();
-		const accounts = await client.listAccounts({
-			fetchOptions: { headers: headers2 },
-		});
-		expect(accounts.data?.length).toBe(2);
 	});
 
 	it("should encrypt access token and refresh token", async () => {
-		const { headers: headers2 } = await signInWithTestUser();
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		const account = await ctx.adapter.findOne<Account>({
 			model: "account",
 			where: [{ field: "providerId", value: "google" }],
 		});
 		expect(account).toBeTruthy();
 		expect(account?.accessToken).not.toBe("test");
-		const accessToken = await client.getAccessToken({
-			providerId: "google",
-			fetchOptions: { headers: headers2 },
+		await runWithClient2(async () => {
+			const accessToken = await client.getAccessToken({
+				providerId: "google",
+			});
+			expect(accessToken.data?.accessToken).toBe("test");
 		});
-		expect(accessToken.data?.accessToken).toBe("test");
 	});
 
 	it("should pass custom scopes to authorization URL", async () => {
-		const { headers: headers2 } = await signInWithTestUser();
-		const customScope = "https://www.googleapis.com/auth/drive.readonly";
-		const linkAccountRes = await client.linkSocial(
-			{
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const customScope = "https://www.googleapis.com/auth/drive.readonly";
+			const linkAccountRes = await client.linkSocial({
 				provider: "google",
 				callbackURL: "/callback",
 				scopes: [customScope],
-			},
-			{
-				headers: headers2,
-			},
-		);
+			});
 
-		expect(linkAccountRes.data).toMatchObject({
-			url: expect.stringContaining("google.com"),
-			redirect: true,
+			expect(linkAccountRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+
+			const url =
+				linkAccountRes.data && "url" in linkAccountRes.data
+					? new URL(linkAccountRes.data.url)
+					: new URL("");
+			const scopesParam = url.searchParams.get("scope");
+			expect(scopesParam).toContain(customScope);
 		});
-
-		const url =
-			linkAccountRes.data && "url" in linkAccountRes.data
-				? new URL(linkAccountRes.data.url)
-				: new URL("");
-		const scopesParam = url.searchParams.get("scope");
-		expect(scopesParam).toContain(customScope);
 	});
 
 	it("should link second account from the same provider", async () => {
-		const { headers: headers2 } = await signInWithTestUser();
-		const linkAccountRes = await client.linkSocial(
-			{
-				provider: "google",
-				callbackURL: "/callback",
-			},
-			{
-				headers: headers2,
-				onSuccess(context) {
-					const cookies = parseSetCookieHeader(
-						context.response.headers.get("set-cookie") || "",
-					);
-					headers.set(
-						"cookie",
-						`better-auth.state=${cookies.get("better-auth.state")?.value}`,
-					);
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async (headers) => {
+			const linkAccountRes = await client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/callback",
 				},
-			},
-		);
-		expect(linkAccountRes.data).toMatchObject({
-			url: expect.stringContaining("google.com"),
-			redirect: true,
-		});
-		const state =
-			linkAccountRes.data && "url" in linkAccountRes.data
-				? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
-				: "";
-		email = "test2@test.com";
-		await client.$fetch("/callback/google", {
-			query: {
-				state,
-				code: "test",
-			},
-			method: "GET",
-			headers,
-			onError(context) {
-				expect(context.response.status).toBe(302);
-				const location = context.response.headers.get("location");
-				expect(location).toBeDefined();
-				expect(location).toContain("/callback");
-			},
+				{
+					onSuccess(context) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						headers.set(
+							"cookie",
+							`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+						);
+					},
+				},
+			);
+			expect(linkAccountRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+			const state =
+				linkAccountRes.data && "url" in linkAccountRes.data
+					? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+					: "";
+			email = "test2@test.com";
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				method: "GET",
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+					expect(location).toContain("/callback");
+				},
+			});
 		});
 
-		const { headers: headers3 } = await signInWithTestUser();
-		const accounts = await client.listAccounts({
-			fetchOptions: { headers: headers3 },
+		const { runWithUser: runWithClient3 } = await signInWithTestUser();
+		await runWithClient3(async () => {
+			const accounts = await client.listAccounts();
+			expect(accounts.data?.length).toBe(2);
 		});
-		expect(accounts.data?.length).toBe(2);
 	});
 
 	it("should link third account with idToken", async () => {
@@ -253,136 +249,114 @@ describe("account", async () => {
 		};
 		googleGetUserInfoMock.mockResolvedValueOnce(userInfo);
 
-		const { headers: headers2 } = await signInWithTestUser();
-		const linkAccountRes = await client.linkSocial(
-			{
-				provider: "google",
-				callbackURL: "/callback",
-				idToken: { token: "test" },
-			},
-			{
-				headers: headers2,
-				onSuccess(context) {
-					const cookies = parseSetCookieHeader(
-						context.response.headers.get("set-cookie") || "",
-					);
-					headers.set(
-						"cookie",
-						`better-auth.state=${cookies.get("better-auth.state")?.value}`,
-					);
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async (headers) => {
+			await client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/callback",
+					idToken: { token: "test" },
 				},
-			},
-		);
+				{
+					onSuccess(context) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						headers.set(
+							"cookie",
+							`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+						);
+					},
+				},
+			);
+		});
 
 		expect(googleVerifyIdTokenMock).toHaveBeenCalledOnce();
 		expect(googleGetUserInfoMock).toHaveBeenCalledOnce();
 
-		const { headers: headers3 } = await signInWithTestUser();
-		const accounts = await client.listAccounts({
-			fetchOptions: { headers: headers3 },
+		const { runWithUser: runWithClient3 } = await signInWithTestUser();
+		await runWithClient3(async () => {
+			const accounts = await client.listAccounts();
+			expect(accounts.data?.length).toBe(3);
 		});
-		expect(accounts.data?.length).toBe(3);
 	});
 
 	it("should unlink account", async () => {
-		const { headers } = await signInWithTestUser();
-		const previousAccounts = await client.listAccounts({
-			fetchOptions: {
-				headers,
-			},
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const previousAccounts = await client.listAccounts();
+			expect(previousAccounts.data?.length).toBe(3);
+			const unlinkAccountId = previousAccounts.data![1]!.accountId;
+			const unlinkRes = await client.unlinkAccount({
+				providerId: "google",
+				accountId: unlinkAccountId!,
+			});
+			expect(unlinkRes.data?.status).toBe(true);
+			const accounts = await client.listAccounts();
+			expect(accounts.data?.length).toBe(2);
 		});
-		expect(previousAccounts.data?.length).toBe(3);
-		const unlinkAccountId = previousAccounts.data![1].accountId;
-		const unlinkRes = await client.unlinkAccount({
-			providerId: "google",
-			accountId: unlinkAccountId!,
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(unlinkRes.data?.status).toBe(true);
-		const accounts = await client.listAccounts({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(accounts.data?.length).toBe(2);
 	});
 
 	it("should fail to unlink the last account of a provider", async () => {
-		const { headers } = await signInWithTestUser();
-		const previousAccounts = await client.listAccounts({
-			fetchOptions: {
-				headers,
-			},
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const previousAccounts = await client.listAccounts();
+			await ctx.adapter.delete({
+				model: "account",
+				where: [
+					{
+						field: "providerId",
+						value: "google",
+					},
+				],
+			});
+			const unlinkAccountId = previousAccounts.data![0]!.accountId;
+			const unlinkRes = await client.unlinkAccount({
+				providerId: "credential",
+				accountId: unlinkAccountId,
+			});
+			expect(unlinkRes.error?.message).toBe(
+				BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+			);
 		});
-		await ctx.adapter.delete({
-			model: "account",
-			where: [
-				{
-					field: "providerId",
-					value: "google",
-				},
-			],
-		});
-		const unlinkAccountId = previousAccounts.data![0].accountId;
-		const unlinkRes = await client.unlinkAccount({
-			providerId: "credential",
-			accountId: unlinkAccountId,
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(unlinkRes.error?.message).toBe(
-			BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
-		);
 	});
 
 	it("should unlink account with specific accountId", async () => {
-		const { headers } = await signInWithTestUser();
-		const previousAccounts = await client.listAccounts({
-			fetchOptions: {
-				headers,
-			},
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const previousAccounts = await client.listAccounts();
+			expect(previousAccounts.data?.length).toBeGreaterThan(0);
+
+			const accountToUnlink = previousAccounts.data![0]!;
+			const unlinkAccountId = accountToUnlink.accountId;
+			const providerId = accountToUnlink.providerId;
+			const accountsWithSameProvider = previousAccounts.data!.filter(
+				(account) => account.providerId === providerId,
+			);
+			if (accountsWithSameProvider.length <= 1) {
+				return;
+			}
+
+			const unlinkRes = await client.unlinkAccount({
+				providerId,
+				accountId: unlinkAccountId!,
+			});
+
+			expect(unlinkRes.data?.status).toBe(true);
+
+			const accountsAfterUnlink = await client.listAccounts();
+
+			expect(accountsAfterUnlink.data?.length).toBe(
+				previousAccounts.data!.length - 1,
+			);
+			expect(
+				accountsAfterUnlink.data?.find((a) => a.accountId === unlinkAccountId),
+			).toBeUndefined();
 		});
-		expect(previousAccounts.data?.length).toBeGreaterThan(0);
-
-		const accountToUnlink = previousAccounts.data![0];
-		const unlinkAccountId = accountToUnlink.accountId;
-		const providerId = accountToUnlink.providerId;
-		const accountsWithSameProvider = previousAccounts.data!.filter(
-			(account) => account.providerId === providerId,
-		);
-		if (accountsWithSameProvider.length <= 1) {
-			return;
-		}
-
-		const unlinkRes = await client.unlinkAccount({
-			providerId,
-			accountId: unlinkAccountId!,
-			fetchOptions: {
-				headers,
-			},
-		});
-
-		expect(unlinkRes.data?.status).toBe(true);
-
-		const accountsAfterUnlink = await client.listAccounts({
-			fetchOptions: {
-				headers,
-			},
-		});
-
-		expect(accountsAfterUnlink.data?.length).toBe(
-			previousAccounts.data!.length - 1,
-		);
-		expect(
-			accountsAfterUnlink.data?.find((a) => a.accountId === unlinkAccountId),
-		).toBeUndefined();
 	});
 
 	it("should unlink all accounts with specific providerId", async () => {
-		const { headers, user } = await signInWithTestUser();
+		const { runWithUser, user } = await signInWithTestUser();
 		await ctx.adapter.create({
 			model: "account",
 			data: {
@@ -405,37 +379,28 @@ describe("account", async () => {
 			},
 		});
 
-		const previousAccounts = await client.listAccounts({
-			fetchOptions: {
-				headers,
-			},
+		await runWithUser(async () => {
+			const previousAccounts = await client.listAccounts();
+
+			const googleAccounts = previousAccounts.data!.filter(
+				(account) => account.providerId === "google",
+			);
+			expect(googleAccounts.length).toBeGreaterThan(1);
+
+			for (let i = 0; i < googleAccounts.length - 1; i++) {
+				const unlinkRes = await client.unlinkAccount({
+					providerId: "google",
+					accountId: googleAccounts[i]!.accountId!,
+				});
+				expect(unlinkRes.data?.status).toBe(true);
+			}
+
+			const accountsAfterUnlink = await client.listAccounts();
+
+			const remainingGoogleAccounts = accountsAfterUnlink.data!.filter(
+				(account) => account.providerId === "google",
+			);
+			expect(remainingGoogleAccounts.length).toBe(1);
 		});
-
-		const googleAccounts = previousAccounts.data!.filter(
-			(account) => account.providerId === "google",
-		);
-		expect(googleAccounts.length).toBeGreaterThan(1);
-
-		for (let i = 0; i < googleAccounts.length - 1; i++) {
-			const unlinkRes = await client.unlinkAccount({
-				providerId: "google",
-				accountId: googleAccounts[i].accountId!,
-				fetchOptions: {
-					headers,
-				},
-			});
-			expect(unlinkRes.data?.status).toBe(true);
-		}
-
-		const accountsAfterUnlink = await client.listAccounts({
-			fetchOptions: {
-				headers,
-			},
-		});
-
-		const remainingGoogleAccounts = accountsAfterUnlink.data!.filter(
-			(account) => account.providerId === "google",
-		);
-		expect(remainingGoogleAccounts.length).toBe(1);
 	});
 });

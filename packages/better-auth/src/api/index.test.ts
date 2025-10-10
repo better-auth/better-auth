@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { getEndpoints } from "./index";
-import type { AuthContext } from "../init";
-import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
-import { createAuthMiddleware } from "./call";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/middleware";
+import type { AuthContext } from "@better-auth/core";
 
 describe("getEndpoints", () => {
 	it("should await promise-based context before passing to middleware", async () => {
@@ -41,10 +41,10 @@ describe("getEndpoints", () => {
 			context: { customProp: "value" },
 		};
 
-		await middlewares[0].middleware(testCtx);
+		await middlewares[0]!.middleware(testCtx);
 
 		expect(middlewareFn).toHaveBeenCalled();
-		const call = middlewareFn.mock.calls[0][0];
+		const call = middlewareFn.mock.calls[0]![0];
 		expect(call.context).toMatchObject({
 			baseURL: "http://localhost:3000",
 			options: {},

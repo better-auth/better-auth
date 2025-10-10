@@ -1,14 +1,18 @@
 import {
 	APIError,
-	toResponse,
 	type EndpointContext,
 	type EndpointOptions,
 	type InputContext,
+	toResponse,
 } from "better-call";
-import type { AuthEndpoint, AuthMiddleware } from "./call";
-import type { AuthContext, HookEndpointContext } from "../types";
+import type {
+	AuthEndpoint,
+	AuthMiddleware,
+} from "@better-auth/core/middleware";
 import { createDefu } from "defu";
-import { shouldPublishLog } from "../utils";
+import { shouldPublishLog } from "@better-auth/core/env";
+import type { AuthContext } from "@better-auth/core";
+import type { HookEndpointContext } from "../types";
 
 type InternalContext = InputContext<string, any> &
 	EndpointContext<string, any> & {
@@ -81,7 +85,16 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				internalContext = defuReplaceArrays(rest, internalContext);
 			} else if (before) {
 				/* Return before hook response if it's anything other than a context return */
-				return before;
+				return context?.asResponse
+					? toResponse(before, {
+							headers: context?.headers,
+						})
+					: context?.returnHeaders
+						? {
+								headers: context?.headers,
+								response: before,
+							}
+						: before;
 			}
 
 			internalContext.asResponse = false;

@@ -1,21 +1,26 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
-import * as z from "zod/v4";
-import { createAuthEndpoint, sessionMiddleware } from "../../api";
+import * as z from "zod";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { setSessionCookie } from "../../cookies";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
-	type OAuth2Tokens,
-	type OAuthProvider,
-	type OAuth2UserInfo,
-} from "../../oauth2";
+} from "@better-auth/core/oauth2";
+import type {
+	OAuth2Tokens,
+	OAuth2UserInfo,
+	OAuthProvider,
+} from "@better-auth/core/oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { refreshAccessToken } from "../../oauth2/refresh-access-token";
+import { refreshAccessToken } from "@better-auth/core/oauth2";
 import { generateState, parseState } from "../../oauth2/state";
-import type { BetterAuthPlugin, User } from "../../types";
+import type { User } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { sessionMiddleware } from "../../api";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -99,13 +104,16 @@ export interface GenericOAuthConfig {
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	authorizationUrlParams?: Record<string, string>;
-
+	authorizationUrlParams?:
+		| Record<string, string>
+		| ((ctx: GenericEndpointContext) => Record<string, string>);
 	/**
 	 * Additional search-params to add to the tokenUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	tokenUrlParams?: Record<string, string>;
+	tokenUrlParams?:
+		| Record<string, string>
+		| ((ctx: GenericEndpointContext) => Record<string, string>);
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
@@ -470,6 +478,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						}
 						finalAuthUrl = withAdditionalParams.toString();
 					}
+					const additionalParams =
+						typeof authorizationUrlParams === "function"
+							? authorizationUrlParams(ctx)
+							: authorizationUrlParams;
 
 					const { state, codeVerifier } = await generateState(ctx);
 					const authUrl = await createAuthorizationURL({
@@ -490,7 +502,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						accessType,
 						responseType,
 						responseMode,
-						additionalParams: authorizationUrlParams,
+						additionalParams,
 					});
 					return ctx.json({
 						url: authUrl.toString(),
@@ -619,6 +631,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration.",
 							});
 						}
+						const additionalParams =
+							typeof provider.tokenUrlParams === "function"
+								? provider.tokenUrlParams(ctx)
+								: provider.tokenUrlParams;
 						tokens = await validateAuthorizationCode({
 							headers: provider.authorizationHeaders,
 							code,
@@ -631,7 +647,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: provider.authentication,
-							additionalParams: provider.tokenUrlParams,
+							additionalParams,
 						});
 					} catch (e) {
 						ctx.context.logger.error(
@@ -921,6 +937,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						email: session.user.email,
 					});
 
+					const additionalParams =
+						typeof authorizationUrlParams === "function"
+							? authorizationUrlParams(c)
+							: authorizationUrlParams;
+
 					const url = await createAuthorizationURL({
 						id: providerId,
 						options: {
@@ -939,7 +960,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							`${c.context.baseURL}/oauth2/callback/${providerId}`,
 						prompt,
 						accessType,
-						additionalParams: authorizationUrlParams,
+						additionalParams,
 					});
 
 					return c.json({

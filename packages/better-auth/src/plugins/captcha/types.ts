@@ -22,6 +22,11 @@ export interface HCaptchaOptions extends BaseCaptchaOptions {
 	siteKey?: string;
 }
 
+export interface CaptchaFoxOptions extends BaseCaptchaOptions {
+	provider: typeof Providers.CAPTCHAFOX;
+	siteKey?: string;
+}
+
 export interface YandexSmartCaptchaOptions extends BaseCaptchaOptions {
 	provider: typeof Providers.YANDEX_SMART_CAPTCHA;
 }
@@ -30,4 +35,5 @@ export type CaptchaOptions =
 	| GoogleRecaptchaOptions
 	| CloudflareTurnstileOptions
 	| HCaptchaOptions
-	| YandexSmartCaptchaOptions;
+	| CaptchaFoxOptions
+  | YandexSmartCaptchaOptions;
