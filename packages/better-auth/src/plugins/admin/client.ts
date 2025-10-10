@@ -10,14 +10,7 @@ interface AdminClientOptions {
 	roles?: {
 		[key in string]: Role;
 	};
-	/**
-	 * Special user role that uses per-user custom permissions
-	 */
-	specialNonAdminRole?: string;
-	/**
-	 * Special admin role that uses per-user custom permissions
-	 */
-	specialAdminRole?: string;
+	specialRoles?: string | string[] | undefined;
 }
 
 export const adminClient = <O extends AdminClientOptions>(options?: O) => {
@@ -87,8 +80,7 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 						options: {
 							ac: options?.ac,
 							roles: roles,
-							specialNonAdminRole: options?.specialNonAdminRole,
-							specialAdminRole: options?.specialAdminRole,
+							specialRoles: options?.specialRoles,
 						},
 						permissions: (data.permissions ?? data.permission) as any,
 					});

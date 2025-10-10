@@ -2,7 +2,6 @@ import type {
 	AdminOptions,
 	FinalPermissions,
 	SpecialPermissions,
-	UserWithRole,
 } from "./types";
 
 export const getFinalPermissions = (input: {
@@ -15,15 +14,11 @@ export const getFinalPermissions = (input: {
 		return input.options?.ac?.statements || {};
 	}
 	const roles = (input.role || input.options?.defaultRole || "user").split(",");
+	const specialRoles = input.options?.specialRoles || [];
 
 	const finalPermissionsPartial = (() => {
 		// Check if user has a special role, then return special permissions
-		const isSpecialRole =
-			(!!input.options?.specialNonAdminRole &&
-				roles.includes(input.options.specialNonAdminRole)) ||
-			(!!input.options?.specialAdminRole &&
-				roles.includes(input.options?.specialAdminRole));
-
+		const isSpecialRole = roles.some((role) => specialRoles.includes(role));
 		if (isSpecialRole) {
 			return input.specialPermissions || {};
 		}

@@ -1160,13 +1160,7 @@ describe("access control with special roles", async (it) => {
 		order: [],
 	});
 
-	const {
-		signInWithTestUser,
-		signInWithUser,
-		cookieSetter,
-		auth,
-		customFetchImpl,
-	} = await getTestInstance(
+	const { signInWithTestUser, auth, customFetchImpl } = await getTestInstance(
 		{
 			plugins: [
 				admin({
@@ -1177,8 +1171,7 @@ describe("access control with special roles", async (it) => {
 						adminSpecial: adminSpecialAc,
 						userSpecial: userSpecialAc,
 					},
-					specialAdminRole: "adminSpecial",
-					specialNonAdminRole: "userSpecial",
+					specialRoles: ["adminSpecial", "userSpecial"],
 				}),
 			],
 			databaseHooks: {
@@ -1227,8 +1220,7 @@ describe("access control with special roles", async (it) => {
 					adminSpecial: adminSpecialAc,
 					userSpecial: userSpecialAc,
 				},
-				specialAdminRole: "adminSpecial",
-				specialNonAdminRole: "userSpecial",
+				specialRoles: ["adminSpecial", "userSpecial"],
 			}),
 		],
 		baseURL: "http://localhost:3000",

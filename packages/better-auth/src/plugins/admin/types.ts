@@ -36,6 +36,15 @@ export interface AdminOptions {
 	 * @default ["admin"]
 	 */
 	adminRoles?: string | string[];
+
+	/**
+	 * Roles that are considered special roles.
+	 *
+	 * Special roles ignores role-based permissions and uses the `specialPermissions` field instead.
+	 *
+	 * @default undefined
+	 */
+	specialRoles?: string | string[] | undefined;
 	/**
 	 * A default ban reason
 	 *
@@ -81,16 +90,6 @@ export interface AdminOptions {
 	 * By default, the message is "You have been banned from this application"
 	 */
 	bannedUserMessage?: string;
-	/**
-	 * Special admin role that uses per-user custom permissions
-	 * stored in the `specialPermissions` field instead of role-based permissions
-	 */
-	specialAdminRole?: string;
-	/**
-	 * Special non-admin role that uses per-user custom permissions
-	 * stored in the `specialPermissions` field instead of role-based permissions
-	 */
-	specialNonAdminRole?: string;
 }
 
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =

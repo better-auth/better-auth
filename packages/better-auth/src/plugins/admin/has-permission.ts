@@ -30,14 +30,10 @@ export const hasPermission = (
 		return false;
 	}
 	const roles = (input.role || input.options?.defaultRole || "user").split(",");
+	const specialRoles = input.options?.specialRoles || [];
 
 	// Check if user has a special role and custom permissions
-	const isSpecialRole =
-		(input.options?.specialNonAdminRole &&
-			roles.includes(input.options.specialNonAdminRole)) ||
-		(input.options?.specialAdminRole &&
-			roles.includes(input.options?.specialAdminRole));
-
+	const isSpecialRole = roles.some((role) => specialRoles.includes(role));
 	if (isSpecialRole) {
 		if (!input.specialPermissions) {
 			return false;
