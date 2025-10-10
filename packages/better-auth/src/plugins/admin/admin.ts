@@ -1683,14 +1683,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				"/admin/get-user-statements",
 				{
 					method: "GET",
-					query: z.object({
-						userId: z.coerce.string().optional().meta({
-							description: `The user id. Eg: "user-id"`,
-						}),
-						role: z.string().optional().meta({
-							description: `The role to check permission for. Eg: "admin"`,
-						}),
-					}),
+					query: z
+						.object({
+							userId: z.coerce.string().optional().meta({
+								description: `The user id. Eg: "user-id"`,
+							}),
+							role: z.string().or(z.string().array()).optional().meta({
+								description: `The role to check permission for. Eg: "admin"`,
+							}),
+						})
+						.optional(),
 					metadata: {
 						openapi: {
 							description: "Get all permissions for a user",
@@ -1700,18 +1702,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									name: "userId",
 									required: false,
 									description: `The user id. Eg: "user-id"`,
-									schema: {
-										type: "string",
-									},
 								},
 								{
 									in: "query",
 									name: "role",
 									required: false,
 									description: `The role to check permission for. Eg: "admin"`,
-									schema: {
-										type: "string",
-									},
 								},
 							],
 							responses: {
@@ -1742,7 +1738,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						$Infer: {
 							query: {} as {
 								userId?: string;
-								role?: InferAdminRolesFromOption<O>;
+								role?:
+									| InferAdminRolesFromOption<O>
+									| InferAdminRolesFromOption<O>[];
 							},
 						},
 					},
@@ -1761,12 +1759,32 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 
 					let user: UserWithRole | undefined = undefined;
-					if (ctx.query.userId) {
+					if (ctx.query.role) {
 						if (
+							session &&
 							!isAdmin(
 								{
-									userId: session?.user.id,
-									role: session?.user.role,
+									userId: session.user.id,
+									role: session.user.role,
+								},
+								opts,
+							)
+						) {
+							throw new APIError("FORBIDDEN", {
+								message: "You're not allowed to get another user's statements",
+							});
+						}
+						user = {
+							id: ctx.query.userId,
+							role: ctx.query.role,
+						} as UserWithRole;
+					} else if (ctx.query.userId) {
+						if (
+							session &&
+							!isAdmin(
+								{
+									userId: session.user.id,
+									role: session.user.role,
 								},
 								opts,
 							)
