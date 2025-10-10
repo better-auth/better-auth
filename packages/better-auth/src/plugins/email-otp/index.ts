@@ -726,7 +726,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					const currentSession = await getSessionFromCtx(ctx);
-					if (currentSession) {
+					if (currentSession && updatedUser.emailVerified) {
 						const dontRememberMeCookie = await ctx.getSignedCookie(
 							ctx.context.authCookies.dontRememberToken.name,
 							ctx.context.secret,
@@ -737,7 +737,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								session: currentSession.session,
 								user: {
 									...currentSession.user,
-									emailVerified: updatedUser.emailVerified ?? false,
+									emailVerified: true,
 								},
 							},
 							!!dontRememberMeCookie,
