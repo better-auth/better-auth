@@ -1,3 +1,4 @@
+import { defaultRoles } from "./access";
 import type {
 	AdminOptions,
 	FinalPermissions,
@@ -15,6 +16,7 @@ export const getFinalPermissions = (input: {
 	}
 	const roles = (input.role || input.options?.defaultRole || "user").split(",");
 	const specialRoles = input.options?.specialRoles || [];
+	const acRoles = input.options?.roles || defaultRoles;
 
 	const finalPermissionsPartial = (() => {
 		// Check if user has a special role, then return special permissions
@@ -24,18 +26,19 @@ export const getFinalPermissions = (input: {
 		}
 
 		// Use role-based permissions for regular roles
-		const roleStatements = !input.role
-			? {}
-			: input.options?.roles?.[input.role]?.statements || {};
-		return Object.entries(roleStatements).reduce(
-			(acc, [resource, actions]) => {
+		const combined: Record<string, string[]> = {};
+		for (const role of roles) {
+			const roleStatements =
+				acRoles[role as keyof typeof acRoles]?.statements || {};
+			for (const [resource, actions] of Object.entries(roleStatements)) {
 				if (actions) {
-					acc[resource] = actions;
+					combined[resource] = [
+						...new Set([...(combined[resource] || []), ...actions]),
+					];
 				}
-				return acc;
-			},
-			{} as Record<string, string[]>,
-		);
+			}
+		}
+		return combined;
 	})();
 
 	// add empty arrays for resources that are not in finalPermissionsPartial
