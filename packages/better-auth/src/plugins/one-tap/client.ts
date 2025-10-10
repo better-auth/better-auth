@@ -1,5 +1,5 @@
 import type { BetterFetchOption } from "@better-fetch/fetch";
-import type { BetterAuthClientPlugin } from "../../types";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 
 declare global {
 	interface Window {

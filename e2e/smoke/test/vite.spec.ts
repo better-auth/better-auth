@@ -48,5 +48,15 @@ describe("(vite) client build", () => {
 			!clientContent.includes("createEndpoint"),
 			"Built output should not contain 'better-call' imports",
 		);
+
+		assert.ok(
+			!clientContent.includes("async_hooks"),
+			"Built output should not contain 'async_hooks' imports",
+		);
+
+		assert.ok(
+			!clientContent.includes("AsyncLocalStorage"),
+			"Built output should not contain 'AsyncLocalStorage' imports",
+		);
 	});
 });
