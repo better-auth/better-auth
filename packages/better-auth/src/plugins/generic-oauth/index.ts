@@ -21,6 +21,7 @@ import type { User } from "../../types";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { sessionMiddleware } from "../../api";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -206,13 +207,14 @@ async function getUserInfo(
 	};
 }
 
+const ERROR_CODES = defineErrorCodes({
+	INVALID_OAUTH_CONFIGURATION: "Invalid OAuth configuration",
+});
+
 /**
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
 export const genericOAuth = (options: GenericOAuthOptions) => {
-	const ERROR_CODES = {
-		INVALID_OAUTH_CONFIGURATION: "Invalid OAuth configuration",
-	} as const;
 	return {
 		id: "generic-oauth",
 		init: (ctx) => {
