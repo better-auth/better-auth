@@ -4,6 +4,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	type Account,
 	type Session,
+	type TransactionAdapter,
 	type User,
 	type Verification,
 } from "../types";
@@ -12,7 +13,6 @@ import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId } from "../utils";
-import { getCurrentAdapter, runWithTransaction } from "../context/transaction";
 import type { InternalLogger } from "@better-auth/core/env";
 import type {
 	AuthContext,

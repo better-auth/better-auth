@@ -8,7 +8,7 @@ import type {
 } from "../db";
 import type { OAuthProvider } from "../oauth2";
 import { createLogger } from "../env";
-import type { DBAdapter, Where } from "../db/adapter";
+import type { DBAdapter, DBTransactionAdapter, Where } from "../db/adapter";
 import type { BetterAuthCookies } from "./cookie";
 import type { Models } from "../db/type";
 import type { LiteralUnion } from "./helper";
@@ -39,6 +39,7 @@ export interface InternalAdapter<
 			Partial<User> &
 			Record<string, any>,
 		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<T & User>;
 
 	createAccount<T extends Record<string, any>>(
@@ -46,22 +47,30 @@ export interface InternalAdapter<
 			Partial<Account> &
 			T,
 		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<T & Account>;
 
-	listSessions(userId: string): Promise<Session[]>;
+	listSessions(
+		userId: string,
+		trxAdapter?: DBTransactionAdapter<Options>,
+	): Promise<Session[]>;
 
 	listUsers(
 		limit?: number,
 		offset?: number,
 		sortBy?: { field: string; direction: "asc" | "desc" },
 		where?: Where[],
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<User[]>;
 
-	countTotalUsers(where?: Where[]): Promise<number>;
+	countTotalUsers(
+		where?: Where[],
+		trxAdapter?: DBTransactionAdapter<Options>,
+	): Promise<number>;
 
 	deleteUser(
 		userId: string,
-		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<void>;
 
 	createSession(
@@ -70,56 +79,71 @@ export interface InternalAdapter<
 		dontRememberMe?: boolean,
 		override?: Partial<Session> & Record<string, any>,
 		overrideAll?: boolean,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<Session>;
 
-	findSession(token: string): Promise<{
+	findSession(
+		token: string,
+		trxAdapter?: DBTransactionAdapter<Options>,
+	): Promise<{
 		session: Session & Record<string, any>;
 		user: User & Record<string, any>;
 	} | null>;
 
 	findSessions(
 		sessionTokens: string[],
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<{ session: Session; user: User }[]>;
 
 	updateSession(
 		sessionToken: string,
 		session: Partial<Session> & Record<string, any>,
 		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<Session | null>;
 
-	deleteSession(token: string): Promise<void>;
+	deleteSession(
+		token: string,
+		trxAdapter?: DBTransactionAdapter<Options>,
+	): Promise<void>;
 
 	deleteAccounts(
 		userId: string,
-		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<void>;
 
 	deleteAccount(
 		accountId: string,
-		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<void>;
 
 	deleteSessions(
 		userIdOrSessionTokens: string | string[],
-		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<void>;
 
 	findOAuthUser(
 		email: string,
 		accountId: string,
 		providerId: string,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<{ user: User; accounts: Account[] } | null>;
 
 	findUserByEmail(
 		email: string,
 		options?: { includeAccounts: boolean },
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<{ user: User; accounts: Account[] } | null>;
 
-	findUserById(userId: string): Promise<User | null>;
+	findUserById(
+		userId: string,
+		trxAdapter?: DBTransactionAdapter<Options>,
+	): Promise<User | null>;
 
 	linkAccount(
 		account: Omit<Account, "id" | "createdAt" | "updatedAt"> & Partial<Account>,
 		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<Account>;
 
 	// fixme: any type
@@ -127,59 +151,78 @@ export interface InternalAdapter<
 		userId: string,
 		data: Partial<User> & Record<string, any>,
 		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<any>;
 
 	updateUserByEmail(
 		email: string,
 		data: Partial<User & Record<string, any>>,
 		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<User>;
 
 	updatePassword(
 		userId: string,
 		password: string,
 		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<void>;
 
-	findAccounts(userId: string): Promise<Account[]>;
+	findAccounts(
+		userId: string,
+		trxAdapter?: DBTransactionAdapter<Options>,
+	): Promise<Account[]>;
 
-	findAccount(accountId: string): Promise<Account | null>;
+	findAccount(
+		accountId: string,
+		trxAdapter?: DBTransactionAdapter<Options>,
+	): Promise<Account | null>;
 
 	findAccountByProviderId(
 		accountId: string,
 		providerId: string,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<Account | null>;
 
-	findAccountByUserId(userId: string): Promise<Account[]>;
+	findAccountByUserId(
+		userId: string,
+		trxAdapter?: DBTransactionAdapter<Options>,
+	): Promise<Account[]>;
 
 	updateAccount(
 		id: string,
 		data: Partial<Account>,
 		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<Account>;
 
 	createVerificationValue(
 		data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 			Partial<Verification>,
 		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<Verification>;
 
-	findVerificationValue(identifier: string): Promise<Verification | null>;
+	findVerificationValue(
+		identifier: string,
+		trxAdapter?: DBTransactionAdapter<Options>,
+	): Promise<Verification | null>;
 
 	deleteVerificationValue(
 		id: string,
-		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<void>;
 
 	deleteVerificationByIdentifier(
 		identifier: string,
-		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<void>;
 
 	updateVerificationValue(
 		id: string,
 		data: Partial<Verification>,
 		context?: GenericEndpointContext<Options>,
+		trxAdapter?: DBTransactionAdapter<Options>,
 	): Promise<Verification>;
 }
 

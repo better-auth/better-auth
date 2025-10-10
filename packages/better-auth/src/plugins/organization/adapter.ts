@@ -17,7 +17,6 @@ import type {
 import { BetterAuthError } from "@better-auth/core/error";
 import parseJSON from "../../client/parser";
 import { type InferAdditionalFieldsFromPluginOptions } from "../../db";
-import { getCurrentAdapter } from "../../context/transaction";
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
