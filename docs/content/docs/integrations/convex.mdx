@@ -284,7 +284,7 @@ and call the function from your server code.
 First, a token helper for calling Convex functions from your server code.
 
 ```ts title="src/lib/auth-server.ts"
-import { createAuth } from "convex/auth";
+import { createAuth } from "@/convex/auth";
 import { getToken as getTokenNextjs } from "@convex-dev/better-auth/nextjs";
 
 export const getToken = () => {

@@ -2,24 +2,25 @@ import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
 import * as z from "zod";
-import { createAuthEndpoint, sessionMiddleware } from "../../api";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { setSessionCookie } from "../../cookies";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
-	type OAuth2Tokens,
-	type OAuthProvider,
-	type OAuth2UserInfo,
-} from "../../oauth2";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { refreshAccessToken } from "../../oauth2/refresh-access-token";
-import { generateState, parseState } from "../../oauth2/state";
+} from "@better-auth/core/oauth2";
 import type {
-	BetterAuthPlugin,
-	GenericEndpointContext,
-	User,
-} from "../../types";
+	OAuth2Tokens,
+	OAuth2UserInfo,
+	OAuthProvider,
+} from "@better-auth/core/oauth2";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { refreshAccessToken } from "@better-auth/core/oauth2";
+import { generateState, parseState } from "../../oauth2/state";
+import type { User } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { sessionMiddleware } from "../../api";
 
 /**
  * Configuration interface for generic OAuth providers.

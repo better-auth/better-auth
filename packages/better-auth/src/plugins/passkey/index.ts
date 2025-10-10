@@ -13,18 +13,16 @@ import type {
 import { APIError } from "better-call";
 import { generateRandomString } from "../../crypto/random";
 import * as z from "zod";
-import { createAuthEndpoint } from "../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { sessionMiddleware } from "../../api";
 import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
-import type {
-	BetterAuthPlugin,
-	InferOptionSchema,
-	AuthPluginSchema,
-} from "../../types/plugins";
+import type { InferOptionSchema } from "../../types/plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { setSessionCookie } from "../../cookies";
 import { generateId } from "../../utils";
 import { mergeSchema } from "../../db/schema";
 import { base64 } from "@better-auth/utils/base64";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
@@ -1054,4 +1052,4 @@ const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;

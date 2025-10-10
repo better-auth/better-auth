@@ -1,4 +1,4 @@
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { Statements, Subset } from "./types";
 
 export type AuthorizeResponse =
