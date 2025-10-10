@@ -1766,7 +1766,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							!isAdmin({
 								userId: session?.user.id,
 								role: session?.user.role,
-							})
+							}, opts)
 						) {
 							throw new APIError("FORBIDDEN", {
 								message: "You're not allowed to get another user's statements",
