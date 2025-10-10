@@ -8,8 +8,7 @@ import type {
 	PublicKeyCredentialCreationOptionsJSON,
 	PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
-import type { Session } from "inspector";
-import type { User } from "../../types";
+import type { User, Session } from "../../types";
 import type { passkey as passkeyPl, Passkey } from ".";
 import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import { useAuthQuery } from "../../client";
