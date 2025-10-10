@@ -1,5 +1,7 @@
 import type { ZodType } from "zod";
-import type { LiteralString } from "../types";
+import type { BetterAuthPlugin, LiteralString } from "../types";
+import type { BetterAuthPluginDBSchema } from ".";
+import type { BetterAuthPluginDBTableSchema } from "./plugin";
 
 export type DBPreservedModels =
 	| "user"
@@ -33,7 +35,23 @@ export type DBPrimitive =
 	| string[]
 	| number[];
 
-export type DBFieldAttributeConfig = {
+export type DBFieldPrimitive<T extends DBFieldType> = T extends "string"
+	? string
+	: T extends "number"
+		? number
+		: T extends "boolean"
+			? boolean
+			: T extends "date"
+				? Date
+				: T extends `${infer T}[]`
+					? T extends "string"
+						? string[]
+						: number[]
+					: T extends Array<any>
+						? T[number]
+						: never;
+
+export type DBFieldAttributeConfig<T extends DBFieldType = DBFieldType> = {
 	/**
 	 * If the field should be required on a new record.
 	 * @default true
@@ -55,20 +73,24 @@ export type DBFieldAttributeConfig = {
 	 * Note: This will not create a default value on the database level. It will only
 	 * be used when creating a new record.
 	 */
-	defaultValue?: DBPrimitive | (() => DBPrimitive);
+	defaultValue?: DBFieldPrimitive<T> | (() => DBFieldPrimitive<T>);
 	/**
 	 * Update value for the field
 	 *
 	 * Note: This will create an onUpdate trigger on the database level for supported adapters.
 	 * It will be called when updating a record.
 	 */
-	onUpdate?: () => DBPrimitive;
+	onUpdate?: () => DBFieldPrimitive<T>;
 	/**
 	 * transform the value before storing it.
 	 */
 	transform?: {
-		input?: (value: DBPrimitive) => DBPrimitive | Promise<DBPrimitive>;
-		output?: (value: DBPrimitive) => DBPrimitive | Promise<DBPrimitive>;
+		input?: (
+			value: DBFieldPrimitive<T>,
+		) => DBPrimitive | Promise<DBFieldPrimitive<T>>;
+		output?: (
+			value: DBFieldPrimitive<T>,
+		) => DBPrimitive | Promise<DBFieldPrimitive<T>>;
 	};
 	/**
 	 * Reference to another model.
@@ -118,9 +140,17 @@ export type DBFieldAttributeConfig = {
 	sortable?: boolean;
 };
 
-export type DBFieldAttribute<T extends DBFieldType = DBFieldType> = {
+export type DBFieldAttribute<T extends DBFieldType = any> = {
 	type: T;
-} & DBFieldAttributeConfig;
+} & DBFieldAttributeConfig<T>;
+
+export type DBRequiredTable<K extends string> = BetterAuthPluginDBSchema & {
+	[key in K]: BetterAuthPluginDBTableSchema;
+};
+
+export type InferDBType<S extends BetterAuthPluginDBTableSchema> = {
+	[field in keyof S["fields"] & string]: DBFieldPrimitive<S["fields"][field]["type"]>;
+}
 
 export type BetterAuthDBSchema = Record<
 	string,
