@@ -210,6 +210,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 			typeof opts.storeClientSecret === "object" &&
 			"hash" in opts.storeClientSecret
 		) {
+			if (typeof opts.storeClientSecret.verify === "function") {
+				return await opts.storeClientSecret.verify({
+					hash: storedClientSecret,
+					clientSecret,
+				});
+			}
 			const hashedClientSecret =
 				await opts.storeClientSecret.hash(clientSecret);
 			return hashedClientSecret === storedClientSecret;

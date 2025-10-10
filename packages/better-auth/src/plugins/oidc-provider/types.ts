@@ -136,7 +136,7 @@ export interface OIDCOptions {
 	 * - "hashed" - The client secret is hashed using the `hash` function.
 	 * - "plain" - The client secret is stored in the database in plain text.
 	 * - "encrypted" - The client secret is encrypted using the `encrypt` function.
-	 * - { hash: (clientSecret: string) => Promise<string> } - A function that hashes the client secret.
+	 * - { hash: (clientSecret: string) => Promise<string>, verify?: (data: { hash: string; clientSecret: string; }) => Promise<boolean>; } - A function that hashes the client secret and optionally verifies it
 	 * - { encrypt: (clientSecret: string) => Promise<string>, decrypt: (clientSecret: string) => Promise<string> } - A function that encrypts and decrypts the client secret.
 	 *
 	 * @default "plain"
@@ -145,7 +145,13 @@ export interface OIDCOptions {
 		| "hashed"
 		| "plain"
 		| "encrypted"
-		| { hash: (clientSecret: string) => Promise<string> }
+		| {
+				hash: (clientSecret: string) => Promise<string>;
+				verify?: (data: {
+					hash: string;
+					clientSecret: string;
+				}) => Promise<boolean>;
+		  }
 		| {
 				encrypt: (clientSecret: string) => Promise<string>;
 				decrypt: (clientSecret: string) => Promise<string>;
