@@ -674,6 +674,57 @@ await auth.api.userHasPermission({
 });
 ```
 
+**Get User Statements**:
+
+To get all permission statements from a user, you can use the `getUserStatements` function provided by the client.
+
+<APIMethod path="/admin/get-user-statements" method="GET" resultVariable="{ statements }">
+```ts
+type getUserStatements = {
+    /**
+     * The user id which you want to get the statements from. 
+     */
+    userId?: string = "user-id"
+    /**
+     * Check role permissions.
+     * @serverOnly
+     */
+    role?: string = "admin"
+}
+```
+</APIMethod>
+
+Example usage:
+
+```ts title="auth-client.ts"
+const userStatements = await authClient.admin.getUserStatements({});
+
+// An admin can also get statements from another user
+const anotherUsersStatements = await authClient.admin.getUserStatements({
+  query: {
+    userId: "user-id",
+  },
+});
+```
+
+If you want to get the statements server-side, you can use the `getUserStatements` action provided by the `api` to get all permission statements from a user.
+
+```ts title="api.ts"
+import { auth } from "@/auth";
+
+await auth.api.getUserStatements({
+  query: {
+    userId: 'id', //the user id
+  },
+});
+
+// You can also just pass the role directly
+await auth.api.getUserStatements({
+  body: {
+    role: "admin",
+  },
+});
+```
 
 **Check Role Permission**:
 
@@ -696,6 +747,23 @@ const canDeleteUserAndRevokeSession = authClient.admin.checkRolePermission({
     session: ["revoke"]
   },
   role: "admin",
+});
+```
+
+**Check Role Statements**:
+
+Use the `getRolePermissions` function on the client side to retrieve all permissions assigned to a specific **role**. This lets you view all permissions assigned to a role directly on the client.
+
+Note that this function does **not** check the permissions of the currently logged-in user. It only returns the permissions assigned to the specified role. The function is synchronous, so you don't need to use `await` when calling it.
+
+```ts title="auth-client.ts"
+const userStatements = authClient.admin.checkRoleStatements({
+  role: "user",
+});
+
+// You can also check multiple roles at the same time
+const userAndAdminStatements = authClient.admin.checkRoleStatements({
+  role: ["user", "admin"],
 });
 ```
 
