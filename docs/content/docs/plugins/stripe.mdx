@@ -857,6 +857,10 @@ If webhooks aren't being processed correctly:
 3. Ensure you've selected all the necessary events in the Stripe dashboard
 4. Check your server logs for any errors during webhook processing
 
+<Callout type="warning">
+    If your **webhook** is failing with **signature verification errors**, make sure you **do not parse or modify the request body** before passing it to Better Auth. For example, using **`express.json()`** before verification can break the signature check. Stripe requires the **raw request body** to validate the signature, so you may need to capture the **unprocessed body** and provide it to Better Auth for the webhook endpoint.
+</Callout>
+
 ### Subscription Status Issues
 
 If subscription statuses aren't updating correctly:
@@ -872,5 +876,3 @@ For local development, you can use the Stripe CLI to forward webhooks to your lo
 ```bash
 stripe listen --forward-to localhost:3000/api/auth/stripe/webhook
 ```
-
-This will provide you with a webhook signing secret that you can use in your local environment.
