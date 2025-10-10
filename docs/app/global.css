@@ -7,6 +7,8 @@
 
 :root {
 	--fd-nav-height: 56px;
+	--fd-banner-height: 0px;
+	--fd-tocnav-height: 0px;
 
 	--background: oklch(1 0 0);
 
@@ -255,13 +257,17 @@
 }
 
 html {
-	scroll-behavior: smooth;
+	scroll-behavior: auto;
 	scroll-padding-top: calc(
-		var(--fd-nav-height) +
+		var(--fd-nav-height, 56px) +
 		var(--fd-banner-height, 0px) +
 		var(--fd-tocnav-height, 0px) +
-		16px
+		24px
 	);
+}
+
+html:not([data-anchor-scrolling]) {
+	scroll-behavior: smooth;
 }
 
 /* Global, accessible custom scrollbars */

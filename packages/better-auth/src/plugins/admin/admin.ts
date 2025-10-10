@@ -1,11 +1,12 @@
 import * as z from "zod";
+import { APIError, getSessionFromCtx } from "../../api";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSessionFromCtx,
-} from "../../api";
-import { type BetterAuthPlugin, type Session, type Where } from "../../types";
+} from "@better-auth/core/middleware";
+import { type Session } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import type { Where } from "@better-auth/core/db/adapter";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";

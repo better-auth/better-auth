@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import type { GenericEndpointContext } from "../types/context";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export async function validatePassword(
 	ctx: GenericEndpointContext,
