@@ -1,1 +1,1 @@
-import 'better-auth'
+import "better-auth";
