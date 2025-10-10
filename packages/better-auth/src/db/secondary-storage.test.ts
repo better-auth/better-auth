@@ -208,13 +208,17 @@ describe("secondary storage with preserveSessionInDatabase", async () => {
 		const token2 = s2.data!.session.token;
 		const userId = s1.data!.session.userId;
 
-		// Verify both sessions exist in database before revocation
-		const sessionsBeforeRevoke = await db.findMany({
+		// Verify both NEW sessions exist in database before revocation
+		const sessionsBeforeRevoke = (await db.findMany({
 			model: "session",
 			where: [{ field: "userId", value: userId }],
-		});
+		})) as { token: string; expiresAt: Date }[];
 		expect(sessionsBeforeRevoke).toBeDefined();
-		expect(sessionsBeforeRevoke?.length).toBe(2);
+		// Filter only active sessions (there may be expired ones from previous tests)
+		const activeSessions = sessionsBeforeRevoke.filter(
+			(s) => s.expiresAt.getTime() > Date.now(),
+		);
+		expect(activeSessions.length).toBe(2);
 
 		// Revoke all sessions
 		const revoke = await client.revokeSessions({
@@ -233,8 +237,9 @@ describe("secondary storage with preserveSessionInDatabase", async () => {
 			where: [{ field: "userId", value: userId }],
 		})) as { token: string; expiresAt: Date }[];
 		expect(allSessions).toBeDefined();
-		expect(allSessions?.length).toBe(2);
-		// Both sessions should have expiresAt set to epoch
+		// There may be more than 2 sessions from previous tests, but we check our specific ones
+		expect(allSessions.length).toBeGreaterThanOrEqual(2);
+		// Both of our specific sessions should have expiresAt set to epoch
 		const session1 = allSessions!.find((s) => s.token === token1);
 		const session2 = allSessions!.find((s) => s.token === token2);
 		expect(session1).toBeDefined();
