@@ -799,7 +799,7 @@ export type BetterAuthOptions = {
 		/**
 		 * @deprecated Please use `database.generateId` instead.
 		 */
-		generateId?: never;
+		generateId?: GenerateIdFn | false;
 	};
 	logger?: Logger;
 	/**
