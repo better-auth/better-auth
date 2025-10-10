@@ -9,7 +9,7 @@ export const emailOTPClient = () => {
 			{
 				matcher: (path) => path === "/email-otp/verify-email",
 				signal: "$sessionSignal",
-			}
-		]
+			},
+		],
 	} satisfies BetterAuthClientPlugin;
 };
