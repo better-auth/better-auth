@@ -5,19 +5,6 @@ import type { StripEmptyObjects, UnionToIntersection } from "./helper";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import type { User, Session } from "@better-auth/core/db";
 
-export type Models =
-	| "user"
-	| "account"
-	| "session"
-	| "verification"
-	| "rate-limit"
-	| "organization"
-	| "member"
-	| "invitation"
-	| "jwks"
-	| "passkey"
-	| "two-factor";
-
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
 	InferFieldsFromPlugins<Options, "user", "input"> &
 		InferFieldsFromOptions<Options, "user", "input">;
