@@ -10,7 +10,7 @@ import type { OAuthProvider } from "../oauth2";
 import { createLogger } from "../env";
 import type { DBAdapter, Where } from "../db/adapter";
 import type { BetterAuthCookies } from "./cookie";
-import type { Models } from "../db/type";
+import type { DBPreservedModels } from "../db/type";
 import type { LiteralUnion } from "./helper";
 import type { CookieOptions, EndpointContext } from "better-call";
 import type {
@@ -247,7 +247,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			freshAge: number;
 		};
 		generateId: (options: {
-			model: LiteralUnion<Models, string>;
+			model: LiteralUnion<DBPreservedModels, string>;
 			size?: number;
 		}) => string | false;
 		secondaryStorage: SecondaryStorage | undefined;
