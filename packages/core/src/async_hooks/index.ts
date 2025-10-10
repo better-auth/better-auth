@@ -6,18 +6,10 @@ import type { AsyncLocalStorage } from "node:async_hooks";
 // We only export the type here to avoid issues in environments where AsyncLocalStorage is not available.
 export type { AsyncLocalStorage };
 
-/**
- * Dynamically import AsyncLocalStorage to avoid issues in environments where it's not available.
- *
- * Right now, this is primarily for Cloudflare Workers.
- *
- */
-let moduleName: string = "node:async_hooks";
-
 const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage> = import(
 	/* @vite-ignore */
 	/* webpackIgnore: true */
-	moduleName
+	"node:async_hooks"
 )
 	.then((mod) => mod.AsyncLocalStorage)
 	.catch((err) => {
