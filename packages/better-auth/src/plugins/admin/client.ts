@@ -9,6 +9,7 @@ interface AdminClientOptions {
 	roles?: {
 		[key in string]: Role;
 	};
+	signInTracking?: boolean;
 }
 
 export const adminClient = <O extends AdminClientOptions>(options?: O) => {
@@ -55,6 +56,7 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 							admin: Role;
 							user: Role;
 						};
+				signInTracking: O["signInTracking"] extends true ? true : false;
 			}>
 		>,
 		getActions: () => ({
