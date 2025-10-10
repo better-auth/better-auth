@@ -132,6 +132,66 @@ const requestAdditionalScopes = async () => {
 Make sure you're running Better Auth version 1.2.7 or later. Earlier versions (like 1.2.2) may show a "Social account already linked" error when trying to link with an existing provider for additional scopes.
 </Callout>
 
+
+### Passing Additional Data
+
+You can pass additional data through the OAuth flow by using the `socialProviders.additionalData` option.
+This is useful if you want to assign custom fields to specific tables during the OAuth flow,
+or run custom validation logic based on the additional data.
+
+```ts
+betterAuth({
+  socialProviders: {
+    additionalData: {
+      enabled: true,
+      schema: z.object({ /** schema... */}),
+      assign: async ({ data, flow }) => {
+        // ... custom logic ...
+
+        // Optionally return partial data to map to one of the following tables:
+        return {
+          user: { /** user data... */ },
+          account: { /** account data... */ },
+          session: { /** session data... */ },
+        }
+      },
+    }
+  }
+});
+```
+<Callout>
+  If you're assigning data to a custom field,
+  be sure to define that additional field in your auth config's respective schema.
+</Callout>
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    socialProviders: {
+        // ... other social provider configurations
+        additionalData: {
+            enabled: true,
+            schema: z.object({ inviteeId: z.string() }),
+            assign: async ({ data, flow }) => {
+                if (flow !== "sign-up") return;
+                // query DB for a matching user.id
+                const invitee = getUserById(data.inviteeId);
+                if (!invitee) {
+                    throw new APIError("BAD_REQUEST", {
+                        message: "Invitee not found",
+                    });
+                }
+                return {
+                    user: {
+                        inviteeId: data.inviteeId,
+                    },
+                };
+            },
+        },
+        // ... other social provider configurations
+    },
+});
+```
+
 ## Provider Options
 
 ### scope

@@ -9,6 +9,13 @@ export async function generateState(
 		email: string;
 		userId: string;
 	},
+	/**
+	 * Whether to assign additional data to the state - primarily used for social providers additional data.
+	 * As of writing, this is only used by built-in social providers as well as
+	 * the generic oauth plugin.
+	 * All other cases should set this to false, which will skip setting `additionalData` in the state.
+	 */
+	additionalData: { data: unknown } | false = false,
 ) {
 	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
 	if (!callbackURL) {
@@ -39,6 +46,9 @@ export async function generateState(
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
+		...(additionalData
+			? { additionalData: additionalData.data }
+			: {}),
 	});
 	const expiresAt = new Date();
 	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
@@ -76,6 +86,7 @@ export async function parseState(c: GenericEndpointContext) {
 		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 	}
 
+	const unsanitizedData = JSON.parse(data.value);
 	const parsedData = z
 		.object({
 			callbackURL: z.string(),
@@ -90,8 +101,9 @@ export async function parseState(c: GenericEndpointContext) {
 				})
 				.optional(),
 			requestSignUp: z.boolean().optional(),
+			additionalData: z.unknown().optional(),
 		})
-		.parse(JSON.parse(data.value));
+		.parse(unsanitizedData);
 
 	if (!parsedData.errorURL) {
 		parsedData.errorURL = `${c.context.baseURL}/error`;
@@ -107,12 +119,12 @@ export async function parseState(c: GenericEndpointContext) {
 	 * plugin
 	 */
 	const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
+	const errorURL =
+		c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 	if (
 		!skipStateCookieCheck &&
 		(!stateCookieValue || stateCookieValue !== state)
 	) {
-		const errorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 		throw c.redirect(`${errorURL}?error=state_mismatch`);
 	}
 	c.setCookie(stateCookie.name, "", {
@@ -125,5 +137,6 @@ export async function parseState(c: GenericEndpointContext) {
 		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 	}
 	await c.context.internalAdapter.deleteVerificationValue(data.id);
+
 	return parsedData;
 }

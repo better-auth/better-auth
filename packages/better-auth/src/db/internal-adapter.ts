@@ -556,6 +556,53 @@ export const createInternalAdapter = (
 			);
 			return updatedSession;
 		},
+		updateLatestSession: async (userId: string, session: Partial<Session> & Record<string, any>, context?: GenericEndpointContext) => {
+			const sessions = await adapter.findMany<Session>({
+				model: "session",
+				where: [
+					{ field: "userId", value: userId },
+				],
+				sortBy: {
+					direction: "desc",
+					field: "createdAt",
+				},
+				limit: 1,
+			});
+			const latestSession = sessions[0];
+			if (latestSession) {
+				const sessionToken = latestSession.token;
+				const updatedSession = await updateWithHooks<Session>(
+					session,
+					[{ field: "token", value: sessionToken }],
+					"session",
+					secondaryStorage
+						? {
+								async fn(data) {
+									const currentSession = await secondaryStorage.get(sessionToken);
+									let updatedSession: Session | null = null;
+									if (currentSession) {
+										const parsedSession = safeJSONParse<{
+											session: Session;
+											user: User;
+										}>(currentSession);
+										if (!parsedSession) return null;
+										updatedSession = {
+											...parsedSession.session,
+											...data,
+										};
+										return updatedSession;
+									} else {
+										return null;
+									}
+								},
+								executeMainFn: options.session?.storeSessionInDatabase,
+							}
+						: undefined,
+					context,
+				);
+				return updatedSession;
+			}
+		},
 		deleteSession: async (token: string) => {
 			if (secondaryStorage) {
 				// remove the session from the active sessions list

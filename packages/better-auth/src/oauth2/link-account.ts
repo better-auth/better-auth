@@ -8,6 +8,7 @@ import { setTokenUtil } from "./utils";
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
 	{
+		additionalData,
 		userInfo,
 		account,
 		callbackURL,
@@ -19,6 +20,7 @@ export async function handleOAuthUserInfo(
 		callbackURL?: string;
 		disableSignUp?: boolean;
 		overrideUserInfo?: boolean;
+		additionalData?: unknown;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
@@ -45,6 +47,7 @@ export async function handleOAuthUserInfo(
 				a.providerId === account.providerId &&
 				a.accountId === account.accountId,
 		);
+
 		if (!hasBeenLinked) {
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
@@ -65,6 +68,7 @@ export async function handleOAuthUserInfo(
 					data: null,
 				};
 			}
+
 			try {
 				await c.context.internalAdapter.linkAccount(
 					{
@@ -81,21 +85,11 @@ export async function handleOAuthUserInfo(
 					c,
 				);
 			} catch (e) {
-				logger.error("Unable to link account", e);
+				c.context.logger.error("Unable to link account", e);
 				return {
 					error: "unable to link account",
 					data: null,
 				};
-			}
-
-			if (
-				userInfo.emailVerified &&
-				!dbUser.user.emailVerified &&
-				userInfo.email.toLowerCase() === dbUser.user.email
-			) {
-				await c.context.internalAdapter.updateUser(dbUser.user.id, {
-					emailVerified: true,
-				});
 			}
 		} else {
 			if (c.context.options.account?.updateAccountOnSignIn !== false) {
@@ -118,27 +112,31 @@ export async function handleOAuthUserInfo(
 					);
 				}
 			}
-
-			if (
-				userInfo.emailVerified &&
-				!dbUser.user.emailVerified &&
-				userInfo.email.toLowerCase() === dbUser.user.email
-			) {
-				await c.context.internalAdapter.updateUser(dbUser.user.id, {
-					emailVerified: true,
-				});
-			}
 		}
 		if (overrideUserInfo) {
 			const { id: _, ...restUserInfo } = userInfo;
 			// update user info from the provider if overrideUserInfo is true
 			await c.context.internalAdapter.updateUser(dbUser.user.id, {
 				...restUserInfo,
+				...(additionalData || {}),
 				email: userInfo.email.toLowerCase(),
 				emailVerified:
 					userInfo.email.toLowerCase() === dbUser.user.email
 						? dbUser.user.emailVerified || userInfo.emailVerified
 						: userInfo.emailVerified,
+			});
+		} else {
+			let updateEmailVerified = false;
+			if (
+				userInfo.emailVerified &&
+				!dbUser.user.emailVerified &&
+				userInfo.email.toLowerCase() === dbUser.user.email
+			) {
+				updateEmailVerified = true;
+			}
+			await c.context.internalAdapter.updateUser(dbUser.user.id, {
+				...(additionalData || {}),
+				...(updateEmailVerified ? { emailVerified: true } : {}),
 			});
 		}
 	} else {
@@ -149,24 +147,27 @@ export async function handleOAuthUserInfo(
 				isRegister: false,
 			};
 		}
+		const { id: _, ...restUserInfo } = userInfo;
+		const currentAccount = {
+			accessToken: await setTokenUtil(account.accessToken, c.context),
+			refreshToken: await setTokenUtil(account.refreshToken, c.context),
+			idToken: account.idToken,
+			accessTokenExpiresAt: account.accessTokenExpiresAt,
+			refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+			scope: account.scope,
+			providerId: account.providerId,
+			accountId: userInfo.id.toString(),
+		};
+		const currentUser = {
+			...restUserInfo,
+			email: userInfo.email.toLowerCase(),
+		};
+
 		try {
-			const { id: _, ...restUserInfo } = userInfo;
 			user = await c.context.internalAdapter
 				.createOAuthUser(
-					{
-						...restUserInfo,
-						email: userInfo.email.toLowerCase(),
-					},
-					{
-						accessToken: await setTokenUtil(account.accessToken, c.context),
-						refreshToken: await setTokenUtil(account.refreshToken, c.context),
-						idToken: account.idToken,
-						accessTokenExpiresAt: account.accessTokenExpiresAt,
-						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-						scope: account.scope,
-						providerId: account.providerId,
-						accountId: userInfo.id.toString(),
-					},
+					{ ...currentUser, ...(additionalData || {}) },
+					currentAccount,
 					c,
 				)
 				.then((res) => res?.user);

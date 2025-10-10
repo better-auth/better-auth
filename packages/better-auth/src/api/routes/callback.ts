@@ -58,6 +58,7 @@ export const callbackOAuth = createAuthEndpoint(
 			errorURL,
 			newUserURL,
 			requestSignUp,
+			additionalData,
 		} = await parseState(c);
 
 		function redirectOnError(error: string, description?: string) {
@@ -161,10 +162,19 @@ export const callbackOAuth = createAuthEndpoint(
 						scope: tokens.scopes?.join(","),
 					}).filter(([_, value]) => value !== undefined),
 				);
+
 				await c.context.internalAdapter.updateAccount(
 					existingAccount.id,
 					updateData,
+					c,
 				);
+				if (additionalData) {
+					await c.context.internalAdapter.updateUser(
+						existingAccount.userId,
+						additionalData,
+						c,
+					);
+				}
 			} else {
 				const newAccount = await c.context.internalAdapter.createAccount(
 					{
@@ -180,6 +190,13 @@ export const callbackOAuth = createAuthEndpoint(
 				);
 				if (!newAccount) {
 					return redirectOnError("unable_to_link_account");
+				}
+				if (additionalData) {
+					await c.context.internalAdapter.updateUser(
+						link.userId,
+						additionalData,
+						c,
+					);
 				}
 			}
 			let toRedirectTo: string;
@@ -198,7 +215,6 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 			return redirectOnError("email_not_found");
 		}
-
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
@@ -217,6 +233,7 @@ export const callbackOAuth = createAuthEndpoint(
 				(provider.disableImplicitSignUp && !requestSignUp) ||
 				provider.options?.disableSignUp,
 			overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
+			additionalData,
 		});
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));

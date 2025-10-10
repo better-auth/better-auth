@@ -24,6 +24,64 @@ import type { LiteralUnion, OmitId } from "./helper";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
 import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
+import type { StandardSchemaV1 } from "better-call";
+
+/**
+ * Return shape for mapping additional OAuth data into database tables.
+ */
+export type SocialAdditionalDataAssignmentResult = {
+	/**
+	 * Fields to merge into the `user` record when applicable.
+	 */
+	user?: Partial<User> & Record<string, unknown>;
+	/**
+	 * Fields to merge into the `account` record when applicable.
+	 */
+	account?: Partial<Account> & Record<string, unknown>;
+	/**
+	 * Fields to merge into the `session` record when applicable.
+	 */
+	session?: Partial<Session> & Record<string, unknown>;
+};
+
+/**
+ * Function for mapping validated additional OAuth data into table payloads.
+ *
+ * The `data` input is the additional payload provided by the client. If a
+ * `schema` is configured, it will be the validated and parsed output of that
+ * schema; otherwise it is the raw object from the request.
+ */
+export type SocialAdditionalDataAssign = (params: {
+	/**
+	 * OAuth provider id (e.g. "google", "github", custom, etc.)
+	 */
+	provider: LiteralUnion<SocialProviderList[number], string>;
+	/**
+	 * Additional data from the incoming request.
+	 * Note: For now this is `any` type, however we do intend on inferring the type from the schema in the future.
+	 */
+	data: any;
+	/**
+	 * Endpoint context
+	 */
+	ctx: GenericEndpointContext;
+	/**
+	 * Known records in the current OAuth flow context.
+	 *
+	 * Depending on the OAuth flow type, this may contain different records.
+	 *
+	 * Use these to conditionally assign additional data based on what is already
+	 * known about the user's authentication state.
+	 */
+	current: {
+		user?: Partial<User> & Record<string, unknown>;
+		account?: Partial<Account> & Record<string, unknown>;
+	};
+	flow: "sign-up" | "sign-in" | "account-linking";
+}) =>
+	| SocialAdditionalDataAssignmentResult
+	| void
+	| Promise<SocialAdditionalDataAssignmentResult | void>;
 
 export type BetterAuthOptions = {
 	/**
@@ -302,7 +360,33 @@ export type BetterAuthOptions = {
 	/**
 	 * list of social providers
 	 */
-	socialProviders?: SocialProviders;
+	socialProviders?: SocialProviders & {
+		/**
+		 * Allow providing additional data through the oauth flow.
+		 * Useful if you want to assign custom fields to specific tables during the oauth flow.
+		 *
+		 * This applies to all social providers, including any defined under the generic oauth plugin.
+		 */
+		additionalData?: {
+			/**
+			 * Enable additional data for social providers
+			 * @default false
+			 */
+			enabled?: boolean;
+			/**
+			 * Optional schema used to validate and parse the additional data payload.
+			 * If provided, the `data` passed to `assign` will be the parsed output.
+			 */
+			schema?: StandardSchemaV1;
+			/**
+			 * Map the (optionally validated) additional data to table payloads.
+			 * Return an object with any of `user`, `account`, or `session` keys
+			 * to merge into the corresponding records during the OAuth flow.
+			 */
+			assign?: SocialAdditionalDataAssign;
+		};
+	};
+
 	/**
 	 * List of Better Auth plugins
 	 */

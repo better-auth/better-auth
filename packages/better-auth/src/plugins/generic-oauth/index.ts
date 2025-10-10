@@ -392,6 +392,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: false",
 							})
 							.optional(),
+						/**
+						 * Any additional data to pass through the oauth flow.
+						 */
+						data: z.record(z.string(), z.any()).optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -484,7 +488,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? authorizationUrlParams(ctx)
 							: authorizationUrlParams;
 
-					const { state, codeVerifier } = await generateState(ctx);
+					const { state, codeVerifier } = await generateState(ctx, undefined, {
+						data: ctx.body.data,
+					});
 					const authUrl = await createAuthorizationURL({
 						id: providerId,
 						options: {
@@ -595,6 +601,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						requestSignUp,
 						newUserURL,
 						link,
+						additionalData,
 					} = parsedState;
 					const code = ctx.query.code;
 
@@ -728,25 +735,44 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									scope: tokens.scopes?.join(","),
 								}).filter(([_, value]) => value !== undefined),
 							);
+
 							await ctx.context.internalAdapter.updateAccount(
 								existingAccount.id,
 								updateData,
+								ctx,
 							);
+							if (additionalData) {
+								await ctx.context.internalAdapter.updateUser(
+									existingAccount.userId,
+									additionalData,
+									ctx,
+								);
+							}
 						} else {
 							const newAccount =
-								await ctx.context.internalAdapter.createAccount({
-									userId: link.userId,
-									providerId: provider.providerId,
-									accountId: userInfo.id,
-									accessToken: tokens.accessToken,
-									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-									scope: tokens.scopes?.join(","),
-									refreshToken: tokens.refreshToken,
-									idToken: tokens.idToken,
-								});
+								await ctx.context.internalAdapter.createAccount(
+									{
+										userId: link.userId,
+										providerId: provider.providerId,
+										accountId: userInfo.id,
+										accessToken: tokens.accessToken,
+										accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+										refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+										scope: tokens.scopes?.join(","),
+										refreshToken: tokens.refreshToken,
+										idToken: tokens.idToken,
+									},
+									ctx,
+								);
 							if (!newAccount) {
 								return redirectOnError("unable_to_link_account");
+							}
+							if (additionalData) {
+								await ctx.context.internalAdapter.updateUser(
+									link.userId,
+									additionalData,
+									ctx,
+								);
 							}
 						}
 						let toRedirectTo: string;
@@ -772,6 +798,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							(provider.disableImplicitSignUp && !requestSignUp) ||
 							provider.disableSignUp,
 						overrideUserInfo: provider.overrideUserInfo,
+						additionalData,
 					});
 
 					if (result.error) {

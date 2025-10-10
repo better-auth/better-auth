@@ -158,6 +158,10 @@ export const linkSocialAccount = createAuthEndpoint(
 						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
+			/**
+			 * Any additional data to pass through the oauth flow.
+			 */
+			data: z.record(z.string(), z.any()).optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
@@ -345,7 +349,7 @@ export const linkSocialAccount = createAuthEndpoint(
 		const state = await generateState(c, {
 			userId: session.user.id,
 			email: session.user.email,
-		});
+		}, {data: c.body.data});
 
 		const url = await provider.createAuthorizationURL({
 			state: state.state,
