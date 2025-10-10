@@ -482,7 +482,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					});
 					if (!twoFactor) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Backup codes aren't enabled",
+							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
 					const decryptedBackupCodes = await getBackupCodes(
@@ -493,7 +493,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 
 					if (!decryptedBackupCodes) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Backup codes are not valid",
+							message: TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						});
 					}
 					return ctx.json({
