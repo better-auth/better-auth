@@ -118,10 +118,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						key: ctx.context.secret,
 						data: secret,
 					});
-					const backupCodes = await generateBackupCodes(
-						ctx.context.secret,
-						options?.backupCodeOptions,
-					);
+					const backupCodes = await generateBackupCodes(ctx.context.secret, {
+						storeBackupCodes: "encrypted",
+						...options?.backupCodeOptions,
+					});
 					if (options?.skipVerificationOnEnable) {
 						const updatedUser = await ctx.context.internalAdapter.updateUser(
 							user.id,

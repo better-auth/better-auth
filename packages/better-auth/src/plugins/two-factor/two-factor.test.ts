@@ -246,7 +246,7 @@ describe("two factor", async () => {
 		const backupCode = backupCodes[0]!;
 
 		let parsedCookies = new Map();
-		await client.twoFactor.verifyBackupCode({
+		const verifyBackupCodeRes = await client.twoFactor.verifyBackupCode({
 			code: backupCode,
 			fetchOptions: {
 				headers,
@@ -257,6 +257,7 @@ describe("two factor", async () => {
 				},
 			},
 		});
+
 		const token = parsedCookies.get("better-auth.session_token")?.value;
 		expect(token?.length).toBeGreaterThan(0);
 		const currentBackupCodes = await auth.api.viewBackupCodes({
@@ -539,9 +540,6 @@ describe("two factor auth API", async () => {
 	});
 });
 
-// Regression tests for PR #5174 - viewBackupCodes endpoint
-// Bug: viewBackupCodes was returning encrypted JSON string instead of parsed array
-// This caused "SyntaxError: Unexpected number in JSON" errors
 describe("view backup codes", async () => {
 	const sendOTP = vi.fn();
 	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
@@ -580,7 +578,6 @@ describe("view backup codes", async () => {
 			body: { userId },
 		});
 
-		// Critical: Verify it returns an array, NOT a JSON string (the bug that was fixed)
 		expect(typeof viewResult.backupCodes).not.toBe("string");
 		expect(Array.isArray(viewResult.backupCodes)).toBe(true);
 		expect(viewResult.backupCodes.length).toBe(10);

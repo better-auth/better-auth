@@ -11,7 +11,7 @@ import type {
 import { APIError } from "better-call";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { verifyTwoFactor } from "../verify-two-factor";
-import type { GenericEndpointContext } from "@better-auth/core";
+import { safeJSONParse } from "../../../utils/json";
 
 export interface BackupCodeOptions {
 	/**
@@ -53,17 +53,34 @@ export async function generateBackupCodes(
 	secret: string,
 	options?: BackupCodeOptions,
 ) {
-	const key = secret;
 	const backupCodes = options?.customBackupCodesGenerate
 		? options.customBackupCodesGenerate()
 		: generateBackupCodesFn(options);
-	const encCodes = await symmetricEncrypt({
-		data: JSON.stringify(backupCodes),
-		key: key,
-	});
+	const key = secret;
+	if (options?.storeBackupCodes === "encrypted") {
+		const encCodes = await symmetricEncrypt({
+			data: JSON.stringify(backupCodes),
+			key: key,
+		});
+		return {
+			backupCodes,
+			encryptedBackupCodes: encCodes,
+		};
+	}
+	if (
+		typeof options?.storeBackupCodes === "object" &&
+		"encrypt" in options?.storeBackupCodes
+	) {
+		return {
+			backupCodes,
+			encryptedBackupCodes: await options?.storeBackupCodes.encrypt(
+				JSON.stringify(backupCodes),
+			),
+		};
+	}
 	return {
 		backupCodes,
-		encryptedBackupCodes: encCodes,
+		encryptedBackupCodes: JSON.stringify(backupCodes),
 	};
 }
 
@@ -73,8 +90,9 @@ export async function verifyBackupCode(
 		code: string;
 	},
 	key: string,
+	options?: BackupCodeOptions,
 ) {
-	const codes = await getBackupCodes(data.backupCodes, key);
+	const codes = await getBackupCodes(data.backupCodes, key, options);
 	if (!codes) {
 		return {
 			status: false,
@@ -87,60 +105,33 @@ export async function verifyBackupCode(
 	};
 }
 
-export async function getBackupCodes(backupCodes: string, key: string) {
-	const secret = new TextDecoder("utf-8").decode(
-		new TextEncoder().encode(
-			await symmetricDecrypt({ key, data: backupCodes }),
-		),
-	);
-	const data = JSON.parse(secret);
-	const result = z.array(z.string()).safeParse(data);
-	if (result.success) {
-		return result.data;
+export async function getBackupCodes(
+	backupCodes: string,
+	key: string,
+	options?: BackupCodeOptions,
+) {
+	if (options?.storeBackupCodes === "encrypted") {
+		const decrypted = await symmetricDecrypt({ key, data: backupCodes });
+		return safeJSONParse<string[]>(decrypted);
 	}
-	return null;
+	if (
+		typeof options?.storeBackupCodes === "object" &&
+		"decrypt" in options?.storeBackupCodes
+	) {
+		const decrypted = await options?.storeBackupCodes.decrypt(backupCodes);
+		return safeJSONParse<string[]>(decrypted);
+	}
+
+	return safeJSONParse<string[]>(backupCodes);
 }
 
 export const backupCode2fa = (options?: BackupCodeOptions) => {
 	const twoFactorTable = "twoFactor";
 
-	async function storeBackupCodes(
-		ctx: GenericEndpointContext,
-		backupCodes: string,
-	) {
-		if (options?.storeBackupCodes === "encrypted") {
-			return await symmetricEncrypt({
-				key: ctx.context.secret,
-				data: backupCodes,
-			});
-		}
-		if (
-			typeof options?.storeBackupCodes === "object" &&
-			"encrypt" in options?.storeBackupCodes
-		) {
-			return await options?.storeBackupCodes.encrypt(backupCodes);
-		}
-		return backupCodes;
-	}
-
-	async function decryptBackupCodes(
-		ctx: GenericEndpointContext,
-		backupCodes: string,
-	) {
-		if (options?.storeBackupCodes === "encrypted") {
-			return await symmetricDecrypt({
-				key: ctx.context.secret,
-				data: backupCodes,
-			});
-		}
-		if (
-			typeof options?.storeBackupCodes === "object" &&
-			"decrypt" in options?.storeBackupCodes
-		) {
-			return await options?.storeBackupCodes.decrypt(backupCodes);
-		}
-		return backupCodes;
-	}
+	const opts = {
+		storeBackupCodes: "encrypted",
+		...options,
+	} satisfies BackupCodeOptions;
 
 	return {
 		id: "backup_code",
@@ -319,16 +310,13 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
-					const decryptedBackupCodes = await decryptBackupCodes(
-						ctx,
-						twoFactor.backupCodes,
-					);
 					const validate = await verifyBackupCode(
 						{
-							backupCodes: decryptedBackupCodes,
+							backupCodes: twoFactor.backupCodes,
 							code: ctx.body.code,
 						},
 						ctx.context.secret,
+						opts,
 					);
 					if (!validate.status) {
 						throw new APIError("UNAUTHORIZED", {
@@ -439,16 +427,13 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					await ctx.context.password.checkPassword(user.id, ctx);
 					const backupCodes = await generateBackupCodes(
 						ctx.context.secret,
-						options,
+						opts,
 					);
-					const storedBackupCodes = await storeBackupCodes(
-						ctx,
-						backupCodes.encryptedBackupCodes,
-					);
+
 					await ctx.context.adapter.update({
 						model: twoFactorTable,
 						update: {
-							backupCodes: storedBackupCodes,
+							backupCodes: backupCodes.encryptedBackupCodes,
 						},
 						where: [
 							{
@@ -506,22 +491,20 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 							message: "Backup codes aren't enabled",
 						});
 					}
-					const decryptedBackupCodes = await decryptBackupCodes(
-						ctx,
+					const decryptedBackupCodes = await getBackupCodes(
 						twoFactor.backupCodes,
-					);
-					const backupCodes = await getBackupCodes(
-						decryptedBackupCodes,
 						ctx.context.secret,
+						opts,
 					);
-					if (!backupCodes) {
+
+					if (!decryptedBackupCodes) {
 						throw new APIError("BAD_REQUEST", {
-							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
+							message: "Backup codes are not valid",
 						});
 					}
 					return ctx.json({
 						status: true,
-						backupCodes,
+						backupCodes: decryptedBackupCodes,
 					});
 				},
 			),
