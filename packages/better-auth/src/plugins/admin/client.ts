@@ -2,7 +2,7 @@ import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { type AccessControl, type Role } from "../access";
 import { adminAc, defaultStatements, userAc } from "./access";
 import type { admin } from "./admin";
-import { hasPermission } from "./has-permission";
+import { getStatements, hasPermission } from "./has-permission";
 
 interface AdminClientOptions {
 	ac?: AccessControl;
@@ -61,7 +61,7 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 			admin: {
 				checkRolePermission: <
 					R extends O extends { roles: any }
-						? keyof O["roles"]
+						? keyof O["roles"] & string
 						: "admin" | "user",
 				>(
 					data: PermissionExclusive & {
@@ -69,7 +69,7 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 					},
 				) => {
 					const isAuthorized = hasPermission({
-						role: data.role as string,
+						role: data.role,
 						options: {
 							ac: options?.ac,
 							roles: roles,
@@ -77,6 +77,21 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 						permissions: (data.permissions ?? data.permission) as any,
 					});
 					return isAuthorized;
+				},
+				checkRoleStatements: <
+					R extends O extends { roles: any }
+						? keyof O["roles"] & string
+						: "admin" | "user",
+				>(data: {
+					role: R;
+				}) => {
+					return getStatements({
+						role: data.role,
+						options: {
+							ac: options?.ac,
+							roles,
+						},
+					});
 				},
 			},
 		}),
