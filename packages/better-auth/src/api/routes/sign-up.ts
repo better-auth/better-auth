@@ -1,15 +1,12 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { createEmailVerificationToken } from "./email-verification";
 import { setSessionCookie } from "../../cookies";
 import { APIError } from "better-call";
-import type {
-	AdditionalUserFieldsInput,
-	BetterAuthOptions,
-	User,
-} from "../../types";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { isDevelopment } from "../../utils/env";
+import type { AdditionalUserFieldsInput, User } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { isDevelopment } from "@better-auth/core/env";
 import { runWithTransaction } from "../../context/transaction";
 import { parseUserInput } from "../../db";
 

@@ -1,39 +1,41 @@
 import { safeJSONParse } from "../../utils/json";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type {
-	Adapter,
-	BetterAuthOptions,
-	TransactionAdapter,
-	Where,
-} from "../../types";
-import { generateId as defaultGenerateId, logger } from "../../utils";
+import type { BetterAuthOptions } from "@better-auth/core";
+import { generateId as defaultGenerateId } from "../../utils";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
-	CleanedWhere,
 } from "./types";
-import { colors } from "../../utils/colors";
 import type { DBFieldAttribute } from "@better-auth/core/db";
+import { logger, TTY_COLORS, getColorDepth } from "@better-auth/core/env";
+import type {
+	DBAdapter,
+	DBTransactionAdapter,
+	Where,
+	CleanedWhere,
+} from "@better-auth/core/db/adapter";
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
 
 const createAsIsTransaction =
-	(adapter: Adapter) =>
-	<R>(fn: (trx: TransactionAdapter) => Promise<R>) =>
+	(adapter: DBAdapter<BetterAuthOptions>) =>
+	<R>(fn: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>) =>
 		fn(adapter);
 
-export type AdapterFactory = (options: BetterAuthOptions) => Adapter;
+export type AdapterFactory = (
+	options: BetterAuthOptions,
+) => DBAdapter<BetterAuthOptions>;
 
 export const createAdapterFactory =
 	({
 		adapter: customAdapter,
 		config: cfg,
 	}: AdapterFactoryOptions): AdapterFactory =>
-	(options: BetterAuthOptions): Adapter => {
+	(options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		const uniqueAdapterFactoryInstanceId = Math.random()
 			.toString(36)
 			.substring(2, 15);
@@ -559,8 +561,10 @@ export const createAdapterFactory =
 			transformWhereClause,
 		});
 
-		let lazyLoadTransaction: Adapter["transaction"] | null = null;
-		const adapter: Adapter = {
+		let lazyLoadTransaction:
+			| DBAdapter<BetterAuthOptions>["transaction"]
+			| null = null;
+		const adapter: DBAdapter<BetterAuthOptions> = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
@@ -599,7 +603,7 @@ export const createAdapterFactory =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
-
+				unsafeModel = getDefaultModelName(unsafeModel);
 				if ("id" in unsafeData && !forceAllowId) {
 					logger.warn(
 						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you, unless you pass in the \`forceAllowId\` parameter. The id will be ignored.`,
@@ -665,6 +669,7 @@ export const createAdapterFactory =
 			}): Promise<T | null> => {
 				transactionId++;
 				let thisTransactionId = transactionId;
+				unsafeModel = getDefaultModelName(unsafeModel);
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -725,6 +730,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
@@ -777,6 +783,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "findOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
@@ -830,6 +837,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
@@ -877,6 +885,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "delete" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -908,6 +917,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "deleteMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -940,6 +950,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "count" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -1065,19 +1076,22 @@ export const createAdapterFactory =
 	};
 
 function formatTransactionId(transactionId: number) {
-	return `${colors.fg.magenta}#${transactionId}${colors.reset}`;
+	if (getColorDepth() < 8) {
+		return `#${transactionId}`;
+	}
+	return `${TTY_COLORS.fg.magenta}#${transactionId}${TTY_COLORS.reset}`;
 }
 
 function formatStep(step: number, total: number) {
-	return `${colors.bg.black}${colors.fg.yellow}[${step}/${total}]${colors.reset}`;
+	return `${TTY_COLORS.bg.black}${TTY_COLORS.fg.yellow}[${step}/${total}]${TTY_COLORS.reset}`;
 }
 
 function formatMethod(method: string) {
-	return `${colors.bright}${method}${colors.reset}`;
+	return `${TTY_COLORS.bright}${method}${TTY_COLORS.reset}`;
 }
 
 function formatAction(action: string) {
-	return `${colors.dim}(${action})${colors.reset}`;
+	return `${TTY_COLORS.dim}(${action})${TTY_COLORS.reset}`;
 }
 
 /**
