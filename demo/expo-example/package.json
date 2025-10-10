@@ -9,7 +9,6 @@
     "dev": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "jest --watchAll",
     "lint": "expo lint",
     "android": "expo run:android"
   },
