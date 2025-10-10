@@ -421,9 +421,8 @@ describe("captcha", async (it) => {
 			expect(res.error?.status).toBe(403);
 		});
 	});
-});
 
-describe("yandex-smart-captcha", async (it) => {
+	describe("yandex-smart-captcha", async (it) => {
 		const { client } = await getTestInstance({
 			plugins: [
 				captcha({
@@ -491,4 +490,4 @@ describe("yandex-smart-captcha", async (it) => {
 			expect(res.error?.status).toBe(403);
 		});
 	});
-});    
+});

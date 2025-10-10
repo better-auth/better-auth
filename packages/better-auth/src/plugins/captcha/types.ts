@@ -36,4 +36,4 @@ export type CaptchaOptions =
 	| CloudflareTurnstileOptions
 	| HCaptchaOptions
 	| CaptchaFoxOptions
-  | YandexSmartCaptchaOptions;
+	| YandexSmartCaptchaOptions;
