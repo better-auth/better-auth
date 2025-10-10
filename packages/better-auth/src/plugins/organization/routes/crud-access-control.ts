@@ -85,17 +85,17 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 					.object({ ...additionalFieldsSchema.shape })
 					.optional(),
 			}),
-		metadata: {
-			$Infer: {
-				body: {} as {
-					organizationId?: string;
-					role: string;
-					permission: Record<string, string[]>;
-				} & (IsExactlyEmptyObject<AdditionalFields> extends true
-					? { additionalFields?: {} }
-					: { additionalFields: AdditionalFields }),
+			metadata: {
+				$Infer: {
+					body: {} as {
+						organizationId?: string;
+						role: string;
+						permission: Record<string, string[]>;
+					} & (IsExactlyEmptyObject<AdditionalFields> extends true
+						? { additionalFields?: {} }
+						: { additionalFields: AdditionalFields }),
+				},
 			},
-		},
 			requireHeaders: true,
 			use: [orgSessionMiddleware],
 		},
@@ -306,16 +306,16 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 			requireHeaders: true,
 			use: [orgSessionMiddleware],
 			metadata: {
-			$Infer: {
-				body: {} as (
-					| {
-							roleName: string;
-					  }
-					| {
-							roleId: string;
-					  }
-				) & { organizationId?: string },
-			},
+				$Infer: {
+					body: {} as (
+						| {
+								roleName: string;
+						  }
+						| {
+								roleId: string;
+						  }
+					) & { organizationId?: string },
+				},
 			},
 		},
 		async (ctx) => {
@@ -489,21 +489,23 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 		{
 			method: "GET",
 			use: [orgSessionMiddleware],
-		query: z
-			.object({
-				organizationId: z.string().optional().meta({
-					description:
-						"The id of the organization to list roles for. If not provided, the user's active organization will be used.",
-				}),
-			})
-			.optional(),
-		metadata: {
-			$Infer: {
-				query: {} as {
-					organizationId?: string;
-				} | undefined,
+			query: z
+				.object({
+					organizationId: z.string().optional().meta({
+						description:
+							"The id of the organization to list roles for. If not provided, the user's active organization will be used.",
+					}),
+				})
+				.optional(),
+			metadata: {
+				$Infer: {
+					query: {} as
+						| {
+								organizationId?: string;
+						  }
+						| undefined,
+				},
 			},
-		},
 		},
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
@@ -629,13 +631,13 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					]),
 				)
 				.optional(),
-		metadata: {
-			$Infer: {
-				query: {} as {
-					organizationId?: string;
-				} & ({ roleName: string } | { roleId: string }),
+			metadata: {
+				$Infer: {
+					query: {} as {
+						organizationId?: string;
+					} & ({ roleName: string } | { roleId: string }),
+				},
 			},
-		},
 		},
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
@@ -800,17 +802,17 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						}),
 					]),
 				),
-		metadata: {
-			$Infer: {
-				body: {} as {
-					organizationId?: string;
-					data: {
-						permission?: Record<string, string[]>;
-						roleName?: string;
-					} & AdditionalFields;
-				} & ({ roleName: string } | { roleId: string }),
+			metadata: {
+				$Infer: {
+					body: {} as {
+						organizationId?: string;
+						data: {
+							permission?: Record<string, string[]>;
+							roleName?: string;
+						} & AdditionalFields;
+					} & ({ roleName: string } | { roleId: string }),
+				},
 			},
-		},
 			use: [orgSessionMiddleware],
 		},
 		async (ctx) => {

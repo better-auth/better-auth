@@ -660,7 +660,8 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			} satisfies BetterAuthPluginDBSchema)
 		: {};
 
-	const organizationRoleSchema: BetterAuthPluginDBSchema = options?.dynamicAccessControl?.enabled
+	const organizationRoleSchema: BetterAuthPluginDBSchema = options
+		?.dynamicAccessControl?.enabled
 		? ({
 				organizationRole: {
 					fields: {
