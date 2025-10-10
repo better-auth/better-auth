@@ -733,6 +733,19 @@ This plugin adds the following fields to the `user` table:
   ]}
 />
 
+When `signInTracking` is enabled, the following field is added (optional):
+
+<DatabaseTable
+  fields={[
+    {
+      field: "latestSignInAt",
+      type: "date",
+      description: "The date of the user's most recent successfull sign-in.",
+      isOptional: true,
+    }
+  ]}
+/>
+
 And adds one field in the `session` table:
 
 <DatabaseTable
