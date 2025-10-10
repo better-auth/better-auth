@@ -596,7 +596,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	};
 
 	// Build team schema in a way that never introduces undefined values when spreading
-	const teamSchema = teamSupport
+	const teamSchema: BetterAuthPluginDBSchema = teamSupport
 		? ({
 				team: {
 					modelName: options?.schema?.team?.modelName,
@@ -660,7 +660,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			} satisfies BetterAuthPluginDBSchema)
 		: {};
 
-	const organizationRoleSchema = options?.dynamicAccessControl?.enabled
+	const organizationRoleSchema: BetterAuthPluginDBSchema = options?.dynamicAccessControl?.enabled
 		? ({
 				organizationRole: {
 					fields: {
@@ -703,7 +703,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			} satisfies BetterAuthPluginDBSchema)
 		: {};
 
-	const schema = {
+	const schema: BetterAuthPluginDBSchema = {
 		...organizationRoleSchema,
 		...teamSchema,
 		...({

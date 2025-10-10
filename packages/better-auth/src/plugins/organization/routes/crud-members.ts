@@ -54,16 +54,16 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			metadata: {
 				SERVER_ONLY: true,
 				$Infer: {
-					body: {} as {
-						userId: string;
-						role:
-							| InferOrganizationRolesFromOption<O>
-							| InferOrganizationRolesFromOption<O>[];
-						organizationId?: string | undefined;
-					} & (O extends { teams: { enabled: true } }
-						? { teamId?: string | undefined }
-						: {}) &
-						InferAdditionalFieldsFromPluginOptions<"member", O>,
+				body: {} as {
+					userId: string;
+					role:
+						| InferOrganizationRolesFromOption<O>
+						| InferOrganizationRolesFromOption<O>[];
+					organizationId?: string;
+				} & (O extends { teams: { enabled: true } }
+					? { teamId?: string }
+					: {}) &
+					InferAdditionalFieldsFromPluginOptions<"member", O>,
 				},
 			},
 		},

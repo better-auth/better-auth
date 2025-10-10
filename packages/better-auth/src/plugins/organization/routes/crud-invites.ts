@@ -96,11 +96,11 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						role:
 							| InferOrganizationRolesFromOption<O>
 							| InferOrganizationRolesFromOption<O>[];
-						/**
-						 * The organization ID to invite
-						 * the user to
-						 */
-						organizationId?: string | undefined;
+					/**
+					 * The organization ID to invite
+					 * the user to
+					 */
+					organizationId?: string;
 						/**
 						 * Resend the invitation email, if
 						 * the user is already invited
