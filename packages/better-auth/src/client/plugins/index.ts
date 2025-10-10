@@ -22,3 +22,4 @@ export * from "../../plugins/siwe/client";
 export * from "../../plugins/device-authorization/client";
 export type * from "@simplewebauthn/server";
 export * from "../../plugins/last-login-method/client";
+export * from "../../plugins/alias/client";
