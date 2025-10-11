@@ -1,10 +1,11 @@
-import type { Adapter } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import type { Jwk } from "./types";
 import { ensureProperEncryption, getPublicJwk, revokedTag } from "./utils";
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { JWK } from "jose";
 
-export const getJwksAdapter = (adapter: Adapter) => {
+export const getJwksAdapter = (adapter: DBAdapter<BetterAuthOptions>) => {
 	return {
 		getAllKeys: async (): Promise<Jwk[] | undefined> => {
 			return await adapter.findMany<Jwk>({

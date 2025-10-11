@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "..";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import type {
 	JwtCustomClaims,
 	JwkOptions,
@@ -39,7 +39,7 @@ import {
 	toJwtTime,
 } from "./utils";
 import { APIError } from "../../api";
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import { getJwksAdapter } from "./adapter";
 import { JWTExpired } from "jose/errors";
 import { randomUUID } from "crypto";

@@ -1,11 +1,11 @@
-import type { GenericEndpointContext } from "../../types";
+import type { GenericEndpointContext } from "@better-auth/core";
 import type {
 	CryptoKeyIdAlg,
 	JwtCustomClaims,
 	JwtPluginOptions,
 } from "./types";
 import type { JWTPayload } from "jose";
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import { createJwkInternal, getJwkInternal } from "./jwk";
 import {
 	decryptPrivateKey,

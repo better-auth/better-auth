@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "../../types";
+import type { GenericEndpointContext } from "@better-auth/core";
 import type {
 	JWTPayload,
 	JWTVerifyGetKey,
@@ -10,7 +10,7 @@ import type {
 	JwtPluginOptions,
 	JwtVerifyOptions,
 } from "./types";
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import { getAllJwksInternal, getCachedJwks, getJwk } from "./jwk";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import { getJwtPluginOptions, revokedTag } from "./utils";

@@ -1,13 +1,13 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../api/call";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { originCheck } from "../../api";
 import { defaultKeyHasher } from "./utils";
-import type { GenericEndpointContext } from "../../types";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 interface MagicLinkopts {
 	/**

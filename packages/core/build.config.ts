@@ -15,5 +15,9 @@ export default defineBuildConfig({
 		"./src/async_hooks/index.ts",
 		"./src/env/index.ts",
 		"./src/oauth2/index.ts",
+		"./src/middleware/index.ts",
+		"./src/social-providers/index.ts",
+		"./src/utils/index.ts",
+		"./src/error/index.ts",
 	],
 });

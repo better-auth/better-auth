@@ -1,8 +1,8 @@
-import type { AuthContext } from "../../types";
+import type { AuthContext } from "@better-auth/core";
 import type { InternalLogger } from "@better-auth/core/env";
 import type { CryptoKeyIdAlg, JwkAlgorithm, JwtPluginOptions } from "./types";
 import { importJWK, type JWK } from "jose";
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { joseSecs } from "../../utils/time";
 

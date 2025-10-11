@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	jwtCustomClaimsSchema,
 	jwkExportedSchema,
@@ -12,11 +12,9 @@ import {
 import { schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	sessionMiddleware,
-} from "../../api";
+} from "@better-auth/core/middleware";
 import { mergeSchema } from "../../db/schema";
 import {
 	createJwkInternal,
@@ -33,8 +31,9 @@ import { verifyJwtInternal, verifyJwtWithKeyInternal } from "./verify";
 import { type JSONWebKeySet, type JWK, type JWTPayload } from "jose";
 import * as z from "zod/v4";
 import { parseJwk } from "./utils";
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import { JWTExpired } from "jose/errors";
+import { APIError, sessionMiddleware } from "../../api";
 export type * from "./types";
 export { createJwk, getJwk, getJwks, getAllJwks, importJwk } from "./jwk";
 export { getSessionJwt, signJwt } from "./sign";
