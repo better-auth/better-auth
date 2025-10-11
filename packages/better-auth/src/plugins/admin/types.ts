@@ -51,7 +51,7 @@ export interface AdminOptions {
 	/**
 	 * Custom schema for the admin plugin
 	 */
-	schema?: InferOptionSchema<AdminSchema>;
+	schema?: InferOptionSchema<AdminSchema<any>>;
 	/**
 	 * Configure the roles and permissions for the admin
 	 * plugin.
@@ -75,6 +75,14 @@ export interface AdminOptions {
 	 * By default, the message is "You have been banned from this application"
 	 */
 	bannedUserMessage?: string;
+	/**
+	 * Enables tracking of the user's last successful sign-in.
+	 * When enabled, a `latestSignInAt` field is added to the user table and
+	 * updated each time the user signs in.
+	 *
+	 * @default false
+	 */
+	signInTracking?: boolean;
 }
 
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =

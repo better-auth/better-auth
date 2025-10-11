@@ -16,7 +16,7 @@ import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { schema } from "./schema";
+import { getAdminSchema } from "./schema";
 import type {
 	AdminOptions,
 	InferAdminRolesFromOption,
@@ -142,6 +142,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 											message: opts.bannedUserMessage,
 											code: "BANNED_USER",
 										});
+									}
+								},
+								async after(session, ctx) {
+									if (!ctx) {
+										return;
+									}
+									if (opts.signInTracking) {
+										await ctx.context.internalAdapter.updateUser(
+											session.userId,
+											{
+												latestSignInAt: session.createdAt,
+											},
+										);
 									}
 								},
 							},
@@ -1681,7 +1694,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 			),
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
-		schema: mergeSchema(schema, opts.schema),
+		schema: mergeSchema(getAdminSchema(opts as O), opts.schema),
 		options: options as any,
 	} satisfies BetterAuthPlugin;
 };
