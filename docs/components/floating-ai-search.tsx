@@ -20,6 +20,7 @@ import type { z } from "zod";
 import { DefaultChatTransport } from "ai";
 import { Markdown } from "./markdown";
 import { Presence } from "@radix-ui/react-presence";
+import { MessageFeedback } from "./message-feedback";
 
 const Context = createContext<{
 	open: boolean;
@@ -286,8 +287,11 @@ function ThinkingIndicator() {
 
 function Message({
 	message,
+	messages,
+	messageIndex,
+	isStreaming,
 	...props
-}: { message: UIMessage } & ComponentProps<"div">) {
+}: { message: UIMessage; messages?: UIMessage[]; messageIndex?: number; isStreaming?: boolean } & ComponentProps<"div">) {
 	let markdown = "";
 	let links: z.infer<typeof ProvideLinksToolSchema>["links"] = [];
 
@@ -347,6 +351,18 @@ function Message({
 						))}
 					</div>
 				</div>
+			)}
+			{message.role === "assistant" && message.id && !isStreaming && (
+				<MessageFeedback 
+					messageId={message.id} 
+					userMessageId={
+						messages && messageIndex !== undefined && messageIndex > 0 
+							? messages[messageIndex - 1]?.id 
+							: undefined
+					}
+					content={markdown}
+					className="opacity-100 transition-opacity"
+				/>
 			)}
 		</div>
 	);
@@ -427,9 +443,23 @@ export function AISearchTrigger() {
 							<div className="flex flex-col gap-4">
 								{chat.messages
 									.filter((msg: UIMessage) => msg.role !== "system")
-									.map((item: UIMessage) => (
-										<Message key={item.id} message={item} />
-									))}
+									.map((item: UIMessage, index: number) => {
+										const filteredMessages = chat.messages.filter((msg: UIMessage) => msg.role !== "system");
+										const isLastMessage = index === filteredMessages.length - 1;
+										const isCurrentlyStreaming = (chat.status === "streaming" || chat.status === "submitted") && 
+											item.role === "assistant" && isLastMessage;
+										
+										return (
+											<Message 
+												key={item.id} 
+												message={item} 
+												messages={filteredMessages}
+												messageIndex={index}
+												isStreaming={isCurrentlyStreaming}
+												className="" 
+											/>
+										);
+									})}
 								{chat.status === "submitted" && <ThinkingIndicator />}
 							</div>
 						</List>
