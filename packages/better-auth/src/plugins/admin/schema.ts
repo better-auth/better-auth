@@ -24,6 +24,11 @@ export const schema = {
 				required: false,
 				input: false,
 			},
+			specialPermissions: {
+				type: "json",
+				required: false,
+				input: false,
+			},
 		},
 	},
 	session: {

@@ -3,12 +3,14 @@ import { type AccessControl, type Role } from "../access";
 import { adminAc, defaultStatements, userAc } from "./access";
 import type { admin } from "./admin";
 import { hasPermission } from "./has-permission";
+import type { SpecialPermissions } from "./types";
 
 interface AdminClientOptions {
 	ac?: AccessControl;
 	roles?: {
 		[key in string]: Role;
 	};
+	specialRoles?: string | string[] | undefined;
 }
 
 export const adminClient = <O extends AdminClientOptions>(options?: O) => {
@@ -63,16 +65,22 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 					R extends O extends { roles: any }
 						? keyof O["roles"]
 						: "admin" | "user",
+					SP extends O extends AccessControl<infer S>
+						? { [K in keyof S]?: string[] } | null | undefined
+						: SpecialPermissions,
 				>(
 					data: PermissionExclusive & {
 						role: R;
+						specialPermissions?: SP;
 					},
 				) => {
 					const isAuthorized = hasPermission({
 						role: data.role as string,
+						specialPermissions: data.specialPermissions,
 						options: {
 							ac: options?.ac,
 							roles: roles,
+							specialRoles: options?.specialRoles,
 						},
 						permissions: (data.permissions ?? data.permission) as any,
 					});
