@@ -9,10 +9,10 @@
   },
   "dependencies": {
     "@solidjs/router": "^0.15.3",
-    "@solidjs/start": "^1.1.7",
+    "@solidjs/start": "^1.2.0",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.2.0",
-    "solid-js": "^1.9.7",
+    "better-sqlite3": "^12.4.1",
+    "solid-js": "^1.9.9",
     "vinxi": "^0.5.8"
   },
   "devDependencies": {
