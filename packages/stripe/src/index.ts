@@ -26,8 +26,9 @@ import type {
 import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
 import { getSchema } from "./schema";
 import { defu } from "defu";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
-const STRIPE_ERROR_CODES = {
+const STRIPE_ERROR_CODES = defineErrorCodes({
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
 	SUBSCRIPTION_PLAN_NOT_FOUND: "Subscription plan not found",
 	ALREADY_SUBSCRIBED_PLAN: "You're already subscribed to this plan",
@@ -38,7 +39,7 @@ const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
 	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
 		"Subscription is not scheduled for cancellation",
-} as const;
+});
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
 	if (url.startsWith("http")) {
