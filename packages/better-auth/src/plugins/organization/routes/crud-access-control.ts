@@ -88,7 +88,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					body: {} as {
-						organizationId?: string | undefined;
+						organizationId?: string;
 						role: string;
 						permission: Record<string, string[]>;
 					} & (IsExactlyEmptyObject<AdditionalFields> extends true
@@ -314,7 +314,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						| {
 								roleId: string;
 						  }
-					) & { organizationId?: string | undefined },
+					) & { organizationId?: string },
 				},
 			},
 		},
@@ -501,7 +501,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				$Infer: {
 					query: {} as
 						| {
-								organizationId?: string | undefined;
+								organizationId?: string;
 						  }
 						| undefined,
 				},
@@ -634,7 +634,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					query: {} as {
-						organizationId?: string | undefined;
+						organizationId?: string;
 					} & ({ roleName: string } | { roleId: string }),
 				},
 			},
@@ -805,10 +805,10 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					body: {} as {
-						organizationId?: string | undefined;
+						organizationId?: string;
 						data: {
-							permission?: Record<string, string[]> | undefined;
-							roleName?: string | undefined;
+							permission?: Record<string, string[]>;
+							roleName?: string;
 						} & AdditionalFields;
 					} & ({ roleName: string } | { roleId: string }),
 				},
