@@ -1,5 +1,5 @@
 import { type spinner as clackSpinner } from "@clack/prompts";
-import { logger } from "better-auth";
+import { globalLog } from "better-auth";
 import {
 	type SupportedDatabases,
 	type SupportedPlugin,
@@ -548,7 +548,7 @@ export async function generateAuthConfig({
 				`Something went wrong while generating/updating your new auth config file.`,
 				1,
 			);
-			logger.error(error.message);
+			globalLog("error", error.message, null);
 			process.exit(1);
 		}
 	}
@@ -569,7 +569,7 @@ export async function generateAuthConfig({
 				`Something went wrong while generating/updating your new auth config file.`,
 				1,
 			);
-			logger.error(error.message);
+			globalLog("error", error.message, null);
 			process.exit(1);
 		}
 	}

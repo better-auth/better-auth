@@ -6,8 +6,8 @@ import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
-import { logger } from "@better-auth/core/env";
 import { refreshAccessToken } from "@better-auth/core/oauth2";
+import { globalLog } from "@better-auth/core/env";
 
 export interface GoogleProfile {
 	aud: string;
@@ -65,9 +65,11 @@ export const google = (options: GoogleOptions) => {
 			display,
 		}) {
 			if (!options.clientId || !options.clientSecret) {
-				logger.error(
+				globalLog(
+					"error",
 					"Client Id and Client Secret is required for Google. Make sure to provide them in the options.",
-				);
+					null,
+				); // Can't set the better auth's logger options here!
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
 			if (!codeVerifier) {

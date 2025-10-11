@@ -5,9 +5,9 @@ import {
 } from "@better-auth/core/oauth2";
 import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import { logger } from "@better-auth/core/env";
 import { decodeJwt } from "jose";
 import { base64 } from "@better-auth/utils/base64";
+import { globalLog } from "@better-auth/core/env";
 
 /**
  * @see [Microsoft Identity Platform - Optional claims reference](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference)
@@ -195,12 +195,14 @@ export const microsoft = (options: MicrosoftOptions) => {
 							const pictureBase64 = base64.encode(pictureBuffer);
 							user.picture = `data:image/jpeg;base64, ${pictureBase64}`;
 						} catch (e) {
-							logger.error(
+							globalLog(
+								"error",
 								e && typeof e === "object" && "name" in e
 									? (e.name as string)
 									: "",
+								null,
 								e,
-							);
+							); // Can't set the better auth's logger options here!
 						}
 					},
 				},

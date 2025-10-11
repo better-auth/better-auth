@@ -1,4 +1,4 @@
-import { logger, type Adapter, type BetterAuthOptions } from "better-auth";
+import { globalLog, type Adapter, type BetterAuthOptions } from "better-auth";
 import { generateDrizzleSchema } from "./drizzle";
 import { generatePrismaSchema } from "./prisma";
 import { generateMigrations } from "./kysely";
@@ -34,8 +34,10 @@ export const generateSchema = (opts: {
 			}));
 	}
 
-	logger.error(
+	globalLog(
+		"error",
 		`${adapter.id} is not supported. If it is a custom adapter, please request the maintainer to implement createSchema`,
+		null,
 	);
 	process.exit(1);
 };

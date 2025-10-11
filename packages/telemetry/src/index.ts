@@ -1,4 +1,9 @@
-import { ENV, getBooleanEnvVar, isTest } from "@better-auth/core/env";
+import {
+	globalLog,
+	ENV,
+	getBooleanEnvVar,
+	isTest,
+} from "@better-auth/core/env";
 import { getProjectId } from "./project-id";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
@@ -8,7 +13,6 @@ import { detectSystemInfo } from "./detectors/detect-system-info";
 import { detectPackageManager } from "./detectors/detect-project-info";
 import { betterFetch } from "@better-fetch/fetch";
 import type { TelemetryContext, TelemetryEvent } from "./types";
-import { logger } from "@better-auth/core/env";
 import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
 export { getTelemetryAuthConfig };
 export type { TelemetryEvent } from "./types";
@@ -23,15 +27,34 @@ export async function createTelemetry(
 	const TELEMETRY_ENDPOINT = ENV.BETTER_AUTH_TELEMETRY_ENDPOINT;
 	const track = async (event: TelemetryEvent) => {
 		if (context?.customTrack) {
-			await context.customTrack(event).catch(logger.error);
+			await context.customTrack(event).catch((reason: any) => {
+				globalLog(
+					"error",
+					`Telemetry failed (custom): ${reason}\nOn event:`,
+					options,
+					JSON.stringify(event, null, 2),
+				);
+			});
 		} else {
 			if (debugEnabled) {
-				logger.info("telemetry event", JSON.stringify(event, null, 2));
+				globalLog(
+					"info",
+					"telemetry event",
+					null,
+					JSON.stringify(event, null, 2),
+				);
 			} else {
 				await betterFetch(TELEMETRY_ENDPOINT, {
 					method: "POST",
 					body: event,
-				}).catch(logger.error);
+				}).catch((msg: string) => {
+					globalLog(
+						"error",
+						`Telemetry failed (endpoint): ${msg}\nOn event:`,
+						options,
+						JSON.stringify(event, null, 2),
+					);
+				});
 			}
 		}
 	};

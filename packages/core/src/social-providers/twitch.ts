@@ -1,11 +1,11 @@
 import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
-import { logger } from "@better-auth/core/env";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
 	refreshAccessToken,
 } from "@better-auth/core/oauth2";
 import { decodeJwt } from "jose";
+import { globalLog } from "@better-auth/core/env";
 
 /**
  * @see https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/#requesting-claims
@@ -89,7 +89,7 @@ export const twitch = (options: TwitchOptions) => {
 			}
 			const idToken = token.idToken;
 			if (!idToken) {
-				logger.error("No idToken found in token");
+				globalLog("error", "No idToken found in token", null); // Can't set the better auth's logger options here!
 				return null;
 			}
 			const profile = decodeJwt(idToken) as TwitchProfile;

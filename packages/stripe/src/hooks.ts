@@ -1,4 +1,4 @@
-import { type GenericEndpointContext, logger } from "better-auth";
+import { type GenericEndpointContext } from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
 import { getPlanByPriceInfo } from "./utils";
@@ -92,7 +92,7 @@ export async function onCheckoutSessionCompleted(
 			}
 		}
 	} catch (e: any) {
-		logger.error(`Stripe webhook failed. Error: ${e.message}`);
+		ctx.context.logger.error(`Stripe webhook failed. Error: ${e.message}`);
 	}
 }
 
@@ -130,7 +130,7 @@ export async function onSubscriptionUpdated(
 						sub.status === "active" || sub.status === "trialing",
 				);
 				if (!activeSub) {
-					logger.warn(
+					ctx.context.logger.warn(
 						`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no active subscription is found`,
 					);
 					return;
@@ -204,7 +204,7 @@ export async function onSubscriptionUpdated(
 			}
 		}
 	} catch (error: any) {
-		logger.error(`Stripe webhook failed. Error: ${error}`);
+		ctx.context.logger.error(`Stripe webhook failed. Error: ${error}`);
 	}
 }
 
@@ -248,11 +248,11 @@ export async function onSubscriptionDeleted(
 				subscription,
 			});
 		} else {
-			logger.warn(
+			ctx.context.logger.warn(
 				`Stripe webhook error: Subscription not found for subscriptionId: ${subscriptionId}`,
 			);
 		}
 	} catch (error: any) {
-		logger.error(`Stripe webhook failed. Error: ${error}`);
+		ctx.context.logger.error(`Stripe webhook failed. Error: ${error}`);
 	}
 }

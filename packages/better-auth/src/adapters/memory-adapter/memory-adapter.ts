@@ -1,4 +1,4 @@
-import { logger } from "@better-auth/core/env";
+import { globalLog } from "@better-auth/core/env";
 import { createAdapterFactory } from "../adapter-factory";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
@@ -50,8 +50,10 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 			function convertWhereClause(where: CleanedWhere[], model: string) {
 				const table = db[model];
 				if (!table) {
-					logger.error(
+					globalLog(
+						"error",
 						`[MemoryAdapter] Model ${model} not found in the DB`,
+						null,
 						Object.keys(db),
 					);
 					throw new Error(`Model ${model} not found`);
