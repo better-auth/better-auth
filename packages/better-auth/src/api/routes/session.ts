@@ -1,5 +1,8 @@
 import { APIError } from "better-call";
-import { createAuthEndpoint, createAuthMiddleware } from "../call";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/middleware";
 import { getDate } from "../../utils/date";
 import {
 	deleteSessionCookie,
@@ -7,20 +10,15 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import * as z from "zod";
-import type {
-	BetterAuthOptions,
-	GenericEndpointContext,
-	InferSession,
-	InferUser,
-	Session,
-	User,
-} from "../../types";
+import type { InferSession, InferUser, Session, User } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type { Prettify } from "../../types/helper";
 import { safeJSONParse } from "../../utils/json";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export const getSessionQuerySchema = z.optional(
 	z.object({

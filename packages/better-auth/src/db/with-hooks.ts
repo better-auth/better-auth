@@ -1,14 +1,10 @@
-import type {
-	Adapter,
-	BetterAuthOptions,
-	GenericEndpointContext,
-	Models,
-	TransactionAdapter,
-	Where,
-} from "../types";
+import type { Models, TransactionAdapter } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export function getWithHooks(
-	adapter: Adapter,
+	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
 		options: BetterAuthOptions;
 		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];

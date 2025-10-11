@@ -1,12 +1,12 @@
 import * as z from "zod";
+import { originCheck } from "../../api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-	originCheck,
-} from "../../api";
+} from "@better-auth/core/middleware";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "../../types";
-import { env } from "../../utils/env";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { env } from "@better-auth/core/env";
 import { getOrigin } from "../../utils/url";
 import type { EndpointContext } from "better-call";
 

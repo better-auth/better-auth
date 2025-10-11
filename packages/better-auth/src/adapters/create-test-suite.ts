@@ -1,11 +1,11 @@
-import type { Adapter } from "../types";
 import type { User, Session, Verification, Account } from "../types";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "./adapter-factory";
 import { test } from "vitest";
 import { generateId } from "../utils";
 import type { Logger } from "./test-adapter";
-import { colors } from "../utils/colors";
+import { TTY_COLORS } from "@better-auth/core/env";
 import { betterAuth } from "../auth";
 import { deepmerge } from "./utils";
 
@@ -104,7 +104,7 @@ export const createTestSuite = <
 	},
 	tests: (
 		helpers: {
-			adapter: Adapter;
+			adapter: DBAdapter<BetterAuthOptions>;
 			log: Logger;
 			generate: GenerateFn;
 			insertRandom: InsertRandomFn;
@@ -144,7 +144,7 @@ export const createTestSuite = <
 		} & AdditionalOptions,
 	) => {
 		return async (helpers: {
-			adapter: () => Promise<Adapter>;
+			adapter: () => Promise<DBAdapter<BetterAuthOptions>>;
 			log: Logger;
 			adapterDisplayName: string;
 			getBetterAuthOptions: () => BetterAuthOptions;
@@ -176,15 +176,16 @@ export const createTestSuite = <
 					disableTransformOutput: true,
 					disableTransformInput: true,
 				};
-				const adapterCreator = (options: BetterAuthOptions): Adapter =>
+				const adapterCreator = (
+					options: BetterAuthOptions,
+				): DBAdapter<BetterAuthOptions> =>
 					createAdapterFactory({
 						config: {
 							...adapterConfig,
 							transaction: adapter.transaction,
 						},
 						adapter: ({ getDefaultModelName }) => {
-							//@ts-expect-error
-							adapter.transaction = undefined;
+							adapter.transaction = undefined as any;
 							return {
 								count: adapter.count,
 								deleteMany: adapter.deleteMany,
@@ -466,7 +467,7 @@ export const createTestSuite = <
 			const allDisabled: boolean = options?.disableTests?.ALL ?? false;
 
 			// Here to display a label in the tests showing the suite name
-			test(`\n${colors.fg.white}${" ".repeat(3)}${dash.repeat(35)} [${colors.fg.magenta}${suiteName}${colors.fg.white}] ${dash.repeat(35)}`, async () => {
+			test(`\n${TTY_COLORS.fg.white}${" ".repeat(3)}${dash.repeat(35)} [${TTY_COLORS.fg.magenta}${suiteName}${TTY_COLORS.fg.white}] ${dash.repeat(35)}`, async () => {
 				try {
 					await helpers.cleanup();
 				} catch {}
@@ -506,13 +507,13 @@ export const createTestSuite = <
 					(options?.disableTests?.[testName] ?? false);
 				testName = testName.replace(
 					" - ",
-					` ${colors.dim}${dash}${colors.undim} `,
+					` ${TTY_COLORS.dim}${dash}${TTY_COLORS.undim} `,
 				);
 				if (config.prefixTests) {
-					testName = `${config.prefixTests} ${colors.dim}>${colors.undim} ${testName}`;
+					testName = `${config.prefixTests} ${TTY_COLORS.dim}>${TTY_COLORS.undim} ${testName}`;
 				}
 				if (helpers.prefixTests) {
-					testName = `[${colors.dim}${helpers.prefixTests}${colors.undim}] ${testName}`;
+					testName = `[${TTY_COLORS.dim}${helpers.prefixTests}${TTY_COLORS.undim}] ${testName}`;
 				}
 
 				test.skipIf(shouldSkip)(

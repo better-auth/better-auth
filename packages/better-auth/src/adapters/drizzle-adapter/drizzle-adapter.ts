@@ -16,14 +16,18 @@ import {
 	sql,
 	SQL,
 } from "drizzle-orm";
-import { BetterAuthError } from "../../error";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	createAdapterFactory,
 	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
-import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
+import type {
+	DBAdapterDebugLogOption,
+	DBAdapter,
+	Where,
+} from "@better-auth/core/db/adapter";
 
 export interface DB {
 	[key: string]: any;
@@ -384,7 +388,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		adapter: createCustomAdapter(db),
 	};
 	const adapter = createAdapterFactory(adapterOptions);
-	return (options: BetterAuthOptions): Adapter => {
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return adapter(options);
 	};
