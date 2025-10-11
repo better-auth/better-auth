@@ -32,8 +32,8 @@ function useChatContext() {
 }
 
 function SearchAIActions() {
-	const { messages, status, setMessages, regenerate } = useChatContext();
-	const isLoading = status === "streaming";
+	const { messages, status, setMessages, stop } = useChatContext();
+	const isGenerating = status === "streaming" || status === "submitted";
 
 	if (messages.length === 0) return null;
 
@@ -61,22 +61,22 @@ function SearchAIActions() {
 					buttonVariants({
 						color: "secondary",
 						size: "sm",
-						className: "rounded-full",
+						className: "rounded-none",
 					}),
 				)}
-				onClick={() => setMessages([])}
+				onClick={isGenerating ? stop : () => setMessages([])}
 			>
-				Clear Chat
+				{isGenerating ? "Cancel" : "Clear Chat"}
 			</button>
 		</>
 	);
 }
 
 const suggestions = [
-	"How do I set up authentication with Better Auth?",
-	"How to integrate Better Auth with NextJs?",
-	"How to add two-factor authentication?",
-	"How to setup SSO with Google?",
+	"How to configure Sqlite database?",
+	"How to require email verification?",
+	"How to change session expiry?",
+	"How to share cookies across subdomains?",
 ];
 
 function SearchAIInput(props: ComponentProps<"form">) {
@@ -92,7 +92,6 @@ function SearchAIInput(props: ComponentProps<"form">) {
 	};
 
 	const handleSuggestionClick = (suggestion: string) => {
-		setInput(suggestion);
 		void sendMessage({ text: suggestion });
 	};
 
@@ -101,7 +100,7 @@ function SearchAIInput(props: ComponentProps<"form">) {
 	}, [isLoading]);
 
 	return (
-		<div className="flex flex-col">
+		<div className={cn("flex flex-col", isLoading ? "opacity-50" : "")}>
 			<form
 				{...props}
 				className={cn("flex items-start pe-2", props.className)}
@@ -109,7 +108,7 @@ function SearchAIInput(props: ComponentProps<"form">) {
 			>
 				<Input
 					value={input}
-					placeholder={isLoading ? "AI is answering..." : "Ask AI"}
+					placeholder={isLoading ? "answering..." : "Ask BA bot"}
 					autoFocus
 					className="p-4"
 					disabled={status === "streaming" || status === "submitted"}
@@ -154,7 +153,7 @@ function SearchAIInput(props: ComponentProps<"form">) {
 			</form>
 
 			{showSuggestions && (
-				<div className="mt-3 px-2">
+				<div className="mt-3 px-4">
 					<p className="text-xs font-medium text-fd-muted-foreground mb-2">
 						Try asking:
 					</p>
@@ -175,8 +174,27 @@ function SearchAIInput(props: ComponentProps<"form">) {
 	);
 }
 
-function List(props: Omit<ComponentProps<"div">, "dir">) {
+function List(
+	props: Omit<ComponentProps<"div">, "dir"> & { messageCount: number },
+) {
 	const containerRef = useRef<HTMLDivElement>(null);
+	const isUserScrollingRef = useRef(false);
+	const prevMessageCountRef = useRef(props.messageCount);
+
+	// Scroll to bottom when new message is submitted
+	useEffect(() => {
+		if (props.messageCount > prevMessageCountRef.current) {
+			// New message submitted, reset scroll lock and scroll to bottom
+			isUserScrollingRef.current = false;
+			if (containerRef.current) {
+				containerRef.current.scrollTo({
+					top: containerRef.current.scrollHeight,
+					behavior: "smooth",
+				});
+			}
+		}
+		prevMessageCountRef.current = props.messageCount;
+	}, [props.messageCount]);
 
 	useEffect(() => {
 		if (!containerRef.current) return;
@@ -184,10 +202,13 @@ function List(props: Omit<ComponentProps<"div">, "dir">) {
 			const container = containerRef.current;
 			if (!container) return;
 
-			container.scrollTo({
-				top: container.scrollHeight,
-				behavior: "instant",
-			});
+			// Only auto-scroll if user hasn't manually scrolled up
+			if (!isUserScrollingRef.current) {
+				container.scrollTo({
+					top: container.scrollHeight,
+					behavior: "instant",
+				});
+			}
 		}
 
 		const observer = new ResizeObserver(callback);
@@ -202,6 +223,23 @@ function List(props: Omit<ComponentProps<"div">, "dir">) {
 		return () => {
 			observer.disconnect();
 		};
+	}, []);
+
+	// Track when user manually scrolls
+	useEffect(() => {
+		const container = containerRef.current;
+		if (!container) return;
+
+		const handleScroll = () => {
+			const { scrollTop, scrollHeight, clientHeight } = container;
+			const isNearBottom = scrollHeight - scrollTop - clientHeight < 50;
+
+			// If user is near bottom, enable auto-scroll, otherwise disable it
+			isUserScrollingRef.current = !isNearBottom;
+		};
+
+		container.addEventListener("scroll", handleScroll);
+		return () => container.removeEventListener("scroll", handleScroll);
 	}, []);
 
 	return (
@@ -241,8 +279,26 @@ function Input(props: ComponentProps<"textarea">) {
 
 const roleName: Record<string, string> = {
 	user: "you",
-	assistant: "better-auth bot",
+	assistant: "BA bot",
 };
+
+function ThinkingIndicator() {
+	return (
+		<div className="flex flex-col">
+			<p className="mb-1 text-sm font-medium text-fd-muted-foreground">
+				BA bot
+			</p>
+			<div className="flex items-end gap-1 text-sm text-fd-muted-foreground">
+				<span>Thinking</span>
+				<div className="flex items-center gap-1 opacity-70">
+					<span className="inline-block size-1 bg-fd-primary rounded-full animate-bounce [animation-delay:0ms]" />
+					<span className="inline-block size-1 opacity-80 bg-fd-primary rounded-full animate-bounce [animation-delay:150ms]" />
+					<span className="inline-block size-1 bg-fd-primary rounded-full animate-bounce [animation-delay:300ms]" />
+				</div>
+			</div>
+		</div>
+	);
+}
 
 function Message({
 	message,
@@ -253,10 +309,7 @@ function Message({
 
 	for (const part of message.parts ?? []) {
 		if (part.type === "text") {
-			const textWithCitations = part.text.replace(
-				/\((\d+)\)/g,
-				'<pre className="font-mono text-xs"> ($1) </pre>',
-			);
+			const textWithCitations = part.text.replace(/\((\d+)\)/g, "");
 			markdown += textWithCitations;
 			continue;
 		}
@@ -351,7 +404,7 @@ export function AISearchTrigger() {
 							}
 						}}
 					>
-						<div className="sticky top-0 flex gap-2 items-center py-2 w-full max-w-[600px]">
+						<div className="sticky top-0 flex gap-2 items-center py-2 w-[min(800px,90vw)]">
 							<button
 								aria-label="Close"
 								tabIndex={-1}
@@ -368,7 +421,8 @@ export function AISearchTrigger() {
 							</button>
 						</div>
 						<List
-							className="py-10 pr-2 w-full max-w-[600px] overscroll-contain"
+							messageCount={chat.messages.length}
+							className="py-10 pr-2 w-[min(800px,90vw)] overscroll-contain"
 							style={{
 								maskImage:
 									"linear-gradient(to bottom, transparent, white 4rem, white calc(100% - 2rem), transparent 100%)",
@@ -380,16 +434,17 @@ export function AISearchTrigger() {
 									.map((item: UIMessage) => (
 										<Message key={item.id} message={item} />
 									))}
+								{chat.status === "submitted" && <ThinkingIndicator />}
 							</div>
 						</List>
 					</div>
 				</Presence>
 				<div
 					className={cn(
-						"fixed bottom-2 transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 rounded-2xl border shadow-xl overflow-hidden z-30",
+						"fixed bottom-2 transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 rounded-sm border shadow-xl overflow-hidden z-30",
 						open
-							? `w-[min(600px,90vw)] bg-fd-popover ${showSuggestions ? "h-48" : "h-32"}`
-							: "w-40 h-10 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background",
+							? `w-[min(800px,90vw)] bg-fd-popover ${showSuggestions ? "h-48" : "h-32"}`
+							: "w-40 h-10 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl",
 					)}
 					style={{
 						left: "calc(50% - var(--removed-body-scroll-bar-size,0px)/2)",
@@ -398,7 +453,7 @@ export function AISearchTrigger() {
 					<Presence present={!open}>
 						<button
 							className={cn(
-								"absolute inset-0 text-center p-2 text-fd-muted-foreground text-sm transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground",
+								"absolute inset-0 text-center p-2  text-fd-muted-foreground text-sm transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground",
 								!open
 									? "animate-fd-fade-in"
 									: "animate-fd-fade-out bg-fd-accent",
@@ -417,7 +472,7 @@ export function AISearchTrigger() {
 							)}
 						>
 							<SearchAIInput className="flex-1" />
-							<div className="flex items-center gap-1.5 p-1 empty:hidden">
+							<div className="flex items-center gap-1.5 p-2 empty:hidden">
 								<SearchAIActions />
 							</div>
 						</div>
