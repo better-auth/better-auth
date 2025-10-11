@@ -2,7 +2,11 @@ import type { AuthEndpoint } from "../../api";
 import type { Endpoint } from "better-call";
 import type { LiteralString } from "../../types/helper";
 import type { BetterAuthPlugin } from "../../types";
-import type { NormalizePrefix, TransformEndpointKey } from "./types";
+import type {
+	NormalizePrefix,
+	TransformEndpointKey,
+	TrimLeadingChar,
+} from "./types";
 
 export type InferAliasedPlugin<
 	T extends BetterAuthPlugin,
@@ -24,7 +28,9 @@ export type InferAliasedPlugin<
 				? Handler extends (...args: infer Args) => infer Return
 					? ((...args: Args) => Return) & {
 							options: Options;
-							path: `${NormalizePrefix<Prefix>}${OldPath}`;
+							path: OldPath extends `/sign-in/${string}` | `/sign-up/${string}`
+								? `${OldPath}-${TrimLeadingChar<NormalizePrefix<Prefix>, "/">}`
+								: `${NormalizePrefix<Prefix>}${OldPath}`;
 						}
 					: T
 				: T["endpoints"][K];
@@ -44,6 +50,8 @@ export type AliasOptions = {
 	 */
 	unstable_prefixEndpointMethods?: boolean;
 };
+
+const SPECIAL_ENDPOINTS = ["/sign-in/", "/sign-up/"] as const;
 
 /**
  * Wraps a plugin and prefixes all its endpoints with a sub-path
@@ -85,7 +93,7 @@ export function alias<
 
 		for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
 			const originalPath = endpoint.path || `/${key}`;
-			const newPath = `${cleanPrefix}${originalPath}`;
+			const newPath = resolveNewPath(originalPath, cleanPrefix);
 			const newKey = !options?.unstable_prefixEndpointMethods
 				? key
 				: newPath
@@ -149,4 +157,15 @@ export function alias<
 	}
 
 	return aliasedPlugin as InferAliasedPlugin<T, Prefix, O>;
+}
+
+function resolveNewPath(originalPath: string, cleanPrefix: string) {
+	for (const specialPrefix of SPECIAL_ENDPOINTS) {
+		if (originalPath.startsWith(specialPrefix)) {
+			const rest = originalPath.slice(specialPrefix.length);
+			return `${specialPrefix.replace(/\/$/, "")}${cleanPrefix}/${rest}`;
+		}
+	}
+
+	return `${cleanPrefix}${originalPath}`;
 }

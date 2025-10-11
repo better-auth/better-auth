@@ -43,23 +43,38 @@ type ExtendGetActions<
 				[T in P as CamelCase<`${TrimLeadingChar<
 					TransformNormalizedPrefix<NormalizePrefix<P>>
 				>}`>]: {
-					[K in keyof Actions & string as K extends "$Infer"
+					[K in keyof Actions & string as K extends
+						| "$Infer"
+						| "signIn"
+						| "signUp"
 						? never
 						: K]: Actions[K];
 				};
+			} & {
+				[T in keyof Actions & string as T extends "signIn" | "signUp"
+					? T
+					: never]: {
+					[K in keyof Actions[T] & string as `${K}${Capitalize<
+						CamelCase<
+							TrimLeadingChar<TransformNormalizedPrefix<NormalizePrefix<P>>>
+						>
+					>}`]: Actions[T][K];
+				};
 			} & (Actions extends {
-				$Infer: infer I extends Record<string, any>;
-			}
-				? {
-						$Infer: {
-							[K in keyof I & string as `${Capitalize<
-								CamelCase<
-									TrimLeadingChar<TransformNormalizedPrefix<NormalizePrefix<P>>>
-								>
-							>}${K}`]: I[K];
-						};
-					}
-				: { $Infer: {} });
+					$Infer: infer I extends Record<string, any>;
+				}
+					? {
+							$Infer: {
+								[K in keyof I & string as `${Capitalize<
+									CamelCase<
+										TrimLeadingChar<
+											TransformNormalizedPrefix<NormalizePrefix<P>>
+										>
+									>
+								>}${K}`]: I[K];
+							};
+						}
+					: { $Infer: {} });
 		}
 	: { getActions: undefined };
 
@@ -225,8 +240,8 @@ export function aliasClient<
 			};
 
 			for (const [key, action] of Object.entries(originalActions)) {
-				if (typeof action === "function") {
-					prefixedActions[camelCasePrefix][key] = action;
+				if (key === "signIn" || key === "signUp") {
+					prefixedActions[key] = action;
 				} else {
 					prefixedActions[camelCasePrefix][key] = action;
 				}
