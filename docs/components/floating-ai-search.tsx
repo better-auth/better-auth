@@ -273,7 +273,6 @@ function ThinkingIndicator() {
 				BA bot
 			</p>
 			<div className="flex items-end gap-1 text-sm text-fd-muted-foreground">
-				<span>Thinking</span>
 				<div className="flex items-center gap-1 opacity-70">
 					<span className="inline-block size-1 bg-fd-primary rounded-full animate-bounce [animation-delay:0ms]" />
 					<span className="inline-block size-1 opacity-80 bg-fd-primary rounded-full animate-bounce [animation-delay:150ms]" />
