@@ -291,7 +291,12 @@ function Message({
 	messageIndex,
 	isStreaming,
 	...props
-}: { message: UIMessage; messages?: UIMessage[]; messageIndex?: number; isStreaming?: boolean } & ComponentProps<"div">) {
+}: {
+	message: UIMessage;
+	messages?: UIMessage[];
+	messageIndex?: number;
+	isStreaming?: boolean;
+} & ComponentProps<"div">) {
 	let markdown = "";
 	let links: z.infer<typeof ProvideLinksToolSchema>["links"] = [];
 
@@ -353,11 +358,11 @@ function Message({
 				</div>
 			)}
 			{message.role === "assistant" && message.id && !isStreaming && (
-				<MessageFeedback 
-					messageId={message.id} 
+				<MessageFeedback
+					messageId={message.id}
 					userMessageId={
-						messages && messageIndex !== undefined && messageIndex > 0 
-							? messages[messageIndex - 1]?.id 
+						messages && messageIndex !== undefined && messageIndex > 0
+							? messages[messageIndex - 1]?.id
 							: undefined
 					}
 					content={markdown}
@@ -444,19 +449,24 @@ export function AISearchTrigger() {
 								{chat.messages
 									.filter((msg: UIMessage) => msg.role !== "system")
 									.map((item: UIMessage, index: number) => {
-										const filteredMessages = chat.messages.filter((msg: UIMessage) => msg.role !== "system");
+										const filteredMessages = chat.messages.filter(
+											(msg: UIMessage) => msg.role !== "system",
+										);
 										const isLastMessage = index === filteredMessages.length - 1;
-										const isCurrentlyStreaming = (chat.status === "streaming" || chat.status === "submitted") && 
-											item.role === "assistant" && isLastMessage;
-										
+										const isCurrentlyStreaming =
+											(chat.status === "streaming" ||
+												chat.status === "submitted") &&
+											item.role === "assistant" &&
+											isLastMessage;
+
 										return (
-											<Message 
-												key={item.id} 
-												message={item} 
+											<Message
+												key={item.id}
+												message={item}
 												messages={filteredMessages}
 												messageIndex={index}
 												isStreaming={isCurrentlyStreaming}
-												className="" 
+												className=""
 											/>
 										);
 									})}

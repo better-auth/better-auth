@@ -1,7 +1,10 @@
 import { ProvideLinksToolSchema } from "@/lib/chat/inkeep-qa-schema";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { convertToModelMessages, streamText } from "ai";
-import { logConversationToAnalytics, type InkeepMessage } from "@/lib/inkeep-analytics";
+import {
+	logConversationToAnalytics,
+	type InkeepMessage,
+} from "@/lib/inkeep-analytics";
 
 export const runtime = "edge";
 
@@ -28,32 +31,38 @@ export async function POST(req: Request) {
 		onFinish: async (event) => {
 			try {
 				const extractMessageContent = (msg: any): string => {
-					if (typeof msg.content === 'string') {
+					if (typeof msg.content === "string") {
 						return msg.content;
 					}
-					
+
 					if (msg.parts && Array.isArray(msg.parts)) {
 						return msg.parts
-							.filter((part: any) => part.type === 'text')
+							.filter((part: any) => part.type === "text")
 							.map((part: any) => part.text)
-							.join('');
+							.join("");
 					}
-					
+
 					if (msg.text) {
 						return msg.text;
 					}
-					
-					return '';
+
+					return "";
 				};
 
-				const assistantMessageId = event.response.id || `assistant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-				
+				const assistantMessageId =
+					event.response.id ||
+					`assistant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
 				const inkeepMessages: InkeepMessage[] = [
-					...reqJson.messages.map((msg: any) => ({
-						id: msg.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-						role: msg.role,
-						content: extractMessageContent(msg),
-					})).filter((msg: any) => msg.content.trim() !== ''),
+					...reqJson.messages
+						.map((msg: any) => ({
+							id:
+								msg.id ||
+								`msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+							role: msg.role,
+							content: extractMessageContent(msg),
+						}))
+						.filter((msg: any) => msg.content.trim() !== ""),
 					{
 						id: assistantMessageId,
 						role: "assistant" as const,
