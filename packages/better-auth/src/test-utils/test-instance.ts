@@ -206,17 +206,6 @@ export async function getTestInstance<
 		);
 	};
 
-	const client = createAuthClient({
-		...(config?.clientOptions as C extends undefined ? {} : C),
-		baseURL: getBaseURL(
-			options?.baseURL || "http://localhost:" + (config?.port || 3000),
-			options?.basePath || "/api/auth",
-		),
-		fetchOptions: {
-			customFetchImpl,
-		},
-	});
-
 	async function signInWithTestUser() {
 		if (config?.disableTestUser) {
 			throw new Error("Test user is disabled");
@@ -227,7 +216,7 @@ export async function getTestInstance<
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
 		};
 		//@ts-expect-error
-		const { data, error } = await client.signIn.email({
+		const response = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
@@ -240,6 +229,9 @@ export async function getTestInstance<
 				},
 			},
 		});
+		const data = config?.clientOptions?.fetchOptions?.throw
+			? response
+			: response.data;
 		return {
 			session: data.session as Session,
 			user: data.user as User,
@@ -287,6 +279,17 @@ export async function getTestInstance<
 			}
 		};
 	}
+
+	const client = createAuthClient({
+		...(config?.clientOptions as C extends undefined ? {} : C),
+		baseURL: getBaseURL(
+			options?.baseURL || "http://localhost:" + (config?.port || 3000),
+			options?.basePath || "/api/auth",
+		),
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
 
 	return {
 		auth,
