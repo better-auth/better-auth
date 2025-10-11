@@ -657,15 +657,15 @@ function createClientBody({
 	);
 	const baseIndentLevel = isQueryParam ? 2 : 1;
 
-	let body = ``;
+	let params = ``;
 
 	let i = -1;
 	for (const prop of props) {
 		i++;
 		if (prop.isServerOnly) continue;
-		if (body === "") body += "{\n";
+		if (params === "") params += "{\n";
 
-		body += buildPropertyLine(prop, prop.path.length + baseIndentLevel);
+		params += buildPropertyLine(prop, prop.path.length + baseIndentLevel);
 
 		if ((props[i + 1]?.path?.length || 0) < prop.path.length) {
 			const diff = prop.path.length - (props[i + 1]?.path?.length || 0);
@@ -674,28 +674,28 @@ function createClientBody({
 				.fill(0)
 				.map((_, i) => i)
 				.reverse()) {
-				body += `${indentationSpace.repeat(index + baseIndentLevel)}},\n`;
+				params += `${indentationSpace.repeat(index + baseIndentLevel)}},\n`;
 			}
 		}
 	}
 
-	if (body !== "") {
+	if (params !== "") {
 		if (isQueryParam) {
 			// Wrap in query object for GET requests and when forceAsQuery is true
-			body = `{\n    query: ${body}    },\n}`;
+			params = `{\n    query: ${params}    },\n}`;
 		} else {
-			body += "}";
+			params += "}";
 		}
 	}
 
-	return body;
+	return params;
 }
 
 /**
  * Determines if the server request should use query parameters
  *
- * - POST requests use body by default, unless `forceAsQuery` is true
  * - GET requests use query params by default, unless `forceAsBody` is true
+ * - Other methods (POST, PUT, DELETE) use body by default, unless `forceAsQuery` is true
  */
 function shouldServerUseQueryParams(
 	method: string,
@@ -704,7 +704,7 @@ function shouldServerUseQueryParams(
 ): boolean {
 	if (forceAsQuery) return true;
 	if (forceAsBody) return false;
-	return method !== "POST";
+	return method === "GET";
 }
 
 function createServerBody({
@@ -727,14 +727,14 @@ function createServerBody({
 	);
 	const clientOnlyProps = props.filter((x) => !x.isClientOnly);
 
-	// Build properties body
-	let propertiesBody = ``;
+	// Build properties content
+	let propertiesContent = ``;
 	let i = -1;
 
 	for (const prop of props) {
 		i++;
 		if (prop.isClientOnly) continue;
-		if (propertiesBody === "") propertiesBody += "{\n";
+		if (propertiesContent === "") propertiesContent += "{\n";
 
 		// Check if this is a server-only nested property
 		const isNestedServerOnlyProp =
@@ -752,7 +752,7 @@ function createServerBody({
 		const additionalComments: string[] = [];
 		if (isNestedServerOnlyProp) additionalComments.push("server-only");
 
-		propertiesBody += buildPropertyLine(
+		propertiesContent += buildPropertyLine(
 			prop,
 			prop.path.length + 2,
 			additionalComments,
@@ -765,12 +765,12 @@ function createServerBody({
 				.fill(0)
 				.map((_, i) => i)
 				.reverse()) {
-				propertiesBody += `${indentationSpace.repeat(index + 2)}},\n`;
+				propertiesContent += `${indentationSpace.repeat(index + 2)}},\n`;
 			}
 		}
 	}
 
-	if (propertiesBody !== "") propertiesBody += "    },";
+	if (propertiesContent !== "") propertiesContent += "    },";
 
 	// Build fetch options
 	let fetchOptions = "";
@@ -779,17 +779,17 @@ function createServerBody({
 			"\n    // This endpoint requires session cookies.\n    headers: await headers(),";
 	}
 
-	// Assemble final server body
-	let serverBody = "";
+	// Assemble final result
+	let result = "";
 	if (clientOnlyProps.length > 0) {
-		serverBody += "{\n";
+		result += "{\n";
 		const paramType = isQueryParam ? "query" : "body";
-		serverBody += `    ${paramType}: ${propertiesBody}${fetchOptions}\n}`;
+		result += `    ${paramType}: ${propertiesContent}${fetchOptions}\n}`;
 	} else if (fetchOptions.length) {
-		serverBody += `{${fetchOptions}\n}`;
+		result += `{${fetchOptions}\n}`;
 	}
 
-	return serverBody;
+	return result;
 }
 
 function Note({ children }: { children: ReactNode }) {
