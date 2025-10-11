@@ -39,22 +39,6 @@ function SearchAIActions() {
 
 	return (
 		<>
-			{!isLoading && messages.at(-1)?.role === "assistant" && (
-				<button
-					type="button"
-					className={cn(
-						buttonVariants({
-							color: "secondary",
-							size: "sm",
-							className: "rounded-full gap-1.5",
-						}),
-					)}
-					onClick={() => regenerate()}
-				>
-					<RefreshCw className="size-4" />
-					Retry
-				</button>
-			)}
 			<button
 				type="button"
 				className={cn(
@@ -83,10 +67,7 @@ function SearchAIInput(props: ComponentProps<"form">) {
 	const { status, sendMessage, stop, messages } = useChatContext();
 	const [input, setInput] = useState("");
 	const isLoading = status === "streaming" || status === "submitted";
-<<<<<<< HEAD
 	const showSuggestions = messages.length === 0 && !isLoading;
-=======
->>>>>>> c1626c08a (lint)
 
 	const onStart = (e?: SyntheticEvent) => {
 		e?.preventDefault();
@@ -379,6 +360,9 @@ export function AISearchTrigger() {
 			api: "/api/chat",
 		}),
 	});
+
+	const showSuggestions =
+		chat.messages.length === 0 && chat.status !== "streaming";
 
 	const onKeyPress = (e: KeyboardEvent) => {
 		if (e.key === "Escape" && open) {
