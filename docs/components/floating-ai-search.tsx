@@ -446,7 +446,10 @@ export function AISearchTrigger() {
 						<div className="sticky top-0 flex gap-2 items-center py-2 w-[min(800px,90vw)]">
 							<div className="flex justify-between w-full items-center">
 								<p className="text-xs flex items-center gap-1 flex-1 text-fd-muted-foreground">
-									Powered by <Link href="https://inkeep.com" target="_blank"><InKeepLogo className="w-16 h-16" /></Link>	
+									Powered by{" "}
+									<Link href="https://inkeep.com" target="_blank">
+										<InKeepLogo className="w-16 h-16" />
+									</Link>
 								</p>
 								<button
 									aria-label="Close"
