@@ -11,8 +11,7 @@
   "homepage": "https://www.better-auth.com/docs/concepts/cli",
   "main": "./dist/index.mjs",
   "scripts": {
-    "build": "unbuild",
-    "stub": "unbuild --stub",
+    "build": "tsdown",
     "start": "node ./dist/index.mjs",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
@@ -35,9 +34,9 @@
   "bin": "./dist/index.mjs",
   "devDependencies": {
     "@types/semver": "^7.7.1",
+    "tsdown": "^0.15.6",
     "tsx": "^4.20.5",
-    "typescript": "catalog:",
-    "unbuild": "catalog:"
+    "typescript": "catalog:"
   },
   "dependencies": {
     "@babel/core": "^7.28.4",
