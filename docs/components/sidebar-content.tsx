@@ -873,6 +873,16 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "Plex",
+				href: "/docs/authentication/plex",
+				isNew: true,
+				icon: () => (
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+						<path d="M256 70H148l108 186-108 186h108l108-186z" fill="currentColor"/>
+					</svg>
+				),
+			},
+			{
 				title: "Polar",
 				href: "/docs/authentication/polar",
 				icon: () => (
