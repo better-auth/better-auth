@@ -15,6 +15,8 @@ import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
 import type { BetterAuthClientOptions } from "@better-auth/core";
 
+export { getTestInstance } from "./test-instance";
+
 export async function getTestInstanceMemory<
 	O extends Partial<BetterAuthOptions>,
 	C extends BetterAuthClientOptions,
