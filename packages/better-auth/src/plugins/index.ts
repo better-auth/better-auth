@@ -14,6 +14,7 @@ export * from "./multi-session";
 export * from "./email-otp";
 export * from "./one-tap";
 export * from "./oauth-proxy";
+export * from "./oauth-provider";
 export * from "./custom-session";
 export * from "./open-api";
 export * from "./oidc-provider";
