@@ -1,6 +1,6 @@
 import { Endpoint } from "./endpoint";
 // import { Tab, Tabs } from "fumadocs-ui/components/tabs";
-import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
+import { DynamicCodeBlock } from "./ui/dynamic-code-block";
 import {
 	Table,
 	TableBody,
@@ -144,6 +144,7 @@ export const APIMethod = ({
 				noResult ? "" : `const ${resultVariable} = `
 			}await auth.api.${functionName}(${serverBody});${code_suffix}`}
 			lang="ts"
+			allowCopy={!isClientOnly}
 		/>
 	);
 
@@ -243,6 +244,7 @@ export const APIMethod = ({
 										}, error } = `
 							}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
 							lang="ts"
+							allowCopy={!isServerOnly}
 						/>
 						{isServerOnly ? (
 							<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">

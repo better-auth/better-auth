@@ -1,11 +1,11 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { APIError } from "better-call";
-import type { AuthContext } from "../../init";
 import { getDate } from "../../utils/date";
 import { generateId } from "../../utils";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { originCheck } from "../middlewares";
+import type { AuthContext } from "@better-auth/core";
 
 function redirectError(
 	ctx: AuthContext,
@@ -132,6 +132,8 @@ export const requestPasswordReset = createAuthEndpoint(
 		);
 		return ctx.json({
 			status: true,
+			message:
+				"If this email exists in our system, check your email for the reset link",
 		});
 	},
 );

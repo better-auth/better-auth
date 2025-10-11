@@ -1,11 +1,15 @@
-import { BetterAuthError } from "../../error";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { BetterAuthOptions } from "@better-auth/core";
 import {
-	createAdapter,
-	type AdapterDebugLogs,
-	type CreateAdapterOptions,
-	type CreateCustomAdapter,
-} from "../create-adapter";
+	createAdapterFactory,
+	type AdapterFactoryOptions,
+	type AdapterFactoryCustomizeAdapterCreator,
+} from "../adapter-factory";
+import type {
+	DBAdapterDebugLogOption,
+	DBAdapter,
+	Where,
+} from "@better-auth/core/db/adapter";
 
 export interface PrismaConfig {
 	/**
@@ -24,7 +28,7 @@ export interface PrismaConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 
 	/**
 	 * Use plural table names
@@ -38,7 +42,7 @@ export interface PrismaConfig {
 	 *
 	 * If the database doesn't support transactions,
 	 * set this to `false` and operations will be executed sequentially.
-	 * @default true
+	 * @default false
 	 */
 	transaction?: boolean;
 }
@@ -55,6 +59,7 @@ type PrismaClientInternal = {
 		findFirst: (data: any) => Promise<any>;
 		findMany: (data: any) => Promise<any>;
 		update: (data: any) => Promise<any>;
+		updateMany: (data: any) => Promise<any>;
 		delete: (data: any) => Promise<any>;
 		[key: string]: any;
 	};
@@ -63,7 +68,7 @@ type PrismaClientInternal = {
 export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
-		(prisma: PrismaClient): CreateCustomAdapter =>
+		(prisma: PrismaClient): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldName }) => {
 			const db = prisma as PrismaClientInternal;
 
@@ -91,9 +96,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				}
 			}
 			const convertWhereClause = (model: string, where?: Where[]) => {
-				if (!where) return {};
+				if (!where || !where.length) return {};
 				if (where.length === 1) {
-					const w = where[0];
+					const w = where[0]!;
 					if (!w) {
 						return;
 					}
@@ -142,7 +147,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					return await db[model].create({
+					return await db[model]!.create({
 						data: values,
 						select: convertSelect(select, model),
 					});
@@ -154,7 +159,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					return await db[model].findFirst({
+					return await db[model]!.findFirst({
 						where: whereClause,
 						select: convertSelect(select, model),
 					});
@@ -167,7 +172,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						);
 					}
 
-					return (await db[model].findMany({
+					return (await db[model]!.findMany({
 						where: whereClause,
 						take: limit || 100,
 						skip: offset || 0,
@@ -188,7 +193,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					return await db[model].count({
+					return await db[model]!.count({
 						where: whereClause,
 					});
 				},
@@ -199,14 +204,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						);
 					}
 					const whereClause = convertWhereClause(model, where);
-					return await db[model].update({
+					return await db[model]!.update({
 						where: whereClause,
 						data: update,
 					});
 				},
 				async updateMany({ model, where, update }) {
 					const whereClause = convertWhereClause(model, where);
-					const result = await db[model].updateMany({
+					const result = await db[model]!.updateMany({
 						where: whereClause,
 						data: update,
 					});
@@ -215,7 +220,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				async delete({ model, where }) {
 					const whereClause = convertWhereClause(model, where);
 					try {
-						await db[model].delete({
+						await db[model]!.delete({
 							where: whereClause,
 						});
 					} catch (e) {
@@ -224,7 +229,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				},
 				async deleteMany({ model, where }) {
 					const whereClause = convertWhereClause(model, where);
-					const result = await db[model].deleteMany({
+					const result = await db[model]!.deleteMany({
 						where: whereClause,
 					});
 					return result ? (result.count as number) : 0;
@@ -233,7 +238,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			};
 		};
 
-	let adapterOptions: CreateAdapterOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "prisma",
@@ -241,10 +246,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			transaction:
-				(config.transaction ?? true)
+				(config.transaction ?? false)
 					? (cb) =>
 							(prisma as PrismaClientInternal).$transaction((tx) => {
-								const adapter = createAdapter({
+								const adapter = createAdapterFactory({
 									config: adapterOptions!.config,
 									adapter: createCustomAdapter(tx),
 								})(lazyOptions!);
@@ -255,8 +260,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		adapter: createCustomAdapter(prisma),
 	};
 
-	const adapter = createAdapter(adapterOptions);
-	return (options: BetterAuthOptions): Adapter => {
+	const adapter = createAdapterFactory(adapterOptions);
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return adapter(options);
 	};

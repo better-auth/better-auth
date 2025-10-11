@@ -3,12 +3,12 @@ import { anonymous } from ".";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { anonymousClient } from "./client";
-import type { GoogleProfile } from "../../social-providers";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { getOAuth2Tokens } from "../../oauth2";
+import { getOAuth2Tokens } from "@better-auth/core/oauth2";
 import { signJWT } from "../../crypto/jwt";
 
-vi.mock("../../oauth2", async (importOriginal) => {
+vi.mock("@better-auth/core/oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
 	return {
 		...original,
@@ -45,7 +45,7 @@ vi.mock("../../oauth2", async (importOriginal) => {
 
 describe("anonymous", async () => {
 	const linkAccountFn = vi.fn();
-	const { customFetchImpl, auth, sessionSetter, testUser } =
+	const { customFetchImpl, auth, sessionSetter, testUser, cookieSetter } =
 		await getTestInstance({
 			plugins: [
 				anonymous({
@@ -114,9 +114,13 @@ describe("anonymous", async () => {
 				headers,
 			},
 		});
+
 		const singInRes = await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		const state = new URL(singInRes.data?.url || "").searchParams.get("state");
 		await client.$fetch("/callback/google", {

@@ -1,0 +1,172 @@
+{
+  "name": "@better-auth/core",
+  "version": "1.4.0-beta.9",
+  "description": "The most comprehensive authentication library for TypeScript.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./async_hooks": {
+      "import": {
+        "types": "./dist/async_hooks/index.d.ts",
+        "default": "./dist/async_hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/async_hooks/index.d.cts",
+        "default": "./dist/async_hooks/index.cjs"
+      }
+    },
+    "./env": {
+      "import": {
+        "types": "./dist/env/index.d.ts",
+        "default": "./dist/env/index.mjs"
+      },
+      "require": {
+        "types": "./dist/env/index.d.cts",
+        "default": "./dist/env/index.cjs"
+      }
+    },
+    "./error": {
+      "import": {
+        "types": "./dist/error/index.d.ts",
+        "default": "./dist/error/index.mjs"
+      },
+      "require": {
+        "types": "./dist/error/index.d.cts",
+        "default": "./dist/error/index.cjs"
+      }
+    },
+    "./utils": {
+      "import": {
+        "types": "./dist/utils/index.d.ts",
+        "default": "./dist/utils/index.mjs"
+      },
+      "require": {
+        "types": "./dist/utils/index.d.cts",
+        "default": "./dist/utils/index.cjs"
+      }
+    },
+    "./social-providers": {
+      "import": {
+        "types": "./dist/social-providers/index.d.ts",
+        "default": "./dist/social-providers/index.mjs"
+      },
+      "require": {
+        "types": "./dist/social-providers/index.d.cts",
+        "default": "./dist/social-providers/index.cjs"
+      }
+    },
+    "./db": {
+      "import": {
+        "types": "./dist/db/index.d.ts",
+        "default": "./dist/db/index.mjs"
+      },
+      "require": {
+        "types": "./dist/db/index.d.cts",
+        "default": "./dist/db/index.cjs"
+      }
+    },
+    "./db/adapter": {
+      "import": {
+        "types": "./dist/db/adapter/index.d.ts",
+        "default": "./dist/db/adapter/index.mjs"
+      },
+      "require": {
+        "types": "./dist/db/adapter/index.d.cts",
+        "default": "./dist/db/adapter/index.cjs"
+      }
+    },
+    "./oauth2": {
+      "import": {
+        "types": "./dist/oauth2/index.d.ts",
+        "default": "./dist/oauth2/index.mjs"
+      },
+      "require": {
+        "types": "./dist/oauth2/index.d.cts",
+        "default": "./dist/oauth2/index.cjs"
+      }
+    },
+    "./middleware": {
+      "import": {
+        "types": "./dist/middleware/index.d.ts",
+        "default": "./dist/middleware/index.mjs"
+      },
+      "require": {
+        "types": "./dist/middleware/index.d.cts",
+        "default": "./dist/middleware/index.cjs"
+      }
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "index": [
+        "dist/index.d.ts"
+      ],
+      "async_hooks": [
+        "dist/async_hooks.d.ts"
+      ],
+      "db": [
+        "dist/db.d.ts"
+      ],
+      "db/adapter": [
+        "dist/db/adapter/index.d.ts"
+      ],
+      "env": [
+        "dist/env.d.ts"
+      ],
+      "error": [
+        "dist/error.d.ts"
+      ],
+      "middleware": [
+        "dist/middleware.d.ts"
+      ],
+      "oauth2": [
+        "dist/oauth2.d.ts"
+      ],
+      "social-providers": [
+        "dist/social-providers.d.ts"
+      ],
+      "utils": [
+        "dist/utils.d.ts"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "unbuild --clean",
+    "stub": "unbuild --stub",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "devDependencies": {
+    "@better-auth/utils": "0.3.0",
+    "@better-fetch/fetch": "catalog:",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-call": "catalog:",
+    "better-sqlite3": "^12.4.1",
+    "jose": "^6.1.0",
+    "kysely": "^0.28.5",
+    "nanostores": "^1.0.1",
+    "unbuild": "catalog:"
+  },
+  "dependencies": {
+    "zod": "^4.1.5"
+  },
+  "peerDependencies": {
+    "@better-auth/utils": "0.3.0",
+    "@better-fetch/fetch": "catalog:",
+    "better-call": "catalog:",
+    "better-sqlite3": "^12.4.1",
+    "jose": "^6.1.0",
+    "kysely": "^0.28.5",
+    "nanostores": "^1.0.1"
+  }
+}

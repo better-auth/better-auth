@@ -1,6 +1,6 @@
 {
   "root": true,
-  "$schema": "https://biomejs.dev/schemas/2.2.3/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.2.4/schema.json",
   "formatter": {
     "enabled": true,
     "indentStyle": "tab"
@@ -13,7 +13,8 @@
       "suspicious": {
         "noImplicitAnyLet": "warn",
         "noDuplicateObjectKeys": "warn",
-        "noTsIgnore": "error"
+        "noTsIgnore": "error",
+        "noDebugger": "error"
       },
       "performance": {
         "noDelete": "error"
@@ -65,7 +66,8 @@
       "!**/.cache",
       "!**/dev/cloudflare/drizzle",
       "!**/playwright-report",
-      "!**/.output"
+      "!**/.output",
+      "!**/.tmp"
     ]
   }
 }

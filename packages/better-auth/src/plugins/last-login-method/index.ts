@@ -1,5 +1,6 @@
-import { createAuthMiddleware, type BetterAuthPlugin } from "..";
-import type { GenericEndpointContext } from "../../types";
+import { createAuthMiddleware } from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 /**
  * Configuration for tracking different authentication methods
@@ -49,15 +50,17 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		"/sign-in/email",
 		"/sign-up/email",
 	];
+
+	const defaultResolveMethod = (ctx: GenericEndpointContext) => {
+		if (paths.includes(ctx.path)) {
+			return ctx.params?.id ? ctx.params.id : ctx.path.split("/").pop();
+		}
+		return null;
+	};
+
 	const config = {
 		cookieName: "better-auth.last_used_login_method",
 		maxAge: 60 * 60 * 24 * 30,
-		customResolveMethod: (ctx) => {
-			if (paths.includes(ctx.path)) {
-				return ctx.params?.id ? ctx.params.id : ctx.path.split("/").pop();
-			}
-			return null;
-		},
 		...userConfig,
 	} satisfies LastLoginMethodOptions;
 
@@ -73,7 +76,8 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 									if (!config.storeInDatabase) return;
 									if (!context) return;
 									const lastUsedLoginMethod =
-										config.customResolveMethod(context);
+										config.customResolveMethod?.(context) ??
+										defaultResolveMethod(context);
 									if (lastUsedLoginMethod) {
 										return {
 											data: {
@@ -81,6 +85,29 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 												lastLoginMethod: lastUsedLoginMethod,
 											},
 										};
+									}
+								},
+							},
+						},
+						session: {
+							create: {
+								async after(session, context) {
+									if (!config.storeInDatabase) return;
+									if (!context) return;
+									const lastUsedLoginMethod =
+										config.customResolveMethod?.(context) ??
+										defaultResolveMethod(context);
+									if (lastUsedLoginMethod && session?.userId) {
+										try {
+											await ctx.internalAdapter.updateUser(session.userId, {
+												lastLoginMethod: lastUsedLoginMethod,
+											});
+										} catch (error) {
+											ctx.logger.error(
+												"Failed to update lastLoginMethod",
+												error,
+											);
+										}
 									}
 								},
 							},
@@ -96,21 +123,29 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const lastUsedLoginMethod = config.customResolveMethod(ctx);
+						const lastUsedLoginMethod =
+							config.customResolveMethod?.(ctx) ?? defaultResolveMethod(ctx);
 						if (lastUsedLoginMethod) {
-							// Inherit cookie attributes from Better Auth's centralized cookie system
-							// This ensures consistency with cross-origin, cross-subdomain, and security settings
-							const cookieAttributes = {
-								...ctx.context.authCookies.sessionToken.options,
-								maxAge: config.maxAge,
-								httpOnly: false, // Override: plugin cookies are not httpOnly
-							};
+							const setCookie = ctx.context.responseHeaders?.get("set-cookie");
+							const sessionTokenName =
+								ctx.context.authCookies.sessionToken.name;
+							const hasSessionToken =
+								setCookie && setCookie.includes(sessionTokenName);
+							if (hasSessionToken) {
+								// Inherit cookie attributes from Better Auth's centralized cookie system
+								// This ensures consistency with cross-origin, cross-subdomain, and security settings
+								const cookieAttributes = {
+									...ctx.context.authCookies.sessionToken.options,
+									maxAge: config.maxAge,
+									httpOnly: false, // Override: plugin cookies are not httpOnly
+								};
 
-							ctx.setCookie(
-								config.cookieName,
-								lastUsedLoginMethod,
-								cookieAttributes,
-							);
+								ctx.setCookie(
+									config.cookieName,
+									lastUsedLoginMethod,
+									cookieAttributes,
+								);
+							}
 						}
 					}),
 				},

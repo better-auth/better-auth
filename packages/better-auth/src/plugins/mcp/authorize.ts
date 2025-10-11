@@ -1,5 +1,4 @@
 import { APIError } from "better-call";
-import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
 import type {
 	AuthorizationQuery,
@@ -7,6 +6,7 @@ import type {
 	OIDCOptions,
 } from "../oidc-provider/types";
 import { generateRandomString } from "../../crypto";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 function redirectErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -56,7 +56,7 @@ export async function authorizeMCPOAuth(
 				sameSite: "lax",
 			},
 		);
-		const queryFromURL = ctx.request.url?.split("?")[1];
+		const queryFromURL = ctx.request.url?.split("?")[1]!;
 		throw ctx.redirect(`${options.loginPage}?${queryFromURL}`);
 	}
 

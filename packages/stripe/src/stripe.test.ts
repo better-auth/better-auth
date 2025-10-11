@@ -17,6 +17,16 @@ describe("stripe", async () => {
 		},
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_mock123" }),
+			list: vi.fn().mockResolvedValue({ data: [] }),
+			retrieve: vi.fn().mockResolvedValue({
+				id: "cus_mock123",
+				email: "test@email.com",
+				deleted: false,
+			}),
+			update: vi.fn().mockResolvedValue({
+				id: "cus_mock123",
+				email: "newemail@example.com",
+			}),
 		},
 		checkout: {
 			sessions: {
@@ -1188,6 +1198,141 @@ describe("stripe", async () => {
 		expect(hasTrialData).toBe(true);
 	});
 
+	it("should upgrade existing subscription instead of creating new one", async () => {
+		// Reset mocks for this test
+		vi.clearAllMocks();
+
+		// Create a user
+		const userRes = await authClient.signUp.email(
+			{ ...testUser, email: "upgrade-existing@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{ ...testUser, email: "upgrade-existing@email.com" },
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		// Mock customers.list to find existing customer
+		mockStripe.customers.list.mockResolvedValueOnce({
+			data: [{ id: "cus_test_123" }],
+		});
+
+		// First create a starter subscription
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		// Simulate the subscription being active
+		const starterSub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				stripeSubscriptionId: "sub_active_test_123",
+				stripeCustomerId: "cus_mock123", // Use the same customer ID as the mock
+			},
+			where: [
+				{
+					field: "id",
+					value: starterSub!.id,
+				},
+			],
+		});
+
+		// Also update the user with the Stripe customer ID
+		await ctx.adapter.update({
+			model: "user",
+			update: {
+				stripeCustomerId: "cus_mock123",
+			},
+			where: [
+				{
+					field: "id",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Mock Stripe subscriptions.list to return the active subscription
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_active_test_123",
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_test_123",
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		// Clear mock calls before the upgrade
+		mockStripe.checkout.sessions.create.mockClear();
+		mockStripe.billingPortal.sessions.create.mockClear();
+
+		// Now upgrade to premium plan - should use billing portal to update existing subscription
+		const upgradeRes = await authClient.subscription.upgrade({
+			plan: "premium",
+			fetchOptions: { headers },
+		});
+
+		// Verify that billing portal was called (indicating update, not new subscription)
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				customer: "cus_mock123",
+				flow_data: expect.objectContaining({
+					type: "subscription_update_confirm",
+					subscription_update_confirm: expect.objectContaining({
+						subscription: "sub_active_test_123",
+					}),
+				}),
+			}),
+		);
+
+		// Should not create a new checkout session
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+
+		// Verify the response has a redirect URL
+		expect(upgradeRes.data?.url).toBe("https://billing.stripe.com/mock");
+		expect(upgradeRes.data?.redirect).toBe(true);
+
+		// Verify no new subscription was created in the database
+		const allSubs = await ctx.adapter.findMany<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+		expect(allSubs).toHaveLength(1); // Should still have only one subscription
+	});
+
 	it("should prevent multiple free trials across different plans", async () => {
 		// Create a user
 		const userRes = await authClient.signUp.email(
@@ -1279,5 +1424,319 @@ describe("stripe", async () => {
 			return hadTrial;
 		});
 		expect(hasEverTrialed).toBe(true);
+	});
+
+	it("should update stripe customer email when user email changes", async () => {
+		// Setup mock for customer retrieve and update
+		mockStripe.customers.retrieve = vi.fn().mockResolvedValue({
+			id: "cus_mock123",
+			email: "test@email.com",
+			deleted: false,
+		});
+		mockStripe.customers.update = vi.fn().mockResolvedValue({
+			id: "cus_mock123",
+			email: "newemail@example.com",
+		});
+
+		// Sign up a user
+		const userRes = await authClient.signUp.email(testUser, {
+			throw: true,
+		});
+
+		expect(userRes.user).toBeDefined();
+
+		// Verify customer was created during signup
+		expect(mockStripe.customers.create).toHaveBeenCalledWith({
+			email: testUser.email,
+			name: testUser.name,
+			metadata: {
+				userId: userRes.user.id,
+			},
+		});
+
+		// Clear mocks to track the update
+		vi.clearAllMocks();
+
+		// Re-setup the retrieve mock for the update flow
+		mockStripe.customers.retrieve = vi.fn().mockResolvedValue({
+			id: "cus_mock123",
+			email: "test@email.com",
+			deleted: false,
+		});
+		mockStripe.customers.update = vi.fn().mockResolvedValue({
+			id: "cus_mock123",
+			email: "newemail@example.com",
+		});
+
+		// Create a mock request context
+		const mockRequest = new Request("http://localhost:3000/api/test", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+			},
+		});
+
+		// Update the user's email using internal adapter (which triggers hooks)
+		await ctx.internalAdapter.updateUserByEmail(
+			testUser.email,
+			{
+				email: "newemail@example.com",
+			},
+			{
+				request: mockRequest,
+				context: ctx,
+			} as any,
+		);
+
+		// Verify that Stripe customer.retrieve was called
+		expect(mockStripe.customers.retrieve).toHaveBeenCalledWith("cus_mock123");
+
+		// Verify that Stripe customer.update was called with the new email
+		expect(mockStripe.customers.update).toHaveBeenCalledWith("cus_mock123", {
+			email: "newemail@example.com",
+		});
+	});
+
+	describe("getCustomerCreateParams", () => {
+		it("should call getCustomerCreateParams and merge with default params", async () => {
+			const getCustomerCreateParamsMock = vi
+				.fn()
+				.mockResolvedValue({ metadata: { customField: "customValue" } });
+
+			const testOptions = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+				getCustomerCreateParams: getCustomerCreateParamsMock,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [stripe(testOptions)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			// Sign up a user
+			const userRes = await testAuthClient.signUp.email(
+				{
+					email: "custom-params@email.com",
+					password: "password",
+					name: "Custom User",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			// Verify getCustomerCreateParams was called
+			expect(getCustomerCreateParamsMock).toHaveBeenCalledWith(
+				expect.objectContaining({
+					id: userRes.user.id,
+					email: "custom-params@email.com",
+					name: "Custom User",
+				}),
+				expect.objectContaining({
+					context: expect.any(Object),
+				}),
+			);
+
+			// Verify customer was created with merged params
+			expect(mockStripe.customers.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					email: "custom-params@email.com",
+					name: "Custom User",
+					metadata: expect.objectContaining({
+						userId: userRes.user.id,
+						customField: "customValue",
+					}),
+				}),
+			);
+		});
+
+		it("should use getCustomerCreateParams to add custom address", async () => {
+			const getCustomerCreateParamsMock = vi.fn().mockResolvedValue({
+				address: {
+					line1: "123 Main St",
+					city: "San Francisco",
+					state: "CA",
+					postal_code: "94111",
+					country: "US",
+				},
+			});
+
+			const testOptions = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+				getCustomerCreateParams: getCustomerCreateParamsMock,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [stripe(testOptions)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			// Sign up a user
+			await testAuthClient.signUp.email(
+				{
+					email: "address-user@email.com",
+					password: "password",
+					name: "Address User",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			// Verify customer was created with address
+			expect(mockStripe.customers.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					email: "address-user@email.com",
+					name: "Address User",
+					address: {
+						line1: "123 Main St",
+						city: "San Francisco",
+						state: "CA",
+						postal_code: "94111",
+						country: "US",
+					},
+					metadata: expect.objectContaining({
+						userId: expect.any(String),
+					}),
+				}),
+			);
+		});
+
+		it("should properly merge nested objects using defu", async () => {
+			const getCustomerCreateParamsMock = vi.fn().mockResolvedValue({
+				metadata: {
+					customField: "customValue",
+					anotherField: "anotherValue",
+				},
+				phone: "+1234567890",
+			});
+
+			const testOptions = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+				getCustomerCreateParams: getCustomerCreateParamsMock,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [stripe(testOptions)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			// Sign up a user
+			const userRes = await testAuthClient.signUp.email(
+				{
+					email: "merge-test@email.com",
+					password: "password",
+					name: "Merge User",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			// Verify customer was created with properly merged params
+			// defu merges objects and preserves all fields
+			expect(mockStripe.customers.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					email: "merge-test@email.com",
+					name: "Merge User",
+					phone: "+1234567890",
+					metadata: {
+						userId: userRes.user.id,
+						customField: "customValue",
+						anotherField: "anotherValue",
+					},
+				}),
+			);
+		});
+
+		it("should work without getCustomerCreateParams", async () => {
+			// This test ensures backward compatibility
+			const testOptions = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+				// No getCustomerCreateParams provided
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [stripe(testOptions)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			// Sign up a user
+			const userRes = await testAuthClient.signUp.email(
+				{
+					email: "no-custom-params@email.com",
+					password: "password",
+					name: "Default User",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			// Verify customer was created with default params only
+			expect(mockStripe.customers.create).toHaveBeenCalledWith({
+				email: "no-custom-params@email.com",
+				name: "Default User",
+				metadata: {
+					userId: userRes.user.id,
+				},
+			});
+		});
 	});
 });

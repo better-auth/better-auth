@@ -13,18 +13,17 @@ import type {
 import { APIError } from "better-call";
 import { generateRandomString } from "../../crypto/random";
 import * as z from "zod";
-import { createAuthEndpoint } from "../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { sessionMiddleware } from "../../api";
 import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
-import type {
-	BetterAuthPlugin,
-	InferOptionSchema,
-	AuthPluginSchema,
-} from "../../types/plugins";
+import type { InferOptionSchema } from "../../types/plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { setSessionCookie } from "../../cookies";
 import { generateId } from "../../utils";
 import { mergeSchema } from "../../db/schema";
 import { base64 } from "@better-auth/utils/base64";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
@@ -32,6 +31,17 @@ interface WebAuthnChallengeValue {
 		id: string;
 	};
 }
+
+const ERROR_CODES = defineErrorCodes({
+	CHALLENGE_NOT_FOUND: "Challenge not found",
+	YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY:
+		"You are not allowed to register this passkey",
+	FAILED_TO_VERIFY_REGISTRATION: "Failed to verify registration",
+	PASSKEY_NOT_FOUND: "Passkey not found",
+	AUTHENTICATION_FAILED: "Authentication failed",
+	UNABLE_TO_CREATE_SESSION: "Unable to create session",
+	FAILED_TO_UPDATE_PASSKEY: "Failed to update passkey",
+});
 
 function getRpID(options: PasskeyOptions, baseURL?: string) {
 	return (
@@ -61,7 +71,7 @@ export interface PasskeyOptions {
 	 * if this isn't provided. The client itself will
 	 * pass this value.
 	 */
-	origin?: string | null;
+	origin?: string | string[] | null;
 
 	/**
 	 * Allow customization of the authenticatorSelection options
@@ -110,16 +120,6 @@ export const passkey = (options?: PasskeyOptions) => {
 		(expirationTime.getTime() - currentTime.getTime()) / 1000,
 	);
 
-	const ERROR_CODES = {
-		CHALLENGE_NOT_FOUND: "Challenge not found",
-		YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY:
-			"You are not allowed to register this passkey",
-		FAILED_TO_VERIFY_REGISTRATION: "Failed to verify registration",
-		PASSKEY_NOT_FOUND: "Passkey not found",
-		AUTHENTICATION_FAILED: "Authentication failed",
-		UNABLE_TO_CREATE_SESSION: "Unable to create session",
-		FAILED_TO_UPDATE_PASSKEY: "Failed to update passkey",
-	} as const;
 	return {
 		id: "passkey",
 		endpoints: {
@@ -146,13 +146,13 @@ export const passkey = (options?: PasskeyOptions) => {
 									parameters: {
 										query: {
 											authenticatorAttachment: {
-												description: `Type of authenticator to use for registration. 
-                          "platform" for device-specific authenticators, 
+												description: `Type of authenticator to use for registration.
+                          "platform" for device-specific authenticators,
                           "cross-platform" for authenticators that can be used across devices.`,
 												required: false,
 											},
 											name: {
-												description: `Optional custom name for the passkey. 
+												description: `Optional custom name for the passkey.
                           This can help identify the passkey when managing multiple credentials.`,
 												required: false,
 											},
@@ -332,16 +332,6 @@ export const passkey = (options?: PasskeyOptions) => {
 				"/passkey/generate-authenticate-options",
 				{
 					method: "POST",
-					body: z
-						.object({
-							email: z
-								.string()
-								.meta({
-									description: "The email address of the user",
-								})
-								.optional(),
-						})
-						.optional(),
 					metadata: {
 						openapi: {
 							description: "Generate authentication options for a passkey",
@@ -1064,4 +1054,4 @@ const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;

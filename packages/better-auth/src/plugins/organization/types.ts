@@ -1,5 +1,5 @@
-import type { FieldAttribute } from "../../db";
-import type { User, Session, AuthContext } from "../../types";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { User, Session } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type {
 	Invitation,
@@ -9,6 +9,7 @@ import type {
 	Team,
 	TeamMember,
 } from "./schema";
+import type { AuthContext } from "@better-auth/core";
 
 export interface OrganizationOptions {
 	/**
@@ -257,7 +258,7 @@ export interface OrganizationOptions {
 				[key in keyof Omit<Organization, "id">]?: string;
 			};
 			additionalFields?: {
-				[key in string]: FieldAttribute;
+				[key in string]: DBFieldAttribute;
 			};
 		};
 		member?: {
@@ -266,7 +267,7 @@ export interface OrganizationOptions {
 				[key in keyof Omit<Member, "id">]?: string;
 			};
 			additionalFields?: {
-				[key in string]: FieldAttribute;
+				[key in string]: DBFieldAttribute;
 			};
 		};
 		invitation?: {
@@ -275,7 +276,7 @@ export interface OrganizationOptions {
 				[key in keyof Omit<Invitation, "id">]?: string;
 			};
 			additionalFields?: {
-				[key in string]: FieldAttribute;
+				[key in string]: DBFieldAttribute;
 			};
 		};
 		team?: {
@@ -284,7 +285,7 @@ export interface OrganizationOptions {
 				[key in keyof Omit<Team, "id">]?: string;
 			};
 			additionalFields?: {
-				[key in string]: FieldAttribute;
+				[key in string]: DBFieldAttribute;
 			};
 		};
 		teamMember?: {
@@ -299,7 +300,7 @@ export interface OrganizationOptions {
 				[key in keyof Omit<OrganizationRole, "id">]?: string;
 			};
 			additionalFields?: {
-				[key in string]: FieldAttribute;
+				[key in string]: DBFieldAttribute;
 			};
 		};
 	};
@@ -799,10 +800,4 @@ export interface OrganizationOptions {
 			organization: Organization & Record<string, any>;
 		}) => Promise<void>;
 	};
-	/**
-	 * Automatically create an organization for the user on sign up.
-	 *
-	 * @default false
-	 */
-	autoCreateOrganizationOnSignUp?: boolean;
 }

@@ -12,7 +12,7 @@ describe("forget password", async (it) => {
 			emailAndPassword: {
 				enabled: true,
 				async sendResetPassword({ url }) {
-					token = url.split("?")[0].split("/").pop() || "";
+					token = url.split("?")[0]!.split("/").pop() || "";
 					await mockSendEmail();
 				},
 				onPasswordReset: async ({ user }) => {
@@ -192,13 +192,12 @@ describe("forget password", async (it) => {
 				resetPasswordTokenExpiresIn: 10,
 			},
 		});
-		const { headers } = await signInWithTestUser();
-		await client.requestPasswordReset({
-			email: testUser.email,
-			redirectTo: "/sign-in",
-			fetchOptions: {
-				headers,
-			},
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			await client.requestPasswordReset({
+				email: testUser.email,
+				redirectTo: "/sign-in",
+			});
 		});
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 9);
@@ -220,12 +219,11 @@ describe("forget password", async (it) => {
 			token,
 		});
 		expect(res.data?.status).toBe(true);
-		await client.requestPasswordReset({
-			email: testUser.email,
-			redirectTo: "/sign-in",
-			fetchOptions: {
-				headers,
-			},
+		await runWithUser(async () => {
+			await client.requestPasswordReset({
+				email: testUser.email,
+				redirectTo: "/sign-in",
+			});
 		});
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 11);
@@ -273,7 +271,7 @@ describe("revoke sessions on password reset", async (it) => {
 			emailAndPassword: {
 				enabled: true,
 				async sendResetPassword({ url }) {
-					token = url.split("?")[0].split("/").pop() || "";
+					token = url.split("?")[0]!.split("/").pop() || "";
 					await mockSendEmail();
 				},
 				revokeSessionsOnPasswordReset: true,
@@ -285,7 +283,7 @@ describe("revoke sessions on password reset", async (it) => {
 	);
 
 	it("should revoke other sessions when revokeSessionsOnPasswordReset is enabled", async () => {
-		const { headers } = await signInWithTestUser();
+		const { runWithUser } = await signInWithTestUser();
 
 		await client.requestPasswordReset({
 			email: testUser.email,
@@ -303,12 +301,10 @@ describe("revoke sessions on password reset", async (it) => {
 			},
 		);
 
-		const sessionAttempt = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
+		await runWithUser(async () => {
+			const sessionAttempt = await client.getSession();
+			expect(sessionAttempt.data).toBeNull();
 		});
-		expect(sessionAttempt.data).toBeNull();
 	});
 
 	it("should not revoke other sessions by default", async () => {
@@ -317,7 +313,7 @@ describe("revoke sessions on password reset", async (it) => {
 				emailAndPassword: {
 					enabled: true,
 					async sendResetPassword({ url }) {
-						token = url.split("?")[0].split("/").pop() || "";
+						token = url.split("?")[0]!.split("/").pop() || "";
 						await mockSendEmail();
 					},
 				},
@@ -327,7 +323,7 @@ describe("revoke sessions on password reset", async (it) => {
 			},
 		);
 
-		const { headers } = await signInWithTestUser();
+		const { runWithUser } = await signInWithTestUser();
 
 		await client.requestPasswordReset({
 			email: testUser.email,
@@ -345,11 +341,9 @@ describe("revoke sessions on password reset", async (it) => {
 			},
 		);
 
-		const sessionAttempt = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
+		await runWithUser(async () => {
+			const sessionAttempt = await client.getSession();
+			expect(sessionAttempt.data?.user).toBeDefined();
 		});
-		expect(sessionAttempt.data?.user).toBeDefined();
 	});
 });

@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
@@ -29,10 +29,10 @@ export const createOrganization = <O extends OrganizationOptions>(
 		isClientSide: true,
 	});
 	const baseSchema = z.object({
-		name: z.string().meta({
+		name: z.string().min(1).meta({
 			description: "The name of the organization",
 		}),
-		slug: z.string().meta({
+		slug: z.string().min(1).meta({
 			description: "The slug of the organization",
 		}),
 		userId: z.coerce
@@ -304,6 +304,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				await adapter.setActiveOrganization(
 					ctx.context.session.session.token,
 					organization.id,
+					ctx,
 				);
 			}
 
@@ -315,6 +316,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				await adapter.setActiveTeam(
 					ctx.context.session.session.token,
 					teamMember.teamId,
+					ctx,
 				);
 			}
 
@@ -372,7 +374,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			logo?: string;
 			metadata?: Record<string, any>;
 		} & Partial<InferAdditionalFieldsFromPluginOptions<"organization", O>>;
-		organizationId: string;
+		organizationId?: string | undefined;
 	};
 	return createAuthEndpoint(
 		"/organization/update",
@@ -384,12 +386,14 @@ export const updateOrganization = <O extends OrganizationOptions>(
 						...additionalFieldsSchema.shape,
 						name: z
 							.string()
+							.min(1)
 							.meta({
 								description: "The name of the organization",
 							})
 							.optional(),
 						slug: z
 							.string()
+							.min(1)
 							.meta({
 								description: "The slug of the organization",
 							})
@@ -605,7 +609,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				/**
 				 * If the organization is deleted, we set the active organization to null
 				 */
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 
 			const org = await adapter.findOrganizationById(organizationId);
@@ -707,19 +711,15 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
-			const isMember = organization?.members.find(
-				(member) => member.userId === session.user.id,
-			);
+			const isMember = await adapter.checkMembership({
+				userId: session.user.id,
+				organizationId: organization.id,
+			});
 			if (!isMember) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				});
-			}
-			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
 			type OrganizationReturn = O["teams"] extends { enabled: true }
@@ -795,6 +795,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				const updatedSession = await adapter.setActiveOrganization(
 					session.session.token,
 					null,
+					ctx,
 				);
 				await setSessionCookie(ctx, {
 					session: updatedSession,
@@ -833,7 +834,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				organizationId,
 			});
 			if (!isMember) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
@@ -849,6 +850,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			const updatedSession = await adapter.setActiveOrganization(
 				session.session.token,
 				organization.id,
+				ctx,
 			);
 			await setSessionCookie(ctx, {
 				session: updatedSession,

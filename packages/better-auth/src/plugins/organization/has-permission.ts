@@ -1,36 +1,14 @@
-import type { OrganizationOptions } from "./types";
 import { defaultRoles } from "./access";
-import type { GenericEndpointContext } from "../../types";
 import type { Role } from "../access";
 import * as z from "zod";
 import { APIError } from "../../api";
 import type { OrganizationRole } from "./schema";
-
-type PermissionExclusive =
-	| {
-			/**
-			 * @deprecated Use `permissions` instead
-			 */
-			permission: { [key: string]: string[] };
-			permissions?: never;
-	  }
-	| {
-			permissions: { [key: string]: string[] };
-			permission?: never;
-	  };
-
-let cacheAllRoles = new Map<
-	string,
-	{
-		[x: string]: Role<any> | undefined;
-	}
->();
-
-type HasPermissionBaseInput = {
-	role: string;
-	options: OrganizationOptions;
-	allowCreatorAllPermissions?: boolean;
-} & PermissionExclusive;
+import {
+	cacheAllRoles,
+	hasPermissionFn,
+	type HasPermissionBaseInput,
+} from "./permission";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export const hasPermission = async (
 	input: {
@@ -100,40 +78,4 @@ export const hasPermission = async (
 	cacheAllRoles.set(input.organizationId, acRoles);
 
 	return hasPermissionFn(input, acRoles);
-};
-
-/**
- * Using the same `hasPermissionFn` function, but without the need for a `ctx` perameter or the `organizationId` perameter.
- */
-export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
-	const acRoles: {
-		[x: string]: Role<any> | undefined;
-	} = input.options.roles || defaultRoles;
-
-	return hasPermissionFn(input, acRoles);
-};
-
-const hasPermissionFn = (
-	input: HasPermissionBaseInput,
-	acRoles: {
-		[x: string]: Role<any> | undefined;
-	},
-) => {
-	if (!input.permissions && !input.permission) return false;
-
-	const roles = input.role.split(",");
-	const creatorRole = input.options.creatorRole || "owner";
-	const isCreator = roles.includes(creatorRole);
-
-	const allowCreatorsAllPermissions = input.allowCreatorAllPermissions || false;
-	if (isCreator && allowCreatorsAllPermissions) return true;
-
-	for (const role of roles) {
-		const _role = acRoles[role as keyof typeof acRoles];
-		const result = _role?.authorize(input.permissions ?? input.permission);
-		if (result?.success) {
-			return true;
-		}
-	}
-	return false;
 };

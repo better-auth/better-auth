@@ -38,7 +38,7 @@
       "outputs": []
     },
     "typecheck": {
-      "outputs": [],
+      "outputs": [".tsbuildinfo", "dist/**"],
       "cache": true
     },
     "deploy": {

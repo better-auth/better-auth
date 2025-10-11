@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { verifyTwoFactor } from "../verify-two-factor";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
@@ -10,9 +10,9 @@ import {
 	symmetricEncrypt,
 } from "../../../crypto";
 import { setSessionCookie } from "../../../cookies";
-import { BASE_ERROR_CODES } from "../../../error/codes";
-import type { GenericEndpointContext } from "../../../types";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { defaultKeyHasher } from "../utils";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export interface OTPOptions {
 	/**
@@ -290,7 +290,7 @@ export const otp2fa = (options?: OTPOptions) => {
 					`2fa-otp-${key}`,
 				);
 			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
-			const decryptedOtp = await decryptOTP(ctx, otp);
+			const decryptedOtp = await decryptOTP(ctx, otp!);
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				if (toCheckOtp) {
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -302,7 +302,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				});
 			}
 			const allowedAttempts = options?.allowedAttempts || 5;
-			if (parseInt(counter) >= allowedAttempts) {
+			if (parseInt(counter!) >= allowedAttempts) {
 				await ctx.context.internalAdapter.deleteVerificationValue(
 					toCheckOtp.id,
 				);
@@ -354,7 +354,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				await ctx.context.internalAdapter.updateVerificationValue(
 					toCheckOtp.id,
 					{
-						value: `${otp}:${(parseInt(counter, 10) || 0) + 1}`,
+						value: `${otp}:${(parseInt(counter!, 10) || 0) + 1}`,
 					},
 				);
 				return invalid("INVALID_CODE");

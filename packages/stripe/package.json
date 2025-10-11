@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/stripe",
   "author": "Bereket Engida",
-  "version": "1.3.10-beta.7",
+  "version": "1.4.0-beta.9",
   "main": "dist/index.cjs",
   "license": "MIT",
   "keywords": [
@@ -14,8 +14,8 @@
   "scripts": {
     "test": "vitest",
     "build": "unbuild",
-    "typecheck": "tsc --noEmit",
-    "dev": "unbuild --watch"
+    "dev": "unbuild --watch",
+    "typecheck": "tsc --project tsconfig.json"
   },
   "publishConfig": {
     "access": "public"
@@ -43,13 +43,16 @@
     }
   },
   "dependencies": {
+    "defu": "^6.1.4",
     "zod": "^4.1.5"
   },
   "peerDependencies": {
+    "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "stripe": "^18"
   },
   "devDependencies": {
+    "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
     "stripe": "^18.5.0",

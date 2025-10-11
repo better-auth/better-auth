@@ -5,7 +5,7 @@ packages:
   - e2e/**
 
 catalog:
-  '@better-fetch/fetch': ^1.1.18
+  '@better-fetch/fetch': 1.1.18
   better-call: 1.0.19
   typescript: ^5.9.2
   unbuild: 3.6.1

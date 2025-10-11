@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import type { InferOrganizationRolesFromOption, Member } from "../schema";
@@ -7,7 +7,7 @@ import { APIError } from "better-call";
 import { parseRoles } from "../organization";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { BASE_ERROR_CODES } from "../../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { hasPermission } from "../has-permission";
 import type { OrganizationOptions } from "../types";
 import { toZodSchema } from "../../../db/to-zod";
@@ -59,9 +59,9 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 						role:
 							| InferOrganizationRolesFromOption<O>
 							| InferOrganizationRolesFromOption<O>[];
-						organizationId?: string;
+						organizationId?: string | undefined;
 					} & (O extends { teams: { enabled: true } }
-						? { teamId?: string }
+						? { teamId?: string | undefined }
 						: {}) &
 						InferAdditionalFieldsFromPluginOptions<"member", O>,
 				},
@@ -384,7 +384,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				session.session.activeOrganizationId ===
 					toBeRemovedMember.organizationId
 			) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 
 			// Run afterRemoveMember hook
@@ -794,7 +794,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			}
 			await adapter.deleteMember(member.id);
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 			return ctx.json(member);
 		},
