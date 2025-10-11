@@ -52,7 +52,7 @@ const STRIPE_ERROR_CODES = defineErrorCodes({
 		"Subscription is not scheduled for cancellation",
 	PRODUCT_NOT_FOUND: "Product not found",
 	PAYMENT_NOT_FOUND: "Payment not found",
-} as const;
+}) as const;
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
 	if (url.startsWith("http")) {
