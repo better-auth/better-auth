@@ -55,7 +55,7 @@
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "stripe": "^18.5.0",
+    "stripe": "^19.1.0",
     "unbuild": "catalog:"
   }
 }
