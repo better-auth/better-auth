@@ -2,11 +2,12 @@
   "name": "hono",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json"
+  },
   "dependencies": {
     "@better-auth/expo": "workspace:^",
-    "@hono/node-server": "^1.19.5",
     "better-auth": "workspace:^",
-    "better-sqlite3": "^12.4.1",
-    "hono": "^4.9.7"
+    "better-sqlite3": "^12.4.1"
   }
 }
