@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { getOrgAdapter } from "../../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../../call";
 import {
@@ -16,7 +16,7 @@ import {
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../../db";
 import { getDate } from "../../../../utils/date";
-import { BASE_ERROR_CODES } from "../../../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -254,6 +254,11 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			// If resend is true and there's an existing invitation, reuse it
 			if (alreadyInvited.length && ctx.body.resend) {
 				const existingInvitation = alreadyInvited[0];
+				if (!existingInvitation) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+					});
+				}
 
 				// Update the invitation's expiration date using the same logic as createInvitation
 				const defaultExpiration = 60 * 60 * 48; // 48 hours in seconds
@@ -302,8 +307,14 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				alreadyInvited.length &&
 				ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
 			) {
+				const invitation = alreadyInvited[0];
+				if (!invitation) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+					});
+				}
 				await adapter.updateInvitation({
-					invitationId: alreadyInvited[0].id,
+					invitationId: invitation.id,
 					status: "canceled",
 				});
 			}

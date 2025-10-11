@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { getOrgAdapter } from "../../adapter";
 import { orgMiddleware } from "../../call";
 import { APIError } from "better-call";

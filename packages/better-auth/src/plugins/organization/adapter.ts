@@ -426,9 +426,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return member;
 		},
-		/**
-		 * @requires db
-		 */
 		findFullOrganization: async ({
 			organizationId,
 			isSlug,
@@ -620,7 +617,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return team;
 		},
-
 		deleteTeam: async (teamId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			await adapter.deleteMany({
@@ -643,7 +639,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return team;
 		},
-
 		listTeams: async (organizationId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const teams = await adapter.findMany<Team>({
@@ -657,7 +652,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return teams;
 		},
-
 		createTeamInvitation: async ({
 			email,
 			role,
@@ -694,7 +688,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return invitation;
 		},
-
 		setActiveTeam: async (
 			sessionToken: string,
 			teamId: string | null,
@@ -709,7 +702,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			);
 			return session as Session;
 		},
-
 		listTeamMembers: async (data: { teamId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const members = await adapter.findMany<TeamMember>({
@@ -765,7 +757,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return teams;
 		},
-
 		findTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const member = await adapter.findOne<TeamMember>({
@@ -784,7 +775,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return member;
 		},
-
 		findOrCreateTeamMember: async (data: {
 			teamId: string;
 			userId: string;
@@ -815,7 +805,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				},
 			});
 		},
-
 		removeTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			await adapter.delete({
@@ -832,7 +821,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 			});
 		},
-
 		findInvitationsByTeamId: async (teamId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const invitations = await adapter.findMany<InferInvitation<O>>({
@@ -846,8 +834,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return invitations;
 		},
-		listUserInvitations: async (email: string) => {
-			const adapter = await getCurrentAdapter(baseAdapter);
 		listUserInvitations: async (
 			email: string,
 			data: {
@@ -862,6 +848,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				};
 			},
 		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
 				where: [
@@ -982,8 +969,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				(invite) => new Date(invite.expiresAt) > new Date(),
 			);
 		},
-		listInvitations: async (data: { organizationId: string }) => {
-			const adapter = await getCurrentAdapter(baseAdapter);
 		listInvitations: async (data: {
 			organizationId: string;
 			limit?: number;
@@ -996,6 +981,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				value: any;
 			};
 		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
 				where: [

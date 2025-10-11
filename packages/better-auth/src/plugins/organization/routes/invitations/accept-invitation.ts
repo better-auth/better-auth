@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { getOrgAdapter } from "../../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../../call";
 import { type Invitation } from "../../schema";
@@ -167,7 +167,8 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					const teamId = teamIds[0];
 					const updatedSession = await adapter.setActiveTeam(
 						session.session.token,
-						teamId,
+						teamId ?? null,
+						ctx,
 					);
 
 					await setSessionCookie(ctx, {
@@ -187,6 +188,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			await adapter.setActiveOrganization(
 				session.session.token,
 				invitation.organizationId,
+				ctx,
 			);
 			if (!acceptedI) {
 				return ctx.json(null, {
