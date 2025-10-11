@@ -206,17 +206,6 @@ export async function getTestInstance<
 		);
 	};
 
-	const client = createAuthClient({
-		...(config?.clientOptions as C extends undefined ? {} : C),
-		baseURL: getBaseURL(
-			options?.baseURL || "http://localhost:" + (config?.port || 3000),
-			options?.basePath || "/api/auth",
-		),
-		fetchOptions: {
-			customFetchImpl,
-		},
-	});
-
 	async function signInWithTestUser() {
 		if (config?.disableTestUser) {
 			throw new Error("Test user is disabled");
@@ -299,10 +288,9 @@ export async function getTestInstance<
 		),
 		fetchOptions: {
 			customFetchImpl,
-
-			...config?.clientOptions?.fetchOptions,
 		},
 	});
+
 	return {
 		auth,
 		client,
