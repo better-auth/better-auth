@@ -1,0 +1,12 @@
+{
+  "name": "hono",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@better-auth/expo": "workspace:^",
+    "@hono/node-server": "^1.19.5",
+    "better-auth": "workspace:^",
+    "better-sqlite3": "^12.4.1",
+    "hono": "^4.9.7"
+  }
+}

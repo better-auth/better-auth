@@ -11,21 +11,18 @@
   },
   "homepage": "https://www.better-auth.com/docs/integrations/expo",
   "scripts": {
-    "test": "vitest",
-    "build": "unbuild --clean",
-    "dev": "unbuild --watch",
-    "stub": "unbuild --stub",
+    "build": "tsdown",
     "typecheck": "tsc --project tsconfig.json"
   },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
+      "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./client": {
       "types": "./dist/client.d.ts",
-      "import": "./dist/client.mjs",
+      "import": "./dist/client.js",
       "require": "./dist/client.cjs"
     }
   },
@@ -53,7 +50,6 @@
   "devDependencies": {
     "@better-fetch/fetch": "catalog:",
     "@types/better-sqlite3": "^7.6.13",
-    "better-auth": "workspace:*",
     "better-sqlite3": "^12.2.0",
     "expo-constants": "~17.1.7",
     "expo-crypto": "^13.0.2",
@@ -61,17 +57,18 @@
     "expo-secure-store": "~14.2.3",
     "expo-web-browser": "~14.2.0",
     "react-native": "~0.80.2",
-    "unbuild": "^3.6.1"
+    "tsdown": "^0.15.6"
   },
   "peerDependencies": {
-    "better-auth": "workspace:*",
     "expo-constants": ">=17.0.0",
     "expo-crypto": ">=13.0.0",
     "expo-linking": ">=7.0.0",
     "expo-secure-store": ">=14.0.0",
-    "expo-web-browser": ">=14.0.0"
+    "expo-web-browser": ">=14.0.0",
+    "react-native": ">=0.70.0"
   },
   "dependencies": {
+    "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "zod": "^4.1.5"
   },

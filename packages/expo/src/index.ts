@@ -1,9 +1,9 @@
-import type { BetterAuthPlugin } from "better-auth";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "better-auth/api";
+} from "@better-auth/core/middleware";
+import { APIError } from 'better-call'
 import { z } from "zod";
 
 export interface ExpoOptions {

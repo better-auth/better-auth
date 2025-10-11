@@ -1,5 +1,5 @@
-import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
-import type { BetterAuthOptions } from "../../types";
+import type { BetterAuthDBSchema, DBFieldAttribute } from "../type.js";
+import type { BetterAuthOptions } from "@better-auth/core";
 
 export type DBAdapterDebugLogOption =
 	| boolean

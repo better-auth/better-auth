@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { coreSchema } from "./shared";
+import { coreSchema } from "./shared.js";
 
 export const accountSchema = coreSchema.extend({
 	providerId: z.string(),

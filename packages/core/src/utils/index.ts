@@ -1,1 +1,1 @@
-export { defineErrorCodes } from "./error-codes";
+export { defineErrorCodes } from "./error-codes.js";

@@ -1,11 +1,11 @@
-import type { BetterAuthPlugin } from "./plugin";
+import type { BetterAuthPlugin } from "./plugin.js";
 import type {
 	BetterFetch,
 	BetterFetchOption,
 	BetterFetchPlugin,
 } from "@better-fetch/fetch";
-import type { LiteralString } from "./helper";
-import type { BetterAuthOptions } from "./init-options";
+import type { LiteralString } from "./helper.js";
+import type { BetterAuthOptions } from "./init-options.js";
 import type { WritableAtom, Atom } from "nanostores";
 
 export interface ClientStore {

@@ -1,21 +1,21 @@
 import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Database } from "better-sqlite3";
 import type { CookieOptions } from "better-call";
-import type { LiteralUnion } from "./helper";
+import type { LiteralUnion } from "./helper.js";
 import type {
 	DBFieldAttribute,
 	DBPreservedModels,
 	SecondaryStorage,
-} from "../db/type";
-import type { Account, RateLimit, Session, User, Verification } from "../db";
+} from "@better-auth/core/db";
+import type { Account, RateLimit, Session, User, Verification } from "@better-auth/core/db";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
-import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { Logger } from "../env";
-import type { AuthContext, GenericEndpointContext } from "./context";
-import type { AuthMiddleware } from "../middleware";
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { DBAdapterDebugLogOption, DBAdapterInstance } from "@better-auth/core/db/adapter";
+import type { SocialProviderList, SocialProviders } from "@better-auth/core/social-providers";
+import type { Logger } from "@better-auth/core/env";
+import type { AuthContext, GenericEndpointContext } from "./context.js";
+import type { AuthMiddleware } from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from './plugin.js'
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type OmitId<T extends { id: unknown }> = Omit<T, "id">;
@@ -497,7 +497,7 @@ export type BetterAuthOptions = {
 	/**
 	 * List of Better Auth plugins
 	 */
-	plugins?: [] | BetterAuthPlugin[];
+	plugins?: BetterAuthPlugin[];
 	/**
 	 * User configuration
 	 */

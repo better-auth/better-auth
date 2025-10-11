@@ -1,5 +1,5 @@
 import type { ZodType } from "zod";
-import type { LiteralString } from "../types";
+import type { LiteralString } from "../types/index.js";
 
 export type DBPreservedModels =
 	| "user"
