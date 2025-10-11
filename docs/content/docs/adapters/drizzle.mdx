@@ -43,7 +43,7 @@ npx drizzle-kit generate # generate the migration file
 npx drizzle-kit migrate # apply the migration
 ```
 
-## Additional Information
+## Modifying Table Names
 
 The Drizzle adapter expects the schema you define to match the table names. For example, if your Drizzle schema maps the `user` table to `users`, you need to manually pass the schema and map it to the user table.
 
@@ -64,7 +64,60 @@ export const auth = betterAuth({
 });
 ```
 
+You can either modify the provided schema values like the example above,
+or you can mutate the auth config's `modelName` property directly.
+For example:
+
+```ts
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    provider: "sqlite", // or "pg" or "mysql"
+    schema,
+  }),
+  user: {
+    modelName: "users", // [!code highlight]
+  }
+});
+```
+
+## Modifying Field Names
+
+We map field names based on property you passed to your Drizzle schema.
+For example, if you want to modify the `email` field to `email_address`,
+you simply need to change the Drizzle schema to:
+
+```ts
+export const user = mysqlTable("user", {
+  // Changed field name without changing the schema property name
+  // This allows drizzle & better-auth to still use the original field name,
+  // while your DB uses the modified field name
+  email: varchar("email_address", { length: 255 }).notNull().unique(), // [!code highlight]
+  // ... others
+});
+```
+
+You can either modify the Drizzle schema like the example above,
+or you can mutate the auth config's `fields` property directly.
+For example:
+
+```ts
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    provider: "sqlite", // or "pg" or "mysql"
+    schema,
+  }),
+  user: {
+    fields: {
+      email: "email_address", // [!code highlight]
+    }
+  }
+});
+```
+
+## Using Plural Table Names
+
 If all your tables are using plural form, you can just pass the `usePlural` option:
+
 ```ts
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -73,5 +126,7 @@ export const auth = betterAuth({
   }),
 });
 ```
+
+## Performance Tips
 
 If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
