@@ -18,6 +18,19 @@ export const createFieldAttribute = <
 	} satisfies DBFieldAttribute<T>;
 };
 
+export const field = <
+	T extends DBFieldType,
+	C extends DBFieldAttributeConfig,
+>(
+	type: T,
+	config?: C,
+) => {
+	return {
+		type,
+		...config,
+	} satisfies DBFieldAttribute<T>;
+};
+
 export type InferValueType<T extends DBFieldType> = T extends "string"
 	? string
 	: T extends "number"

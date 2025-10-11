@@ -1,21 +1,16 @@
-import * as z from "zod";
+import type { DBRequiredTable, InferDBType } from "../type";
+import { coreSchema, field, schema } from "./shared";
 
-export const rateLimitSchema = z.object({
-	/**
-	 * The key to use for rate limiting
-	 */
-	key: z.string(),
-	/**
-	 * The number of requests made
-	 */
-	count: z.number(),
-	/**
-	 * The last request time in milliseconds
-	 */
-	lastRequest: z.number(),
-});
+export const rateLimitSchema = {
+	fields: {
+		key: field("string"),
+		count: field("number"),
+		lastRequest: field("number", { bigint: true }),
 
-/**
- * Rate limit schema type used by better-auth for rate limiting
- */
-export type RateLimit = z.infer<typeof rateLimitSchema>;
+		...coreSchema,
+	},
+	modelName: "rateLimit",
+};
+
+export type RateLimit<S extends DBRequiredTable<"ratelimit"> = typeof schema> =
+	InferDBType<S["ratelimit"]>;

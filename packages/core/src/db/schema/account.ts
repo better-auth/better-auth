@@ -1,34 +1,37 @@
-import * as z from "zod";
-import { coreSchema } from "./shared";
+import type { BetterAuthDBSchema } from "..";
+import type { DBRequiredTable, InferDBType } from "../type";
+import { coreSchema, field, schema } from "./shared";
 
-export const accountSchema = coreSchema.extend({
-	providerId: z.string(),
-	accountId: z.string(),
-	userId: z.coerce.string(),
-	accessToken: z.string().nullish(),
-	refreshToken: z.string().nullish(),
-	idToken: z.string().nullish(),
-	/**
-	 * Access token expires at
-	 */
-	accessTokenExpiresAt: z.date().nullish(),
-	/**
-	 * Refresh token expires at
-	 */
-	refreshTokenExpiresAt: z.date().nullish(),
-	/**
-	 * The scopes that the user has authorized
-	 */
-	scope: z.string().nullish(),
-	/**
-	 * Password is only stored in the credential provider
-	 */
-	password: z.string().nullish(),
-});
+export const accountSchema = {
+	fields: {
+		providerId: field("string"),
+		accountId: field("string"),
+		userId: field("string"),
+		accessToken: field("string", { required: false }),
+		refreshToken: field("string", { required: false }),
+		idToken: field("string", { required: false }),
+		/**
+		 * Access token expires at
+		 */
+		accessTokenExpiresAt: field("date", { required: false }),
+		/**
+		 * Refresh token expires at
+		 */
+		refreshTokenExpiresAt: field("date", { required: false }),
+		/**
+		 * The scopes that the user has authorized
+		 */
+		scope: field("string", { required: false }),
+		/**
+		 * Password is only stored in the credential provider
+		 */
+		password: field("string", { required: false }),
 
-/**
- * Account schema type used by better-auth, note that it's possible that account could have additional fields
- *
- * todo: we should use generics to extend this type with additional fields from plugins and options in the future
- */
-export type Account = z.infer<typeof accountSchema>;
+		...coreSchema,
+	},
+
+	modelName: "account",
+};
+
+export type Account<S extends DBRequiredTable<"account"> = typeof schema> =
+	InferDBType<S["account"]>;

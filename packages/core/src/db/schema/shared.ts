@@ -1,7 +1,32 @@
-import * as z from "zod";
+import type { DBFieldAttributeConfig, DBFieldAttribute, DBFieldType } from "..";
+import { accountSchema } from "./account";
+import { rateLimitSchema } from "./rate-limit";
+import { sessionSchema } from "./session";
+import { userSchema } from "./user";
+import { verificationSchema } from "./verification";
 
-export const coreSchema = z.object({
-	id: z.string(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
-});
+export const field = <T extends DBFieldType, C extends DBFieldAttributeConfig<T>>(
+	type: T,
+	config?: C,
+) => {
+	return {
+		type,
+		...config,
+	} satisfies DBFieldAttribute<T>;
+};
+
+
+export const coreSchema = {
+	id: field("string"),
+	createdAt: field("date", { defaultValue: () => new Date() }),
+	updatedAt: field("date", { defaultValue: () => new Date() }),
+};
+
+export const schema = {
+	account: accountSchema,
+	user: userSchema,
+	session: sessionSchema,
+	verification: verificationSchema,
+	ratelimit: rateLimitSchema,
+};
+

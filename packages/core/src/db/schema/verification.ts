@@ -1,15 +1,17 @@
-import * as z from "zod";
-import { coreSchema } from "./shared";
+import type { DBRequiredTable, InferDBType } from "../type";
+import { coreSchema, field, schema } from "./shared";
 
-export const verificationSchema = coreSchema.extend({
-	value: z.string(),
-	expiresAt: z.date(),
-	identifier: z.string(),
-});
+export const verificationSchema = {
+	fields: {
+		value: field("string"),
+		expiresAt: field("date"),
+		identifier: field("string"),
 
-/**
- * Verification schema type used by better-auth, note that it's possible that verification could have additional fields
- *
- * todo: we should use generics to extend this type with additional fields from plugins and options in the future
- */
-export type Verification = z.infer<typeof verificationSchema>;
+		...coreSchema,
+	},
+	modelName: "verification",
+};
+
+export type Verification<
+	S extends DBRequiredTable<"verification"> = typeof schema,
+> = InferDBType<S["verification"]>;
