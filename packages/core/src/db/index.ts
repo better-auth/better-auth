@@ -13,7 +13,10 @@ export { coreSchema } from "./schema/shared.js";
 export { userSchema, type User } from "./schema/user.js";
 export { accountSchema, type Account } from "./schema/account.js";
 export { sessionSchema, type Session } from "./schema/session.js";
-export { verificationSchema, type Verification } from "./schema/verification.js";
+export {
+	verificationSchema,
+	type Verification,
+} from "./schema/verification.js";
 export { rateLimitSchema, type RateLimit } from "./schema/rate-limit.js";
 
 export type {

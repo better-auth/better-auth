@@ -7,15 +7,27 @@ import type {
 	DBPreservedModels,
 	SecondaryStorage,
 } from "@better-auth/core/db";
-import type { Account, RateLimit, Session, User, Verification } from "@better-auth/core/db";
+import type {
+	Account,
+	RateLimit,
+	Session,
+	User,
+	Verification,
+} from "@better-auth/core/db";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import type { DBAdapterDebugLogOption, DBAdapterInstance } from "@better-auth/core/db/adapter";
-import type { SocialProviderList, SocialProviders } from "@better-auth/core/social-providers";
+import type {
+	DBAdapterDebugLogOption,
+	DBAdapterInstance,
+} from "@better-auth/core/db/adapter";
+import type {
+	SocialProviderList,
+	SocialProviders,
+} from "@better-auth/core/social-providers";
 import type { Logger } from "@better-auth/core/env";
 import type { AuthContext, GenericEndpointContext } from "./context.js";
 import type { AuthMiddleware } from "@better-auth/core/middleware";
-import type { BetterAuthPlugin } from './plugin.js'
+import type { BetterAuthPlugin } from "./plugin.js";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type OmitId<T extends { id: unknown }> = Omit<T, "id">;
