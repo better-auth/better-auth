@@ -86,6 +86,7 @@ await authClient.sso.register({
     providerId: "example-provider",
     issuer: "https://idp.example.com",
     domain: "example.com",
+    useHttps: true,
     oidcConfig: {
         clientId: "client-id",
         clientSecret: "client-secret",
@@ -119,6 +120,7 @@ await auth.api.registerSSOProvider({
         providerId: "example-provider",
         issuer: "https://idp.example.com",
         domain: "example.com",
+        useHttps: true,
         oidcConfig: {
             clientId: "your-client-id",
             clientSecret: "your-client-secret",
@@ -695,6 +697,8 @@ The plugin automatically creates the following SAML endpoints:
 - **SP Metadata**: `/api/auth/sso/saml2/sp/metadata?providerId={providerId}`
 - **SAML Callback**: `/api/auth/sso/saml2/callback/{providerId}`
 
+For a detailed guide on setting up SAML SSO with examples for Okta and testing with DummyIDP, see our [SAML SSO Setup Guide](/docs/guides/sso-saml-guide).
+
 ## Schema
 
 The plugin requires additional fields in the `ssoProvider` table to store the provider's configuration.
@@ -706,6 +710,7 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
         },
         { name: "issuer", type: "string", description: "The issuer identifier", isRequired: true },
         { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
+        { name: "useHttps", type: "boolean", description: "Whether to use HTTPS for the provider domain (defaults to true)", isRequired: false },
         { name: "oidcConfig", type: "string", description: "The OIDC configuration (JSON string)", isRequired: false },
         { name: "samlConfig", type: "string", description: "The SAML configuration (JSON string)", isRequired: false },
         { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
@@ -714,11 +719,61 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
     ]}
 />
 
-For a detailed guide on setting up SAML SSO with examples for Okta and testing with DummyIDP, see our [SAML SSO with Okta](/docs/guides/saml-sso-with-okta).
+### Extending the `ssoProvider` schema
+
+You can customize the underlying table via the `schema.ssoProvider` option. This lets you:
+
+- Override column names for built‑in fields using `fields`
+- Provide a custom table name via `modelName`
+- Add your own columns with `additionalFields`
+
+Each additional field uses the same `FieldAttribute` structure as other Better Auth plugins. You can specify `type`, `required`, `defaultValue`, `input`, `returned`, `unique`, `references`, validators, and more.
+
+#### Example: Adding environment and region columns
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+export const auth = betterAuth({
+    plugins: [
+        sso({
+            schema: {
+                ssoProvider: {
+                    modelName: "singleSignOnProvider", // optional table name override
+                    fields: {
+                        providerId: "provider_id", // map column name
+                    },
+                    additionalFields: {
+                        environment: {
+                            type: "string",
+                            required: true,
+                            defaultValue: "prod", // auto-filled on create
+                        },
+                        region: {
+                            type: "string",
+                            required: false,
+                        },
+                    },
+                },
+            },
+        }),
+    ],
+});
+```
+
+Once added, the inferred type for an SSO provider is augmented. You can access it via the plugin inference helper:
+
+```ts
+type MySSOProvider = typeof auth.$Infer.SSOProvider;
+// has environment (string) and region?: string
+```
 
 ## Options
 
 ### Server
+
+**useProviderDomain**: Use the provider domain to build callback URLs instead of the base URL.
 
 **provisionUser**: A custom function to provision a user when they sign in with an SSO provider.
 
@@ -732,6 +787,11 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 <TypeTable
   type={{
+    useProviderDomain: {
+        description: "Use the provider domain to build callback URLs instead of the base URL. When enabled, authorization URLs, callback URIs, and token requests will be resolved against the provider's domain.",
+        type: "boolean",
+        default: false,
+    },
     provisionUser: {
         description: "A custom function to provision a user when they sign in with an SSO provider.",
         type: "function",

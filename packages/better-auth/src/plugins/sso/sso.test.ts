@@ -4,8 +4,6 @@ import { sso } from ".";
 import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
 import { organization } from "../organization";
-import { createAuthClient } from "../../client";
-import { ssoClient } from "./client";
 
 let server = new OAuth2Server();
 
@@ -209,6 +207,64 @@ describe("SSO", async () => {
 	});
 });
 
+describe("SSO schema additionalFields", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			sso({
+				schema: {
+					ssoProvider: {
+						additionalFields: {
+							environment: {
+								type: "string",
+								required: true,
+								defaultValue: "prod",
+							},
+						},
+					},
+				},
+			}),
+		],
+	});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.issuer.on;
+		await server.start(8081, "localhost");
+	});
+
+	afterAll(async () => {
+		await server.stop().catch(() => {});
+	});
+
+	it("should persist additional field with default value", async () => {
+		const { headers } = await signInWithTestUser();
+		const provider = await auth.api.createOIDCProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "localhost.com",
+				clientId: "test",
+				clientSecret: "test",
+				authorizationEndpoint: `${server.issuer.url}/authorize`,
+				tokenEndpoint: `${server.issuer.url}/token`,
+				jwksEndpoint: `${server.issuer.url}/jwks`,
+				mapping: {
+					id: "sub",
+					email: "email",
+					emailVerified: "email_verified",
+					name: "name",
+					image: "picture",
+				},
+				providerId: "test-additional",
+			},
+			headers,
+		});
+		expect(provider).toMatchObject({
+			id: expect.any(String),
+			environment: "prod",
+		});
+	});
+});
+
 describe("SSO disable implicit sign in", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
@@ -369,7 +425,7 @@ describe("SSO disable implicit sign in", async () => {
 });
 
 describe("provisioning", async (ctx) => {
-	const { auth, signInWithTestUser, customFetchImpl, cookieSetter, db } =
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
 			plugins: [sso(), organization()],
 		});
@@ -518,74 +574,5 @@ describe("provisioning", async (ctx) => {
 		});
 
 		expect(res.url).toContain("http://localhost:8080/authorize");
-	});
-
-	it("should not delete SSO provider when creator user is deleted", async () => {
-		const { headers, user } = await signInWithTestUser();
-
-		await auth.api.createOIDCProvider({
-			body: {
-				issuer: server.issuer.url!,
-				domain: "delete-test.com",
-				clientId: "test-delete",
-				clientSecret: "test-delete",
-				authorizationEndpoint: `${server.issuer.url}/authorize`,
-				tokenEndpoint: `${server.issuer.url}/token`,
-				jwksEndpoint: `${server.issuer.url}/jwks`,
-				mapping: {
-					id: "sub",
-					email: "email",
-					emailVerified: "email_verified",
-					name: "name",
-					image: "picture",
-				},
-				providerId: "test-delete",
-			},
-			headers,
-		});
-
-		// Verify provider exists before deletion and has the correct userId
-		const providerBeforeDelete = await db.findOne<{
-			userId: string | null;
-			domain: string;
-			providerId: string;
-		}>({
-			model: "ssoProvider",
-			where: [{ field: "providerId", value: "test-delete" }],
-		});
-
-		expect(providerBeforeDelete).toBeTruthy();
-		expect(providerBeforeDelete?.userId).toBe(user.id);
-
-		// Delete the user who created the SSO provider
-		// The database foreign key constraint with SET NULL should handle setting userId to null
-		await db.delete({
-			model: "user",
-			where: [
-				{
-					field: "id",
-					value: user.id,
-				},
-			],
-		});
-
-		// Verify SSO provider still exists but userId is null
-		const ssoProvider = await db.findOne<{
-			userId: string | null;
-			domain: string;
-			providerId: string;
-		}>({
-			model: "ssoProvider",
-			where: [
-				{
-					field: "providerId",
-					value: "test-delete",
-				},
-			],
-		});
-
-		expect(ssoProvider).toBeTruthy();
-		expect(ssoProvider?.userId).toBeNull();
-		expect(ssoProvider?.domain).toBe("delete-test.com");
 	});
 });

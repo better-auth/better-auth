@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { createAuthEndpoint } from "@better-auth/core/middleware";
-import type { BetterAuthPlugin, User } from "../../types";
+import type { BetterAuthPlugin, InferOptionSchema, User } from "../../types";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
@@ -14,6 +14,8 @@ import { setSessionCookie } from "../../cookies";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
+import { schema } from "./schema";
+import { mergeSchema, type FieldAttribute } from "better-auth/db";
 
 export interface SSOOptions {
 	/**
@@ -72,6 +74,19 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	defaultOverrideUserInfo?: boolean;
+	/**
+	 * Extend or customize the underlying ssoProvider model.
+	 *
+	 * Similar to other plugins, you can:
+	 *  - Provide custom DB column names for existing fields via `fields`
+	 *  - Add additional fields via `additionalFields`
+	 *  - Change the table/model name via `modelName`
+	 */
+	schema?: InferOptionSchema<ReturnType<typeof schema>> & {
+		ssoProvider?: {
+			additionalFields?: Record<string, FieldAttribute>;
+		};
+	};
 }
 
 /**
@@ -1009,50 +1024,13 @@ export const sso = (options?: SSOOptions) => {
 				},
 			),
 		},
-		schema: {
-			ssoProvider: {
-				fields: {
-					issuer: {
-						type: "string",
-						required: true,
-					},
-					oidcConfig: {
-						type: "string",
-						required: false,
-					},
-					samlConfig: {
-						type: "string",
-						required: false,
-					},
-					userId: {
-						type: "string",
-						required: false,
-						references: {
-							model: "user",
-							field: "id",
-							onDelete: "set null",
-						},
-					},
-					providerId: {
-						type: "string",
-						required: true,
-						unique: true,
-					},
-					organizationId: {
-						type: "string",
-						required: false,
-					},
-					domain: {
-						type: "string",
-						required: true,
-					},
-				},
-			},
-		},
+		schema: mergeSchema(schema(options?.schema), options?.schema),
+		options: options,
 	} satisfies BetterAuthPlugin;
 };
 
 export interface SSOProvider {
+	id: string;
 	issuer: string;
 	oidcConfig: OIDCConfig;
 	userId?: string;
