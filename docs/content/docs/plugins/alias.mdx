@@ -1,0 +1,155 @@
+---
+title: Alias
+description: Namespace plugin endpoints to avoid conflicts
+---
+
+The alias plugin allows you to prefix plugin endpoints with a custom path to avoid conflicts when using multiple plugins with similar endpoint paths. This is particularly useful when integrating multiple payment providers or services that might have overlapping endpoint names.
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add the plugin to your auth config
+
+        Wrap your plugins with the `alias` function to prefix their endpoints:
+
+        ```ts title="auth.ts" 
+        import { betterAuth } from "better-auth"
+        import { alias } from "better-auth/plugins" // [!code highlight]
+
+        export const auth = betterAuth({
+            plugins: [ // [!code highlight]
+                // Wrap any plugin with alias to prefix its endpoints
+                alias("/prefix", somePlugin()), // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+    <Step>
+        ### Add the client plugin
+        
+        Use `aliasClient` to wrap client plugins with the same prefix:
+        
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { aliasClient } from "better-auth/client/plugins" // [!code highlight]
+        
+        export const authClient = createAuthClient({
+            plugins: [ // [!code highlight]
+                // Wrap client plugin with same prefix
+                aliasClient("/prefix", someClientPlugin()), // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+</Steps>
+
+## Usage
+
+### Avoiding Endpoint Conflicts
+
+The primary use case for the alias plugin is to avoid endpoint conflicts when using multiple plugins that expose similar endpoints. For example, if you have two payment providers that both expose a `/checkout` endpoint:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { alias } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        // Without alias: both would try to use /api/auth/checkout - conflict!
+        // With alias: each gets its own namespace
+        alias("/stripe", stripePlugin()),
+        alias("/paypal", paypalPlugin())
+    ]
+})
+```
+
+Now the endpoints are available at:
+- `/api/auth/stripe/checkout` 
+- `/api/auth/paypal/checkout`
+
+### Client-side Usage
+
+On the client side, wrap the corresponding client plugins with the same prefix:
+
+```ts title="auth-client.ts" 
+import { createAuthClient } from "better-auth/client"
+import { aliasClient } from "better-auth/client/plugins"
+
+const authClient = createAuthClient({
+    plugins: [
+        aliasClient("/stripe", stripeClient()),
+        aliasClient("/paypal", paypalClient())
+    ]
+})
+```
+
+## Configuration
+
+The alias plugin accepts two parameters:
+
+### prefix
+**Type**: `string`  
+**Required**: `true`
+
+The prefix to add to all plugin endpoints. Can be provided with or without leading/trailing slashes.
+
+Examples:
+- `"/polar"` → `/polar/endpoint`
+- `"polar"` → `/polar/endpoint`  
+- `"/polar/"` → `/polar/endpoint`
+
+### plugin
+**Type**: `BetterAuthPlugin` (server) or `BetterAuthClientPlugin` (client)  
+**Required**: `true`
+
+The plugin to wrap with the alias prefix.
+
+## How it Works
+
+The alias plugin modifies the wrapped plugin by:
+
+1. **Prefixing all endpoint paths** - All endpoints get the specified prefix
+2. **Updating middleware paths** - Middlewares are adjusted to match new paths
+3. **Modifying hook matchers** - Hooks continue to work with prefixed paths
+4. **Adjusting rate limit rules** - Rate limiting works correctly with new paths
+5. **Preserving all functionality** - The wrapped plugin works exactly the same, just with different paths
+
+## Examples
+
+### API Versioning
+
+Use aliases to version your authentication API:
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        alias("/v1", oldPlugin()),
+        alias("/v2", newPlugin())
+    ]
+})
+```
+
+### Service Separation
+
+Separate authentication for different services:
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        alias("/admin", adminPlugin()),
+        alias("/customer", customerPlugin())
+    ]
+})
+```
+
+## Best Practices
+
+1. **Use consistent prefixes** - Always use the same prefix on both server and client
+2. **Keep prefixes short but descriptive** - e.g., `/stripe` not `/stripe-payment-provider`
+3. **Document your structure** - Keep track of aliased endpoints in your API docs
+4. **Avoid deep nesting** - While possible, deeply nested aliases can be confusing
+
+<Callout type="info">
+Remember to use the same prefix on both the server and client sides to ensure proper functionality.
+</Callout>
