@@ -10,7 +10,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Loader2, RefreshCw, SearchIcon, Send, X } from "lucide-react";
+import { Loader2, SearchIcon, Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import Link from "fumadocs-core/link";
@@ -39,22 +39,6 @@ function SearchAIActions() {
 
 	return (
 		<>
-			{!isLoading && messages.at(-1)?.role === "assistant" && (
-				<button
-					type="button"
-					className={cn(
-						buttonVariants({
-							color: "secondary",
-							size: "sm",
-							className: "rounded-full gap-1.5",
-						}),
-					)}
-					onClick={() => regenerate()}
-				>
-					<RefreshCw className="size-4" />
-					Retry
-				</button>
-			)}
 			<button
 				type="button"
 				className={cn(
@@ -318,6 +302,18 @@ function Message({
 			links = (part.input as z.infer<typeof ProvideLinksToolSchema>).links;
 		}
 	}
+
+	// Fix incomplete code blocks for better rendering during streaming
+	const codeBlockCount = (markdown.match(/```/g) || []).length;
+	if (codeBlockCount % 2 !== 0) {
+		// Odd number of ``` means there's an unclosed code block
+		markdown += "\n```";
+	}
+
+	// Ensure proper spacing around code blocks
+	markdown = markdown
+		.replace(/```(\w+)?\n/g, "\n```$1\n")
+		.replace(/\n```\n/g, "\n```\n\n");
 
 	return (
 		<div {...props}>

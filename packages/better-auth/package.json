@@ -773,7 +773,7 @@
     "deepmerge": "^4.3.1",
     "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.38.2",
-    "happy-dom": "^18.0.1",
+    "happy-dom": "^20.0.0",
     "hono": "^4.9.7",
     "listhen": "^1.9.0",
     "mongodb": "^6.18.0",
