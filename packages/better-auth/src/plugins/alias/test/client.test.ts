@@ -184,7 +184,7 @@ describe("aliasClient plugin", () => {
 		const aliased = aliasClient("/app", plugin);
 
 		expect(aliased.atomListeners![0]?.signal).toBe("$sessionSignal");
-		expect(aliased.atomListeners![1]?.signal).toBe("adminSignal");
+		expect(aliased.atomListeners![1]?.signal).toBe("adminSignalApp");
 	});
 
 	it("should handle complex path patterns in atomListeners", () => {
