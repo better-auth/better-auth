@@ -25,6 +25,7 @@ import { setSessionCookie } from "better-auth/cookies";
 import type { FlowResult } from "samlify/types/src/flow";
 import { XMLValidator } from "fast-xml-parser";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
+import { schema } from "./schema";
 
 const fastValidator = {
 	async validate(xml: string) {
@@ -252,6 +253,17 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	trustEmailVerified?: boolean;
+	/**
+	 * Extend or customize the underlying ssoProvider model.
+	 *
+	 * Similar to other plugins, you can:
+	 *  - Add additional fields via `additionalFields`
+	 */
+	schema?: {
+		ssoProvider?: {
+			additionalFields?: Record<string, import("./schema").DBFieldAttribute>;
+		};
+	};
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -2233,43 +2245,6 @@ export const sso = (options?: SSOOptions) => {
 				},
 			),
 		},
-		schema: {
-			ssoProvider: {
-				fields: {
-					issuer: {
-						type: "string",
-						required: true,
-					},
-					oidcConfig: {
-						type: "string",
-						required: false,
-					},
-					samlConfig: {
-						type: "string",
-						required: false,
-					},
-					userId: {
-						type: "string",
-						references: {
-							model: "user",
-							field: "id",
-						},
-					},
-					providerId: {
-						type: "string",
-						required: true,
-						unique: true,
-					},
-					organizationId: {
-						type: "string",
-						required: false,
-					},
-					domain: {
-						type: "string",
-						required: true,
-					},
-				},
-			},
-		},
+		schema: schema(options?.schema),
 	} satisfies BetterAuthPlugin;
 };
