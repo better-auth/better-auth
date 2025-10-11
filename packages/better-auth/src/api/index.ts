@@ -47,7 +47,7 @@ import { toAuthEndpoints } from "./to-auth-endpoints";
 import type { AuthContext } from "@better-auth/core";
 
 function isEndpoint(endpoint: unknown): endpoint is Endpoint {
-	return !!endpoint && typeof endpoint === "object" && "path" in endpoint;
+	return !!endpoint && Object.hasOwn(endpoint, "path");
 }
 
 export function checkEndpointConflicts(
