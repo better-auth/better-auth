@@ -50,7 +50,10 @@ export interface BetterAuthClientPlugin {
 	 * State atoms that'll be resolved by each framework
 	 * auth store.
 	 */
-	getAtoms?: ($fetch: BetterFetch) => Record<string, Atom<any>>;
+	getAtoms?: (
+		$fetch: BetterFetch,
+		options?: BetterAuthClientOptions | undefined,
+	) => Record<string, Atom<any>>;
 	/**
 	 * specify path methods for server plugin inferred
 	 * endpoints to force a specific method.

@@ -30,7 +30,7 @@ export function capitalizeFirstLetter(str: string) {
 type InferResolvedHooks<O extends BetterAuthClientOptions> =
 	O["plugins"] extends Array<infer Plugin>
 		? Plugin extends BetterAuthClientPlugin
-			? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+			? Plugin["getAtoms"] extends (fetch: any, options: any) => infer Atoms
 				? Atoms extends Record<string, any>
 					? {
 							[key in keyof Atoms as IsSignal<key> extends true

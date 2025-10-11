@@ -43,11 +43,47 @@ type ExtendGetActions<
 				[T in P as CamelCase<`${TrimLeadingChar<
 					TransformNormalizedPrefix<NormalizePrefix<P>>
 				>}`>]: {
-					[K in keyof Actions]: Actions[K];
+					[K in keyof Actions & string as K extends "$Infer"
+						? never
+						: K]: Actions[K];
 				};
-			};
+			} & (Actions extends {
+				$Infer: infer I extends Record<string, any>;
+			}
+				? {
+						$Infer: {
+							[K in keyof I & string as `${Capitalize<
+								CamelCase<
+									TrimLeadingChar<TransformNormalizedPrefix<NormalizePrefix<P>>>
+								>
+							>}${K}`]: I[K];
+						};
+					}
+				: { $Infer: {} });
 		}
 	: { getActions: undefined };
+
+type ExtendGetAtoms<
+	T extends BetterAuthClientPlugin,
+	P extends string,
+> = T extends {
+	getAtoms: (fetch: infer F, options: infer O) => infer Atoms;
+}
+	? {
+			getAtoms: (
+				fetch: F,
+				options: O,
+			) => {
+				[K in keyof Atoms & string as `${K}${Capitalize<
+					CamelCase<
+						TrimLeadingChar<TransformNormalizedPrefix<NormalizePrefix<P>>>
+					>
+				>}`]: Atoms[K];
+			};
+		}
+	: {
+			getAtoms: undefined;
+		};
 
 type ExtendEndpoints<
 	T extends BetterAuthClientPlugin,
@@ -70,10 +106,14 @@ type ExtendEndpoints<
 export type InferAliasedClientPlugin<
 	Prefix extends LiteralString,
 	T extends BetterAuthClientPlugin,
-> = Omit<T, "id" | "pathMethods" | "getActions" | "$InferServerPlugin"> & {
+> = Omit<
+	T,
+	"id" | "pathMethods" | "getActions" | "getAtoms" | "$InferServerPlugin"
+> & {
 	id: `${T["id"]}-${TransformNormalizedPrefix<NormalizePrefix<Prefix>>}`;
 } & ExtendPathMethods<T, NormalizePrefix<Prefix>> &
 	ExtendGetActions<T, NormalizePrefix<Prefix>> &
+	ExtendGetAtoms<T, NormalizePrefix<Prefix>> &
 	ExtendEndpoints<T, NormalizePrefix<Prefix>>;
 
 export type AliasClientOptions = {
@@ -140,7 +180,10 @@ export function aliasClient<
 	// Update atomListeners matchers
 	if (plugin.atomListeners) {
 		aliasedPlugin.atomListeners = plugin.atomListeners.map((listener) => ({
-			...listener,
+			signal:
+				listener.signal !== "$sessionSignal"
+					? `${listener.signal}${camelCasePrefix.charAt(0).toUpperCase() + camelCasePrefix.slice(1)}`
+					: listener.signal,
 			matcher: (path: string) => {
 				// Check if the path starts with the prefix, then strip it and check the original matcher
 				if (path.startsWith(cleanPrefix)) {
@@ -195,6 +238,38 @@ export function aliasClient<
 
 	// Wrap getAtoms to prefix any path-based actions
 	if (plugin.getAtoms) {
+		aliasedPlugin.getAtoms = ($fetch, options) => {
+			const baseURL = getBaseURL(
+				options?.baseURL,
+				options?.basePath,
+				undefined,
+			);
+			const originalAtoms = plugin.getAtoms!(
+				((url: string | URL, ...options: any[]) => {
+					return $fetch(
+						resolveURL(
+							{
+								url: url,
+								baseURL,
+							},
+							aliasEndpointPaths,
+							prefix,
+						),
+						...options,
+					);
+				}) as any,
+				options,
+			);
+
+			return Object.fromEntries(
+				Object.entries(originalAtoms).map(([key, value]) => {
+					return [
+						`${key}${camelCasePrefix.charAt(0).toUpperCase() + camelCasePrefix.slice(1)}`,
+						value,
+					];
+				}),
+			);
+		};
 	}
 
 	// Update fetchPlugins hooks to handle prefixed paths
