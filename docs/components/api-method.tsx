@@ -1,5 +1,4 @@
 import { Endpoint } from "./endpoint";
-// import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { DynamicCodeBlock } from "./ui/dynamic-code-block";
 import {
 	Table,
@@ -45,6 +44,8 @@ const placeholderProperty: Property = {
 	isNullable: false,
 	isClientOnly: false,
 };
+
+const indentationSpace = `    `;
 
 export const APIMethod = ({
 	path,
@@ -129,7 +130,14 @@ export const APIMethod = ({
 	let { props, functionName, code_prefix, code_suffix } = parseCode(children);
 
 	const authClientMethodPath = pathToDotNotation(path);
-	const clientBody = createClientBody({ props });
+
+	const clientBody = createClientBody({
+		props,
+		method: method ?? "GET",
+		forceAsBody,
+		forceAsQuery,
+	});
+
 	const serverBody = createServerBody({
 		props,
 		method: method ?? "GET",
@@ -589,9 +597,66 @@ function parseCode(children: JSX.Element) {
 	};
 }
 
-const indentationSpace = `    `;
+/**
+ * Builds a property line with proper formatting and comments
+ */
+function buildPropertyLine(
+	prop: Property,
+	indentLevel: number,
+	additionalComments: string[] = [],
+): string {
+	const comments: string[] = [...additionalComments];
+	if (!prop.isOptional) comments.push("required");
+	if (prop.comments) comments.push(prop.comments);
+	const addComment = comments.length > 0;
 
-function createClientBody({ props }: { props: Property[] }) {
+	const indent = indentationSpace.repeat(indentLevel);
+	const propValue = prop.exampleValue ? `: ${prop.exampleValue}` : "";
+	const commentText = addComment ? ` // ${comments.join(", ")}` : "";
+
+	if (prop.type === "Object") {
+		// For object types, put comment after the opening brace
+		return `${indent}${prop.propName}${propValue}: {${commentText}\n`;
+	} else {
+		// For non-object types, put comment after the comma
+		return `${indent}${prop.propName}${propValue},${commentText}\n`;
+	}
+}
+
+/**
+ * Determines if the client request should use query parameters
+ *
+ * - GET requests use query params by default, unless `forceAsBody` is true
+ * - Any request can be forced to use query params with `forceAsQuery`
+ */
+function shouldClientUseQueryParams(
+	method: string | undefined,
+	forceAsBody: boolean | undefined,
+	forceAsQuery: boolean | undefined,
+): boolean {
+	if (forceAsQuery) return true;
+	if (forceAsBody) return false;
+	return method === "GET";
+}
+
+function createClientBody({
+	props,
+	method,
+	forceAsBody,
+	forceAsQuery,
+}: {
+	props: Property[];
+	method?: string;
+	forceAsBody?: boolean;
+	forceAsQuery?: boolean;
+}) {
+	const isQueryParam = shouldClientUseQueryParams(
+		method,
+		forceAsBody,
+		forceAsQuery,
+	);
+	const baseIndentLevel = isQueryParam ? 2 : 1;
+
 	let body = ``;
 
 	let i = -1;
@@ -600,18 +665,7 @@ function createClientBody({ props }: { props: Property[] }) {
 		if (prop.isServerOnly) continue;
 		if (body === "") body += "{\n";
 
-		let addComment = false;
-		let comment: string[] = [];
-		if (!prop.isOptional || prop.comments) addComment = true;
-
-		if (!prop.isOptional) comment.push("required");
-		if (prop.comments) comment.push(prop.comments);
-
-		body += `${indentationSpace.repeat(prop.path.length + 1)}${prop.propName}${
-			prop.exampleValue ? `: ${prop.exampleValue}` : ""
-		}${prop.type === "Object" ? ": {" : ","}${
-			addComment ? ` // ${comment.join(", ")}` : ""
-		}\n`;
+		body += buildPropertyLine(prop, prop.path.length + baseIndentLevel);
 
 		if ((props[i + 1]?.path?.length || 0) < prop.path.length) {
 			const diff = prop.path.length - (props[i + 1]?.path?.length || 0);
@@ -620,13 +674,37 @@ function createClientBody({ props }: { props: Property[] }) {
 				.fill(0)
 				.map((_, i) => i)
 				.reverse()) {
-				body += `${indentationSpace.repeat(index + 1)}},\n`;
+				body += `${indentationSpace.repeat(index + baseIndentLevel)}},\n`;
 			}
 		}
 	}
-	if (body !== "") body += "}";
+
+	if (body !== "") {
+		if (isQueryParam) {
+			// Wrap in query object for GET requests and when forceAsQuery is true
+			body = `{\n    query: ${body}    },\n}`;
+		} else {
+			body += "}";
+		}
+	}
 
 	return body;
+}
+
+/**
+ * Determines if the server request should use query parameters
+ *
+ * - POST requests use body by default, unless `forceAsQuery` is true
+ * - GET requests use query params by default, unless `forceAsBody` is true
+ */
+function shouldServerUseQueryParams(
+	method: string,
+	forceAsBody: boolean | undefined,
+	forceAsQuery: boolean | undefined,
+): boolean {
+	if (forceAsQuery) return true;
+	if (forceAsBody) return false;
+	return method !== "POST";
 }
 
 function createServerBody({
@@ -642,24 +720,24 @@ function createServerBody({
 	forceAsQuery: boolean | undefined;
 	forceAsBody: boolean | undefined;
 }) {
-	let serverBody = "";
+	const isQueryParam = shouldServerUseQueryParams(
+		method,
+		forceAsBody,
+		forceAsQuery,
+	);
+	const clientOnlyProps = props.filter((x) => !x.isClientOnly);
 
-	let body2 = ``;
-
+	// Build properties body
+	let propertiesBody = ``;
 	let i = -1;
+
 	for (const prop of props) {
 		i++;
 		if (prop.isClientOnly) continue;
-		if (body2 === "") body2 += "{\n";
+		if (propertiesBody === "") propertiesBody += "{\n";
 
-		let addComment = false;
-		let comment: string[] = [];
-
-		if (!prop.isOptional || prop.comments) {
-			addComment = true;
-		}
-
-		if (
+		// Check if this is a server-only nested property
+		const isNestedServerOnlyProp =
 			prop.isServerOnly &&
 			!(
 				prop.path.length &&
@@ -669,19 +747,17 @@ function createServerBody({
 							prop.path.slice(0, prop.path.length - 2).join(".") &&
 						x.propName === prop.path[prop.path.length - 1],
 				)
-			)
-		) {
-			comment.push("server-only");
-			addComment = true;
-		}
-		if (!prop.isOptional) comment.push("required");
-		if (prop.comments) comment.push(prop.comments);
+			);
 
-		body2 += `${indentationSpace.repeat(prop.path.length + 2)}${prop.propName}${
-			prop.exampleValue ? `: ${prop.exampleValue}` : ""
-		}${prop.type === "Object" ? ": {" : ","}${
-			addComment ? ` // ${comment.join(", ")}` : ""
-		}\n`;
+		const additionalComments: string[] = [];
+		if (isNestedServerOnlyProp) additionalComments.push("server-only");
+
+		propertiesBody += buildPropertyLine(
+			prop,
+			prop.path.length + 2,
+			additionalComments,
+		);
+
 		if ((props[i + 1]?.path?.length || 0) < prop.path.length) {
 			const diff = prop.path.length - (props[i + 1]?.path?.length || 0);
 
@@ -689,28 +765,30 @@ function createServerBody({
 				.fill(0)
 				.map((_, i) => i)
 				.reverse()) {
-				body2 += `${indentationSpace.repeat(index + 2)}},\n`;
+				propertiesBody += `${indentationSpace.repeat(index + 2)}},\n`;
 			}
 		}
 	}
-	if (body2 !== "") body2 += "    },";
 
+	if (propertiesBody !== "") propertiesBody += "    },";
+
+	// Build fetch options
 	let fetchOptions = "";
 	if (requireSession) {
 		fetchOptions +=
 			"\n    // This endpoint requires session cookies.\n    headers: await headers(),";
 	}
 
-	if (props.filter((x) => !x.isClientOnly).length > 0) {
+	// Assemble final server body
+	let serverBody = "";
+	if (clientOnlyProps.length > 0) {
 		serverBody += "{\n";
-		if ((method === "POST" || forceAsBody) && !forceAsQuery) {
-			serverBody += `    body: ${body2}${fetchOptions}\n}`;
-		} else {
-			serverBody += `    query: ${body2}${fetchOptions}\n}`;
-		}
+		const paramType = isQueryParam ? "query" : "body";
+		serverBody += `    ${paramType}: ${propertiesBody}${fetchOptions}\n}`;
 	} else if (fetchOptions.length) {
 		serverBody += `{${fetchOptions}\n}`;
 	}
+
 	return serverBody;
 }
 
