@@ -1,6 +1,14 @@
+import { Metadata } from "next";
 import CommunityHeader from "./_components/header";
 import Stats from "./_components/stats";
 import Section from "@/components/landing/section";
+
+export const metadata: Metadata = {
+	title: "Community",
+	description:
+		"Join the Better Auth community and connect with developers worldwide.",
+};
+
 type NpmPackageResp = {
 	downloads: number;
 	start: string;
@@ -47,36 +55,36 @@ export default async function CommunityPage() {
 			crossesOffset=""
 			customPaddings
 		>
-			<div className="min-h-screen w-full bg-transparent">
-				<div className="overflow-hidden flex flex-col w-full bg-transparent/10 relative">
+			<div className="w-full min-h-screen bg-transparent">
+				<div className="relative flex flex-col w-full overflow-hidden bg-transparent/10">
 					<div className="h-[38vh]">
 						<CommunityHeader />
 					</div>
 					<div className="relative py-0">
 						<div className="absolute inset-0 z-0">
-							<div className="grid grid-cols-12 h-full">
+							<div className="grid h-full grid-cols-12">
 								{Array(12)
 									.fill(null)
 									.map((_, i) => (
 										<div
 											key={i}
-											className="border-l border-dashed border-stone-100 dark:border-white/10 h-full"
+											className="h-full border-l border-dashed border-stone-100 dark:border-white/10"
 										/>
 									))}
 							</div>
-							<div className="grid grid-rows-12 w-full absolute top-0">
+							<div className="absolute top-0 grid w-full grid-rows-12">
 								{Array(12)
 									.fill(null)
 									.map((_, i) => (
 										<div
 											key={i}
-											className="border-t border-dashed border-stone-100 dark:border-stone-900/60 w-full"
+											className="w-full border-t border-dashed border-stone-100 dark:border-stone-900/60"
 										/>
 									))}
 							</div>
 						</div>
 					</div>
-					<div className="w-full md:mx-auto overflow-hidden">
+					<div className="w-full overflow-hidden md:mx-auto">
 						<Stats
 							npmDownloads={npmDownloads.downloads}
 							githubStars={githubStars}

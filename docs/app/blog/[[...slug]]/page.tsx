@@ -24,7 +24,7 @@ import { Callout } from "@/components/ui/callout";
 import { ArrowLeftIcon, ExternalLink } from "lucide-react";
 import { Support } from "../_components/support";
 
-const metaTitle = "Blogs";
+const metaTitle = "Blogs | Better Auth";
 const metaDescription = "Latest changes , fixes and updates.";
 const ogImage = "https://better-auth.com/release-og/changelog-og.png";
 
@@ -45,12 +45,12 @@ export default async function Page({
 	const { title, description, date } = page.data;
 	return (
 		<div className="relative min-h-screen">
-			<div className="pointer-events-none absolute inset-0 -z-10">
-				<StarField className="top-1/3 left-1/2 -translate-x-1/2" />
+			<div className="absolute inset-0 pointer-events-none -z-10">
+				<StarField className="-translate-x-1/2 top-1/3 left-1/2" />
 				<Glow />
 			</div>
-			<div className="relative mx-auto max-w-3xl px-4 md:px-0 pb-24 pt-12">
-				<h1 className="text-center text-3xl md:text-5xl font-semibold tracking-tighter">
+			<div className="relative max-w-3xl px-4 pt-12 pb-24 mx-auto md:px-0">
+				<h1 className="text-3xl font-semibold tracking-tighter text-center md:text-5xl">
 					{title}
 				</h1>
 				{description && (
@@ -58,14 +58,14 @@ export default async function Page({
 						{description}
 					</p>
 				)}
-				<div className="my-2 flex items-center justify-center gap-3">
+				<div className="flex items-center justify-center gap-3 my-2">
 					{page.data?.author?.avatar && (
 						<Image
 							src={page.data.author.avatar}
 							alt={page.data?.author?.name ?? "Author"}
 							width={40}
 							height={40}
-							className="rounded-full border"
+							className="border rounded-full"
 						/>
 					)}
 					<div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -95,17 +95,17 @@ export default async function Page({
 						)}
 					</div>
 				</div>
-				<div className="w-full flex items-center gap-2 my-4 mb-8">
+				<div className="flex items-center w-full gap-2 my-4 mb-8">
 					<div className="flex items-center gap-2 opacity-80">
 						<ArrowLeftIcon className="size-4" />
 						<Link href="/blog" className="">
 							Blogs
 						</Link>
 					</div>
-					<hr className="h-1 w-full opacity-80" />
+					<hr className="w-full h-1 opacity-80" />
 				</div>
 
-				<article className="prose prose-neutral dark:prose-invert mx-auto max-w-3xl px-4 md:px-0">
+				<article className="max-w-3xl px-4 mx-auto prose prose-neutral dark:prose-invert md:px-0">
 					<MDX
 						components={{
 							...defaultMdxComponents,
