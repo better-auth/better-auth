@@ -10,7 +10,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Loader2, RefreshCw, SearchIcon, Send, X } from "lucide-react";
+import { Loader2, SearchIcon, Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import Link from "fumadocs-core/link";
