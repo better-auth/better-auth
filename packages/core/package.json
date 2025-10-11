@@ -142,8 +142,7 @@
     }
   },
   "scripts": {
-    "build": "unbuild --clean",
-    "stub": "unbuild --stub",
+    "build": "bunchee",
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
@@ -152,10 +151,10 @@
     "@types/better-sqlite3": "^7.6.13",
     "better-call": "catalog:",
     "better-sqlite3": "^12.4.1",
+    "bunchee": "^6.6.1",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
-    "nanostores": "^1.0.1",
-    "unbuild": "catalog:"
+    "nanostores": "^1.0.1"
   },
   "dependencies": {
     "zod": "^4.1.5"

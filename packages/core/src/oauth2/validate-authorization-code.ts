@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { jwtVerify } from "jose";
-import type { ProviderOptions } from "./index";
+import type { ProviderOptions } from "./oauth-provider";
 import { getOAuth2Tokens } from "./index";
 import { base64 } from "@better-auth/utils/base64";
 
