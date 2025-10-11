@@ -1,4 +1,4 @@
-import type { LiteralString } from "../types";
+import type { LiteralString } from "../types/index.js";
 
 export interface OAuth2Tokens {
 	tokenType?: string;

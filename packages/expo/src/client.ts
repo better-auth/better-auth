@@ -1,4 +1,4 @@
-import type { BetterAuthClientPlugin, Store } from "better-auth/types";
+import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
@@ -133,7 +133,7 @@ function getOrigin(scheme: string) {
 }
 
 export const expoClient = (opts: ExpoClientOptions) => {
-	let store: Store | null = null;
+	let store: ClientStore | null = null;
 	const cookieName = `${opts?.storagePrefix || "better-auth"}_cookie`;
 	const localCacheName = `${opts?.storagePrefix || "better-auth"}_session_data`;
 	const storage = opts?.storage;

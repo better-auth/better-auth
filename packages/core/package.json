@@ -142,8 +142,8 @@
     }
   },
   "scripts": {
-    "build": "unbuild --clean",
-    "stub": "unbuild --stub",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
@@ -155,6 +155,7 @@
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
     "nanostores": "^1.0.1",
+    "tsdown": "^0.15.6",
     "unbuild": "catalog:"
   },
   "dependencies": {

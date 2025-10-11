@@ -5,18 +5,18 @@ import type {
 	Session,
 	User,
 	Verification,
-} from "../db";
-import type { OAuthProvider } from "../oauth2";
-import { createLogger } from "../env";
-import type { DBAdapter, Where } from "../db/adapter";
-import type { BetterAuthCookies } from "./cookie";
-import type { DBPreservedModels } from "../db/type";
-import type { LiteralUnion } from "./helper";
+	DBPreservedModels,
+} from "@better-auth/core/db";
+import type { OAuthProvider } from "@better-auth/core/oauth2";
+import { createLogger } from "@better-auth/core/env";
+import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import type { BetterAuthCookies } from "./cookie.js";
+import type { LiteralUnion } from "./helper.js";
 import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
-} from "./init-options";
+} from "./init-options.js";
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,

@@ -52,9 +52,6 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.2
-      unbuild:
-        specifier: 'catalog:'
-        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
       vitest:
         specifier: 'catalog:'
         version: 3.2.4(@types/debug@4.1.12)(@types/node@24.7.1)(happy-dom@18.0.1)(jiti@2.6.0)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)
@@ -828,6 +825,18 @@ importers:
         specifier: 4.33.2
         version: 4.33.2(@cloudflare/workers-types@4.20250903.0)
 
+  e2e/smoke/test/fixtures/tsconfig-verbatim-module-syntax-node10:
+    dependencies:
+      '@better-auth/expo':
+        specifier: workspace:^
+        version: link:../../../../../packages/expo
+      better-auth:
+        specifier: workspace:^
+        version: link:../../../../../packages/better-auth
+      better-sqlite3:
+        specifier: ^12.4.1
+        version: 12.4.1
+
   e2e/smoke/test/fixtures/vite:
     dependencies:
       better-auth:
@@ -979,15 +988,15 @@ importers:
       tedious:
         specifier: ^18.6.1
         version: 18.6.1
+      tsdown:
+        specifier: ^0.15.6
+        version: 0.15.6(typescript@5.9.2)
       type-fest:
         specifier: ^4.41.0
         version: 4.41.0
       typescript:
         specifier: 'catalog:'
         version: 5.9.2
-      unbuild:
-        specifier: 'catalog:'
-        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
       vue:
         specifier: ^3.5.18
         version: 3.5.19(typescript@5.9.2)
@@ -1076,15 +1085,15 @@ importers:
       '@types/semver':
         specifier: ^7.7.1
         version: 7.7.1
+      tsdown:
+        specifier: ^0.15.6
+        version: 0.15.6(typescript@5.9.2)
       tsx:
         specifier: ^4.20.5
         version: 4.20.5
       typescript:
         specifier: 'catalog:'
         version: 5.9.2
-      unbuild:
-        specifier: 'catalog:'
-        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
 
   packages/core:
     dependencies:
@@ -1116,12 +1125,18 @@ importers:
       nanostores:
         specifier: ^1.0.1
         version: 1.0.1
+      tsdown:
+        specifier: ^0.15.6
+        version: 0.15.6(typescript@5.9.2)
       unbuild:
         specifier: 'catalog:'
         version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
 
   packages/expo:
     dependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.18
@@ -1132,9 +1147,6 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
-      better-auth:
-        specifier: workspace:*
-        version: link:../better-auth
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.2.0
@@ -1156,9 +1168,9 @@ importers:
       react-native:
         specifier: ~0.80.2
         version: 0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@types/react@19.2.2)(react@19.2.0)
-      unbuild:
-        specifier: ^3.6.1
-        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
+      tsdown:
+        specifier: ^0.15.6
+        version: 0.15.6(typescript@5.9.2)
 
   packages/sso:
     dependencies:
@@ -1199,9 +1211,9 @@ importers:
       express:
         specifier: ^5.1.0
         version: 5.1.0
-      unbuild:
-        specifier: 'catalog:'
-        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
+      tsdown:
+        specifier: ^0.15.6
+        version: 0.15.6(typescript@5.9.2)
 
   packages/stripe:
     dependencies:
@@ -1224,9 +1236,9 @@ importers:
       stripe:
         specifier: ^18.5.0
         version: 18.5.0(@types/node@24.7.1)
-      unbuild:
-        specifier: 'catalog:'
-        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
+      tsdown:
+        specifier: ^0.15.6
+        version: 0.15.6(typescript@5.9.2)
 
   packages/telemetry:
     dependencies:
@@ -15191,7 +15203,7 @@ snapshots:
       resolve: 1.22.10
       resolve-from: 5.0.0
       resolve.exports: 2.0.3
-      semver: 7.7.2
+      semver: 7.7.3
       send: 0.19.1
       slugify: 1.6.6
       source-map-support: 0.5.21
@@ -15268,7 +15280,7 @@ snapshots:
       resolve: 1.22.10
       resolve-from: 5.0.0
       resolve.exports: 2.0.3
-      semver: 7.7.2
+      semver: 7.7.3
       send: 0.19.1
       slugify: 1.6.6
       source-map-support: 0.5.21
@@ -15305,7 +15317,7 @@ snapshots:
       getenv: 2.0.0
       glob: 10.4.5
       resolve-from: 5.0.0
-      semver: 7.7.2
+      semver: 7.7.3
       slash: 3.0.0
       slugify: 1.6.6
       xcode: 3.0.1
@@ -15324,7 +15336,7 @@ snapshots:
       getenv: 2.0.0
       glob: 10.4.5
       resolve-from: 5.0.0
-      semver: 7.7.2
+      semver: 7.7.3
       slash: 3.0.0
       slugify: 1.6.6
       xcode: 3.0.1
@@ -15348,7 +15360,7 @@ snapshots:
       require-from-string: 2.0.2
       resolve-from: 5.0.0
       resolve-workspace-root: 2.0.0
-      semver: 7.7.2
+      semver: 7.7.3
       slugify: 1.6.6
       sucrase: 3.35.0
     transitivePeerDependencies:
@@ -15366,7 +15378,7 @@ snapshots:
       require-from-string: 2.0.2
       resolve-from: 5.0.0
       resolve-workspace-root: 2.0.0
-      semver: 7.7.2
+      semver: 7.7.3
       slugify: 1.6.6
       sucrase: 3.35.0
     transitivePeerDependencies:
@@ -15426,7 +15438,7 @@ snapshots:
       minimatch: 9.0.5
       p-limit: 3.1.0
       resolve-from: 5.0.0
-      semver: 7.7.2
+      semver: 7.7.3
     transitivePeerDependencies:
       - supports-color
 
@@ -15439,7 +15451,7 @@ snapshots:
       parse-png: 2.1.0
       resolve-from: 5.0.0
       resolve-global: 1.0.0
-      semver: 7.7.2
+      semver: 7.7.3
       temp-dir: 2.0.0
       unique-string: 2.0.0
 
@@ -15573,7 +15585,7 @@ snapshots:
       debug: 4.4.3
       expo: 54.0.10(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.8)(graphql@16.11.0)(react-native@0.81.4(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0)
       resolve-from: 5.0.0
-      semver: 7.7.2
+      semver: 7.7.3
       xml2js: 0.6.0
     transitivePeerDependencies:
       - supports-color
@@ -16065,11 +16077,11 @@ snapshots:
   '@mapbox/node-pre-gyp@2.0.0':
     dependencies:
       consola: 3.4.2
-      detect-libc: 2.0.4
+      detect-libc: 2.1.2
       https-proxy-agent: 7.0.6
       node-fetch: 2.7.0
       nopt: 8.1.0
-      semver: 7.7.2
+      semver: 7.7.3
       tar: 7.4.3
     transitivePeerDependencies:
       - encoding
@@ -16239,7 +16251,7 @@ snapshots:
       precinct: 12.2.0
       require-package-name: 2.0.1
       resolve: 2.0.0-next.5
-      semver: 7.7.2
+      semver: 7.7.3
       tmp-promise: 3.0.3
       toml: 3.0.0
       unixify: 1.0.0
@@ -17652,7 +17664,7 @@ snapshots:
       metro: 0.82.5
       metro-config: 0.82.5
       metro-core: 0.82.5
-      semver: 7.7.2
+      semver: 7.7.3
     optionalDependencies:
       '@react-native-community/cli': 20.0.1(typescript@5.9.2)
     transitivePeerDependencies:
@@ -17668,7 +17680,7 @@ snapshots:
       metro: 0.83.1
       metro-config: 0.83.1
       metro-core: 0.83.1
-      semver: 7.7.2
+      semver: 7.7.3
     optionalDependencies:
       '@react-native-community/cli': 20.0.1(typescript@5.9.2)
       '@react-native/metro-config': 0.81.0(@babel/core@7.28.4)
@@ -19152,7 +19164,7 @@ snapshots:
       fast-glob: 3.3.3
       is-glob: 4.0.3
       minimatch: 9.0.5
-      semver: 7.7.2
+      semver: 7.7.3
       ts-api-utils: 2.1.0(typescript@5.9.2)
       typescript: 5.9.2
     transitivePeerDependencies:
@@ -20718,8 +20730,7 @@ snapshots:
 
   detect-libc@2.0.4: {}
 
-  detect-libc@2.1.2:
-    optional: true
+  detect-libc@2.1.2: {}
 
   detect-node-es@1.1.0: {}
 
@@ -20922,7 +20933,7 @@ snapshots:
       '@one-ini/wasm': 0.1.1
       commander: 10.0.1
       minimatch: 9.0.1
-      semver: 7.7.2
+      semver: 7.7.3
 
   ee-first@1.1.1: {}
 
@@ -22825,7 +22836,7 @@ snapshots:
       lodash.isstring: 4.0.1
       lodash.once: 4.1.1
       ms: 2.1.3
-      semver: 7.7.2
+      semver: 7.7.3
 
   jsrsasign@11.1.0: {}
 
@@ -24529,7 +24540,7 @@ snapshots:
       rollup: 4.50.1
       rollup-plugin-visualizer: 6.0.3(rolldown@1.0.0-beta.42)(rollup@4.50.1)
       scule: 1.3.0
-      semver: 7.7.2
+      semver: 7.7.3
       serve-placeholder: 2.0.2
       serve-static: 2.2.0
       source-map: 0.7.6
@@ -24629,7 +24640,7 @@ snapshots:
       rollup: 4.50.1
       rollup-plugin-visualizer: 6.0.3(rolldown@1.0.0-beta.42)(rollup@4.50.1)
       scule: 1.3.0
-      semver: 7.7.2
+      semver: 7.7.3
       serve-placeholder: 2.0.2
       serve-static: 2.2.0
       source-map: 0.7.6
@@ -24678,7 +24689,7 @@ snapshots:
 
   node-abi@3.75.0:
     dependencies:
-      semver: 7.7.2
+      semver: 7.7.3
 
   node-addon-api@7.1.1: {}
 
@@ -24728,7 +24739,7 @@ snapshots:
   normalize-package-data@6.0.2:
     dependencies:
       hosted-git-info: 7.0.2
-      semver: 7.7.2
+      semver: 7.7.3
       validate-npm-package-license: 3.0.4
 
   normalize-path@2.1.1:
@@ -24743,7 +24754,7 @@ snapshots:
     dependencies:
       hosted-git-info: 7.0.2
       proc-log: 4.2.0
-      semver: 7.7.2
+      semver: 7.7.3
       validate-npm-package-name: 5.0.1
 
   npm-run-path@4.0.1:
@@ -25388,7 +25399,7 @@ snapshots:
 
   prebuild-install@7.1.3:
     dependencies:
-      detect-libc: 2.0.4
+      detect-libc: 2.1.2
       expand-template: 2.0.3
       github-from-package: 0.0.0
       minimist: 1.2.8
@@ -26448,8 +26459,7 @@ snapshots:
 
   semver@7.7.2: {}
 
-  semver@7.7.3:
-    optional: true
+  semver@7.7.3: {}
 
   send@0.19.0:
     dependencies:
@@ -26557,8 +26567,8 @@ snapshots:
   sharp@0.33.5:
     dependencies:
       color: 4.2.3
-      detect-libc: 2.0.4
-      semver: 7.7.2
+      detect-libc: 2.1.2
+      semver: 7.7.3
     optionalDependencies:
       '@img/sharp-darwin-arm64': 0.33.5
       '@img/sharp-darwin-x64': 0.33.5
@@ -27200,7 +27210,7 @@ snapshots:
       hookable: 5.5.3
       rolldown: 1.0.0-beta.42
       rolldown-plugin-dts: 0.16.11(rolldown@1.0.0-beta.42)(typescript@5.9.2)
-      semver: 7.7.2
+      semver: 7.7.3
       tinyexec: 1.0.1
       tinyglobby: 0.2.15
       tree-kill: 1.2.2

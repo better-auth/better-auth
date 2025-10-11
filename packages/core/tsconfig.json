@@ -4,7 +4,9 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "lib": ["esnext", "dom", "dom.iterable"],
-    "types": ["node"]
+    "types": ["node"],
+    "module": "node16",
+    "moduleResolution": "node16"
   },
   "include": ["src"]
 }

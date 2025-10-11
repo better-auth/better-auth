@@ -8,4 +8,4 @@ export class BetterAuthError extends Error {
 	}
 }
 
-export { BASE_ERROR_CODES } from "./codes";
+export { BASE_ERROR_CODES } from "./codes.js";

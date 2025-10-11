@@ -8,8 +8,8 @@ export {
 	isDevelopment,
 	type EnvObject,
 	isProduction,
-} from "./env-impl";
-export { getColorDepth } from "./color-depth";
+} from "./env-impl.js";
+export { getColorDepth } from "./color-depth.js";
 export {
 	logger,
 	createLogger,
@@ -20,4 +20,4 @@ export {
 	type InternalLogger,
 	shouldPublishLog,
 	TTY_COLORS,
-} from "./logger";
+} from "./logger.js";
