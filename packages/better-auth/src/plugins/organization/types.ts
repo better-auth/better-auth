@@ -166,9 +166,9 @@ export interface OrganizationOptions {
 		| number
 		| ((
 				data: {
-					user: User;
-					organization: Organization;
-					member: Member;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+					member: Member & Record<string, any>;
 				},
 				ctx: AuthContext,
 		  ) => Promise<number> | number);
