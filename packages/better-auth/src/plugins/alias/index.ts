@@ -1,31 +1,22 @@
 import type { AuthEndpoint } from "../../api";
 import type { Endpoint } from "better-call";
-import type { CamelCase } from "../../client/path-to-object";
 import type { LiteralString } from "../../types/helper";
 import type { BetterAuthPlugin } from "../../types";
-
-type TrimLeadingChar<
-	S extends string,
-	C extends string = "-",
-> = S extends `${C}${infer T}` ? T : S;
-type TransformEndpointKey<
-	K extends string,
-	Prefix extends string,
-> = `${CamelCase<`${TrimLeadingChar<TransformNormalizedPrefix<NormalizePrefix<Prefix>>>}`>}${Capitalize<K>}`;
+import type { NormalizePrefix, TransformEndpointKey } from "./types";
 
 export type InferAliasedPlugin<
 	T extends BetterAuthPlugin,
 	Prefix extends string,
+	O extends AliasOptions,
 	IsClient extends true | false = false,
 > = Omit<T, "endpoints"> & {
 	endpoints: {
-		[K in keyof T["endpoints"] & string as TransformEndpointKey<
-			K,
-			Prefix
-		>]: IsClient extends false
+		[K in keyof T["endpoints"] &
+			string as O["unstable_prefixEndpointMethods"] extends true
+			? TransformEndpointKey<K, Prefix>
+			: K]: IsClient extends false
 			? T["endpoints"][K]
-			: // TODO: Options looses type inference
-				T["endpoints"][K] extends Endpoint<
+			: T["endpoints"][K] extends Endpoint<
 						infer OldPath,
 						infer Options,
 						infer Handler
@@ -38,6 +29,20 @@ export type InferAliasedPlugin<
 					: T
 				: T["endpoints"][K];
 	};
+};
+
+export type AliasOptions = {
+	/**
+	 * Derives a camelCase prefix for endpoint methods.
+	 *
+	 * Example with alias `/v1`:
+	 * - `createUser` -> `v1CreateUser`
+	 * - `listUserSessions` -> `v1ListUserSessions`
+	 * - `revokeUserSession` -> `v1RevokeUserSession`
+	 *
+	 * @default false
+	 */
+	unstable_prefixEndpointMethods?: boolean;
 };
 
 /**
@@ -63,11 +68,11 @@ export type InferAliasedPlugin<
  * // - /api/auth/dodo/checkout
  * ```
  */
-
-export function alias<Prefix extends LiteralString, T extends BetterAuthPlugin>(
-	prefix: Prefix,
-	plugin: T,
-) {
+export function alias<
+	Prefix extends LiteralString,
+	T extends BetterAuthPlugin,
+	O extends AliasOptions,
+>(prefix: Prefix, plugin: T, options?: O) {
 	const normalizedPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
 	const cleanPrefix = normalizedPrefix.endsWith("/")
 		? normalizedPrefix.slice(0, -1)
@@ -81,9 +86,11 @@ export function alias<Prefix extends LiteralString, T extends BetterAuthPlugin>(
 		for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
 			const originalPath = endpoint.path || `/${key}`;
 			const newPath = `${cleanPrefix}${originalPath}`;
-			const newKey = newPath
-				.replace(/\/(.)?/g, (_, c) => (c ? c.toUpperCase() : ""))
-				.replace(/^[A-Z]/, (match) => match.toLowerCase());
+			const newKey = !options?.unstable_prefixEndpointMethods
+				? key
+				: newPath
+						.replace(/\/(.)?/g, (_, c) => (c ? c.toUpperCase() : ""))
+						.replace(/^[A-Z]/, (match) => match.toLowerCase());
 
 			const clonedEndpoint = Object.assign(
 				Object.create(Object.getPrototypeOf(endpoint)),
@@ -141,5 +148,5 @@ export function alias<Prefix extends LiteralString, T extends BetterAuthPlugin>(
 		}));
 	}
 
-	return aliasedPlugin as InferAliasedPlugin<T, Prefix>;
+	return aliasedPlugin as InferAliasedPlugin<T, Prefix, O>;
 }

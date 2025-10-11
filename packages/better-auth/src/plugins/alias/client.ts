@@ -1,6 +1,7 @@
 import type { BetterAuthClientPlugin, BetterAuthPlugin } from "../../types";
 import type { LiteralString } from "../../types/helper";
 import type { InferAliasedPlugin } from ".";
+import type { NormalizePrefix, TransformNormalizedPrefix } from "./types";
 
 type ExtendPathMethods<
 	T extends BetterAuthClientPlugin,
@@ -38,10 +39,13 @@ type ExtendGetActions<
 		}
 	: { getActions: undefined };
 
-type ExtendPaths<T extends BetterAuthClientPlugin, Prefix extends string> = {
+type ExtendEndpoints<
+	T extends BetterAuthClientPlugin,
+	Prefix extends string,
+> = {
 	$InferServerPlugin: T["$InferServerPlugin"] extends infer P extends
 		BetterAuthPlugin
-		? InferAliasedPlugin<P, Prefix, true>
+		? InferAliasedPlugin<P, Prefix, any, true>
 		: never;
 };
 
@@ -52,7 +56,7 @@ export type InferAliasedClientPlugin<
 	id: `${T["id"]}-${TransformNormalizedPrefix<NormalizePrefix<Prefix>>}`;
 } & ExtendPathMethods<T, NormalizePrefix<Prefix>> &
 	ExtendGetActions<T, NormalizePrefix<Prefix>> &
-	ExtendPaths<T, NormalizePrefix<Prefix>>;
+	ExtendEndpoints<T, NormalizePrefix<Prefix>>;
 
 /**
  * Wraps a client plugin and prefixes all its endpoints with a sub-path

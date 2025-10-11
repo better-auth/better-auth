@@ -64,14 +64,11 @@ describe("aliasClient plugin", () => {
 		const plugin = createMockClientPlugin("payment");
 		const aliased = aliasClient("/polar", plugin);
 
-		console.log(aliased.$InferServerPlugin);
 		expect(aliased.$InferServerPlugin).toBeDefined();
 		expect(aliased.$InferServerPlugin!.endpoints).toBeDefined();
-		// @ts-expect-error
 		expect(aliased.$InferServerPlugin!.endpoints!.checkout.path).toBe(
 			"/polar/checkout",
 		);
-		// @ts-expect-error
 		expect(aliased.$InferServerPlugin!.endpoints!.customerPortal.path).toBe(
 			"/polar/customer/portal",
 		);
