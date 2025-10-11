@@ -1,7 +1,13 @@
 import type { BetterAuthClientPlugin, BetterAuthPlugin } from "../../types";
 import type { LiteralString } from "../../types/helper";
 import type { InferAliasedPlugin } from ".";
-import type { NormalizePrefix, TransformNormalizedPrefix } from "./types";
+import type {
+	NormalizePrefix,
+	TransformNormalizedPrefix,
+	TrimLeadingChar,
+} from "./types";
+import type { CamelCase } from "../../client/path-to-object";
+import { getBaseURL } from "../../utils/url";
 
 type ExtendPathMethods<
 	T extends BetterAuthClientPlugin,
@@ -34,7 +40,11 @@ type ExtendGetActions<
 				store: S,
 				options: O,
 			) => {
-				[K in keyof Actions]: Actions[K];
+				[T in P as CamelCase<`${TrimLeadingChar<
+					TransformNormalizedPrefix<NormalizePrefix<P>>
+				>}`>]: {
+					[K in keyof Actions]: Actions[K];
+				};
 			};
 		}
 	: { getActions: undefined };
@@ -45,18 +55,33 @@ type ExtendEndpoints<
 > = {
 	$InferServerPlugin: T["$InferServerPlugin"] extends infer P extends
 		BetterAuthPlugin
-		? InferAliasedPlugin<P, Prefix, any, true>
+		? InferAliasedPlugin<
+				P,
+				Prefix,
+				{
+					// make endpoints distinct
+					unstable_prefixEndpointMethods: true;
+				},
+				true
+			>
 		: never;
 };
 
 export type InferAliasedClientPlugin<
 	Prefix extends LiteralString,
 	T extends BetterAuthClientPlugin,
-> = Omit<T, "id" | "pathMethods" | "$InferServerPlugin"> & {
+> = Omit<T, "id" | "pathMethods" | "getActions" | "$InferServerPlugin"> & {
 	id: `${T["id"]}-${TransformNormalizedPrefix<NormalizePrefix<Prefix>>}`;
 } & ExtendPathMethods<T, NormalizePrefix<Prefix>> &
 	ExtendGetActions<T, NormalizePrefix<Prefix>> &
 	ExtendEndpoints<T, NormalizePrefix<Prefix>>;
+
+export type AliasClientOptions = {
+	/**
+	 * Add alias to endpoints that were not automatically deteceted.
+	 */
+	aliasEndpoints?: string[];
+};
 
 /**
  * Wraps a client plugin and prefixes all its endpoints with a sub-path
@@ -84,12 +109,20 @@ export type InferAliasedClientPlugin<
 export function aliasClient<
 	Prefix extends LiteralString,
 	T extends BetterAuthClientPlugin,
->(prefix: Prefix, plugin: T) {
+>(prefix: Prefix, plugin: T, options?: AliasClientOptions) {
 	const normalizedPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
 	const cleanPrefix = normalizedPrefix.endsWith("/")
 		? normalizedPrefix.slice(0, -1)
 		: normalizedPrefix;
-
+	const camelCasePrefix = cleanPrefix
+		.replace(/[-_/](.)?/g, (_, c) => (c ? c.toUpperCase() : ""))
+		.replace(/^[A-Z]/, (match) => match.toLowerCase());
+	const aliasEndpointPaths = [
+		...new Set([
+			...Object.keys(plugin.pathMethods || {}),
+			...(options?.aliasEndpoints || []),
+		]),
+	];
 	const aliasedPlugin: BetterAuthClientPlugin = {
 		...plugin,
 		id: `${plugin.id}-${cleanPrefix.replace(/\//g, "-")}`,
@@ -121,20 +154,47 @@ export function aliasClient<
 
 	// Wrap getActions to prefix any path-based actions
 	if (plugin.getActions) {
-		aliasedPlugin.getActions = (fetch, store, options) => {
-			const originalActions = plugin.getActions!(fetch, store, options);
-			const prefixedActions: Record<string, any> = {};
+		aliasedPlugin.getActions = ($fetch, store, options) => {
+			const baseURL = getBaseURL(
+				options?.baseURL,
+				options?.basePath,
+				undefined,
+			);
+			const originalActions = plugin.getActions!(
+				((url: string | URL, ...options: any[]) => {
+					return $fetch(
+						resolveURL(
+							{
+								url: url,
+								baseURL,
+							},
+							aliasEndpointPaths,
+							prefix,
+						),
+						...options,
+					);
+				}) as any,
+				store,
+				options,
+			);
+			const prefixedActions: Record<string, any> = {
+				[camelCasePrefix]: {},
+			};
 
 			for (const [key, action] of Object.entries(originalActions)) {
 				if (typeof action === "function") {
-					prefixedActions[key] = action;
+					prefixedActions[camelCasePrefix][key] = action;
 				} else {
-					prefixedActions[key] = action;
+					prefixedActions[camelCasePrefix][key] = action;
 				}
 			}
 
 			return prefixedActions;
 		};
+	}
+
+	// Wrap getAtoms to prefix any path-based actions
+	if (plugin.getAtoms) {
 	}
 
 	// Update fetchPlugins hooks to handle prefixed paths
@@ -201,3 +261,37 @@ export function aliasClient<
 		T
 	> satisfies BetterAuthClientPlugin;
 }
+
+const resolveURL = (
+	context: {
+		url: string | URL;
+		baseURL?: string;
+	},
+	aliasEndpointPaths: string[],
+	prefix?: string,
+) => {
+	const url = new URL(context.url);
+	const base = new URL(context.baseURL || "");
+	if (!url.pathname.startsWith(base.pathname)) {
+		return url.toString();
+	}
+
+	const relativePath = url.pathname.slice(base.pathname.length);
+	const normalizedRelative = relativePath.startsWith("/")
+		? relativePath
+		: `/${relativePath}`;
+	const shouldPrefix = aliasEndpointPaths.some(
+		(path) =>
+			normalizedRelative === path || normalizedRelative.startsWith(`${path}/`),
+	);
+	if (!shouldPrefix) {
+		return url.toString();
+	}
+
+	const fullPath = `${base.pathname.replace(/\/$/, "")}${prefix || ""}${normalizedRelative}`;
+	const finalUrl = new URL(fullPath, url.origin);
+	finalUrl.search = url.search;
+	finalUrl.hash = url.hash;
+
+	return finalUrl.toString();
+};

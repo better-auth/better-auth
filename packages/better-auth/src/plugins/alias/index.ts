@@ -89,7 +89,7 @@ export function alias<
 			const newKey = !options?.unstable_prefixEndpointMethods
 				? key
 				: newPath
-						.replace(/\/(.)?/g, (_, c) => (c ? c.toUpperCase() : ""))
+						.replace(/[-_/](.)?/g, (_, c) => (c ? c.toUpperCase() : ""))
 						.replace(/^[A-Z]/, (match) => match.toLowerCase());
 
 			const clonedEndpoint = Object.assign(

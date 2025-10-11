@@ -17,7 +17,7 @@ export type TransformNormalizedPrefix<T extends string> =
 		? `${Head}-${TransformNormalizedPrefix<Tail>}`
 		: T;
 
-type TrimLeadingChar<
+export type TrimLeadingChar<
 	S extends string,
 	C extends string = "-",
 > = S extends `${C}${infer T}` ? T : S;

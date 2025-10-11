@@ -48,8 +48,8 @@ describe("aliasClient plugin", () => {
 		expect(aliased.getActions).toBeDefined();
 		const actions = aliased.getActions!({} as any, {} as any, undefined);
 
-		expect(actions.customAction()).toBe("action-result");
-		expect(actions.anotherAction("test")).toBe("result-test");
+		expect(actions.dodo.customAction()).toBe("action-result");
+		expect(actions.dodo.anotherAction("test")).toBe("result-test");
 	});
 
 	it("should update fetchPlugins id", () => {
@@ -66,9 +66,11 @@ describe("aliasClient plugin", () => {
 
 		expect(aliased.$InferServerPlugin).toBeDefined();
 		expect(aliased.$InferServerPlugin!.endpoints).toBeDefined();
+		// @ts-expect-error
 		expect(aliased.$InferServerPlugin!.endpoints!.checkout.path).toBe(
 			"/polar/checkout",
 		);
+		// @ts-expect-error
 		expect(aliased.$InferServerPlugin!.endpoints!.customerPortal.path).toBe(
 			"/polar/customer/portal",
 		);
