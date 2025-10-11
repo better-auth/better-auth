@@ -756,6 +756,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						return ctx.json(
 							{
 								session: s,
+								user,
 							},
 							{
 								status: 200,
