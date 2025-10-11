@@ -1,17 +1,17 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import type { InferOptionSchema } from "../../types/plugins";
-import { APIError } from "better-call";
-import { mergeSchema } from "../../db/schema";
-import { generateRandomString } from "../../crypto/random";
-import { getSessionFromCtx } from "../../api";
-import { getDate } from "../../utils/date";
-import { setSessionCookie } from "../../cookies";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import type { User } from "../../types";
-import { ERROR_CODES } from "./phone-number-error";
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { BetterAuthPlugin } from "@better-auth/core";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { APIError } from "better-call";
+import * as z from "zod";
+import { getSessionFromCtx } from "../../api";
+import { setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto/random";
+import { mergeSchema } from "../../db/schema";
+import type { User } from "../../types";
+import type { InferOptionSchema } from "../../types/plugins";
+import { getDate } from "../../utils/date";
+import { ERROR_CODES } from "./phone-number-error";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;

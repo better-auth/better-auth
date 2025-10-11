@@ -1,21 +1,22 @@
-import { safeJSONParse } from "../../utils/json";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import type {
+	CleanedWhere,
+	DBAdapter,
+	DBTransactionAdapter,
+	Where,
+} from "@better-auth/core/db/adapter";
+import { getColorDepth, logger, TTY_COLORS } from "@better-auth/core/env";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type { BetterAuthOptions } from "@better-auth/core";
 import { generateId as defaultGenerateId } from "../../utils";
+import { safeJSONParse } from "../../utils/json";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 } from "./types";
-import type { DBFieldAttribute } from "@better-auth/core/db";
-import { logger, TTY_COLORS, getColorDepth } from "@better-auth/core/env";
-import type {
-	DBAdapter,
-	DBTransactionAdapter,
-	Where,
-	CleanedWhere,
-} from "@better-auth/core/db/adapter";
+
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];

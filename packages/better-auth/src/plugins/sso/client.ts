@@ -1,5 +1,5 @@
-import type { sso } from ".";
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { sso } from ".";
 
 export const ssoClient = () => {
 	return {

@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
+import { betterFetch } from "@better-fetch/fetch";
 
 export interface TwitterProfile {
 	data: {

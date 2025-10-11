@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { magicLink } from ".";
-import { createAuthClient } from "../../client";
 import { magicLinkClient } from "./client";
 import { defaultKeyHasher } from "./utils";
 

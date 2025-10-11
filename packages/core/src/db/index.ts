@@ -1,20 +1,21 @@
+import type { BetterAuthPluginDBSchema } from "./plugin";
 import type {
+	BetterAuthDBSchema,
 	DBFieldAttribute,
 	DBFieldAttributeConfig,
 	DBFieldType,
-	DBPrimitive,
-	BetterAuthDBSchema,
 	DBPreservedModels,
+	DBPrimitive,
 } from "./type";
-import type { BetterAuthPluginDBSchema } from "./plugin";
+
 export type { BetterAuthPluginDBSchema } from "./plugin";
-export type { SecondaryStorage } from "./type";
+export { type Account, accountSchema } from "./schema/account";
+export { type RateLimit, rateLimitSchema } from "./schema/rate-limit";
+export { type Session, sessionSchema } from "./schema/session";
 export { coreSchema } from "./schema/shared";
-export { userSchema, type User } from "./schema/user";
-export { accountSchema, type Account } from "./schema/account";
-export { sessionSchema, type Session } from "./schema/session";
-export { verificationSchema, type Verification } from "./schema/verification";
-export { rateLimitSchema, type RateLimit } from "./schema/rate-limit";
+export { type User, userSchema } from "./schema/user";
+export { type Verification, verificationSchema } from "./schema/verification";
+export type { SecondaryStorage } from "./type";
 
 export type {
 	DBFieldAttribute,

@@ -1,14 +1,14 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { createEmailVerificationToken } from "./email-verification";
-import { setSessionCookie } from "../../cookies";
-import { APIError } from "better-call";
-import type { AdditionalUserFieldsInput, User } from "../../types";
 import type { BetterAuthOptions } from "@better-auth/core";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { isDevelopment } from "@better-auth/core/env";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { APIError } from "better-call";
+import * as z from "zod";
 import { runWithTransaction } from "../../context/transaction";
+import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
+import type { AdditionalUserFieldsInput, User } from "../../types";
+import { createEmailVerificationToken } from "./email-verification";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(

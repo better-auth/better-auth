@@ -1,24 +1,24 @@
-import { getDate } from "../utils/date";
-import { parseSessionOutput, parseUserOutput } from "./schema";
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	GenericEndpointContext,
+	InternalAdapter,
+} from "@better-auth/core";
+import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import type { InternalLogger } from "@better-auth/core/env";
+import { getCurrentAdapter, runWithTransaction } from "../context/transaction";
 import {
 	type Account,
 	type Session,
 	type User,
 	type Verification,
 } from "../types";
-import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
-import { getWithHooks } from "./with-hooks";
+import { generateId } from "../utils";
+import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
-import { generateId } from "../utils";
-import { getCurrentAdapter, runWithTransaction } from "../context/transaction";
-import type { InternalLogger } from "@better-auth/core/env";
-import type {
-	AuthContext,
-	GenericEndpointContext,
-	InternalAdapter,
-} from "@better-auth/core";
+import { parseSessionOutput, parseUserOutput } from "./schema";
+import { getWithHooks } from "./with-hooks";
 
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,

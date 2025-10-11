@@ -1,12 +1,12 @@
+import { getOAuth2Tokens } from "@better-auth/core/oauth2";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { describe, expect, it, vi } from "vitest";
+import { parseCookies, parseSetCookieHeader } from "../../cookies";
+import { signJWT } from "../../crypto/jwt";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { DEFAULT_SECRET } from "../../utils/constants";
 import { lastLoginMethod } from ".";
 import { lastLoginMethodClient } from "./client";
-import { parseCookies, parseSetCookieHeader } from "../../cookies";
-import { DEFAULT_SECRET } from "../../utils/constants";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { getOAuth2Tokens } from "@better-auth/core/oauth2";
-import { signJWT } from "../../crypto/jwt";
 
 // Mock OAuth2 functions to return valid tokens for testing
 vi.mock("@better-auth/core/oauth2", async (importOriginal) => {

@@ -1,3 +1,4 @@
+import { PageTree } from "fumadocs-core/server";
 import {
 	Binoculars,
 	Book,
@@ -14,12 +15,11 @@ import {
 	ScanFace,
 	ShieldCheck,
 	UserCircle,
-	Users2,
 	UserSquare2,
+	Users2,
 } from "lucide-react";
 import { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
-import { PageTree } from "fumadocs-core/server";
 
 interface Content {
 	title: string;

@@ -4,11 +4,10 @@ import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import Stripe from "stripe";
-import { vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { stripe } from ".";
 import { stripeClient } from "./client";
 import type { StripeOptions, Subscription } from "./types";
-import { expect, describe, it, beforeEach } from "vitest";
 
 describe("stripe", async () => {
 	const mockStripe = {

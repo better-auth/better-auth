@@ -1,12 +1,12 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
+import { generateRandomString } from "../../crypto";
 import type {
 	AuthorizationQuery,
 	Client,
 	OIDCOptions,
 } from "../oidc-provider/types";
-import { generateRandomString } from "../../crypto";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 function redirectErrorURL(url: string, error: string, description: string) {
 	return `${

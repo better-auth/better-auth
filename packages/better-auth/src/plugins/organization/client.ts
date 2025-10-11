@@ -1,4 +1,7 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import { atom } from "nanostores";
+import { useAuthQuery } from "../../client";
 import type {
 	InferInvitation,
 	InferMember,
@@ -7,23 +10,20 @@ import type {
 	Organization,
 	Team,
 } from "../../plugins/organization/schema";
+import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 import type { Prettify } from "../../types/helper";
 import { type AccessControl, type Role } from "../access";
-import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { organization } from "./organization";
-import { useAuthQuery } from "../../client";
 import {
-	defaultStatements,
 	adminAc,
+	defaultRoles,
+	defaultStatements,
 	memberAc,
 	ownerAc,
-	defaultRoles,
 } from "./access";
-import type { DBFieldAttribute } from "@better-auth/core/db";
-import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
-import type { OrganizationOptions } from "./types";
+import { organization } from "./organization";
 import type { HasPermissionBaseInput } from "./permission";
 import { hasPermissionFn } from "./permission";
+import type { OrganizationOptions } from "./types";
 
 /**
  * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.

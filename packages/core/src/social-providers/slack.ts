@@ -1,9 +1,9 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
 import {
-	validateAuthorizationCode,
 	refreshAccessToken,
+	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
+import { betterFetch } from "@better-fetch/fetch";
 
 export interface SlackProfile extends Record<string, any> {
 	ok: boolean;

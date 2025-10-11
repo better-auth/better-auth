@@ -1,11 +1,10 @@
-import type { User } from "../../types";
 import type { AuthEndpoint } from "@better-auth/core/middleware";
+import type { InferOptionSchema, User } from "../../types";
 import type { LiteralString } from "../../types/helper";
 import type { BackupCodeOptions } from "./backup-codes";
 import type { OTPOptions } from "./otp";
-import type { TOTPOptions } from "./totp";
-import type { InferOptionSchema } from "../../types";
 import type { schema } from "./schema";
+import type { TOTPOptions } from "./totp";
 
 export interface TwoFactorOptions {
 	/**

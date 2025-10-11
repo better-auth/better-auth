@@ -1,14 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { admin } from "./admin";
-import { type UserWithRole } from "./types";
-import { adminClient } from "./client";
-import { createAccessControl } from "../access";
-import { createAuthClient } from "../../client";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { signJWT } from "../../crypto";
-import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "@better-auth/core/oauth2";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { describe, expect, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
+import { signJWT } from "../../crypto";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { DEFAULT_SECRET } from "../../utils/constants";
+import { createAccessControl } from "../access";
+import { admin } from "./admin";
+import { adminClient } from "./client";
+import { type UserWithRole } from "./types";
 
 vi.mock("@better-auth/core/oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;

@@ -1,14 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { APIError } from "better-call";
-import { getEndpoints, router } from "./api";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/middleware";
-import { init } from "./init";
-import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import { APIError } from "better-call";
+import { describe, expect, it } from "vitest";
 import * as z from "zod";
+import { getEndpoints, router } from "./api";
 import { createAuthClient } from "./client";
+import { init } from "./init";
 import { bearer } from "./plugins";
 
 describe("call", async () => {

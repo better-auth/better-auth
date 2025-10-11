@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { parseSetCookieHeader } from "../cookies";
 import { createAuthMiddleware } from "@better-auth/core/middleware";
+import { parseSetCookieHeader } from "../cookies";
 
 export const reactStartCookies = () => {
 	return {

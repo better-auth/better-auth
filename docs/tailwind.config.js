@@ -1,6 +1,6 @@
+import svgToDataUri from "mini-svg-data-uri";
 import defaultTheme from "tailwindcss/defaultTheme";
 import flattenColorPalette from "tailwindcss/lib/util/flattenColorPalette";
-import svgToDataUri from "mini-svg-data-uri";
 
 /** @type {import('tailwindcss').Config} */
 export default {

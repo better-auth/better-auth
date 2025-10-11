@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { type MemoryDB, memoryAdapter } from "../../adapters/memory-adapter";
 import { parseSetCookieHeader } from "../../cookies";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { getDate } from "../../utils/date";
-import { memoryAdapter, type MemoryDB } from "../../adapters/memory-adapter";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =

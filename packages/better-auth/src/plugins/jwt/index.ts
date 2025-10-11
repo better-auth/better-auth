@@ -1,20 +1,21 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { schema } from "./schema";
-import { getJwksAdapter } from "./adapter";
-import { getJwtToken, signJWT } from "./sign";
-import type { JSONWebKeySet, JWTPayload } from "jose";
-import { APIError, sessionMiddleware } from "../../api";
+import { BetterAuthError } from "@better-auth/core/error";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/middleware";
-import { mergeSchema } from "../../db/schema";
+import type { JSONWebKeySet, JWTPayload } from "jose";
 import * as z from "zod";
-import { BetterAuthError } from "@better-auth/core/error";
+import { APIError, sessionMiddleware } from "../../api";
+import { mergeSchema } from "../../db/schema";
+import { getJwksAdapter } from "./adapter";
+import { schema } from "./schema";
+import { getJwtToken, signJWT } from "./sign";
 import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
+
 export type * from "./types";
-export { generateExportedKeyPair, createJwk } from "./utils";
+export { createJwk, generateExportedKeyPair } from "./utils";
 
 export const jwt = (options?: JwtOptions) => {
 	// Remote url must be set when using signing function

@@ -1,20 +1,20 @@
-import {
-	createAdapterFactory,
-	type AdapterFactoryCustomizeAdapterCreator,
-	type AdapterFactoryOptions,
-} from "../adapter-factory";
 import type { BetterAuthOptions } from "@better-auth/core";
-import type { KyselyDatabaseType } from "./types";
+import type {
+	DBAdapter,
+	DBAdapterDebugLogOption,
+	Where,
+} from "@better-auth/core/db/adapter";
 import {
 	type InsertQueryBuilder,
 	type Kysely,
 	type UpdateQueryBuilder,
 } from "kysely";
-import type {
-	DBAdapterDebugLogOption,
-	DBAdapter,
-	Where,
-} from "@better-auth/core/db/adapter";
+import {
+	type AdapterFactoryCustomizeAdapterCreator,
+	type AdapterFactoryOptions,
+	createAdapterFactory,
+} from "../adapter-factory";
+import type { KyselyDatabaseType } from "./types";
 
 interface KyselyAdapterConfig {
 	/**

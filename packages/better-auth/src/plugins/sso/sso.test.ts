@@ -1,10 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { sso } from ".";
-import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
-import { organization } from "../organization";
+import { OAuth2Server } from "oauth2-mock-server";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { organization } from "../organization";
+import { sso } from ".";
 import { ssoClient } from "./client";
 
 let server = new OAuth2Server();

@@ -1,3 +1,4 @@
+import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	Account,
 	BetterAuthDBSchema,
@@ -6,13 +7,12 @@ import type {
 	User,
 	Verification,
 } from "../db";
-import type { OAuthProvider } from "../oauth2";
-import { createLogger } from "../env";
 import type { DBAdapter, Where } from "../db/adapter";
-import type { BetterAuthCookies } from "./cookie";
 import type { DBPreservedModels } from "../db/type";
+import { createLogger } from "../env";
+import type { OAuthProvider } from "../oauth2";
+import type { BetterAuthCookies } from "./cookie";
 import type { LiteralUnion } from "./helper";
-import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,

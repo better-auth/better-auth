@@ -1,3 +1,10 @@
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	DBAdapter,
+	DBAdapterDebugLogOption,
+	Where,
+} from "@better-auth/core/db/adapter";
+import { BetterAuthError } from "@better-auth/core/error";
 import {
 	and,
 	asc,
@@ -7,27 +14,20 @@ import {
 	gt,
 	gte,
 	inArray,
-	notInArray,
 	like,
 	lt,
 	lte,
 	ne,
+	notInArray,
 	or,
-	sql,
 	SQL,
+	sql,
 } from "drizzle-orm";
-import { BetterAuthError } from "@better-auth/core/error";
-import type { BetterAuthOptions } from "@better-auth/core";
 import {
-	createAdapterFactory,
-	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
+	type AdapterFactoryOptions,
+	createAdapterFactory,
 } from "../adapter-factory";
-import type {
-	DBAdapterDebugLogOption,
-	DBAdapter,
-	Where,
-} from "@better-auth/core/db/adapter";
 
 export interface DB {
 	[key: string]: any;

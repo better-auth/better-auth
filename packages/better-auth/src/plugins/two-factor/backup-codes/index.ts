@@ -1,17 +1,17 @@
-import { generateRandomString } from "../../../crypto/random";
-import * as z from "zod";
 import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { APIError } from "better-call";
+import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
+import { generateRandomString } from "../../../crypto/random";
+import { safeJSONParse } from "../../../utils/json";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { APIError } from "better-call";
-import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { verifyTwoFactor } from "../verify-two-factor";
-import { safeJSONParse } from "../../../utils/json";
 
 export interface BackupCodeOptions {
 	/**

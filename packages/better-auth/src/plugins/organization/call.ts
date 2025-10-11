@@ -1,10 +1,10 @@
-import type { Session, User } from "../../types";
+import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/middleware";
 import { sessionMiddleware } from "../../api";
+import type { Session, User } from "../../types";
 import type { Role } from "../access";
-import type { OrganizationOptions } from "./types";
 import type { defaultRoles } from "./access/statement";
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { OrganizationOptions } from "./types";
 
 export const orgMiddleware = createAuthMiddleware(async () => {
 	return {} as {

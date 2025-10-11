@@ -1,12 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
-import { anonymous } from ".";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { createAuthClient } from "../../client";
-import { anonymousClient } from "./client";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "@better-auth/core/oauth2";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { describe, expect, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
 import { signJWT } from "../../crypto/jwt";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { DEFAULT_SECRET } from "../../utils/constants";
+import { anonymous } from ".";
+import { anonymousClient } from "./client";
 
 vi.mock("@better-auth/core/oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;

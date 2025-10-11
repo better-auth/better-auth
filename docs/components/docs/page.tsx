@@ -1,33 +1,33 @@
 import type { TableOfContents } from "fumadocs-core/server";
+import { AnchorProvider, type AnchorProviderProps } from "fumadocs-core/toc";
+import { I18nLabel } from "fumadocs-ui/provider";
+import { Edit, Text } from "lucide-react";
 import {
 	type AnchorHTMLAttributes,
 	forwardRef,
 	type HTMLAttributes,
 	type ReactNode,
 } from "react";
-import { type AnchorProviderProps, AnchorProvider } from "fumadocs-core/toc";
-import { replaceOrDefault } from "./shared";
 import { cn } from "../../lib/utils";
 import {
+	TOCItems,
+	type TOCProps,
+	TOCScrollArea,
+	Toc,
+	TocPopoverContent,
+	TocPopoverTrigger,
+} from "./layout/toc";
+import {
+	type BreadcrumbProps,
 	Footer,
 	type FooterProps,
 	LastUpdate,
-	TocPopoverHeader,
-	type BreadcrumbProps,
-	PageBody,
 	PageArticle,
+	PageBody,
+	TocPopoverHeader,
 } from "./page.client";
-import {
-	Toc,
-	TOCItems,
-	TocPopoverTrigger,
-	TocPopoverContent,
-	type TOCProps,
-	TOCScrollArea,
-} from "./layout/toc";
+import { replaceOrDefault } from "./shared";
 import { buttonVariants } from "./ui/button";
-import { Edit, Text } from "lucide-react";
-import { I18nLabel } from "fumadocs-ui/provider";
 
 type TableOfContentOptions = Omit<TOCProps, "items" | "children"> &
 	Pick<AnchorProviderProps, "single"> & {
