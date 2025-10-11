@@ -1,72 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { alias } from "./index";
-import { z } from "zod/v4";
-import type { BetterAuthPlugin } from "../../types";
-import { createAuthEndpoint } from "../../api";
+import { alias } from "../index";
+import type { BetterAuthPlugin } from "../../../types";
+import { createAuthEndpoint } from "../../../api";
+import { createMockPlugin } from "./mock-plugin";
 
 describe("alias plugin", () => {
-	// Create a mock plugin with endpoints
-	const createMockPlugin = (id: string): BetterAuthPlugin => ({
-		id,
-		endpoints: {
-			checkout: createAuthEndpoint(
-				"/checkout",
-				{
-					method: "POST",
-					body: z.object({
-						amount: z.number(),
-					}),
-				},
-				async (ctx) => {
-					return ctx.json({ success: true });
-				},
-			),
-			customerPortal: createAuthEndpoint(
-				"/customer/portal",
-				{
-					method: "GET",
-				},
-				async (ctx) => {
-					return ctx.json({ portal: "url" });
-				},
-			),
-		},
-		middlewares: [
-			{
-				path: "/checkout",
-				middleware: async (ctx: any) => ctx,
-			},
-		],
-		rateLimit: [
-			{
-				window: 60,
-				max: 10,
-				pathMatcher: (path) => path === "/checkout",
-			},
-		],
-		hooks: {
-			before: [
-				{
-					matcher: (ctx) => ctx.path === "/checkout",
-					handler: async () => ({}),
-				},
-			],
-			after: [
-				{
-					matcher: (ctx) => ctx.path === "/customer/portal",
-					handler: async () => ({}),
-				},
-			],
-		},
-	});
-
-	it("should prefix endpoint paths", () => {
+	it("should prefix endpoint paths and keys", () => {
 		const plugin = createMockPlugin("polar");
 		const aliasedPlugin = alias("/polar", plugin);
 
 		// Check that endpoints are prefixed
-		expect(aliasedPlugin.endpoints?.checkout?.path).toBe("/polar/checkout");
-		expect(aliasedPlugin.endpoints?.customerPortal?.path).toBe(
+		expect(aliasedPlugin.endpoints?.polarCheckout?.path).toBe(
+			"/polar/checkout",
+		);
+		expect(aliasedPlugin.endpoints?.polarCustomerPortal?.path).toBe(
 			"/polar/customer/portal",
 		);
 	});
@@ -122,15 +69,15 @@ describe("alias plugin", () => {
 
 		// Test without leading slash
 		const aliased1 = alias("prefix", plugin);
-		expect(aliased1.endpoints?.checkout?.path).toBe("/prefix/checkout");
+		expect(aliased1.endpoints?.prefixCheckout?.path).toBe("/prefix/checkout");
 
 		// Test with trailing slash
 		const aliased2 = alias("/prefix/", plugin);
-		expect(aliased2.endpoints?.checkout?.path).toBe("/prefix/checkout");
+		expect(aliased2.endpoints?.prefixCheckout?.path).toBe("/prefix/checkout");
 
 		// Test with both
 		const aliased3 = alias("prefix/", plugin);
-		expect(aliased3.endpoints?.checkout?.path).toBe("/prefix/checkout");
+		expect(aliased3.endpoints?.prefixCheckout?.path).toBe("/prefix/checkout");
 	});
 
 	it("should allow multiple plugins with same endpoints when aliased", () => {
@@ -141,8 +88,8 @@ describe("alias plugin", () => {
 		const aliasedDodo = alias("/dodo", dodoPlugin);
 
 		// Both plugins now have different paths
-		expect(aliasedPolar.endpoints?.checkout?.path).toBe("/polar/checkout");
-		expect(aliasedDodo.endpoints?.checkout?.path).toBe("/dodo/checkout");
+		expect(aliasedPolar.endpoints?.polarCheckout?.path).toBe("/polar/checkout");
+		expect(aliasedDodo.endpoints?.dodoCheckout?.path).toBe("/dodo/checkout");
 
 		// And different IDs
 		expect(aliasedPolar.id).not.toBe(aliasedDodo.id);
@@ -160,7 +107,8 @@ describe("alias plugin", () => {
 
 		const aliasedPlugin = alias("/mini", minimalPlugin);
 
-		expect(aliasedPlugin.endpoints?.test?.path).toBe("/mini/test");
+		// @ts-expect-error
+		expect(aliasedPlugin.endpoints?.miniTest?.path).toBe("/mini/test");
 		expect(aliasedPlugin.middlewares).toBeUndefined();
 		expect(aliasedPlugin.rateLimit).toBeUndefined();
 		expect(aliasedPlugin.hooks).toBeUndefined();

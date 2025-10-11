@@ -1,5 +1,6 @@
-import type { Endpoint } from "better-call";
 import type { BetterAuthClientPlugin, BetterAuthPlugin } from "../../types";
+import type { LiteralString } from "../../types/helper";
+import type { InferAliasedPlugin } from ".";
 
 type ExtendPathMethods<
 	T extends BetterAuthClientPlugin,
@@ -37,34 +38,21 @@ type ExtendGetActions<
 		}
 	: { getActions: undefined };
 
-type NormalizePrefix<S extends string> = S extends ""
-	? ""
-	: S extends "/"
-		? ""
-		: S extends `/${infer Rest}`
-			? Rest extends `${infer Inner}/`
-				? `/${Inner}`
-				: `/${Rest}`
-			: S extends `${infer Inner}/`
-				? `/${Inner}`
-				: `/${S}`;
-
 type ExtendPaths<T extends BetterAuthClientPlugin, Prefix extends string> = {
-	$InferServerPlugin: T["$InferServerPlugin"] extends infer SP extends
+	$InferServerPlugin: T["$InferServerPlugin"] extends infer P extends
 		BetterAuthPlugin
-		? Omit<SP, "endpoints"> & {
-				endpoints: {
-					[K in keyof SP["endpoints"] &
-						string]: SP["endpoints"][K] extends Endpoint<
-						infer OldPath,
-						infer Options
-					>
-						? Endpoint<`${Prefix}${OldPath}`, Options>
-						: never;
-				};
-			}
+		? InferAliasedPlugin<P, Prefix, true>
 		: never;
 };
+
+export type InferAliasedClientPlugin<
+	Prefix extends LiteralString,
+	T extends BetterAuthClientPlugin,
+> = Omit<T, "id" | "pathMethods" | "$InferServerPlugin"> & {
+	id: `${T["id"]}-${TransformNormalizedPrefix<NormalizePrefix<Prefix>>}`;
+} & ExtendPathMethods<T, NormalizePrefix<Prefix>> &
+	ExtendGetActions<T, NormalizePrefix<Prefix>> &
+	ExtendPaths<T, NormalizePrefix<Prefix>>;
 
 /**
  * Wraps a client plugin and prefixes all its endpoints with a sub-path
@@ -90,15 +78,9 @@ type ExtendPaths<T extends BetterAuthClientPlugin, Prefix extends string> = {
  * ```
  */
 export function aliasClient<
-	Prefix extends string,
+	Prefix extends LiteralString,
 	T extends BetterAuthClientPlugin,
->(
-	prefix: Prefix,
-	plugin: T,
-): Omit<T, "pathMethods" | "$InferServerPlugin"> &
-	ExtendPathMethods<T, NormalizePrefix<Prefix>> &
-	ExtendGetActions<T, NormalizePrefix<Prefix>> &
-	ExtendPaths<T, NormalizePrefix<Prefix>> {
+>(prefix: Prefix, plugin: T) {
 	const normalizedPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
 	const cleanPrefix = normalizedPrefix.endsWith("/")
 		? normalizedPrefix.slice(0, -1)
@@ -210,5 +192,8 @@ export function aliasClient<
 		aliasedPlugin.$InferServerPlugin = wrappedServerPlugin;
 	}
 
-	return aliasedPlugin as any;
+	return aliasedPlugin as InferAliasedClientPlugin<
+		Prefix,
+		T
+	> satisfies BetterAuthClientPlugin;
 }

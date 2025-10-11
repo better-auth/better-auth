@@ -1,5 +1,44 @@
-import type { BetterAuthPlugin } from "packages/core/dist";
 import type { AuthEndpoint } from "../../api";
+import type { Endpoint } from "better-call";
+import type { CamelCase } from "../../client/path-to-object";
+import type { LiteralString } from "../../types/helper";
+import type { BetterAuthPlugin } from "../../types";
+
+type TrimLeadingChar<
+	S extends string,
+	C extends string = "-",
+> = S extends `${C}${infer T}` ? T : S;
+type TransformEndpointKey<
+	K extends string,
+	Prefix extends string,
+> = `${CamelCase<`${TrimLeadingChar<TransformNormalizedPrefix<NormalizePrefix<Prefix>>>}`>}${Capitalize<K>}`;
+
+export type InferAliasedPlugin<
+	T extends BetterAuthPlugin,
+	Prefix extends string,
+	IsClient extends true | false = false,
+> = Omit<T, "endpoints"> & {
+	endpoints: {
+		[K in keyof T["endpoints"] & string as TransformEndpointKey<
+			K,
+			Prefix
+		>]: IsClient extends false
+			? T["endpoints"][K]
+			: // TODO: Options looses type inference
+				T["endpoints"][K] extends Endpoint<
+						infer OldPath,
+						infer Options,
+						infer Handler
+					>
+				? Handler extends (...args: infer Args) => infer Return
+					? ((...args: Args) => Return) & {
+							options: Options;
+							path: `${NormalizePrefix<Prefix>}${OldPath}`;
+						}
+					: T
+				: T["endpoints"][K];
+	};
+};
 
 /**
  * Wraps a plugin and prefixes all its endpoints with a sub-path
@@ -24,10 +63,11 @@ import type { AuthEndpoint } from "../../api";
  * // - /api/auth/dodo/checkout
  * ```
  */
-export function alias<T extends BetterAuthPlugin>(
-	prefix: string,
+
+export function alias<Prefix extends LiteralString, T extends BetterAuthPlugin>(
+	prefix: Prefix,
 	plugin: T,
-): T {
+) {
 	const normalizedPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
 	const cleanPrefix = normalizedPrefix.endsWith("/")
 		? normalizedPrefix.slice(0, -1)
@@ -41,6 +81,9 @@ export function alias<T extends BetterAuthPlugin>(
 		for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
 			const originalPath = endpoint.path || `/${key}`;
 			const newPath = `${cleanPrefix}${originalPath}`;
+			const newKey = newPath
+				.replace(/\/(.)?/g, (_, c) => (c ? c.toUpperCase() : ""))
+				.replace(/^[A-Z]/, (match) => match.toLowerCase());
 
 			const clonedEndpoint = Object.assign(
 				Object.create(Object.getPrototypeOf(endpoint)),
@@ -48,7 +91,8 @@ export function alias<T extends BetterAuthPlugin>(
 			);
 			clonedEndpoint.path = newPath;
 
-			prefixedEndpoints[key] = clonedEndpoint;
+			prefixedEndpoints[newKey] = clonedEndpoint;
+			prefixedEndpoints.originalKey = key;
 		}
 
 		aliasedPlugin.endpoints = prefixedEndpoints;
@@ -97,5 +141,5 @@ export function alias<T extends BetterAuthPlugin>(
 		}));
 	}
 
-	return aliasedPlugin as T;
+	return aliasedPlugin as InferAliasedPlugin<T, Prefix>;
 }

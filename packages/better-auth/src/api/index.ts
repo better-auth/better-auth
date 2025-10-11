@@ -46,6 +46,10 @@ import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 import type { AuthContext } from "@better-auth/core";
 
+function isEndpoint(endpoint: unknown): endpoint is Endpoint {
+	return !!endpoint && typeof endpoint === "object" && "path" in endpoint;
+}
+
 export function checkEndpointConflicts(
 	options: BetterAuthOptions,
 	logger: InternalLogger,
@@ -58,7 +62,7 @@ export function checkEndpointConflicts(
 	options.plugins?.forEach((plugin) => {
 		if (plugin.endpoints) {
 			for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
-				if (endpoint && "path" in endpoint) {
+				if (isEndpoint(endpoint)) {
 					const path = endpoint.path;
 					let methods: string[] = [];
 					if (endpoint.options && "method" in endpoint.options) {

@@ -30,6 +30,10 @@ overrides:
 importers:
 
   .:
+    dependencies:
+      better-call:
+        specifier: link:C:/Users/joell/AppData/Local/pnpm/global/5/node_modules/better-call
+        version: link:C:/Users/joell/AppData/Local/pnpm/global/5/node_modules/better-call
     devDependencies:
       '@biomejs/biome':
         specifier: 2.2.4

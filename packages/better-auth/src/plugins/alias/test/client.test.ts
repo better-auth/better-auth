@@ -1,64 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { BetterAuthClientPlugin } from "../../client/types";
-import { aliasClient } from "./client";
-import { createEndpoint } from "better-call";
+import type { BetterAuthClientPlugin } from "../../../client/types";
+import { aliasClient } from "../client";
+import { createMockClientPlugin } from "./mock-plugin";
 
 describe("aliasClient plugin", () => {
-	const endpoint = createEndpoint.create();
-	const createMockClientPlugin = (id: string) =>
-		({
-			id,
-			pathMethods: {
-				"/checkout": "POST",
-				"/customer/portal": "GET",
-				"/subscription/cancel": "POST",
-			},
-			atomListeners: [
-				{
-					matcher: (path) => path.startsWith("/checkout"),
-					signal: "$sessionSignal",
-				},
-				{
-					matcher: (path) => path === "/customer/portal",
-					signal: "customSignal",
-				},
-			],
-			fetchPlugins: [
-				{
-					id: `${id}-fetch`,
-					name: `${id}-fetch`,
-					hooks: {
-						onRequest: async (context) => {
-							return context;
-						},
-					},
-				},
-			],
-			getActions: (fetch, store, options) => ({
-				customAction: () => "action-result",
-				anotherAction: (param: string) => `result-${param}`,
-			}),
-			$InferServerPlugin: {
-				id: `${id}-server`,
-				endpoints: {
-					checkout: endpoint(
-						"/checkout",
-						{
-							method: "POST",
-						},
-						(ctx) => ctx.json({}),
-					),
-					customerPortal: endpoint(
-						"/customer/portal",
-						{
-							method: "GET",
-						},
-						(ctx) => ctx.json({}),
-					),
-				},
-			},
-		}) satisfies BetterAuthClientPlugin;
-
 	it("should prefix pathMethods", () => {
 		const plugin = createMockClientPlugin("payment");
 		const aliased = aliasClient("/polar", plugin);
@@ -119,11 +64,14 @@ describe("aliasClient plugin", () => {
 		const plugin = createMockClientPlugin("payment");
 		const aliased = aliasClient("/polar", plugin);
 
+		console.log(aliased.$InferServerPlugin);
 		expect(aliased.$InferServerPlugin).toBeDefined();
 		expect(aliased.$InferServerPlugin!.endpoints).toBeDefined();
+		// @ts-expect-error
 		expect(aliased.$InferServerPlugin!.endpoints!.checkout.path).toBe(
 			"/polar/checkout",
 		);
+		// @ts-expect-error
 		expect(aliased.$InferServerPlugin!.endpoints!.customerPortal.path).toBe(
 			"/polar/customer/portal",
 		);
