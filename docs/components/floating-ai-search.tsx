@@ -319,6 +319,18 @@ function Message({
 		}
 	}
 
+	// Fix incomplete code blocks for better rendering during streaming
+	const codeBlockCount = (markdown.match(/```/g) || []).length;
+	if (codeBlockCount % 2 !== 0) {
+		// Odd number of ``` means there's an unclosed code block
+		markdown += "\n```";
+	}
+
+	// Ensure proper spacing around code blocks
+	markdown = markdown
+		.replace(/```(\w+)?\n/g, "\n```$1\n")
+		.replace(/\n```\n/g, "\n```\n\n");
+
 	return (
 		<div {...props}>
 			<p
