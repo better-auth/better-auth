@@ -35,8 +35,5 @@
     "zod": "^4.1.5",
     "miniflare>zod": "^3.25.1",
     "vinxi>zod": "^3.24.3"
-  },
-  "dependencies": {
-    "better-call": "link:C:/Users/joell/AppData/Local/pnpm/global/5/node_modules/better-call"
   }
 }

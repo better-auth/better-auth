@@ -30,10 +30,6 @@ overrides:
 importers:
 
   .:
-    dependencies:
-      better-call:
-        specifier: link:C:/Users/joell/AppData/Local/pnpm/global/5/node_modules/better-call
-        version: link:C:/Users/joell/AppData/Local/pnpm/global/5/node_modules/better-call
     devDependencies:
       '@biomejs/biome':
         specifier: 2.2.4
@@ -18788,7 +18784,7 @@ snapshots:
       '@babel/generator': 7.28.3
       '@babel/parser': 7.28.4
       '@babel/preset-typescript': 7.27.1(@babel/core@7.28.4)
-      ansis: 4.1.0
+      ansis: 4.2.0
       diff: 8.0.2
     transitivePeerDependencies:
       - supports-color
