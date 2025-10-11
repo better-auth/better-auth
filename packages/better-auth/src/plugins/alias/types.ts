@@ -21,7 +21,12 @@ export type TrimLeadingChar<
 	S extends string,
 	C extends string = "-",
 > = S extends `${C}${infer T}` ? T : S;
+
+export type CamelCasePrefix<Prefix extends string> = CamelCase<
+	TrimLeadingChar<TransformNormalizedPrefix<NormalizePrefix<Prefix>>>
+>;
+
 export type TransformEndpointKey<
 	K extends string,
 	Prefix extends string,
-> = `${CamelCase<`${TrimLeadingChar<TransformNormalizedPrefix<NormalizePrefix<Prefix>>>}`>}${Capitalize<K>}`;
+> = `${CamelCasePrefix<Prefix>}${Capitalize<K>}`;

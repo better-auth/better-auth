@@ -7,6 +7,7 @@ import type {
 	TransformEndpointKey,
 	TrimLeadingChar,
 } from "./types";
+import { SPECIAL_ENDPOINTS, toCamelCase } from "./utils";
 
 export type InferAliasedPlugin<
 	T extends BetterAuthPlugin,
@@ -51,8 +52,6 @@ export type AliasOptions = {
 	unstable_prefixEndpointMethods?: boolean;
 };
 
-const SPECIAL_ENDPOINTS = ["/sign-in/", "/sign-up/"] as const;
-
 /**
  * Wraps a plugin and prefixes all its endpoints with a sub-path
  * to avoid conflicts between plugins with similar endpoint paths.
@@ -96,9 +95,7 @@ export function alias<
 			const newPath = resolveNewPath(originalPath, cleanPrefix);
 			const newKey = !options?.unstable_prefixEndpointMethods
 				? key
-				: newPath
-						.replace(/[-_/](.)?/g, (_, c) => (c ? c.toUpperCase() : ""))
-						.replace(/^[A-Z]/, (match) => match.toLowerCase());
+				: toCamelCase(newPath);
 
 			const clonedEndpoint = Object.assign(
 				Object.create(Object.getPrototypeOf(endpoint)),

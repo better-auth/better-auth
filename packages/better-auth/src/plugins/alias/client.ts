@@ -2,12 +2,12 @@ import type { BetterAuthClientPlugin, BetterAuthPlugin } from "../../types";
 import type { LiteralString } from "../../types/helper";
 import type { InferAliasedPlugin } from ".";
 import type {
+	CamelCasePrefix,
 	NormalizePrefix,
 	TransformNormalizedPrefix,
-	TrimLeadingChar,
 } from "./types";
-import type { CamelCase } from "../../client/path-to-object";
 import { getBaseURL } from "../../utils/url";
+import { SPECIAL_ENDPOINTS, toCamelCase } from "./utils";
 
 type ExtendPathMethods<
 	T extends BetterAuthClientPlugin,
@@ -40,9 +40,7 @@ type ExtendGetActions<
 				store: S,
 				options: O,
 			) => {
-				[T in P as CamelCase<`${TrimLeadingChar<
-					TransformNormalizedPrefix<NormalizePrefix<P>>
-				>}`>]: {
+				[T in P as CamelCasePrefix<P>]: {
 					[K in keyof Actions & string as K extends
 						| "$Infer"
 						| "signIn"
@@ -54,24 +52,16 @@ type ExtendGetActions<
 				[T in keyof Actions & string as T extends "signIn" | "signUp"
 					? T
 					: never]: {
-					[K in keyof Actions[T] & string as `${K}${Capitalize<
-						CamelCase<
-							TrimLeadingChar<TransformNormalizedPrefix<NormalizePrefix<P>>>
-						>
-					>}`]: Actions[T][K];
+					[K in keyof Actions[T] &
+						string as `${K}${Capitalize<CamelCasePrefix<P>>}`]: Actions[T][K];
 				};
 			} & (Actions extends {
 					$Infer: infer I extends Record<string, any>;
 				}
 					? {
 							$Infer: {
-								[K in keyof I & string as `${Capitalize<
-									CamelCase<
-										TrimLeadingChar<
-											TransformNormalizedPrefix<NormalizePrefix<P>>
-										>
-									>
-								>}${K}`]: I[K];
+								[K in keyof I &
+									string as `${Capitalize<CamelCasePrefix<P>>}${K}`]: I[K];
 							};
 						}
 					: { $Infer: {} });
@@ -89,11 +79,8 @@ type ExtendGetAtoms<
 				fetch: F,
 				options: O,
 			) => {
-				[K in keyof Atoms & string as `${K}${Capitalize<
-					CamelCase<
-						TrimLeadingChar<TransformNormalizedPrefix<NormalizePrefix<P>>>
-					>
-				>}`]: Atoms[K];
+				[K in keyof Atoms &
+					string as `${K}${Capitalize<CamelCasePrefix<P>>}`]: Atoms[K];
 			};
 		}
 	: {
@@ -169,9 +156,7 @@ export function aliasClient<
 	const cleanPrefix = normalizedPrefix.endsWith("/")
 		? normalizedPrefix.slice(0, -1)
 		: normalizedPrefix;
-	const camelCasePrefix = cleanPrefix
-		.replace(/[-_/](.)?/g, (_, c) => (c ? c.toUpperCase() : ""))
-		.replace(/^[A-Z]/, (match) => match.toLowerCase());
+	const camelCasePrefix = toCamelCase(cleanPrefix);
 	const aliasEndpointPaths = [
 		...new Set([
 			...Object.keys(plugin.pathMethods || {}),
@@ -240,7 +225,7 @@ export function aliasClient<
 			};
 
 			for (const [key, action] of Object.entries(originalActions)) {
-				if (key === "signIn" || key === "signUp") {
+				if (SPECIAL_ENDPOINTS.some((value) => toCamelCase(value) === key)) {
 					prefixedActions[key] = action;
 				} else {
 					prefixedActions[camelCasePrefix][key] = action;
