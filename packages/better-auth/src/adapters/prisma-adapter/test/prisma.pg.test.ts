@@ -1,3 +1,5 @@
+import type { BetterAuthOptions } from "@better-auth/core";
+import { Pool } from "pg";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
@@ -9,14 +11,12 @@ import {
 import { prismaAdapter } from "../prisma-adapter";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
-import { pushPrismaSchema } from "./push-prisma-schema";
-import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	destroyPrismaClient,
 	getPrismaClient,
 	incrementMigrationCount,
 } from "./get-prisma-client";
-import { Pool } from "pg";
+import { pushPrismaSchema } from "./push-prisma-schema";
 
 const dialect = "postgresql";
 const { execute } = await testAdapter({

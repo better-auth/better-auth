@@ -1,9 +1,9 @@
-import { describe, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { createAuthClient } from "../../client";
 import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { originCheck } from "./origin-check";
+import { describe, expect } from "vitest";
 import * as z from "zod";
+import { createAuthClient } from "../../client";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { originCheck } from "./origin-check";
 
 describe("Origin Check", async (it) => {
 	const { customFetchImpl, testUser } = await getTestInstance({

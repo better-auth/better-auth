@@ -1,5 +1,5 @@
-import type { phoneNumber } from ".";
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { phoneNumber } from ".";
 
 export const phoneNumberClient = () => {
 	return {

@@ -1,5 +1,5 @@
-import type { anonymous } from ".";
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { anonymous } from ".";
 
 export const anonymousClient = () => {
 	return {

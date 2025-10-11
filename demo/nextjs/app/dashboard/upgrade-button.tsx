@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
+import { useState } from "react";
 
 export default function UpgradeButton() {
 	const [isHovered, setIsHovered] = useState(false);

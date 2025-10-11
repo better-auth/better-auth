@@ -1,20 +1,20 @@
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { getOAuth2Tokens } from "@better-auth/core/oauth2";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import {
 	afterEach,
 	beforeAll,
 	describe,
 	expect,
 	it,
-	vi,
 	type MockInstance,
+	vi,
 } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { DEFAULT_SECRET } from "../../utils/constants";
-import { getOAuth2Tokens } from "@better-auth/core/oauth2";
 import { signJWT } from "../../crypto/jwt";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
+import { DEFAULT_SECRET } from "../../utils/constants";
 
 let email = "";
 vi.mock("@better-auth/core/oauth2", async (importOriginal) => {

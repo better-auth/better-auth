@@ -1,15 +1,15 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
-import type { StripEmptyObjects, UnionToIntersection } from "../types/helper";
-import type { Auth } from "../auth";
-import type { InferRoutes } from "./path-to-object";
-import type { Session, User } from "../types";
-import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
 import type {
-	ClientStore,
-	ClientAtomListener,
 	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
+	BetterAuthPlugin,
+	ClientAtomListener,
+	ClientStore,
 } from "@better-auth/core";
+import type { Auth } from "../auth";
+import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
+import type { Session, User } from "../types";
+import type { StripEmptyObjects, UnionToIntersection } from "../types/helper";
+import type { InferRoutes } from "./path-to-object";
 export type {
 	ClientStore,
 	ClientAtomListener,

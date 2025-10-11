@@ -1,7 +1,7 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import type { InferOptionSchema } from "../../types";
 import type { Statements } from "../access";
 import type { apiKeySchema } from "./schema";
-import type { GenericEndpointContext } from "@better-auth/core";
 export interface ApiKeyOptions {
 	/**
 	 * The header name to check for API key

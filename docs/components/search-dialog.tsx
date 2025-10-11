@@ -1,5 +1,7 @@
 "use client";
 
+import { OramaClient } from "@oramacloud/client";
+import { useDocsSearch } from "fumadocs-core/search/client";
 import {
 	SearchDialog,
 	SearchDialogClose,
@@ -12,11 +14,9 @@ import {
 	SearchDialogOverlay,
 	type SharedProps,
 } from "fumadocs-ui/components/dialog/search";
-import { useDocsSearch } from "fumadocs-core/search/client";
-import { OramaClient } from "@oramacloud/client";
 import { useI18n } from "fumadocs-ui/contexts/i18n";
-import { AIChatModal, aiChatModalAtom } from "./ai-chat-modal";
 import { useAtom } from "jotai";
+import { AIChatModal, aiChatModalAtom } from "./ai-chat-modal";
 
 const client = new OramaClient({
 	endpoint: process.env.NEXT_PUBLIC_ORAMA_ENDPOINT!,

@@ -1,8 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { test } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, test, vi } from "vitest";
 import { getConfig } from "../src/utils/get-config";
 
 interface TmpDirFixture {

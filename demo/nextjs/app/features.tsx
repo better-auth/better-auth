@@ -1,7 +1,7 @@
 "use client";
-import React from "react";
 
 import { AnimatePresence, motion } from "framer-motion";
+import React from "react";
 import { Logo } from "@/components/logo";
 
 export function Features() {

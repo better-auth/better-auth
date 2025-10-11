@@ -1,20 +1,19 @@
-import { APIError } from "../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { setSessionCookie } from "../../cookies";
-import * as z from "zod";
-import type { InferOptionSchema } from "../../types";
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
+import * as z from "zod";
+import { APIError } from "../../api";
+import { setSessionCookie } from "../../cookies";
+import { mergeSchema } from "../../db/schema";
+import type { InferOptionSchema, User } from "../../types";
+import { toChecksumAddress } from "../../utils/hashing";
+import { getOrigin } from "../../utils/url";
+import { schema } from "./schema";
 import type {
 	ENSLookupArgs,
 	ENSLookupResult,
 	SIWEVerifyMessageArgs,
 	WalletAddress,
 } from "./types";
-import type { User } from "../../types";
-import { schema } from "./schema";
-import { getOrigin } from "../../utils/url";
-import { toChecksumAddress } from "../../utils/hashing";
-import { mergeSchema } from "../../db/schema";
 
 export interface SIWEPluginOptions {
 	domain: string;

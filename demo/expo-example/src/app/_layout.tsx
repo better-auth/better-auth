@@ -1,8 +1,7 @@
 import { Slot } from "expo-router";
 import "../global.css";
+import { ImageBackground, StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { ImageBackground, View } from "react-native";
-import { StyleSheet } from "react-native";
 
 export default function RootLayout() {
 	return (

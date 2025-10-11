@@ -1,14 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { prismaAdapter } from "better-auth/adapters/prisma";
-import { generatePrismaSchema } from "../src/generators/prisma";
-import { organization, twoFactor, username } from "better-auth/plugins";
-import { generateDrizzleSchema } from "../src/generators/drizzle";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { generateMigrations } from "../src/generators/kysely";
-import Database from "better-sqlite3";
 import type { BetterAuthOptions } from "better-auth";
-import { generateAuthConfig } from "../src/generators/auth-config";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { prismaAdapter } from "better-auth/adapters/prisma";
+import { organization, twoFactor, username } from "better-auth/plugins";
+import Database from "better-sqlite3";
+import { describe, expect, it } from "vitest";
 import type { SupportedPlugin } from "../src/commands/init";
+import { generateAuthConfig } from "../src/generators/auth-config";
+import { generateDrizzleSchema } from "../src/generators/drizzle";
+import { generateMigrations } from "../src/generators/kysely";
+import { generatePrismaSchema } from "../src/generators/prisma";
 
 describe("generate", async () => {
 	it("should generate prisma schema", async () => {

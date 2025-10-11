@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
-import useMeasure from "react-use-measure";
-import Link from "next/link";
 import clsx from "clsx";
-import { Button } from "@/components/ui/button";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { Check, Copy } from "lucide-react";
+import Link from "next/link";
 import { useTheme } from "next-themes";
 import { Highlight, themes } from "prism-react-renderer";
-import { AnimatePresence, motion, MotionConfig } from "framer-motion";
+import { useEffect, useId, useState } from "react";
+import useMeasure from "react-use-measure";
+import { Button } from "@/components/ui/button";
 import { Builder } from "../builder";
-import { Spotlight } from "./spotlight";
 import { GradientBG } from "./gradient-bg";
+import { Spotlight } from "./spotlight";
+
 const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
 	{
 		name: "auth.ts",

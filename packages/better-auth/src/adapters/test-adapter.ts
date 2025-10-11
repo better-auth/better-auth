@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, describe } from "vitest";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { TTY_COLORS } from "@better-auth/core/env";
+import { afterAll, beforeAll, describe } from "vitest";
 import { getAuthTables } from "../db";
 import type { createTestSuite } from "./create-test-suite";
-import { TTY_COLORS } from "@better-auth/core/env";
 import { deepmerge } from "./utils";
 
 export type Logger = {

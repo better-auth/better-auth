@@ -14,12 +14,11 @@ import {
 	useMemo,
 	useRef,
 } from "react";
-import { cn } from "@/lib/utils";
-import { useCopyButton } from "./use-copy-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mergeRefs } from "@/lib/utils";
+import { cn, mergeRefs } from "@/lib/utils";
 import { ScrollArea, ScrollBar, ScrollViewport } from "./scroll-area";
+import { useCopyButton } from "./use-copy-button";
 
 export interface CodeBlockProps extends ComponentProps<"figure"> {
 	/**

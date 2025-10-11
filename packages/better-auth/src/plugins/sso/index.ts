@@ -1,19 +1,19 @@
-import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../api";
 import { createAuthEndpoint } from "@better-auth/core/middleware";
-import type { BetterAuthPlugin, User } from "../../types";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
 	validateToken,
 } from "@better-auth/core/oauth2";
-import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
+import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import * as z from "zod";
+import { APIError, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
-import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
+import type { BetterAuthPlugin, User } from "../../types";
 
 export interface SSOOptions {
 	/**

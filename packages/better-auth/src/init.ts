@@ -1,27 +1,29 @@
-import { defu } from "defu";
-import { hashPassword, verifyPassword } from "./crypto/password";
-import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
-import type { Entries } from "type-fest";
-import { getAdapter } from "./db/utils";
-import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
-import { DEFAULT_SECRET } from "./utils/constants";
-import { createCookieGetter, getCookies } from "./cookies";
-import { createLogger } from "@better-auth/core/env";
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	BetterAuthPlugin,
+} from "@better-auth/core";
+import { createLogger, env, isProduction } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { OAuthProvider } from "@better-auth/core/oauth2";
 import {
 	type SocialProviders,
 	socialProviders,
 } from "@better-auth/core/social-providers";
-import type { OAuthProvider } from "@better-auth/core/oauth2";
-import { generateId } from "./utils";
-import { env, isProduction } from "@better-auth/core/env";
-import { checkPassword } from "./utils/password";
-import { getBaseURL } from "./utils/url";
-import { BetterAuthError } from "@better-auth/core/error";
 import { createTelemetry } from "@better-auth/telemetry";
+import { defu } from "defu";
+import type { Entries } from "type-fest";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
+import { createCookieGetter, getCookies } from "./cookies";
+import { hashPassword, verifyPassword } from "./crypto/password";
+import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
+import { getAdapter } from "./db/utils";
+import { generateId } from "./utils";
+import { DEFAULT_SECRET } from "./utils/constants";
 import { isPromise } from "./utils/is-promise";
-import type { AuthContext } from "@better-auth/core";
+import { checkPassword } from "./utils/password";
+import { getBaseURL } from "./utils/url";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);

@@ -1,12 +1,12 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import {
-	getAsyncLocalStorage,
 	type AsyncLocalStorage,
+	getAsyncLocalStorage,
 } from "@better-auth/core/async_hooks";
 import type {
-	DBTransactionAdapter,
 	DBAdapter,
+	DBTransactionAdapter,
 } from "@better-auth/core/db/adapter";
-import type { BetterAuthOptions } from "@better-auth/core";
 
 let currentAdapterAsyncStorage: AsyncLocalStorage<
 	DBTransactionAdapter<BetterAuthOptions>

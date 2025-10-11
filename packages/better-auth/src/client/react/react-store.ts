@@ -1,7 +1,7 @@
-import { listenKeys } from "nanostores";
-import { useCallback, useRef, useSyncExternalStore } from "react";
 import type { Store, StoreValue } from "nanostores";
+import { listenKeys } from "nanostores";
 import type { DependencyList } from "react";
+import { useCallback, useRef, useSyncExternalStore } from "react";
 
 type StoreKeys<T> = T extends { setKey: (k: infer K, v: any) => unknown }
 	? K

@@ -1,25 +1,24 @@
+import type {
+	BetterAuthClientOptions,
+	BetterAuthClientPlugin,
+} from "@better-auth/core";
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type {
+	BetterFetchError,
+	BetterFetchResponse,
+} from "@better-fetch/fetch";
+import type { Accessor } from "solid-js";
+import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
+import { capitalizeFirstLetter } from "../../utils/misc";
 import { getClientConfig } from "../config";
 import { createDynamicPathProxy } from "../proxy";
-import { capitalizeFirstLetter } from "../../utils/misc";
 import type {
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
 } from "../types";
-import type {
-	BetterAuthClientPlugin,
-	BetterAuthClientOptions,
-} from "@better-auth/core";
-
-import type { Accessor } from "solid-js";
-import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
-import type {
-	BetterFetchError,
-	BetterFetchResponse,
-} from "@better-fetch/fetch";
 import { useStore } from "./solid-store";
-import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;

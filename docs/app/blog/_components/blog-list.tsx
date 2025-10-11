@@ -1,12 +1,12 @@
-import { formatBlogDate } from "@/lib/blog";
-import Link from "next/link";
-import { blogs } from "@/lib/source";
-import { IconLink } from "./changelog-layout";
-import { GitHubIcon, BookIcon, XIcon } from "./icons";
-import { Glow } from "./default-changelog";
-import { StarField } from "./stat-field";
 import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import Image from "next/image";
+import Link from "next/link";
+import { formatBlogDate } from "@/lib/blog";
+import { blogs } from "@/lib/source";
+import { IconLink } from "./changelog-layout";
+import { Glow } from "./default-changelog";
+import { BookIcon, GitHubIcon, XIcon } from "./icons";
+import { StarField } from "./stat-field";
 
 export async function BlogPage() {
 	const posts = blogs.getPages().sort((a, b) => {

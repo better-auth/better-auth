@@ -1,19 +1,18 @@
-import * as z from "zod";
+import type { BetterAuthOptions } from "@better-auth/core";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createAuthEndpoint } from "@better-auth/core/middleware";
-
+import { APIError } from "better-call";
+import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto";
+import type { AdditionalUserFieldsInput } from "../../types";
+import { originCheck } from "../middlewares";
+import { createEmailVerificationToken } from "./email-verification";
 import {
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
 	sessionMiddleware,
 } from "./session";
-import { APIError } from "better-call";
-import { createEmailVerificationToken } from "./email-verification";
-import type { AdditionalUserFieldsInput } from "../../types";
-import type { BetterAuthOptions } from "@better-auth/core";
-import { generateRandomString } from "../../crypto";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { originCheck } from "../middlewares";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(

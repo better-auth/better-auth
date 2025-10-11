@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
 import clsx from "clsx";
 import { animate, Segment } from "motion/react";
+import { useEffect, useId, useRef } from "react";
 
 type Star = [x: number, y: number, dim?: boolean, blur?: boolean];
 

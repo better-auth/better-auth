@@ -1,6 +1,6 @@
 import {
-	BetterFetchError,
 	type BetterFetch,
+	BetterFetchError,
 	type BetterFetchOption,
 } from "@better-fetch/fetch";
 import { atom, onMount, type PreinitializedWritableAtom } from "nanostores";

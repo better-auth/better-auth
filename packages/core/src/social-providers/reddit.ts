@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
 import {
 	createAuthorizationURL,
@@ -6,6 +5,7 @@ import {
 	refreshAccessToken,
 } from "@better-auth/core/oauth2";
 import { base64 } from "@better-auth/utils/base64";
+import { betterFetch } from "@better-fetch/fetch";
 
 export interface RedditProfile {
 	id: string;

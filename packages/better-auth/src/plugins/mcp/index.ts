@@ -1,30 +1,32 @@
-import * as z from "zod";
+import type {
+	BetterAuthOptions,
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import { isProduction, logger } from "@better-auth/core/env";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/middleware";
-import type { BetterAuthPlugin, BetterAuthOptions } from "@better-auth/core";
+import { getWebcryptoSubtle } from "@better-auth/utils";
+import { base64 } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
+import { SignJWT } from "jose";
+import * as z from "zod";
+import { APIError, getSessionFromCtx } from "../../api";
+import { parseSetCookieHeader } from "../../cookies";
+import { generateRandomString } from "../../crypto";
+import { getBaseURL } from "../../utils/url";
 import {
-	oidcProvider,
 	type Client,
 	type CodeVerificationValue,
 	type OAuthAccessToken,
 	type OIDCMetadata,
 	type OIDCOptions,
+	oidcProvider,
 } from "../oidc-provider";
-import { APIError, getSessionFromCtx } from "../../api";
-import { base64 } from "@better-auth/utils/base64";
-import { generateRandomString } from "../../crypto";
-import { createHash } from "@better-auth/utils/hash";
-import { getWebcryptoSubtle } from "@better-auth/utils";
-import { SignJWT } from "jose";
-import { parseSetCookieHeader } from "../../cookies";
 import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
-import { getBaseURL } from "../../utils/url";
-import { isProduction } from "@better-auth/core/env";
-import { logger } from "@better-auth/core/env";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 interface MCPOptions {
 	loginPage: string;

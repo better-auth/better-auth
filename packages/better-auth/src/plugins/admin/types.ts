@@ -1,5 +1,4 @@
-import { type Session, type User } from "../../types";
-import { type InferOptionSchema } from "../../types";
+import { type InferOptionSchema, type Session, type User } from "../../types";
 import { type AccessControl, type Role } from "../access";
 import { type AdminSchema } from "./schema";
 

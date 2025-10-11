@@ -1,14 +1,14 @@
+import { betterFetch } from "@better-fetch/fetch";
+import { DiscordLogoIcon } from "@radix-ui/react-icons";
+import defaultMdxComponents from "fumadocs-ui/mdx";
 import Link from "next/link";
 import { useId } from "react";
+import Markdown from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
 import { cn } from "@/lib/utils";
 import { IconLink } from "./changelog-layout";
 import { BookIcon, GitHubIcon, XIcon } from "./icons";
-import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { StarField } from "./stat-field";
-import { betterFetch } from "@better-fetch/fetch";
-import Markdown from "react-markdown";
-import defaultMdxComponents from "fumadocs-ui/mdx";
-import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/dark.css";
 
 export const dynamic = "force-static";

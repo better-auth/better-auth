@@ -1,12 +1,11 @@
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import { Image, KeyboardAvoidingView, View } from "react-native";
 import { Button } from "@/components/ui/button";
 import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
 import { authClient } from "@/lib/auth-client";
-import { KeyboardAvoidingView, View } from "react-native";
-import { Image } from "react-native";
-import { useRouter } from "expo-router";
-import { useState } from "react";
 
 export default function SignUp() {
 	const router = useRouter();

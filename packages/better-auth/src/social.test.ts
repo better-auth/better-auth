@@ -1,14 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "./test-utils/test-instance";
-import { DEFAULT_SECRET } from "./utils/constants";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { parseSetCookieHeader } from "./cookies";
 import { getOAuth2Tokens, refreshAccessToken } from "@better-auth/core/oauth2";
-import { signJWT } from "./crypto";
-import { OAuth2Server } from "oauth2-mock-server";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
 import Database from "better-sqlite3";
+import { OAuth2Server } from "oauth2-mock-server";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { parseSetCookieHeader } from "./cookies";
+import { signJWT } from "./crypto";
 import { getMigrations } from "./db";
+import { getTestInstance } from "./test-utils/test-instance";
+import { DEFAULT_SECRET } from "./utils/constants";
 
 let server = new OAuth2Server();
 let port = 8005;

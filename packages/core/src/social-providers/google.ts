@@ -1,13 +1,13 @@
-import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt } from "jose";
-import { BetterAuthError } from "../error";
+import { logger } from "@better-auth/core/env";
 import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
 import {
 	createAuthorizationURL,
+	refreshAccessToken,
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
-import { logger } from "@better-auth/core/env";
-import { refreshAccessToken } from "@better-auth/core/oauth2";
+import { betterFetch } from "@better-fetch/fetch";
+import { decodeJwt } from "jose";
+import { BetterAuthError } from "../error";
 
 export interface GoogleProfile {
 	aud: string;

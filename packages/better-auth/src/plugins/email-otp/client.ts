@@ -1,5 +1,5 @@
-import type { emailOTP } from ".";
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { emailOTP } from ".";
 
 export const emailOTPClient = () => {
 	return {

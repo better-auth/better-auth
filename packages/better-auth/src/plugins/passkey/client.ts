@@ -1,18 +1,18 @@
+import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
-import {
-	WebAuthnError,
-	startAuthentication,
-	startRegistration,
-} from "@simplewebauthn/browser";
 import type {
 	PublicKeyCredentialCreationOptionsJSON,
 	PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
-import type { User, Session } from "../../types";
-import type { passkey as passkeyPl, Passkey } from ".";
-import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
-import { useAuthQuery } from "../../client";
+import {
+	startAuthentication,
+	startRegistration,
+	WebAuthnError,
+} from "@simplewebauthn/browser";
 import { atom } from "nanostores";
+import { useAuthQuery } from "../../client";
+import type { Session, User } from "../../types";
+import type { Passkey, passkey as passkeyPl } from ".";
 
 export const getPasskeyActions = (
 	$fetch: BetterFetch,

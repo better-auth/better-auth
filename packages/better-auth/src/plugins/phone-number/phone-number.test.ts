@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { phoneNumber } from ".";
 import { createAuthClient } from "../../client";
-import { phoneNumberClient } from "./client";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
+import { phoneNumber } from ".";
+import { phoneNumberClient } from "./client";
 
 describe("phone-number", async (it) => {
 	let otp = "";

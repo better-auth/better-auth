@@ -1,6 +1,10 @@
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import { BetterAuthError } from "@better-auth/core/error";
+import parseJSON from "../../client/parser";
+import { getCurrentAdapter } from "../../context/transaction";
+import { type InferAdditionalFieldsFromPluginOptions } from "../../db";
 import type { Session, User } from "../../types";
 import { getDate } from "../../utils/date";
-import type { OrganizationOptions } from "./types";
 import type {
 	InferInvitation,
 	InferMember,
@@ -14,11 +18,7 @@ import type {
 	TeamInput,
 	TeamMember,
 } from "./schema";
-import { BetterAuthError } from "@better-auth/core/error";
-import parseJSON from "../../client/parser";
-import { type InferAdditionalFieldsFromPluginOptions } from "../../db";
-import { getCurrentAdapter } from "../../context/transaction";
-import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import type { OrganizationOptions } from "./types";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,

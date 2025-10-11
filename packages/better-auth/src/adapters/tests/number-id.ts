@@ -1,6 +1,6 @@
+import type { User } from "better-auth/types";
 import { expect } from "vitest";
 import { createTestSuite } from "../create-test-suite";
-import type { User } from "better-auth/types";
 import { getNormalTestSuiteTests } from "./normal";
 
 export const numberIdTestSuite = createTestSuite(

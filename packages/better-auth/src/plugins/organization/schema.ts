@@ -1,8 +1,8 @@
+import type { Prettify } from "better-call";
 import * as z from "zod";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./types";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
-import type { Prettify } from "better-call";
 
 export const role = z.string();
 export const invitationStatus = z
