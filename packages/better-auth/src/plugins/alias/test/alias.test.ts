@@ -106,7 +106,7 @@ describe("alias plugin", () => {
 		const aliasedPlugin = alias("/mini", minimalPlugin);
 
 		// @ts-expect-error
-		expect(aliasedPlugin.endpoints?.miniTest?.path).toBe("/mini/test");
+		expect(aliasedPlugin.endpoints?.test?.path).toBe("/mini/test");
 		expect(aliasedPlugin.middlewares).toBeUndefined();
 		expect(aliasedPlugin.rateLimit).toBeUndefined();
 		expect(aliasedPlugin.hooks).toBeUndefined();
