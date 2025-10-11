@@ -499,6 +499,8 @@ export const createAdapterFactory =
 					}
 				}
 
+				let newValue = value;
+
 				const defaultModelName = getDefaultModelName(model);
 				const defaultFieldName = getDefaultFieldName({
 					field: unsafe_field,
@@ -522,19 +524,42 @@ export const createAdapterFactory =
 				) {
 					if (options.advanced?.database?.useNumberId) {
 						if (Array.isArray(value)) {
-							return {
-								operator,
-								connector,
-								field: fieldName,
-								value: value.map(Number),
-							} satisfies CleanedWhere;
+							newValue = value.map(Number);
+						} else {
+							newValue = Number(value);
 						}
-						return {
-							operator,
-							connector,
-							field: fieldName,
-							value: Number(value),
-						} satisfies CleanedWhere;
+					}
+				}
+
+				if (
+					fieldAttr.type === "date" &&
+					value instanceof Date &&
+					!config.supportsDates
+				) {
+					newValue = value.toISOString();
+				}
+
+				if (
+					fieldAttr.type === "boolean" &&
+					typeof value === "boolean" &&
+					!config.supportsBooleans
+				) {
+					newValue = value ? 1 : 0;
+				}
+
+				if (
+					fieldAttr.type === "json" &&
+					typeof value === "object" &&
+					!config.supportsJSON
+				) {
+					try {
+						const stringifiedJSON = JSON.stringify(value);
+						newValue = stringifiedJSON;
+					} catch (error) {
+						throw new Error(
+							`Failed to stringify JSON value for field ${fieldName}`,
+							{ cause: error },
+						);
 					}
 				}
 
@@ -542,7 +567,7 @@ export const createAdapterFactory =
 					operator,
 					connector,
 					field: fieldName,
-					value: value,
+					value: newValue,
 				} satisfies CleanedWhere;
 			}) as any;
 		};

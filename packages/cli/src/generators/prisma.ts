@@ -170,15 +170,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					} else if (typeof attr.defaultValue === "boolean") {
 						fieldBuilder.attribute(`default(${attr.defaultValue})`);
 					} else if (typeof attr.defaultValue === "function") {
-						// For other function-based defaults, we'll need to check what they return
-						const defaultVal = attr.defaultValue();
-						if (defaultVal instanceof Date) {
-							fieldBuilder.attribute("default(now())");
-						} else {
-							console.warn(
-								`Warning: Unsupported default function for field ${fieldName} in model ${modelName}. Please adjust manually.`,
-							);
-						}
+						// we are intentionally not adding the default value here
+						// this is because if the defaultValue is a function, it could have
+						// custom logic within that function that might not work in prisma's context.
 					}
 				}
 
@@ -186,9 +180,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				if (field === "updatedAt" && attr.onUpdate) {
 					fieldBuilder.attribute("updatedAt");
 				} else if (attr.onUpdate) {
-					console.warn(
-						`Warning: 'onUpdate' is only supported on 'updatedAt' fields. Please adjust manually for field ${fieldName} in model ${modelName}.`,
-					);
+					// we are intentionally not adding the onUpdate value here
+					// this is because if the onUpdate is a function, it could have
+					// custom logic within that function that might not work in prisma's context.
 				}
 
 				if (attr.references) {
