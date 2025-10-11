@@ -12,6 +12,7 @@ import { huggingface } from "./huggingface";
 import { microsoft } from "./microsoft-entra-id";
 import { slack } from "./slack";
 import { notion } from "./notion";
+import { soundcloud } from "./soundcloud";
 import { spotify } from "./spotify";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
@@ -42,6 +43,7 @@ export const socialProviders = {
 	google,
 	huggingface,
 	slack,
+	soundcloud,
 	spotify,
 	twitch,
 	twitter,
@@ -101,6 +103,7 @@ export * from "./notion";
 export * from "./reddit";
 export * from "./roblox";
 export * from "./salesforce";
+export * from "./soundcloud";
 export * from "./spotify";
 export * from "./tiktok";
 export * from "./twitch";
