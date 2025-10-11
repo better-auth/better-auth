@@ -37,8 +37,8 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 									: key extends string
 										? `use${Capitalize<key>}`
 										: never]: () => DeepReadonly<
-										Ref<ReturnType<Atoms[key]["get"]>>
-									>;
+									Ref<ReturnType<Atoms[key]["get"]>>
+								>;
 							}
 						: {}
 					: {}
