@@ -1,12 +1,12 @@
 import * as z from "zod";
+import { originCheck } from "../../api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-	originCheck,
-} from "../../api";
+} from "@better-auth/core/middleware";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "../../types";
-import { env } from "../../utils/env";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { env } from "@better-auth/core/env";
 import { getOrigin } from "../../utils/url";
 import type { EndpointContext } from "better-call";
 
@@ -231,7 +231,6 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx);
-						console.log("skipProxy", skipProxy);
 						if (skipProxy) {
 							return;
 						}

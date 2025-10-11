@@ -1,6 +1,7 @@
 import { expect } from "vitest";
 import { createTestSuite } from "../create-test-suite";
 import type { User } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
 
 /**
  * This test suite tests the basic CRUD operations of the adapter.
@@ -98,6 +99,37 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(findResult).toEqual(res);
 		},
+		"create - should return null for nullable foreign keys": async () => {
+			await modifyBetterAuthOptions(
+				{
+					plugins: [
+						{
+							id: "nullable-test",
+							schema: {
+								testModel: {
+									fields: {
+										nullableReference: {
+											type: "string",
+											references: { field: "id", model: "user" },
+											required: false,
+										},
+									},
+								},
+							},
+						} satisfies BetterAuthPlugin,
+					],
+				},
+				true,
+			);
+			const { nullableReference } = await adapter.create<{
+				nullableReference: string | null;
+			}>({
+				model: "testModel",
+				data: { nullableReference: null },
+				forceAllowId: true,
+			});
+			expect(nullableReference).toBeNull();
+		},
 		"findOne - should find a model": async () => {
 			const [user] = await insertRandom("user");
 			const result = await adapter.findOne<User>({
@@ -148,6 +180,54 @@ export const getNormalTestSuiteTests = ({
 			expect(result).toEqual(user);
 			expect(result?.email).toEqual(user.email);
 			expect(true).toEqual(true);
+		},
+		"findOne - should find a model with a modified model name": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						modelName: "user_custom",
+					},
+				},
+				true,
+			);
+			const [user] = await insertRandom("user");
+			expect(user).toBeDefined();
+			expect(user).toHaveProperty("id");
+			expect(user).toHaveProperty("name");
+			const result = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: user.email }],
+			});
+			expect(result).toEqual(user);
+			expect(result?.email).toEqual(user.email);
+			expect(true).toEqual(true);
+		},
+		"findOne - should find a model with additional fields": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							customField: {
+								type: "string",
+								input: false,
+								required: true,
+								defaultValue: "default-value",
+							},
+						},
+					},
+				},
+				true,
+			);
+			const [user_] = await insertRandom("user");
+			const user = user_ as User & { customField: string };
+			expect(user).toHaveProperty("customField");
+			expect(user.customField).toBe("default-value");
+			const result = await adapter.findOne<User & { customField: string }>({
+				model: "user",
+				where: [{ field: "customField", value: user.customField }],
+			});
+			expect(result).toEqual(user);
+			expect(result?.customField).toEqual("default-value");
 		},
 		"findOne - should select fields": async () => {
 			const [user] = await insertRandom("user");
@@ -557,5 +637,76 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(result).toEqual(2);
 		},
+		"update - should correctly return record when updating a field used in where clause":
+			async () => {
+				// This tests the fix for MySQL where updating a field that's in the where clause
+				// would previously fail to find the record using the old value
+				const [user] = await insertRandom("user");
+				const originalEmail = user.email;
+
+				// Update the email, using the old email in the where clause
+				const result = await adapter.update<User>({
+					model: "user",
+					where: [{ field: "email", value: originalEmail }],
+					update: { email: "newemail@example.com" },
+				});
+
+				// Should return the updated record with the new email
+				expect(result).toBeDefined();
+				expect(result!.email).toBe("newemail@example.com");
+				expect(result!.id).toBe(user.id);
+
+				// Verify the update persisted by finding with new email
+				const foundUser = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "email", value: "newemail@example.com" }],
+				});
+				expect(foundUser).toBeDefined();
+				expect(foundUser!.id).toBe(user.id);
+
+				// Old email should not exist
+				const oldUser = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "email", value: originalEmail }],
+				});
+				expect(oldUser).toBeNull();
+			},
+
+		"update - should handle updating multiple fields including where clause field":
+			async () => {
+				const [user] = await insertRandom("user");
+				const originalEmail = user.email;
+
+				const result = await adapter.update<User>({
+					model: "user",
+					where: [{ field: "email", value: originalEmail }],
+					update: {
+						email: "updated@example.com",
+						name: "Updated Name",
+						emailVerified: true,
+					},
+				});
+
+				expect(result!.email).toBe("updated@example.com");
+				expect(result!.name).toBe("Updated Name");
+				expect(result!.emailVerified).toBe(true);
+				expect(result!.id).toBe(user.id);
+			},
+
+		"update - should work when updated field is not in where clause":
+			async () => {
+				// Regression test: ensure normal updates still work
+				const [user] = await insertRandom("user");
+
+				const result = await adapter.update<User>({
+					model: "user",
+					where: [{ field: "email", value: user.email }],
+					update: { name: "Updated Name Only" },
+				});
+
+				expect(result!.name).toBe("Updated Name Only");
+				expect(result!.email).toBe(user.email); // Should remain unchanged
+				expect(result!.id).toBe(user.id);
+			},
 	};
 };
