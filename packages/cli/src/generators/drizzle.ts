@@ -161,6 +161,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							const attr = fields[field]!;
 							const fieldName = attr.fieldName || field;
 							let type = getType(fieldName, attr);
+
 							if (
 								attr.defaultValue !== null &&
 								typeof attr.defaultValue !== "undefined"
@@ -176,7 +177,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 											type += `.defaultNow()`;
 										}
 									} else {
-										type += `.$defaultFn(${attr.defaultValue})`;
+										// we are intentionally not adding .$defaultFn(${attr.defaultValue})
+										// this is because if the defaultValue is a function, it could have
+										// custom logic within that function that might not work in drizzle's context.
 									}
 								} else if (typeof attr.defaultValue === "string") {
 									type += `.default("${attr.defaultValue}")`;
@@ -191,6 +194,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
+
 							return `${fieldName}: ${type}${attr.required ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
