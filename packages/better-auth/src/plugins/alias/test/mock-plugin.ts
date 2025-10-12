@@ -1,7 +1,12 @@
-import { createAuthEndpoint } from "../..";
-import type { BetterAuthClientPlugin, BetterAuthPlugin } from "../../../types";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
+import type {
+	BetterAuthClientPlugin,
+	BetterAuthPlugin,
+} from "@better-auth/core";
 import type { LiteralString } from "../../../types/helper";
 import z from "zod/v4";
+import { useAuthQuery } from "../../../client";
+import { atom, computed } from "nanostores";
 
 export function createMockPlugin<ID extends LiteralString>(id: ID) {
 	return {
@@ -60,6 +65,12 @@ export function createMockPlugin<ID extends LiteralString>(id: ID) {
 }
 
 export function createMockClientPlugin<ID extends LiteralString>(id: ID) {
+	const $test = atom(false);
+	let testValue = 0;
+	const computedAtom = computed($test, () => {
+		return testValue++;
+	});
+
 	const plugin = {
 		id,
 		pathMethods: {
@@ -74,7 +85,7 @@ export function createMockClientPlugin<ID extends LiteralString>(id: ID) {
 			},
 			{
 				matcher: (path) => path === "/customer/portal",
-				signal: "customSignal",
+				signal: "$test",
 			},
 		],
 		fetchPlugins: [
@@ -88,10 +99,26 @@ export function createMockClientPlugin<ID extends LiteralString>(id: ID) {
 				},
 			},
 		],
-		getActions: (fetch, store, options) => ({
+		getActions: ($fetch, $store, options) => ({
 			customAction: () => "action-result",
 			anotherAction: (param: string) => `result-${param}`,
+			triggerFetch: (path: string, method: string = "GET") => {
+				return $fetch(path, { method });
+			},
 		}),
+		getAtoms: ($fetch, options) => {
+			// TODO:
+			const $signal = atom(false);
+			const queryAtom = useAuthQuery<any>($signal, "/test", $fetch, {
+				method: "GET",
+			});
+			return {
+				$test,
+				$signal,
+				computedAtom,
+				queryAtom,
+			};
+		},
 		$InferServerPlugin: createMockPlugin(id),
 	} satisfies BetterAuthClientPlugin;
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { alias } from "../index";
 import type { BetterAuthPlugin } from "../../../types";
-import { createAuthEndpoint } from "../../../api";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { createMockPlugin } from "./mock-plugin";
 
 describe("alias plugin", () => {

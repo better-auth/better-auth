@@ -1,4 +1,7 @@
-import type { BetterAuthClientPlugin, BetterAuthPlugin } from "../../types";
+import type {
+	BetterAuthClientPlugin,
+	BetterAuthPlugin,
+} from "@better-auth/core";
 import type { LiteralString } from "../../types/helper";
 import type { InferAliasedPlugin } from ".";
 import type {
@@ -52,8 +55,7 @@ type ExtendGetActions<
 				[T in keyof Actions & string as T extends "signIn" | "signUp"
 					? T
 					: never]: {
-					[K in keyof Actions[T] &
-						string as `${K}${Capitalize<CamelCasePrefix<P>>}`]: Actions[T][K];
+					[I in CamelCasePrefix<P>]: Actions[T];
 				};
 			} & (Actions extends {
 					$Infer: infer I extends Record<string, any>;
@@ -220,14 +222,14 @@ export function aliasClient<
 				store,
 				options,
 			);
-			const prefixedActions: Record<string, any> = {
-				[camelCasePrefix]: {},
-			};
+			const prefixedActions: Record<string, any> = {};
 
 			for (const [key, action] of Object.entries(originalActions)) {
 				if (SPECIAL_ENDPOINTS.some((value) => toCamelCase(value) === key)) {
-					prefixedActions[key] = action;
+					prefixedActions[key] ??= {};
+					prefixedActions[key][camelCasePrefix] = action;
 				} else {
+					prefixedActions[camelCasePrefix] ??= {};
 					prefixedActions[camelCasePrefix][key] = action;
 				}
 			}
@@ -345,7 +347,14 @@ const resolveURL = (
 	aliasEndpointPaths: string[],
 	prefix?: string,
 ) => {
-	const url = new URL(context.url);
+	let url: URL;
+	try {
+		url = new URL(context.url);
+	} catch {
+		url = new URL(
+			`${context.baseURL?.endsWith("/") ? context.baseURL.slice(0, -1) : context.baseURL}${(context.url.toString().startsWith("/") ? "" : "/") + context.url.toString()}`,
+		);
+	}
 	const base = new URL(context.baseURL || "");
 	if (!url.pathname.startsWith(base.pathname)) {
 		return url.toString();

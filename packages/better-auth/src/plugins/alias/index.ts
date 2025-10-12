@@ -1,13 +1,9 @@
 import type { AuthEndpoint } from "../../api";
 import type { Endpoint } from "better-call";
 import type { LiteralString } from "../../types/helper";
-import type { BetterAuthPlugin } from "../../types";
-import type {
-	NormalizePrefix,
-	TransformEndpointKey,
-	TrimLeadingChar,
-} from "./types";
-import { SPECIAL_ENDPOINTS, toCamelCase } from "./utils";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import type { NormalizePrefix, TransformEndpointKey } from "./types";
+import { SPECIAL_ENDPOINTS, toCamelCase, type SpecialEndpoints } from "./utils";
 
 export type InferAliasedPlugin<
 	T extends BetterAuthPlugin,
@@ -29,9 +25,14 @@ export type InferAliasedPlugin<
 				? Handler extends (...args: infer Args) => infer Return
 					? ((...args: Args) => Return) & {
 							options: Options;
-							path: OldPath extends `/sign-in/${string}` | `/sign-up/${string}`
-								? `${OldPath}-${TrimLeadingChar<NormalizePrefix<Prefix>, "/">}`
+							path: OldPath extends `${NormalizePrefix<SpecialEndpoints>}/${infer R}`
+								? OldPath extends `${infer S}/${R}`
+									? `${S}${NormalizePrefix<Prefix>}${NormalizePrefix<R>}`
+									: `${NormalizePrefix<Prefix>}${OldPath}`
 								: `${NormalizePrefix<Prefix>}${OldPath}`;
+							// path: OldPath extends `/sign-in/${infer R}`
+							// 	? `/sign-in${NormalizePrefix<Prefix>}${NormalizePrefix<R>}`
+							// 	: `${NormalizePrefix<Prefix>}${OldPath}`;
 						}
 					: T
 				: T["endpoints"][K];
@@ -164,7 +165,8 @@ function cloneEndpoint<
 
 	return Object.assign(cloned, {
 		path,
-		originalPath: endpoint.path,
+		// Preserve original path
+		originalPath: endpoint.originalPath || endpoint.path,
 		options: endpoint.options,
 	});
 }
