@@ -30,6 +30,7 @@ type ExtendPathMethods<
 type ExtendGetActions<
 	T extends BetterAuthClientPlugin,
 	P extends string,
+	Options extends AliasClientOptions,
 > = T extends {
 	getActions: (
 		fetch: infer F,
@@ -61,10 +62,12 @@ type ExtendGetActions<
 					$Infer: infer I extends Record<string, any>;
 				}
 					? {
-							$Infer: {
-								[K in keyof I &
-									string as `${Capitalize<CamelCasePrefix<P>>}${K}`]: I[K];
-							};
+							$Infer: Options["prefixTypeInference"] extends true
+								? {
+										[K in keyof I &
+											string as `${Capitalize<CamelCasePrefix<P>>}${K}`]: I[K];
+									}
+								: I;
 						}
 					: { $Infer: {} });
 		}
@@ -110,13 +113,14 @@ type ExtendEndpoints<
 export type InferAliasedClientPlugin<
 	Prefix extends LiteralString,
 	T extends BetterAuthClientPlugin,
+	O extends AliasClientOptions,
 > = Omit<
 	T,
 	"id" | "pathMethods" | "getActions" | "getAtoms" | "$InferServerPlugin"
 > & {
 	id: `${T["id"]}-${TransformNormalizedPrefix<NormalizePrefix<Prefix>>}`;
 } & ExtendPathMethods<T, NormalizePrefix<Prefix>> &
-	ExtendGetActions<T, NormalizePrefix<Prefix>> &
+	ExtendGetActions<T, NormalizePrefix<Prefix>, O> &
 	ExtendGetAtoms<T, NormalizePrefix<Prefix>> &
 	ExtendEndpoints<T, NormalizePrefix<Prefix>>;
 
@@ -125,6 +129,7 @@ export type AliasClientOptions = {
 	 * Add alias to endpoints that were not automatically deteceted.
 	 */
 	aliasEndpoints?: string[];
+	prefixTypeInference?: boolean;
 };
 
 /**
@@ -153,7 +158,8 @@ export type AliasClientOptions = {
 export function aliasClient<
 	Prefix extends LiteralString,
 	T extends BetterAuthClientPlugin,
->(prefix: Prefix, plugin: T, options?: AliasClientOptions) {
+	O extends AliasClientOptions,
+>(prefix: Prefix, plugin: T, options?: O) {
 	const normalizedPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
 	const cleanPrefix = normalizedPrefix.endsWith("/")
 		? normalizedPrefix.slice(0, -1)
@@ -335,7 +341,8 @@ export function aliasClient<
 
 	return aliasedPlugin as InferAliasedClientPlugin<
 		Prefix,
-		T
+		T,
+		O
 	> satisfies BetterAuthClientPlugin;
 }
 

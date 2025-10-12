@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { assertType, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { getTestInstanceMemory } from "../../../test-utils";
 import { alias } from "..";
@@ -184,6 +184,11 @@ describe("Alias Plugin", async () => {
 					},
 				),
 			},
+			$Infer: {
+				SomeType: {} as {
+					success: true;
+				},
+			},
 		} satisfies BetterAuthPlugin;
 
 		const testPluginClient = {
@@ -210,8 +215,12 @@ describe("Alias Plugin", async () => {
 			$InferServerPlugin: {} as typeof testPlugin,
 		} satisfies BetterAuthClientPlugin;
 
-		const { customFetchImpl } = await getTestInstanceMemory({
-			plugins: [alias("/test", testPlugin)],
+		const { auth, customFetchImpl } = await getTestInstanceMemory({
+			plugins: [
+				alias("/test", testPlugin, {
+					prefixTypeInference: true,
+				}),
+			],
 		});
 
 		const client = createAuthClient({
@@ -219,7 +228,11 @@ describe("Alias Plugin", async () => {
 				customFetchImpl,
 			},
 			baseURL: "https://localhost:3000",
-			plugins: [aliasClient("/test", testPluginClient)],
+			plugins: [
+				aliasClient("/test", testPluginClient, {
+					prefixTypeInference: true,
+				}),
+			],
 		});
 
 		it("should preserve sign-in endpoints", async () => {
@@ -257,7 +270,10 @@ describe("Alias Plugin", async () => {
 		});
 
 		it("should preserve $Infer key", async () => {
-			expectTypeOf<typeof client.$Infer.TestSomeType>().toEqualTypeOf<{
+			expectTypeOf<typeof auth.$Infer.TestSomeType>().toMatchObjectType<{
+				success: true;
+			}>();
+			expectTypeOf<typeof client.$Infer.TestSomeType>().toMatchObjectType<{
 				success: true;
 			}>();
 		});

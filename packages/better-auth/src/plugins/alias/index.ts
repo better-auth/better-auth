@@ -2,7 +2,11 @@ import type { AuthEndpoint } from "../../api";
 import type { Endpoint } from "better-call";
 import type { LiteralString } from "../../types/helper";
 import type { BetterAuthPlugin } from "@better-auth/core";
-import type { NormalizePrefix, TransformEndpointKey } from "./types";
+import type {
+	CamelCasePrefix,
+	NormalizePrefix,
+	TransformEndpointKey,
+} from "./types";
 import { SPECIAL_ENDPOINTS, toCamelCase, type SpecialEndpoints } from "./utils";
 
 export type InferAliasedPlugin<
@@ -10,7 +14,7 @@ export type InferAliasedPlugin<
 	Prefix extends string,
 	O extends AliasOptions,
 	IsClient extends true | false = false,
-> = Omit<T, "endpoints"> & {
+> = Omit<T, "endpoints" | "$Infer"> & {
 	endpoints: {
 		[K in keyof T["endpoints"] &
 			string as O["unstable_prefixEndpointMethods"] extends true
@@ -37,7 +41,18 @@ export type InferAliasedPlugin<
 					: T
 				: T["endpoints"][K];
 	};
-};
+} & (T extends { $Infer: infer I extends Record<string, any> }
+		? {
+				$Infer: O["prefixTypeInference"] extends true
+					? {
+							[K in keyof I &
+								string as `${Capitalize<CamelCasePrefix<Prefix>>}${K}`]: I[K];
+						}
+					: I;
+			}
+		: {
+				$Infer: undefined;
+			});
 
 export type AliasOptions = {
 	/**
@@ -51,6 +66,7 @@ export type AliasOptions = {
 	 * @default false
 	 */
 	unstable_prefixEndpointMethods?: boolean;
+	prefixTypeInference?: boolean;
 };
 
 /**
