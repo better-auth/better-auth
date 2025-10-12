@@ -50,40 +50,40 @@ The Legal Documents plugin lets you force users to accept T&C's before signing u
     })
     ```
 
-    <CustomTypeTable type={[{
-	    isOptional: false,
-	    description: "The name of the document, used in the schema for the database",
-	    propName: "name",
-	    type: "string",
-	    exampleValue: "Terms of Service",
-	    comments: null,
-	    isServerOnly: false,
-	    path: [],
-	    isNullable: false,
-	    isClientOnly: false,
-    },{
-	    isOptional: true,
-	    description: "Whether the user must accept the terms before signing up",
-	    propName: "mustAccept",
-	    type: "boolean",
-	    exampleValue: "false",
-	    comments: "default: true",
-	    isServerOnly: false,
-	    path: [],
-	    isNullable: false,
-	    isClientOnly: false,
-    },{
-	    isOptional: false,
-	    description: "Whether the user must view the terms before signing up",
-	    propName: "mustView",
-	    type: "boolean",
-	    exampleValue: "false",
-	    comments: "default: true",
-	    isServerOnly: false,
-	    path: [],
-	    isNullable: false,
-	    isClientOnly: false,
-    }]}/>
+    <CustomTypeTable props={[{
+          isOptional: false,
+          description: "The name of the document, used in the schema for the database",
+          propName: "name",
+          type: "string",
+          exampleValue: "Terms of Service",
+          comments: null,
+          isServerOnly: false,
+          path: [],
+          isNullable: false,
+          isClientOnly: false,
+        }, {
+          isOptional: true,
+          description: "Whether the user must accept the terms before signing up",
+          propName: "mustAccept",
+          type: "boolean",
+          exampleValue: "false",
+          comments: "default: true",
+          isServerOnly: false,
+          path: [],
+          isNullable: false,
+          isClientOnly: false,
+        }, {
+          isOptional: false,
+          description: "Whether the user must view the terms before signing up",
+          propName: "mustView",
+          type: "boolean",
+          exampleValue: "false",
+          comments: "default: true",
+          isServerOnly: false,
+          path: [],
+          isNullable: false,
+          isClientOnly: false,
+        }]} isServer={true} />
   </Step>
 </Steps>
 
@@ -99,15 +99,15 @@ type actionLegalDocument = {
 		/**
      * The name of the document
     */
-    name: string;
+    name: string
     /**
      * The date (and time) the document was accepted
     */
-	  acceptedAt: Date = undefined;
+	  acceptedAt?: Date
     /**
      * The date (and time) the document was accepted
     */
-    viewedAt: Date = undefined;
+    viewedAt?: Date
 }
 ```
 </APIMethod>
@@ -123,7 +123,7 @@ If either `blockSignUp` or `blockSignIn` is set to `true`, SSO will be disabled.
 ### Include Legal Documents in auth request
 
 You can include documents in the `sign up` and `sign in` request such as `authClient.signUp.email`
-You can do this by passing `\{name}AcceptedAt` and `\{name}ViewedAt` (where `name` is the name of the document) to the request body, and it will be merged with the user's current documents.
+You can do this by passing `{name}AcceptedAt` and `{name}ViewedAt` (where `name` is the name of the document) to the request body, and it will be merged with the user's current documents.
 
 The `UserWithDocuments` type is exported from the plugin, and is the type that should be used for `signUp` and `signIn` request containing documents.
 
@@ -138,26 +138,24 @@ type listDocuments = {
    * The user's id
    * Either `user` or `cookie` is required
   */
-  user?: string;
+  user?: string
   /**
    * The user's cookie
    * Either `user` or `cookie` is required
   */
-	cookie?: string;
-
+	cookie?: string
   /**
    * The name of the document
   */
-	name: string;
+	name: string
   /**
    * The date (and time) the document was viewed (undefined if not viewed)
    */
-	viewedAt?: Date;
+	viewedAt?: Date
   /**
    * The date (and time) the document was accepted (undefined if not accepted)
   */
-	acceptedAt?: Date;
-
+	acceptedAt?: Date
 }
 ```
 </APIMethod>
@@ -166,14 +164,14 @@ type listDocuments = {
 
 ### LegalOptions
 
-<CustomTypeTable type={[{
+<CustomTypeTable props={[{
 	isOptional: false,
 	description: "The definitions for the documents",
 	propName: "documents",
 	type: "LegalDocument[]",
 	exampleValue: "[]",
 	comments: null,
-	isServerOnly: true,
+	isServerOnly: false,
 	path: [],
 	isNullable: false,
 	isClientOnly: false
@@ -184,7 +182,7 @@ type listDocuments = {
 	type: "boolean",
 	exampleValue: "false",
 	comments: "default: true",
-	isServerOnly: true,
+	isServerOnly: false,
 	path: [],
 	isNullable: false,
 	isClientOnly: false
@@ -195,7 +193,7 @@ type listDocuments = {
 	type: "boolean",
 	exampleValue: "false",
 	comments: "default: true",
-	isServerOnly: true,
+	isServerOnly: false,
 	path: [],
 	isNullable: false,
 	isClientOnly: false
@@ -206,15 +204,15 @@ type listDocuments = {
 	type: "string",
 	exampleValue: "'legalDocumentCookieName",
 	comments: "default: 'legal-id'",
-	isServerOnly: true,
+	isServerOnly: false,
 	path: [],
 	isNullable: false,
 	isClientOnly: false
-}]}/>
+}]} isServer={true} />
 
 ### LegalDocument
 
-<CustomTypeTable type={[{
+<CustomTypeTable props={[{
 	isOptional: false,
 	description: "The name of the document, used in the schema for the database",
 	propName: "name",
@@ -247,4 +245,4 @@ type listDocuments = {
 	path: ["LegalOptions", "documents[number]"],
 	isNullable: false,
 	isClientOnly: false,
-}]}/>
+}]} isServer={true} />
