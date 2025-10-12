@@ -11,7 +11,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Loader2, SearchIcon, Send, X } from "lucide-react";
+import { Loader2, SearchIcon, Send, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import Link from "fumadocs-core/link";
@@ -33,30 +33,30 @@ function useChatContext() {
 	return use(Context)!.chat;
 }
 
-function SearchAIActions() {
-	const { messages, status, setMessages, stop } = useChatContext();
-	const isGenerating = status === "streaming" || status === "submitted";
+// function SearchAIActions() {
+// 	const { messages, status, setMessages, stop } = useChatContext();
+// 	const isGenerating = status === "streaming" || status === "submitted";
 
-	if (messages.length === 0) return null;
+// 	if (messages.length === 0) return null;
 
-	return (
-		<>
-			<button
-				type="button"
-				className={cn(
-					buttonVariants({
-						color: "secondary",
-						size: "sm",
-						className: "rounded-none",
-					}),
-				)}
-				onClick={isGenerating ? stop : () => setMessages([])}
-			>
-				{isGenerating ? "Cancel" : "Clear Chat"}
-			</button>
-		</>
-	);
-}
+// 	return (
+// 		<>
+// 			<button
+// 				type="button"
+// 				className={cn(
+// 					buttonVariants({
+// 						color: "secondary",
+// 						size: "sm",
+// 						className: "rounded-none",
+// 					}),
+// 				)}
+// 				onClick={isGenerating ? stop : () => setMessages([])}
+// 			>
+// 				{isGenerating ? "Cancel" : "Clear Chat"}
+// 			</button>
+// 		</>
+// 	);
+// }
 
 const suggestions = [
 	"How to configure Sqlite database?",
@@ -66,7 +66,7 @@ const suggestions = [
 ];
 
 function SearchAIInput(props: ComponentProps<"form">) {
-	const { status, sendMessage, stop, messages } = useChatContext();
+	const { status, sendMessage, stop, messages, setMessages } = useChatContext();
 	const [input, setInput] = useState("");
 	const isLoading = status === "streaming" || status === "submitted";
 	const showSuggestions = messages.length === 0 && !isLoading;
@@ -81,12 +81,22 @@ function SearchAIInput(props: ComponentProps<"form">) {
 		void sendMessage({ text: suggestion });
 	};
 
+	const handleClear = () => {
+		setMessages([]);
+		setInput("");
+	};
+
 	useEffect(() => {
 		if (isLoading) document.getElementById("nd-ai-input")?.focus();
 	}, [isLoading]);
 
 	return (
-		<div className={cn("flex flex-col", isLoading ? "opacity-50" : "")}>
+		<div
+			className={cn(
+				"flex flex-col relative bg-fd-background m-[1px] h-full border border-fd-border rounded-lg shadow-2xl shadow-fd-background",
+				isLoading ? "opacity-50" : "",
+			)}
+		>
 			<form
 				{...props}
 				className={cn("flex items-start pe-2", props.className)}
@@ -94,9 +104,9 @@ function SearchAIInput(props: ComponentProps<"form">) {
 			>
 				<Input
 					value={input}
-					placeholder={isLoading ? "answering..." : "Ask BA bot"}
+					placeholder={isLoading ? "answering..." : "Ask BA Bot"}
 					autoFocus
-					className="p-4"
+					className="p-4 text-sm"
 					disabled={status === "streaming" || status === "submitted"}
 					onChange={(e) => {
 						setInput(e.target.value);
@@ -153,6 +163,38 @@ function SearchAIInput(props: ComponentProps<"form">) {
 								{suggestion}
 							</button>
 						))}
+					</div>
+				</div>
+			)}
+			{showSuggestions && (
+				<div className="border-t px-4 text-xs text-fd-muted-foreground bg-fd-accent/40 h-full flex items-center gap-1 mt-2 py-1">
+					Powered by{" "}
+					<Link
+						href="https://inkeep.com"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-fd-primary hover:text-fd-primary/80 hover:underline"
+					>
+						Inkeep.
+					</Link>
+					AI can be inaccurate, please verify the information.
+				</div>
+			)}
+			{!showSuggestions && (
+				<div className="border-t px-4 text-xs text-fd-muted-foreground cursor-pointer bg-fd-accent/40 h-full flex items-center gap-1 mt-2 py-1">
+					<div
+						className="flex items-center gap-1 empty:hidden hover:text-fd-foreground transition-all duration-200 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+						role="button"
+						aria-disabled={isLoading}
+						tabIndex={0}
+						onClick={() => {
+							if (!isLoading) {
+								handleClear();
+							}
+						}}
+					>
+						<Trash2 className="size-3" />
+						<p>Clear</p>
 					</div>
 				</div>
 			)}
@@ -463,16 +505,6 @@ export function AISearchTrigger() {
 							}
 						}}
 					>
-						<p className="text-xs absolute -top-3 lg:top-auto lg:left-auto left-4 lg:-bottom-3 lg:right-4 flex items-center gap-1 flex-1 text-fd-muted-foreground">
-							Powered by{" "}
-							<Link
-								href="https://inkeep.com"
-								target="_blank"
-								aria-label="Inkeep"
-							>
-								<InKeepLogo className="w-16 h-16" />
-							</Link>
-						</p>
 						<div className="sticky top-0 flex gap-2 items-center py-2 w-[min(800px,90vw)]">
 							<div className="flex justify-end w-full items-center">
 								<button
@@ -530,9 +562,9 @@ export function AISearchTrigger() {
 				</Presence>
 				<div
 					className={cn(
-						"fixed bottom-2 transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 rounded-sm border shadow-xl overflow-hidden z-30",
+						"fixed bottom-4 transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 rounded-sm border shadow-xl overflow-hidden z-30",
 						open
-							? `w-[min(800px,90vw)] bg-fd-popover ${showSuggestions ? "h-48" : "h-32"}`
+							? `w-[min(800px,90vw)] bg-fd-accent/30 ${showSuggestions ? "h-1/4" : "h-32"}`
 							: "w-40 h-10 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl",
 					)}
 					style={{
@@ -561,9 +593,6 @@ export function AISearchTrigger() {
 							)}
 						>
 							<SearchAIInput className="flex-1" />
-							<div className="flex items-center gap-1.5 p-2 empty:hidden">
-								<SearchAIActions />
-							</div>
 						</div>
 					</Presence>
 				</div>
