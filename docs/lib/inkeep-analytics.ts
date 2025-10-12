@@ -70,27 +70,15 @@ async function makeAnalyticsRequest(endpoint: string, data: any) {
 export async function logConversationToAnalytics(
 	conversation: InkeepConversation,
 ) {
-	try {
-		return await makeAnalyticsRequest("/conversations", conversation);
-	} catch (error) {
-		throw error;
-	}
+	return await makeAnalyticsRequest("/conversations", conversation);
 }
 
 export async function submitFeedbackToAnalytics(feedback: InkeepFeedback) {
-	try {
-		return await makeAnalyticsRequest("/feedback", feedback);
-	} catch (error) {
-		throw error;
-	}
+	return await makeAnalyticsRequest("/feedback", feedback);
 }
 
 export async function logEventToAnalytics(event: InkeepEvent) {
-	try {
-		return await makeAnalyticsRequest("/events", event);
-	} catch (error) {
-		throw error;
-	}
+	return await makeAnalyticsRequest("/events", event);
 }
 
 export async function logConversationToInkeep(messages: InkeepMessage[]) {
