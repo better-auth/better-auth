@@ -998,7 +998,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
 							value: `${storedOTP}:0`,
-							identifier: `forget-password-otp-${email}`,
+							// use the same identifier as request-password-reset
+							// to avoid performing multiple database queries
+							identifier: `request-password-reset-otp-${email}`,
 							expiresAt: getDate(opts.expiresIn, "sec"),
 						},
 						ctx,
@@ -1167,12 +1169,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					const verificationValue =
-						(await ctx.context.internalAdapter.findVerificationValue(
+						await ctx.context.internalAdapter.findVerificationValue(
 							`request-password-reset-otp-${email}`,
-						)) ??
-						(await ctx.context.internalAdapter.findVerificationValue(
-							`forget-password-otp-${email}`,
-						));
+						);
 					if (!verificationValue) {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_OTP,
