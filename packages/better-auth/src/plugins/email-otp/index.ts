@@ -104,7 +104,6 @@ export interface EmailOTPOptions {
 	overrideDefaultEmailVerification?: boolean;
 }
 
-const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const defaultOTPGenerator = (options: EmailOTPOptions) =>
 	generateRandomString(options.otpLength ?? 6, "0-9");
 
@@ -233,8 +232,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				}
 				const email = ctx.body.email;
-				if (!emailRegex.test(email)) {
-					throw ctx.error("BAD_REQUEST", {
+				const isValidEmail = z.email().safeParse(email);
+				if (!isValidEmail.success) {
+					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_EMAIL,
 					});
 				}
@@ -526,7 +526,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					if (!emailRegex.test(email)) {
+					const isValidEmail = z.email().safeParse(email);
+					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_EMAIL,
 						});
@@ -650,7 +651,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					if (!emailRegex.test(email)) {
+					const isValidEmail = z.email().safeParse(email);
+					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_EMAIL,
 						});
