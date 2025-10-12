@@ -58,7 +58,7 @@ export async function POST(req: Request) {
 						.map((msg: any) => ({
 							id:
 								msg.id ||
-								`msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+								`msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
 							role: msg.role,
 							content: extractMessageContent(msg),
 						}))
