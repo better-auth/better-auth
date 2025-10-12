@@ -298,13 +298,8 @@ export const createInternalAdapter = (
 				...(overrideAll ? rest : {}),
 			};
 
-			if (
-				ctx.context.options.session?.deleteSessionOnSignOut?.enabled === false
-			) {
-				if (
-					ctx.context.options.session?.deleteSessionOnSignOut?.timestamp ===
-					true
-				) {
+			if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+				if (options.session?.deleteSessionOnSignOut?.timestamp === true) {
 					data.invalidatedAt = null;
 				} else {
 					data.isActive = true;
@@ -649,7 +644,7 @@ export const createInternalAdapter = (
 				}
 			}
 
-			if (ctx.options.session?.deleteSessionOnSignOut?.enabled !== false) {
+			if (options.session?.deleteSessionOnSignOut?.enabled !== false) {
 				await (await getCurrentAdapter(adapter)).delete<Session>({
 					model: "session",
 					where: [
@@ -662,7 +657,7 @@ export const createInternalAdapter = (
 			} else {
 				const updateData: { isActive?: boolean; invalidatedAt?: Date } = {};
 
-				if (ctx.options.session?.deleteSessionOnSignOut?.timestamp === true) {
+				if (options.session?.deleteSessionOnSignOut?.timestamp === true) {
 					updateData.invalidatedAt = new Date();
 				} else {
 					updateData.isActive = false;
@@ -739,7 +734,7 @@ export const createInternalAdapter = (
 				}
 			}
 
-			if (ctx.options.session?.deleteSessionOnSignOut?.enabled !== false) {
+			if (options.session?.deleteSessionOnSignOut?.enabled !== false) {
 				await deleteManyWithHooks(
 					[
 						{
@@ -755,7 +750,7 @@ export const createInternalAdapter = (
 			} else {
 				const updateData: { isActive?: boolean; invalidatedAt?: Date } = {};
 
-				if (ctx.options.session?.deleteSessionOnSignOut?.timestamp === true) {
+				if (options.session?.deleteSessionOnSignOut?.timestamp === true) {
 					updateData.invalidatedAt = new Date();
 				} else {
 					updateData.isActive = false;
