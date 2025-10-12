@@ -125,6 +125,7 @@ export async function submitFeedbackToInkeep(
 
 		return data;
 	} catch (error) {
+		console.error("Error in submitFeedbackToInkeep:", error);
 		return null;
 	}
 }
