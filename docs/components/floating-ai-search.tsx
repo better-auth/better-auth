@@ -11,7 +11,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Loader2, RefreshCw, SearchIcon, Send, X } from "lucide-react";
+import { Loader2, SearchIcon, Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import Link from "fumadocs-core/link";
@@ -463,18 +463,18 @@ export function AISearchTrigger() {
 							}
 						}}
 					>
+						<p className="text-xs absolute -top-3 lg:top-auto lg:left-auto left-4 lg:-bottom-3 lg:right-4 flex items-center gap-1 flex-1 text-fd-muted-foreground">
+							Powered by{" "}
+							<Link
+								href="https://inkeep.com"
+								target="_blank"
+								aria-label="Inkeep"
+							>
+								<InKeepLogo className="w-16 h-16" />
+							</Link>
+						</p>
 						<div className="sticky top-0 flex gap-2 items-center py-2 w-[min(800px,90vw)]">
-							<div className="flex justify-between w-full items-center">
-								<p className="text-xs flex items-center gap-1 flex-1 text-fd-muted-foreground">
-									Powered by{" "}
-									<Link
-										href="https://inkeep.com"
-										target="_blank"
-										aria-label="Inkeep"
-									>
-										<InKeepLogo className="w-16 h-16" />
-									</Link>
-								</p>
+							<div className="flex justify-end w-full items-center">
 								<button
 									aria-label="Close"
 									tabIndex={-1}
