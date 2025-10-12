@@ -12,6 +12,7 @@ export default defineBuildConfig({
 	clean: true,
 	failOnWarn: false,
 	externals: [
+		"@better-auth/core",
 		"prisma",
 		"@prisma/client",
 		"better-sqlite3",
