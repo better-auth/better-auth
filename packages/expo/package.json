@@ -12,9 +12,8 @@
   "homepage": "https://www.better-auth.com/docs/integrations/expo",
   "scripts": {
     "test": "vitest",
-    "build": "unbuild --clean",
-    "dev": "unbuild --watch",
-    "stub": "unbuild --stub",
+    "build": "bunchee",
+    "dev": "bunchee --watch",
     "typecheck": "tsc --project tsconfig.json"
   },
   "exports": {
@@ -55,6 +54,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.2.0",
+    "bunchee": "^6.6.1",
     "expo-constants": "~17.1.7",
     "expo-crypto": "^13.0.2",
     "expo-linking": "~7.1.7",
@@ -69,7 +69,13 @@
     "expo-crypto": ">=13.0.0",
     "expo-linking": ">=7.0.0",
     "expo-secure-store": ">=14.0.0",
-    "expo-web-browser": ">=14.0.0"
+    "expo-web-browser": ">=14.0.0",
+    "react-native": "~0.80.2"
+  },
+  "peerDependenciesMeta": {
+    "react-native": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@better-fetch/fetch": "catalog:",

@@ -13,8 +13,8 @@
   "description": "Stripe plugin for Better Auth",
   "scripts": {
     "test": "vitest",
-    "build": "unbuild",
-    "dev": "unbuild --watch",
+    "build": "bunchee",
+    "dev": "bunchee --watch",
     "typecheck": "tsc --project tsconfig.json"
   },
   "publishConfig": {
@@ -55,7 +55,7 @@
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "stripe": "^18.5.0",
-    "unbuild": "catalog:"
+    "bunchee": "^6.6.1",
+    "stripe": "^18.5.0"
   }
 }

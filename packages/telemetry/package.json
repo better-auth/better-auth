@@ -4,7 +4,7 @@
   "description": "Telemetry package for Better Auth",
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
+  "module": "./dist/index.js",
   "exports": {
     ".": {
       "import": {
@@ -25,12 +25,13 @@
     }
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "bunchee",
+    "dev": "bunchee --watch",
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "tsdown": "^0.15.6",
+    "bunchee": "^6.6.1",
     "type-fest": "^4.31.0"
   },
   "dependencies": {

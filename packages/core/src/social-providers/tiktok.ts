@@ -1,9 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	refreshAccessToken,
 	validateAuthorizationCode,
-} from "@better-auth/core/oauth2";
+} from "../oauth2";
 
 /**
  * [More info](https://developers.tiktok.com/doc/tiktok-api-v2-get-user-info/)

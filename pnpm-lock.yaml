@@ -1097,9 +1097,9 @@ importers:
       '@types/semver':
         specifier: ^7.7.1
         version: 7.7.1
-      tsdown:
-        specifier: ^0.15.6
-        version: 0.15.6(typescript@5.9.2)
+      bunchee:
+        specifier: ^6.6.1
+        version: 6.6.1(typescript@5.9.2)
       tsx:
         specifier: ^4.20.5
         version: 4.20.5
@@ -1159,6 +1159,9 @@ importers:
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.4.1
+      bunchee:
+        specifier: ^6.6.1
+        version: 6.6.1(typescript@5.9.2)
       expo-constants:
         specifier: ~17.1.7
         version: 17.1.7(expo@54.0.10)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.2))(@types/react@19.2.2)(react@19.2.0))
@@ -1242,12 +1245,12 @@ importers:
       better-call:
         specifier: 'catalog:'
         version: 1.0.19
+      bunchee:
+        specifier: ^6.6.1
+        version: 6.6.1(typescript@5.9.2)
       stripe:
         specifier: ^18.5.0
         version: 18.5.0(@types/node@24.7.1)
-      unbuild:
-        specifier: 'catalog:'
-        version: 3.6.1(sass@1.90.0)(typescript@5.9.2)(vue@3.5.19(typescript@5.9.2))
 
   packages/telemetry:
     dependencies:
@@ -1261,9 +1264,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
-      tsdown:
-        specifier: ^0.15.6
-        version: 0.15.6(typescript@5.9.2)
+      bunchee:
+        specifier: ^6.6.1
+        version: 6.6.1(typescript@5.9.2)
       type-fest:
         specifier: ^4.31.0
         version: 4.41.0
@@ -3975,9 +3978,6 @@ packages:
   '@prisma/get-platform@5.22.0':
     resolution: {integrity: sha512-pHhpQdr1UPFpt+zFfnPazhulaZYCUqeIcPpJViYoq9R+D/yw4fjE+CtnsnKzPYm0ddUbeXUzjGVGIRVgPDCk4Q==}
 
-  '@quansync/fs@0.1.5':
-    resolution: {integrity: sha512-lNS9hL2aS2NZgNW7BBj+6EBl4rOf8l+tQ0eRY6JWCI8jI2kc53gSoqbjojU0OnAWhzoXiOjFyGsHcDGePB3lhA==}
-
   '@radix-ui/number@1.1.1':
     resolution: {integrity: sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g==}
 
@@ -6538,10 +6538,6 @@ packages:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
     engines: {node: '>=12'}
 
-  ast-kit@2.1.3:
-    resolution: {integrity: sha512-TH+b3Lv6pUjy/Nu0m6A2JULtdzLpmqF9x1Dhj00ZoEiML8qvVA9j1flkzTKNYgdEhWrjDwtWNpyyCUbfQe514g==}
-    engines: {node: '>=20.19.0'}
-
   ast-module-types@6.0.1:
     resolution: {integrity: sha512-WHw67kLXYbZuHTmcdbIrVArCq5wxo6NEuj3hiYAWr8mwJeC+C2mMCIBIWCiDoCye/OF/xelc+teJ1ERoWmnEIA==}
     engines: {node: '>=18'}
@@ -6731,9 +6727,6 @@ packages:
 
   birpc@0.2.14:
     resolution: {integrity: sha512-37FHE8rqsYM5JEKCnXFyHpBCzvgHEExwVVTq+nUmloInU7l8ezD1TpOhKpS8oe1DTYFqEK27rFZVKG43oTqXRA==}
-
-  birpc@2.6.1:
-    resolution: {integrity: sha512-LPnFhlDpdSH6FJhJyn4M0kFO7vtQ5iPw24FnG0y21q09xC7e8+1LeR31S1MAIrDAHp4m7aas4bEkTDTvMAtebQ==}
 
   bl@4.1.0:
     resolution: {integrity: sha512-1W07cM9gS6DcLperZfFSj+bWLtaPGSOHWhPiGzXmvVJbRLdG82sH/Kn8EtW1VqWVA54AKf2h5k5BbnIbwF3h6w==}
@@ -7922,15 +7915,6 @@ packages:
       sql.js:
         optional: true
       sqlite3:
-        optional: true
-
-  dts-resolver@2.1.2:
-    resolution: {integrity: sha512-xeXHBQkn2ISSXxbJWD828PFjtyg+/UrMDo7W4Ffcs7+YWCquxU8YjV1KoxuiL+eJ5pg3ll+bC6flVv61L3LKZg==}
-    engines: {node: '>=20.18.0'}
-    peerDependencies:
-      oxc-resolver: '>=11.0.0'
-    peerDependenciesMeta:
-      oxc-resolver:
         optional: true
 
   dunder-proto@1.0.1:
@@ -11871,25 +11855,6 @@ packages:
     deprecated: Rimraf versions prior to v4 are no longer supported
     hasBin: true
 
-  rolldown-plugin-dts@0.16.11:
-    resolution: {integrity: sha512-9IQDaPvPqTx3RjG2eQCK5GYZITo203BxKunGI80AGYicu1ySFTUyugicAaTZWRzFWh9DSnzkgNeMNbDWBbSs0w==}
-    engines: {node: '>=20.18.0'}
-    peerDependencies:
-      '@ts-macro/tsc': ^0.3.6
-      '@typescript/native-preview': '>=7.0.0-dev.20250601.1'
-      rolldown: ^1.0.0-beta.9
-      typescript: ^5.0.0
-      vue-tsc: ~3.1.0
-    peerDependenciesMeta:
-      '@ts-macro/tsc':
-        optional: true
-      '@typescript/native-preview':
-        optional: true
-      typescript:
-        optional: true
-      vue-tsc:
-        optional: true
-
   rolldown@1.0.0-beta.42:
     resolution: {integrity: sha512-xaPcckj+BbJhYLsv8gOqezc8EdMcKKe/gk8v47B0KPvgABDrQ0qmNPAiT/gh9n9Foe0bUkEv2qzj42uU5q1WRg==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -12648,28 +12613,6 @@ packages:
   ts-morph@26.0.0:
     resolution: {integrity: sha512-ztMO++owQnz8c/gIENcM9XfCEzgoGphTv+nKpYNM1bgsdOVC/jRZuEBf6N+mLLDNg68Kl+GgUZfOySaRiG1/Ug==}
 
-  tsdown@0.15.6:
-    resolution: {integrity: sha512-W6++O3JeV9gm3JY6P/vLiC7zzTcJbZhQxXb+p3AvRMpDOPBIg82yXULyZCcwjsihY/bFG+Qw37HkezZbP7fzUg==}
-    engines: {node: '>=20.19.0'}
-    hasBin: true
-    peerDependencies:
-      '@arethetypeswrong/core': ^0.18.1
-      publint: ^0.3.0
-      typescript: ^5.0.0
-      unplugin-lightningcss: ^0.4.0
-      unplugin-unused: ^0.5.0
-    peerDependenciesMeta:
-      '@arethetypeswrong/core':
-        optional: true
-      publint:
-        optional: true
-      typescript:
-        optional: true
-      unplugin-lightningcss:
-        optional: true
-      unplugin-unused:
-        optional: true
-
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
@@ -12775,9 +12718,6 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
-
-  unconfig@7.3.3:
-    resolution: {integrity: sha512-QCkQoOnJF8L107gxfHL0uavn7WD9b3dpBcFX6HtfQYmjw2YzWxGuFQ0N0J6tE9oguCBJn9KOvfqYDCMPHIZrBA==}
 
   uncrypto@0.1.3:
     resolution: {integrity: sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q==}
@@ -16191,12 +16131,12 @@ snapshots:
       write-file-atomic: 5.0.1
     optional: true
 
-  '@netlify/functions@3.1.10(rollup@4.50.1)':
+  '@netlify/functions@3.1.10(rollup@4.52.4)':
     dependencies:
       '@netlify/blobs': 9.1.2
       '@netlify/dev-utils': 2.2.0
       '@netlify/serverless-functions-api': 1.41.2
-      '@netlify/zip-it-and-ship-it': 12.2.1(rollup@4.50.1)
+      '@netlify/zip-it-and-ship-it': 12.2.1(rollup@4.52.4)
       cron-parser: 4.9.0
       decache: 4.6.2
       extract-zip: 2.0.1
@@ -16221,13 +16161,13 @@ snapshots:
 
   '@netlify/serverless-functions-api@2.2.1': {}
 
-  '@netlify/zip-it-and-ship-it@12.2.1(rollup@4.50.1)':
+  '@netlify/zip-it-and-ship-it@12.2.1(rollup@4.52.4)':
     dependencies:
       '@babel/parser': 7.28.4
       '@babel/types': 7.28.0
       '@netlify/binary-info': 1.0.0
       '@netlify/serverless-functions-api': 2.2.1
-      '@vercel/nft': 0.29.4(rollup@4.50.1)
+      '@vercel/nft': 0.29.4(rollup@4.52.4)
       archiver: 7.0.1
       common-path-prefix: 3.0.0
       copy-file: 11.1.0
@@ -16345,7 +16285,8 @@ snapshots:
       '@orama/orama': 3.1.14
       lodash: 4.17.21
 
-  '@oxc-project/types@0.94.0': {}
+  '@oxc-project/types@0.94.0':
+    optional: true
 
   '@oxc-transform/binding-android-arm64@0.75.1':
     optional: true
@@ -16552,10 +16493,6 @@ snapshots:
   '@prisma/get-platform@5.22.0':
     dependencies:
       '@prisma/debug': 5.22.0
-
-  '@quansync/fs@0.1.5':
-    dependencies:
-      quansync: 0.2.11
 
   '@radix-ui/number@1.1.1': {}
 
@@ -17753,7 +17690,9 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
@@ -18022,11 +17961,16 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.0-beta.32': {}
 
-  '@rolldown/pluginutils@1.0.0-beta.42': {}
+  '@rolldown/pluginutils@1.0.0-beta.42':
+    optional: true
 
   '@rollup/plugin-alias@5.1.1(rollup@4.50.1)':
     optionalDependencies:
       rollup: 4.50.1
+
+  '@rollup/plugin-alias@5.1.1(rollup@4.52.4)':
+    optionalDependencies:
+      rollup: 4.52.4
 
   '@rollup/plugin-commonjs@28.0.6(rollup@4.50.1)':
     dependencies:
@@ -18052,13 +17996,13 @@ snapshots:
     optionalDependencies:
       rollup: 4.52.4
 
-  '@rollup/plugin-inject@5.0.5(rollup@4.50.1)':
+  '@rollup/plugin-inject@5.0.5(rollup@4.52.4)':
     dependencies:
-      '@rollup/pluginutils': 5.2.0(rollup@4.50.1)
+      '@rollup/pluginutils': 5.2.0(rollup@4.52.4)
       estree-walker: 2.0.2
       magic-string: 0.30.19
     optionalDependencies:
-      rollup: 4.50.1
+      rollup: 4.52.4
 
   '@rollup/plugin-json@6.1.0(rollup@4.50.1)':
     dependencies:
@@ -18106,13 +18050,13 @@ snapshots:
     optionalDependencies:
       rollup: 4.52.4
 
-  '@rollup/plugin-terser@0.4.4(rollup@4.50.1)':
+  '@rollup/plugin-terser@0.4.4(rollup@4.52.4)':
     dependencies:
       serialize-javascript: 6.0.2
       smob: 1.5.0
       terser: 5.44.0
     optionalDependencies:
-      rollup: 4.50.1
+      rollup: 4.52.4
 
   '@rollup/plugin-wasm@6.2.2(rollup@4.52.4)':
     dependencies:
@@ -19328,10 +19272,10 @@ snapshots:
       vue: 3.5.19(typescript@5.9.2)
       vue-router: 4.5.1(vue@3.5.19(typescript@5.9.2))
 
-  '@vercel/nft@0.29.4(rollup@4.50.1)':
+  '@vercel/nft@0.29.4(rollup@4.52.4)':
     dependencies:
       '@mapbox/node-pre-gyp': 2.0.0
-      '@rollup/pluginutils': 5.2.0(rollup@4.50.1)
+      '@rollup/pluginutils': 5.2.0(rollup@4.52.4)
       acorn: 8.15.0
       acorn-import-attributes: 1.9.5(acorn@8.15.0)
       async-sema: 3.1.1
@@ -19725,11 +19669,6 @@ snapshots:
 
   assertion-error@2.0.1: {}
 
-  ast-kit@2.1.3:
-    dependencies:
-      '@babel/parser': 7.28.4
-      pathe: 2.0.3
-
   ast-module-types@6.0.1: {}
 
   ast-types@0.16.1:
@@ -19980,8 +19919,6 @@ snapshots:
       file-uri-to-path: 1.0.0
 
   birpc@0.2.14: {}
-
-  birpc@2.6.1: {}
 
   bl@4.1.0:
     dependencies:
@@ -21026,8 +20963,6 @@ snapshots:
       postgres: 3.4.7
       prisma: 5.22.0
 
-  dts-resolver@2.1.2: {}
-
   dunder-proto@1.0.1:
     dependencies:
       call-bind-apply-helpers: 1.0.2
@@ -21075,7 +21010,8 @@ snapshots:
 
   emoji-regex@9.2.2: {}
 
-  empathic@2.0.0: {}
+  empathic@2.0.0:
+    optional: true
 
   enabled@2.0.0: {}
 
@@ -24559,15 +24495,15 @@ snapshots:
   nitropack@2.12.4(@azure/identity@4.11.1)(@libsql/client@0.15.14)(@netlify/blobs@10.0.8)(better-sqlite3@12.4.1)(drizzle-orm@0.44.5(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(better-sqlite3@12.4.1)(bun-types@1.2.23(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0))(mysql2@3.14.4)(rolldown@1.0.0-beta.42):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.4.0
-      '@netlify/functions': 3.1.10(rollup@4.50.1)
-      '@rollup/plugin-alias': 5.1.1(rollup@4.50.1)
-      '@rollup/plugin-commonjs': 28.0.6(rollup@4.50.1)
-      '@rollup/plugin-inject': 5.0.5(rollup@4.50.1)
-      '@rollup/plugin-json': 6.1.0(rollup@4.50.1)
-      '@rollup/plugin-node-resolve': 16.0.1(rollup@4.50.1)
-      '@rollup/plugin-replace': 6.0.2(rollup@4.50.1)
-      '@rollup/plugin-terser': 0.4.4(rollup@4.50.1)
-      '@vercel/nft': 0.29.4(rollup@4.50.1)
+      '@netlify/functions': 3.1.10(rollup@4.52.4)
+      '@rollup/plugin-alias': 5.1.1(rollup@4.52.4)
+      '@rollup/plugin-commonjs': 28.0.6(rollup@4.52.4)
+      '@rollup/plugin-inject': 5.0.5(rollup@4.52.4)
+      '@rollup/plugin-json': 6.1.0(rollup@4.52.4)
+      '@rollup/plugin-node-resolve': 16.0.1(rollup@4.52.4)
+      '@rollup/plugin-replace': 6.0.2(rollup@4.52.4)
+      '@rollup/plugin-terser': 0.4.4(rollup@4.52.4)
+      '@vercel/nft': 0.29.4(rollup@4.52.4)
       archiver: 7.0.1
       c12: 3.2.0(magicast@0.3.5)
       chokidar: 4.0.3
@@ -24609,8 +24545,8 @@ snapshots:
       pkg-types: 2.3.0
       pretty-bytes: 6.1.1
       radix3: 1.1.2
-      rollup: 4.50.1
-      rollup-plugin-visualizer: 6.0.3(rolldown@1.0.0-beta.42)(rollup@4.50.1)
+      rollup: 4.52.4
+      rollup-plugin-visualizer: 6.0.3(rolldown@1.0.0-beta.42)(rollup@4.52.4)
       scule: 1.3.0
       semver: 7.7.2
       serve-placeholder: 2.0.2
@@ -24659,15 +24595,15 @@ snapshots:
   nitropack@2.12.4(@libsql/client@0.15.14)(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.2.23(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.4.0
-      '@netlify/functions': 3.1.10(rollup@4.50.1)
-      '@rollup/plugin-alias': 5.1.1(rollup@4.50.1)
-      '@rollup/plugin-commonjs': 28.0.6(rollup@4.50.1)
-      '@rollup/plugin-inject': 5.0.5(rollup@4.50.1)
-      '@rollup/plugin-json': 6.1.0(rollup@4.50.1)
-      '@rollup/plugin-node-resolve': 16.0.1(rollup@4.50.1)
-      '@rollup/plugin-replace': 6.0.2(rollup@4.50.1)
-      '@rollup/plugin-terser': 0.4.4(rollup@4.50.1)
-      '@vercel/nft': 0.29.4(rollup@4.50.1)
+      '@netlify/functions': 3.1.10(rollup@4.52.4)
+      '@rollup/plugin-alias': 5.1.1(rollup@4.52.4)
+      '@rollup/plugin-commonjs': 28.0.6(rollup@4.52.4)
+      '@rollup/plugin-inject': 5.0.5(rollup@4.52.4)
+      '@rollup/plugin-json': 6.1.0(rollup@4.52.4)
+      '@rollup/plugin-node-resolve': 16.0.1(rollup@4.52.4)
+      '@rollup/plugin-replace': 6.0.2(rollup@4.52.4)
+      '@rollup/plugin-terser': 0.4.4(rollup@4.52.4)
+      '@vercel/nft': 0.29.4(rollup@4.52.4)
       archiver: 7.0.1
       c12: 3.2.0(magicast@0.3.5)
       chokidar: 4.0.3
@@ -24709,8 +24645,8 @@ snapshots:
       pkg-types: 2.3.0
       pretty-bytes: 6.1.1
       radix3: 1.1.2
-      rollup: 4.50.1
-      rollup-plugin-visualizer: 6.0.3(rolldown@1.0.0-beta.42)(rollup@4.50.1)
+      rollup: 4.52.4
+      rollup-plugin-visualizer: 6.0.3(rolldown@1.0.0-beta.42)(rollup@4.52.4)
       scule: 1.3.0
       semver: 7.7.2
       serve-placeholder: 2.0.2
@@ -26343,24 +26279,6 @@ snapshots:
     dependencies:
       glob: 7.2.3
 
-  rolldown-plugin-dts@0.16.11(rolldown@1.0.0-beta.42)(typescript@5.9.2):
-    dependencies:
-      '@babel/generator': 7.28.3
-      '@babel/parser': 7.28.4
-      '@babel/types': 7.28.4
-      ast-kit: 2.1.3
-      birpc: 2.6.1
-      debug: 4.4.3
-      dts-resolver: 2.1.2
-      get-tsconfig: 4.10.1
-      magic-string: 0.30.19
-      rolldown: 1.0.0-beta.42
-    optionalDependencies:
-      typescript: 5.9.2
-    transitivePeerDependencies:
-      - oxc-resolver
-      - supports-color
-
   rolldown@1.0.0-beta.42:
     dependencies:
       '@oxc-project/types': 0.94.0
@@ -26381,6 +26299,7 @@ snapshots:
       '@rolldown/binding-win32-arm64-msvc': 1.0.0-beta.42
       '@rolldown/binding-win32-ia32-msvc': 1.0.0-beta.42
       '@rolldown/binding-win32-x64-msvc': 1.0.0-beta.42
+    optional: true
 
   rollup-plugin-dts@6.2.1(rollup@4.50.1)(typescript@5.9.2):
     dependencies:
@@ -26407,7 +26326,7 @@ snapshots:
       rollup: 4.52.4
       rollup-preserve-directives: 1.1.3(rollup@4.52.4)
 
-  rollup-plugin-visualizer@6.0.3(rolldown@1.0.0-beta.42)(rollup@4.50.1):
+  rollup-plugin-visualizer@6.0.3(rolldown@1.0.0-beta.42)(rollup@4.52.4):
     dependencies:
       open: 8.4.2
       picomatch: 4.0.3
@@ -26415,7 +26334,7 @@ snapshots:
       yargs: 17.7.2
     optionalDependencies:
       rolldown: 1.0.0-beta.42
-      rollup: 4.50.1
+      rollup: 4.52.4
 
   rollup-preserve-directives@1.1.3(rollup@4.52.4):
     dependencies:
@@ -27313,31 +27232,6 @@ snapshots:
       '@ts-morph/common': 0.27.0
       code-block-writer: 13.0.3
 
-  tsdown@0.15.6(typescript@5.9.2):
-    dependencies:
-      ansis: 4.2.0
-      cac: 6.7.14
-      chokidar: 4.0.3
-      debug: 4.4.3
-      diff: 8.0.2
-      empathic: 2.0.0
-      hookable: 5.5.3
-      rolldown: 1.0.0-beta.42
-      rolldown-plugin-dts: 0.16.11(rolldown@1.0.0-beta.42)(typescript@5.9.2)
-      semver: 7.7.2
-      tinyexec: 1.0.1
-      tinyglobby: 0.2.15
-      tree-kill: 1.2.2
-      unconfig: 7.3.3
-    optionalDependencies:
-      typescript: 5.9.2
-    transitivePeerDependencies:
-      - '@ts-macro/tsc'
-      - '@typescript/native-preview'
-      - oxc-resolver
-      - supports-color
-      - vue-tsc
-
   tslib@2.8.1: {}
 
   tsx@4.20.5:
@@ -27455,13 +27349,6 @@ snapshots:
       - vue
       - vue-sfc-transformer
       - vue-tsc
-
-  unconfig@7.3.3:
-    dependencies:
-      '@quansync/fs': 0.1.5
-      defu: 6.1.4
-      jiti: 2.6.0
-      quansync: 0.2.11
 
   uncrypto@0.1.3: {}
 
@@ -27865,7 +27752,7 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.3)
       picomatch: 4.0.3
       postcss: 8.5.6
-      rollup: 4.50.1
+      rollup: 4.52.4
       tinyglobby: 0.2.15
     optionalDependencies:
       '@types/node': 24.7.1

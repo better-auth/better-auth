@@ -143,6 +143,7 @@
   },
   "scripts": {
     "build": "bunchee",
+    "dev": "bunchee --watch",
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
