@@ -124,7 +124,7 @@ export type BetterAuthAdvancedOptions = {
 		/**
 		 * Disable ip tracking
 		 *
-		 * ⚠︎ This is a security risk and it may expose your application to abuse
+		 * ! This is a security risk and it may expose your application to abuse
 		 */
 		disableIpTracking?: boolean;
 	};
@@ -137,7 +137,7 @@ export type BetterAuthAdvancedOptions = {
 	/**
 	 * Disable trusted origins check
 	 *
-	 * ⚠︎ This is a security risk and it may expose your application to CSRF attacks
+	 * ! This is a security risk and it may expose your application to CSRF attacks
 	 */
 	disableCSRFCheck?: boolean;
 	/**
@@ -679,11 +679,26 @@ export type BetterAuthOptions = {
 		 * If the session is not fresh, the user should be prompted
 		 * to sign in again.
 		 *
-		 * If set to 0, the session will be considered fresh every time. (⚠︎ not recommended)
+		 * If set to 0, the session will be considered fresh every time. (! not recommended)
 		 *
 		 * @default 1 day (60 * 60 * 24)
 		 */
 		freshAge?: number;
+		/**
+		 * Configuration options to delete session on sign out
+		 */
+		deleteSessionOnSignOut?: {
+			/**
+			 * Enable session deletion from database on sign out
+			 * @default true
+			 */
+			enabled?: boolean;
+			/**
+			 * Store the field to determine whether a session is active or not using a timestamp instead of boolean
+			 * @default false
+			 */
+			timestamp?: boolean;
+		};
 	};
 	account?: {
 		/**
@@ -728,7 +743,7 @@ export type BetterAuthOptions = {
 			 *
 			 * @default false
 			 *
-			 * ⚠️ Warning: enabling this might lead to account takeovers, so proceed with caution.
+			 * ! Warning: enabling this might lead to account takeovers, so proceed with caution.
 			 */
 			allowDifferentEmails?: boolean;
 			/**

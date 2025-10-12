@@ -297,6 +297,20 @@ export const createInternalAdapter = (
 				updatedAt: new Date(),
 				...(overrideAll ? rest : {}),
 			};
+
+			if (
+				ctx.context.options.session?.deleteSessionOnSignOut?.enabled === false
+			) {
+				if (
+					ctx.context.options.session?.deleteSessionOnSignOut?.timestamp ===
+					true
+				) {
+					data.invalidatedAt = null;
+				} else {
+					data.isActive = true;
+				}
+			}
+
 			const res = await createWithHooks(
 				data,
 				"session",
@@ -412,15 +426,25 @@ export const createInternalAdapter = (
 				}
 			}
 
+			const whereClause: Where[] = [
+				{
+					value: token,
+					field: "token",
+				},
+			];
+
+			if (ctx.options.session?.deleteSessionOnSignOut?.enabled === false) {
+				if (ctx.options.session?.deleteSessionOnSignOut?.timestamp === true) {
+					whereClause.push({ value: null, field: "invalidatedAt" });
+				} else {
+					whereClause.push({ value: true, field: "isActive" });
+				}
+			}
+
 			const session = await (await getCurrentAdapter(adapter)).findOne<Session>(
 				{
 					model: "session",
-					where: [
-						{
-							value: token,
-							field: "token",
-						},
-					],
+					where: whereClause,
 				},
 			);
 
@@ -482,17 +506,27 @@ export const createInternalAdapter = (
 				return sessions;
 			}
 
+			const whereClause: Where[] = [
+				{
+					field: "token",
+					value: sessionTokens,
+					operator: "in",
+				},
+			];
+
+			if (ctx.options.session?.deleteSessionOnSignOut?.enabled === false) {
+				if (ctx.options.session?.deleteSessionOnSignOut?.timestamp === true) {
+					whereClause.push({ value: null, field: "invalidatedAt" });
+				} else {
+					whereClause.push({ value: true, field: "isActive" });
+				}
+			}
+
 			const sessions = await (
 				await getCurrentAdapter(adapter)
 			).findMany<Session>({
 				model: "session",
-				where: [
-					{
-						field: "token",
-						value: sessionTokens,
-						operator: "in",
-					},
-				],
+				where: whereClause,
 			});
 			const userIds = sessions.map((session) => {
 				return session.userId;
@@ -607,21 +641,43 @@ export const createInternalAdapter = (
 				await secondaryStorage.delete(token);
 
 				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
+					(!options.session?.storeSessionInDatabase ||
+						ctx.options.session?.preserveSessionInDatabase) &&
+					ctx.options.session?.deleteSessionOnSignOut?.enabled !== false
 				) {
 					return;
 				}
 			}
-			await (await getCurrentAdapter(adapter)).delete<Session>({
-				model: "session",
-				where: [
-					{
-						field: "token",
-						value: token,
-					},
-				],
-			});
+
+			if (ctx.options.session?.deleteSessionOnSignOut?.enabled !== false) {
+				await (await getCurrentAdapter(adapter)).delete<Session>({
+					model: "session",
+					where: [
+						{
+							field: "token",
+							value: token,
+						},
+					],
+				});
+			} else {
+				const updateData: { isActive?: boolean; invalidatedAt?: Date } = {};
+
+				if (ctx.options.session?.deleteSessionOnSignOut?.timestamp === true) {
+					updateData.invalidatedAt = new Date();
+				} else {
+					updateData.isActive = false;
+				}
+
+				const where: Where[] = [{ value: token, field: "token" }];
+
+				await updateWithHooks(
+					updateData,
+					where,
+					"session",
+					undefined,
+					undefined,
+				);
+			}
 		},
 		deleteAccounts: async (
 			userId: string,
@@ -682,18 +738,43 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-			await deleteManyWithHooks(
-				[
-					{
-						field: Array.isArray(userIdOrSessionTokens) ? "token" : "userId",
-						value: userIdOrSessionTokens,
-						operator: Array.isArray(userIdOrSessionTokens) ? "in" : undefined,
-					},
-				],
-				"session",
-				undefined,
-				context,
-			);
+
+			if (ctx.options.session?.deleteSessionOnSignOut?.enabled !== false) {
+				await deleteManyWithHooks(
+					[
+						{
+							field: Array.isArray(userIdOrSessionTokens) ? "token" : "userId",
+							value: userIdOrSessionTokens,
+							operator: Array.isArray(userIdOrSessionTokens) ? "in" : undefined,
+						},
+					],
+					"session",
+					undefined,
+					context,
+				);
+			} else {
+				const updateData: { isActive?: boolean; invalidatedAt?: Date } = {};
+
+				if (ctx.options.session?.deleteSessionOnSignOut?.timestamp === true) {
+					updateData.invalidatedAt = new Date();
+				} else {
+					updateData.isActive = false;
+				}
+
+				await updateManyWithHooks(
+					updateData,
+					[
+						{
+							field: Array.isArray(userIdOrSessionTokens) ? "token" : "userId",
+							value: userIdOrSessionTokens,
+							operator: Array.isArray(userIdOrSessionTokens) ? "in" : undefined,
+						},
+					],
+					"session",
+					undefined,
+					context,
+				);
+			}
 		},
 		findOAuthUser: async (
 			email: string,
