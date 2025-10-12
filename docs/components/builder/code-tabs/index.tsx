@@ -64,7 +64,7 @@ ${
 					? `legal(${
 							options.legalDocuments.length > 0
 								? `{
-								fields: [${options.legalDocuments.map(
+								documents: [${options.legalDocuments.map(
 									(doc) => `{
 	name: ${doc.name};
 	must_accept: ${doc.accept};

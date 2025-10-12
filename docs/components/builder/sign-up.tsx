@@ -448,7 +448,7 @@ export default function SignUp() {
 					<Button
 						type="submit"
 						className="w-full"
-						disabled={loading${options.legal ? ` || !accepted` : ""}}
+						disabled={loading${options.legal ? " || !accepted" : ""}}
 						onClick={async () => {
 							await signUp.email({
 								email,
