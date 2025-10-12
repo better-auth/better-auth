@@ -35,7 +35,7 @@ import { AppModule } from "./app.module";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    bodyParser: false, // Required for Better Auth
+    bodyParser: false, // Don't worry, the library will automatically re-add the default body parsers.
   });
   await app.listen(process.env.PORT ?? 3000);
 }
