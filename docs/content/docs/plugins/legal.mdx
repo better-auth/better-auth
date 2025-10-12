@@ -38,12 +38,12 @@ The Legal Documents plugin lets you force users to accept T&C's before signing u
         plugins: [
             legal({
               documents: [
-                {
-                    name: "Terms of Service",
-                    mustAccept: true,
-                    mustRead: true,
-                    url: "/terms"
-                }
+                {// [!code highlight]
+                    name: "Terms of Service",// [!code highlight]
+                    mustAccept: true,// [!code highlight]
+                    mustRead: true,// [!code highlight]
+                    url: "/terms"// [!code highlight]
+                }// [!code highlight]
               ]
             })
         ]
@@ -235,7 +235,7 @@ type listDocuments = {
 	isNullable: false,
 	isClientOnly: false,
 },{
-	isOptional: false,
+	isOptional: true,
 	description: "Whether the user must view the terms before signing up",
 	propName: "mustView",
 	type: "boolean",
