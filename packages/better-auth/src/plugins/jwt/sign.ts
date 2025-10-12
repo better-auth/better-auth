@@ -53,8 +53,8 @@ async function signJwtPayload(
 	let privateKey = await getJwkInternal(
 		ctx,
 		pluginOpts,
-		true,
 		jwk ?? pluginOpts?.jwks?.defaultKeyId,
+		true,
 	);
 
 	if (!privateKey) {

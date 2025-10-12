@@ -29,11 +29,7 @@ export interface JwtPluginOptions {
 	 */
 	disableSettingJwtHeader?: boolean;
 	/**
-	 * @todo: describe, implement
-	 */
-	//enableJwtRevocation?: boolean;
-	/**
-	 * Custom schema for the jwt plugin.
+	 * Custom schema for the **jwt plugin**.
 	 */
 	schema?: InferOptionSchema<typeof schema>;
 }
@@ -117,7 +113,6 @@ export interface JwksOptions {
 	 * @todo optional CRON that checks for key revocation from remote JWKS
 	 */
 	remoteJwks?: (() => Awaitable<JSONWebKeySet>)[];
-
 	/**
 	 * Default key pair configuration.
 	 * @description A subset of the options available for the JOSE `generateKeyPair` function.
@@ -127,7 +122,6 @@ export interface JwksOptions {
 	 * @default { alg: 'EdDSA', crv: 'Ed25519' }
 	 */
 	keyPairConfig?: JwkOptions;
-
 	/**
 	 * Disable the encryption of the **private keys** in the database.
 	 *
@@ -205,6 +199,14 @@ export interface JwtOptions {
 	 * @default 30
 	 */
 	maxClockSkew?: number | null;
+	/**
+	 * Logs to console when **JWT verification** fails as **info**.
+	 *
+	 * @description Useful for debugging and telemetry, but may impact performance under high load if current {`Logger`}'s {`LogLevel`} allows for printing **info** status.
+	 *
+	 * @default true
+	 */
+	logFailure?: boolean;
 	/**
 	 * A function that is called to define the data of the **JWT** in the `getSessionJwt` function.
 	 *
@@ -404,11 +406,12 @@ export interface JwtVerifyOptions {
 	 * @default getJwtPluginOptions(ctx.context)?.jwt?.allowedClockSkew // 30 if not defined
 	 */
 	maxClockSkew?: number | null;
+
 	/**
-	 * Display information on console if **JWT verification** fails.
+	 * Logs to console when **JWT verification** fails as **info**.
 	 *
-	 * @description I/O could be a costly operation, for systems under high load, logging every jwt-verification failure including simple expiration, might be undesired.
-	 * @todo redact
+	 * @description Useful for debugging and telemetry, but may impact performance under high load if current {`Logger`}'s {`LogLevel`} allows for printing **info** status.
+	 *
 	 * @default true
 	 */
 	logFailure?: boolean;

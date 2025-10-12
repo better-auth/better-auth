@@ -371,7 +371,7 @@ export const jwt = (pluginOpts?: JwtPluginOptions) => {
 									'Failed to verify the JWT: Tokens without "Expiration Time" Claim are not allowed, because they are dangerous. If you are sure you want to verify such tokens, create your own endpoint',
 							});
 
-						return ctx.json({ payload });
+						return ctx.json({ payload: payload });
 					} catch (error: unknown) {
 						// Do not return information about the error to the caller, could be a client who isn't supposed to obtain it
 						// Instead log it as an "info" on server inside `verifyJwtInternal`. This is not a system error, verification failure is often nothing unexpected

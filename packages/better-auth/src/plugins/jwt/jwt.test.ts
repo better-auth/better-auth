@@ -222,7 +222,7 @@ describe("jwt", async () => {
 					async (ctx) => {
 						const { data, jwk, claims } = ctx.body;
 						if (jwk === undefined || typeof jwk === "string") {
-							const privateKey = await getJwk(ctx, true, jwk);
+							const privateKey = await getJwk(ctx, jwk, true);
 							const jwt = await signJwt(ctx, data, {
 								jwk: privateKey,
 								claims: claims,
@@ -583,6 +583,9 @@ describe("jwt", async () => {
 							defaultKeyId,
 							remoteJwks,
 						},
+						jwt: {
+							logFailure: false,
+						},
 					} satisfies JwtPluginOptions;
 				}
 
@@ -697,10 +700,10 @@ describe("jwt", async () => {
 				});
 
 				it("Should use default key id even if it is a remote key", async () => {
-					const remoteKid = remoteKeys3[1]!.kid!;
-					const { headers, client } = await createTestCase({
-						jwks: { ...simplePluginOpts(remoteKid, remoteJwks).jwks },
-					});
+					const remoteKid = remoteKeys[0]!.kid!;
+					const { headers, client } = await createTestCase(
+						simplePluginOpts(remoteKid, remoteJwks),
+					);
 
 					const token = (await client.token({ fetchOptions: { headers } })).data
 						?.token;
@@ -712,6 +715,78 @@ describe("jwt", async () => {
 					const { protectedHeader } = await jwtVerify(token!, localJwks);
 					expect(protectedHeader.kid).toBe(remoteKid);
 				});
+
+				it("Should sign and verify using a remote key", async () => {
+					const remoteKid = remoteKeys3[1]!.kid!;
+					const someData = { answer: 42 };
+					const { auth, client } = await createTestCase(
+						simplePluginOpts(undefined, remoteJwks),
+					);
+
+					const { token } = await auth.api.signJwt({
+						body: { data: someData, jwk: remoteKid },
+					});
+					expect(token?.length).toBeGreaterThan(10);
+
+					const { payload } = await auth.api.verifyJwt({
+						body: { jwt: token!, jwk: remoteKid },
+					});
+					expect(payload).toBeDefined();
+					expect(payload!.answer).toBe(42);
+
+					let jwks = await client.jwksAll();
+					expect(jwks.data).toBeDefined();
+					let localJwks = createLocalJWKSet(jwks.data!);
+					const { protectedHeader } = await jwtVerify(token!, localJwks);
+					expect(protectedHeader.kid).toBe(remoteKid);
+				});
+
+				it("Should fetch remote key if it was added and requested after init", async () => {
+					const customRemoteKeys: JWK[] = [];
+					const someData = { answer: 42 };
+					const { auth, client } = await createTestCase(
+						simplePluginOpts(undefined, [
+							...remoteJwks,
+							() => {
+								return { keys: customRemoteKeys };
+							},
+						]),
+					);
+
+					customRemoteKeys.push(await createRemoteKey());
+
+					const { token } = await auth.api.signJwt({
+						body: { data: someData, jwk: customRemoteKeys[0]!.kid! },
+					});
+					expect(token.length).toBeGreaterThan(10);
+
+					const { payload } = await auth.api.verifyJwt({
+						body: { jwt: token! },
+					});
+					expect(payload).toBeDefined();
+					expect(payload!.answer).toBe(42);
+
+					// Sanity check
+					const jwks = await client.jwksAll();
+					expect(jwks.data).toBeDefined();
+					const localJwks = createLocalJWKSet(jwks.data!);
+					const { protectedHeader: protectedHeader2 } = await jwtVerify(
+						token!,
+						localJwks,
+					);
+					expect(protectedHeader2.kid).toBe(customRemoteKeys[0]!.kid!);
+
+					const { payload: payload2 } = await auth.api.verifyJwt({
+						body: { jwt: token!, jwk: customRemoteKeys[0]!.kid! },
+					});
+					expect(payload2).toBeDefined();
+					expect(payload2!.answer).toBe(42);
+				});
+
+				it.todo(
+					"Remote keys ID conflict should not break the system",
+					async () => {},
+				);
 
 				it(`Private keys should be ${disablePrivateKeyEncryption ? "decrypted" : "encrypted"} and re-${disablePrivateKeyEncryption ? "encrypt" : "decrypt"}able`, async () => {
 					const { auth } = await getTestInstance({

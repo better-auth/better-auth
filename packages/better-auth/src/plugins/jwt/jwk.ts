@@ -123,8 +123,8 @@ async function getKeySet(
  * - If `jwk` is **`undefined`**, returns the **latest key** from the database. Returns `undefined` if the database is **empty**.
  *
  * @param ctx - Endpoint context.
- * @param isPrivate - Whether to return the **private key** or the **public key**.
  * @param jwk - Optional. Either a **key ID** ({`string`}) or a {`CryptoKeyWithId`} object containing a {`CryptoKey`} and an optional `id` field to uniquely identify external keys.
+ * @param isPrivate - Whether to return the **private key** or the **public key**.
  *
  * @throws {BetterAuthError} - If a **key ID** is provided but not found in the database.
  * @throws {TypeError | JOSENotSupported} - If `importJWK` fails due to **invalid key**.
@@ -137,14 +137,14 @@ async function getKeySet(
 export async function getJwkInternal(
 	ctx: GenericEndpointContext,
 	pluginOpts: JwtPluginOptions | undefined,
-	isPrivate: boolean,
 	jwk?: string | CryptoKeyIdAlg,
+	isPrivate?: boolean,
 ): Promise<CryptoKeyIdAlg | undefined> {
 	if (jwk !== undefined && typeof jwk !== "string") return jwk;
 
-	let keyFromDb = await getKeySet(ctx, pluginOpts, jwk);
+	let key = await getKeySet(ctx, pluginOpts, jwk);
 
-	if (!keyFromDb) {
+	if (!key) {
 		if (jwk !== undefined)
 			// We are provided with keyId and we didn't find it in the database
 			throw new BetterAuthError(
@@ -154,11 +154,11 @@ export async function getJwkInternal(
 		return undefined;
 	}
 
-	const alg = keyFromDb.publicKey.alg;
+	const alg = key.publicKey.alg;
 	if (!alg)
 		throw new BetterAuthError(
-			`Failed to access the JWK: the public key with ID "${keyFromDb.id}" does not contain its algorithm name`,
-			keyFromDb.id,
+			`Failed to access the JWK: the public key with ID "${key.id}" does not contain its algorithm name`,
+			key.id,
 		);
 	/*
     if (!isJwkAlgValid(alg))
@@ -169,25 +169,25 @@ export async function getJwkInternal(
     */
 
 	if (isPrivate) {
-		if (keyFromDb.privateKey.trim() === "")
+		if (key.privateKey.trim() === "")
 			throw new BetterAuthError(
-				`Failed to access the JWK: Tried to access a private key from a public-only entry with ID "${keyFromDb.id}"`,
-				keyFromDb.id,
+				`Failed to access the JWK: Tried to access a private key from a public-only entry with ID "${key.id}"`,
+				key.id,
 			);
 		const privateKeyJSON = JSON.parse(
-			isPrivateKeyEncrypted(keyFromDb.privateKey)
-				? await decryptPrivateKey(ctx.context.secret, keyFromDb.privateKey)
-				: keyFromDb.privateKey,
+			isPrivateKeyEncrypted(key.privateKey)
+				? await decryptPrivateKey(ctx.context.secret, key.privateKey)
+				: key.privateKey,
 		);
 
 		const privateKey = (await importJWK(privateKeyJSON, alg)) as CryptoKey;
-		return { id: keyFromDb.id, alg: alg as JwkAlgorithm, key: privateKey };
+		return { id: key.id, alg: alg as JwkAlgorithm, key: privateKey };
 	}
 	const publicKey = (await importJWK(
-		getPublicJwk(keyFromDb.publicKey),
+		getPublicJwk(key.publicKey),
 		alg,
 	)) as CryptoKey;
-	return { id: keyFromDb.id, alg: alg as JwkAlgorithm, key: publicKey };
+	return { id: key.id, alg: alg as JwkAlgorithm, key: publicKey };
 }
 
 /**
@@ -212,10 +212,10 @@ export async function getJwkInternal(
  */
 export async function getJwk(
 	ctx: GenericEndpointContext,
-	isPrivate: boolean,
 	jwk?: string | CryptoKeyIdAlg,
+	isPrivate?: boolean,
 ): Promise<CryptoKeyIdAlg | undefined> {
-	return getJwkInternal(ctx, getJwtPluginOptions(ctx.context), isPrivate, jwk);
+	return getJwkInternal(ctx, getJwtPluginOptions(ctx.context), jwk, isPrivate);
 }
 
 /**
@@ -509,17 +509,23 @@ export async function getAllKeysInternal(
 	pluginOpts: JwtPluginOptions | undefined,
 ): Promise<{ keys: Jwk[]; remoteKeys: JWK[] }> {
 	const jwks = await getJwksInternal(ctx, pluginOpts);
-	let remoteKeys: JWK[] = [];
 
-	if (pluginOpts?.jwks?.remoteJwks)
-		for (const remoteKeyFetcher of pluginOpts.jwks.remoteJwks) {
-			// Contains only keys with "id", "alg" defined and not marked as revoked
-			remoteKeys = (await remoteKeyFetcher()).keys.filter(
-				(remoteKey) =>
-					remoteKey.kid !== undefined &&
-					!jwks.some((key) => key.id === remoteKey.kid + revokedTag),
-			);
-		}
+	if (!pluginOpts?.jwks?.remoteJwks?.length)
+		return { keys: jwks, remoteKeys: [] };
+
+	const revokedIds = new Set(jwks.map((key) => key.id + revokedTag));
+
+	const remoteKeysArrays = await Promise.all(
+		pluginOpts.jwks.remoteJwks.map((fetcher) => fetcher()),
+	);
+
+	// Contains only keys with "id", "alg" defined and not marked as revoked
+	const remoteKeys: JWK[] = remoteKeysArrays.flatMap(({ keys }) =>
+		keys.filter(
+			(remoteKey) =>
+				remoteKey.kid !== undefined && !revokedIds.has(remoteKey.kid),
+		),
+	);
 
 	return { keys: jwks, remoteKeys };
 }
