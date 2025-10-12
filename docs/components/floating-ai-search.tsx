@@ -447,7 +447,7 @@ export function AISearchTrigger() {
 							<div className="flex justify-between w-full items-center">
 								<p className="text-xs flex items-center gap-1 flex-1 text-fd-muted-foreground">
 									Powered by{" "}
-									<Link href="https://inkeep.com" target="_blank">
+                                    <Link href="https://inkeep.com" target="_blank" aria-label="Inkeep">
 										<InKeepLogo className="w-16 h-16" />
 									</Link>
 								</p>
