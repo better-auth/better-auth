@@ -126,9 +126,12 @@ export type InferAliasedClientPlugin<
 
 export type AliasClientOptions = {
 	/**
-	 * Add alias to endpoints that were not automatically deteceted.
+	 * Endpoints that should not be prefixed with the alias.
 	 */
-	aliasEndpoints?: string[];
+	excludeEndpoints?: string[];
+	/**
+	 * If `true`, adds a prefix `$Infer` types.
+	 */
 	prefixTypeInference?: boolean;
 };
 
@@ -165,12 +168,6 @@ export function aliasClient<
 		? normalizedPrefix.slice(0, -1)
 		: normalizedPrefix;
 	const camelCasePrefix = toCamelCase(cleanPrefix);
-	const aliasEndpointPaths = [
-		...new Set([
-			...Object.keys(plugin.pathMethods || {}),
-			...(options?.aliasEndpoints || []),
-		]),
-	];
 	const aliasedPlugin: BetterAuthClientPlugin = {
 		...plugin,
 		id: `${plugin.id}-${cleanPrefix.replace(/\//g, "-")}`,
@@ -205,28 +202,28 @@ export function aliasClient<
 
 	// Wrap getActions to prefix any path-based actions
 	if (plugin.getActions) {
-		aliasedPlugin.getActions = ($fetch, store, options) => {
+		aliasedPlugin.getActions = ($fetch, store, clientOptions) => {
 			const baseURL = getBaseURL(
-				options?.baseURL,
-				options?.basePath,
+				clientOptions?.baseURL,
+				clientOptions?.basePath,
 				undefined,
 			);
 			const originalActions = plugin.getActions!(
-				((url: string | URL, ...options: any[]) => {
+				((url: string | URL, ...opts: any[]) => {
 					return $fetch(
 						resolveURL(
 							{
 								url: url,
 								baseURL,
 							},
-							aliasEndpointPaths,
+							options?.excludeEndpoints ?? [],
 							prefix,
 						),
-						...options,
+						...opts,
 					);
 				}) as any,
 				store,
-				options,
+				clientOptions,
 			);
 			const prefixedActions: Record<string, any> = {};
 
@@ -246,27 +243,27 @@ export function aliasClient<
 
 	// Wrap getAtoms to prefix any path-based actions
 	if (plugin.getAtoms) {
-		aliasedPlugin.getAtoms = ($fetch, options) => {
+		aliasedPlugin.getAtoms = ($fetch, clientOptions) => {
 			const baseURL = getBaseURL(
-				options?.baseURL,
-				options?.basePath,
+				clientOptions?.baseURL,
+				clientOptions?.basePath,
 				undefined,
 			);
 			const originalAtoms = plugin.getAtoms!(
-				((url: string | URL, ...options: any[]) => {
+				((url: string | URL, ...opts: any[]) => {
 					return $fetch(
 						resolveURL(
 							{
 								url: url,
 								baseURL,
 							},
-							aliasEndpointPaths,
+							options?.excludeEndpoints ?? [],
 							prefix,
 						),
-						...options,
+						...opts,
 					);
 				}) as any,
-				options,
+				clientOptions,
 			);
 
 			return Object.fromEntries(
@@ -351,7 +348,7 @@ const resolveURL = (
 		url: string | URL;
 		baseURL?: string;
 	},
-	aliasEndpointPaths: string[],
+	excludeEndpoints: string[],
 	prefix?: string,
 ) => {
 	let url: URL;
@@ -371,11 +368,11 @@ const resolveURL = (
 	const normalizedRelative = relativePath.startsWith("/")
 		? relativePath
 		: `/${relativePath}`;
-	const shouldPrefix = aliasEndpointPaths.some(
+	const shouldExclude = excludeEndpoints.some(
 		(path) =>
 			normalizedRelative === path || normalizedRelative.startsWith(`${path}/`),
 	);
-	if (!shouldPrefix) {
+	if (shouldExclude) {
 		return url.toString();
 	}
 

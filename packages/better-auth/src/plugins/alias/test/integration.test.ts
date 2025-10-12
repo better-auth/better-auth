@@ -1,4 +1,4 @@
-import { assertType, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { getTestInstanceMemory } from "../../../test-utils";
 import { alias } from "..";
@@ -138,8 +138,7 @@ describe("Alias Plugin", async () => {
 			baseURL: "http://localhost:3000",
 			plugins: [
 				aliasClient("/dodo", createMockClientPlugin("dodo"), {
-					// TODO: flip logic
-					aliasEndpoints: ["/payment/init"],
+					excludeEndpoints: ["/other-plugin"],
 				}),
 			],
 		});
@@ -147,9 +146,17 @@ describe("Alias Plugin", async () => {
 		await client.dodo.triggerFetch("/payment/init", "POST");
 
 		expect(spyFetch).toHaveBeenCalledTimes(1);
-		const calledURL = spyFetch.mock.calls[0]?.[0];
+		let calledURL = spyFetch.mock.calls[0]?.[0];
 		expect(calledURL?.toString()).toEqual(
 			"http://localhost:3000/api/auth/dodo/payment/init",
+		);
+		spyFetch.mockClear();
+
+		await client.dodo.triggerFetch("/other-plugin");
+		expect(spyFetch).toHaveBeenCalledTimes(1);
+		calledURL = spyFetch.mock.calls[0]?.[0];
+		expect(calledURL?.toString()).toEqual(
+			"http://localhost:3000/api/auth/other-plugin",
 		);
 	});
 
