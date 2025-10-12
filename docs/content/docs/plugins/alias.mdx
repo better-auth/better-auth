@@ -18,10 +18,10 @@ The alias plugin allows you to prefix plugin endpoints with a custom path to avo
         import { alias } from "better-auth/plugins" // [!code highlight]
 
         export const auth = betterAuth({
-            plugins: [ // [!code highlight]
+            plugins: [
                 // Wrap any plugin with alias to prefix its endpoints
                 alias("/prefix", somePlugin()), // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -35,10 +35,10 @@ The alias plugin allows you to prefix plugin endpoints with a custom path to avo
         import { aliasClient } from "better-auth/client/plugins" // [!code highlight]
         
         export const authClient = createAuthClient({
-            plugins: [ // [!code highlight]
+            plugins: [
                 // Wrap client plugin with same prefix
                 aliasClient("/prefix", someClientPlugin()), // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
