@@ -466,7 +466,6 @@ export function AISearchTrigger() {
 												messages={filteredMessages}
 												messageIndex={index}
 												isStreaming={isCurrentlyStreaming}
-												className=""
 											/>
 										);
 									})}
