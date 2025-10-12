@@ -126,6 +126,30 @@ export interface PhoneNumberOptions {
 	 * @default 3
 	 */
 	allowedAttempts?: number;
+	/**
+	 * Custom OTP codes for testing purposes.
+	 * This is useful for testing and development environments.
+	 */
+	customOTP?: {
+		/**
+		 * @example
+		 * ```ts
+		 * phoneNumbers: {
+		 *   "+1234567890": "123456",
+		 *   "+0987654321": "654321",
+		 * }
+		 * ```
+		 */
+		phoneNumbers:
+			| Record<string, string>
+			| (() => Record<string, string> | Promise<Record<string, string>>);
+		/**
+		 * Skip sending OTP for test phone numbers defined in
+		 *`customOTP.phoneNumbers`
+		 * @default false
+		 */
+		skipSendOTP?: boolean;
+	};
 }
 
 export const phoneNumber = (options?: PhoneNumberOptions) => {
@@ -389,7 +413,17 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						}
 					}
 
-					const code = generateOTP(opts.otpLength);
+					let customCode: string | undefined = undefined;
+
+					if (options?.customOTP) {
+						const phoneNumbers =
+							typeof options?.customOTP?.phoneNumbers === "function"
+								? await options?.customOTP?.phoneNumbers()
+								: options?.customOTP?.phoneNumbers || {};
+						customCode = phoneNumbers[ctx.body.phoneNumber];
+					}
+
+					const code = customCode ?? generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
 							value: `${code}:0`,
@@ -398,13 +432,16 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						},
 						ctx,
 					);
-					await options.sendOTP(
-						{
-							phoneNumber: ctx.body.phoneNumber,
-							code,
-						},
-						ctx.request,
-					);
+
+					if (!options.customOTP?.skipSendOTP || !customCode) {
+						await options.sendOTP(
+							{
+								phoneNumber: ctx.body.phoneNumber,
+								code,
+							},
+							ctx.request,
+						);
+					}
 					return ctx.json({ message: "code sent" });
 				},
 			),
