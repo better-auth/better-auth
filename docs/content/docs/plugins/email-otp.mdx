@@ -66,9 +66,9 @@ type sendVerificationOTP = {
      */
     email: string = "user@example.com"
     /**
-     * Type of the OTP. `sign-in`, `email-verification`, or `forget-password`. 
+     * Type of the OTP. `sign-in`, `email-verification`, or `request-password-reset`. 
      */
-    type: "email-verification" | "sign-in" | "forget-password" = "sign-in"
+    type: "email-verification" | "sign-in" | "request-password-reset" = "sign-in"
 }
 ```
 </APIMethod>
@@ -85,9 +85,9 @@ type checkVerificationOTP = {
      */
     email: string = "user@example.com"
     /**
-     * Type of the OTP. `sign-in`, `email-verification`, or `forget-password`. 
+     * Type of the OTP. `sign-in`, `email-verification`, or `request-password-reset`. 
      */
-    type: "email-verification" | "sign-in" | "forget-password" = "sign-in"
+    type: "email-verification" | "sign-in" | "request-password-reset" = "sign-in"
     /**
      * OTP sent to the email. 
      */
@@ -174,11 +174,11 @@ type verifyEmailOTP = {
 
 ### Reset Password with OTP
 
-To reset the user's password with OTP, use the `forgetPassword.emailOTP()` method to send a "forget-password" OTP to the user's email address.
+To reset the user's password with OTP, use the `requestPasswordReset.emailOTP()` method to send a "request-password-reset" OTP to the user's email address.
 
-<APIMethod path="/forget-password/email-otp" method="POST">
+<APIMethod path="/request-password-reset/email-otp" method="POST">
 ```ts
-type forgetPasswordEmailOTP = {
+type requestPasswordResetEmailOTP = {
     /**
      * Email address to send the OTP. 
      */
@@ -199,7 +199,7 @@ type checkVerificationOTP = {
     /**
      * Type of the OTP.
      */
-    type: "forget-password" = "forget-password"
+    type: "request-password-reset" = "request-password-reset"
     /**
      * OTP sent to the email. 
      */
@@ -254,7 +254,7 @@ export const auth = betterAuth({
 - `sendVerificationOTP`: A function that sends the OTP to the user's email address. The function receives an object with the following properties:
   - `email`: The user's email address.
   - `otp`: The OTP to send.
-  - `type`: The type of OTP to send. Can be "sign-in", "email-verification", or "forget-password".
+  - `type`: The type of OTP to send. Can be "sign-in", "email-verification", or "request-password-reset".
 
 - `otpLength`: The length of the OTP. Defaults to `6`.
 
