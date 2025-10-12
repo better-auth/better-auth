@@ -60,8 +60,7 @@
     "expo-linking": "~7.1.7",
     "expo-secure-store": "~14.2.3",
     "expo-web-browser": "~14.2.0",
-    "react-native": "~0.80.2",
-    "unbuild": "^3.6.1"
+    "react-native": "~0.80.2"
   },
   "peerDependencies": {
     "better-auth": "workspace:*",
