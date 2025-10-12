@@ -3,7 +3,7 @@
   "version": "1.4.0-beta.9",
   "type": "module",
   "description": "",
-  "main": "dist/index.cjs",
+  "main": "dist/index.mjs",
   "module": "dist/index.mjs",
   "repository": {
     "type": "git",
