@@ -309,7 +309,7 @@ export function aliasClient<
 		}));
 	}
 
-	// Wrap the $InferServerPlugin if it exists
+	// // Wrap the $InferServerPlugin if it exists
 	if (plugin.$InferServerPlugin) {
 		const wrappedServerPlugin: BetterAuthPlugin = {
 			...plugin.$InferServerPlugin,

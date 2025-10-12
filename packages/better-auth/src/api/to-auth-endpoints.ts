@@ -55,7 +55,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 					responseHeaders: undefined,
 					session: null,
 				},
-				path: endpoint.path,
+				path: endpoint.originalPath || endpoint.path,
 				headers: context?.headers ? new Headers(context?.headers) : undefined,
 			};
 			const { beforeHooks, afterHooks } = getHooks(authContext);

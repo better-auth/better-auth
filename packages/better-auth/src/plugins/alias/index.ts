@@ -97,14 +97,14 @@ export function alias<
 				? key
 				: toCamelCase(newPath);
 
-			const clonedEndpoint = Object.assign(
-				Object.create(Object.getPrototypeOf(endpoint)),
-				endpoint,
-			);
-			clonedEndpoint.path = newPath;
+			// const clonedEndpoint = Object.assign(
+			// 	Object.create(Object.getPrototypeOf(endpoint)),
+			// 	endpoint,
+			// );
+			// clonedEndpoint.path = newPath;
+			const clonedEndpoint = cloneEndpoint(endpoint, newPath);
 
 			prefixedEndpoints[newKey] = clonedEndpoint;
-			prefixedEndpoints.originalKey = key;
 		}
 
 		aliasedPlugin.endpoints = prefixedEndpoints;
@@ -154,6 +154,19 @@ export function alias<
 	}
 
 	return aliasedPlugin as InferAliasedPlugin<T, Prefix, O>;
+}
+
+function cloneEndpoint<
+	T extends ((...args: any[]) => any) & Record<string, any>,
+>(endpoint: T, path: string) {
+	const cloned = ((...args: Parameters<T>) => endpoint(...args)) as T &
+		Record<string, any>;
+
+	return Object.assign(cloned, {
+		path,
+		originalPath: endpoint.path,
+		options: endpoint.options,
+	});
 }
 
 function resolveNewPath(originalPath: string, cleanPrefix: string) {
