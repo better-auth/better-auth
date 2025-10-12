@@ -323,7 +323,7 @@ function getChildren(
 	}
 }
 
-function TypeTable({
+export function TypeTable({
 	props,
 	isServer,
 }: {

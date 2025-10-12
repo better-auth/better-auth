@@ -1,0 +1,250 @@
+---
+title: Legal
+description: Legal plugin for Better Auth.
+---
+
+The Legal Documents plugin lets you force users to accept T&C's before signing up.
+
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    Add the `legal` plugin to your auth config and add the different `fields` you want.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { legal } from "better-auth/plugins" // [!code highlight]
+    
+    export const auth = betterAuth({
+        // ... other config options
+        plugins: [
+            legal() // [!code highlight]
+        ]
+    })
+    ```
+    </Step>
+    <Step>
+    ### Add different documents to the plugin
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { legal } from "better-auth/plugins"
+    
+    export const auth = betterAuth({
+        // ... other config options
+        plugins: [
+            legal({
+              documents: [
+                {
+                    name: "Terms of Service",
+                    mustAccept: true,
+                    mustRead: true,
+                    url: "/terms"
+                }
+              ]
+            })
+        ]
+    })
+    ```
+
+    <CustomTypeTable type={[{
+	    isOptional: false,
+	    description: "The name of the document, used in the schema for the database",
+	    propName: "name",
+	    type: "string",
+	    exampleValue: "Terms of Service",
+	    comments: null,
+	    isServerOnly: false,
+	    path: [],
+	    isNullable: false,
+	    isClientOnly: false,
+    },{
+	    isOptional: true,
+	    description: "Whether the user must accept the terms before signing up",
+	    propName: "mustAccept",
+	    type: "boolean",
+	    exampleValue: "false",
+	    comments: "default: true",
+	    isServerOnly: false,
+	    path: [],
+	    isNullable: false,
+	    isClientOnly: false,
+    },{
+	    isOptional: false,
+	    description: "Whether the user must view the terms before signing up",
+	    propName: "mustView",
+	    type: "boolean",
+	    exampleValue: "false",
+	    comments: "default: true",
+	    isServerOnly: false,
+	    path: [],
+	    isNullable: false,
+	    isClientOnly: false,
+    }]}/>
+  </Step>
+</Steps>
+
+## Usage
+
+### Commit an action
+
+Use the `actionLegalDocument()` method to commit an action to the user's documents.
+
+<APIMethod path="/legal/action" method="POST">
+```ts
+type actionLegalDocument = {
+		/**
+     * The name of the document
+    */
+    name: string;
+    /**
+     * The date (and time) the document was accepted
+    */
+	  acceptedAt: Date = undefined;
+    /**
+     * The date (and time) the document was accepted
+    */
+    viewedAt: Date = undefined;
+}
+```
+</APIMethod>
+
+### Prevent Sign Up and sign in
+
+By default, the plugin will block sign up and sign in. To not block sign up or sign in, pass `blockSignUp: false` or `blockSignIn: false` in the options.
+
+<Callout>
+If either `blockSignUp` or `blockSignIn` is set to `true`, SSO will be disabled.
+</Callout>
+
+### Include Legal Documents in auth request
+
+You can include documents in the `sign up` and `sign in` request such as `authClient.signUp.email`
+You can do this by passing `\{name}AcceptedAt` and `\{name}ViewedAt` (where `name` is the name of the document) to the request body, and it will be merged with the user's current documents.
+
+The `UserWithDocuments` type is exported from the plugin, and is the type that should be used for `signUp` and `signIn` request containing documents.
+
+### List a User's Documents
+
+Use the `listDocuments()` method to list a user's documents.
+
+<APIMethod path="/legal/list" method="GET">
+```ts
+type listDocuments = {
+  /**
+   * The user's id
+   * Either `user` or `cookie` is required
+  */
+  user?: string;
+  /**
+   * The user's cookie
+   * Either `user` or `cookie` is required
+  */
+	cookie?: string;
+
+  /**
+   * The name of the document
+  */
+	name: string;
+  /**
+   * The date (and time) the document was viewed (undefined if not viewed)
+   */
+	viewedAt?: Date;
+  /**
+   * The date (and time) the document was accepted (undefined if not accepted)
+  */
+	acceptedAt?: Date;
+
+}
+```
+</APIMethod>
+
+## Options
+
+### LegalOptions
+
+<CustomTypeTable type={[{
+	isOptional: false,
+	description: "The definitions for the documents",
+	propName: "documents",
+	type: "LegalDocument[]",
+	exampleValue: "[]",
+	comments: null,
+	isServerOnly: true,
+	path: [],
+	isNullable: false,
+	isClientOnly: false
+},{
+	isOptional: true,
+	description: "Whether to block sign up based on the documents",
+	propName: "blockSignUp",
+	type: "boolean",
+	exampleValue: "false",
+	comments: "default: true",
+	isServerOnly: true,
+	path: [],
+	isNullable: false,
+	isClientOnly: false
+},{
+	isOptional: true,
+	description: "Whether to block sign in based on the documents",
+	propName: "blockSignIn",
+	type: "boolean",
+	exampleValue: "false",
+	comments: "default: true",
+	isServerOnly: true,
+	path: [],
+	isNullable: false,
+	isClientOnly: false
+},{
+	isOptional: true,
+	description: "The cookie name",
+	propName: "cookieName",
+	type: "string",
+	exampleValue: "'legalDocumentCookieName",
+	comments: "default: 'legal-id'",
+	isServerOnly: true,
+	path: [],
+	isNullable: false,
+	isClientOnly: false
+}]}/>
+
+### LegalDocument
+
+<CustomTypeTable type={[{
+	isOptional: false,
+	description: "The name of the document, used in the schema for the database",
+	propName: "name",
+	type: "string",
+	exampleValue: "Terms of Service",
+	comments: null,
+	isServerOnly: false,
+	path: ["LegalOptions", "documents[number]"],
+	isNullable: false,
+	isClientOnly: false,
+},{
+	isOptional: true,
+	description: "Whether the user must accept the terms before signing up",
+	propName: "mustAccept",
+	type: "boolean",
+	exampleValue: "false",
+	comments: "default: true",
+	isServerOnly: false,
+	path: ["LegalOptions", "documents[number]"],
+	isNullable: false,
+	isClientOnly: false,
+},{
+	isOptional: false,
+	description: "Whether the user must view the terms before signing up",
+	propName: "mustView",
+	type: "boolean",
+	exampleValue: "false",
+	comments: "default: true",
+	isServerOnly: false,
+	path: ["LegalOptions", "documents[number]"],
+	isNullable: false,
+	isClientOnly: false,
+}]}/>

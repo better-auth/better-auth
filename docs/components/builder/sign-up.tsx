@@ -9,14 +9,21 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { socialProviders } from "./social-provider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Loader2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAtom } from "jotai";
+import { optionsAtom } from "./store";
+import { Separator } from "@radix-ui/react-dropdown-menu";
+import { cn } from "@/lib/utils";
+import { Checkbox } from "../ui/checkbox";
 
 export function SignUp() {
+	const [options] = useAtom(optionsAtom);
 	const [firstName, setFirstName] = useState("");
 	const [lastName, setLastName] = useState("");
 	const [email, setEmail] = useState("");
@@ -24,7 +31,20 @@ export function SignUp() {
 	const [passwordConfirmation, setPasswordConfirmation] = useState("");
 	const [image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
+	const [legalDocumentsAccepted, setLegalDocumentsAccepted] = useState<
+		string[]
+	>([]);
+	const [accepted, setAccepted] = useState(!options.legal);
 	const router = useRouter();
+
+	useEffect(() => {
+		if (!options.legal) setAccepted(true);
+		const accept =
+			options.legalDocuments.filter(
+				(doc) => !legalDocumentsAccepted.includes(doc.name),
+			).length === 0;
+		setAccepted(accept);
+	}, [legalDocumentsAccepted, options]);
 
 	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -48,114 +68,186 @@ export function SignUp() {
 				</CardDescription>
 			</CardHeader>
 			<CardContent>
-				<div className="grid gap-4">
-					<div className="grid grid-cols-2 gap-4">
-						<div className="grid gap-2">
-							<Label htmlFor="first-name">First name</Label>
-							<Input
-								id="first-name"
-								placeholder="Max"
-								required
-								onChange={(e) => {
-									setFirstName(e.target.value);
-								}}
-								value={firstName}
-							/>
-						</div>
-						<div className="grid gap-2">
-							<Label htmlFor="last-name">Last name</Label>
-							<Input
-								id="last-name"
-								placeholder="Robinson"
-								required
-								onChange={(e) => {
-									setLastName(e.target.value);
-								}}
-								value={lastName}
-							/>
-						</div>
-					</div>
-					<div className="grid gap-2">
-						<Label htmlFor="email">Email</Label>
-						<Input
-							id="email"
-							type="email"
-							placeholder="m@example.com"
-							required
-							onChange={(e) => {
-								setEmail(e.target.value);
-							}}
-							value={email}
-						/>
-					</div>
-					<div className="grid gap-2">
-						<Label htmlFor="password">Password</Label>
-						<Input
-							id="password"
-							type="password"
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							autoComplete="new-password"
-							placeholder="Password"
-						/>
-					</div>
-					<div className="grid gap-2">
-						<Label htmlFor="password">Confirm Password</Label>
-						<Input
-							id="password_confirmation"
-							type="password"
-							value={passwordConfirmation}
-							onChange={(e) => setPasswordConfirmation(e.target.value)}
-							autoComplete="new-password"
-							placeholder="Confirm Password"
-						/>
-					</div>
-					<div className="grid gap-2">
-						<Label htmlFor="image">Profile Image (optional)</Label>
-						<div className="flex items-end gap-4">
-							{imagePreview && (
-								<div className="relative w-16 h-16 rounded-sm overflow-hidden">
-									<Image
-										src={imagePreview}
-										alt="Profile preview"
-										layout="fill"
-										objectFit="cover"
-									/>
-								</div>
-							)}
-							<div className="flex items-center gap-2 w-full">
+				{options.email ? (
+					<div className="grid gap-4">
+						<div className="grid grid-cols-2 gap-4">
+							<div className="grid gap-2">
+								<Label htmlFor="first-name">First name</Label>
 								<Input
-									id="image"
-									type="file"
-									accept="image/*"
-									onChange={handleImageChange}
-									className="w-full"
+									id="first-name"
+									placeholder="Max"
+									required
+									onChange={(e) => {
+										setFirstName(e.target.value);
+									}}
+									value={firstName}
 								/>
-								{imagePreview && (
-									<X
-										className="cursor-pointer"
-										onClick={() => {
-											setImage(null);
-											setImagePreview(null);
-										}}
-									/>
-								)}
+							</div>
+							<div className="grid gap-2">
+								<Label htmlFor="last-name">Last name</Label>
+								<Input
+									id="last-name"
+									placeholder="Robinson"
+									required
+									onChange={(e) => {
+										setLastName(e.target.value);
+									}}
+									value={lastName}
+								/>
 							</div>
 						</div>
+						<div className="grid gap-2">
+							<Label htmlFor="signup-email">Email</Label>
+							<Input
+								id="signup-email"
+								type="email"
+								placeholder="m@example.com"
+								required
+								onChange={(e) => {
+									setEmail(e.target.value);
+								}}
+								value={email}
+							/>
+						</div>
+						<div className="grid gap-2">
+							<Label htmlFor="password">Password</Label>
+							<Input
+								id="password"
+								type="password"
+								value={password}
+								onChange={(e) => setPassword(e.target.value)}
+								autoComplete="new-password"
+								placeholder="Password"
+							/>
+						</div>
+						<div className="grid gap-2">
+							<Label htmlFor="password">Confirm Password</Label>
+							<Input
+								id="password_confirmation"
+								type="password"
+								value={passwordConfirmation}
+								onChange={(e) => setPasswordConfirmation(e.target.value)}
+								autoComplete="new-password"
+								placeholder="Confirm Password"
+							/>
+						</div>
+						<div className="grid gap-2">
+							<Label htmlFor="image">Profile Image (optional)</Label>
+							<div className="flex items-end gap-4">
+								{imagePreview && (
+									<div className="relative w-16 h-16 rounded-sm overflow-hidden">
+										<Image
+											src={imagePreview}
+											alt="Profile preview"
+											layout="fill"
+											objectFit="cover"
+										/>
+									</div>
+								)}
+								<div className="flex items-center gap-2 w-full">
+									<Input
+										id="image"
+										type="file"
+										accept="image/*"
+										onChange={handleImageChange}
+										className="w-full"
+									/>
+									{imagePreview && (
+										<X
+											className="cursor-pointer"
+											onClick={() => {
+												setImage(null);
+												setImagePreview(null);
+											}}
+										/>
+									)}
+								</div>
+							</div>
+						</div>
+						<Button
+							type="submit"
+							className="w-full"
+							disabled={loading || !accepted}
+							onClick={async () => {}}
+						>
+							{loading ? (
+								<Loader2 size={16} className="animate-spin" />
+							) : (
+								"Create an account"
+							)}
+						</Button>
 					</div>
-					<Button
-						type="submit"
-						className="w-full"
-						disabled={loading}
-						onClick={async () => {}}
-					>
-						{loading ? (
-							<Loader2 size={16} className="animate-spin" />
-						) : (
-							"Create an account"
-						)}
-					</Button>
+				) : (
+					<></>
+				)}
+				<div
+					className={cn(
+						"w-full gap-2 flex items-center justify-between",
+						options.socialProviders.length > 3
+							? "flex-row flex-wrap"
+							: "flex-col",
+						options.email ? "mt-2" : "",
+					)}
+				>
+					{Object.keys(socialProviders).map((provider) => {
+						if (options.socialProviders.includes(provider)) {
+							const { Icon } =
+								socialProviders[provider as keyof typeof socialProviders];
+							return (
+								<Button
+									key={provider}
+									variant="outline"
+									disabled={!accepted}
+									className={cn(
+										options.socialProviders.length > 3
+											? "flex-grow"
+											: "w-full gap-2",
+									)}
+								>
+									<Icon width="1.2em" height="1.2em" />
+									{options.socialProviders.length <= 3 &&
+										"Sign up with " +
+											provider.charAt(0).toUpperCase() +
+											provider.slice(1)}
+								</Button>
+							);
+						}
+						return null;
+					})}
 				</div>
+
+				{options.legalDocuments.length > 0 ? (
+					<>
+						{options.email || options.socialProviders.length > 0 ? (
+							<Separator className="my-2" />
+						) : (
+							<></>
+						)}
+						{options.legalDocuments.map((doc) => {
+							return (
+								<div key={doc.name}>
+									<Checkbox
+										onCheckedChange={(checked) => {
+											setLegalDocumentsAccepted(
+												checked
+													? [...legalDocumentsAccepted, doc.name]
+													: legalDocumentsAccepted.filter(
+															(d) => d !== doc.name,
+														),
+											);
+										}}
+									/>{" "}
+									I have read and accept the{" "}
+									<a href={doc.url} target="_blank">
+										{doc.name}
+									</a>
+								</div>
+							);
+						})}
+					</>
+				) : (
+					<></>
+				)}
 			</CardContent>
 			<CardFooter>
 				<div className="flex justify-center w-full border-t py-4">
@@ -177,7 +269,23 @@ async function convertImageToBase64(file: File): Promise<string> {
 	});
 }
 
-export const signUpString = `"use client";
+export const signUpString = (options: {
+	email: boolean;
+	passkey: boolean;
+	socialProviders: string[];
+	magicLink: boolean;
+	signUp: boolean;
+	label: boolean;
+	rememberMe: boolean;
+	requestPasswordReset: boolean;
+	legal: boolean;
+	legalDocuments: {
+		name: string;
+		view: boolean;
+		accept: boolean;
+		url: string;
+	}[];
+}) => `"use client";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -188,6 +296,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
@@ -198,6 +307,9 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 export default function SignUp() {
+	${
+		options.email
+			? `
 	const [firstName, setFirstName] = useState("");
 	const [lastName, setLastName] = useState("");
 	const [email, setEmail] = useState("");
@@ -218,7 +330,14 @@ export default function SignUp() {
 			};
 			reader.readAsDataURL(file);
 		}
-	};
+	};`
+			: ""
+	}
+	${options.legal ? `	const [legalDocumentsAccepted, setLegalDocumentsAccepted] = useState<
+		string[]
+	>([]);
+	const [accepted, setAccepted] = useState(false);
+` : ""}
 
 	return (
 		<Card className="z-50 rounded-md rounded-t-none max-w-md">
@@ -229,7 +348,9 @@ export default function SignUp() {
 				</CardDescription>
 			</CardHeader>
 			<CardContent>
-				<div className="grid gap-4">
+				${
+					options.email
+						? `<div className="grid gap-4">
 					<div className="grid grid-cols-2 gap-4">
 						<div className="grid gap-2">
 							<Label htmlFor="first-name">First name</Label>
@@ -327,7 +448,7 @@ export default function SignUp() {
 					<Button
 						type="submit"
 						className="w-full"
-						disabled={loading}
+						disabled={loading${options.legal ? ` || !accepted` : ""}}
 						onClick={async () => {
 							await signUp.email({
 								email,
@@ -358,15 +479,111 @@ export default function SignUp() {
 							"Create an account"
 						)}
 					</Button>
-				</div>
+				</div>`
+						: ""
+				}
+				          ${
+										options.socialProviders?.length > 0
+											? `<div className={cn(
+              "w-full gap-2 flex items-center",
+              ${
+								options.socialProviders.length > 3
+									? '"justify-between flex-wrap"'
+									: '"justify-between flex-col"'
+							}
+            )}>
+              ${options.socialProviders
+								.map((provider: string) => {
+									const icon =
+										socialProviders[provider as keyof typeof socialProviders]
+											?.stringIcon || "";
+									return `\n\t\t\t\t<Button
+                  variant="outline"
+                  className={cn(
+                    ${
+											options.socialProviders.length > 3
+												? '"flex-grow"'
+												: '"w-full gap-2"'
+										}
+                  )}
+                  disabled={loading ${options.legal ? ` || !accepted` : ""}}
+                  onClick={async () => {
+                    await signIn.social(
+                    {
+                      provider: "${provider}",
+                      callbackURL: "/dashboard"
+                    },
+                    {
+                      onRequest: (ctx) => {
+                         setLoading(true);
+                      },
+                      onResponse: (ctx) => {
+                         setLoading(false);
+                      },
+                     },
+                    );
+                  }}
+                >
+                  ${icon}
+                  ${
+										options.socialProviders.length <= 3
+											? `Sign up with ${
+													provider.charAt(0).toUpperCase() + provider.slice(1)
+												}`
+											: ""
+									}
+                </Button>`;
+								})
+								.join("")}
+            </div>`
+											: ""
+									}
+													${options.legalDocuments.length > 0 ? (
+					`
+						${options.email || options.socialProviders.length > 0 ? (
+							`<Separator className="my-2" />`
+						) : (
+							""
+						)}
+						${options.legalDocuments.map((doc) => {
+							return (
+								`<div>
+									<Checkbox
+										onCheckedChange={(checked) => {
+											setLegalDocumentsAccepted(
+												checked
+													? [...legalDocumentsAccepted, doc.name]
+													: legalDocumentsAccepted.filter(
+															(d) => d !== doc.name,
+														),
+											);
+										}}
+									/>{" "}
+									I have read and accept the{" "}
+									<a href=${doc.url} target="_blank">
+										${doc.name}
+									</a>
+								</div>
+								`
+							);
+						})}
+					`
+				) : (
+					""
+				)}
+
 			</CardContent>
-			<CardFooter>
+			${
+				options.label
+					? `<CardFooter>
 				<div className="flex justify-center w-full border-t py-4">
 					<p className="text-center text-xs text-neutral-500">
 						Secured by <span className="text-orange-400">better-auth.</span>
 					</p>
 				</div>
-			</CardFooter>
+			</CardFooter>`
+					: ""
+			}
 		</Card>
 	);
 }

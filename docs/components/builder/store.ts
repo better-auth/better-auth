@@ -9,4 +9,11 @@ export const optionsAtom = atom({
 	label: true,
 	rememberMe: true,
 	requestPasswordReset: true,
+	legal: false,
+	legalDocuments: [] as {
+		url: string;
+		name: string;
+		view: boolean;
+		accept: boolean;
+	}[],
 });

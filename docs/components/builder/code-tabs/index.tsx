@@ -6,6 +6,7 @@ import { optionsAtom } from "../store";
 import { js_beautify } from "js-beautify";
 import { signUpString } from "../sign-up";
 import { signInString } from "../sign-in";
+import { legalContent } from "../legal";
 
 export default function CodeTabs() {
 	const [options] = useAtom(optionsAtom);
@@ -46,7 +47,7 @@ ${
 				: ""
 		}
 		${
-			options.magicLink || options.passkey
+			options.magicLink || options.passkey || options.legal
 				? `plugins: [
 			${
 				options.magicLink
@@ -54,10 +55,26 @@ ${
 				async sendMagicLink(data) {
 					// Send an email to the user with a magic link
 				},
-			}),`
-					: `${options.passkey ? `passkey(),` : ""}`
+			}),
+			`
+					: ""
+			}${ options.passkey ? `passkey(),
+			 ` : ""}${
+				options.legal
+					? `legal(${
+							options.legalDocuments.length > 0
+								? `{
+								fields: [${options.legalDocuments.map(
+									(doc) => `{
+	name: ${doc.name};
+	must_accept: ${doc.accept};
+	must_read: ${doc.view};
+},`,
+								)}]}`
+								: ""
+						}),`
+					: ""
 			}
-			${options.passkey && options.magicLink ? `passkey(),` : ""}
 		]`
 				: ""
 		}
@@ -98,13 +115,22 @@ ${
 			content: signInString(options),
 		},
 	];
-	if (options.email) {
+	
+	if (options.email || options.legal) {
 		initialFiles.push({
 			id: "4",
 			name: "sign-up.tsx",
-			content: signUpString,
+			content: signUpString(options),
 		});
 	}
+
+	options.legalDocuments.forEach((doc, i) => {
+		initialFiles.push({
+			id: (initialFiles.length + 1).toString(),
+			name: `${doc.name.toLowerCase()}.tsx`,
+			content: legalContent(doc.name, doc.view)
+		})
+	})
 
 	const [files, setFiles] = useState(initialFiles);
 	const [activeFileId, setActiveFileId] = useState(files[0].id);

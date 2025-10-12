@@ -28,6 +28,9 @@ import { useAtom } from "jotai";
 import { optionsAtom } from "./store";
 import { useTheme } from "next-themes";
 import { ScrollArea } from "../ui/scroll-area";
+import { Document as LegalDocument } from "./legal";
+import { Button } from "../ui/button";
+
 const frameworks = [
 	{
 		title: "Next.js",
@@ -269,8 +272,8 @@ export function Builder() {
 
 				<div className="flex gap-4 md:gap-12 flex-col md:flex-row items-center md:items-start">
 					<div className={cn("w-4/12")}>
-						<div
-							className="overflow-scroll h-[580px] relative"
+						<ScrollArea
+							className="overflow-scroll h-[580px] relative m-2"
 							style={{
 								scrollbarWidth: "none",
 								scrollbarColor: "transparent transparent",
@@ -280,7 +283,7 @@ export function Builder() {
 								},
 							}}
 						>
-							{options.signUp ? (
+							{options.email || options.legal ? (
 								<AuthTabs
 									tabs={[
 										{
@@ -298,7 +301,7 @@ export function Builder() {
 							) : (
 								<SignIn />
 							)}
-						</div>
+						</ScrollArea>
 					</div>
 					<ScrollArea
 						className="w-[45%] flex-grow"
@@ -519,6 +522,26 @@ export function Builder() {
 													}}
 												/>
 											</div>
+											<div className="flex items-center justify-between">
+												<div className="flex items-center gap-2">
+													<Label
+														className="cursor-pointer"
+														htmlFor="plugin-legal"
+													>
+														Legal
+													</Label>
+												</div>
+												<Switch
+													id="plugin-legal"
+													checked={options.legal}
+													onCheckedChange={(checked) => {
+														setOptions((prev) => ({
+															...prev,
+															legal: checked,
+														}));
+													}}
+												/>
+											</div>
 										</div>
 										<div className="mt-4">
 											<Separator />
@@ -546,7 +569,9 @@ export function Builder() {
 										<button
 											className="bg-stone-950 no-underline group cursor-pointer relative shadow-2xl shadow-zinc-900 rounded-sm p-px text-xs font-semibold leading-6  text-white inline-block w-full"
 											onClick={() => {
-												setCurrentStep(currentStep + 1);
+												options.legal
+													? setCurrentStep(currentStep + 1)
+													: setCurrentStep(currentStep + 2);
 											}}
 										>
 											<span className="absolute inset-0 overflow-hidden rounded-sm">
@@ -560,6 +585,70 @@ export function Builder() {
 									</CardFooter>
 								</Card>
 							) : currentStep === 1 ? (
+								<Card>
+									<CardHeader>
+										<CardTitle>Add Legal Documents</CardTitle>
+										<p
+											className="text-blue-400 hover:underline mt-1 text-sm cursor-pointer"
+											onClick={() => {
+												setCurrentStep(0);
+											}}
+										>
+											Go Back
+										</p>
+									</CardHeader>
+									<CardContent>
+										<Button
+											onClick={() =>
+												setOptions({
+													...options,
+													legalDocuments: [
+														...options.legalDocuments,
+														{
+															name: "",
+															url: "",
+															view: true,
+															accept: true,
+														},
+													],
+												})
+											}
+										>
+											<PlusIcon size={14} />
+											<span>New</span>
+										</Button>
+										{options.legalDocuments.map((doc, i, arr) => (
+											<LegalDocument
+												name={doc.name}
+												view={doc.view}
+												accept={doc.accept}
+												url={doc.url}
+												key={i}
+												update={(val) =>
+													setOptions({
+														...options,
+														legalDocuments: arr.toSpliced(i, 1, val),
+													})
+												}
+											/>
+										))}
+										<button
+											className="bg-stone-950 no-underline group cursor-pointer relative shadow-2xl shadow-zinc-900 rounded-sm p-px text-xs font-semibold leading-6  text-white inline-block w-full"
+											onClick={() => {
+												setCurrentStep(currentStep + 1);
+											}}
+										>
+											<span className="absolute inset-0 overflow-hidden rounded-sm">
+												<span className="absolute inset-0 rounded-sm bg-[image:radial-gradient(75%_100%_at_50%_0%,rgba(56,189,248,0.6)_0%,rgba(56,189,248,0)_75%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100"></span>
+											</span>
+											<div className="relative flex space-x-2 items-center z-10 rounded-none bg-zinc-950 py-2 px-4 ring-1 ring-white/10 justify-center">
+												<span>Continue</span>
+											</div>
+											<span className="absolute -bottom-0 left-[1.125rem] h-px w-[calc(100%-2.25rem)] bg-gradient-to-r from-emerald-400/0 via-stone-800/90 to-emerald-400/0 transition-opacity duration-500 group-hover:opacity-40"></span>
+										</button>
+									</CardContent>
+								</Card>
+							) : currentStep === 2 ? (
 								<Card className="rounded-none flex-grow  h-full">
 									<CardHeader>
 										<CardTitle>Choose Framework</CardTitle>
