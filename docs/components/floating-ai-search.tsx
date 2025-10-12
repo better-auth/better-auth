@@ -181,7 +181,7 @@ function SearchAIInput(props: ComponentProps<"form">) {
 				</div>
 			)}
 			{!showSuggestions && (
-				<div className="border-t px-4 text-xs text-fd-muted-foreground cursor-pointer  bg-fd-accent/40 h-full flex items-center gap-1 mt-2 py-1">
+				<div className="border-t px-4 text-xs text-fd-muted-foreground cursor-pointer bg-fd-accent/40 h-full flex items-center gap-1 mt-2 py-1">
 					<div
 						className="flex items-center gap-1 empty:hidden hover:text-fd-foreground transition-all duration-200 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
 						role="button"
