@@ -8,7 +8,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 
 export const createFieldAttribute = <
 	T extends DBFieldType,
-	C extends DBFieldAttributeConfig,
+	C extends DBFieldAttributeConfig<T>,
 >(
 	type: T,
 	config?: C,
