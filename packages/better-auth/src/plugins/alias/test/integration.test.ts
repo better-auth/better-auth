@@ -114,14 +114,6 @@ describe("Alias Plugin", async () => {
 		expect(nestedClient.v1.polar.anotherAction("test")).toEqual("result-test");
 	});
 
-	it("should handle atoms correctly", async () => {
-		// TODO:
-	});
-
-	it("should handle rateLimit correctly", async () => {
-		// TODO:
-	});
-
 	it("should wrap getActions to prefix any path-based actions", async () => {
 		const spyFetch = vi.fn(async (req: Request | string | URL) => {
 			return new Response(
@@ -277,9 +269,13 @@ describe("Alias Plugin", async () => {
 		});
 
 		it("should preserve $Infer key", async () => {
+			// @ts-expect-error
+			expectTypeOf<typeof auth.$Infer.SomeType>().toEqualTypeOf<never>();
 			expectTypeOf<typeof auth.$Infer.TestSomeType>().toMatchObjectType<{
 				success: true;
 			}>();
+			// @ts-expect-error
+			expectTypeOf<typeof client.$Infer.SomeType>().toEqualTypeOf<never>();
 			expectTypeOf<typeof client.$Infer.TestSomeType>().toMatchObjectType<{
 				success: true;
 			}>();
