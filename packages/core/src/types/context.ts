@@ -1,6 +1,7 @@
 import type {
 	Account,
 	BetterAuthDBSchema,
+	BetterAuthPluginDBSchema,
 	SecondaryStorage,
 	Session,
 	User,
@@ -17,171 +18,181 @@ import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 } from "./init-options";
+import type { schema } from "../db/schema";
 
 export type GenericEndpointContext<
-	Options extends BetterAuthOptions = BetterAuthOptions,
-> = EndpointContext<string, any> & {
-	context: AuthContext<Options>;
-};
+		Schema extends BetterAuthPluginDBSchema<typeof schema>,
+		Options extends BetterAuthOptions<Schema> = BetterAuthOptions<Schema>,
+	> = EndpointContext<string, any> & {
+		context: AuthContext<Schema, Options>;
+	};
 
 export interface InternalAdapter<
-	Options extends BetterAuthOptions = BetterAuthOptions,
-> {
-	createOAuthUser(
-		user: Omit<User, "id" | "createdAt" | "updatedAt">,
-		account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
-			Partial<Account>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<{ user: User; account: Account }>;
+		Schema extends BetterAuthPluginDBSchema<typeof schema>,
+		Options extends BetterAuthOptions<Schema> = BetterAuthOptions<Schema>,
+	> {
+		createOAuthUser(
+			user: Omit<User<Schema>, "id" | "createdAt" | "updatedAt">,
+			account: Omit<
+				Account<Schema>,
+				"userId" | "id" | "createdAt" | "updatedAt"
+			> &
+				Partial<Account>,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<{ user: User<Schema>; account: Account<Schema> }>;
 
-	createUser<T extends Record<string, any>>(
-		user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
-			Partial<User> &
-			Record<string, any>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<T & User>;
+		createUser(
+			user: Omit<
+				User<Schema>,
+				"id" | "createdAt" | "updatedAt" | "emailVerified"
+			> &
+				Partial<User<Schema>>,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<User<Schema>>;
 
-	createAccount<T extends Record<string, any>>(
-		account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
-			Partial<Account> &
-			T,
-		context?: GenericEndpointContext<Options>,
-	): Promise<T & Account>;
+		createAccount(
+			account: Omit<Account<Schema>, "id" | "createdAt" | "updatedAt"> &
+				Partial<Account<Schema>>,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<Account<Schema>>;
 
-	listSessions(userId: string): Promise<Session[]>;
+		listSessions(userId: string): Promise<Session<Schema>[]>;
 
-	listUsers(
-		limit?: number,
-		offset?: number,
-		sortBy?: { field: string; direction: "asc" | "desc" },
-		where?: Where[],
-	): Promise<User[]>;
+		listUsers(
+			limit?: number,
+			offset?: number,
+			sortBy?: { field: string; direction: "asc" | "desc" },
+			where?: Where<Schema["user"]>[],
+		): Promise<User<Schema>[]>;
 
-	countTotalUsers(where?: Where[]): Promise<number>;
+		countTotalUsers(where?: Where<Schema["user"]>[]): Promise<number>;
 
-	deleteUser(
-		userId: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+		deleteUser(
+			userId: string,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<void>;
 
-	createSession(
-		userId: string,
-		ctx: GenericEndpointContext<Options>,
-		dontRememberMe?: boolean,
-		override?: Partial<Session> & Record<string, any>,
-		overrideAll?: boolean,
-	): Promise<Session>;
+		createSession(
+			userId: string,
+			ctx: GenericEndpointContext<Schema, Options>,
+			dontRememberMe?: boolean,
+			override?: Partial<Session<Schema>>,
+			overrideAll?: boolean,
+		): Promise<Session<Schema>>;
 
-	findSession(token: string): Promise<{
-		session: Session & Record<string, any>;
-		user: User & Record<string, any>;
-	} | null>;
+		findSession(token: string): Promise<{
+			session: Session<Schema>;
+			user: User<Schema>;
+		} | null>;
 
-	findSessions(
-		sessionTokens: string[],
-	): Promise<{ session: Session; user: User }[]>;
+		findSessions(
+			sessionTokens: string[],
+		): Promise<{ session: Session<Schema>; user: User<Schema> }[]>;
 
-	updateSession(
-		sessionToken: string,
-		session: Partial<Session> & Record<string, any>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<Session | null>;
+		updateSession(
+			sessionToken: string,
+			session: Partial<Session<Schema>>,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<Session<Schema> | null>;
 
-	deleteSession(token: string): Promise<void>;
+		deleteSession(token: string): Promise<void>;
 
-	deleteAccounts(
-		userId: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+		deleteAccounts(
+			userId: string,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<void>;
 
-	deleteAccount(
-		accountId: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+		deleteAccount(
+			accountId: string,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<void>;
 
-	deleteSessions(
-		userIdOrSessionTokens: string | string[],
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+		deleteSessions(
+			userIdOrSessionTokens: string | string[],
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<void>;
 
-	findOAuthUser(
-		email: string,
-		accountId: string,
-		providerId: string,
-	): Promise<{ user: User; accounts: Account[] } | null>;
+		findOAuthUser(
+			email: string,
+			accountId: string,
+			providerId: string,
+		): Promise<{ user: User<Schema>; accounts: Account<Schema>[] } | null>;
 
-	findUserByEmail(
-		email: string,
-		options?: { includeAccounts: boolean },
-	): Promise<{ user: User; accounts: Account[] } | null>;
+		findUserByEmail(
+			email: string,
+			options?: { includeAccounts: boolean },
+		): Promise<{ user: User<Schema>; accounts: Account<Schema>[] } | null>;
 
-	findUserById(userId: string): Promise<User | null>;
+		findUserById(userId: string): Promise<User<Schema> | null>;
 
-	linkAccount(
-		account: Omit<Account, "id" | "createdAt" | "updatedAt"> & Partial<Account>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<Account>;
+		linkAccount(
+			account: Omit<Account<Schema>, "id" | "createdAt" | "updatedAt"> &
+				Partial<Account<Schema>>,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<Account<Schema>>;
 
-	// fixme: any type
-	updateUser(
-		userId: string,
-		data: Partial<User> & Record<string, any>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<any>;
+		// Fix me: any type
+		updateUser(
+			userId: string,
+			data: Partial<User<Schema>> & Record<string, any>,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<User<Schema>>;
 
-	updateUserByEmail(
-		email: string,
-		data: Partial<User & Record<string, any>>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<User>;
+		updateUserByEmail(
+			email: string,
+			data: Partial<User<Schema> & Record<string, any>>,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<User<Schema>>;
 
-	updatePassword(
-		userId: string,
-		password: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+		updatePassword(
+			userId: string,
+			password: string,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<void>;
 
-	findAccounts(userId: string): Promise<Account[]>;
+		findAccounts(userId: string): Promise<Account<Schema>[]>;
 
-	findAccount(accountId: string): Promise<Account | null>;
+		findAccount(accountId: string): Promise<Account<Schema> | null>;
 
-	findAccountByProviderId(
-		accountId: string,
-		providerId: string,
-	): Promise<Account | null>;
+		findAccountByProviderId(
+			accountId: string,
+			providerId: string,
+		): Promise<Account<Schema> | null>;
 
-	findAccountByUserId(userId: string): Promise<Account[]>;
+		findAccountByUserId(userId: string): Promise<Account<Schema>[]>;
 
-	updateAccount(
-		id: string,
-		data: Partial<Account>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<Account>;
+		updateAccount(
+			id: string,
+			data: Partial<Account<Schema>>,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<Account<Schema>>;
 
-	createVerificationValue(
-		data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
-			Partial<Verification>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<Verification>;
+		createVerificationValue(
+			data: Omit<Verification<Schema>, "createdAt" | "id" | "updatedAt"> &
+				Partial<Verification<Schema>>,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<Verification<Schema>>;
 
-	findVerificationValue(identifier: string): Promise<Verification | null>;
+		findVerificationValue(
+			identifier: string,
+		): Promise<Verification<Schema> | null>;
 
-	deleteVerificationValue(
-		id: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+		deleteVerificationValue(
+			id: string,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<void>;
 
-	deleteVerificationByIdentifier(
-		identifier: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+		deleteVerificationByIdentifier(
+			identifier: string,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<void>;
 
-	updateVerificationValue(
-		id: string,
-		data: Partial<Verification>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<Verification>;
-}
+		updateVerificationValue(
+			id: string,
+			data: Partial<Verification>,
+			context?: GenericEndpointContext<Schema, Options>,
+		): Promise<Verification>;
+	}
 
 type CreateCookieGetterFn = (
 	cookieName: string,
@@ -191,13 +202,15 @@ type CreateCookieGetterFn = (
 	attributes: CookieOptions;
 };
 
-type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
-	userId: string,
-	ctx: GenericEndpointContext<Options>,
-) => Promise<boolean>;
+type CheckPasswordFn<
+	Schema extends BetterAuthPluginDBSchema<typeof schema>,
+	Options extends BetterAuthOptions<Schema> = BetterAuthOptions<Schema>,
+> = (userId: string, ctx: GenericEndpointContext<Schema, Options>) => Promise<boolean>;
 
-export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
-	{
+export type AuthContext<
+		Schema extends BetterAuthPluginDBSchema<typeof schema>,
+		Options extends BetterAuthOptions<Schema> = BetterAuthOptions<Schema>,
+	> = {
 		options: Options;
 		appName: string;
 		baseURL: string;
@@ -215,17 +228,17 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * by `setNewSession` method.
 		 */
 		newSession: {
-			session: Session & Record<string, any>;
+			session: Session<Schema> & Record<string, any>;
 			user: User & Record<string, any>;
 		} | null;
 		session: {
-			session: Session & Record<string, any>;
-			user: User & Record<string, any>;
+			session: Session<Schema> & Record<string, any>;
+			user: User<Schema> & Record<string, any>;
 		} | null;
 		setNewSession: (
 			session: {
-				session: Session & Record<string, any>;
-				user: User & Record<string, any>;
+				session: Session<Schema> & Record<string, any>;
+				user: User<Schema> & Record<string, any>;
 			} | null,
 		) => void;
 		socialProviders: OAuthProvider[];
@@ -237,8 +250,8 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			max: number;
 			storage: "memory" | "database" | "secondary-storage";
 		} & BetterAuthRateLimitOptions;
-		adapter: DBAdapter<Options>;
-		internalAdapter: InternalAdapter<Options>;
+		adapter: DBAdapter<Schema, Options>;
+		internalAdapter: InternalAdapter<Schema, Options>;
 		createAuthCookie: CreateCookieGetterFn;
 		secret: string;
 		sessionConfig: {
@@ -258,7 +271,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				minPasswordLength: number;
 				maxPasswordLength: number;
 			};
-			checkPassword: CheckPasswordFn<Options>;
+			checkPassword: CheckPasswordFn<Schema, Options>;
 		};
 		tables: BetterAuthDBSchema;
 		runMigrations: () => Promise<void>;

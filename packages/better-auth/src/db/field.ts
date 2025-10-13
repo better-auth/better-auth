@@ -2,10 +2,24 @@ import type {
 	DBFieldAttribute,
 	DBFieldAttributeConfig,
 	DBFieldType,
+	DBFieldPrimitive,
 } from "@better-auth/core/db";
 import type { BetterAuthOptions } from "@better-auth/core";
 
 export const createFieldAttribute = <
+	T extends DBFieldType,
+	C extends DBFieldAttributeConfig<T>,
+>(
+	type: T,
+	config?: C,
+) => {
+	return {
+		type,
+		...config,
+	} satisfies DBFieldAttribute<T>;
+};
+
+export const field = <
 	T extends DBFieldType,
 	C extends DBFieldAttributeConfig,
 >(
@@ -17,22 +31,6 @@ export const createFieldAttribute = <
 		...config,
 	} satisfies DBFieldAttribute<T>;
 };
-
-export type InferValueType<T extends DBFieldType> = T extends "string"
-	? string
-	: T extends "number"
-		? number
-		: T extends "boolean"
-			? boolean
-			: T extends "date"
-				? Date
-				: T extends `${infer T}[]`
-					? T extends "string"
-						? string[]
-						: number[]
-					: T extends Array<any>
-						? T[number]
-						: never;
 
 export type InferFieldsOutput<Field> = Field extends Record<
 	infer Key,
@@ -100,21 +98,20 @@ export type InferFieldsInputClient<Field> = Field extends Record<
 type InferFieldOutput<T extends DBFieldAttribute> = T["returned"] extends false
 	? never
 	: T["required"] extends false
-		? InferValueType<T["type"]> | undefined | null
-		: InferValueType<T["type"]>;
+		? DBFieldPrimitive<T["type"]> | undefined | null
+		: DBFieldPrimitive<T["type"]>;
 
 /**
  * Converts a Record<string, DBFieldAttribute> to an object type
  * with keys and value types inferred from DBFieldAttribute["type"].
  */
-export type FieldAttributeToObject<
-	Fields extends Record<string, DBFieldAttribute>,
-> = AddOptionalFields<
-	{
-		[K in keyof Fields]: InferValueType<Fields[K]["type"]>;
-	},
-	Fields
->;
+export type FieldAttributeToObject<Fields extends Record<string, DBFieldAttribute>> =
+		AddOptionalFields<
+			{
+				[K in keyof Fields]: DBFieldPrimitive<Fields[K]["type"]>;
+			},
+			Fields
+		>;
 
 type AddOptionalFields<
 	T extends Record<string, any>,
@@ -158,7 +155,7 @@ type RemoveFieldsWithInputFalse<T extends Record<string, DBFieldAttribute>> = {
 	[K in keyof T as T[K]["input"] extends false ? never : K]: T[K];
 };
 
-type InferFieldInput<T extends DBFieldAttribute> = InferValueType<T["type"]>;
+type InferFieldInput<T extends DBFieldAttribute> = DBFieldPrimitive<T["type"]>;
 
 export type PluginFieldAttribute = Omit<
 	DBFieldAttribute,
