@@ -34,7 +34,7 @@ export const numberIdTestSuite = createTestSuite(
 				});
 				expect(res).toHaveProperty("id");
 				expect(typeof res.id).toBe("string");
-				expect(Number(res.id)).not.toBeNaN();
+				expect(Number(res.id)).toBeGreaterThan(0);
 			},
 			...normalTests,
 		};
