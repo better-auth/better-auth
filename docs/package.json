@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "next build && pnpm run scripts:sync-orama",
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "start": "next start",
     "postinstall": "fumadocs-mdx",
     "scripts:endpoint-to-doc": "bun ./scripts/endpoint-to-doc/index.ts",
