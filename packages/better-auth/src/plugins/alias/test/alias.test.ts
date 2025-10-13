@@ -7,15 +7,12 @@ import { createMockPlugin } from "./mock-plugin";
 describe("alias plugin", () => {
 	it("should prefix endpoint paths and keys", () => {
 		const plugin = createMockPlugin("polar");
-		const aliasedPlugin = alias("/polar", plugin, {
-			excludeEndpoints: ["/customer/portal"],
-		});
+		const aliasedPlugin = alias("/polar", plugin);
 
 		// Check that endpoints are prefixed
 		expect(aliasedPlugin.endpoints?.checkout?.path).toBe("/polar/checkout");
-		// Check that excluded endpoints are not prefixed
 		expect(aliasedPlugin.endpoints?.customerPortal?.path).toBe(
-			"/customer/portal",
+			"/polar/customer/portal",
 		);
 	});
 
