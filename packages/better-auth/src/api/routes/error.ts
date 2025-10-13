@@ -239,7 +239,7 @@ const html = (code: string = "Unknown", description: string | null = null) =>
             ${
 							!description
 								? "We encountered an unexpected error. Please try again or return to the home page. If you're a developer, you can find more information about the error " +
-									`<a href='https://better-auth.com/docs/errors/${encodeURIComponent(sanitize(code))}' target='_blank' style='color: var(--foreground); text-decoration: underline;'>here</a>.`
+									`<a href='https://better-auth.com/docs/errors/${encodeURIComponent(code)}' target='_blank' style='color: var(--foreground); text-decoration: underline;'>here</a>.`
 								: sanitize(description)
 						}
           </p>
@@ -261,6 +261,7 @@ const html = (code: string = "Unknown", description: string | null = null) =>
               padding: 0.5rem 1.25rem;
               border-radius: 0;
             "
+            onclick="window.history.back()"
           >
             Try again
           </button>

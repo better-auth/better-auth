@@ -32,7 +32,7 @@ not triggered by email/password flows on their own.
   is already linked to a different user record.
 * Data migration or manual database edits left a stale link pointing to the wrong user.
 * You rely on email matching to decide linking, but the actual unique key is the provider account identifier 
-  (e.g., `providerId` + `providerAccountId`). If that mapping exists for another user, linking will be blocked.
+  (e.g., `providerId` + `accountId`). If that mapping exists for another user, linking will be blocked.
 
 ### Safer patterns and prevention
 
