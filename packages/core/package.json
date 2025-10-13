@@ -26,6 +26,16 @@
         "default": "./dist/async_hooks/index.cjs"
       }
     },
+    "./context": {
+      "import": {
+        "types": "./dist/context/index.d.ts",
+        "default": "./dist/context/index.js"
+      },
+      "require": {
+        "types": "./dist/context/index.d.cts",
+        "default": "./dist/context/index.cjs"
+      }
+    },
     "./env": {
       "import": {
         "types": "./dist/env/index.d.ts",
