@@ -26,30 +26,6 @@ export const getNormalTestSuiteTests = ({
 	customIdGenerator,
 	getBetterAuthOptions,
 }: Parameters<Parameters<typeof createTestSuite>[2]>[0]) => {
-	/**
-	 * Some databases (such as SQLite) sort rows orders using raw byte values
-	 * Meaning that capitalization, numbers and others goes before the rest of the alphabet
-	 * Because of the inconsistency, as a bare minimum for testing sorting functionality, we should
-	 * remove all capitalizations and numbers from the `name` field
-	 */
-	const createBinarySortFriendlyUsers = async (count: number) => {
-		let users: User[] = [];
-		for (let i = 0; i < count; i++) {
-			const user = await generate("user");
-			const userResult = await adapter.create<User>({
-				model: "user",
-				data: {
-					...user,
-					name:
-						`user-` + crypto.randomUUID().replace(/[0-9]/g, "").toLowerCase(),
-				},
-				forceAllowId: true,
-			});
-			users.push(userResult);
-		}
-		return users;
-	};
-
 	return {
 		"create - should create a model": async () => {
 			const user = await generate("user");
@@ -366,7 +342,7 @@ export const getNormalTestSuiteTests = ({
 			expect(result[0]!.name.includes(".*")).toBe(true);
 		},
 		"findMany - should find many models with ends_with operator": async () => {
-			const users = await createBinarySortFriendlyUsers(3);
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const ends_with = users[0]!.name.slice(-1);
 			const result = await adapter.findMany<User>({
 				model: "user",
@@ -534,14 +510,47 @@ export const getNormalTestSuiteTests = ({
 			expect(sortModels(result)).toEqual([users[2]]);
 		},
 		"findMany - should find many models with sortBy": async () => {
-			const users = await createBinarySortFriendlyUsers(5);
-			const result = await adapter.findMany<User>({
-				model: "user",
-				sortBy: { field: "name", direction: "asc" },
-			});
-			expect(result.map((x) => x.name)).toEqual(
-				users.map((x) => x.name).sort((a, b) => a.localeCompare(b)),
+			let n = -1;
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							numericField: {
+								type: "number",
+								defaultValue() {
+									return n++;
+								},
+							},
+						},
+					},
+				},
+				true,
 			);
+			const users = (await insertRandom("user", 5)).map(
+				(x) => x[0],
+			) as (User & { numericField: number })[];
+			const result = await adapter.findMany<User & { numericField: number }>({
+				model: "user",
+				sortBy: { field: "numericField", direction: "asc" },
+			});
+			const expectedResult = users
+				.map((x) => x.numericField)
+				.sort((a, b) => a - b);
+			try {
+				expect(result.map((x) => x.numericField)).toEqual(expectedResult);
+			} catch (error) {
+				console.log(`--------------------------------`);
+				console.log(`result:`);
+				console.log(result.map((x) => x.id));
+				console.log(`expected result:`);
+				console.log(expectedResult);
+				console.log(`--------------------------------`);
+				throw error;
+			}
+			const options = getBetterAuthOptions();
+			if (options.advanced?.database?.useNumberId) {
+				expect(Number(users[0]!.id)).not.toBeNaN();
+			}
 		},
 		"findMany - should find many models with limit": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
@@ -582,45 +591,117 @@ export const getNormalTestSuiteTests = ({
 			});
 		},
 		"findMany - should find many models with sortBy and offset": async () => {
-			const users = await createBinarySortFriendlyUsers(5);
+			let n = -1;
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							numericField: {
+								type: "number",
+								defaultValue() {
+									return n++;
+								},
+							},
+						},
+					},
+				},
+				true,
+			);
+			const users = (await insertRandom("user", 5)).map(
+				(x) => x[0],
+			) as (User & { numericField: number })[];
 			const result = await adapter.findMany<User>({
 				model: "user",
-				sortBy: { field: "name", direction: "asc" },
+				sortBy: { field: "numericField", direction: "asc" },
 				offset: 2,
 			});
 			expect(result).toHaveLength(3);
 			expect(result).toEqual(
-				users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(2),
+				users.sort((a, b) => a.numericField - b.numericField).slice(2),
 			);
 		},
 		"findMany - should find many models with sortBy and limit": async () => {
-			const users = await createBinarySortFriendlyUsers(5);
+			let n = -1;
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							numericField: {
+								type: "number",
+								defaultValue() {
+									return n++;
+								},
+							},
+						},
+					},
+				},
+				true,
+			);
+			const users = (await insertRandom("user", 5)).map(
+				(x) => x[0],
+			) as (User & { numericField: number })[];
 			const result = await adapter.findMany<User>({
 				model: "user",
-				sortBy: { field: "name", direction: "asc" },
+				sortBy: { field: "numericField", direction: "asc" },
 				limit: 2,
 			});
 			expect(result).toEqual(
-				users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(0, 2),
+				users.sort((a, b) => a.numericField - b.numericField).slice(0, 2),
 			);
 		},
 		"findMany - should find many models with sortBy and limit and offset":
 			async () => {
-				const users = await createBinarySortFriendlyUsers(5);
+				let n = -1;
+				await modifyBetterAuthOptions(
+					{
+						user: {
+							additionalFields: {
+								numericField: {
+									type: "number",
+									defaultValue() {
+										return n++;
+									},
+								},
+							},
+						},
+					},
+					true,
+				);
+				const users = (await insertRandom("user", 5)).map(
+					(x) => x[0],
+				) as (User & { numericField: number })[];
 				const result = await adapter.findMany<User>({
 					model: "user",
-					sortBy: { field: "name", direction: "asc" },
+					sortBy: { field: "numericField", direction: "asc" },
 					limit: 2,
 					offset: 2,
 				});
 				expect(result.length).toBe(2);
 				expect(result).toEqual(
-					users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(2, 4),
+					users.sort((a, b) => a.numericField - b.numericField).slice(2, 4),
 				);
 			},
 		"findMany - should find many models with sortBy and limit and offset and where":
 			async () => {
-				let users = await createBinarySortFriendlyUsers(10);
+				let n = -1;
+				await modifyBetterAuthOptions(
+					{
+						user: {
+							additionalFields: {
+								numericField: {
+									type: "number",
+									defaultValue() {
+										return n++;
+									},
+								},
+							},
+						},
+					},
+					true,
+				);
+				let users = (await insertRandom("user", 10)).map(
+					(x) => x[0],
+				) as (User & { numericField: number })[];
 
 				// update the last three users to end with "last"
 				let i = -1;
@@ -637,9 +718,9 @@ export const getNormalTestSuiteTests = ({
 					users[i]!.updatedAt = result.updatedAt;
 				}
 
-				const result = await adapter.findMany<User>({
+				const result = await adapter.findMany<User & { numericField: number }>({
 					model: "user",
-					sortBy: { field: "name", direction: "asc" },
+					sortBy: { field: "numericField", direction: "asc" },
 					limit: 2,
 					offset: 2,
 					where: [{ field: "name", value: "last", operator: "ends_with" }],
@@ -648,13 +729,39 @@ export const getNormalTestSuiteTests = ({
 				// Order of operation for most DBs:
 				// FROM → WHERE → SORT BY → OFFSET → LIMIT
 
-				expect(result.length).toBe(2);
-				expect(result).toEqual(
-					users
-						.filter((user) => user.name.endsWith("last"))
-						.sort((a, b) => a["name"].localeCompare(b["name"]))
-						.slice(2, 4),
-				);
+				let expectedResult: any[] = [];
+				expectedResult = users
+					.filter((user) => user.name.endsWith("last"))
+					.sort((a, b) => a.numericField - b.numericField)
+					.slice(2, 4);
+
+				try {
+					expect(result.length).toBe(2);
+					expect(result).toEqual(expectedResult);
+				} catch (error) {
+					console.log(`--------------------------------`);
+					console.log(`results:`);
+					console.log(result.map((x) => x.id));
+					console.log(`expected results, sorted:`);
+					console.log(
+						users
+							.filter((x) => x.name.toString().endsWith("last"))
+							.map((x) => x.numericField)
+							.sort((a, b) => a - b),
+					);
+					console.log(`expected results, sorted + offset:`);
+					console.log(
+						users
+							.filter((x) => x.name.toString().endsWith("last"))
+							.map((x) => x.numericField)
+							.sort((a, b) => a - b)
+							.slice(2, 4),
+					);
+					console.log(`--------------------------------`);
+					console.log("FAIL", error);
+					console.log(`--------------------------------`);
+					throw error;
+				}
 			},
 		"update - should update a model": async () => {
 			const [user] = await insertRandom("user");
@@ -871,7 +978,7 @@ export const getNormalTestSuiteTests = ({
 				});
 				expect(stillThere).not.toBeNull();
 			}
-    },
+		},
 		"deleteMany - should delete many models with numeric values": async () => {
 			let i = 0;
 			await modifyBetterAuthOptions(
