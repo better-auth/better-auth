@@ -586,8 +586,7 @@ export function AISearchTrigger() {
 							onClick={() => setOpen(true)}
 						>
 							<SearchIcon className="size-3.5 sm:size-4" />
-							<span className="hidden sm:inline">Ask AI</span>
-							<span className="sm:hidden">AI</span>
+							Ask AI
 						</button>
 					</Presence>
 					<Presence present={open}>
