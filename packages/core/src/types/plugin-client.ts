@@ -21,7 +21,9 @@ export type ClientAtomListener = {
 	signal: "$sessionSignal" | Omit<string, "$sessionSignal">;
 };
 
-export interface BetterAuthClientOptions<Schema extends BetterAuthPluginDBSchema<typeof schema>> {
+export interface BetterAuthClientOptions<
+	Schema extends BetterAuthPluginDBSchema<typeof schema>,
+> {
 	fetchOptions?: BetterFetchOption;
 	plugins?: BetterAuthClientPlugin<Schema>[];
 	baseURL?: string;
@@ -31,43 +33,43 @@ export interface BetterAuthClientOptions<Schema extends BetterAuthPluginDBSchema
 }
 
 export interface BetterAuthClientPlugin<
-		Schema extends BetterAuthPluginDBSchema<typeof schema>,
-	> {
-		id: LiteralString;
+	Schema extends BetterAuthPluginDBSchema<typeof schema>,
+> {
+	id: LiteralString;
+	/**
+	 * only used for type inference. don't pass the
+	 * actual plugin
+	 */
+	$InferServerPlugin?: BetterAuthPlugin<Schema>;
+	/**
+	 * Custom actions
+	 */
+	getActions?: (
+		$fetch: BetterFetch,
+		$store: ClientStore,
 		/**
-		 * only used for type inference. don't pass the
-		 * actual plugin
+		 * better-auth client options
 		 */
-		$InferServerPlugin?: BetterAuthPlugin<Schema>;
-		/**
-		 * Custom actions
-		 */
-		getActions?: (
-			$fetch: BetterFetch,
-			$store: ClientStore,
-			/**
-			 * better-auth client options
-			 */
-			options: BetterAuthClientOptions<Schema> | undefined,
-		) => Record<string, any>;
-		/**
-		 * State atoms that'll be resolved by each framework
-		 * auth store.
-		 */
-		getAtoms?: ($fetch: BetterFetch) => Record<string, Atom<any>>;
-		/**
-		 * specify path methods for server plugin inferred
-		 * endpoints to force a specific method.
-		 */
-		pathMethods?: Record<string, "POST" | "GET">;
-		/**
-		 * Better fetch plugins
-		 */
-		fetchPlugins?: BetterFetchPlugin[];
-		/**
-		 * a list of recaller based on a matcher function.
-		 * The signal name needs to match a signal in this
-		 * plugin or any plugin the user might have added.
-		 */
-		atomListeners?: ClientAtomListener[];
-	}
+		options: BetterAuthClientOptions<Schema> | undefined,
+	) => Record<string, any>;
+	/**
+	 * State atoms that'll be resolved by each framework
+	 * auth store.
+	 */
+	getAtoms?: ($fetch: BetterFetch) => Record<string, Atom<any>>;
+	/**
+	 * specify path methods for server plugin inferred
+	 * endpoints to force a specific method.
+	 */
+	pathMethods?: Record<string, "POST" | "GET">;
+	/**
+	 * Better fetch plugins
+	 */
+	fetchPlugins?: BetterFetchPlugin[];
+	/**
+	 * a list of recaller based on a matcher function.
+	 * The signal name needs to match a signal in this
+	 * plugin or any plugin the user might have added.
+	 */
+	atomListeners?: ClientAtomListener[];
+}

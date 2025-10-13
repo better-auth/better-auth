@@ -21,7 +21,7 @@ import type {
 } from "@better-auth/core";
 
 export const createInternalAdapter = (
-	adapter: DBAdapter<BetterAuthOptiongis>,
+	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
 		options: Omit<BetterAuthOptions, "logger">;
 		logger: InternalLogger;

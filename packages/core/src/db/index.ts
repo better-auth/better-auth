@@ -18,7 +18,7 @@ export {
 	verificationSchema,
 	rateLimitSchema,
 } from "./schema";
-export type { Account, User, Session, Verification, RateLimit } from "./schema"
+export type { Account, User, Session, Verification, RateLimit } from "./schema";
 
 export type {
 	DBFieldPrimitive,

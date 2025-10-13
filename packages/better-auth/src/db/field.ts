@@ -21,7 +21,7 @@ export const createFieldAttribute = <
 
 export const field = <
 	T extends DBFieldType,
-	C extends DBFieldAttributeConfig,
+	C extends DBFieldAttributeConfig<T>,
 >(
 	type: T,
 	config?: C,
@@ -105,13 +105,14 @@ type InferFieldOutput<T extends DBFieldAttribute> = T["returned"] extends false
  * Converts a Record<string, DBFieldAttribute> to an object type
  * with keys and value types inferred from DBFieldAttribute["type"].
  */
-export type FieldAttributeToObject<Fields extends Record<string, DBFieldAttribute>> =
-		AddOptionalFields<
-			{
-				[K in keyof Fields]: DBFieldPrimitive<Fields[K]["type"]>;
-			},
-			Fields
-		>;
+export type FieldAttributeToObject<
+	Fields extends Record<string, DBFieldAttribute>,
+> = AddOptionalFields<
+	{
+		[K in keyof Fields]: DBFieldPrimitive<Fields[K]["type"]>;
+	},
+	Fields
+>;
 
 type AddOptionalFields<
 	T extends Record<string, any>,

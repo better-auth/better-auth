@@ -3,6 +3,9 @@ import {
 	createMiddleware,
 	type EndpointContext,
 	type EndpointOptions,
+	type InferUse,
+	type MiddlewareContext,
+	type MiddlewareInputContext,
 	type MiddlewareOptions,
 } from "better-call";
 import type { AuthContext } from "../types";
@@ -18,12 +21,32 @@ export const optionsMiddleware = createMiddleware(async () => {
 	return {};
 }) as OptionsMiddlewareType<any>;
 
+type PostHooksMiddlewareType<O extends MiddlewareOptions = MiddlewareOptions> =
+	ReturnType<
+		typeof createMiddleware<
+			O,
+			{
+				returned?: unknown;
+				responseHeaders?: Headers;
+			}
+		>
+	>;
+
 type OptionsMiddlewareType<
 	S extends BetterAuthPluginDBSchema<typeof schema>,
 	O extends MiddlewareOptions = MiddlewareOptions,
 > = ReturnType<typeof createMiddleware<O, AuthContext<S>>>;
 
-export const createAuthMiddleware = createMiddleware.create({
+type createMiddlewareType<
+	S extends BetterAuthPluginDBSchema<typeof schema>,
+	O extends MiddlewareOptions = MiddlewareOptions,
+> = ReturnType<
+	typeof createMiddleware.create<{
+		use: [OptionsMiddlewareType<S, O>, PostHooksMiddlewareType<O>];
+	}>
+>;
+
+const createMiddlewareFunc = createMiddleware.create({
 	use: [
 		optionsMiddleware,
 		/**
@@ -36,15 +59,33 @@ export const createAuthMiddleware = createMiddleware.create({
 			};
 		}),
 	],
-});
+}) as createMiddlewareType<any>;
+
+export function createAuthMiddleware<
+	S extends BetterAuthPluginDBSchema<typeof schema>,
+	Options extends MiddlewareOptions,
+	R,
+>(
+	options: Options,
+	handler: (
+		ctx: MiddlewareContext<
+			Options,
+			AuthContext<S> & {
+				returned?: unknown;
+				responseHeaders?: Headers;
+			}
+		>,
+	) => Promise<R>,
+): AuthMiddleware<S> {
+	return createMiddlewareFunc(options, handler) as AuthMiddleware<S>;
+}
 
 const createEndpointFunc = createEndpoint.create({
 	use: [optionsMiddleware],
 }) as createEndpointType<any>;
 
-type createEndpointType<
-	S extends BetterAuthPluginDBSchema<typeof schema>,
-> = ReturnType<typeof createEndpoint.create<{use: [OptionsMiddlewareType<S>]}>>;
+type createEndpointType<S extends BetterAuthPluginDBSchema<typeof schema>> =
+	ReturnType<typeof createEndpoint.create<{ use: [OptionsMiddlewareType<S>] }>>;
 
 // Use a separate function to make sure the type is correct
 export function createAuthEndpoint<
@@ -60,5 +101,9 @@ export function createAuthEndpoint<
 	return createEndpointFunc(path, options, handler);
 }
 
-export type AuthEndpoint<S extends BetterAuthPluginDBSchema<typeof schema>> = ReturnType<createEndpointType<S>>;
-export type AuthMiddleware = ReturnType<typeof createAuthMiddleware>;
+export type AuthEndpoint<S extends BetterAuthPluginDBSchema<typeof schema>> =
+	ReturnType<createEndpointType<S>>;
+export type AuthMiddleware<
+	S extends BetterAuthPluginDBSchema<typeof schema>,
+	O extends MiddlewareOptions = MiddlewareOptions,
+> = ReturnType<createMiddlewareType<S, O>>;

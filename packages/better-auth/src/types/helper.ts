@@ -22,8 +22,8 @@ export type PrettifyDeep<T> = {
 			: T[K];
 } & {};
 export type LiteralUnion<LiteralType, BaseType extends DBPrimitive> =
-		| LiteralType
-		| (BaseType & Record<never, never>);
+	| LiteralType
+	| (BaseType & Record<never, never>);
 
 export type UnionToIntersection<U> = (
 	U extends any
