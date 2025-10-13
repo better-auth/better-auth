@@ -99,14 +99,14 @@ function SearchAIInput(props: ComponentProps<"form">) {
 		>
 			<form
 				{...props}
-				className={cn("flex items-start pe-2", props.className)}
+				className={cn("flex items-start pe-2 sm:pe-2", props.className)}
 				onSubmit={onStart}
 			>
 				<Input
 					value={input}
 					placeholder={isLoading ? "answering..." : "Ask BA Bot"}
 					autoFocus
-					className="p-4 text-sm"
+					className="p-3 sm:p-4 text-sm"
 					disabled={status === "streaming" || status === "submitted"}
 					onChange={(e) => {
 						setInput(e.target.value);
@@ -124,7 +124,7 @@ function SearchAIInput(props: ComponentProps<"form">) {
 						className={cn(
 							buttonVariants({
 								color: "secondary",
-								className: "transition-all rounded-full mt-2 gap-2",
+								className: "transition-all rounded-full mt-2 gap-2 shrink-0",
 							}),
 						)}
 						onClick={stop}
@@ -138,7 +138,7 @@ function SearchAIInput(props: ComponentProps<"form">) {
 						className={cn(
 							buttonVariants({
 								color: "secondary",
-								className: "transition-all rounded-full mt-2",
+								className: "transition-all rounded-full mt-2 shrink-0",
 							}),
 						)}
 						disabled={input.length === 0}
@@ -149,16 +149,16 @@ function SearchAIInput(props: ComponentProps<"form">) {
 			</form>
 
 			{showSuggestions && (
-				<div className="mt-3 px-4">
+				<div className="mt-2 sm:mt-3 px-3 sm:px-4">
 					<p className="text-xs font-medium text-fd-muted-foreground mb-2">
 						Try asking:
 					</p>
-					<div className="flex flex-wrap gap-2">
+					<div className="flex flex-wrap gap-1.5 sm:gap-2">
 						{suggestions.slice(0, 4).map((suggestion, i) => (
 							<button
 								key={i}
 								onClick={() => handleSuggestionClick(suggestion)}
-								className="text-xs px-3 py-1.5 bg-fd-muted/30 hover:bg-fd-muted/50 text-fd-muted-foreground hover:text-fd-foreground rounded-full border border-fd-border/50 hover:border-fd-border transition-all duration-200 text-left"
+								className="text-xs px-2.5 sm:px-3 py-1.5 bg-fd-muted/30 hover:bg-fd-muted/50 text-fd-muted-foreground hover:text-fd-foreground rounded-full border border-fd-border/50 hover:border-fd-border transition-all duration-200 text-left break-words hyphens-auto"
 							>
 								{suggestion}
 							</button>
@@ -167,21 +167,23 @@ function SearchAIInput(props: ComponentProps<"form">) {
 				</div>
 			)}
 			{showSuggestions && (
-				<div className="border-t px-4 text-xs text-fd-muted-foreground bg-fd-accent/40 h-full flex items-center gap-1 mt-2 py-1">
-					Powered by{" "}
+				<div className="border-t px-3 sm:px-4 text-xs text-fd-muted-foreground bg-fd-accent/40 h-full flex items-center gap-1 mt-2 py-1">
+					<span className="hidden sm:inline">Powered by{" "}</span>
 					<Link
 						href="https://inkeep.com"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="text-fd-primary hover:text-fd-primary/80 hover:underline"
 					>
-						Inkeep.
+						<span className="sm:hidden">Inkeep</span>
+						<span className="hidden sm:inline">Inkeep.</span>
 					</Link>
-					AI can be inaccurate, please verify the information.
+					<span className="hidden sm:inline">AI can be inaccurate, please verify the information.</span>
+					<span className="sm:hidden text-[10px]">AI may be inaccurate</span>
 				</div>
 			)}
 			{!showSuggestions && (
-				<div className="border-t px-4 text-xs text-fd-muted-foreground cursor-pointer bg-fd-accent/40 h-full flex items-center gap-1 mt-2 py-1">
+				<div className="border-t px-3 sm:px-4 text-xs text-fd-muted-foreground cursor-pointer bg-fd-accent/40 h-full flex items-center gap-1 mt-2 py-1">
 					<div
 						className="flex items-center gap-1 empty:hidden hover:text-fd-foreground transition-all duration-200 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
 						role="button"
@@ -495,7 +497,7 @@ export function AISearchTrigger() {
 				<Presence present={open}>
 					<div
 						className={cn(
-							"fixed inset-0 p-2 right-(--removed-body-scroll-bar-size,0) flex flex-col pb-[8.375rem] items-center bg-fd-background/80 backdrop-blur-sm z-30",
+							"fixed inset-0 p-2 sm:p-4 right-(--removed-body-scroll-bar-size,0) flex flex-col pb-[8.375rem] items-center bg-fd-background/80 backdrop-blur-sm z-30",
 							open ? "animate-fd-fade-in" : "animate-fd-fade-out",
 						)}
 						onClick={(e) => {
@@ -505,7 +507,7 @@ export function AISearchTrigger() {
 							}
 						}}
 					>
-						<div className="sticky top-0 flex gap-2 items-center py-2 w-[min(800px,90vw)]">
+						<div className="sticky top-0 flex gap-2 items-center py-2 w-full max-w-[800px]">
 							<div className="flex justify-end w-full items-center">
 								<button
 									aria-label="Close"
@@ -525,10 +527,10 @@ export function AISearchTrigger() {
 						</div>
 						<List
 							messageCount={chat.messages.length}
-							className="py-10 pr-2 w-[min(800px,90vw)] overscroll-contain"
+							className="py-4 sm:py-10 pr-2 w-full max-w-[800px] overscroll-contain"
 							style={{
 								maskImage:
-									"linear-gradient(to bottom, transparent, white 4rem, white calc(100% - 2rem), transparent 100%)",
+									"linear-gradient(to bottom, transparent, white 2rem, white calc(100% - 2rem), transparent 100%)",
 							}}
 						>
 							<div className="flex flex-col gap-4">
@@ -562,10 +564,10 @@ export function AISearchTrigger() {
 				</Presence>
 				<div
 					className={cn(
-						"fixed bottom-4 transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 rounded-sm border shadow-xl overflow-hidden z-30",
+						"fixed bottom-4 transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-xl overflow-hidden z-30",
 						open
-							? `w-[min(800px,90vw)] bg-fd-accent/30 ${showSuggestions ? "h-1/4" : "h-32"}`
-							: "w-40 h-10 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl",
+							? `w-[calc(100vw-2rem)] sm:w-[calc(100vw-4rem)] max-w-[800px] bg-fd-accent/30 ${showSuggestions ? "h-[40vh] sm:h-1/4" : "h-32 sm:h-32"}`
+							: "w-32 sm:w-40 h-10 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl",
 					)}
 					style={{
 						left: "calc(50% - var(--removed-body-scroll-bar-size,0px)/2)",
@@ -574,15 +576,16 @@ export function AISearchTrigger() {
 					<Presence present={!open}>
 						<button
 							className={cn(
-								"absolute inset-0 text-center p-2  text-fd-muted-foreground text-sm transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground",
+								"absolute inset-0 text-center p-2 text-fd-muted-foreground text-xs sm:text-sm transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground flex items-center justify-center gap-1.5",
 								!open
 									? "animate-fd-fade-in"
 									: "animate-fd-fade-out bg-fd-accent",
 							)}
 							onClick={() => setOpen(true)}
 						>
-							<SearchIcon className="absolute top-1/2 -translate-y-1/2 size-4.5" />
-							Ask AI
+							<SearchIcon className="size-3.5 sm:size-4" />
+							<span className="hidden sm:inline">Ask AI</span>
+							<span className="sm:hidden">AI</span>
 						</button>
 					</Presence>
 					<Presence present={open}>
