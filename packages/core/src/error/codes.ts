@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "../utils";
 
 export const BASE_ERROR_CODES = defineErrorCodes({
 	USER_NOT_FOUND: "User not found",

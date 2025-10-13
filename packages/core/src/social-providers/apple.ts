@@ -1,12 +1,12 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	refreshAccessToken,
 	createAuthorizationURL,
 	validateAuthorizationCode,
-} from "@better-auth/core/oauth2";
+} from "../oauth2";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject

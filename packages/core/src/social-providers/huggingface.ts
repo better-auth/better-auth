@@ -1,10 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
 	refreshAccessToken,
-} from "@better-auth/core/oauth2";
+} from "../oauth2";
 
 export interface HuggingFaceProfile {
 	sub: string;
