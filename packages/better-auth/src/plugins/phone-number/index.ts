@@ -433,7 +433,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						ctx,
 					);
 
-					if (!options.customOTP?.skipSendOTP || !customCode) {
+					if (!customCode || !options.customOTP?.skipSendOTP) {
 						await options.sendOTP(
 							{
 								phoneNumber: ctx.body.phoneNumber,
