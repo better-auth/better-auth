@@ -282,14 +282,13 @@ describe("aliasClient plugin", () => {
 	it("should wrap getAtoms to prefix any path-based actions", async () => {
 		let returnNull = false;
 		const spyFetch = vi.fn(async (req: Request | string | URL) => {
+			if (returnNull) {
+				return new Response(JSON.stringify(null));
+			}
 			return new Response(
-				JSON.stringify(
-					!returnNull
-						? {
-								success: true,
-							}
-						: null,
-				),
+				JSON.stringify({
+					success: true,
+				}),
 			);
 		});
 
@@ -314,10 +313,17 @@ describe("aliasClient plugin", () => {
 			"http://localhost:3000/api/auth/polar/customer/portal",
 		);
 
+		spyFetch.mockClear();
+
 		// recall
 		returnNull = true;
 		await client.polar.customer.portal();
 		await vi.advanceTimersByTimeAsync(10);
+		expect(spyFetch).toHaveBeenCalledTimes(1);
+		const recalledURL = spyFetch.mock.calls[0]?.[0];
+		expect(recalledURL?.toString()).toEqual(
+			"http://localhost:3000/api/auth/polar/customer/portal",
+		);
 		expect(res()).toMatchObject({
 			data: null,
 			error: null,
