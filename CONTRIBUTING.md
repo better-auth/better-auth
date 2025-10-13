@@ -101,8 +101,41 @@ pnpm lint:fix
    - `chore/` - Build process or tooling changes
 
 2. Make your changes following the code style guidelines
-3. Add tests for your changes
-4. Run the test suite:
+
+3. Build the package:
+   ```bash
+   # In packages/better-auth
+   pnpm build
+   ```
+
+4. Test your changes locally:
+
+   **PNPM linking**
+   ```bash
+   # In packages/better-auth
+   pnpm link --global
+   
+   # Navigate to your test project/example directory
+   cd ../../examples/*  # or your test project
+   pnpm link --global better-auth
+   ```
+
+   **Packing**
+   
+   If you run into a symlink issue, you can use the packing method instead:
+   ```bash
+   # In packages/better-auth
+   pnpm pack
+   ```
+   
+   This creates a `.tgz` file. Then in your test project:
+   ```bash
+   # Install the packed version (replace with actual filename)
+   pnpm install ../../packages/better-auth/better-auth-*.tgz
+   ```
+
+5. Add tests for your changes
+6. Run the test suite:
    ```bash
    # Run all tests
    pnpm test
@@ -110,8 +143,9 @@ pnpm lint:fix
    # Run tests for a specific package
    pnpm -F "{packagename}" test
    ```
-5. Ensure all tests pass and the code is properly formatted
-6. Commit your changes with a descriptive message following this format:
+
+7. Ensure all tests pass and the code is properly formatted
+8. Commit your changes with a descriptive message following this format:
    For changes that need to be included in the changelog (excluding docs or chore changes), use the `fix` or `feat` format with a specific scope:
    ```
    fix(organization): fix incorrect member role assignment
@@ -119,7 +153,10 @@ pnpm lint:fix
    feat(two-factor): add support for TOTP authentication
    ```
 
+9. Commit your changes with a descriptive message following the [Conventional Commits](https://www.conventionalcommits.org/) format:
+
    For core library changes that don't have a specific plugin or scope, you can use `fix` and `feat` without a scope:
+
    ```
    fix: resolve memory leak in session handling
    
@@ -137,10 +174,10 @@ pnpm lint:fix
    chore(refactor): reorganize authentication middleware
    chore: update dependencies to latest versions
    ```
-
    Each commit message should be clear and descriptive, explaining what the change does. For features and fixes, include context about what was added or resolved.
-7. Push your branch to your fork
-8. Open a pull request against the **canary** branch. In your PR description:
+   
+10. Push your branch to your fork
+11. Open a pull request against the **canary** branch. In your PR description:
    - Clearly describe what changes you made and why
    - Include any relevant context or background
    - List any breaking changes or deprecations
