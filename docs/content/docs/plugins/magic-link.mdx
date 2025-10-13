@@ -59,19 +59,19 @@ To sign in with a magic link, you need to call `signIn.magicLink` with the user'
   method="POST"
   requireSession
 >
-  
+
 ```ts
 type signInMagicLink = {
     /**
-     * Email address to send the magic link. 
+     * Email address to send the magic link.
      */
     email: string = "user@email.com"
     /**
-     * User display name. Only used if the user is registering for the first time. 
+     * User display name. Only used if the user is registering for the first time.
      */
     name?: string = "my-name"
     /**
-     * URL to redirect after magic link verification. 
+     * URL to redirect after magic link verification.
      */
     callbackURL?: string = "/dashboard"
     /**
@@ -80,7 +80,7 @@ type signInMagicLink = {
     newUserCallbackURL?: string = "/welcome"
     /**
      * URL to redirect if an error happen on verification
-     * If only callbackURL is provided but without an `errorCallbackURL` then they will be 
+     * If only callbackURL is provided but without an `errorCallbackURL` then they will be
      * redirected to the callbackURL with an `error` query parameter.
      */
     errorCallbackURL?: string = "/error"
@@ -89,7 +89,7 @@ type signInMagicLink = {
 </APIMethod>
 
 <Callout>
-If the user has not signed up, unless `disableSignUp` is set to `true`, the user will be signed up automatically.
+If the user has not signed up, unless `disableSignUp` is set to `true` or a function that returns `true`, the user will be signed up automatically.
 </Callout>
 
 ### Verify Magic Link
@@ -111,11 +111,11 @@ If you want to handle the verification manually, (e.g, if you send the user a di
 ```ts
 type magicLinkVerify = {
     /**
-     * Verification token. 
+     * Verification token.
      */
     token: string = "123456"
     /**
-     * URL to redirect after magic link verification, if not provided will return the session. 
+     * URL to redirect after magic link verification, if not provided will return the session.
      */
     callbackURL?: string = "/dashboard"
 }
@@ -134,7 +134,41 @@ and a `request` object as the second parameter.
 
 **expiresIn**: specifies the time in seconds after which the magic link will expire. The default value is `300` seconds (5 minutes).
 
-**disableSignUp**: If set to `true`, the user will not be able to sign up using the magic link. The default value is `false`.
+**disableSignUp**: Controls whether new users can sign up via magic link. Can be a boolean or a function that receives the endpoint context and returns a boolean (sync or async). The default value is `false`.
+
+- When set to `true`, only existing users can sign in with magic links.
+- When set to a function, you can conditionally disable signups based on your application logic.
+- The function receives the endpoint context with access to `body`, `context`, and `request`.
+
+Example with function handler:
+```ts
+magicLink({
+    sendMagicLink: async ({ email, token, url }, request) => {
+        // send email
+    },
+    disableSignUp: (ctx) => {
+        // Only allow signups from specific email domains
+        const email = ctx.body.email;
+        const allowedDomains = ["company.com", "partner.com"];
+        const domain = email.split("@")[1];
+        return !allowedDomains.includes(domain);
+    }
+})
+```
+
+Or with async logic:
+```ts
+magicLink({
+    sendMagicLink: async ({ email, token, url }, request) => {
+        // send email
+    },
+    disableSignUp: async (ctx) => {
+        // Check feature flag or application state
+        const signupsEnabled = await checkFeatureFlag("magic-link-signups");
+        return !signupsEnabled;
+    }
+})
+```
 
 **generateToken**: The `generateToken` function is called to generate a token which is used to uniquely identify the user. The default value is a random string. There is one parameter:
 

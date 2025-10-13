@@ -29,9 +29,14 @@ interface MagicLinkopts {
 	/**
 	 * Disable sign up if user is not found.
 	 *
+	 * Can be a boolean or a function that receives the endpoint context and returns a boolean.
+	 * This allows you to conditionally disable signups based on request context.
+	 *
 	 * @default false
 	 */
-	disableSignUp?: boolean;
+	disableSignUp?:
+		| boolean
+		| ((ctx: GenericEndpointContext) => boolean | Promise<boolean>);
 	/**
 	 * Rate limit configuration.
 	 *
@@ -164,14 +169,24 @@ export const magicLink = (options: MagicLinkopts) => {
 				async (ctx) => {
 					const { email } = ctx.body;
 
+					// Handle disableSignUp - can be boolean or function
 					if (opts.disableSignUp) {
-						const user =
-							await ctx.context.internalAdapter.findUserByEmail(email);
+						let signUpDisabled = false;
+						if (typeof opts.disableSignUp === "function") {
+							signUpDisabled = await opts.disableSignUp(ctx);
+						} else {
+							signUpDisabled = true;
+						}
 
-						if (!user) {
-							throw new APIError("BAD_REQUEST", {
-								message: BASE_ERROR_CODES.USER_NOT_FOUND,
-							});
+						if (signUpDisabled) {
+							const user =
+								await ctx.context.internalAdapter.findUserByEmail(email);
+
+							if (!user) {
+								throw new APIError("BAD_REQUEST", {
+									message: BASE_ERROR_CODES.USER_NOT_FOUND,
+								});
+							}
 						}
 					}
 
@@ -364,7 +379,12 @@ export const magicLink = (options: MagicLinkopts) => {
 						.then((res) => res?.user);
 
 					if (!user) {
-						if (!opts.disableSignUp) {
+						const signUpDisabled =
+							typeof opts.disableSignUp === "function"
+								? await opts.disableSignUp(ctx)
+								: opts.disableSignUp;
+
+						if (!signUpDisabled) {
 							const newUser = await ctx.context.internalAdapter.createUser(
 								{
 									email: email,
