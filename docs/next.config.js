@@ -56,8 +56,8 @@ const config = {
 		ignoreBuildErrors: true,
 	},
 	experimental: {
-		turbopackFileSystemCacheForDev: true
-	}
+		turbopackFileSystemCacheForDev: true,
+	},
 };
 
 export default withMDX(config);
