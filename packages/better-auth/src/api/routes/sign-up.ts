@@ -7,7 +7,7 @@ import type { AdditionalUserFieldsInput, User } from "../../types";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { isDevelopment } from "@better-auth/core/env";
-import { runWithTransaction } from "../../context/transaction";
+import { runWithTransaction } from "@better-auth/core/context";
 import { parseUserInput } from "../../db";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>

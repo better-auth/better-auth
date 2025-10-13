@@ -8,6 +8,7 @@ export default defineConfig({
 		"./src/db/index.ts",
 		"./src/db/adapter/index.ts",
 		"./src/async_hooks/index.ts",
+		"./src/context/index.ts",
 		"./src/env/index.ts",
 		"./src/oauth2/index.ts",
 		"./src/middleware/index.ts",
