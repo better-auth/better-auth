@@ -264,7 +264,7 @@ export const auth = betterAuth({
 export const auth = betterAuth({
     plugins: [
         phoneNumber({
-            // ...otps
+            // ...opts
             sendOTP: ({ phoneNumber, code }, request) => {
                 // Implement sending OTP code via SMS
             },
