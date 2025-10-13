@@ -727,6 +727,7 @@
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
     "solid-js": "^1.0.0",
+    "vinxi": "^0.5.7",
     "svelte": "^4.0.0 || ^5.0.0",
     "vue": "^3.0.0"
   },
@@ -747,6 +748,9 @@
       "optional": true
     },
     "solid-js": {
+      "optional": true
+    },
+    "vinxi": {
       "optional": true
     },
     "svelte": {
@@ -792,6 +796,7 @@
     "type-fest": "^4.41.0",
     "typescript": "catalog:",
     "unbuild": "catalog:",
+    "vinxi": "^0.5.8",
     "vue": "^3.5.18"
   },
   "files": [
