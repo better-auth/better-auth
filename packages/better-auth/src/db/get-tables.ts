@@ -105,6 +105,7 @@ export const getAuthTables = (
 								invalidatedAt: {
 									type: "date",
 									required: false,
+									defaultValue: null,
 									fieldName:
 										options.session?.fields?.invalidatedAt || "invalidatedAt",
 								},

@@ -421,30 +421,28 @@ export const createInternalAdapter = (
 				}
 			}
 
-			const whereClause: Where[] = [
-				{
-					value: token,
-					field: "token",
-				},
-			];
-
-			if (ctx.options.session?.deleteSessionOnSignOut?.enabled === false) {
-				if (ctx.options.session?.deleteSessionOnSignOut?.timestamp === true) {
-					whereClause.push({ value: null, field: "invalidatedAt" });
-				} else {
-					whereClause.push({ value: true, field: "isActive" });
-				}
-			}
-
 			const session = await (await getCurrentAdapter(adapter)).findOne<Session>(
 				{
 					model: "session",
-					where: whereClause,
+					where: [
+						{
+							value: token,
+							field: "token",
+						},
+					],
 				},
 			);
 
 			if (!session) {
 				return null;
+			}
+
+			if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+				if (options.session.deleteSessionOnSignOut.timestamp === true) {
+					if (session.invalidatedAt !== null) return null;
+				} else {
+					if (session.isActive !== true) return null;
+				}
 			}
 
 			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
@@ -501,27 +499,17 @@ export const createInternalAdapter = (
 				return sessions;
 			}
 
-			const whereClause: Where[] = [
-				{
-					field: "token",
-					value: sessionTokens,
-					operator: "in",
-				},
-			];
-
-			if (ctx.options.session?.deleteSessionOnSignOut?.enabled === false) {
-				if (ctx.options.session?.deleteSessionOnSignOut?.timestamp === true) {
-					whereClause.push({ value: null, field: "invalidatedAt" });
-				} else {
-					whereClause.push({ value: true, field: "isActive" });
-				}
-			}
-
 			const sessions = await (
 				await getCurrentAdapter(adapter)
 			).findMany<Session>({
 				model: "session",
-				where: whereClause,
+				where: [
+					{
+						field: "token",
+						value: sessionTokens,
+						operator: "in",
+					},
+				],
 			});
 			const userIds = sessions.map((session) => {
 				return session.userId;

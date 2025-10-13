@@ -599,4 +599,118 @@ describe("adapter test", async () => {
 		accounts = await internalAdapter.findAccounts(user.id);
 		expect(accounts.length).toBe(0);
 	});
+
+	it("should use isActive field when deleteSessionOnSignOut is not enabled", async () => {
+		const testOpts = {
+			database: {
+				dialect: new SqliteDialect({ database: new Database(":memory:") }),
+				type: "sqlite",
+			},
+			session: {
+				deleteSessionOnSignOut: {
+					enabled: false,
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+
+		const testUser = {
+			id: "test-user-id",
+			name: "Test User",
+			email: "test@example.com",
+			emailVerified: true,
+			image: null,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+
+		const user = await testCtx.internalAdapter.createUser(
+			testUser,
+			testCtx as unknown as GenericEndpointContext,
+		);
+
+		const session = await testCtx.internalAdapter.createSession(
+			user.id,
+			testCtx as unknown as GenericEndpointContext,
+		);
+
+		expect(session.invalidatedAt).toBeUndefined();
+		expect(session.isActive).toBeDefined();
+		expect(session.isActive).toBeTruthy();
+
+		const sessionToken = session.token;
+
+		const activeSession =
+			await testCtx.internalAdapter.findSession(sessionToken);
+
+		expect(activeSession).toBeDefined();
+		expect(activeSession?.session).toBeDefined();
+
+		await testCtx.internalAdapter.deleteSession(sessionToken);
+
+		const inActiveSession =
+			await testCtx.internalAdapter.findSession(sessionToken);
+
+		expect(inActiveSession).toBeNull();
+	});
+
+	it("should use invalidatedAt field when deleteSessionOnSignOut is not enabled deleteSessionOnSignOut.timestamp = true", async () => {
+		const testOpts = {
+			database: {
+				dialect: new SqliteDialect({ database: new Database(":memory:") }),
+				type: "sqlite",
+			},
+			session: {
+				deleteSessionOnSignOut: {
+					enabled: false,
+					timestamp: true,
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+
+		const testUser = {
+			id: "test-user-id",
+			name: "Test User",
+			email: "test@example.com",
+			emailVerified: true,
+			image: null,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+
+		const user = await testCtx.internalAdapter.createUser(
+			testUser,
+			testCtx as unknown as GenericEndpointContext,
+		);
+
+		const session = await testCtx.internalAdapter.createSession(
+			user.id,
+			testCtx as unknown as GenericEndpointContext,
+		);
+
+		expect(session.isActive).toBeUndefined();
+		expect(session.invalidatedAt).toBeDefined();
+		expect(session.invalidatedAt).toBeNull();
+
+		const sessionToken = session.token;
+
+		const validSession =
+			await testCtx.internalAdapter.findSession(sessionToken);
+
+		expect(validSession?.session).toBeDefined();
+
+		await testCtx.internalAdapter.deleteSession(sessionToken);
+
+		const invalidatedSession =
+			await testCtx.internalAdapter.findSession(sessionToken);
+
+		expect(invalidatedSession).toBeNull();
+	});
 });
