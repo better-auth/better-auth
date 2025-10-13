@@ -1,5 +1,5 @@
 {
-  "name": "hono",
+  "name": "tsconfig-verbatim-module-syntax-node10",
   "private": true,
   "type": "module",
   "scripts": {
