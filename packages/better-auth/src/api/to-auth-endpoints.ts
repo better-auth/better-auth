@@ -11,8 +11,7 @@ import type {
 } from "@better-auth/core/middleware";
 import { createDefu } from "defu";
 import { shouldPublishLog } from "@better-auth/core/env";
-import type { AuthContext } from "@better-auth/core";
-import type { HookEndpointContext } from "../types";
+import type { AuthContext, HookEndpointContext } from "@better-auth/core";
 
 type InternalContext = InputContext<string, any> &
 	EndpointContext<string, any> & {
