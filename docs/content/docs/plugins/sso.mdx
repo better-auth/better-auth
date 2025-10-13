@@ -324,8 +324,6 @@ const res = await authClient.signIn.sso({
 });
 ```
 
-Note: If you provide email but omit loginHint, Better Auth will automatically use the email as the login_hint for OIDC providers. This does not apply to SAML.
-
 To use the server API you can use `signInSSO`
 
 ```ts title="sign-in-org.ts"
