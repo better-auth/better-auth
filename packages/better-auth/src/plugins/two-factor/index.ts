@@ -1,10 +1,17 @@
 import { generateRandomString } from "../../crypto/random";
 import * as z from "zod";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/middleware";
 import { sessionMiddleware } from "../../api";
 import { symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "../../types/plugins";
-import { backupCode2fa, generateBackupCodes } from "./backup-codes";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import {
+	backupCode2fa,
+	generateBackupCodes,
+	type BackupCodeOptions,
+} from "./backup-codes";
 import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
@@ -24,8 +31,12 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
 	};
+	const backupCodeOptions = {
+		storeBackupCodes: "encrypted",
+		...options?.backupCodeOptions,
+	} satisfies BackupCodeOptions;
 	const totp = totp2fa(options?.totpOptions);
-	const backupCode = backupCode2fa(options?.backupCodeOptions);
+	const backupCode = backupCode2fa(backupCodeOptions);
 	const otp = otp2fa(options?.otpOptions);
 
 	return {
@@ -117,7 +128,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					const backupCodes = await generateBackupCodes(
 						ctx.context.secret,
-						options?.backupCodeOptions,
+						backupCodeOptions,
 					);
 					if (options?.skipVerificationOnEnable) {
 						const updatedUser = await ctx.context.internalAdapter.updateUser(

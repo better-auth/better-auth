@@ -1,15 +1,15 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.4.0-beta.8",
+  "version": "1.4.0-beta.9",
   "description": "Telemetry package for Better Auth",
   "type": "module",
-  "main": "./dist/index.cjs",
+  "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "exports": {
     ".": {
       "import": {
         "types": "./dist/index.d.ts",
-        "default": "./dist/index.mjs"
+        "default": "./dist/index.js"
       },
       "require": {
         "types": "./dist/index.d.cts",
@@ -25,17 +25,19 @@
     }
   },
   "scripts": {
-    "build": "unbuild --clean",
-    "stub": "unbuild --stub",
+    "build": "tsdown",
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
-    "unbuild": "catalog:",
+    "@better-auth/core": "workspace:*",
+    "tsdown": "^0.15.6",
     "type-fest": "^4.31.0"
   },
   "dependencies": {
-    "@better-auth/core": "workspace:*",
     "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:*"
   }
 }
