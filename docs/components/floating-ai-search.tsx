@@ -200,7 +200,7 @@ function SearchAIInput(props: ComponentProps<"form">) {
 						<PopoverContent
 							side="top"
 							align="end"
-							className="w-auto max-w-45 p-2 text-xs text-pretty"
+							className="w-auto max-w-44 p-2 text-xs text-pretty"
 						>
 							AI can be inaccurate, please verify the information.
 						</PopoverContent>
