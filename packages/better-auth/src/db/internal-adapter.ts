@@ -314,16 +314,16 @@ export const createInternalAdapter = (
 				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				// Conditionally include invalidatedAt or isActive based on the session config
+				...(options.session?.deleteSessionOnSignOut?.enabled === false
+					? {
+							...(options.session?.deleteSessionOnSignOut?.timestamp === true
+								? { invalidatedAt: null } // Only add invalidatedAt if timestamp is true
+								: { isActive: true }), // Otherwise, add isActive
+						}
+					: {}),
 				...(overrideAll ? rest : {}),
 			};
-
-			if (options.session?.deleteSessionOnSignOut?.enabled === false) {
-				if (options.session?.deleteSessionOnSignOut?.timestamp === true) {
-					data.invalidatedAt = null;
-				} else {
-					data.isActive = true;
-				}
-			}
 
 			const res = await createWithHooks(
 				data,
