@@ -2,6 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens } from "./types";
 import type { ProviderOptions } from "./types";
 import { base64 } from "@better-auth/utils/base64";
+import { filterSensitiveFields } from "./utils";
 
 export function createRefreshAccessTokenRequest({
 	refreshToken,
@@ -112,6 +113,7 @@ export async function refreshAccessToken({
 		tokenType: data.token_type,
 		scopes: data.scope?.split(" "),
 		idToken: data.id_token,
+		raw: filterSensitiveFields(data),
 	};
 
 	if (data.expires_in) {
