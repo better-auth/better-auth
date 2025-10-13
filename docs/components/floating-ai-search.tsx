@@ -168,7 +168,7 @@ function SearchAIInput(props: ComponentProps<"form">) {
 			)}
 			{showSuggestions && (
 				<div className="border-t px-3 sm:px-4 text-xs text-fd-muted-foreground bg-fd-accent/40 h-full flex items-center gap-1 mt-2 py-1">
-					<span className="hidden sm:inline">Powered by{" "}</span>
+					<span className="hidden sm:inline">Powered by </span>
 					<Link
 						href="https://inkeep.com"
 						target="_blank"
@@ -178,7 +178,9 @@ function SearchAIInput(props: ComponentProps<"form">) {
 						<span className="sm:hidden">Inkeep</span>
 						<span className="hidden sm:inline">Inkeep.</span>
 					</Link>
-					<span className="hidden sm:inline">AI can be inaccurate, please verify the information.</span>
+					<span className="hidden sm:inline">
+						AI can be inaccurate, please verify the information.
+					</span>
 					<span className="sm:hidden text-[10px]">AI may be inaccurate</span>
 				</div>
 			)}
