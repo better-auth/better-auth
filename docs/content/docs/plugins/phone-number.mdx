@@ -261,25 +261,37 @@ export const auth = betterAuth({
     - `skipSendOTP`: A boolean to skip sending the OTP code for phone numbers listed in `customOTP.phoneNumbers`. Default is `false`. 
 
 ```ts
+// Example usage of custom OTPs using a static record
 export const auth = betterAuth({
     plugins: [
         phoneNumber({
-            // ...opts
             sendOTP: ({ phoneNumber, code }, request) => {
                 // Implement sending OTP code via SMS
             },
             customOTP: {
-                // phoneNumber to custom OTP mapping
                 phoneNumbers: {
                   "+1234567890": "654321", 
                   "+1987654321": "123456" 
                 },
+                skipSendOTP: true // this will avoid calling sendOTP() for custom OTPs
+            }
+        })
+    ]
+})
+```
 
-                // or you can provide a function to fetch from database
+```ts
+// Example usage of custom OTPs with async function
+export const auth = betterAuth({
+    plugins: [
+        phoneNumber({
+            sendOTP: ({ phoneNumber, code }, request) => {
+                // Implement sending OTP code via SMS
+            },
+            customOTP: {
                 phoneNumbers: async () => {
                   return getCustomOTPsFromDB() 
                 },
-
                 skipSendOTP: true // this will avoid calling sendOTP() for custom OTPs
             }
         })
