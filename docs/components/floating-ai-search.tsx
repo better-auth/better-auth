@@ -161,7 +161,9 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 								onClick={() => handleSuggestionClick(suggestion)}
 								className={cn(
 									"bg-fd-muted/30 hover:bg-fd-muted/50 text-fd-muted-foreground hover:text-fd-foreground rounded-full border border-fd-border/50 hover:border-fd-border transition-all duration-200 text-left",
-									props.isMobile ? "text-xs px-2.5 py-1" : "text-xs px-3 py-1.5"
+									props.isMobile
+										? "text-xs px-2.5 py-1"
+										: "text-xs px-3 py-1.5",
 								)}
 							>
 								{suggestion}
@@ -181,10 +183,14 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 					>
 						Inkeep.
 					</Link>
-					{!props.isMobile && (
-						<>
-					AI can be inaccurate, please verify the information.
-						</>
+					{props.isMobile ? (
+						<p className="text-xs text-fd-muted-foreground">
+							AI may be wrong. Please verify.
+						</p>
+					) : (
+						<p className="text-xs text-fd-muted-foreground">
+							AI can be inaccurate, please verify the information.
+						</p>
 					)}
 				</div>
 			)}
@@ -505,8 +511,8 @@ export function AISearchTrigger() {
 					<div
 						className={cn(
 							"fixed inset-0 flex flex-col items-center bg-fd-background/80 backdrop-blur-sm z-30",
-							isMobile 
-								? "p-4 pb-40" 
+							isMobile
+								? "p-4 pb-40"
 								: "p-2 right-(--removed-body-scroll-bar-size,0) pb-[8.375rem]",
 							open ? "animate-fd-fade-in" : "animate-fd-fade-out",
 						)}
@@ -517,10 +523,12 @@ export function AISearchTrigger() {
 							}
 						}}
 					>
-						<div className={cn(
-							"sticky top-0 flex gap-2 items-center py-2",
-							isMobile ? "w-full" : "w-[min(800px,90vw)]"
-						)}>
+						<div
+							className={cn(
+								"sticky top-0 flex gap-2 items-center py-2",
+								isMobile ? "w-full" : "w-[min(800px,90vw)]",
+							)}
+						>
 							<div className="flex justify-end w-full items-center">
 								<button
 									aria-label="Close"
@@ -542,12 +550,12 @@ export function AISearchTrigger() {
 							messageCount={chat.messages.length}
 							className={cn(
 								"overscroll-contain",
-								isMobile 
-									? "pt-6 pb-28 px-2 w-full" 
-									: "py-10 pr-2 w-[min(800px,90vw)]"
+								isMobile
+									? "pt-6 pb-28 px-2 w-full"
+									: "py-10 pr-2 w-[min(800px,90vw)]",
 							)}
 							style={{
-								maskImage: isMobile 
+								maskImage: isMobile
 									? "linear-gradient(to bottom, transparent, white 2rem, white calc(100% - 12rem), transparent 100%)"
 									: "linear-gradient(to bottom, transparent, white 4rem, white calc(100% - 2rem), transparent 100%)",
 							}}
@@ -586,7 +594,7 @@ export function AISearchTrigger() {
 						"fixed transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-xl overflow-hidden z-30",
 						isMobile ? "bottom-6" : "bottom-4",
 						open
-							? isMobile 
+							? isMobile
 								? `w-[calc(100vw-2rem)] bg-fd-accent/30 ${showSuggestions ? "h-72" : "h-40"}`
 								: `w-[min(800px,90vw)] bg-fd-accent/30 ${showSuggestions ? "h-1/4" : "h-32"}`
 							: isMobile
@@ -609,10 +617,12 @@ export function AISearchTrigger() {
 							)}
 							onClick={() => setOpen(true)}
 						>
-							<SearchIcon className={cn(
-								"absolute top-1/2 -translate-y-1/2",
-								isMobile ? "left-2 size-4" : "size-4.5"
-							)} />
+							<SearchIcon
+								className={cn(
+									"absolute top-1/2 -translate-y-1/2",
+									isMobile ? "left-2 size-4" : "size-4.5",
+								)}
+							/>
 							<span className={cn(isMobile ? "ml-6" : "")}>Ask AI</span>
 						</button>
 					</Presence>
