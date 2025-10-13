@@ -15,8 +15,8 @@ import { generateRandomString } from "../../crypto";
 // url and text field are for future use
 type LegalDocument = {
 	// url: string;
-	must_accept?: boolean;
-	must_view?: boolean;
+	mustAccept?: boolean;
+	mustView?: boolean;
 	// text: string;
 	name: string;
 };
@@ -118,7 +118,7 @@ export function legal({
 								"You must either accept or view the document when calling this endpoint",
 						});
 					}
-					let cookie = ctx.getCookie("legal-id");
+					let cookie = ctx.getCookie(cookieName);
 					if (!cookie) {
 						cookie = generateRandomString(32, "a-z", "A-Z");
 						ctx.setCookie("legal-id", cookie);
@@ -195,7 +195,7 @@ export function legal({
 						(ctx.path.includes("/sign-in") && blockSignIn),
 					handler: createAuthMiddleware(async (ctx) => {
 						const cookie = ctx.getCookie(cookieName);
-						const user = userSchema.parse(ctx.request?.json());
+						const user = userSchema.parse(await ctx.request?.json());
 						const data = await ctx.context.adapter.findMany<LegalSchema>({
 							model: "legal",
 							where: [
@@ -223,7 +223,7 @@ export function legal({
 						documents.forEach((f) => {
 							const document = data.find((d) => d.name === f.name);
 							if (
-								(f.must_accept ?? true) &&
+								(f.mustAccept ?? true) &&
 								!document?.acceptedAt &&
 								!user[`${f.name}AcceptedAt`]
 							) {
@@ -232,7 +232,7 @@ export function legal({
 								});
 							}
 							if (
-								(f.must_view ?? true) &&
+								(f.mustView ?? true) &&
 								!document?.viewedAt &&
 								!user[`${f.name}ViewedAt`]
 							) {
