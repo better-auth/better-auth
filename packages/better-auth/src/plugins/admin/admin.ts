@@ -1,11 +1,12 @@
 import * as z from "zod";
+import { APIError, getSessionFromCtx } from "../../api";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSessionFromCtx,
-} from "../../api";
-import { type BetterAuthPlugin, type Session, type Where } from "../../types";
+} from "@better-auth/core/middleware";
+import { type Session } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import type { Where } from "@better-auth/core/db/adapter";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
@@ -14,7 +15,7 @@ import { type AccessControl } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { schema } from "./schema";
 import type {
 	AdminOptions,

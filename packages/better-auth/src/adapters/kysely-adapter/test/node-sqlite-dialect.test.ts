@@ -4,7 +4,7 @@ import { NodeSqliteDialect } from "../node-sqlite-dialect";
 import { kyselyAdapter } from "../kysely-adapter";
 import { runAdapterTest } from "../../test";
 import { getMigrations } from "../../../db/get-migration";
-import type { BetterAuthOptions } from "../../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import merge from "deepmerge";
 import type { DatabaseSync } from "node:sqlite";
 const nodeVersion = process.version;

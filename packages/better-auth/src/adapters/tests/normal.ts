@@ -1,6 +1,7 @@
 import { expect } from "vitest";
 import { createTestSuite } from "../create-test-suite";
-import type { BetterAuthPlugin, User } from "../../types";
+import type { User } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
 
 /**
  * This test suite tests the basic CRUD operations of the adapter.
@@ -180,6 +181,54 @@ export const getNormalTestSuiteTests = ({
 			expect(result?.email).toEqual(user.email);
 			expect(true).toEqual(true);
 		},
+		"findOne - should find a model with modified model name": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						modelName: "user_custom",
+					},
+				},
+				true,
+			);
+			const [user] = await insertRandom("user");
+			expect(user).toBeDefined();
+			expect(user).toHaveProperty("id");
+			expect(user).toHaveProperty("name");
+			const result = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: user.email }],
+			});
+			expect(result).toEqual(user);
+			expect(result?.email).toEqual(user.email);
+			expect(true).toEqual(true);
+		},
+		"findOne - should find a model with additional fields": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							customField: {
+								type: "string",
+								input: false,
+								required: true,
+								defaultValue: "default-value",
+							},
+						},
+					},
+				},
+				true,
+			);
+			const [user_] = await insertRandom("user");
+			const user = user_ as User & { customField: string };
+			expect(user).toHaveProperty("customField");
+			expect(user.customField).toBe("default-value");
+			const result = await adapter.findOne<User & { customField: string }>({
+				model: "user",
+				where: [{ field: "customField", value: user.customField }],
+			});
+			expect(result).toEqual(user);
+			expect(result?.customField).toEqual("default-value");
+		},
 		"findOne - should select fields": async () => {
 			const [user] = await insertRandom("user");
 			const result = await adapter.findOne<Pick<User, "email" | "name">>({
@@ -188,6 +237,33 @@ export const getNormalTestSuiteTests = ({
 				select: ["email", "name"],
 			});
 			expect(result).toEqual({ email: user.email, name: user.name });
+		},
+		"findOne - should find model with date field": async () => {
+			const [user] = await insertRandom("user");
+			const result = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "createdAt", value: user.createdAt, operator: "eq" }],
+			});
+			expect(result).toEqual(user);
+			expect(result?.createdAt).toBeInstanceOf(Date);
+			expect(result?.createdAt).toEqual(user.createdAt);
+		},
+		"findMany - should find many models with date fields": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const youngestUser = users.sort(
+				(a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+			)[0]!;
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{ field: "createdAt", value: youngestUser.createdAt, operator: "lt" },
+				],
+			});
+			expect(sortModels(result)).toEqual(
+				sortModels(
+					users.filter((user) => user.createdAt < youngestUser.createdAt),
+				),
+			);
 		},
 		"findMany - should find many models": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
@@ -563,6 +639,80 @@ export const getNormalTestSuiteTests = ({
 				model: "user",
 			});
 			expect(sortModels(result)).toEqual(sortModels(users.slice(2)));
+		},
+		"deleteMany - should delete many models with numeric values": async () => {
+			let i = 0;
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							numericField: {
+								type: "number",
+								defaultValue() {
+									return i++;
+								},
+							},
+						},
+					},
+				},
+				true,
+			);
+			const users = (await insertRandom("user", 3)).map(
+				(x) => x[0],
+			) as (User & { numericField: number })[];
+			if (!users[0] || !users[1] || !users[2]) {
+				expect(false).toBe(true);
+				throw new Error("Users not found");
+			}
+			expect(users[0].numericField).toEqual(0);
+			expect(users[1].numericField).toEqual(1);
+			expect(users[2].numericField).toEqual(2);
+
+			await adapter.deleteMany({
+				model: "user",
+				where: [
+					{
+						field: "numericField",
+						value: users[0].numericField,
+						operator: "gt",
+					},
+				],
+			});
+
+			const result = await adapter.findMany<User>({
+				model: "user",
+			});
+			expect(result).toEqual([users[0]]);
+		},
+		"deleteMany - should delete many models with boolean values": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			// in this test, we have 3 users, two of which have emailVerified set to true and one to false
+			// delete all that has emailVerified set to true, and expect users[1] to be the only one left
+			if (!users[0] || !users[1] || !users[2]) {
+				expect(false).toBe(true);
+				throw new Error("Users not found");
+			}
+			await adapter.updateMany({
+				model: "user",
+				where: [],
+				update: { emailVerified: true },
+			});
+			await adapter.update({
+				model: "user",
+				where: [{ field: "id", value: users[1].id }],
+				update: { emailVerified: false },
+			});
+			await adapter.deleteMany({
+				model: "user",
+				where: [{ field: "emailVerified", value: true }],
+			});
+			const result = await adapter.findMany<User>({
+				model: "user",
+			});
+			expect(result).toHaveLength(1);
+			expect(result.find((user) => user.id === users[0]?.id)).toBeUndefined();
+			expect(result.find((user) => user.id === users[1]?.id)).toBeDefined();
+			expect(result.find((user) => user.id === users[2]?.id)).toBeUndefined();
 		},
 		"count - should count many models": async () => {
 			const users = await insertRandom("user", 15);

@@ -16,14 +16,18 @@ import {
 	sql,
 	SQL,
 } from "drizzle-orm";
-import { BetterAuthError } from "../../error";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	createAdapterFactory,
-	type AdapterDebugLogs,
 	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
+import type {
+	DBAdapterDebugLogOption,
+	DBAdapter,
+	Where,
+} from "@better-auth/core/db/adapter";
 
 export interface DB {
 	[key: string]: any;
@@ -49,7 +53,7 @@ export interface DrizzleAdapterConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 	/**
 	 * By default snake case is used for table and field names
 	 * when the CLI is used to generate the schema. If you want
@@ -62,7 +66,7 @@ export interface DrizzleAdapterConfig {
 	 *
 	 * If the database doesn't support transactions,
 	 * set this to `false` and operations will be executed sequentially.
-	 * @default true
+	 * @default false
 	 */
 	transaction?: boolean;
 }
@@ -384,7 +388,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		adapter: createCustomAdapter(db),
 	};
 	const adapter = createAdapterFactory(adapterOptions);
-	return (options: BetterAuthOptions): Adapter => {
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return adapter(options);
 	};
