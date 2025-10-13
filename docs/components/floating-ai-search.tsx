@@ -1,4 +1,5 @@
 "use client";
+
 import { RemoveScroll } from "react-remove-scroll";
 import {
 	type ComponentProps,
@@ -11,10 +12,15 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Loader2, SearchIcon, Send, X } from "lucide-react";
+import { InfoIcon, Loader2, SearchIcon, Send, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import Link from "fumadocs-core/link";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
 import { type UIMessage, useChat, type UseChatHelpers } from "@ai-sdk/react";
 import type { ProvideLinksToolSchema } from "@/lib/chat/inkeep-qa-schema";
 import type { z } from "zod";
@@ -22,6 +28,7 @@ import { DefaultChatTransport } from "ai";
 import { Markdown } from "./markdown";
 import { Presence } from "@radix-ui/react-presence";
 import { MessageFeedback } from "./message-feedback";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const Context = createContext<{
 	open: boolean;
@@ -33,30 +40,30 @@ function useChatContext() {
 	return use(Context)!.chat;
 }
 
-function SearchAIActions() {
-	const { messages, status, setMessages, stop } = useChatContext();
-	const isGenerating = status === "streaming" || status === "submitted";
+// function SearchAIActions() {
+// 	const { messages, status, setMessages, stop } = useChatContext();
+// 	const isGenerating = status === "streaming" || status === "submitted";
 
-	if (messages.length === 0) return null;
+// 	if (messages.length === 0) return null;
 
-	return (
-		<>
-			<button
-				type="button"
-				className={cn(
-					buttonVariants({
-						color: "secondary",
-						size: "sm",
-						className: "rounded-none",
-					}),
-				)}
-				onClick={isGenerating ? stop : () => setMessages([])}
-			>
-				{isGenerating ? "Cancel" : "Clear Chat"}
-			</button>
-		</>
-	);
-}
+// 	return (
+// 		<>
+// 			<button
+// 				type="button"
+// 				className={cn(
+// 					buttonVariants({
+// 						color: "secondary",
+// 						size: "sm",
+// 						className: "rounded-none",
+// 					}),
+// 				)}
+// 				onClick={isGenerating ? stop : () => setMessages([])}
+// 			>
+// 				{isGenerating ? "Cancel" : "Clear Chat"}
+// 			</button>
+// 		</>
+// 	);
+// }
 
 const suggestions = [
 	"How to configure Sqlite database?",
@@ -65,8 +72,8 @@ const suggestions = [
 	"How to share cookies across subdomains?",
 ];
 
-function SearchAIInput(props: ComponentProps<"form">) {
-	const { status, sendMessage, stop, messages } = useChatContext();
+function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
+	const { status, sendMessage, stop, messages, setMessages } = useChatContext();
 	const [input, setInput] = useState("");
 	const isLoading = status === "streaming" || status === "submitted";
 	const showSuggestions = messages.length === 0 && !isLoading;
@@ -81,12 +88,22 @@ function SearchAIInput(props: ComponentProps<"form">) {
 		void sendMessage({ text: suggestion });
 	};
 
+	const handleClear = () => {
+		setMessages([]);
+		setInput("");
+	};
+
 	useEffect(() => {
 		if (isLoading) document.getElementById("nd-ai-input")?.focus();
 	}, [isLoading]);
 
 	return (
-		<div className={cn("flex flex-col", isLoading ? "opacity-50" : "")}>
+		<div
+			className={cn(
+				"flex flex-col relative bg-fd-background m-[1px] border border-fd-border rounded-lg shadow-2xl shadow-fd-background",
+				isLoading ? "opacity-50" : "",
+			)}
+		>
 			<form
 				{...props}
 				className={cn("flex items-start pe-2", props.className)}
@@ -94,9 +111,9 @@ function SearchAIInput(props: ComponentProps<"form">) {
 			>
 				<Input
 					value={input}
-					placeholder={isLoading ? "answering..." : "Ask BA bot"}
+					placeholder={isLoading ? "answering..." : "Ask BA Bot"}
 					autoFocus
-					className="p-4"
+					className={cn("p-4", "sm:text-sm")}
 					disabled={status === "streaming" || status === "submitted"}
 					onChange={(e) => {
 						setInput(e.target.value);
@@ -139,20 +156,85 @@ function SearchAIInput(props: ComponentProps<"form">) {
 			</form>
 
 			{showSuggestions && (
-				<div className="mt-3 px-4">
+				<div className={cn("mt-3", props.isMobile ? "px-3" : "px-4")}>
 					<p className="text-xs font-medium text-fd-muted-foreground mb-2">
 						Try asking:
 					</p>
-					<div className="flex flex-wrap gap-2">
+					<div
+						className={cn(
+							"flex gap-2",
+							props.isMobile
+								? "overflow-x-auto pb-2 -mx-3 px-3 [mask-image:linear-gradient(to_right,transparent_0%,black_1rem,black_calc(100%-1rem),transparent_100%)] [-webkit-mask-image:linear-gradient(to_right,transparent_0%,black_1rem,black_calc(100%-1rem),transparent_100%)]"
+								: "flex-wrap",
+						)}
+					>
 						{suggestions.slice(0, 4).map((suggestion, i) => (
 							<button
 								key={i}
 								onClick={() => handleSuggestionClick(suggestion)}
-								className="text-xs px-3 py-1.5 bg-fd-muted/30 hover:bg-fd-muted/50 text-fd-muted-foreground hover:text-fd-foreground rounded-full border border-fd-border/50 hover:border-fd-border transition-all duration-200 text-left"
+								className={cn(
+									"bg-fd-muted/30 hover:bg-fd-muted/50 text-fd-muted-foreground hover:text-fd-foreground rounded-full border border-fd-border/50 hover:border-fd-border transition-all duration-200 text-left",
+									props.isMobile
+										? "text-xs px-2.5 py-1 whitespace-nowrap flex-shrink-0"
+										: "text-xs px-3 py-1.5",
+								)}
 							>
 								{suggestion}
 							</button>
 						))}
+					</div>
+				</div>
+			)}
+			{showSuggestions && (
+				<div className="border-t px-4 text-xs text-fd-muted-foreground bg-fd-accent/40 flex items-center gap-1 mt-2 py-2 relative">
+					<div className="flex items-center gap-1 flex-1">
+						Powered by{" "}
+						<Link
+							href="https://inkeep.com"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-fd-primary hover:text-fd-primary/80 hover:underline"
+						>
+							Inkeep.
+						</Link>
+						<span className="hidden sm:inline">
+							AI can be inaccurate, please verify the information.
+						</span>
+					</div>
+					<Popover>
+						<PopoverTrigger asChild>
+							<button
+								className="sm:hidden hover:bg-fd-accent/50 rounded transition-colors"
+								aria-label="Show information"
+							>
+								<InfoIcon className="size-3.5" />
+							</button>
+						</PopoverTrigger>
+						<PopoverContent
+							side="top"
+							align="end"
+							className="w-auto max-w-44 p-2 text-xs text-pretty"
+						>
+							AI can be inaccurate, please verify the information.
+						</PopoverContent>
+					</Popover>
+				</div>
+			)}
+			{!showSuggestions && (
+				<div className="border-t px-4 text-xs text-fd-muted-foreground cursor-pointer bg-fd-accent/40 flex items-center gap-1 mt-2 py-2">
+					<div
+						className="flex items-center gap-1 empty:hidden hover:text-fd-foreground transition-all duration-200 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+						role="button"
+						aria-disabled={isLoading}
+						tabIndex={0}
+						onClick={() => {
+							if (!isLoading) {
+								handleClear();
+							}
+						}}
+					>
+						<Trash2 className="size-3" />
+						<p>Clear</p>
 					</div>
 				</div>
 			)}
@@ -417,6 +499,7 @@ const InKeepLogo = (props: SVGProps<any>) => {
 
 export function AISearchTrigger() {
 	const [open, setOpen] = useState(false);
+	const isMobile = useIsMobile();
 	const chat = useChat({
 		id: "search",
 		transport: new DefaultChatTransport({
@@ -453,7 +536,10 @@ export function AISearchTrigger() {
 				<Presence present={open}>
 					<div
 						className={cn(
-							"fixed inset-0 p-2 right-(--removed-body-scroll-bar-size,0) flex flex-col pb-[8.375rem] items-center bg-fd-background/80 backdrop-blur-sm z-30",
+							"fixed inset-0 flex flex-col items-center bg-fd-background/80 backdrop-blur-sm z-30",
+							isMobile
+								? "p-4 pb-40"
+								: "p-2 right-(--removed-body-scroll-bar-size,0) pb-[8.375rem]",
 							open ? "animate-fd-fade-in" : "animate-fd-fade-out",
 						)}
 						onClick={(e) => {
@@ -463,34 +549,19 @@ export function AISearchTrigger() {
 							}
 						}}
 					>
-						<p className="text-xs absolute -top-3 lg:top-auto lg:left-auto left-4 lg:-bottom-3 lg:right-4 flex items-center gap-1 flex-1 text-fd-muted-foreground">
-							Powered by{" "}
-							<Link
-								href="https://inkeep.com"
-								target="_blank"
-								aria-label="Inkeep"
-							>
-								<InKeepLogo className="w-16 h-16" />
-							</Link>
-						</p>
-						<div className="sticky top-0 flex gap-2 items-center py-2 w-[min(800px,90vw)]">
-							<div className="flex justify-between w-full items-center">
-								<p className="text-xs flex items-center gap-1 flex-1 text-fd-muted-foreground">
-									Powered by{" "}
-									<Link
-										href="https://inkeep.com"
-										target="_blank"
-										aria-label="Inkeep"
-									>
-										<InKeepLogo className="w-16 h-16" />
-									</Link>
-								</p>
+						<div
+							className={cn(
+								"sticky top-0 flex gap-2 items-center py-2",
+								isMobile ? "w-full" : "w-[min(800px,90vw)]",
+							)}
+						>
+							<div className="flex justify-end w-full items-center">
 								<button
 									aria-label="Close"
 									tabIndex={-1}
 									className={cn(
 										buttonVariants({
-											size: "icon-sm",
+											size: isMobile ? "icon" : "icon-sm",
 											color: "secondary",
 											className: "rounded-full",
 										}),
@@ -503,10 +574,16 @@ export function AISearchTrigger() {
 						</div>
 						<List
 							messageCount={chat.messages.length}
-							className="py-10 pr-2 w-[min(800px,90vw)] overscroll-contain"
+							className={cn(
+								"overscroll-contain",
+								isMobile
+									? "pt-6 pb-28 px-2 w-full"
+									: "py-10 pr-2 w-[min(800px,90vw)]",
+							)}
 							style={{
-								maskImage:
-									"linear-gradient(to bottom, transparent, white 4rem, white calc(100% - 2rem), transparent 100%)",
+								maskImage: isMobile
+									? "linear-gradient(to bottom, transparent, white 2rem, white calc(100% - 12rem), transparent 100%)"
+									: "linear-gradient(to bottom, transparent, white 4rem, white calc(100% - 2rem), transparent 100%)",
 							}}
 						>
 							<div className="flex flex-col gap-4">
@@ -540,42 +617,43 @@ export function AISearchTrigger() {
 				</Presence>
 				<div
 					className={cn(
-						"fixed bottom-2 transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 rounded-sm border shadow-xl overflow-hidden z-30",
+						"fixed bg-transparent transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-xl z-30",
+						isMobile ? "bottom-4" : "bottom-4",
 						open
-							? `w-[min(800px,90vw)] bg-fd-popover ${showSuggestions ? "h-48" : "h-32"}`
-							: "w-40 h-10 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl",
+							? isMobile
+								? `w-[calc(100vw-2rem)] bg-fd-accent/30 overflow-visible h-auto`
+								: `w-[min(800px,90vw)] bg-fd-accent/30 overflow-visible h-auto`
+							: isMobile
+								? "w-32 h-12 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl overflow-hidden"
+								: "w-40 h-10 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl overflow-hidden",
 					)}
 					style={{
 						left: "calc(50% - var(--removed-body-scroll-bar-size,0px)/2)",
 					}}
 				>
-					<Presence present={!open}>
+					{!open && (
 						<button
 							className={cn(
-								"absolute inset-0 text-center p-2  text-fd-muted-foreground text-sm transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground",
-								!open
-									? "animate-fd-fade-in"
-									: "animate-fd-fade-out bg-fd-accent",
+								"absolute inset-0 text-center transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground rounded-2xl",
+								isMobile ? "p-3 text-xs" : "p-2 text-sm",
+								"text-fd-muted-foreground",
 							)}
 							onClick={() => setOpen(true)}
 						>
-							<SearchIcon className="absolute top-1/2 -translate-y-1/2 size-4.5" />
-							Ask AI
+							<SearchIcon
+								className={cn(
+									"absolute top-1/2 -translate-y-1/2",
+									isMobile ? "left-2 size-4" : "size-4.5",
+								)}
+							/>
+							<span className={cn(isMobile ? "ml-6" : "")}>Ask AI</span>
 						</button>
-					</Presence>
-					<Presence present={open}>
-						<div
-							className={cn(
-								"absolute inset-0 flex flex-col",
-								open ? "animate-fd-fade-in" : "animate-fd-fade-out",
-							)}
-						>
-							<SearchAIInput className="flex-1" />
-							<div className="flex items-center gap-1.5 p-2 empty:hidden">
-								<SearchAIActions />
-							</div>
+					)}
+					{open && (
+						<div className="flex flex-col">
+							<SearchAIInput isMobile={isMobile} />
 						</div>
-					</Presence>
+					)}
 				</div>
 			</RemoveScroll>
 		</Context>
