@@ -29,7 +29,7 @@
     "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/base.prisma",
     "typecheck": "tsc --project tsconfig.json"
   },
-  "main": "./dist/index.cjs",
+  "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "exports": {
     ".": {
@@ -773,7 +773,7 @@
     "deepmerge": "^4.3.1",
     "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.38.2",
-    "happy-dom": "^18.0.1",
+    "happy-dom": "^20.0.0",
     "hono": "^4.9.7",
     "listhen": "^1.9.0",
     "mongodb": "^6.18.0",

@@ -8,6 +8,7 @@ import { getSessionFromCtx } from "../../api/routes/session";
 import { ms, type StringValue as MSStringValue } from "ms";
 import { schema, type DeviceCode } from "./schema";
 import { mergeSchema } from "../../db";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
 const msStringValueSchema = z.custom<MSStringValue>(
 	(val) => {
@@ -121,7 +122,7 @@ export type DeviceAuthorizationOptions = {
 
 export { deviceAuthorizationClient } from "./client";
 
-const DEVICE_AUTHORIZATION_ERROR_CODES = {
+const DEVICE_AUTHORIZATION_ERROR_CODES = defineErrorCodes({
 	INVALID_DEVICE_CODE: "Invalid device code",
 	EXPIRED_DEVICE_CODE: "Device code has expired",
 	EXPIRED_USER_CODE: "User code has expired",
@@ -134,7 +135,7 @@ const DEVICE_AUTHORIZATION_ERROR_CODES = {
 	FAILED_TO_CREATE_SESSION: "Failed to create session",
 	INVALID_DEVICE_CODE_STATUS: "Invalid device code status",
 	AUTHENTICATION_REQUIRED: "Authentication required",
-} as const;
+});
 
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
