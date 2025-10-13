@@ -6,17 +6,9 @@ import type {
 	CamelCasePrefix,
 	NormalizePrefix,
 	TransformEndpointKey,
+	MatchesExcluded,
 } from "./types";
 import { SPECIAL_ENDPOINTS, toCamelCase, type SpecialEndpoints } from "./utils";
-
-type MatchesExcluded<
-	OldPath extends string,
-	ExcludePath extends string[] | undefined,
-> = ExcludePath extends string[]
-	? OldPath extends ExcludePath[number]
-		? true
-		: false
-	: false;
 
 export type InferAliasedPlugin<
 	T extends BetterAuthPlugin,
@@ -76,6 +68,8 @@ export type AliasOptions = {
 	unstable_prefixEndpointMethods?: boolean;
 	/**
 	 * If `true`, adds a prefix `$Infer` types.
+	 *
+	 * @default false
 	 */
 	prefixTypeInference?: boolean;
 	/**

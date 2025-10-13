@@ -30,3 +30,12 @@ export type TransformEndpointKey<
 	K extends string,
 	Prefix extends string,
 > = `${CamelCasePrefix<Prefix>}${Capitalize<K>}`;
+
+export type MatchesExcluded<
+	OldPath extends string,
+	ExcludePath extends string[] | undefined,
+> = ExcludePath extends infer E extends string[]
+	? [OldPath] extends [E[number]]
+		? true
+		: false
+	: false;
