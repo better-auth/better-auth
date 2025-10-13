@@ -179,6 +179,15 @@ export const createInternalAdapter = (
 							...s.session,
 							expiresAt: new Date(s.session.expiresAt),
 						});
+
+						if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+							if (options.session.deleteSessionOnSignOut.timestamp === true) {
+								if (s.session.invalidatedAt !== null) continue;
+							} else {
+								if (s.session.isActive !== true) continue;
+							}
+						}
+
 						sessions.push(parsedSession);
 					}
 				}
@@ -196,6 +205,16 @@ export const createInternalAdapter = (
 					},
 				],
 			});
+
+			if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+				return sessions.filter((session) => {
+					if (options.session?.deleteSessionOnSignOut?.timestamp === true) {
+						return session.invalidatedAt === null;
+					}
+					return session.isActive === true;
+				});
+			}
+
 			return sessions;
 		},
 		listUsers: async (
@@ -493,6 +512,15 @@ export const createInternalAdapter = (
 							session: Session;
 							user: User;
 						};
+
+						if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+							if (options.session.deleteSessionOnSignOut.timestamp === true) {
+								if (session.session.invalidatedAt !== null) continue;
+							} else {
+								if (session.session.isActive !== true) continue;
+							}
+						}
+
 						sessions.push(session);
 					}
 				}
@@ -525,14 +553,25 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			return sessions.map((session) => {
-				const user = users.find((u) => u.id === session.userId);
-				if (!user) return null;
-				return {
-					session,
-					user,
-				};
-			}) as {
+			return sessions
+				.filter((session) => {
+					if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+						if (options.session.deleteSessionOnSignOut.timestamp === true) {
+							if (session.invalidatedAt !== null) return false;
+						} else {
+							if (session.isActive !== true) return false;
+						}
+					}
+					return true;
+				})
+				.map((session) => {
+					const user = users.find((u) => u.id === session.userId);
+					if (!user) return null;
+					return {
+						session,
+						user,
+					};
+				}) as {
 				session: Session;
 				user: User;
 			}[];
