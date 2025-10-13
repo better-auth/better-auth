@@ -297,9 +297,13 @@ describe("aliasClient plugin", () => {
 				customFetchImpl: spyFetch,
 			},
 			baseURL: "http://localhost:3000",
-			plugins: [aliasClient("/polar", createMockClientPlugin("polar"))],
+			plugins: [
+				aliasClient("/polar", createMockClientPlugin("polar"), {
+					unstable_prefixAtoms: true,
+				}),
+			],
 		});
-		const res = client.useQueryAtom();
+		const res = client.useQueryAtomPolar();
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1);
 		expect(res()).toMatchObject({
