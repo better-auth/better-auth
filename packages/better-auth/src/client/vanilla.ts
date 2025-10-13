@@ -19,22 +19,25 @@ import type {
 } from "@better-fetch/fetch";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 
-type InferResolvedHooks<O extends BetterAuthClientOptions> =
-	O["plugins"] extends Array<infer Plugin>
-		? Plugin extends BetterAuthClientPlugin
-			? Plugin["getAtoms"] extends (fetch: any, options: any) => infer Atoms
-				? Atoms extends Record<string, any>
-					? {
-							[key in keyof Atoms as IsSignal<key> extends true
-								? never
-								: key extends string
-									? `use${Capitalize<key>}`
-									: never]: Atoms[key];
-						}
+type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
+	plugins: Array<infer Plugin>;
+}
+	? UnionToIntersection<
+			Plugin extends BetterAuthClientPlugin
+				? Plugin["getAtoms"] extends (fetch: any, options: any) => infer Atoms
+					? Atoms extends Record<string, any>
+						? {
+								[key in keyof Atoms as IsSignal<key> extends true
+									? never
+									: key extends string
+										? `use${Capitalize<key>}`
+										: never]: Atoms[key];
+							}
+						: {}
 					: {}
 				: {}
-			: {}
-		: {};
+		>
+	: {};
 
 export function createAuthClient<Option extends BetterAuthClientOptions>(
 	options?: Option,
