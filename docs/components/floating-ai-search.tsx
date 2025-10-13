@@ -617,12 +617,12 @@ export function AISearchTrigger() {
 				</Presence>
 				<div
 					className={cn(
-						"fixed transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-xl z-30",
-						isMobile ? "bottom-6" : "bottom-4",
+						"fixed bg-transparent transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-xl z-30",
+						isMobile ? "bottom-4" : "bottom-4",
 						open
 							? isMobile
-								? `w-[calc(100vw-2rem)] bg-fd-accent/30 overflow-visible ${showSuggestions ? "h-auto" : "h-40"}`
-								: `w-[min(800px,90vw)] bg-fd-accent/30 overflow-visible ${showSuggestions ? "h-auto" : "h-32"}`
+								? `w-[calc(100vw-2rem)] bg-fd-accent/30 overflow-visible h-auto`
+								: `w-[min(800px,90vw)] bg-fd-accent/30 overflow-visible h-auto`
 							: isMobile
 								? "w-32 h-12 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl overflow-hidden"
 								: "w-40 h-10 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl overflow-hidden",
