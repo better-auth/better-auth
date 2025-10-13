@@ -103,17 +103,11 @@
     "@tailwindcss/postcss": "^4.1.13",
     "@types/jsrsasign": "^10.5.15",
     "@types/mdx": "^2.0.13",
-    "@types/react": "19.2.2",
-    "@types/react-dom": "19.2.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
     "mini-svg-data-uri": "^1.4.4",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.9.2"
-  },
-  "pnpm": {
-    "overrides": {
-      "@types/react": "19.2.2",
-      "@types/react-dom": "19.2.1"
-    }
   }
 }
