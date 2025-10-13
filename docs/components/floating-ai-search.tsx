@@ -1,4 +1,5 @@
 "use client";
+
 import { RemoveScroll } from "react-remove-scroll";
 import {
 	type ComponentProps,
@@ -11,10 +12,15 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Loader2, SearchIcon, Send, Trash2, X } from "lucide-react";
+import { InfoIcon, Loader2, SearchIcon, Send, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import Link from "fumadocs-core/link";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
 import { type UIMessage, useChat, type UseChatHelpers } from "@ai-sdk/react";
 import type { ProvideLinksToolSchema } from "@/lib/chat/inkeep-qa-schema";
 import type { z } from "zod";
@@ -94,7 +100,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 	return (
 		<div
 			className={cn(
-				"flex flex-col relative bg-fd-background m-[1px] h-full border border-fd-border rounded-lg shadow-2xl shadow-fd-background",
+				"flex flex-col relative bg-fd-background m-[1px] border border-fd-border rounded-lg shadow-2xl shadow-fd-background",
 				isLoading ? "opacity-50" : "",
 			)}
 		>
@@ -107,7 +113,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 					value={input}
 					placeholder={isLoading ? "answering..." : "Ask BA Bot"}
 					autoFocus
-					className="p-4 text-sm"
+					className={cn("p-4", "sm:text-sm")}
 					disabled={status === "streaming" || status === "submitted"}
 					onChange={(e) => {
 						setInput(e.target.value);
@@ -154,7 +160,14 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 					<p className="text-xs font-medium text-fd-muted-foreground mb-2">
 						Try asking:
 					</p>
-					<div className="flex flex-wrap gap-2">
+					<div
+						className={cn(
+							"flex gap-2",
+							props.isMobile
+								? "overflow-x-auto pb-2 -mx-3 px-3 [mask-image:linear-gradient(to_right,transparent_0%,black_1rem,black_calc(100%-1rem),transparent_100%)] [-webkit-mask-image:linear-gradient(to_right,transparent_0%,black_1rem,black_calc(100%-1rem),transparent_100%)]"
+								: "flex-wrap",
+						)}
+					>
 						{suggestions.slice(0, 4).map((suggestion, i) => (
 							<button
 								key={i}
@@ -162,7 +175,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 								className={cn(
 									"bg-fd-muted/30 hover:bg-fd-muted/50 text-fd-muted-foreground hover:text-fd-foreground rounded-full border border-fd-border/50 hover:border-fd-border transition-all duration-200 text-left",
 									props.isMobile
-										? "text-xs px-2.5 py-1"
+										? "text-xs px-2.5 py-1 whitespace-nowrap flex-shrink-0"
 										: "text-xs px-3 py-1.5",
 								)}
 							>
@@ -173,29 +186,42 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 				</div>
 			)}
 			{showSuggestions && (
-				<div className="border-t px-4 text-xs text-fd-muted-foreground bg-fd-accent/40 h-full flex items-center gap-1 mt-2 py-1">
-					Powered by{" "}
-					<Link
-						href="https://inkeep.com"
-						target="_blank"
-						rel="noopener noreferrer"
-						className="text-fd-primary hover:text-fd-primary/80 hover:underline"
-					>
-						Inkeep.
-					</Link>
-					{props.isMobile ? (
-						<p className="text-xs text-fd-muted-foreground">
-							AI may be wrong. Please verify.
-						</p>
-					) : (
-						<p className="text-xs text-fd-muted-foreground">
+				<div className="border-t px-4 text-xs text-fd-muted-foreground bg-fd-accent/40 flex items-center gap-1 mt-2 py-2 relative">
+					<div className="flex items-center gap-1 flex-1">
+						Powered by{" "}
+						<Link
+							href="https://inkeep.com"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-fd-primary hover:text-fd-primary/80 hover:underline"
+						>
+							Inkeep.
+						</Link>
+						<span className="hidden sm:inline">
 							AI can be inaccurate, please verify the information.
-						</p>
-					)}
+						</span>
+					</div>
+					<Popover>
+						<PopoverTrigger asChild>
+							<button
+								className="sm:hidden hover:bg-fd-accent/50 rounded transition-colors"
+								aria-label="Show information"
+							>
+								<InfoIcon className="size-3.5" />
+							</button>
+						</PopoverTrigger>
+						<PopoverContent
+							side="top"
+							align="end"
+							className="w-auto max-w-44 p-2 text-xs text-pretty"
+						>
+							AI can be inaccurate, please verify the information.
+						</PopoverContent>
+					</Popover>
 				</div>
 			)}
 			{!showSuggestions && (
-				<div className="border-t px-4 text-xs text-fd-muted-foreground cursor-pointer bg-fd-accent/40 h-[50px] sm:h-full flex items-center gap-1 mt-2 py-1">
+				<div className="border-t px-4 text-xs text-fd-muted-foreground cursor-pointer bg-fd-accent/40 flex items-center gap-1 mt-2 py-2">
 					<div
 						className="flex items-center gap-1 empty:hidden hover:text-fd-foreground transition-all duration-200 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
 						role="button"
@@ -591,29 +617,26 @@ export function AISearchTrigger() {
 				</Presence>
 				<div
 					className={cn(
-						"fixed transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-xl overflow-hidden z-30",
-						isMobile ? "bottom-6" : "bottom-4",
+						"fixed bg-transparent transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-xl z-30",
+						isMobile ? "bottom-4" : "bottom-4",
 						open
 							? isMobile
-								? `w-[calc(100vw-2rem)] bg-fd-accent/30 ${showSuggestions ? "h-72" : "h-40"}`
-								: `w-[min(800px,90vw)] bg-fd-accent/30 ${showSuggestions ? "h-1/4" : "h-32"}`
+								? `w-[calc(100vw-2rem)] bg-fd-accent/30 overflow-visible h-auto`
+								: `w-[min(800px,90vw)] bg-fd-accent/30 overflow-visible h-auto`
 							: isMobile
-								? "w-32 h-12 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl"
-								: "w-40 h-10 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl",
+								? "w-32 h-12 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl overflow-hidden"
+								: "w-40 h-10 bg-fd-secondary text-fd-secondary-foreground shadow-fd-background rounded-2xl overflow-hidden",
 					)}
 					style={{
 						left: "calc(50% - var(--removed-body-scroll-bar-size,0px)/2)",
 					}}
 				>
-					<Presence present={!open}>
+					{!open && (
 						<button
 							className={cn(
-								"absolute inset-0 text-center transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground",
+								"absolute inset-0 text-center transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground rounded-2xl",
 								isMobile ? "p-3 text-xs" : "p-2 text-sm",
 								"text-fd-muted-foreground",
-								!open
-									? "animate-fd-fade-in"
-									: "animate-fd-fade-out bg-fd-accent",
 							)}
 							onClick={() => setOpen(true)}
 						>
@@ -625,17 +648,12 @@ export function AISearchTrigger() {
 							/>
 							<span className={cn(isMobile ? "ml-6" : "")}>Ask AI</span>
 						</button>
-					</Presence>
-					<Presence present={open}>
-						<div
-							className={cn(
-								"absolute inset-0 flex flex-col",
-								open ? "animate-fd-fade-in" : "animate-fd-fade-out",
-							)}
-						>
-							<SearchAIInput className="flex-1" isMobile={isMobile} />
+					)}
+					{open && (
+						<div className="flex flex-col">
+							<SearchAIInput isMobile={isMobile} />
 						</div>
-					</Presence>
+					)}
 				</div>
 			</RemoveScroll>
 		</Context>
