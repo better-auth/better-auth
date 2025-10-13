@@ -4,7 +4,7 @@
     "module": "NodeNext",
     "outDir": "dist",
     "strict": true,
-    "exactOptionalPropertyTypes": false,
+    "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
     "types": ["node"],
     "jsx": "react-jsx",
