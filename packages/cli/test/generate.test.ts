@@ -361,3 +361,171 @@ describe("JSON field support in CLI generators", () => {
 		expect(schema.code).toContain("preferences   Json?");
 	});
 });
+
+describe("Enum field support in Drizzle schemas", () => {
+	it("should generate Drizzle schema with enum fields for PostgreSQL", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						role: {
+							type: ["admin", "user", "guest"],
+							required: true,
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain("pgEnum");
+		expect(schema.code).toContain(
+			'role: pgEnum("role", ["admin", "user", "guest"])',
+		);
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-pg-enum.txt",
+		);
+	});
+
+	it("should generate Drizzle schema with enum fields for MySQL", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "mysql",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						status: {
+							type: ["active", "inactive", "pending"],
+							required: false,
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain("mysqlEnum");
+		expect(schema.code).toContain(
+			'status: mysqlEnum(["active", "inactive", "pending"])',
+		);
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-mysql-enum.txt",
+		);
+	});
+
+	it("should generate Drizzle schema with enum fields for SQLite", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "sqlite",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						priority: {
+							type: ["high", "medium", "low"],
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain("text({ enum: [");
+		expect(schema.code).toContain(
+			'priority: text({ enum: ["high", "medium", "low"] })',
+		);
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-sqlite-enum.txt",
+		);
+	});
+
+	it("should include correct imports for enum fields in PostgreSQL", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						role: {
+							type: ["admin", "user"],
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toMatch(/import.*pgEnum.*from.*drizzle-orm\/pg-core/);
+	});
+
+	it("should include correct imports for enum fields in MySQL", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "mysql",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						status: {
+							type: ["active", "inactive"],
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toMatch(
+			/import.*mysqlEnum.*from.*drizzle-orm\/mysql-core/s,
+		);
+	});
+
+	it("should not include enum imports when no enum fields are present", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						name: {
+							type: "string",
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).not.toContain("pgEnum");
+	});
+});
