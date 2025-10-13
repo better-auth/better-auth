@@ -118,7 +118,7 @@ describe("Alias Plugin", async () => {
 		// TODO:
 	});
 
-	it("should wrap getAtoms to prefix any path-based actions", async () => {
+	it("should handle rateLimit correctly", async () => {
 		// TODO:
 	});
 

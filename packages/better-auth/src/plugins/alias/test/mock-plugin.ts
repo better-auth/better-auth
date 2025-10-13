@@ -107,9 +107,8 @@ export function createMockClientPlugin<ID extends LiteralString>(id: ID) {
 			},
 		}),
 		getAtoms: ($fetch, options) => {
-			// TODO:
 			const $signal = atom(false);
-			const queryAtom = useAuthQuery<any>($signal, "/test", $fetch, {
+			const queryAtom = useAuthQuery<any>($signal, "/customer/portal", $fetch, {
 				method: "GET",
 			});
 			return {

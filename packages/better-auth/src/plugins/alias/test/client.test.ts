@@ -1,7 +1,9 @@
+// @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import type { BetterAuthClientPlugin } from "../../../client/types";
 import { aliasClient } from "../client";
 import { createMockClientPlugin } from "./mock-plugin";
+import { createAuthClient as createSolidClient } from "../../../client/solid";
 
 describe("aliasClient plugin", () => {
 	it("should prefix pathMethods", () => {
@@ -220,5 +222,58 @@ describe("aliasClient plugin", () => {
 		// Root prefix
 		const aliased2 = aliasClient("/", plugin);
 		expect(aliased2.pathMethods!["/checkout"]).toBe("POST");
+	});
+
+	it("state listener should be called on matched path", async () => {
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+			baseURL: "http://localhost:3000",
+			plugins: [aliasClient("/paypal", createMockClientPlugin("payment"))],
+		});
+
+		const res = client.useComputedAtomPaypal();
+		expect(res()).toBe(0);
+		await client.paypal.customer.portal();
+		vi.useFakeTimers();
+		setTimeout(() => {
+			expect(res()).toBe(1);
+		}, 100);
+	});
+
+	it("should wrap getAtoms to prefix any path-based actions", async () => {
+		const spyFetch = vi.fn(async (req: Request | string | URL) => {
+			return new Response(
+				JSON.stringify({
+					success: true,
+				}),
+			);
+		});
+
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: spyFetch,
+			},
+			baseURL: "http://localhost:3000",
+			plugins: [aliasClient("/polar", createMockClientPlugin("polar"))],
+		});
+		const res = client.useQueryAtomPolar();
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(res()).toMatchObject({
+			data: { success: true },
+			error: null,
+			isPending: false,
+		});
+		expect(spyFetch).toHaveBeenCalledTimes(1);
+		const calledURL = spyFetch.mock.calls[0]?.[0];
+		expect(calledURL?.toString()).toEqual(
+			"http://localhost:3000/api/auth/polar/customer/portal",
+		);
+
+		// TODO: recall
 	});
 });
