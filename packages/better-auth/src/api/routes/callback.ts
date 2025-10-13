@@ -110,10 +110,21 @@ export const callbackOAuth = createAuthEndpoint(
 				...tokens,
 				user: c.body?.user ? safeJSONParse<any>(c.body.user) : undefined,
 			})
-			.then((res) => res?.user);
+			.then((res) => res?.user)
+			.catch((e) => {
+				c.context.logger.error("Unable to get user info", e);
+				throw redirectOnError(
+					"unable_to_get_user_info",
+					"message" in e
+						? e.message
+						: "Please read server logs for more information.",
+				);
+			});
 
 		if (!userInfo) {
-			c.context.logger.error("Unable to get user info");
+			c.context.logger.error(
+				"Unable to get user info during oauth callback, but no errors were thrown",
+			);
 			return redirectOnError("unable_to_get_user_info");
 		}
 
