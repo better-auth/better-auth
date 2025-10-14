@@ -597,7 +597,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 						return ctx.json({
 							access_token: accessToken,
-							token_type: "bearer",
+							token_type: "Bearer", // OAuth 2.0 RFC 6749 requires "Bearer" (capitalized). Fixed in #5284
 							expires_in: opts.accessTokenExpiresIn,
 							refresh_token: newRefreshToken,
 							scope: token.scopes,
@@ -878,7 +878,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					return ctx.json(
 						{
 							access_token: accessToken,
-							token_type: "Bearer",
+							token_type: "Bearer", // OAuth 2.0 RFC 6749 requires "Bearer" (capitalized)
 							expires_in: opts.accessTokenExpiresIn,
 							refresh_token: requestedScopes.includes("offline_access")
 								? refreshToken
