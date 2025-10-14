@@ -17,7 +17,7 @@ export async function getEndpointContext(): Promise<GenericEndpointContext> {
 	const context = als.getStore();
 	if (!context) {
 		throw new Error(
-			"No auth context found. Please make sure you are calling this function within a `runWithAuthContext` callback.",
+			"No auth context found. Please make sure you are calling this function within a `getEndpointContext` callback.",
 		);
 	}
 	return context;
