@@ -49,6 +49,10 @@ interface DatabaseTableProps {
 	fields: (DBFieldAttribute & {
 		description: string;
 	})[];
+	/**
+	 * @default "create"
+	 */
+	mode?: "create" | "alter";
 }
 
 export default function DatabaseTable(props: DatabaseTableProps) {
@@ -235,11 +239,19 @@ function CopySchemaContent() {
 	const code = useMemo(
 		() =>
 			data
-				? copySchema(data, {
-						dialect: tab !== "drizzle" && tab !== "prisma" ? tab : "postgresql",
-						conditions,
-						useNumberId,
-					})
+				? copySchema(
+						{
+							modelName: data.modelName,
+							fields: data.fields,
+						},
+						{
+							dialect:
+								tab !== "drizzle" && tab !== "prisma" ? tab : "postgresql",
+							conditions,
+							useNumberId,
+							mode: data.mode,
+						},
+					)
 				: "",
 		[data, tab, useNumberId, conditions],
 	);

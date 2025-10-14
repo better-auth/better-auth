@@ -14,11 +14,11 @@ export function getTypeFactory(
 		arrayDataType?: "jsonb" | "text";
 	},
 ) {
-	return (field: DBFieldAttribute, fieldName: string) => {
+	return (field: DBFieldAttribute) => {
 		const type = field.type;
 		const typeMap = getTypeMap(field);
-		if (fieldName === "id" || field.references?.field === "id") {
-			if (fieldName === "id") {
+		if (field.fieldName === "id" || field.references?.field === "id") {
+			if (field.fieldName === "id") {
 				return typeMap.id;
 			}
 			return typeMap.foreignKeyId;

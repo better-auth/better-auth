@@ -439,6 +439,7 @@ twoFactor({
 The plugin requires 1 additional fields in the `user` table and 1 additional table to store the two factor authentication data.
 
 <DatabaseTable
+    mode="alter"
     modelName="user"
     fields={[
         {

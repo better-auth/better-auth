@@ -1,9 +1,93 @@
-import type { Resolver } from "../types";
+import type { DBFieldAttribute, Resolver, ResolverContext } from "../types";
 import { getTypeFactory } from "../utils";
 
-export const mysqlResolver = (({ schema, useNumberId }) => {
-	const lines = [`CREATE TABLE IF NOT EXISTS \`${schema.modelName}\` (`];
+type CustomResolverContext = ResolverContext & {
+	getType: ReturnType<typeof getTypeFactory>;
+};
 
+const formatField = (field: DBFieldAttribute, ctx: CustomResolverContext) => {
+	let out = `\`${field.fieldName}\` ${ctx.getType(field)}`;
+
+	if (field.required !== false) {
+		out += " NOT NULL";
+	}
+
+	if (field.fieldName === "id") {
+		if (ctx.useNumberId) {
+			out += " AUTO_INCREMENT";
+		}
+		out += " PRIMARY KEY";
+	}
+
+	if (field.unique) {
+		out += " UNIQUE";
+	}
+
+	out += ",";
+	return out;
+};
+
+const resolvers: Record<
+	"create" | "alter",
+	(ctx: CustomResolverContext) => string
+> = {
+	create: (ctx) => {
+		const lines = [`CREATE TABLE IF NOT EXISTS \`${ctx.schema.modelName}\` (`];
+
+		for (const field of ctx.schema.fields) {
+			lines.push(`\t${formatField(field, ctx)}`);
+		}
+
+		for (const field of ctx.schema.fields.filter(
+			({ references }) => !!references,
+		)) {
+			let newLine = `\tFOREIGN KEY (\`${field.fieldName}\`) REFERENCES \`${field.references!.model}\`(\`${field.references!.field}\`)`;
+
+			if (field.references!.onDelete) {
+				newLine += ` ON DELETE ${field.references!.onDelete.toUpperCase()}`;
+			}
+
+			newLine += ",";
+			lines.push(newLine);
+		}
+
+		const lastLineIdx = lines.length - 1;
+		if (lines[lastLineIdx].endsWith(",")) {
+			lines[lastLineIdx] = lines[lastLineIdx].slice(0, -1);
+		}
+		lines.push(`);`);
+		return lines.join("\n");
+	},
+	alter: (ctx) => {
+		const lines = [`ALTER TABLE \`${ctx.schema.modelName}\``];
+
+		for (const field of ctx.schema.fields) {
+			const newLine = `\tADD COLUMN ${formatField(field, ctx)}`;
+			lines.push(newLine);
+		}
+
+		for (const field of ctx.schema.fields.filter(
+			({ references }) => !!references,
+		)) {
+			let newLine = `\tADD FOREIGN KEY (\`${field.fieldName}\`) REFERENCES \`${field.references!.model}\`(\`${field.references!.field}\`)`;
+
+			if (field.references!.onDelete) {
+				newLine += ` ON DELETE ${field.references!.onDelete.toUpperCase()}`;
+			}
+
+			newLine += ",";
+			lines.push(newLine);
+		}
+
+		const lastLineIdx = lines.length - 1;
+		if (lines[lastLineIdx].endsWith(",")) {
+			lines[lastLineIdx] = `${lines[lastLineIdx].slice(0, -1)};`;
+		}
+		return lines.join("\n");
+	},
+};
+
+export const mysqlResolver = (({ useNumberId, mode, schema }) => {
 	const getType = getTypeFactory((field) => ({
 		string: field.unique
 			? "varchar(255)"
@@ -18,43 +102,10 @@ export const mysqlResolver = (({ schema, useNumberId }) => {
 		foreignKeyId: useNumberId ? "integer" : "text",
 	}));
 
-	for (const field of schema.fields) {
-		let newLine = `\t\`${field.fieldName}\` ${getType(field, field.fieldName)}`;
-
-		if (field.required !== false) {
-			newLine += " NOT NULL";
-		}
-
-		if (field.fieldName === "id") {
-			if (useNumberId) {
-				newLine += " AUTO_INCREMENT";
-			}
-			newLine += " PRIMARY KEY";
-		}
-
-		if (field.unique) {
-			newLine += " UNIQUE";
-		}
-
-		newLine += ",";
-		lines.push(newLine);
-	}
-
-	for (const field of schema.fields.filter(({ references }) => !!references)) {
-		let newLine = `\tFOREIGN KEY (\`${field.fieldName}\`) REFERENCES \`${field.references!.model}\`(\`${field.references!.field}\`)`;
-
-		if (field.references!.onDelete) {
-			newLine += ` ON DELETE ${field.references!.onDelete.toUpperCase()}`;
-		}
-
-		newLine += ",";
-		lines.push(newLine);
-	}
-
-	const lastLineIdx = lines.length - 1;
-	if (lines[lastLineIdx].endsWith(",")) {
-		lines[lastLineIdx] = lines[lastLineIdx].slice(0, -1);
-	}
-	lines.push(`);`);
-	return lines.join("\n");
+	return resolvers[mode]({
+		getType,
+		mode,
+		schema,
+		useNumberId,
+	});
 }) satisfies Resolver;

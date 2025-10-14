@@ -43,6 +43,7 @@ export const copySchema = <
 
 	const ctx: ResolverContext = {
 		useNumberId: options.useNumberId ?? false,
+		mode: options.mode ?? "create",
 		schema: filteredSchema,
 	};
 

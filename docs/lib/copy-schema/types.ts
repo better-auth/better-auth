@@ -5,6 +5,10 @@ type SharedOptions = {
 	 * @default false
 	 */
 	useNumberId?: boolean;
+	/**
+	 * @default "create"
+	 */
+	mode?: "create" | "alter";
 };
 
 export type CopySchemaOptions = SharedOptions & {
