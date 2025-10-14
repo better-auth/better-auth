@@ -1,6 +1,5 @@
 import {
 	APIError,
-	createInternalContext,
 	type EndpointContext,
 	type EndpointOptions,
 	type InputContext,
@@ -46,14 +45,10 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 	> = {};
 
 	for (const [key, endpoint] of Object.entries(endpoints)) {
-		api[key] = async (inputCtx) => {
+		api[key] = async (context) => {
 			const authContext = await ctx;
-			const context = await createInternalContext(inputCtx, {
-				options: endpoint.options,
-				path: endpoint.path,
-			});
 			let internalContext: InternalContext = {
-				...(context as any),
+				...context,
 				context: {
 					...authContext,
 					returned: undefined,
