@@ -2,7 +2,9 @@ import { source } from "@/lib/source";
 import { DocsPage, DocsBody, DocsTitle } from "@/components/docs/page";
 import { notFound } from "next/navigation";
 import { absoluteUrl } from "@/lib/utils";
-import DatabaseTable from "@/components/mdx/database-tables";
+import DatabaseTable, {
+	CopySchemaDialogProvider,
+} from "@/components/mdx/database-tables";
 import { cn } from "@/lib/utils";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
@@ -58,104 +60,108 @@ export default async function Page({
 				header: <div className="w-10 h-4"></div>,
 			}}
 		>
-			<DocsTitle>{page.data.title}</DocsTitle>
-			{!avoidLLMHeader.includes(page.data.title) && (
-				<div className="flex flex-row gap-2 items-center pb-3 border-b">
-					<LLMCopyButton />
-					<ViewOptions
-						markdownUrl={`${page.url}.mdx`}
-						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.file.path}`}
-					/>
-				</div>
-			)}
-			<DocsBody>
-				<MDX
-					components={{
-						...defaultMdxComponents,
-						CodeBlockTabs: (props) => {
-							return (
-								<CodeBlockTabs
+			<CopySchemaDialogProvider>
+				<DocsTitle>{page.data.title}</DocsTitle>
+				{!avoidLLMHeader.includes(page.data.title) && (
+					<div className="flex flex-row gap-2 items-center pb-3 border-b">
+						<LLMCopyButton />
+						<ViewOptions
+							markdownUrl={`${page.url}.mdx`}
+							githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.file.path}`}
+						/>
+					</div>
+				)}
+				<DocsBody>
+					<MDX
+						components={{
+							...defaultMdxComponents,
+							CodeBlockTabs: (props) => {
+								return (
+									<CodeBlockTabs
+										{...props}
+										className="p-0 border-0 rounded-lg bg-fd-secondary"
+									>
+										<div {...props}>{props.children}</div>
+									</CodeBlockTabs>
+								);
+							},
+							CodeBlockTabsList: (props) => {
+								return (
+									<CodeBlockTabsList
+										{...props}
+										className="pb-0 my-0 rounded-lg bg-fd-secondary"
+									/>
+								);
+							},
+							CodeBlockTab: (props) => {
+								return (
+									<CodeBlockTab {...props} className="p-0 m-0 rounded-lg" />
+								);
+							},
+							pre: (props) => {
+								return (
+									<CodeBlock className="rounded-xl bg-fd-muted" {...props}>
+										<div style={{ minWidth: "100%", display: "table" }}>
+											<Pre className="px-0 py-3 bg-fd-muted focus-visible:outline-none">
+												{props.children}
+											</Pre>
+										</div>
+									</CodeBlock>
+								);
+							},
+							Link: ({
+								className,
+								...props
+							}: React.ComponentProps<typeof Link>) => (
+								<Link
+									className={cn(
+										"font-medium underline underline-offset-4",
+										className,
+									)}
 									{...props}
-									className="p-0 border-0 rounded-lg bg-fd-secondary"
-								>
-									<div {...props}>{props.children}</div>
-								</CodeBlockTabs>
-							);
-						},
-						CodeBlockTabsList: (props) => {
-							return (
-								<CodeBlockTabsList
-									{...props}
-									className="pb-0 my-0 rounded-lg bg-fd-secondary"
 								/>
-							);
-						},
-						CodeBlockTab: (props) => {
-							return <CodeBlockTab {...props} className="p-0 m-0 rounded-lg" />;
-						},
-						pre: (props) => {
-							return (
-								<CodeBlock className="rounded-xl bg-fd-muted" {...props}>
-									<div style={{ minWidth: "100%", display: "table" }}>
-										<Pre className="px-0 py-3 bg-fd-muted focus-visible:outline-none">
-											{props.children}
-										</Pre>
-									</div>
-								</CodeBlock>
-							);
-						},
-						Link: ({
-							className,
-							...props
-						}: React.ComponentProps<typeof Link>) => (
-							<Link
-								className={cn(
-									"font-medium underline underline-offset-4",
-									className,
-								)}
-								{...props}
-							/>
-						),
-						Step,
-						Steps,
-						File,
-						Folder,
-						Files,
-						Tab,
-						Tabs,
-						AutoTypeTable,
-						GenerateSecret,
-						GenerateAppleJwt,
-						AnimatePresence,
-						TypeTable,
-						Features,
-						ForkButton,
-						AddToCursor,
-						DatabaseTable,
-						Accordion,
-						Accordions,
-						Endpoint,
-						APIMethod,
-						Callout: ({
-							children,
-							type,
-							...props
-						}: {
-							children: React.ReactNode;
-							type?: "info" | "warn" | "error" | "success" | "warning";
-							[key: string]: any;
-						}) => (
-							<Callout type={type} {...props}>
-								{children}
-							</Callout>
-						),
-						DividerText,
-						iframe: (props) => (
-							<iframe {...props} className="w-full h-[500px]" />
-						),
-					}}
-				/>
-			</DocsBody>
+							),
+							Step,
+							Steps,
+							File,
+							Folder,
+							Files,
+							Tab,
+							Tabs,
+							AutoTypeTable,
+							GenerateSecret,
+							GenerateAppleJwt,
+							AnimatePresence,
+							TypeTable,
+							Features,
+							ForkButton,
+							AddToCursor,
+							DatabaseTable,
+							Accordion,
+							Accordions,
+							Endpoint,
+							APIMethod,
+							Callout: ({
+								children,
+								type,
+								...props
+							}: {
+								children: React.ReactNode;
+								type?: "info" | "warn" | "error" | "success" | "warning";
+								[key: string]: any;
+							}) => (
+								<Callout type={type} {...props}>
+									{children}
+								</Callout>
+							),
+							DividerText,
+							iframe: (props) => (
+								<iframe {...props} className="w-full h-[500px]" />
+							),
+						}}
+					/>
+				</DocsBody>
+			</CopySchemaDialogProvider>
 		</DocsPage>
 	);
 }
