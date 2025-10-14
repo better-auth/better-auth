@@ -100,21 +100,21 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 
 				internalContext.asResponse = false;
 				internalContext.returnHeaders = true;
-				const result = (await endpoint(internalContext as any).catch(
-					(e: any) => {
-						if (e instanceof APIError) {
-							/**
-							 * API Errors from response are caught
-							 * and returned to hooks
-							 */
-							return {
-								response: e,
-								headers: e.headers ? new Headers(e.headers) : null,
-							};
-						}
-						throw e;
-					},
-				)) as {
+				const result = (await runWithEndpointContext(internalContext, () =>
+					endpoint(internalContext as any),
+				).catch((e: any) => {
+					if (e instanceof APIError) {
+						/**
+						 * API Errors from response are caught
+						 * and returned to hooks
+						 */
+						return {
+							response: e,
+							headers: e.headers ? new Headers(e.headers) : null,
+						};
+					}
+					throw e;
+				})) as {
 					headers: Headers;
 					response: any;
 				};
