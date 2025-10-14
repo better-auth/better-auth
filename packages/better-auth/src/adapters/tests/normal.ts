@@ -306,15 +306,69 @@ export const getNormalTestSuiteTests = ({
 			);
 			expect(sortModels(result)).toEqual(sortModels(expectedResult));
 		},
-		"findMany - should find many models with contains operator": async () => {
-			const users = (await insertRandom("user", 3)).map((x) => x[0]);
-			const result = await adapter.findMany<User>({
+	"findMany - should find many models with contains operator": async () => {
+		const users = (await insertRandom("user", 3)).map((x) => x[0]);
+		const result = await adapter.findMany<User>({
+			model: "user",
+			where: [{ field: "email", value: "@", operator: "contains" }],
+		});
+		expect(sortModels(result)).toEqual(sortModels(users));
+	},
+	"findMany - should handle multiple where conditions with different operators": async () => {
+		const testData = [
+			{ name: "john doe", email: "john@example.com" },
+			{ name: "jane smith", email: "jane@gmail.com" },
+		];
+		
+		const createdUsers: User[] = [];
+		for (const data of testData) {
+			const user = await adapter.create({
 				model: "user",
-				where: [{ field: "email", value: "@", operator: "contains" }],
+				data: {
+					...generate("user"),
+					...data,
+				},
+				forceAllowId: true,
 			});
-			expect(sortModels(result)).toEqual(sortModels(users));
-		},
-		"findMany - should find many models with eq operator": async () => {
+			createdUsers.push(user as User);
+		}
+		
+		const result = await adapter.findMany<User>({
+			model: "user",
+			where: [
+				{ field: "email", value: "john@example.com", operator: "eq", connector: "AND" },
+				{ field: "name", value: "john", operator: "contains", connector: "AND" },
+			],
+		});
+		expect(result.length).toBe(1);
+		expect(result[0]!.email).toBe("john@example.com");
+		expect(result[0]!.name).toBe("john doe");
+		
+		const result2 = await adapter.findMany<User>({
+			model: "user",
+			where: [
+				{ field: "email", value: "gmail", operator: "contains", connector: "AND" },
+				{ field: "name", value: "jane", operator: "contains", connector: "AND" },
+			],
+		});
+		
+		expect(result2.length).toBe(1);
+		expect(result2[0]!.email).toBe("jane@gmail.com");
+		expect(result2[0]!.name).toBe("jane smith");
+		
+		const result3 = await adapter.findMany<User>({
+			model: "user",
+			where: [
+				{ field: "email", value: "john", operator: "starts_with", connector: "AND" },
+				{ field: "name", value: "john", operator: "contains", connector: "AND" },
+			],
+		});
+		
+		expect(result3.length).toBe(1);
+		expect(result3[0]!.email).toBe("john@example.com");
+		expect(result3[0]!.name).toBe("john doe");
+	},
+	"findMany - should find many models with eq operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const result = await adapter.findMany<User>({
 				model: "user",

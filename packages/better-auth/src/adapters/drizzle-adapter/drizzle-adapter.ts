@@ -234,34 +234,98 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				);
 				const orGroup = where.filter((w) => w.connector === "OR");
 
-				const andClause = and(
-					...andGroup.map((w) => {
-						const field = getFieldName({ model, field: w.field });
-						if (w.operator === "in") {
-							if (!Array.isArray(w.value)) {
-								throw new BetterAuthError(
-									`The value for the field "${w.field}" must be an array when using the "in" operator.`,
-								);
-							}
-							return inArray(schemaModel[field], w.value);
-						}
-						if (w.operator === "not_in") {
-							if (!Array.isArray(w.value)) {
-								throw new BetterAuthError(
-									`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
-								);
-							}
-							return notInArray(schemaModel[field], w.value);
-						}
-						return eq(schemaModel[field], w.value);
-					}),
-				);
-				const orClause = or(
-					...orGroup.map((w) => {
-						const field = getFieldName({ model, field: w.field });
-						return eq(schemaModel[field], w.value);
-					}),
-				);
+		const andClause = and(
+			...andGroup.map((w) => {
+				const field = getFieldName({ model, field: w.field });
+				if (w.operator === "in") {
+					if (!Array.isArray(w.value)) {
+						throw new BetterAuthError(
+							`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+						);
+					}
+					return inArray(schemaModel[field], w.value);
+				}
+				if (w.operator === "not_in") {
+					if (!Array.isArray(w.value)) {
+						throw new BetterAuthError(
+							`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
+						);
+					}
+					return notInArray(schemaModel[field], w.value);
+				}
+				if (w.operator === "contains") {
+					return like(schemaModel[field], `%${w.value}%`);
+				}
+				if (w.operator === "starts_with") {
+					return like(schemaModel[field], `${w.value}%`);
+				}
+				if (w.operator === "ends_with") {
+					return like(schemaModel[field], `%${w.value}`);
+				}
+				if (w.operator === "lt") {
+					return lt(schemaModel[field], w.value);
+				}
+				if (w.operator === "lte") {
+					return lte(schemaModel[field], w.value);
+				}
+				if (w.operator === "gt") {
+					return gt(schemaModel[field], w.value);
+				}
+				if (w.operator === "gte") {
+					return gte(schemaModel[field], w.value);
+				}
+				if (w.operator === "ne") {
+					return ne(schemaModel[field], w.value);
+				}
+				return eq(schemaModel[field], w.value);
+			}),
+		);
+		const orClause = or(
+			...orGroup.map((w) => {
+				const field = getFieldName({ model, field: w.field });
+				if (w.operator === "in") {
+					if (!Array.isArray(w.value)) {
+						throw new BetterAuthError(
+							`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+						);
+					}
+					return inArray(schemaModel[field], w.value);
+				}
+				if (w.operator === "not_in") {
+					if (!Array.isArray(w.value)) {
+						throw new BetterAuthError(
+							`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
+						);
+					}
+					return notInArray(schemaModel[field], w.value);
+				}
+				if (w.operator === "contains") {
+					return like(schemaModel[field], `%${w.value}%`);
+				}
+				if (w.operator === "starts_with") {
+					return like(schemaModel[field], `${w.value}%`);
+				}
+				if (w.operator === "ends_with") {
+					return like(schemaModel[field], `%${w.value}`);
+				}
+				if (w.operator === "lt") {
+					return lt(schemaModel[field], w.value);
+				}
+				if (w.operator === "lte") {
+					return lte(schemaModel[field], w.value);
+				}
+				if (w.operator === "gt") {
+					return gt(schemaModel[field], w.value);
+				}
+				if (w.operator === "gte") {
+					return gte(schemaModel[field], w.value);
+				}
+				if (w.operator === "ne") {
+					return ne(schemaModel[field], w.value);
+				}
+				return eq(schemaModel[field], w.value);
+			}),
+		);
 
 				const clause: SQL<unknown>[] = [];
 
