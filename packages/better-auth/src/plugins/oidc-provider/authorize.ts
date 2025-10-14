@@ -18,7 +18,7 @@ export async function authorize(
 			error,
 			description,
 			ctx,
-			defaultURL: typeof ctxOrPath === "string" ? ctxOrPath : undefined,	
+			defaultURL: typeof ctxOrPath === "string" ? ctxOrPath : undefined,
 		});
 	};
 	const handleRedirect = (url: string) => {
@@ -113,7 +113,11 @@ export async function authorize(
 		});
 	}
 	if (client.disabled) {
-		const errorURL = await getErrorURL(ctx, "client_disabled", "client is disabled");
+		const errorURL = await getErrorURL(
+			ctx,
+			"client_disabled",
+			"client is disabled",
+		);
 		throw ctx.redirect(errorURL);
 	}
 
@@ -146,7 +150,11 @@ export async function authorize(
 		options.requirePKCE
 	) {
 		return handleRedirect(
-			await getErrorURL(query.redirect_uri, "invalid_request", "pkce is required"),
+			await getErrorURL(
+				query.redirect_uri,
+				"invalid_request",
+				"pkce is required",
+			),
 		);
 	}
 

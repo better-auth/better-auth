@@ -927,7 +927,7 @@ export const sso = (options?: SSOOptions) => {
 									description: userInfoResponse.error.message,
 									ctx,
 									defaultURL: errorURL || callbackURL,
-								})
+								}),
 							);
 						}
 						userInfo = userInfoResponse.data;
