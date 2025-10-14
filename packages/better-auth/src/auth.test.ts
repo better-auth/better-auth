@@ -1,6 +1,7 @@
 import { describe, expectTypeOf, test } from "vitest";
 import { betterAuth, type Auth } from "./auth";
-import { createAuthEndpoint, router } from "better-auth/api";
+import { router } from "better-auth/api";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 
 describe("auth type", () => {
 	test("default auth type should be okay", () => {
@@ -23,7 +24,9 @@ describe("auth type", () => {
 
 		type T = typeof auth.$ERROR_CODES;
 		expectTypeOf<T>().toEqualTypeOf<
-			{ CUSTOM_ERROR: string } & typeof import("./error/codes").BASE_ERROR_CODES
+			{
+				CUSTOM_ERROR: string;
+			} & typeof import("@better-auth/core/error").BASE_ERROR_CODES
 		>();
 	});
 

@@ -1,4 +1,6 @@
-export const ERROR_CODES = {
+import { defineErrorCodes } from "@better-auth/core/utils";
+
+export const ERROR_CODES = defineErrorCodes({
 	INVALID_PHONE_NUMBER: "Invalid phone number",
 	PHONE_NUMBER_EXIST: "Phone number already exists",
 	INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
@@ -7,4 +9,4 @@ export const ERROR_CODES = {
 	OTP_EXPIRED: "OTP expired",
 	INVALID_OTP: "Invalid OTP",
 	PHONE_NUMBER_NOT_VERIFIED: "Phone number not verified",
-} as const;
+});
