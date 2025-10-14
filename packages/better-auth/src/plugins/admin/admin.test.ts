@@ -1114,3 +1114,452 @@ describe("access control", async (it) => {
 		expect(userRes.error?.status).toBe(403);
 	});
 });
+
+describe("access control with special roles", async (it) => {
+	const ac = createAccessControl({
+		user: [
+			"create",
+			"read",
+			"update",
+			"delete",
+			"list",
+			"bulk-delete",
+			"set-role",
+		],
+		order: ["create", "read", "update", "delete", "update-many"],
+	});
+
+	const adminAc = ac.newRole({
+		user: ["create", "read", "update", "delete", "list", "set-role"],
+		order: ["create", "read", "update", "delete"],
+	});
+	const userAc = ac.newRole({
+		user: ["read"],
+		order: ["read"],
+	});
+	const adminSpecialAc = ac.newRole({
+		user: [],
+		order: [],
+	});
+	const userSpecialAc = ac.newRole({
+		user: [],
+		order: [],
+	});
+
+	const { signInWithTestUser, auth, customFetchImpl } = await getTestInstance(
+		{
+			plugins: [
+				admin({
+					ac,
+					roles: {
+						admin: adminAc,
+						user: userAc,
+						adminSpecial: adminSpecialAc,
+						userSpecial: userSpecialAc,
+					},
+					specialRoles: ["adminSpecial", "userSpecial"],
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Special Admin") {
+								return {
+									data: {
+										...user,
+										role: "adminSpecial",
+										specialPermissions: {
+											user: [
+												"get",
+												"create",
+												"read",
+												"update",
+												"delete",
+												"list",
+												"set-role",
+											],
+											order: ["create", "read", "update", "delete"],
+										},
+									},
+								};
+							}
+						},
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Special Admin",
+			},
+		},
+	);
+
+	const client = createAuthClient({
+		plugins: [
+			adminClient({
+				ac,
+				roles: {
+					admin: adminAc,
+					user: userAc,
+					adminSpecial: adminSpecialAc,
+					userSpecial: userSpecialAc,
+				},
+				specialRoles: ["adminSpecial", "userSpecial"],
+			}),
+		],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const { headers, user } = await signInWithTestUser();
+
+	it("should validate on the client", async () => {
+		const canCreateOrder = client.admin.checkRolePermission({
+			role: "adminSpecial",
+			specialPermissions: {
+				order: ["create"],
+			},
+			permissions: {
+				order: ["create"],
+			},
+		});
+		expect(canCreateOrder).toBe(true);
+		const canCreateOrderFailed = client.admin.checkRolePermission({
+			role: "adminSpecial",
+			specialPermissions: {
+				order: [],
+			},
+			permissions: {
+				order: ["create"],
+			},
+		});
+		expect(canCreateOrderFailed).toBe(false);
+
+		// To be removed when `permission` will be removed entirely
+		const canCreateOrderLegacy = client.admin.checkRolePermission({
+			role: "adminSpecial",
+			specialPermissions: {
+				order: ["create", "delete"],
+				user: ["read"],
+			},
+			permission: {
+				order: ["create"],
+				user: ["read"],
+			},
+		});
+		expect(canCreateOrderLegacy).toBe(true);
+		const canCreateOrderLegacyFailed = client.admin.checkRolePermission({
+			role: "adminSpecial",
+			specialPermissions: {
+				order: [],
+				user: ["read"],
+			},
+			permission: {
+				order: ["create"],
+				user: ["read"],
+			},
+		});
+		expect(canCreateOrderLegacyFailed).toBe(false);
+
+		const canCreateOrderAndReadUser = client.admin.checkRolePermission({
+			role: "admin",
+			specialPermissions: {
+				order: ["create"],
+				user: ["read"],
+			},
+			permissions: {
+				order: ["create"],
+				user: ["read"],
+			},
+		});
+		expect(canCreateOrderAndReadUser).toBe(true);
+		const canCreateOrderAndReadUserFailed = client.admin.checkRolePermission({
+			role: "adminSpecial",
+			specialPermissions: {
+				order: [],
+				user: ["read"],
+			},
+			permissions: {
+				order: ["create"],
+				user: ["read"],
+			},
+		});
+		expect(canCreateOrderAndReadUserFailed).toBe(false);
+
+		const canCreateUser = client.admin.checkRolePermission({
+			role: "userSpecial",
+			specialPermissions: {
+				user: ["create"],
+			},
+			permissions: {
+				user: ["create"],
+			},
+		});
+		expect(canCreateUser).toBe(true);
+		const canCreateUserFailed = client.admin.checkRolePermission({
+			role: "userSpecial",
+			specialPermissions: {
+				user: ["delete"],
+			},
+			permissions: {
+				user: ["create"],
+			},
+		});
+		expect(canCreateUserFailed).toBe(false);
+
+		const canCreateOrderAndCreateUser = client.admin.checkRolePermission({
+			role: "userSpecial",
+			specialPermissions: {
+				order: ["create"],
+				user: ["create"],
+			},
+			permissions: {
+				order: ["create"],
+				user: ["create"],
+			},
+		});
+		expect(canCreateOrderAndCreateUser).toBe(true);
+		const canCreateOrderAndCreateUserFailed = client.admin.checkRolePermission({
+			role: "userSpecial",
+			specialPermissions: {
+				order: [],
+				user: ["create"],
+			},
+			permissions: {
+				order: ["create"],
+				user: ["create"],
+			},
+		});
+		expect(canCreateOrderAndCreateUserFailed).toBe(false);
+	});
+
+	it("should validate using userId", async () => {
+		const canCreateUser = await auth.api.userHasPermission({
+			body: {
+				userId: user.id,
+				permissions: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(canCreateUser.success).toBe(true);
+
+		const canCreateUserAndCreateOrder = await auth.api.userHasPermission({
+			body: {
+				userId: user.id,
+				permissions: {
+					user: ["create"],
+					order: ["create"],
+				},
+			},
+		});
+		expect(canCreateUserAndCreateOrder.success).toBe(true);
+
+		const canUpdateManyOrder = await auth.api.userHasPermission({
+			body: {
+				userId: user.id,
+				permissions: {
+					order: ["update-many"],
+				},
+			},
+		});
+		expect(canUpdateManyOrder.success).toBe(false);
+
+		const canUpdateManyOrderAndBulkDeleteUser =
+			await auth.api.userHasPermission({
+				body: {
+					userId: user.id,
+					permissions: {
+						user: ["bulk-delete"],
+						order: ["update-many"],
+					},
+				},
+			});
+		expect(canUpdateManyOrderAndBulkDeleteUser.success).toBe(false);
+	});
+
+	it("should prioritize role over userId when both are provided", async () => {
+		const testUser = await client.signUp.email({
+			email: "rolepriority@test.com",
+			password: "password",
+			name: "Role Priority Test User",
+		});
+		const userId = testUser.data?.user.id;
+
+		const checkWithAdminRole = await auth.api.userHasPermission({
+			body: {
+				userId: userId, // non-admin user ID
+				role: "adminSpecial",
+				permission: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(checkWithAdminRole.success).toBe(false);
+
+		const checkWithUserRole = await auth.api.userHasPermission({
+			body: {
+				userId: userId, // non-admin user ID
+				role: "adminSpecial",
+				specialPermissions: {
+					user: ["create"],
+				},
+				permission: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(checkWithUserRole.success).toBe(true);
+	});
+
+	it("should get user final permissions", async () => {
+		const user = await client.signUp.email({
+			email: "finalpermissions@test.com",
+			password: "password",
+			name: "Final Permissions Test User",
+		});
+		const resultUser = await auth.api.getUserFinalPermissions({
+			body: {
+				userId: user.data?.user.id,
+			},
+		});
+		expect(resultUser.finalPermissions).toEqual(userAc.statements);
+
+		await client.admin.setRole(
+			{
+				userId: user.data?.user.id || "",
+				role: "adminSpecial",
+				specialPermissions: {
+					user: ["create", "read", "update", "delete"],
+				},
+			},
+			{
+				headers: headers,
+			},
+		);
+		const resultSpecialAdmin = await auth.api.getUserFinalPermissions({
+			body: {
+				userId: user.data?.user.id,
+			},
+		});
+		expect(resultSpecialAdmin.finalPermissions).toEqual({
+			user: ["create", "read", "update", "delete"],
+			order: [],
+		});
+	});
+
+	it("should check permissions correctly for banned user with role provided", async () => {
+		const bannedUser = await client.signUp.email({
+			email: "bannedwithRole@test.com",
+			password: "password",
+			name: "Banned Role Test User",
+		});
+		const bannedUserId = bannedUser.data?.user.id;
+
+		const setRoleResult = await client.admin.setRole(
+			{
+				userId: bannedUserId || "",
+				role: "userSpecial",
+				specialPermissions: {
+					user: ["create"],
+				},
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(setRoleResult.data?.user?.role).toBe("userSpecial");
+		expect(setRoleResult.data?.user?.specialPermissions).toEqual({
+			user: ["create"],
+		});
+
+		const updateUserResult = await client.admin.updateUser(
+			{
+				userId: bannedUserId || "",
+				data: {
+					specialPermissions: {
+						user: ["create"],
+						order: ["create"],
+					},
+				},
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(updateUserResult.data?.role).toBe("userSpecial");
+		expect(updateUserResult.data?.specialPermissions).toEqual({
+			user: ["create"],
+			order: ["create"],
+		});
+
+		await client.admin.banUser(
+			{
+				userId: bannedUserId || "",
+				banReason: "Testing role priority",
+			},
+			{
+				headers: headers,
+			},
+		);
+
+		const checkWithRole = await auth.api.userHasPermission({
+			body: {
+				userId: bannedUserId, // banned user ID
+				role: "adminSpecial",
+				specialPermissions: {
+					user: ["create"],
+				},
+				permission: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(checkWithRole.success).toBe(true);
+		const checkWithRoleFailed = await auth.api.userHasPermission({
+			body: {
+				userId: bannedUserId, // banned user ID
+				role: "adminSpecial",
+				specialPermissions: {
+					user: ["delete"],
+				},
+				permissions: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(checkWithRoleFailed.success).toBe(false);
+
+		const checkWithoutRole = await auth.api.userHasPermission({
+			body: {
+				userId: bannedUserId, // banned user ID only
+				permission: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(checkWithoutRole.success).toBe(true);
+		const checkWithoutRoleFailed = await auth.api.userHasPermission({
+			body: {
+				userId: bannedUserId, // banned user ID only
+				permission: {
+					user: ["delete"],
+				},
+			},
+		});
+		expect(checkWithoutRoleFailed.success).toBe(false);
+
+		await client.admin.unbanUser(
+			{
+				userId: bannedUserId || "",
+			},
+			{
+				headers: headers,
+			},
+		);
+	});
+});

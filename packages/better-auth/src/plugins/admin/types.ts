@@ -1,3 +1,4 @@
+import type { LiteralString } from "packages/core/dist";
 import { type Session, type User } from "../../types";
 import { type InferOptionSchema } from "../../types";
 import { type AccessControl, type Role } from "../access";
@@ -8,7 +9,12 @@ export interface UserWithRole extends User {
 	banned?: boolean | null;
 	banReason?: string | null;
 	banExpires?: Date | null;
+	specialPermissions?: SpecialPermissions;
 }
+export type SpecialPermissions = { [key: string]: string[] | undefined } | null;
+export type FinalPermissions = Readonly<{
+	[key: string]: readonly LiteralString[];
+}>;
 
 export interface SessionWithImpersonatedBy extends Session {
 	impersonatedBy?: string;
@@ -30,6 +36,15 @@ export interface AdminOptions {
 	 * @default ["admin"]
 	 */
 	adminRoles?: string | string[];
+
+	/**
+	 * Roles that are considered special roles.
+	 *
+	 * Special roles ignores role-based permissions and uses the `specialPermissions` field instead.
+	 *
+	 * @default undefined
+	 */
+	specialRoles?: string | string[] | undefined;
 	/**
 	 * A default ban reason
 	 *
@@ -81,3 +96,10 @@ export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
 	O extends { roles: Record<string, unknown> }
 		? keyof O["roles"]
 		: "user" | "admin";
+export type InferSpecialPermissionsFromOption<
+	O extends AdminOptions | undefined,
+> = O extends {
+	ac: AccessControl<infer S>;
+}
+	? { [K in keyof S]?: string[] }
+	: Record<string, string[]>;

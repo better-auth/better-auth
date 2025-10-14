@@ -1,28 +1,31 @@
-import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../api";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import type { Where } from "@better-auth/core/db/adapter";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/middleware";
-import { type Session } from "../../types";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import type { Where } from "@better-auth/core/db/adapter";
+import * as z from "zod";
+import { APIError, getSessionFromCtx } from "../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { type Session } from "../../types";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import { mergeSchema, parseUserOutput } from "../../db/schema";
 import { type AccessControl } from "../access";
-import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
+import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { schema } from "./schema";
 import type {
 	AdminOptions,
 	InferAdminRolesFromOption,
+	InferSpecialPermissionsFromOption,
 	SessionWithImpersonatedBy,
+	SpecialPermissions,
 	UserWithRole,
 } from "./types";
+import { getFinalPermissions } from "./final-permissions";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -212,6 +215,13 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								description:
 									"The role to set, this can be a string or an array of strings. Eg: `admin` or `[admin, user]`",
 							}),
+						specialPermissions: z
+							.record(z.string(), z.union([z.undefined(), z.array(z.string())]))
+							.optional()
+							.nullable()
+							.meta({
+								description: `The special permissions for special role. Eg: {"user": ["create", "read"]}`,
+							}),
 					}),
 					requireHeaders: true,
 					use: [adminMiddleware],
@@ -244,6 +254,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								role:
 									| InferAdminRolesFromOption<O>
 									| InferAdminRolesFromOption<O>[];
+								specialPermissions?: InferSpecialPermissionsFromOption<O>;
 							},
 						},
 					},
@@ -252,6 +263,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canSetRole = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
+						specialPermissions: ctx.context.session.user.specialPermissions,
 						options: opts,
 						permissions: {
 							user: ["set-role"],
@@ -268,6 +280,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						ctx.body.userId,
 						{
 							role: parseRoles(ctx.body.role),
+							...(ctx.body.specialPermissions !== undefined
+								? {
+										specialPermissions: ctx.body.specialPermissions,
+									}
+								: {}),
 						},
 						ctx,
 					);
@@ -317,6 +334,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canGetUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
+						specialPermissions: ctx.context.session.user.specialPermissions,
 						options: opts,
 						permissions: {
 							user: ["get"],
@@ -385,6 +403,13 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							.meta({
 								description: `A string or array of strings representing the roles to apply to the new user. Eg: \"user\"`,
 							}),
+						specialPermissions: z
+							.record(z.string(), z.union([z.undefined(), z.array(z.string())]))
+							.optional()
+							.nullable()
+							.meta({
+								description: `The special permissions for special role. Eg: {"user": ["create", "read"]}`,
+							}),
 						/**
 						 * extra fields for user
 						 */
@@ -424,13 +449,17 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								role?:
 									| InferAdminRolesFromOption<O>
 									| InferAdminRolesFromOption<O>[];
+								specialPermissions?: InferSpecialPermissionsFromOption<O>;
 								data?: Record<string, any>;
 							},
 						},
 					},
 				},
 				async (ctx) => {
-					const session = await getSessionFromCtx<{ role: string }>(ctx);
+					const session = await getSessionFromCtx<{
+						role: string;
+						specialPermissions?: { [key: string]: string[] };
+					}>(ctx);
 					if (!session && (ctx.request || ctx.headers)) {
 						throw ctx.error("UNAUTHORIZED");
 					}
@@ -438,6 +467,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						const canCreateUser = hasPermission({
 							userId: session.user.id,
 							role: session.user.role,
+							specialPermissions: session.user.specialPermissions,
 							options: opts,
 							permissions: {
 								user: ["create"],
@@ -550,6 +580,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canUpdateUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
+						specialPermissions: ctx.context.session.user.specialPermissions,
 						options: opts,
 						permissions: {
 							user: ["update"],
@@ -692,6 +723,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canListUsers = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
+						specialPermissions: session.user.specialPermissions,
 						options: opts,
 						permissions: {
 							user: ["list"],
@@ -808,6 +840,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canListSessions = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
+						specialPermissions: session.user.specialPermissions,
 						options: opts,
 						permissions: {
 							session: ["list"],
@@ -882,6 +915,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canBanUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
+						specialPermissions: session.user.specialPermissions,
 						options: opts,
 						permissions: {
 							user: ["ban"],
@@ -980,6 +1014,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canBanUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
+						specialPermissions: session.user.specialPermissions,
 						options: opts,
 						permissions: {
 							user: ["ban"],
@@ -1085,6 +1120,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canImpersonateUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
+						specialPermissions: ctx.context.session.user.specialPermissions,
 						options: opts,
 						permissions: {
 							user: ["impersonate"],
@@ -1281,6 +1317,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canRevokeSession = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
+						specialPermissions: session.user.specialPermissions,
 						options: opts,
 						permissions: {
 							session: ["revoke"],
@@ -1356,6 +1393,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canRevokeSession = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
+						specialPermissions: session.user.specialPermissions,
 						options: opts,
 						permissions: {
 							session: ["revoke"],
@@ -1430,6 +1468,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canDeleteUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
+						specialPermissions: session.user.specialPermissions,
 						options: opts,
 						permissions: {
 							user: ["delete"],
@@ -1520,6 +1559,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canSetUserPassword = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
+						specialPermissions: ctx.context.session.user.specialPermissions,
 						options: opts,
 						permissions: {
 							user: ["set-password"],
@@ -1570,6 +1610,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							role: z.string().optional().meta({
 								description: `The role to check permission for. Eg: "admin"`,
 							}),
+							specialPermissions: z
+								.record(
+									z.string(),
+									z.union([z.undefined(), z.array(z.string())]),
+								)
+								.optional()
+								.nullable()
+								.meta({
+									description: `The special permissions for special role. Eg: {"user": ["create", "read"]}`,
+								}),
 						})
 						.and(
 							z.union([
@@ -1633,6 +1683,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							body: {} as PermissionExclusive & {
 								userId?: string;
 								role?: InferAdminRolesFromOption<O>;
+								specialPermissions?: InferSpecialPermissionsFromOption<O>;
 							},
 						},
 					},
@@ -1657,11 +1708,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const user =
 						session?.user ||
 						(ctx.body.role
-							? { id: ctx.body.userId || "", role: ctx.body.role }
+							? {
+									id: ctx.body.userId || "",
+									role: ctx.body.role,
+									specialPermissions: ctx.body.specialPermissions,
+								}
 							: null) ||
 						((await ctx.context.internalAdapter.findUserById(
 							ctx.body.userId as string,
-						)) as { role?: string; id: string });
+						)) as {
+							role?: string;
+							id: string;
+							specialPermissions?: SpecialPermissions;
+						});
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: "user not found",
@@ -1670,12 +1729,139 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const result = hasPermission({
 						userId: user.id,
 						role: user.role,
+						specialPermissions: user.specialPermissions,
 						options: options as AdminOptions,
 						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					});
 					return ctx.json({
 						error: null,
 						success: result,
+					});
+				},
+			),
+
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/get-user-final-permissions`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.getUserFinalPermissions`
+			 *
+			 * **client:**
+			 * `authClient.admin.getUserFinalPermissions`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-has-permission)
+			 */
+			getUserFinalPermissions: createAuthEndpoint(
+				"/admin/get-user-final-permissions",
+				{
+					method: "POST",
+					body: z.object({
+						userId: z.coerce.string().optional().meta({
+							description: `The user id. Eg: "user-id"`,
+						}),
+						role: z.string().optional().meta({
+							description: `The role to check permission for. Eg: "admin"`,
+						}),
+						specialPermissions: z
+							.record(z.string(), z.union([z.undefined(), z.array(z.string())]))
+							.optional()
+							.nullable()
+							.meta({
+								description: `The special permissions for special role. Eg: {"user": ["create", "read"]}`,
+							}),
+					}),
+					metadata: {
+						openapi: {
+							description: "Get the final permissions for a user",
+							requestBody: {
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {},
+											required: [],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													finalPermissions: {
+														type: "object",
+														additionalProperties: {
+															type: "array",
+															items: {
+																type: "string",
+															},
+														},
+													},
+												},
+												required: ["finalPermissions"],
+											},
+										},
+									},
+								},
+							},
+						},
+						$Infer: {
+							body: {} as {
+								userId?: string;
+								role?: InferAdminRolesFromOption<O>;
+								specialPermissions?: InferSpecialPermissionsFromOption<O>;
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const session = await getSessionFromCtx(ctx);
+
+					if (!session && (ctx.request || ctx.headers)) {
+						throw new APIError("UNAUTHORIZED");
+					}
+					if (!session && !ctx.body.userId && !ctx.body.role) {
+						throw new APIError("BAD_REQUEST", {
+							message: "user id or role is required",
+						});
+					}
+					const user =
+						session?.user ||
+						(ctx.body.role
+							? {
+									id: ctx.body.userId || "",
+									role: ctx.body.role,
+									specialPermissions: ctx.body.specialPermissions,
+								}
+							: null) ||
+						((await ctx.context.internalAdapter.findUserById(
+							ctx.body.userId as string,
+						)) as {
+							role?: string;
+							id: string;
+							specialPermissions?: SpecialPermissions;
+						});
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: "user not found",
+						});
+					}
+					const finalPermissions = getFinalPermissions({
+						userId: user.id,
+						role: user.role,
+						specialPermissions: user.specialPermissions,
+						options: options as AdminOptions,
+					});
+					return ctx.json({
+						finalPermissions,
 					});
 				},
 			),
