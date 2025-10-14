@@ -162,9 +162,7 @@ export const init = async (options: BetterAuthOptions) => {
 			await runMigrations();
 		},
 		publishTelemetry: publish,
-		async getErrorURL({ error: _err, description: _desc, ctx, defaultURL }) {
-			const error = encodeURIComponent(_err);
-			const description = _desc ? encodeURIComponent(_desc) : null;
+		async getErrorURL({ error, description, ctx, defaultURL }) {
 			let baseURL: string;
 			if (!options.onAPIError?.errorURL) {
 				baseURL = defaultURL || `${options.baseURL}/error`;
