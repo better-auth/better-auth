@@ -12,6 +12,7 @@ import type { EndpointContext } from "better-call";
 import { generateId } from "../../utils/id";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { AuthContext } from "@better-auth/core";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
@@ -72,13 +73,14 @@ const schema = {
 	},
 } satisfies BetterAuthPluginDBSchema;
 
+const ERROR_CODES = defineErrorCodes({
+	FAILED_TO_CREATE_USER: "Failed to create user",
+	COULD_NOT_CREATE_SESSION: "Could not create session",
+	ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY:
+		"Anonymous users cannot sign in again anonymously",
+});
+
 export const anonymous = (options?: AnonymousOptions) => {
-	const ERROR_CODES = {
-		FAILED_TO_CREATE_USER: "Failed to create user",
-		COULD_NOT_CREATE_SESSION: "Could not create session",
-		ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY:
-			"Anonymous users cannot sign in again anonymously",
-	} as const;
 	return {
 		id: "anonymous",
 		endpoints: {
@@ -190,7 +192,8 @@ export const anonymous = (options?: AnonymousOptions) => {
 							ctx.path.startsWith("/magic-link/verify") ||
 							ctx.path.startsWith("/email-otp/verify-email") ||
 							ctx.path.startsWith("/one-tap/callback") ||
-							ctx.path.startsWith("/passkey/verify-authentication")
+							ctx.path.startsWith("/passkey/verify-authentication") ||
+							ctx.path.startsWith("/phone-number/verify")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
