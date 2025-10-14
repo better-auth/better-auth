@@ -1,19 +1,17 @@
-import * as z from "zod/v4";
-import { createAuthEndpoint } from "../../api/call";
-import type {
-	BetterAuthPlugin,
-	InferOptionSchema,
-	AuthPluginSchema,
-} from "../../types/plugins";
+import * as z from "zod";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
+import type { InferOptionSchema } from "../../types/plugins";
 import { APIError } from "better-call";
 import { mergeSchema } from "../../db/schema";
 import { generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx } from "../../api";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { User } from "../../types";
 import { ERROR_CODES } from "./phone-number-error";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import type { BetterAuthPlugin } from "@better-auth/core";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
@@ -658,21 +656,22 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					});
 					if (!user) {
 						if (options?.signUpOnVerification) {
-							user = await ctx.context.internalAdapter.createUser(
-								{
-									email: options.signUpOnVerification.getTempEmail(
-										ctx.body.phoneNumber,
-									),
-									name: options.signUpOnVerification.getTempName
-										? options.signUpOnVerification.getTempName(
-												ctx.body.phoneNumber,
-											)
-										: ctx.body.phoneNumber,
-									[opts.phoneNumber]: ctx.body.phoneNumber,
-									[opts.phoneNumberVerified]: true,
-								},
-								ctx,
-							);
+							user =
+								await ctx.context.internalAdapter.createUser<UserWithPhoneNumber>(
+									{
+										email: options.signUpOnVerification.getTempEmail(
+											ctx.body.phoneNumber,
+										),
+										name: options.signUpOnVerification.getTempName
+											? options.signUpOnVerification.getTempName(
+													ctx.body.phoneNumber,
+												)
+											: ctx.body.phoneNumber,
+										[opts.phoneNumber]: ctx.body.phoneNumber,
+										[opts.phoneNumberVerified]: true,
+									},
+									ctx,
+								);
 							if (!user) {
 								throw new APIError("INTERNAL_SERVER_ERROR", {
 									message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -1037,4 +1036,4 @@ const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;

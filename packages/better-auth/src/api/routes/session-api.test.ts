@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import { getDate } from "../../utils/date";
@@ -124,27 +124,21 @@ describe("session", async () => {
 				updateAge: 0,
 			},
 		});
-		const { headers } = await signInWithTestUser();
+		const { runWithUser } = await signInWithTestUser();
 
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
+		await runWithUser(async () => {
+			const session = await client.getSession();
 
-		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1000 * 60 * 5);
-		const session2 = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
+			vi.useFakeTimers();
+			await vi.advanceTimersByTimeAsync(1000 * 60 * 5);
+			const session2 = await client.getSession();
+			expect(session2.data?.session.expiresAt).not.toBe(
+				session.data?.session.expiresAt,
+			);
+			expect(
+				new Date(session2.data!.session.expiresAt).getTime(),
+			).toBeGreaterThan(new Date(session.data!.session.expiresAt).getTime());
 		});
-		expect(session2.data?.session.expiresAt).not.toBe(
-			session.data?.session.expiresAt,
-		);
-		expect(
-			new Date(session2.data!.session.expiresAt).getTime(),
-		).toBeGreaterThan(new Date(session.data!.session.expiresAt).getTime());
 	});
 
 	it("should handle 'don't remember me' option", async () => {
@@ -342,6 +336,51 @@ describe("session", async () => {
 		});
 		expect(revokeRes.data?.status).toBe(true);
 	});
+
+	it("should return session headers", async () => {
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+
+		const signInHeaders = new Headers();
+		signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+		const sessionResWithoutHeaders = await auth.api.getSession({
+			headers: signInHeaders,
+		});
+
+		const sessionResWithHeaders = await auth.api.getSession({
+			headers: signInHeaders,
+			returnHeaders: true,
+		});
+
+		expect(sessionResWithHeaders.headers).toBeDefined();
+		expect(sessionResWithHeaders.response?.user).toBeDefined();
+		expect(sessionResWithHeaders.response?.session).toBeDefined();
+		expectTypeOf({ headers: sessionResWithHeaders.headers }).toMatchObjectType<{
+			headers: Headers;
+		}>();
+
+		// @ts-expect-error: headers should not exist on sessionResWithoutHeaders
+		expect(sessionResWithoutHeaders.headers).toBeUndefined();
+
+		const sessionResWithHeadersAndAsResponse = await auth.api.getSession({
+			headers: signInHeaders,
+			returnHeaders: true,
+			asResponse: true,
+		});
+
+		expectTypeOf({
+			res: sessionResWithHeadersAndAsResponse,
+		}).toMatchObjectType<{ res: Response }>();
+
+		expect(sessionResWithHeadersAndAsResponse.ok).toBe(true);
+		expect(sessionResWithHeadersAndAsResponse.status).toBe(200);
+	});
 });
 
 describe("session storage", async () => {
@@ -370,91 +409,69 @@ describe("session storage", async () => {
 	it("should store session in secondary storage", async () => {
 		//since the instance creates a session on init, we expect the store to have 2 item (1 for session and 1 for active sessions record for the user)
 		expect(store.size).toBe(0);
-		const { headers } = await signInWithTestUser();
+		const { runWithUser } = await signInWithTestUser();
 		expect(store.size).toBe(2);
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(session.data).toMatchObject({
-			session: {
-				userId: expect.any(String),
-				token: expect.any(String),
-				expiresAt: expect.any(Date),
-				ipAddress: expect.any(String),
-				userAgent: expect.any(String),
-			},
-			user: {
-				id: expect.any(String),
-				name: "test user",
-				email: "test@test.com",
-				emailVerified: false,
-				image: null,
-				createdAt: expect.any(Date),
-				updatedAt: expect.any(Date),
-			},
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			expect(session.data).toMatchObject({
+				session: {
+					userId: expect.any(String),
+					token: expect.any(String),
+					expiresAt: expect.any(Date),
+					ipAddress: expect.any(String),
+					userAgent: expect.any(String),
+				},
+				user: {
+					id: expect.any(String),
+					name: "test user",
+					email: "test@test.com",
+					emailVerified: false,
+					image: null,
+					createdAt: expect.any(Date),
+					updatedAt: expect.any(Date),
+				},
+			});
 		});
 	});
 
 	it("should list sessions", async () => {
-		const { headers } = await signInWithTestUser();
-		const response = await client.listSessions({
-			fetchOptions: {
-				headers,
-			},
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const response = await client.listSessions();
+			expect(response.data?.length).toBe(1);
 		});
-		expect(response.data?.length).toBe(1);
 	});
 
 	it("revoke session and list sessions", async () => {
-		const { headers } = await signInWithTestUser();
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			expect(session.data).not.toBeNull();
+			expect(session.data?.session?.token).toBeDefined();
+			const userId = session.data!.session.userId;
+			const sessions = JSON.parse(store.get(`active-sessions-${userId}`)!);
+			expect(sessions.length).toBe(1);
+			const res = await client.revokeSession({
+				token: session.data?.session?.token!,
+			});
+			expect(res.data?.status).toBe(true);
+			const response = await client.listSessions();
+			expect(response.data).toBe(null);
+			expect(store.size).toBe(0);
 		});
-		expect(session.data).not.toBeNull();
-		expect(session.data?.session?.token).toBeDefined();
-		const userId = session.data!.session.userId;
-		const sessions = JSON.parse(store.get(`active-sessions-${userId}`)!);
-		expect(sessions.length).toBe(1);
-		const res = await client.revokeSession({
-			fetchOptions: {
-				headers,
-			},
-			token: session.data?.session?.token!,
-		});
-		expect(res.data?.status).toBe(true);
-		const response = await client.listSessions({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(response.data).toBe(null);
-		expect(store.size).toBe(0);
 	});
 
 	it("should revoke session", async () => {
-		const { headers } = await signInWithTestUser();
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			expect(session.data).not.toBeNull();
+			const res = await client.revokeSession({
+				token: session.data?.session?.token || "",
+			});
+			const revokedSession = await client.getSession();
+			expect(revokedSession.data).toBeNull();
 		});
-		expect(session.data).not.toBeNull();
-		const res = await client.revokeSession({
-			fetchOptions: {
-				headers,
-			},
-			token: session.data?.session?.token || "",
-		});
-		const revokedSession = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(revokedSession.data).toBeNull();
 	});
 });
 
@@ -574,5 +591,41 @@ describe("cookie cache", async () => {
 			},
 		});
 		expect(fn).toHaveBeenCalledTimes(5);
+	});
+});
+
+describe("getSession type tests", async () => {
+	const { auth } = await getTestInstance();
+
+	it("has parameters", () => {
+		type Params = Parameters<typeof auth.api.getSession>[0]["headers"];
+
+		expectTypeOf<Params>().toEqualTypeOf<
+			[string, string][] | Record<string, string> | Headers
+		>();
+	});
+
+	it("can return a response", () => {
+		type Returns = Awaited<ReturnType<typeof auth.api.getSession<true, false>>>;
+
+		expectTypeOf<{ returns: Returns }>().toMatchObjectType<{
+			returns: Response;
+		}>();
+	});
+
+	it("can return headers", () => {
+		type Returns = Awaited<ReturnType<typeof auth.api.getSession<false, true>>>;
+
+		expectTypeOf<{ returns: Returns["headers"] }>().toMatchObjectType<{
+			returns: Headers;
+		}>();
+	});
+
+	it("asResponse takes prescedence", () => {
+		type Returns = Awaited<ReturnType<typeof auth.api.getSession<true, true>>>;
+
+		expectTypeOf<{ returns: Returns }>().toMatchObjectType<{
+			returns: Response;
+		}>();
 	});
 });

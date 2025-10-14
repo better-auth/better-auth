@@ -3,56 +3,58 @@ import type { DeepReadonly, Ref } from "vue";
 import { getClientConfig } from "../config";
 import { capitalizeFirstLetter } from "../../utils/misc";
 import type {
-	BetterAuthClientPlugin,
-	ClientOptions,
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
 } from "../types";
+import type {
+	BetterAuthClientPlugin,
+	BetterAuthClientOptions,
+} from "@better-auth/core";
 import { createDynamicPathProxy } from "../proxy";
 import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { BASE_ERROR_CODES } from "../../error/codes";
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
 }
 
-type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
-	infer Plugin
->
-	? Plugin extends BetterAuthClientPlugin
-		? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
-			? Atoms extends Record<string, any>
-				? {
-						[key in keyof Atoms as IsSignal<key> extends true
-							? never
-							: key extends string
-								? `use${Capitalize<key>}`
-								: never]: () => DeepReadonly<
-							Ref<ReturnType<Atoms[key]["get"]>>
-						>;
-					}
+type InferResolvedHooks<O extends BetterAuthClientOptions> =
+	O["plugins"] extends Array<infer Plugin>
+		? Plugin extends BetterAuthClientPlugin
+			? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+				? Atoms extends Record<string, any>
+					? {
+							[key in keyof Atoms as IsSignal<key> extends true
+								? never
+								: key extends string
+									? `use${Capitalize<key>}`
+									: never]: () => DeepReadonly<
+								Ref<ReturnType<Atoms[key]["get"]>>
+							>;
+						}
+					: {}
 				: {}
 			: {}
-		: {}
-	: {};
+		: {};
 
-export function createAuthClient<Option extends ClientOptions>(
+export function createAuthClient<Option extends BetterAuthClientOptions>(
 	options?: Option,
 ) {
 	const {
+		baseURL,
 		pluginPathMethods,
 		pluginsActions,
 		pluginsAtoms,
 		$fetch,
 		$store,
 		atomListeners,
-	} = getClientConfig(options);
+	} = getClientConfig(options, false);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
@@ -92,12 +94,8 @@ export function createAuthClient<Option extends ClientOptions>(
 		useFetch?: UseFetch,
 	) {
 		if (useFetch) {
-			const ref = useStore(pluginsAtoms.$sessionSignal);
-			const baseURL = options?.fetchOptions?.baseURL || options?.baseURL;
-			let authPath = baseURL ? new URL(baseURL).pathname : "/api/auth";
-			authPath = authPath === "/" ? "/api/auth" : authPath; //fix for root path
-			authPath = authPath.endsWith("/") ? authPath.slice(0, -1) : authPath; //fix for trailing slash
-			return useFetch(`${authPath}/get-session`, {
+			const ref = useStore(pluginsAtoms.$sessionSignal!);
+			return useFetch(`${baseURL}/get-session`, {
 				ref,
 			}).then((res: any) => {
 				return {

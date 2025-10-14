@@ -21,7 +21,6 @@ import {
 } from "kysely";
 import { DefaultQueryCompiler } from "kysely";
 import { DialectAdapterBase } from "kysely";
-//@ts-ignore - we need to import this to get the type of the database
 import type { Database } from "bun:sqlite";
 
 export class BunSqliteAdapter implements DialectAdapterBase {
@@ -178,21 +177,20 @@ export class BunSqliteIntrospector implements DatabaseIntrospector {
 		options: DatabaseMetadataOptions = { withInternalKyselyTables: false },
 	): Promise<TableMetadata[]> {
 		let query = this.#db
-			// @ts-ignore
+			// @ts-expect-error
 			.selectFrom("sqlite_schema")
-			// @ts-ignore
+			// @ts-expect-error
 			.where("type", "=", "table")
-			// @ts-ignore
+			// @ts-expect-error
 			.where("name", "not like", "sqlite_%")
-			// @ts-ignore
 			.select("name")
 			.$castTo<{ name: string }>();
 
 		if (!options.withInternalKyselyTables) {
 			query = query
-				// @ts-ignore
+				// @ts-expect-error
 				.where("name", "!=", DEFAULT_MIGRATION_TABLE)
-				// @ts-ignore
+				// @ts-expect-error
 				.where("name", "!=", DEFAULT_MIGRATION_LOCK_TABLE);
 		}
 
@@ -213,11 +211,10 @@ export class BunSqliteIntrospector implements DatabaseIntrospector {
 
 		// Get the SQL that was used to create the table.
 		const createSql = await db
-			// @ts-ignore
+			// @ts-expect-error
 			.selectFrom("sqlite_master")
-			// @ts-ignore
+			// @ts-expect-error
 			.where("name", "=", table)
-			// @ts-ignore
 			.select("sql")
 			.$castTo<{ sql: string | undefined }>()
 			.execute();

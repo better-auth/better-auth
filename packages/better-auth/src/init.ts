@@ -1,35 +1,27 @@
 import { defu } from "defu";
 import { hashPassword, verifyPassword } from "./crypto/password";
-import { createInternalAdapter, getMigrations } from "./db";
-import { getAuthTables } from "./db/get-tables";
+import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
+import type { Entries } from "type-fest";
 import { getAdapter } from "./db/utils";
-import type {
-	Adapter,
-	BetterAuthOptions,
-	BetterAuthPlugin,
-	Models,
-	SecondaryStorage,
-	Session,
-	User,
-} from "./types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { DEFAULT_SECRET } from "./utils/constants";
+import { createCookieGetter, getCookies } from "./cookies";
+import { createLogger } from "@better-auth/core/env";
 import {
-	type BetterAuthCookies,
-	createCookieGetter,
-	getCookies,
-} from "./cookies";
-import { createLogger } from "./utils/logger";
-import { socialProviderList, socialProviders } from "./social-providers";
-import type { OAuthProvider } from "./oauth2";
+	type SocialProviders,
+	socialProviders,
+} from "@better-auth/core/social-providers";
+import type { OAuthProvider } from "@better-auth/core/oauth2";
 import { generateId } from "./utils";
-import { env, isProduction } from "./utils/env";
+import { env, isProduction } from "@better-auth/core/env";
 import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
-import type { LiteralUnion } from "./types/helper";
-import { BetterAuthError } from "./error";
-import { createTelemetry } from "./telemetry";
-import type { TelemetryEvent } from "./telemetry/types";
+import { BetterAuthError } from "@better-auth/core/error";
+import { createTelemetry } from "@better-auth/telemetry";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
+import { checkEndpointConflicts } from "./api";
+import { isPromise } from "./utils/is-promise";
+import type { AuthContext } from "@better-auth/core";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -60,26 +52,29 @@ export const init = async (options: BetterAuthOptions) => {
 		plugins: plugins.concat(internalPlugins),
 	};
 
+	checkEndpointConflicts(options, logger);
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
-	const providers = Object.keys(options.socialProviders || {})
-		.map((key) => {
-			const value = options.socialProviders?.[key as "github"]!;
-			if (!value || value.enabled === false) {
+	const providers: OAuthProvider[] = (
+		Object.entries(
+			options.socialProviders || {},
+		) as unknown as Entries<SocialProviders>
+	)
+		.map(([key, config]) => {
+			if (config == null) {
 				return null;
 			}
-			if (!value.clientId) {
+			if (config.enabled === false) {
+				return null;
+			}
+			if (!config.clientId) {
 				logger.warn(
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);
 			}
-			const provider = socialProviders[
-				key as (typeof socialProviderList)[number]
-			](
-				value as any, // TODO: fix this
-			);
+			const provider = socialProviders[key](config as never);
 			(provider as OAuthProvider).disableImplicitSignUp =
-				value.disableImplicitSignUp;
+				config.disableImplicitSignUp;
 			return provider;
 		})
 		.filter((x) => x !== null);
@@ -168,80 +163,30 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 		publishTelemetry: publish,
 	};
-	let { context } = runPluginInit(ctx);
+	const initOrPromise = runPluginInit(ctx);
+	let context: AuthContext;
+	if (isPromise(initOrPromise)) {
+		({ context } = await initOrPromise);
+	} else {
+		({ context } = initOrPromise);
+	}
 	return context;
 };
 
-export type AuthContext = {
-	options: BetterAuthOptions;
-	appName: string;
-	baseURL: string;
-	trustedOrigins: string[];
-	/**
-	 * New session that will be set after the request
-	 * meaning: there is a `set-cookie` header that will set
-	 * the session cookie. This is the fetched session. And it's set
-	 * by `setNewSession` method.
-	 */
-	newSession: {
-		session: Session & Record<string, any>;
-		user: User & Record<string, any>;
-	} | null;
-	session: {
-		session: Session & Record<string, any>;
-		user: User & Record<string, any>;
-	} | null;
-	setNewSession: (
-		session: {
-			session: Session & Record<string, any>;
-			user: User & Record<string, any>;
-		} | null,
-	) => void;
-	socialProviders: OAuthProvider[];
-	authCookies: BetterAuthCookies;
-	logger: ReturnType<typeof createLogger>;
-	rateLimit: {
-		enabled: boolean;
-		window: number;
-		max: number;
-		storage: "memory" | "database" | "secondary-storage";
-	} & BetterAuthOptions["rateLimit"];
-	adapter: Adapter;
-	internalAdapter: ReturnType<typeof createInternalAdapter>;
-	createAuthCookie: ReturnType<typeof createCookieGetter>;
-	secret: string;
-	sessionConfig: {
-		updateAge: number;
-		expiresIn: number;
-		freshAge: number;
-	};
-	generateId: (options: {
-		model: LiteralUnion<Models, string>;
-		size?: number;
-	}) => string | false;
-	secondaryStorage: SecondaryStorage | undefined;
-	password: {
-		hash: (password: string) => Promise<string>;
-		verify: (data: { password: string; hash: string }) => Promise<boolean>;
-		config: {
-			minPasswordLength: number;
-			maxPasswordLength: number;
-		};
-		checkPassword: typeof checkPassword;
-	};
-	tables: ReturnType<typeof getAuthTables>;
-	runMigrations: () => Promise<void>;
-	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
-};
-
-function runPluginInit(ctx: AuthContext) {
+async function runPluginInit(ctx: AuthContext) {
 	let options = ctx.options;
 	const plugins = options.plugins || [];
 	let context: AuthContext = ctx;
 	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
-			const result = plugin.init(context);
+			let initPromise = plugin.init(context);
+			let result: ReturnType<Required<BetterAuthPlugin>["init"]>;
+			if (isPromise(initPromise)) {
+				result = await initPromise;
+			} else {
+				result = initPromise;
+			}
 			if (typeof result === "object") {
 				if (result.options) {
 					const { databaseHooks, ...restOpts } = result.options;

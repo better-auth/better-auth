@@ -9,7 +9,7 @@ export default function UpgradeButton() {
 
 	return (
 		<motion.button
-			className="relative overflow-hidden px-6 py-3 rounded-md bg-gradient-to-r from-gray-900 to-black text-white font-bold text-lg shadow-lg transition-all duration-300 ease-out transform hover:scale-105 hover:shadow-xl"
+			className="relative overflow-hidden px-6 py-3 rounded-md bg-linear-to-r from-gray-900 to-black text-white font-bold text-lg shadow-lg transition-all duration-300 ease-out transform hover:scale-105 hover:shadow-xl"
 			onHoverStart={() => setIsHovered(true)}
 			onHoverEnd={() => setIsHovered(false)}
 			whileHover={{ scale: 1.05 }}
@@ -20,7 +20,7 @@ export default function UpgradeButton() {
 				Upgrade to Pro
 			</span>
 			<motion.div
-				className="absolute inset-0 bg-gradient-to-r from-gray-800 to-gray-700"
+				className="absolute inset-0 bg-linear-to-r from-gray-800 to-gray-700"
 				initial={{ opacity: 0 }}
 				animate={{ opacity: isHovered ? 1 : 0 }}
 				transition={{ duration: 0.3 }}

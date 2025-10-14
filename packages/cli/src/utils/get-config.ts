@@ -2,14 +2,15 @@ import { loadConfig } from "c12";
 import type { BetterAuthOptions } from "better-auth";
 import { logger } from "better-auth";
 import path from "path";
-// @ts-ignore
+// @ts-expect-error
 import babelPresetTypeScript from "@babel/preset-typescript";
-// @ts-ignore
+// @ts-expect-error
 import babelPresetReact from "@babel/preset-react";
 import fs, { existsSync } from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
+import type { JitiOptions } from "jiti";
 
 let possiblePaths = [
 	"auth.ts",
@@ -33,19 +34,54 @@ possiblePaths = [
 	...possiblePaths.map((it) => `app/${it}`),
 ];
 
-function getPathAliases(cwd: string): Record<string, string> | null {
-	const tsConfigPath = path.join(cwd, "tsconfig.json");
-	if (!fs.existsSync(tsConfigPath)) {
-		return null;
+function resolveReferencePath(configDir: string, refPath: string): string {
+	const resolvedPath = path.resolve(configDir, refPath);
+
+	// If it ends with .json, treat as direct file reference
+	if (refPath.endsWith(".json")) {
+		return resolvedPath;
 	}
+
+	// If the exact path exists and is a file, use it
+	if (fs.existsSync(resolvedPath)) {
+		try {
+			const stats = fs.statSync(resolvedPath);
+			if (stats.isFile()) {
+				return resolvedPath;
+			}
+		} catch {
+			// Fall through to directory handling
+		}
+	}
+
+	// Otherwise, assume directory reference
+	return path.resolve(configDir, refPath, "tsconfig.json");
+}
+
+function getPathAliasesRecursive(
+	tsconfigPath: string,
+	visited = new Set<string>(),
+): Record<string, string> {
+	if (visited.has(tsconfigPath)) {
+		return {};
+	}
+	visited.add(tsconfigPath);
+
+	if (!fs.existsSync(tsconfigPath)) {
+		logger.warn(`Referenced tsconfig not found: ${tsconfigPath}`);
+		return {};
+	}
+
 	try {
-		const tsConfig = getTsconfigInfo(cwd);
+		const tsConfig = getTsconfigInfo(undefined, tsconfigPath);
 		const { paths = {}, baseUrl = "." } = tsConfig.compilerOptions || {};
 		const result: Record<string, string> = {};
+
+		const configDir = path.dirname(tsconfigPath);
 		const obj = Object.entries(paths) as [string, string[]][];
 		for (const [alias, aliasPaths] of obj) {
 			for (const aliasedPath of aliasPaths) {
-				const resolvedBaseUrl = path.join(cwd, baseUrl);
+				const resolvedBaseUrl = path.resolve(configDir, baseUrl);
 				const finalAlias = alias.slice(-1) === "*" ? alias.slice(0, -1) : alias;
 				const finalAliasedPath =
 					aliasedPath.slice(-1) === "*"
@@ -55,6 +91,33 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 				result[finalAlias || ""] = path.join(resolvedBaseUrl, finalAliasedPath);
 			}
 		}
+
+		if (tsConfig.references) {
+			for (const ref of tsConfig.references) {
+				const refPath = resolveReferencePath(configDir, ref.path);
+				const refAliases = getPathAliasesRecursive(refPath, visited);
+				for (const [alias, aliasPath] of Object.entries(refAliases)) {
+					if (!(alias in result)) {
+						result[alias] = aliasPath;
+					}
+				}
+			}
+		}
+
+		return result;
+	} catch (error) {
+		logger.warn(`Error parsing tsconfig at ${tsconfigPath}: ${error}`);
+		return {};
+	}
+}
+
+function getPathAliases(cwd: string): Record<string, string> | null {
+	const tsConfigPath = path.join(cwd, "tsconfig.json");
+	if (!fs.existsSync(tsConfigPath)) {
+		return null;
+	}
+	try {
+		const result = getPathAliasesRecursive(tsConfigPath);
 		addSvelteKitEnvModules(result);
 		return result;
 	} catch (error) {
@@ -65,7 +128,7 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 /**
  * .tsx files are not supported by Jiti.
  */
-const jitiOptions = (cwd: string) => {
+const jitiOptions = (cwd: string): JitiOptions => {
 	const alias = getPathAliases(cwd) || {};
 	return {
 		transformOptions: {
@@ -86,6 +149,18 @@ const jitiOptions = (cwd: string) => {
 		alias,
 	};
 };
+
+const isDefaultExport = (
+	object: Record<string, unknown>,
+): object is BetterAuthOptions => {
+	return (
+		typeof object === "object" &&
+		object !== null &&
+		!Array.isArray(object) &&
+		Object.keys(object).length > 0 &&
+		"options" in object
+	);
+};
 export async function getConfig({
 	cwd,
 	configPath,
@@ -100,19 +175,21 @@ export async function getConfig({
 		if (configPath) {
 			let resolvedPath: string = path.join(cwd, configPath);
 			if (existsSync(configPath)) resolvedPath = configPath; // If the configPath is a file, use it as is, as it means the path wasn't relative.
-			const { config } = await loadConfig<{
-				auth: {
-					options: BetterAuthOptions;
-				};
-				default?: {
-					options: BetterAuthOptions;
-				};
-			}>({
+			const { config } = await loadConfig<
+				| {
+						auth: {
+							options: BetterAuthOptions;
+						};
+				  }
+				| {
+						options: BetterAuthOptions;
+				  }
+			>({
 				configFile: resolvedPath,
 				dotenv: true,
 				jitiOptions: jitiOptions(cwd),
 			});
-			if (!config.auth && !config.default) {
+			if (!("auth" in config) && !isDefaultExport(config)) {
 				if (shouldThrowOnError) {
 					throw new Error(
 						`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
@@ -123,7 +200,7 @@ export async function getConfig({
 				);
 				process.exit(1);
 			}
-			configFile = config.auth?.options || config.default?.options || null;
+			configFile = "auth" in config ? config.auth?.options : config.options;
 		}
 
 		if (!configFile) {

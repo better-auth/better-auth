@@ -1,4 +1,4 @@
-import { createAuthClient } from "better-auth/client";
+import { createAuthClient } from "better-auth/react";
 import Database from "better-sqlite3";
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
 import { expo } from ".";
@@ -127,7 +127,7 @@ describe("expo", async () => {
 			provider: "google",
 			callbackURL: "/dashboard",
 		});
-		const stateId = res?.url?.split("state=")[1].split("&")[0];
+		const stateId = res?.url?.split("state=")[1]!.split("&")[0];
 		const ctx = await auth.$context;
 		if (!stateId) {
 			throw new Error("State ID not found");
@@ -147,6 +147,26 @@ describe("expo", async () => {
 	it("should get cookies", async () => {
 		const c = client.getCookie();
 		expect(c).includes("better-auth.session_token");
+	});
+	it("should correctly parse multiple Set-Cookie headers with Expires commas", async () => {
+		const header =
+			"better-auth.session_token=abc; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, better-auth.session_data=xyz; Expires=Thu, 22 Oct 2015 07:28:00 GMT; Path=/";
+		const map = (await import("./client")).parseSetCookieHeader(header);
+		expect(map.get("better-auth.session_token")?.value).toBe("abc");
+		expect(map.get("better-auth.session_data")?.value).toBe("xyz");
+	});
+
+	it("should preserve unchanged client store session properties on signout", async () => {
+		const before = client.$store.atoms.session!.get();
+		await client.signOut();
+		const after = client.$store.atoms.session!.get();
+
+		expect(after).toMatchObject({
+			...before,
+			data: null,
+			error: null,
+			isPending: false,
+		});
 	});
 });
 

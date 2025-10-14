@@ -72,7 +72,7 @@ describe("two factor", async () => {
 				},
 			],
 		});
-		expect(dbUser?.twoFactorEnabled).toBe(null);
+		expect(dbUser?.twoFactorEnabled).toBe(false);
 		expect(twoFactor?.secret).toBeDefined();
 		expect(twoFactor?.backupCodes).toBeDefined();
 	});
@@ -243,7 +243,7 @@ describe("two factor", async () => {
 				},
 			},
 		});
-		const backupCode = backupCodes[0];
+		const backupCode = backupCodes[0]!;
 
 		let parsedCookies = new Map();
 		await client.twoFactor.verifyBackupCode({
@@ -536,5 +536,79 @@ describe("two factor auth API", async () => {
 			headers,
 		});
 		expect(session?.user.twoFactorEnabled).toBe(false);
+	});
+});
+
+describe("view backup codes", async () => {
+	const sendOTP = vi.fn();
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendOTP({ otp }) {
+						sendOTP(otp);
+					},
+				},
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+	let { headers } = await signInWithTestUser();
+
+	let session = await auth.api.getSession({ headers });
+	const userId = session?.user.id!;
+
+	it("should return parsed array of backup codes, not JSON string", async () => {
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		expect(enableRes.status).toBe(200);
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		const enableJson = (await enableRes.json()) as {
+			backupCodes: string[];
+		};
+
+		const viewResult = await auth.api.viewBackupCodes({
+			body: { userId },
+		});
+
+		expect(typeof viewResult.backupCodes).not.toBe("string");
+		expect(Array.isArray(viewResult.backupCodes)).toBe(true);
+		expect(viewResult.backupCodes.length).toBe(10);
+		viewResult.backupCodes.forEach((code) => {
+			expect(typeof code).toBe("string");
+			expect(code.length).toBeGreaterThan(0);
+		});
+		expect(viewResult.backupCodes).toEqual(enableJson.backupCodes);
+		expect(viewResult.status).toBe(true);
+	});
+
+	it("should return array after generating new backup codes", async () => {
+		const generateResult = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+
+		expect(generateResult.backupCodes).toBeDefined();
+		expect(generateResult.backupCodes.length).toBe(10);
+
+		const viewResult = await auth.api.viewBackupCodes({
+			body: { userId },
+		});
+
+		expect(viewResult.status).toBe(true);
+		expect(typeof viewResult.backupCodes).not.toBe("string");
+		expect(Array.isArray(viewResult.backupCodes)).toBe(true);
+		expect(viewResult.backupCodes.length).toBe(10);
+		viewResult.backupCodes.forEach((code) => {
+			expect(typeof code).toBe("string");
+			expect(code.length).toBeGreaterThan(0);
+		});
+		expect(viewResult.backupCodes).toEqual(generateResult.backupCodes);
 	});
 });

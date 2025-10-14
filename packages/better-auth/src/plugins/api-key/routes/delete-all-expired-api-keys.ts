@@ -1,5 +1,5 @@
-import { createAuthEndpoint } from "../../../api";
-import type { AuthContext } from "../../../types";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
+import type { AuthContext } from "@better-auth/core";
 
 export function deleteAllExpiredApiKeysEndpoint({
 	deleteAllExpiredApiKeys,
@@ -7,7 +7,7 @@ export function deleteAllExpiredApiKeysEndpoint({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): Promise<void>;
 }) {
 	return createAuthEndpoint(
 		"/api-key/delete-all-expired-api-keys",

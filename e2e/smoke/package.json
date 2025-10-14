@@ -1,0 +1,10 @@
+{
+  "name": "smoke",
+  "type": "module",
+  "dependencies": {
+    "better-auth": "workspace:*"
+  },
+  "scripts": {
+    "e2e:smoke": "node --test ./test/*.spec.ts"
+  }
+}

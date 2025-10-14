@@ -1,6 +1,8 @@
-import type { AuthContext, RateLimit } from "../../types";
+import type { RateLimit } from "../../types";
+import { safeJSONParse } from "../../utils/json";
 import { getIp } from "../../utils/get-request-ip";
 import { wildcardMatch } from "../../utils/wildcard";
+import type { AuthContext } from "@better-auth/core";
 
 function shouldRateLimit(
 	max: number,
@@ -80,23 +82,33 @@ function createDBStorage(ctx: AuthContext) {
 }
 
 const memory = new Map<string, RateLimit>();
-export function getRateLimitStorage(ctx: AuthContext) {
+export function getRateLimitStorage(
+	ctx: AuthContext,
+	rateLimitSettings?: {
+		window?: number;
+	},
+) {
 	if (ctx.options.rateLimit?.customStorage) {
 		return ctx.options.rateLimit.customStorage;
 	}
-	if (ctx.rateLimit.storage === "secondary-storage") {
+	const storage = ctx.rateLimit.storage;
+	if (storage === "secondary-storage") {
 		return {
 			get: async (key: string) => {
-				const stringified = await ctx.options.secondaryStorage?.get(key);
-				return stringified ? (JSON.parse(stringified) as RateLimit) : undefined;
+				const data = await ctx.options.secondaryStorage?.get(key);
+				return data ? safeJSONParse<RateLimit>(data) : undefined;
 			},
-			set: async (key: string, value: RateLimit) => {
-				await ctx.options.secondaryStorage?.set?.(key, JSON.stringify(value));
+			set: async (key: string, value: RateLimit, _update?: boolean) => {
+				const ttl =
+					rateLimitSettings?.window ?? ctx.options.rateLimit?.window ?? 10;
+				await ctx.options.secondaryStorage?.set?.(
+					key,
+					JSON.stringify(value),
+					ttl,
+				);
 			},
 		};
-	}
-	const storage = ctx.rateLimit.storage;
-	if (storage === "memory") {
+	} else if (storage === "memory") {
 		return {
 			async get(key: string) {
 				return memory.get(key);
@@ -161,10 +173,16 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 				window = resolved.window;
 				max = resolved.max;
 			}
+
+			if (resolved === false) {
+				return;
+			}
 		}
 	}
 
-	const storage = getRateLimitStorage(ctx);
+	const storage = getRateLimitStorage(ctx, {
+		window,
+	});
 	const data = await storage.get(key);
 	const now = Date.now();
 

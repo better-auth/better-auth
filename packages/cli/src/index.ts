@@ -6,6 +6,9 @@ import { init } from "./commands/init";
 import { migrate } from "./commands/migrate";
 import { generate } from "./commands/generate";
 import { generateSecret } from "./commands/secret";
+import { login } from "./commands/login";
+import { info } from "./commands/info";
+import { mcp } from "./commands/mcp";
 import { getPackageInfo } from "./utils/get-package-info";
 
 import "dotenv/config";
@@ -28,6 +31,9 @@ async function main() {
 		.addCommand(migrate)
 		.addCommand(generate)
 		.addCommand(generateSecret)
+		.addCommand(info)
+		.addCommand(login)
+		.addCommand(mcp)
 		.version(packageInfo.version || "1.1.2")
 		.description("Better Auth CLI")
 		.action(() => program.help());
@@ -35,4 +41,7 @@ async function main() {
 	program.parse();
 }
 
-main();
+main().catch((error) => {
+	console.error("Error running Better Auth CLI:", error);
+	process.exit(1);
+});

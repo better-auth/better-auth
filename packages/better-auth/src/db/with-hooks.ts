@@ -1,13 +1,10 @@
-import type {
-	Adapter,
-	BetterAuthOptions,
-	GenericEndpointContext,
-	Models,
-	Where,
-} from "../types";
+import type { Models, TransactionAdapter } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export function getWithHooks(
-	adapter: Adapter,
+	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
 		options: BetterAuthOptions;
 		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
@@ -26,6 +23,7 @@ export function getWithHooks(
 			executeMainFn?: boolean;
 		},
 		context?: GenericEndpointContext,
+		trxAdapter?: TransactionAdapter,
 	) {
 		let actualData = data;
 		for (const hook of hooks || []) {
@@ -50,7 +48,7 @@ export function getWithHooks(
 			: null;
 		const created =
 			!customCreateFn || customCreateFn.executeMainFn
-				? await adapter.create<T>({
+				? await (trxAdapter || adapter).create<T>({
 						model,
 						data: actualData as any,
 						forceAllowId: true,
@@ -76,6 +74,7 @@ export function getWithHooks(
 			executeMainFn?: boolean;
 		},
 		context?: GenericEndpointContext,
+		trxAdapter?: TransactionAdapter,
 	) {
 		let actualData = data;
 
@@ -97,7 +96,7 @@ export function getWithHooks(
 
 		const updated =
 			!customUpdateFn || customUpdateFn.executeMainFn
-				? await adapter.update<T>({
+				? await (trxAdapter || adapter).update<T>({
 						model,
 						update: actualData,
 						where,
@@ -122,6 +121,7 @@ export function getWithHooks(
 			executeMainFn?: boolean;
 		},
 		context?: GenericEndpointContext,
+		trxAdapter?: TransactionAdapter,
 	) {
 		let actualData = data;
 
@@ -143,7 +143,7 @@ export function getWithHooks(
 
 		const updated =
 			!customUpdateFn || customUpdateFn.executeMainFn
-				? await adapter.updateMany({
+				? await (trxAdapter || adapter).updateMany({
 						model,
 						update: actualData,
 						where,

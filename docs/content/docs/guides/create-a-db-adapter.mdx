@@ -22,14 +22,14 @@ All you need to do is provide the database logic, and the `createAdapter` functi
 3. Create the adapter!
 
 ```ts
-import { createAdapter, type AdapterDebugLogs } from "better-auth/adapters";
+import { createAdapter, type DBAdapterDebugLogOption } from "better-auth/adapters";
 
 // Your custom adapter config options
 interface CustomAdapterConfig {
   /**
    * Helps you debug issues with the adapter.
    */
-  debugLogs?: AdapterDebugLogs;
+  debugLogs?: DBAdapterDebugLogOption;
   /**
    * If the table names in the schema are plural.
    */
@@ -451,6 +451,16 @@ const adapter = myAdapter({
   usePlural: true,
 });
 ```
+
+### `transaction`
+
+Whether the adapter supports transactions. If `false`, operations run sequentially; otherwise provide a function that executes a callback with a `TransactionAdapter`.
+
+<Callout type="warn">
+  If your database does not support transactions, the error handling and rollback
+  will not be as robust. We recommend using a database that supports transactions
+  for better data integrity.
+</Callout>
 
 ### `debugLogs`
 

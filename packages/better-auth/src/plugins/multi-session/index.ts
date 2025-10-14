@@ -1,17 +1,16 @@
-import * as z from "zod/v4";
+import * as z from "zod";
+import { APIError, sessionMiddleware } from "../../api";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	sessionMiddleware,
-} from "../../api";
+} from "@better-auth/core/middleware";
 import {
 	deleteSessionCookie,
 	parseCookies,
 	parseSetCookieHeader,
 	setSessionCookie,
 } from "../../cookies";
-import type { BetterAuthPlugin } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
 
 interface MultiSessionConfig {
 	/**
@@ -267,7 +266,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							);
 
 							if (validSessions.length > 0) {
-								const nextSession = validSessions[0];
+								const nextSession = validSessions[0]!;
 								await setSessionCookie(ctx, nextSession);
 							} else {
 								deleteSessionCookie(ctx);
@@ -329,11 +328,15 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						const ids = Object.keys(cookies)
 							.map((key) => {
 								if (isMultiSessionCookie(key)) {
-									ctx.setCookie(key.toLowerCase(), "", {
-										...ctx.context.authCookies.sessionToken.options,
-										maxAge: 0,
-									});
-									const token = cookies[key].split(".")[0];
+									ctx.setCookie(
+										key.toLowerCase().replace("__secure-", "__Secure-"),
+										"",
+										{
+											...ctx.context.authCookies.sessionToken.options,
+											maxAge: 0,
+										},
+									);
+									const token = cookies[key]!.split(".")[0]!;
 									return token;
 								}
 								return null;

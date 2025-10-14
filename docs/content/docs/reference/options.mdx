@@ -220,12 +220,12 @@ export const auth = betterAuth({
 		google: {
 			clientId: "your-client-id",
 			clientSecret: "your-client-secret",
-			redirectUri: "https://example.com/api/auth/callback/google"
+			redirectURI: "https://example.com/api/auth/callback/google"
 		},
 		github: {
 			clientId: "your-client-id",
 			clientSecret: "your-client-secret",
-			redirectUri: "https://example.com/api/auth/callback/github"
+			redirectURI: "https://example.com/api/auth/callback/github"
 		}
 	},
 })
@@ -497,6 +497,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	logger: {
 		disabled: false,
+		disableColors: false,
 		level: "error",
 		log: (level, message, ...args) => {
 			// Custom logging implementation
@@ -509,6 +510,7 @@ export const auth = betterAuth({
 The logger configuration allows you to customize how Better Auth handles logging. It supports the following options:
 
 - `disabled`: Disable all logging when set to `true` (default: `false`)
+- `disableColors`: Disable colors in the default logger implementation (default: determined by the terminal's color support)
 - `level`: Set the minimum log level to display. Available levels are:
   - `"info"`: Show all logs
   - `"warn"`: Show warnings and errors
@@ -639,7 +641,7 @@ export const auth = betterAuth({
 
 ## `telemetry`
 
-Enable or disable Better Auth's telemetry collection. (default: `true`)
+Enable or disable Better Auth's telemetry collection. (default: `false`)
 
 ```ts
 import { betterAuth } from "better-auth";

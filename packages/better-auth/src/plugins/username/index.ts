@@ -1,14 +1,17 @@
-import * as z from "zod/v4";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import * as z from "zod";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { APIError } from "better-call";
 import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
-import { sendVerificationEmailFn } from "../../api";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { getSchema, type UsernameSchema } from "./schema";
 import { mergeSchema } from "../../db/schema";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
+import { createEmailVerificationToken } from "../../api";
 export * from "./error-codes";
 export type UsernameOptions = {
 	schema?: InferOptionSchema<UsernameSchema>;
@@ -201,6 +204,21 @@ export const username = (options?: UsernameOptions) => {
 										},
 									},
 								},
+								422: {
+									description: "Unprocessable Entity. Validation error",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													message: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
 							},
 						},
 					},
@@ -249,13 +267,13 @@ export const username = (options?: UsernameOptions) => {
 					}
 
 					const user = await ctx.context.adapter.findOne<
-						User & { username: string }
+						User & { username: string; displayUsername: string }
 					>({
 						model: "user",
 						where: [
 							{
 								field: "username",
-								value: username,
+								value: normalizer(username),
 							},
 						],
 					});
@@ -268,16 +286,6 @@ export const username = (options?: UsernameOptions) => {
 						});
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
-						});
-					}
-
-					if (
-						!user.emailVerified &&
-						ctx.context.options.emailAndPassword?.requireEmailVerification
-					) {
-						await sendVerificationEmailFn(ctx, user);
-						throw new APIError("FORBIDDEN", {
-							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
 						});
 					}
 
@@ -318,6 +326,44 @@ export const username = (options?: UsernameOptions) => {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
+
+					if (
+						ctx.context.options?.emailAndPassword?.requireEmailVerification &&
+						!user.emailVerified
+					) {
+						if (
+							!ctx.context.options?.emailVerification?.sendVerificationEmail
+						) {
+							throw new APIError("FORBIDDEN", {
+								message: ERROR_CODES.EMAIL_NOT_VERIFIED,
+							});
+						}
+
+						if (ctx.context.options?.emailVerification?.sendOnSignIn) {
+							const token = await createEmailVerificationToken(
+								ctx.context.secret,
+								user.email,
+								undefined,
+								ctx.context.options.emailVerification?.expiresIn,
+							);
+							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
+								ctx.body.callbackURL || "/"
+							}`;
+							await ctx.context.options.emailVerification.sendVerificationEmail(
+								{
+									user: user,
+									url,
+									token,
+								},
+								ctx.request,
+							);
+						}
+
+						throw new APIError("FORBIDDEN", {
+							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
+						});
+					}
+
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
 						ctx,
@@ -343,6 +389,7 @@ export const username = (options?: UsernameOptions) => {
 							email: user.email,
 							emailVerified: user.emailVerified,
 							username: user.username,
+							displayUsername: user.displayUsername,
 							name: user.name,
 							image: user.image,
 							createdAt: user.createdAt,
@@ -368,12 +415,36 @@ export const username = (options?: UsernameOptions) => {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
 					}
+
+					const minUsernameLength = options?.minUsernameLength || 3;
+					const maxUsernameLength = options?.maxUsernameLength || 30;
+
+					if (username.length < minUsernameLength) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_SHORT,
+						});
+					}
+
+					if (username.length > maxUsernameLength) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_LONG,
+						});
+					}
+
+					const validator =
+						options?.usernameValidator || defaultUsernameValidator;
+
+					if (!(await validator(username))) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
 					const user = await ctx.context.adapter.findOne<User>({
 						model: "user",
 						where: [
 							{
 								field: "username",
-								value: username.toLowerCase(),
+								value: normalizer(username),
 							},
 						],
 					});
@@ -488,8 +559,12 @@ export const username = (options?: UsernameOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						ctx.body.displayUsername ||= ctx.body.username;
-						ctx.body.username ||= ctx.body.displayUsername;
+						if (ctx.body.username && !ctx.body.displayUsername) {
+							ctx.body.displayUsername = ctx.body.username;
+						}
+						if (ctx.body.displayUsername && !ctx.body.username) {
+							ctx.body.username = ctx.body.displayUsername;
+						}
 					}),
 				},
 			],

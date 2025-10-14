@@ -3,7 +3,6 @@ export * from "./two-factor";
 export * from "./username";
 export * from "./bearer";
 export * from "../types/plugins";
-export * from "../api/call";
 export * from "../utils/hide-metadata";
 export * from "./magic-link";
 export * from "./phone-number";
@@ -24,3 +23,15 @@ export * from "./haveibeenpwned";
 export * from "./one-time-token";
 export * from "./mcp";
 export * from "./siwe";
+export * from "./device-authorization";
+export * from "./last-login-method";
+/**
+ * @deprecated Please import from `better-auth/api` directly.
+ */
+export {
+	createAuthEndpoint,
+	createAuthMiddleware,
+	optionsMiddleware,
+	type AuthEndpoint,
+	type AuthMiddleware,
+} from "@better-auth/core/middleware";
