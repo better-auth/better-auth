@@ -166,18 +166,15 @@ export const callbackOAuth = createAuthEndpoint(
 					updateData,
 				);
 			} else {
-				const newAccount = await c.context.internalAdapter.createAccount(
-					{
-						userId: link.userId,
-						providerId: provider.id,
-						accountId: String(userInfo.id),
-						...tokens,
-						accessToken: await setTokenUtil(tokens.accessToken, c.context),
-						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-						scope: tokens.scopes?.join(","),
-					},
-					c,
-				);
+				const newAccount = await c.context.internalAdapter.createAccount({
+					userId: link.userId,
+					providerId: provider.id,
+					accountId: String(userInfo.id),
+					...tokens,
+					accessToken: await setTokenUtil(tokens.accessToken, c.context),
+					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
+					scope: tokens.scopes?.join(","),
+				});
 				if (!newAccount) {
 					return redirectOnError("unable_to_link_account");
 				}

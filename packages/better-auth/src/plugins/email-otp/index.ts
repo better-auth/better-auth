@@ -249,28 +249,22 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				let storedOTP = await storeOTP(ctx, otp);
 
 				await ctx.context.internalAdapter
-					.createVerificationValue(
-						{
-							value: `${storedOTP}:0`,
-							identifier: `${ctx.body.type}-otp-${email}`,
-							expiresAt: getDate(opts.expiresIn, "sec"),
-						},
-						ctx,
-					)
+					.createVerificationValue({
+						value: `${storedOTP}:0`,
+						identifier: `${ctx.body.type}-otp-${email}`,
+						expiresAt: getDate(opts.expiresIn, "sec"),
+					})
 					.catch(async (error) => {
 						// might be duplicate key error
 						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 							`${ctx.body.type}-otp-${email}`,
 						);
 						//try again
-						await ctx.context.internalAdapter.createVerificationValue(
-							{
-								value: `${storedOTP}:0`,
-								identifier: `${ctx.body.type}-otp-${email}`,
-								expiresAt: getDate(opts.expiresIn, "sec"),
-							},
-							ctx,
-						);
+						await ctx.context.internalAdapter.createVerificationValue({
+							value: `${storedOTP}:0`,
+							identifier: `${ctx.body.type}-otp-${email}`,
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						});
 					});
 				await options.sendVerificationOTP(
 					{
@@ -352,14 +346,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						opts.generateOTP({ email, type: ctx.body.type }, ctx.request) ||
 						defaultOTPGenerator(opts);
 					let storedOTP = await storeOTP(ctx, otp);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							value: `${storedOTP}:0`,
-							identifier: `${ctx.body.type}-otp-${email}`,
-							expiresAt: getDate(opts.expiresIn, "sec"),
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: `${storedOTP}:0`,
+						identifier: `${ctx.body.type}-otp-${email}`,
+						expiresAt: getDate(opts.expiresIn, "sec"),
+					});
 					return otp;
 				},
 			),
@@ -695,7 +686,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							email,
 							emailVerified: true,
 						},
-						ctx,
 					);
 					await ctx.context.options.emailVerification?.onEmailVerification?.(
 						updatedUser,
@@ -707,7 +697,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					) {
 						const session = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
-							ctx,
 						);
 						await setSessionCookie(ctx, {
 							session,
@@ -867,17 +856,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								message: ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
-						const newUser = await ctx.context.internalAdapter.createUser(
-							{
-								email,
-								emailVerified: true,
-								name: "",
-							},
-							ctx,
-						);
+						const newUser = await ctx.context.internalAdapter.createUser({
+							email,
+							emailVerified: true,
+							name: "",
+						});
 						const session = await ctx.context.internalAdapter.createSession(
 							newUser.id,
-							ctx,
 						);
 						await setSessionCookie(ctx, {
 							session,
@@ -898,18 +883,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}
 
 					if (!user.user.emailVerified) {
-						await ctx.context.internalAdapter.updateUser(
-							user.user.id,
-							{
-								emailVerified: true,
-							},
-							ctx,
-						);
+						await ctx.context.internalAdapter.updateUser(user.user.id, {
+							emailVerified: true,
+						});
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.user.id,
-						ctx,
 					);
 					await setSessionCookie(ctx, {
 						session,
@@ -990,14 +970,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						opts.generateOTP({ email, type: "forget-password" }, ctx.request) ||
 						defaultOTPGenerator(opts);
 					let storedOTP = await storeOTP(ctx, otp);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							value: `${storedOTP}:0`,
-							identifier: `forget-password-otp-${email}`,
-							expiresAt: getDate(opts.expiresIn, "sec"),
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: `${storedOTP}:0`,
+						identifier: `forget-password-otp-${email}`,
+						expiresAt: getDate(opts.expiresIn, "sec"),
+					});
 					await options.sendVerificationOTP(
 						{
 							email,
@@ -1128,20 +1105,16 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						(account) => account.providerId === "credential",
 					);
 					if (!account) {
-						await ctx.context.internalAdapter.createAccount(
-							{
-								userId: user.user.id,
-								providerId: "credential",
-								accountId: user.user.id,
-								password: passwordHash,
-							},
-							ctx,
-						);
+						await ctx.context.internalAdapter.createAccount({
+							userId: user.user.id,
+							providerId: "credential",
+							accountId: user.user.id,
+							password: passwordHash,
+						});
 					} else {
 						await ctx.context.internalAdapter.updatePassword(
 							user.user.id,
 							passwordHash,
-							ctx,
 						);
 					}
 
@@ -1155,13 +1128,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}
 
 					if (!user.user.emailVerified) {
-						await ctx.context.internalAdapter.updateUser(
-							user.user.id,
-							{
-								emailVerified: true,
-							},
-							ctx,
-						);
+						await ctx.context.internalAdapter.updateUser(user.user.id, {
+							emailVerified: true,
+						});
 					}
 
 					return ctx.json({
@@ -1189,14 +1158,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								opts.generateOTP({ email, type: ctx.body.type }, ctx.request) ||
 								defaultOTPGenerator(opts);
 							let storedOTP = await storeOTP(ctx, otp);
-							await ctx.context.internalAdapter.createVerificationValue(
-								{
-									value: `${storedOTP}:0`,
-									identifier: `email-verification-otp-${email}`,
-									expiresAt: getDate(opts.expiresIn, "sec"),
-								},
-								ctx,
-							);
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: `${storedOTP}:0`,
+								identifier: `email-verification-otp-${email}`,
+								expiresAt: getDate(opts.expiresIn, "sec"),
+							});
 							await options.sendVerificationOTP(
 								{
 									email,

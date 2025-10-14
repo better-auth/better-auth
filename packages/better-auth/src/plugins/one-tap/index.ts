@@ -116,7 +116,6 @@ export const oneTap = (options?: OneTapOptions) =>
 								providerId: "google",
 								accountId: sub,
 							},
-							ctx,
 						);
 						if (!newUser) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -125,7 +124,6 @@ export const oneTap = (options?: OneTapOptions) =>
 						}
 						const session = await ctx.context.internalAdapter.createSession(
 							newUser.user.id,
-							ctx,
 						);
 						await setSessionCookie(ctx, {
 							user: newUser.user,
@@ -167,7 +165,6 @@ export const oneTap = (options?: OneTapOptions) =>
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.user.id,
-						ctx,
 					);
 
 					await setSessionCookie(ctx, {

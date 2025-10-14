@@ -310,19 +310,16 @@ export const passkey = (options?: PasskeyOptions) => {
 							maxAge: maxAgeInSeconds,
 						},
 					);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							identifier: id,
-							value: JSON.stringify({
-								expectedChallenge: options.challenge,
-								userData: {
-									id: session.user.id,
-								},
-							}),
-							expiresAt: expirationTime,
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: id,
+						value: JSON.stringify({
+							expectedChallenge: options.challenge,
+							userData: {
+								id: session.user.id,
+							},
+						}),
+						expiresAt: expirationTime,
+					});
 					return ctx.json(options, {
 						status: 200,
 					});
@@ -470,14 +467,11 @@ export const passkey = (options?: PasskeyOptions) => {
 							maxAge: maxAgeInSeconds,
 						},
 					);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							identifier: id,
-							value: JSON.stringify(data),
-							expiresAt: expirationTime,
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: id,
+						value: JSON.stringify(data),
+						expiresAt: expirationTime,
+					});
 					return ctx.json(options, {
 						status: 200,
 					});
@@ -734,7 +728,6 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 						const s = await ctx.context.internalAdapter.createSession(
 							passkey.userId,
-							ctx,
 						);
 						if (!s) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {

@@ -222,16 +222,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				let createdUser: User;
 				try {
 					const data = parseUserInput(ctx.context.options, rest, "create");
-					createdUser = await ctx.context.internalAdapter.createUser(
-						{
-							email: email.toLowerCase(),
-							name,
-							image,
-							...data,
-							emailVerified: false,
-						},
-						ctx,
-					);
+					createdUser = await ctx.context.internalAdapter.createUser({
+						email: email.toLowerCase(),
+						name,
+						image,
+						...data,
+						emailVerified: false,
+					});
 					if (!createdUser) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -255,15 +252,12 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 					});
 				}
-				await ctx.context.internalAdapter.linkAccount(
-					{
-						userId: createdUser.id,
-						providerId: "credential",
-						accountId: createdUser.id,
-						password: hash,
-					},
-					ctx,
-				);
+				await ctx.context.internalAdapter.linkAccount({
+					userId: createdUser.id,
+					providerId: "credential",
+					accountId: createdUser.id,
+					password: hash,
+				});
 				if (
 					ctx.context.options.emailVerification?.sendOnSignUp ||
 					ctx.context.options.emailAndPassword.requireEmailVerification
@@ -325,7 +319,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 				const session = await ctx.context.internalAdapter.createSession(
 					createdUser.id,
-					ctx,
 					rememberMe === false,
 				);
 				if (!session) {

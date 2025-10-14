@@ -272,7 +272,6 @@ export const siwe = (options: SIWEPluginOptions) =>
 
 						const session = await ctx.context.internalAdapter.createSession(
 							user.id,
-							ctx,
 						);
 
 						if (!session) {

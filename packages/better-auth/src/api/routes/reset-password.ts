@@ -112,14 +112,11 @@ export const requestPasswordReset = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue(
-			{
-				value: user.user.id,
-				identifier: `reset-password:${verificationToken}`,
-				expiresAt,
-			},
-			ctx,
-		);
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: user.user.id,
+			identifier: `reset-password:${verificationToken}`,
+			expiresAt,
+		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
@@ -223,14 +220,11 @@ export const forgetPassword = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue(
-			{
-				value: user.user.id,
-				identifier: `reset-password:${verificationToken}`,
-				expiresAt,
-			},
-			ctx,
-		);
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: user.user.id,
+			identifier: `reset-password:${verificationToken}`,
+			expiresAt,
+		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
@@ -387,21 +381,14 @@ export const resetPassword = createAuthEndpoint(
 		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
 		const account = accounts.find((ac) => ac.providerId === "credential");
 		if (!account) {
-			await ctx.context.internalAdapter.createAccount(
-				{
-					userId,
-					providerId: "credential",
-					password: hashedPassword,
-					accountId: userId,
-				},
-				ctx,
-			);
-		} else {
-			await ctx.context.internalAdapter.updatePassword(
+			await ctx.context.internalAdapter.createAccount({
 				userId,
-				hashedPassword,
-				ctx,
-			);
+				providerId: "credential",
+				password: hashedPassword,
+				accountId: userId,
+			});
+		} else {
+			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		}
 		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 

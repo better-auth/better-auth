@@ -106,7 +106,6 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					image,
 					...rest,
 				},
-				ctx,
 			);
 			/**
 			 * Update the session cookie with the new user data
@@ -272,7 +271,6 @@ export const changePassword = createAuthEndpoint(
 			await ctx.context.internalAdapter.deleteSessions(session.user.id);
 			const newSession = await ctx.context.internalAdapter.createSession(
 				session.user.id,
-				ctx,
 			);
 			if (!newSession) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -347,15 +345,12 @@ export const setPassword = createAuthEndpoint(
 		);
 		const passwordHash = await ctx.context.password.hash(newPassword);
 		if (!account) {
-			await ctx.context.internalAdapter.linkAccount(
-				{
-					userId: session.user.id,
-					providerId: "credential",
-					accountId: session.user.id,
-					password: passwordHash,
-				},
-				ctx,
-			);
+			await ctx.context.internalAdapter.linkAccount({
+				userId: session.user.id,
+				providerId: "credential",
+				accountId: session.user.id,
+				password: passwordHash,
+			});
 			return ctx.json({
 				status: true,
 			});
@@ -485,19 +480,16 @@ export const deleteUser = createAuthEndpoint(
 
 		if (ctx.context.options.user.deleteUser?.sendDeleteAccountVerification) {
 			const token = generateRandomString(32, "0-9", "a-z");
-			await ctx.context.internalAdapter.createVerificationValue(
-				{
-					value: session.user.id,
-					identifier: `delete-account-${token}`,
-					expiresAt: new Date(
-						Date.now() +
-							(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
-								60 * 60 * 24) *
-								1000,
-					),
-				},
-				ctx,
-			);
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: session.user.id,
+				identifier: `delete-account-${token}`,
+				expiresAt: new Date(
+					Date.now() +
+						(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
+							60 * 60 * 24) *
+							1000,
+				),
+			});
 			const url = `${
 				ctx.context.baseURL
 			}/delete-user/callback?token=${token}&callbackURL=${
@@ -532,8 +524,8 @@ export const deleteUser = createAuthEndpoint(
 		if (beforeDelete) {
 			await beforeDelete(session.user, ctx.request);
 		}
-		await ctx.context.internalAdapter.deleteUser(session.user.id, ctx);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id, ctx);
+		await ctx.context.internalAdapter.deleteUser(session.user.id);
+		await ctx.context.internalAdapter.deleteSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		deleteSessionCookie(ctx);
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
@@ -624,10 +616,10 @@ export const deleteUserCallback = createAuthEndpoint(
 		if (beforeDelete) {
 			await beforeDelete(session.user, ctx.request);
 		}
-		await ctx.context.internalAdapter.deleteUser(session.user.id, ctx);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id, ctx);
+		await ctx.context.internalAdapter.deleteUser(session.user.id);
+		await ctx.context.internalAdapter.deleteSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
-		await ctx.context.internalAdapter.deleteVerificationValue(token.id, ctx);
+		await ctx.context.internalAdapter.deleteVerificationValue(token.id);
 
 		deleteSessionCookie(ctx);
 
@@ -747,7 +739,6 @@ export const changeEmail = createAuthEndpoint(
 				{
 					email: newEmail,
 				},
-				ctx,
 			);
 			await setSessionCookie(ctx, {
 				session: ctx.context.session.session,

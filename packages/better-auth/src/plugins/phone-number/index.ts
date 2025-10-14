@@ -236,14 +236,11 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					if (opts.requireVerification) {
 						if (!user.phoneNumberVerified) {
 							const otp = generateOTP(opts.otpLength);
-							await ctx.context.internalAdapter.createVerificationValue(
-								{
-									value: otp,
-									identifier: phoneNumber,
-									expiresAt: getDate(opts.expiresIn, "sec"),
-								},
-								ctx,
-							);
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: otp,
+								identifier: phoneNumber,
+								expiresAt: getDate(opts.expiresIn, "sec"),
+							});
 							await opts.sendOTP?.(
 								{
 									phoneNumber,
@@ -288,7 +285,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx,
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {
@@ -390,14 +386,11 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 
 					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							value: `${code}:0`,
-							identifier: ctx.body.phoneNumber,
-							expiresAt: getDate(opts.expiresIn, "sec"),
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: `${code}:0`,
+						identifier: ctx.body.phoneNumber,
+						expiresAt: getDate(opts.expiresIn, "sec"),
+					});
 					await options.sendOTP(
 						{
 							phoneNumber: ctx.body.phoneNumber,
@@ -626,7 +619,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 								[opts.phoneNumber]: ctx.body.phoneNumber,
 								[opts.phoneNumberVerified]: true,
 							},
-							ctx,
 						);
 						return ctx.json({
 							status: true,
@@ -670,7 +662,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 										[opts.phoneNumber]: ctx.body.phoneNumber,
 										[opts.phoneNumberVerified]: true,
 									},
-									ctx,
 								);
 							if (!user) {
 								throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -679,13 +670,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							}
 						}
 					} else {
-						user = await ctx.context.internalAdapter.updateUser(
-							user.id,
-							{
-								[opts.phoneNumberVerified]: true,
-							},
-							ctx,
-						);
+						user = await ctx.context.internalAdapter.updateUser(user.id, {
+							[opts.phoneNumberVerified]: true,
+						});
 					}
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -704,7 +691,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					if (!ctx.body.disableSession) {
 						const session = await ctx.context.internalAdapter.createSession(
 							user.id,
-							ctx,
 						);
 						if (!session) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -804,14 +790,11 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						});
 					}
 					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							value: `${code}:0`,
-							identifier: `${ctx.body.phoneNumber}-request-password-reset`,
-							expiresAt: getDate(opts.expiresIn, "sec"),
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: `${code}:0`,
+						identifier: `${ctx.body.phoneNumber}-request-password-reset`,
+						expiresAt: getDate(opts.expiresIn, "sec"),
+					});
 					await options?.sendForgetPasswordOTP?.(
 						{
 							phoneNumber: ctx.body.phoneNumber,
@@ -874,14 +857,11 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						});
 					}
 					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							value: `${code}:0`,
-							identifier: `${ctx.body.phoneNumber}-request-password-reset`,
-							expiresAt: getDate(opts.expiresIn, "sec"),
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: `${code}:0`,
+						identifier: `${ctx.body.phoneNumber}-request-password-reset`,
+						expiresAt: getDate(opts.expiresIn, "sec"),
+					});
 					await options?.sendPasswordResetOTP?.(
 						{
 							phoneNumber: ctx.body.phoneNumber,

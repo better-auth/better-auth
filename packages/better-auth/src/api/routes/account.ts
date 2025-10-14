@@ -303,18 +303,15 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			try {
-				await c.context.internalAdapter.createAccount(
-					{
-						userId: session.user.id,
-						providerId: provider.id,
-						accountId: linkingUserId,
-						accessToken: c.body.idToken.accessToken,
-						idToken: token,
-						refreshToken: c.body.idToken.refreshToken,
-						scope: c.body.idToken.scopes?.join(","),
-					},
-					c,
-				);
+				await c.context.internalAdapter.createAccount({
+					userId: session.user.id,
+					providerId: provider.id,
+					accountId: linkingUserId,
+					accessToken: c.body.idToken.accessToken,
+					idToken: token,
+					refreshToken: c.body.idToken.refreshToken,
+					scope: c.body.idToken.scopes?.join(","),
+				});
 			} catch (e: any) {
 				throw new APIError("EXPECTATION_FAILED", {
 					message: "Account not linked - unable to create account",
