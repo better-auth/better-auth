@@ -343,6 +343,17 @@ export const getNormalTestSuiteTests = ({
 		},
 		"findMany - should find many models with ends_with operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			for(const user of users) {
+				const res =await adapter.update<User>({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+					update: { name: user.name.toLowerCase() }, // make name lowercase
+				});
+				if(!res) throw new Error("No result");
+				let u = users.find(u => u.id === user.id)!;
+				u.name = res.name;
+				u.updatedAt = res.updatedAt;
+			}
 			const ends_with = users[0]!.name.slice(-1);
 			const result = await adapter.findMany<User>({
 				model: "user",
@@ -361,7 +372,7 @@ export const getNormalTestSuiteTests = ({
 				console.log(`Result length: ${result.length}`);
 				console.log(sortModels(result));
 				console.log("--------------------------------");
-				console.log(`Expected result length: ${expectedResult.length}`);
+				console.log(`Expected result length: ${expectedResult.length} - key: ${JSON.stringify(ends_with)}`);
 				console.log(expectedResult);
 			}
 			expect(sortModels(result)).toEqual(expectedResult);
