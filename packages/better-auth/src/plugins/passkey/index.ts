@@ -706,7 +706,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							expectedRPID: getRpID(opts, ctx.context.options.baseURL),
 							credential: {
 								id: passkey.credentialID,
-								publicKey: new Uint8Array(base64.decode(passkey.publicKey)),
+								publicKey: base64.decode(passkey.publicKey),
 								counter: passkey.counter,
 								transports: passkey.transports?.split(
 									",",
