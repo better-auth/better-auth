@@ -388,8 +388,6 @@ To add custom fields, use the `additionalFields` property in the `user` or `sess
 - `required`: A boolean indicating if the field is mandatory.
 - `defaultValue`: The default value for the field (note: this only applies in the JavaScript layer; in the database, the field will be optional).
 - `input`: This determines whether a value can be provided when creating a new record (default: `true`). If there are additional fields, like `role`, that should not be provided by the user during signup, you can set this to `false`.
-- `returned`: Controls whether the field is included in SELECT queries (default: `true`). Set to `false` if you want the field stored in the database but not retrieved in read operations.
-- `fieldName`: The actual column name in the database if it differs from the JavaScript property name.
 
 Here's an example of how to extend the user schema with additional fields:
 
@@ -410,22 +408,10 @@ export const auth = betterAuth({
         required: false,
         defaultValue: "en",
       },
-      firstName: {
-        type: "string",
-        fieldName: "first_name", // Database column name
-      },
-      internalNotes: {
-        type: "string",
-        returned: false, // Stored but not retrieved in normal queries
-      },
     },
   },
 });
 ```
-
-<Callout type="info">
-  **Field Retrieval**: The `returned` property controls whether a field appears in query results (default: `true`). Set `returned: false` only when you want to store a field in the database but exclude it from being retrieved in normal operations (e.g., internal metadata or audit fields).
-</Callout>
 
 Now you can access the additional fields in your application logic.
 
@@ -485,11 +471,11 @@ export const auth = betterAuth({
 
 ### ID Generation
 
-Better Auth by default will generate unique IDs for users, sessions, and other entities. You can customize ID generation behavior using the `advanced.database.generateId` option.
+Better Auth by default will generate unique IDs for users, sessions, and other entities. You can customize ID generation behavior using the `advanced.database.generateId` option or `advanced.database.useNumberId`.
 
-#### Option 1: Disable ID Generation for All Tables
+#### Option 1: Let Database Generate IDs
 
-Setting `generateId` to `false` disables ID generation globally, letting your database handle all ID generation (useful for auto-increment/serial columns):
+Setting `generateId` to `false` disables ID generation globally, letting your database handle all ID generation:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -504,6 +490,10 @@ export const auth = betterAuth({
   },
 });
 ```
+
+<Callout type="info">
+  **Note**: For auto-incrementing numeric IDs (serial, auto_increment), use `useNumberId: true` instead (see the Numeric IDs section below).
+</Callout>
 
 #### Option 2: Custom ID Generation Function
 
@@ -705,9 +695,6 @@ export const auth = betterAuth({
 });
 ```
 
-<Callout type="info">
-  **Property Names**: In `databaseHooks`, always use JavaScript property names (e.g., `firstName`) not database column names (e.g., `first_name`). Better Auth handles the mapping internally based on your `fieldName` configuration.
-</Callout>
 
 #### Throwing Errors
 
