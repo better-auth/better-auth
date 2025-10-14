@@ -11,6 +11,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
 interface MultiSessionConfig {
 	/**
@@ -21,6 +22,9 @@ interface MultiSessionConfig {
 	maximumSessions?: number;
 }
 
+const ERROR_CODES = defineErrorCodes({
+	INVALID_SESSION_TOKEN: "Invalid session token",
+});
 export const multiSession = (options?: MultiSessionConfig) => {
 	const opts = {
 		maximumSessions: 5,
@@ -28,10 +32,6 @@ export const multiSession = (options?: MultiSessionConfig) => {
 	};
 
 	const isMultiSessionCookie = (key: string) => key.includes("_multi-");
-
-	const ERROR_CODES = {
-		INVALID_SESSION_TOKEN: "Invalid session token",
-	} as const;
 
 	return {
 		id: "multi-session",

@@ -25,22 +25,25 @@ function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
 }
 
-type InferResolvedHooks<O extends BetterAuthClientOptions> =
-	O["plugins"] extends Array<infer Plugin>
-		? Plugin extends BetterAuthClientPlugin
-			? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
-				? Atoms extends Record<string, any>
-					? {
-							[key in keyof Atoms as IsSignal<key> extends true
-								? never
-								: key extends string
-									? `use${Capitalize<key>}`
-									: never]: () => Accessor<ReturnType<Atoms[key]["get"]>>;
-						}
+type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
+	plugins: Array<infer Plugin>;
+}
+	? UnionToIntersection<
+			Plugin extends BetterAuthClientPlugin
+				? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+					? Atoms extends Record<string, any>
+						? {
+								[key in keyof Atoms as IsSignal<key> extends true
+									? never
+									: key extends string
+										? `use${Capitalize<key>}`
+										: never]: () => Accessor<ReturnType<Atoms[key]["get"]>>;
+							}
+						: {}
 					: {}
 				: {}
-			: {}
-		: {};
+		>
+	: {};
 
 export function createAuthClient<Option extends BetterAuthClientOptions>(
 	options?: Option,
