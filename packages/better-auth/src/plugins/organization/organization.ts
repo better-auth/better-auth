@@ -16,7 +16,7 @@ import {
 	listInvitations,
 	rejectInvitation,
 	listUserInvitations,
-} from "./routes/crud-invites";
+} from "./routes/invitations";
 import {
 	addMember,
 	getActiveMember,
