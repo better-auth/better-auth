@@ -33,3 +33,7 @@ export function getTypeFactory(
 		return typeMap[type]!;
 	};
 }
+
+export function filterForeignKeys({ fields }: { fields: DBFieldAttribute[] }) {
+	return fields.filter(({ references }) => !!references);
+}

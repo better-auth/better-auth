@@ -1,5 +1,5 @@
 import type { DBFieldAttribute, Resolver, ResolverContext } from "../types";
-import { getTypeFactory } from "../utils";
+import { filterForeignKeys, getTypeFactory } from "../utils";
 
 type CustomResolverContext = ResolverContext & {
 	getType: ReturnType<typeof getTypeFactory>;
@@ -27,10 +27,7 @@ const formatField = (field: DBFieldAttribute, ctx: CustomResolverContext) => {
 	return out;
 };
 
-const formatForeignKey = (
-	field: DBFieldAttribute,
-	ctx: CustomResolverContext,
-) => {
+const formatForeignKey = (field: DBFieldAttribute) => {
 	let newLine = `FOREIGN KEY (\`${field.fieldName}\`) REFERENCES \`${field.references!.model}\`(\`${field.references!.field}\`)`;
 
 	if (field.references!.onDelete) {
@@ -38,10 +35,6 @@ const formatForeignKey = (
 	}
 
 	newLine += ",";
-};
-
-const filterForeignKeys = ({ fields }: { fields: DBFieldAttribute[] }) => {
-	return fields.filter(({ references }) => !!references);
 };
 
 export const mysqlResolver = ((ctx) => {
@@ -58,10 +51,6 @@ export const mysqlResolver = ((ctx) => {
 		id: ctx.useNumberId ? "integer" : "varchar(36)",
 		foreignKeyId: ctx.useNumberId ? "integer" : "text",
 	}));
-	const context: CustomResolverContext = {
-		...ctx,
-		getType,
-	};
 
 	const lines = [
 		ctx.mode === "create"
@@ -71,13 +60,16 @@ export const mysqlResolver = ((ctx) => {
 
 	for (const field of ctx.schema.fields) {
 		lines.push(
-			`\t${ctx.mode === "alter" ? "ADD COLUMN " : ""}${formatField(field, context)}`,
+			`\t${ctx.mode === "alter" ? "ADD COLUMN " : ""}${formatField(field, {
+				...ctx,
+				getType,
+			})}`,
 		);
 	}
 
 	for (const field of filterForeignKeys(ctx.schema)) {
 		lines.push(
-			`\t${ctx.mode === "alter" ? "ADD " : ""}${formatForeignKey(field, context)}`,
+			`\t${ctx.mode === "alter" ? "ADD " : ""}${formatForeignKey(field)}`,
 		);
 	}
 
