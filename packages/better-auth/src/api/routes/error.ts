@@ -1,5 +1,6 @@
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { createAuthEndpoint } from "@better-auth/core/middleware";
+import type { BetterAuthOptions } from "@better-auth/core";
 
 function sanitize(input: string): string {
 	return input
@@ -10,8 +11,13 @@ function sanitize(input: string): string {
 		.replace(/'/g, "&#39;");
 }
 
-const html = (code: string = "Unknown", description: string | null = null) =>
-	`<!DOCTYPE html>
+const html = (
+	options: BetterAuthOptions,
+	code: string = "Unknown",
+	description: string | null = null,
+) => {
+	const custom = options.onAPIError?.customizeDefaultErrorPage;
+	return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -19,9 +25,8 @@ const html = (code: string = "Unknown", description: string | null = null) =>
     <title>Error</title>
     <style>
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-          'Helvetica Neue', Arial, sans-serif;
-        background: var(--background);
+        font-family: ${custom?.font?.defaultFamily || "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"};
+        background: ${custom?.colors?.background || "var(--background)"};
         color: var(--foreground);
         margin: 0;
       }
@@ -29,29 +34,31 @@ const html = (code: string = "Unknown", description: string | null = null) =>
       :host {
         --spacing: 0.25rem;
         --container-md: 28rem;
-        --text-sm: 0.875rem;
+        --text-sm: ${custom?.size?.textSm || "0.875rem"};
         --text-sm--line-height: calc(1.25 / 0.875);
-        --text-2xl: 1.5rem;
+        --text-2xl: ${custom?.size?.text2xl || "1.5rem"};
         --text-2xl--line-height: calc(2 / 1.5);
-        --text-4xl: 2.25rem;
+        --text-4xl: ${custom?.size?.text4xl || "2.25rem"};
         --text-4xl--line-height: calc(2.5 / 2.25);
-        --text-6xl: 3.75rem;
+        --text-6xl: ${custom?.size?.text6xl || "3.75rem"};
         --text-6xl--line-height: 1;
         --font-weight-medium: 500;
         --font-weight-semibold: 600;
         --font-weight-bold: 700;
         --default-transition-duration: 150ms;
         --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-        --default-font-family: var(--font-geist-sans);
-        --default-mono-font-family: var(--font-geist-mono);
-        --radius: 0.625rem;
+        --radius: ${custom?.size?.radiusSm || "0.625rem"};
+        --default-mono-font-family: ${custom?.font?.monoFamily || "var(--font-geist-mono)"};
       }
       :root {
-        --background: black;
-        --foreground: oklch(0.985 0 0);
-        --border: oklch(0.269 0 0);
-        --destructive: oklch(0.396 0.141 25.723);
-        --muted-foreground: oklch(0.708 0 0);
+        --primary: ${custom?.colors?.primary || "white"};
+        --primary-foreground: ${custom?.colors?.primaryForeground || "black"};
+        --background: ${custom?.colors?.background || "black"};
+        --foreground: ${custom?.colors?.foreground || "oklch(0.985 0 0)"};
+        --border: ${custom?.colors?.border || "oklch(0.269 0 0)"};
+        --destructive: ${custom?.colors?.destructive || "oklch(0.396 0.141 25.723)"};
+        --muted-foreground: ${custom?.colors?.mutedForeground || "oklch(0.708 0 0)"};
+        --corner-border: ${custom?.colors?.cornerBorder || "#BFBFBF"};
       }
 
       button {
@@ -70,23 +77,24 @@ const html = (code: string = "Unknown", description: string | null = null) =>
   </head>
   <body style="width: 100vw; height: 100vh; overflow: hidden;">
     <div
-      style="
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 1.5rem;
-        position: relative;
-        width: 100vw;
-        height: 100vh;
-      "
-    >
+        style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        "
+        >
+${custom?.disableBackgroundGrid ? "" : `
       <div
         style="
           position: absolute;
           inset: 0;
-          background-image: linear-gradient(to right, var(--border) 1px, transparent 1px),
-            linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+          background-image: linear-gradient(to right, ${custom?.colors?.gridColor || "var(--border)"} 1px, transparent 1px),
+            linear-gradient(to bottom, ${custom?.colors?.gridColor || "var(--border)"} 1px, transparent 1px);
           opacity: 0.5;
           background-size: 24px 24px;
           pointer-events: none;
@@ -94,72 +102,78 @@ const html = (code: string = "Unknown", description: string | null = null) =>
           height: 100vh;
         "
       ></div>
+`}
 
-
-      <div
-        style="
-          position: relative;
-          z-index: 10;
-          border: 2px solid var(--border);
-          background: var(--background);
-          padding: 3rem;
-          max-width: 42rem;
-          min-width: 297px;
-          width: 100%;
-        "
-      >
+<div
+  style="
+    position: relative;
+    z-index: 10;
+    border: 2px solid var(--border);
+    background: ${custom?.colors?.cardBackground || "var(--background)"};
+    padding: 3rem;
+    max-width: 42rem;
+    min-width: 297px;
+    width: 100%;
+  "
+>
+    ${
+			custom?.disabledCornerDecorations
+				? ""
+				: `
         <!-- Corner decorations -->
         <div
           style="
             position: absolute;
-            top: 0;
-            left: 0;
+            top: -2px;
+            left: -2px;
             width: 3rem;
             height: 3rem;
-            border-top: 4px solid var(--foreground);
-            border-left: 4px solid var(--foreground);
+            border-top: 4px solid var(--corner-border);
+            border-left: 4px solid var(--corner-border);
           "
         ></div>
         <div
           style="
             position: absolute;
-            top: 0;
-            right: 0;
+            top: -2px;
+            right: -2px;
             width: 3rem;
             height: 3rem;
-            border-top: 4px solid var(--foreground);
-            border-right: 4px solid var(--foreground);
+            border-top: 4px solid var(--corner-border);
+            border-right: 4px solid var(--corner-border);
+          "
+        ></div>
+  
+        <div
+          style="
+            position: absolute;
+            bottom: -2px;
+            left: -2px;
+            width: 3rem;
+            height: 3rem;
+            border-bottom: 4px solid var(--corner-border);
+            border-left: 4px solid var(--corner-border);
           "
         ></div>
         <div
           style="
             position: absolute;
-            bottom: 0;
-            left: 0;
+            bottom: -2px;
+            right: -2px;
             width: 3rem;
             height: 3rem;
-            border-bottom: 4px solid var(--foreground);
-            border-left: 4px solid var(--foreground);
+            border-bottom: 4px solid var(--corner-border);
+            border-right: 4px solid var(--corner-border);
           "
-        ></div>
-        <div
-          style="
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 3rem;
-            height: 3rem;
-            border-bottom: 4px solid var(--foreground);
-            border-right: 4px solid var(--foreground);
-          "
-        ></div>
+        ></div>`
+		}
 
         <div style="text-align: center; margin-bottom: 2rem;">
           <div style="margin-bottom: 1.5rem;">
             <div
               style="
                 display: inline-block;
-                border: 2px solid var(--destructive);
+                border: 2px solid ${custom?.colors?.titleBoarder || "var(--destructive)"};
                 padding: 0.5rem 1.5rem;
               "
             >
@@ -167,7 +181,7 @@ const html = (code: string = "Unknown", description: string | null = null) =>
                 style="
                   font-size: var(--text-6xl);
                   font-weight: var(--font-weight-bold);
-                  color: var(--foreground);
+                  color: ${custom?.colors?.titleColor || "var(--foreground)"};
                   letter-spacing: -0.02em;
                   margin: 0;
                 "
@@ -256,8 +270,8 @@ const html = (code: string = "Unknown", description: string | null = null) =>
           <button
             style="
               border: 2px solid var(--border);
-              background: var(--foreground);
-              color: var(--background);
+              background: var(--primary);
+              color: var(--primary-foreground);
               padding: 0.5rem 1.25rem;
               border-radius: 0;
             "
@@ -282,6 +296,7 @@ const html = (code: string = "Unknown", description: string | null = null) =>
     </div>
   </body>
 </html>`;
+};
 
 export const error = createAuthEndpoint(
 	"/error",
@@ -313,7 +328,7 @@ export const error = createAuthEndpoint(
 		const description =
 			new URL(c.request?.url || "").searchParams.get("error_description") ||
 			null;
-		return new Response(html(code, description), {
+		return new Response(html(c.context.options, code, description), {
 			headers: {
 				"Content-Type": "text/html",
 			},
