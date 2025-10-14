@@ -1,39 +1,41 @@
 import { safeJSONParse } from "../../utils/json";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type {
-	Adapter,
-	BetterAuthOptions,
-	TransactionAdapter,
-	Where,
-} from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { generateId as defaultGenerateId } from "../../utils";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
-	CleanedWhere,
 } from "./types";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import { logger, TTY_COLORS, getColorDepth } from "@better-auth/core/env";
+import type {
+	DBAdapter,
+	DBTransactionAdapter,
+	Where,
+	CleanedWhere,
+} from "@better-auth/core/db/adapter";
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
 
 const createAsIsTransaction =
-	(adapter: Adapter) =>
-	<R>(fn: (trx: TransactionAdapter) => Promise<R>) =>
+	(adapter: DBAdapter<BetterAuthOptions>) =>
+	<R>(fn: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>) =>
 		fn(adapter);
 
-export type AdapterFactory = (options: BetterAuthOptions) => Adapter;
+export type AdapterFactory = (
+	options: BetterAuthOptions,
+) => DBAdapter<BetterAuthOptions>;
 
 export const createAdapterFactory =
 	({
 		adapter: customAdapter,
 		config: cfg,
 	}: AdapterFactoryOptions): AdapterFactory =>
-	(options: BetterAuthOptions): Adapter => {
+	(options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		const uniqueAdapterFactoryInstanceId = Math.random()
 			.toString(36)
 			.substring(2, 15);
@@ -517,6 +519,8 @@ export const createAdapterFactory =
 					}
 				}
 
+				let newValue = value;
+
 				const defaultModelName = getDefaultModelName(model);
 				const defaultFieldName = getDefaultFieldName({
 					field: unsafe_field,
@@ -540,19 +544,42 @@ export const createAdapterFactory =
 				) {
 					if (options.advanced?.database?.useNumberId) {
 						if (Array.isArray(value)) {
-							return {
-								operator,
-								connector,
-								field: fieldName,
-								value: value.map(Number),
-							} satisfies CleanedWhere;
+							newValue = value.map(Number);
+						} else {
+							newValue = Number(value);
 						}
-						return {
-							operator,
-							connector,
-							field: fieldName,
-							value: Number(value),
-						} satisfies CleanedWhere;
+					}
+				}
+
+				if (
+					fieldAttr.type === "date" &&
+					value instanceof Date &&
+					!config.supportsDates
+				) {
+					newValue = value.toISOString();
+				}
+
+				if (
+					fieldAttr.type === "boolean" &&
+					typeof value === "boolean" &&
+					!config.supportsBooleans
+				) {
+					newValue = value ? 1 : 0;
+				}
+
+				if (
+					fieldAttr.type === "json" &&
+					typeof value === "object" &&
+					!config.supportsJSON
+				) {
+					try {
+						const stringifiedJSON = JSON.stringify(value);
+						newValue = stringifiedJSON;
+					} catch (error) {
+						throw new Error(
+							`Failed to stringify JSON value for field ${fieldName}`,
+							{ cause: error },
+						);
 					}
 				}
 
@@ -560,7 +587,7 @@ export const createAdapterFactory =
 					operator,
 					connector,
 					field: fieldName,
-					value: value,
+					value: newValue,
 				} satisfies CleanedWhere;
 			}) as any;
 		};
@@ -579,8 +606,10 @@ export const createAdapterFactory =
 			transformWhereClause,
 		});
 
-		let lazyLoadTransaction: Adapter["transaction"] | null = null;
-		const adapter: Adapter = {
+		let lazyLoadTransaction:
+			| DBAdapter<BetterAuthOptions>["transaction"]
+			| null = null;
+		const adapter: DBAdapter<BetterAuthOptions> = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
