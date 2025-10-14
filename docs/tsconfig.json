@@ -2,11 +2,7 @@
   "compilerOptions": {
     "baseUrl": ".",
     "target": "ESNext",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -20,12 +16,8 @@
     "jsx": "react-jsx",
     "incremental": true,
     "paths": {
-      "@/.source": [
-        "./.source/index.ts"
-      ],
-      "@/*": [
-        "./*"
-      ]
+      "@/.source": ["./.source/index.ts"],
+      "@/*": ["./*"]
     },
     "plugins": [
       {

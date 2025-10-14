@@ -88,7 +88,10 @@ const html = (
             height: 100vh;
         "
         >
-${custom?.disableBackgroundGrid ? "" : `
+${
+	custom?.disableBackgroundGrid
+		? ""
+		: `
       <div
         style="
           position: absolute;
@@ -102,7 +105,8 @@ ${custom?.disableBackgroundGrid ? "" : `
           height: 100vh;
         "
       ></div>
-`}
+`
+}
 
 <div
   style="

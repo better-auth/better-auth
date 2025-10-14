@@ -1135,7 +1135,7 @@ export type BetterAuthOptions = {
 				cardBackground?: string;
 				cornerBorder?: string;
 			};
-			size?:{
+			size?: {
 				radiusSm?: string;
 				radiusMd?: string;
 				radiusLg?: string;
