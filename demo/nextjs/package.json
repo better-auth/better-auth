@@ -82,6 +82,7 @@
     "server-only": "^0.0.1",
     "shiki": "^3.12.2",
     "sonner": "^2.0.7",
+    "stripe": "^18.5.0",
     "tailwind-merge": "^3.3.1",
     "ua-parser-js": "^2.0.4",
     "vaul": "^1.1.2",
