@@ -28,13 +28,18 @@ export const callbackOAuth = createAuthEndpoint(
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
 
-		const getErrorURL = (error: string, description?: string) => {
+		const getErrorURL = (
+			error: string,
+			description?: string,
+			defaultURL?: string,
+		) => {
 			return c.context.getErrorURL({
 				error,
 				description,
-				ctx: c
+				ctx: c,
+				defaultURL,
 			});
-		}
+		};
 
 		try {
 			if (c.method === "GET") {
@@ -66,7 +71,7 @@ export const callbackOAuth = createAuthEndpoint(
 		} = await parseState(c);
 
 		async function redirectOnError(error: string, description?: string) {
-			const url = await getErrorURL(error, description);
+			const url = await getErrorURL(error, description, errorURL);
 			throw c.redirect(url);
 		}
 
@@ -147,7 +152,9 @@ export const callbackOAuth = createAuthEndpoint(
 
 			if (existingAccount) {
 				if (existingAccount.userId.toString() !== link.userId.toString()) {
-					return await redirectOnError("account_already_linked_to_different_user");
+					return await redirectOnError(
+						"account_already_linked_to_different_user",
+					);
 				}
 				const updateData = Object.fromEntries(
 					Object.entries({
