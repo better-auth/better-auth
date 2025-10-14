@@ -1,11 +1,11 @@
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { globalLog } from "../env";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
 	refreshAccessToken,
-} from "@better-auth/core/oauth2";
+} from "../oauth2";
 import { decodeJwt } from "jose";
-import { globalLog } from "@better-auth/core/env";
 
 /**
  * @see https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/#requesting-claims

@@ -2,12 +2,12 @@ import {
 	validateAuthorizationCode,
 	createAuthorizationURL,
 	refreshAccessToken,
-} from "@better-auth/core/oauth2";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
+} from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { betterFetch } from "@better-fetch/fetch";
+import { globalLog } from "../env";
 import { decodeJwt } from "jose";
 import { base64 } from "@better-auth/utils/base64";
-import { globalLog } from "@better-auth/core/env";
 
 /**
  * @see [Microsoft Identity Platform - Optional claims reference](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference)

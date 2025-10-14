@@ -15,7 +15,7 @@ import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Logger } from "./logger";
 import type { AuthContext, GenericEndpointContext } from "./context";
 import type { AuthMiddleware } from "../middleware";
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { BetterAuthPlugin } from "..";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type OmitId<T extends { id: unknown }> = Omit<T, "id">;
