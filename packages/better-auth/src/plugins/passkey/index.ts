@@ -163,91 +163,96 @@ export const passkey = (options?: PasskeyOptions) => {
 											schema: {
 												type: "object",
 												properties: {
-													challenge: {
-														type: "string",
-													},
-													rp: {
+													data: {
 														type: "object",
 														properties: {
-															name: {
+															challenge: {
 																type: "string",
 															},
-															id: {
-																type: "string",
-															},
-														},
-													},
-													user: {
-														type: "object",
-														properties: {
-															id: {
-																type: "string",
-															},
-															name: {
-																type: "string",
-															},
-															displayName: {
-																type: "string",
-															},
-														},
-													},
-													pubKeyCredParams: {
-														type: "array",
-														items: {
-															type: "object",
-															properties: {
-																type: {
-																	type: "string",
-																},
-																alg: {
-																	type: "number",
-																},
-															},
-														},
-													},
-													timeout: {
-														type: "number",
-													},
-													excludeCredentials: {
-														type: "array",
-														items: {
-															type: "object",
-															properties: {
-																id: {
-																	type: "string",
-																},
-																type: {
-																	type: "string",
-																},
-																transports: {
-																	type: "array",
-																	items: {
+															rp: {
+																type: "object",
+																properties: {
+																	name: {
+																		type: "string",
+																	},
+																	id: {
 																		type: "string",
 																	},
 																},
 															},
-														},
-													},
-													authenticatorSelection: {
-														type: "object",
-														properties: {
-															authenticatorAttachment: {
+															user: {
+																type: "object",
+																properties: {
+																	id: {
+																		type: "string",
+																	},
+																	name: {
+																		type: "string",
+																	},
+																	displayName: {
+																		type: "string",
+																	},
+																},
+															},
+															pubKeyCredParams: {
+																type: "array",
+																items: {
+																	type: "object",
+																	properties: {
+																		type: {
+																			type: "string",
+																		},
+																		alg: {
+																			type: "number",
+																		},
+																	},
+																},
+															},
+															timeout: {
+																type: "number",
+															},
+															excludeCredentials: {
+																type: "array",
+																items: {
+																	type: "object",
+																	properties: {
+																		id: {
+																			type: "string",
+																		},
+																		type: {
+																			type: "string",
+																		},
+																		transports: {
+																			type: "array",
+																			items: {
+																				type: "string",
+																			},
+																		},
+																	},
+																},
+															},
+															authenticatorSelection: {
+																type: "object",
+																properties: {
+																	authenticatorAttachment: {
+																		type: "string",
+																	},
+																	requireResidentKey: {
+																		type: "boolean",
+																	},
+																	userVerification: {
+																		type: "string",
+																	},
+																},
+															},
+															attestation: {
 																type: "string",
 															},
-															requireResidentKey: {
-																type: "boolean",
-															},
-															userVerification: {
-																type: "string",
-															},
-														},
-													},
-													attestation: {
-														type: "string",
-													},
 
-													extensions: {
-														type: "object",
+															extensions: {
+																type: "object",
+															},
+														},
 													},
 												},
 											},
@@ -323,9 +328,12 @@ export const passkey = (options?: PasskeyOptions) => {
 						},
 						ctx,
 					);
-					return ctx.json(options, {
-						status: 200,
-					});
+					return ctx.json(
+						{ data: options },
+						{
+							status: 200,
+						},
+					);
 				},
 			),
 			generatePasskeyAuthenticationOptions: createAuthEndpoint(
@@ -343,76 +351,81 @@ export const passkey = (options?: PasskeyOptions) => {
 											schema: {
 												type: "object",
 												properties: {
-													challenge: {
-														type: "string",
-													},
-													rp: {
+													data: {
 														type: "object",
 														properties: {
-															name: {
+															challenge: {
 																type: "string",
 															},
-															id: {
-																type: "string",
-															},
-														},
-													},
-													user: {
-														type: "object",
-														properties: {
-															id: {
-																type: "string",
-															},
-															name: {
-																type: "string",
-															},
-															displayName: {
-																type: "string",
-															},
-														},
-													},
-													timeout: {
-														type: "number",
-													},
-													allowCredentials: {
-														type: "array",
-														items: {
-															type: "object",
-															properties: {
-																id: {
-																	type: "string",
-																},
-																type: {
-																	type: "string",
-																},
-																transports: {
-																	type: "array",
-																	items: {
+															rp: {
+																type: "object",
+																properties: {
+																	name: {
+																		type: "string",
+																	},
+																	id: {
 																		type: "string",
 																	},
 																},
 															},
-														},
-													},
-													userVerification: {
-														type: "string",
-													},
-													authenticatorSelection: {
-														type: "object",
-														properties: {
-															authenticatorAttachment: {
-																type: "string",
+															user: {
+																type: "object",
+																properties: {
+																	id: {
+																		type: "string",
+																	},
+																	name: {
+																		type: "string",
+																	},
+																	displayName: {
+																		type: "string",
+																	},
+																},
 															},
-															requireResidentKey: {
-																type: "boolean",
+															timeout: {
+																type: "number",
+															},
+															allowCredentials: {
+																type: "array",
+																items: {
+																	type: "object",
+																	properties: {
+																		id: {
+																			type: "string",
+																		},
+																		type: {
+																			type: "string",
+																		},
+																		transports: {
+																			type: "array",
+																			items: {
+																				type: "string",
+																			},
+																		},
+																	},
+																},
 															},
 															userVerification: {
 																type: "string",
 															},
+															authenticatorSelection: {
+																type: "object",
+																properties: {
+																	authenticatorAttachment: {
+																		type: "string",
+																	},
+																	requireResidentKey: {
+																		type: "boolean",
+																	},
+																	userVerification: {
+																		type: "string",
+																	},
+																},
+															},
+															extensions: {
+																type: "object",
+															},
 														},
-													},
-													extensions: {
-														type: "object",
 													},
 												},
 											},
@@ -478,9 +491,12 @@ export const passkey = (options?: PasskeyOptions) => {
 						},
 						ctx,
 					);
-					return ctx.json(options, {
-						status: 200,
-					});
+					return ctx.json(
+						{ data: options },
+						{
+							status: 200,
+						},
+					);
 				},
 			),
 			verifyPasskeyRegistration: createAuthEndpoint(
@@ -506,7 +522,12 @@ export const passkey = (options?: PasskeyOptions) => {
 									content: {
 										"application/json": {
 											schema: {
-												$ref: "#/components/schemas/Passkey",
+												type: "object",
+												properties: {
+													data: {
+														$ref: "#/components/schemas/Passkey",
+													},
+												},
 											},
 										},
 									},
@@ -602,9 +623,12 @@ export const passkey = (options?: PasskeyOptions) => {
 							model: "passkey",
 							data: newPasskey,
 						});
-						return ctx.json(newPasskeyRes, {
-							status: 200,
-						});
+						return ctx.json(
+							{ data: newPasskeyRes },
+							{
+								status: 200,
+							},
+						);
 					} catch (e) {
 						console.log(e);
 						throw new APIError("INTERNAL_SERVER_ERROR", {

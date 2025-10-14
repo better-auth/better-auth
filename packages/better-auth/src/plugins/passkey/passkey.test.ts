@@ -15,11 +15,11 @@ describe("passkey", async () => {
 			headers: headers,
 		});
 
-		expect(options).toBeDefined();
-		expect(options).toHaveProperty("challenge");
-		expect(options).toHaveProperty("rp");
-		expect(options).toHaveProperty("user");
-		expect(options).toHaveProperty("pubKeyCredParams");
+		expect(options.data).toBeDefined();
+		expect(options.data).toHaveProperty("challenge");
+		expect(options.data).toHaveProperty("rp");
+		expect(options.data).toHaveProperty("user");
+		expect(options.data).toHaveProperty("pubKeyCredParams");
 
 		const client = createAuthClient({
 			plugins: [passkeyClient()],
@@ -46,20 +46,20 @@ describe("passkey", async () => {
 		const options = await auth.api.generatePasskeyAuthenticationOptions({
 			headers: headers,
 		});
-		expect(options).toBeDefined();
-		expect(options).toHaveProperty("challenge");
-		expect(options).toHaveProperty("rpId");
-		expect(options).toHaveProperty("allowCredentials");
-		expect(options).toHaveProperty("userVerification");
+		expect(options.data).toBeDefined();
+		expect(options.data).toHaveProperty("challenge");
+		expect(options.data).toHaveProperty("rpId");
+		expect(options.data).toHaveProperty("allowCredentials");
+		expect(options.data).toHaveProperty("userVerification");
 	});
 
 	it("should generate authenticate options without session (discoverable credentials)", async () => {
 		// Test without any session/auth headers - simulating a new sign-in with discoverable credentials
 		const options = await auth.api.generatePasskeyAuthenticationOptions({});
-		expect(options).toBeDefined();
-		expect(options).toHaveProperty("challenge");
-		expect(options).toHaveProperty("rpId");
-		expect(options).toHaveProperty("userVerification");
+		expect(options.data).toBeDefined();
+		expect(options.data).toHaveProperty("challenge");
+		expect(options.data).toHaveProperty("rpId");
+		expect(options.data).toHaveProperty("userVerification");
 	});
 
 	it("should list user passkeys", async () => {
