@@ -1,15 +1,15 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.0-beta.9",
+  "version": "1.4.0-beta.10",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "exports": {
     ".": {
       "import": {
         "types": "./dist/index.d.ts",
-        "default": "./dist/index.mjs"
+        "default": "./dist/index.js"
       },
       "require": {
         "types": "./dist/index.d.cts",
@@ -19,17 +19,27 @@
     "./async_hooks": {
       "import": {
         "types": "./dist/async_hooks/index.d.ts",
-        "default": "./dist/async_hooks/index.mjs"
+        "default": "./dist/async_hooks/index.js"
       },
       "require": {
         "types": "./dist/async_hooks/index.d.cts",
         "default": "./dist/async_hooks/index.cjs"
       }
     },
+    "./context": {
+      "import": {
+        "types": "./dist/context/index.d.ts",
+        "default": "./dist/context/index.js"
+      },
+      "require": {
+        "types": "./dist/context/index.d.cts",
+        "default": "./dist/context/index.cjs"
+      }
+    },
     "./env": {
       "import": {
         "types": "./dist/env/index.d.ts",
-        "default": "./dist/env/index.mjs"
+        "default": "./dist/env/index.js"
       },
       "require": {
         "types": "./dist/env/index.d.cts",
@@ -39,7 +49,7 @@
     "./error": {
       "import": {
         "types": "./dist/error/index.d.ts",
-        "default": "./dist/error/index.mjs"
+        "default": "./dist/error/index.js"
       },
       "require": {
         "types": "./dist/error/index.d.cts",
@@ -49,7 +59,7 @@
     "./utils": {
       "import": {
         "types": "./dist/utils/index.d.ts",
-        "default": "./dist/utils/index.mjs"
+        "default": "./dist/utils/index.js"
       },
       "require": {
         "types": "./dist/utils/index.d.cts",
@@ -59,7 +69,7 @@
     "./social-providers": {
       "import": {
         "types": "./dist/social-providers/index.d.ts",
-        "default": "./dist/social-providers/index.mjs"
+        "default": "./dist/social-providers/index.js"
       },
       "require": {
         "types": "./dist/social-providers/index.d.cts",
@@ -69,7 +79,7 @@
     "./db": {
       "import": {
         "types": "./dist/db/index.d.ts",
-        "default": "./dist/db/index.mjs"
+        "default": "./dist/db/index.js"
       },
       "require": {
         "types": "./dist/db/index.d.cts",
@@ -79,7 +89,7 @@
     "./db/adapter": {
       "import": {
         "types": "./dist/db/adapter/index.d.ts",
-        "default": "./dist/db/adapter/index.mjs"
+        "default": "./dist/db/adapter/index.js"
       },
       "require": {
         "types": "./dist/db/adapter/index.d.cts",
@@ -89,7 +99,7 @@
     "./oauth2": {
       "import": {
         "types": "./dist/oauth2/index.d.ts",
-        "default": "./dist/oauth2/index.mjs"
+        "default": "./dist/oauth2/index.js"
       },
       "require": {
         "types": "./dist/oauth2/index.d.cts",
@@ -99,7 +109,7 @@
     "./middleware": {
       "import": {
         "types": "./dist/middleware/index.d.ts",
-        "default": "./dist/middleware/index.mjs"
+        "default": "./dist/middleware/index.js"
       },
       "require": {
         "types": "./dist/middleware/index.d.cts",
@@ -142,8 +152,8 @@
     }
   },
   "scripts": {
-    "build": "unbuild --clean",
-    "stub": "unbuild --stub",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
@@ -155,7 +165,7 @@
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
     "nanostores": "^1.0.1",
-    "unbuild": "catalog:"
+    "tsdown": "catalog:"
   },
   "dependencies": {
     "zod": "^4.1.5"
