@@ -1,5 +1,11 @@
-import { createEndpoint, createMiddleware } from "better-call";
+import {
+	createEndpoint,
+	createMiddleware,
+	type EndpointContext,
+	type EndpointOptions,
+} from "better-call";
 import type { AuthContext } from "../types";
+import { runWithEndpointContext } from "../context";
 
 export const optionsMiddleware = createMiddleware(async () => {
 	/**
@@ -25,9 +31,27 @@ export const createAuthMiddleware = createMiddleware.create({
 	],
 });
 
-export const createAuthEndpoint = createEndpoint.create({
-	use: [optionsMiddleware],
-});
+const use = [optionsMiddleware];
+
+export const createAuthEndpoint = <
+	Path extends string,
+	Opts extends EndpointOptions,
+	R,
+>(
+	path: Path,
+	options: Opts,
+	handler: (ctx: EndpointContext<Path, Opts, AuthContext>) => Promise<R>,
+) => {
+	return createEndpoint(
+		path,
+		{
+			...options,
+			use: [...(options?.use || []), ...use],
+		},
+		// todo: prettify the code, we want to call `runWithEndpointContext` to top level
+		(ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
+	);
+};
 
 export type AuthEndpoint = ReturnType<typeof createAuthEndpoint>;
 export type AuthMiddleware = ReturnType<typeof createAuthMiddleware>;
