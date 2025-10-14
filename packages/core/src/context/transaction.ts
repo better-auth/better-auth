@@ -1,16 +1,8 @@
-import {
-	getAsyncLocalStorage,
-	type AsyncLocalStorage,
-} from "@better-auth/core/async_hooks";
-import type {
-	DBTransactionAdapter,
-	DBAdapter,
-} from "@better-auth/core/db/adapter";
-import type { BetterAuthOptions } from "@better-auth/core";
+import { getAsyncLocalStorage, type AsyncLocalStorage } from "../async_hooks";
+import type { DBTransactionAdapter, DBAdapter } from "../db/adapter";
 
-let currentAdapterAsyncStorage: AsyncLocalStorage<
-	DBTransactionAdapter<BetterAuthOptions>
-> | null = null;
+let currentAdapterAsyncStorage: AsyncLocalStorage<DBTransactionAdapter> | null =
+	null;
 
 const ensureAsyncStorage = async () => {
 	if (!currentAdapterAsyncStorage) {
@@ -21,8 +13,8 @@ const ensureAsyncStorage = async () => {
 };
 
 export const getCurrentAdapter = async (
-	fallback: DBTransactionAdapter<BetterAuthOptions>,
-): Promise<DBTransactionAdapter<BetterAuthOptions>> => {
+	fallback: DBTransactionAdapter,
+): Promise<DBTransactionAdapter> => {
 	return ensureAsyncStorage()
 		.then((als) => {
 			return als.getStore() || fallback;
@@ -33,7 +25,7 @@ export const getCurrentAdapter = async (
 };
 
 export const runWithAdapter = async <R>(
-	adapter: DBAdapter<BetterAuthOptions>,
+	adapter: DBAdapter,
 	fn: () => R,
 ): Promise<R> => {
 	let called = true;
@@ -51,7 +43,7 @@ export const runWithAdapter = async <R>(
 };
 
 export const runWithTransaction = async <R>(
-	adapter: DBAdapter<BetterAuthOptions>,
+	adapter: DBAdapter,
 	fn: () => R,
 ): Promise<R> => {
 	let called = true;
