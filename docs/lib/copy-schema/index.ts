@@ -6,7 +6,6 @@ import type {
 	CopySchemaOptions,
 	DBSchema,
 	DefaultDialects,
-	InferConditions,
 	Resolver,
 	ResolverContext,
 } from "./types";
@@ -20,7 +19,7 @@ const defaultResolvers: Record<DefaultDialects, Resolver> = {
 
 export const copySchema = <
 	const S extends DBSchema,
-	O extends CopySchemaOptions<S>,
+	O extends CopySchemaOptions,
 >(
 	schema: S,
 	options: O,
@@ -32,16 +31,14 @@ export const copySchema = <
 
 	const filteredSchema = {
 		...schema,
-		fields: Object.fromEntries(
-			Object.entries(schema.fields).filter(([_key, field]) => {
-				const condition = field.condition;
-				if (!condition) {
-					return true;
-				}
-				field.condition = undefined;
-				return options.conditions?.[condition as InferConditions<S>] ?? false;
-			}),
-		),
+		fields: schema.fields.filter((field) => {
+			const condition = field.condition;
+			if (!condition) {
+				return true;
+			}
+			field.condition = undefined;
+			return options.conditions?.[condition] ?? false;
+		}),
 	};
 
 	const ctx: ResolverContext = {

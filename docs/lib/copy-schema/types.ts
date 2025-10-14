@@ -7,9 +7,9 @@ type SharedOptions = {
 	useNumberId?: boolean;
 };
 
-export type CopySchemaOptions<S extends DBSchema = DBSchema> = SharedOptions & {
+export type CopySchemaOptions = SharedOptions & {
 	dialect: DefaultDialects | Resolver;
-	conditions?: Partial<Record<InferConditions<S>, boolean>>;
+	conditions?: Record<string, boolean>;
 };
 
 export type ResolverContext = Required<SharedOptions> & {
@@ -64,6 +64,10 @@ export type DBFieldAttribute = {
 	 */
 	bigint?: boolean;
 	/**
+	 * The name of the field on the database.
+	 */
+	fieldName: string;
+	/**
 	 * If the field should be sortable.
 	 *
 	 * applicable only for `text` type.
@@ -80,21 +84,10 @@ export type DBSchema<WithCondition extends boolean = true> = {
 	/**
 	 * The fields of the table
 	 */
-	fields: Record<
-		string,
-		DBFieldAttribute &
-			(WithCondition extends true
-				? {
-						condition?: string;
-					}
-				: {})
-	>;
+	fields: (DBFieldAttribute &
+		(WithCondition extends true
+			? {
+					condition?: string;
+				}
+			: {}))[];
 };
-
-export type InferConditions<T extends DBSchema> = {
-	[K in keyof T["fields"]]: T["fields"][K] extends {
-		condition: infer C extends string;
-	}
-		? C
-		: never;
-}[keyof T["fields"]];

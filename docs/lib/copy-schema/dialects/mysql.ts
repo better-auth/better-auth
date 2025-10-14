@@ -2,7 +2,6 @@ import type { Resolver } from "../types";
 import { getTypeFactory } from "../utils";
 
 export const mysqlResolver = (({ schema, useNumberId }) => {
-	const fields = Object.entries(schema.fields);
 	const lines = [`CREATE TABLE IF NOT EXISTS \`${schema.modelName}\` (`];
 
 	const getType = getTypeFactory((field) => ({
@@ -19,14 +18,14 @@ export const mysqlResolver = (({ schema, useNumberId }) => {
 		foreignKeyId: useNumberId ? "integer" : "text",
 	}));
 
-	for (const [fieldName, field] of fields) {
-		let newLine = `\`${fieldName}\` ${getType(field, fieldName)}`;
+	for (const field of schema.fields) {
+		let newLine = `\`${field.fieldName}\` ${getType(field, field.fieldName)}`;
 
 		if (field.required !== false) {
 			newLine += " NOT NULL";
 		}
 
-		if (fieldName === "id") {
+		if (field.fieldName === "id") {
 			if (useNumberId) {
 				newLine += " AUTO_INCREMENT";
 			}
@@ -41,10 +40,8 @@ export const mysqlResolver = (({ schema, useNumberId }) => {
 		lines.push(newLine);
 	}
 
-	for (const [fieldName, field] of fields.filter(
-		([_, { references }]) => !!references,
-	)) {
-		let newLine = `FOREIGN KEY (\`${fieldName}\`) REFERENCES \`${field.references!.model}\`(\`${field.references!.field}\`)`;
+	for (const field of schema.fields.filter(({ references }) => !!references)) {
+		let newLine = `FOREIGN KEY (\`${field.fieldName}\`) REFERENCES \`${field.references!.model}\`(\`${field.references!.field}\`)`;
 
 		if (field.references!.onDelete) {
 			newLine += ` ON DELETE ${field.references!.onDelete.toUpperCase()}`;
