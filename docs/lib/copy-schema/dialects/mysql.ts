@@ -19,7 +19,7 @@ export const mysqlResolver = (({ schema, useNumberId }) => {
 	}));
 
 	for (const field of schema.fields) {
-		let newLine = `\`${field.fieldName}\` ${getType(field, field.fieldName)}`;
+		let newLine = `\t\`${field.fieldName}\` ${getType(field, field.fieldName)}`;
 
 		if (field.required !== false) {
 			newLine += " NOT NULL";
@@ -41,7 +41,7 @@ export const mysqlResolver = (({ schema, useNumberId }) => {
 	}
 
 	for (const field of schema.fields.filter(({ references }) => !!references)) {
-		let newLine = `FOREIGN KEY (\`${field.fieldName}\`) REFERENCES \`${field.references!.model}\`(\`${field.references!.field}\`)`;
+		let newLine = `\tFOREIGN KEY (\`${field.fieldName}\`) REFERENCES \`${field.references!.model}\`(\`${field.references!.field}\`)`;
 
 		if (field.references!.onDelete) {
 			newLine += ` ON DELETE ${field.references!.onDelete.toUpperCase()}`;
@@ -50,8 +50,10 @@ export const mysqlResolver = (({ schema, useNumberId }) => {
 		newLine += ",";
 		lines.push(newLine);
 	}
-	if (lines[lines.length].endsWith(",")) {
-		lines[lines.length] = lines[lines.length].slice(0, -1);
+
+	const lastLineIdx = lines.length - 1;
+	if (lines[lastLineIdx].endsWith(",")) {
+		lines[lastLineIdx] = lines[lastLineIdx].slice(0, -1);
 	}
 	lines.push(`);`);
 	return lines.join("\n");
