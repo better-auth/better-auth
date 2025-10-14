@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { APIError } from "better-call";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import type { InferOptionSchema } from "../../types/plugins";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { generateRandomString } from "../../crypto";

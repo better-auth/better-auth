@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import {

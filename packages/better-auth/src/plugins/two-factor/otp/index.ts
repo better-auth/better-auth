@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { verifyTwoFactor } from "../verify-two-factor";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";

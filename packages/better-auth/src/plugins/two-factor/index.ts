@@ -3,7 +3,7 @@ import * as z from "zod";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import { sessionMiddleware } from "../../api";
 import { symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "@better-auth/core";

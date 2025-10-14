@@ -5,10 +5,7 @@ import {
 	type InputContext,
 	toResponse,
 } from "better-call";
-import type {
-	AuthEndpoint,
-	AuthMiddleware,
-} from "@better-auth/core/middleware";
+import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
 import { createDefu } from "defu";
 import { shouldPublishLog } from "@better-auth/core/env";
 import type { AuthContext, HookEndpointContext } from "@better-auth/core";

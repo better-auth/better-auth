@@ -1,5 +1,5 @@
 import { APIError } from "../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { setSessionCookie } from "../../cookies";
 import * as z from "zod";
 import type { InferOptionSchema } from "../../types";

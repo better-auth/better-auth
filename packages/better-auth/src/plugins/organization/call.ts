@@ -1,5 +1,5 @@
 import type { Session, User } from "../../types";
-import { createAuthMiddleware } from "@better-auth/core/middleware";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { sessionMiddleware } from "../../api";
 import type { Role } from "../access";
 import type { OrganizationOptions } from "./types";

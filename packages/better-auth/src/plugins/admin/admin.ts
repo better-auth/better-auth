@@ -3,7 +3,7 @@ import { APIError, getSessionFromCtx } from "../../api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import { type Session } from "../../types";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import type { Where } from "@better-auth/core/db/adapter";
