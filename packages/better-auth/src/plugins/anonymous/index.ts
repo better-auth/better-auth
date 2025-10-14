@@ -192,7 +192,8 @@ export const anonymous = (options?: AnonymousOptions) => {
 							ctx.path.startsWith("/magic-link/verify") ||
 							ctx.path.startsWith("/email-otp/verify-email") ||
 							ctx.path.startsWith("/one-tap/callback") ||
-							ctx.path.startsWith("/passkey/verify-authentication")
+							ctx.path.startsWith("/passkey/verify-authentication") ||
+							ctx.path.startsWith("/phone-number/verify")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
