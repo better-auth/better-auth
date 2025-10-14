@@ -27,67 +27,24 @@ const formatField = (field: DBFieldAttribute, ctx: CustomResolverContext) => {
 	return out;
 };
 
-const resolvers: Record<
-	"create" | "alter",
-	(ctx: CustomResolverContext) => string
-> = {
-	create: (ctx) => {
-		const lines = [`CREATE TABLE IF NOT EXISTS \`${ctx.schema.modelName}\` (`];
+const formatForeignKey = (
+	field: DBFieldAttribute,
+	ctx: CustomResolverContext,
+) => {
+	let newLine = `FOREIGN KEY (\`${field.fieldName}\`) REFERENCES \`${field.references!.model}\`(\`${field.references!.field}\`)`;
 
-		for (const field of ctx.schema.fields) {
-			lines.push(`\t${formatField(field, ctx)}`);
-		}
+	if (field.references!.onDelete) {
+		newLine += ` ON DELETE ${field.references!.onDelete.toUpperCase()}`;
+	}
 
-		for (const field of ctx.schema.fields.filter(
-			({ references }) => !!references,
-		)) {
-			let newLine = `\tFOREIGN KEY (\`${field.fieldName}\`) REFERENCES \`${field.references!.model}\`(\`${field.references!.field}\`)`;
-
-			if (field.references!.onDelete) {
-				newLine += ` ON DELETE ${field.references!.onDelete.toUpperCase()}`;
-			}
-
-			newLine += ",";
-			lines.push(newLine);
-		}
-
-		const lastLineIdx = lines.length - 1;
-		if (lines[lastLineIdx].endsWith(",")) {
-			lines[lastLineIdx] = lines[lastLineIdx].slice(0, -1);
-		}
-		lines.push(`);`);
-		return lines.join("\n");
-	},
-	alter: (ctx) => {
-		const lines = [`ALTER TABLE \`${ctx.schema.modelName}\``];
-
-		for (const field of ctx.schema.fields) {
-			const newLine = `\tADD COLUMN ${formatField(field, ctx)}`;
-			lines.push(newLine);
-		}
-
-		for (const field of ctx.schema.fields.filter(
-			({ references }) => !!references,
-		)) {
-			let newLine = `\tADD FOREIGN KEY (\`${field.fieldName}\`) REFERENCES \`${field.references!.model}\`(\`${field.references!.field}\`)`;
-
-			if (field.references!.onDelete) {
-				newLine += ` ON DELETE ${field.references!.onDelete.toUpperCase()}`;
-			}
-
-			newLine += ",";
-			lines.push(newLine);
-		}
-
-		const lastLineIdx = lines.length - 1;
-		if (lines[lastLineIdx].endsWith(",")) {
-			lines[lastLineIdx] = `${lines[lastLineIdx].slice(0, -1)};`;
-		}
-		return lines.join("\n");
-	},
+	newLine += ",";
 };
 
-export const mysqlResolver = (({ useNumberId, mode, schema }) => {
+const filterForeignKeys = ({ fields }: { fields: DBFieldAttribute[] }) => {
+	return fields.filter(({ references }) => !!references);
+};
+
+export const mysqlResolver = ((ctx) => {
 	const getType = getTypeFactory((field) => ({
 		string: field.unique
 			? "varchar(255)"
@@ -98,14 +55,39 @@ export const mysqlResolver = (({ useNumberId, mode, schema }) => {
 		number: field.bigint ? "bigint" : "integer",
 		date: "timestamp(3)",
 		json: "json",
-		id: useNumberId ? "integer" : "varchar(36)",
-		foreignKeyId: useNumberId ? "integer" : "text",
+		id: ctx.useNumberId ? "integer" : "varchar(36)",
+		foreignKeyId: ctx.useNumberId ? "integer" : "text",
 	}));
-
-	return resolvers[mode]({
+	const context: CustomResolverContext = {
+		...ctx,
 		getType,
-		mode,
-		schema,
-		useNumberId,
-	});
+	};
+
+	const lines = [
+		ctx.mode === "create"
+			? `CREATE TABLE IF NOT EXISTS \`${ctx.schema.modelName}\` (`
+			: `ALTER TABLE \`${ctx.schema.modelName}\``,
+	];
+
+	for (const field of ctx.schema.fields) {
+		lines.push(
+			`\t${ctx.mode === "alter" ? "ADD COLUMN " : ""}${formatField(field, context)}`,
+		);
+	}
+
+	for (const field of filterForeignKeys(ctx.schema)) {
+		lines.push(
+			`\t${ctx.mode === "alter" ? "ADD " : ""}${formatForeignKey(field, context)}`,
+		);
+	}
+
+	const lastLineIdx = lines.length - 1;
+	if (lines[lastLineIdx].endsWith(",")) {
+		const str = lines[lastLineIdx].slice(0, -1);
+		lines[lastLineIdx] = ctx.mode === "create" ? str : `${str};`;
+	}
+	if (ctx.mode === "create") {
+		lines.push(`);`);
+	}
+	return lines.join("\n");
 }) satisfies Resolver;
