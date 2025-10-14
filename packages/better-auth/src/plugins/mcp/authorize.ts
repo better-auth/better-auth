@@ -8,12 +8,6 @@ import type {
 import { generateRandomString } from "../../crypto";
 import type { GenericEndpointContext } from "@better-auth/core";
 
-function redirectErrorURL(url: string, error: string, description: string) {
-	return `${
-		url.includes("?") ? "&" : "?"
-	}error=${error}&error_description=${description}`;
-}
-
 export async function authorizeMCPOAuth(
 	ctx: GenericEndpointContext,
 	options: OIDCOptions,
@@ -63,16 +57,21 @@ export async function authorizeMCPOAuth(
 	const query = ctx.query as AuthorizationQuery;
 	console.log(query);
 	if (!query.client_id) {
-		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
+		throw ctx.redirect(
+			await ctx.context.getErrorURL({
+				error: "invalid_client",
+				ctx,
+			}),
+		);
 	}
 
 	if (!query.response_type) {
 		throw ctx.redirect(
-			redirectErrorURL(
-				`${ctx.context.baseURL}/error`,
-				"invalid_request",
-				"response_type is required",
-			),
+			await ctx.context.getErrorURL({
+				error: "invalid_request",
+				description: "response_type is required",
+				ctx,
+			}),
 		);
 	}
 
@@ -98,7 +97,12 @@ export async function authorizeMCPOAuth(
 		});
 	console.log(client);
 	if (!client) {
-		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
+		throw ctx.redirect(
+			await ctx.context.getErrorURL({
+				error: "invalid_client",
+				ctx,
+			}),
+		);
 	}
 	const redirectURI = client.redirectURLs.find(
 		(url) => url === ctx.query.redirect_uri,
@@ -113,12 +117,20 @@ export async function authorizeMCPOAuth(
 		});
 	}
 	if (client.disabled) {
-		throw ctx.redirect(`${ctx.context.baseURL}/error?error=client_disabled`);
+		throw ctx.redirect(
+			await ctx.context.getErrorURL({
+				error: "client_disabled",
+				ctx,
+			}),
+		);
 	}
 
 	if (query.response_type !== "code") {
 		throw ctx.redirect(
-			`${ctx.context.baseURL}/error?error=unsupported_response_type`,
+			await ctx.context.getErrorURL({
+				error: "unsupported_response_type",
+				ctx,
+			}),
 		);
 	}
 
@@ -129,11 +141,12 @@ export async function authorizeMCPOAuth(
 	});
 	if (invalidScopes.length) {
 		throw ctx.redirect(
-			redirectErrorURL(
-				query.redirect_uri,
-				"invalid_scope",
-				`The following scopes are invalid: ${invalidScopes.join(", ")}`,
-			),
+			await ctx.context.getErrorURL({
+				error: "invalid_scope",
+				description: `The following scopes are invalid: ${invalidScopes.join(", ")}`,
+				ctx,
+				defaultURL: query.redirect_uri,
+			}),
 		);
 	}
 
@@ -142,11 +155,12 @@ export async function authorizeMCPOAuth(
 		options.requirePKCE
 	) {
 		throw ctx.redirect(
-			redirectErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"pkce is required",
-			),
+			await ctx.context.getErrorURL({
+				error: "invalid_request",
+				description: "pkce is required",
+				ctx,
+				defaultURL: query.redirect_uri,
+			}),
 		);
 	}
 
@@ -161,11 +175,12 @@ export async function authorizeMCPOAuth(
 		].includes(query.code_challenge_method?.toLowerCase() || "")
 	) {
 		throw ctx.redirect(
-			redirectErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"invalid code_challenge method",
-			),
+			await ctx.context.getErrorURL({
+				error: "invalid_request",
+				description: "invalid code_challenge method",
+				ctx,
+				defaultURL: query.redirect_uri,
+			}),
 		);
 	}
 
@@ -209,11 +224,12 @@ export async function authorizeMCPOAuth(
 		);
 	} catch (e) {
 		throw ctx.redirect(
-			redirectErrorURL(
-				query.redirect_uri,
-				"server_error",
-				"An error occurred while processing the request",
-			),
+			await ctx.context.getErrorURL({
+				error: "server_error",
+				description: "An error occurred while processing the request",
+				ctx,
+				defaultURL: query.redirect_uri,
+			}),
 		);
 	}
 

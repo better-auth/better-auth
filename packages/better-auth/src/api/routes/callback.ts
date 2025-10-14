@@ -27,8 +27,15 @@ export const callbackOAuth = createAuthEndpoint(
 	},
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
-		const defaultErrorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+
+		const getErrorURL = (error: string, description?: string) => {
+			return c.context.getErrorURL({
+				error,
+				description,
+				ctx: c
+			});
+		}
+
 		try {
 			if (c.method === "GET") {
 				queryOrBody = schema.parse(c.query);
@@ -39,16 +46,14 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} catch (e) {
 			c.context.logger.error("INVALID_CALLBACK_REQUEST", e);
-			throw c.redirect(`${defaultErrorURL}?error=invalid_callback_request`);
+			throw c.redirect(await getErrorURL("invalid_callback_request"));
 		}
 
 		const { code, error, state, error_description, device_id } = queryOrBody;
 
 		if (!state) {
 			c.context.logger.error("State not found", error);
-			const sep = defaultErrorURL.includes("?") ? "&" : "?";
-			const url = `${defaultErrorURL}${sep}state=state_not_found`;
-			throw c.redirect(url);
+			throw c.redirect(await getErrorURL("state_not_found"));
 		}
 
 		const {
@@ -60,25 +65,18 @@ export const callbackOAuth = createAuthEndpoint(
 			requestSignUp,
 		} = await parseState(c);
 
-		function redirectOnError(error: string, description?: string) {
-			const baseURL = errorURL ?? defaultErrorURL;
-
-			const params = new URLSearchParams({ error });
-			if (description) params.set("error_description", description);
-
-			const sep = baseURL.includes("?") ? "&" : "?";
-			const url = `${baseURL}${sep}${params.toString()}`;
-
+		async function redirectOnError(error: string, description?: string) {
+			const url = await getErrorURL(error, description);
 			throw c.redirect(url);
 		}
 
 		if (error) {
-			redirectOnError(error, error_description);
+			await redirectOnError(error, error_description);
 		}
 
 		if (!code) {
 			c.context.logger.error("Code not found");
-			throw redirectOnError("no_code");
+			throw await redirectOnError("no_code");
 		}
 		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.params.id,
@@ -90,7 +88,7 @@ export const callbackOAuth = createAuthEndpoint(
 				c.params.id,
 				"not found",
 			);
-			throw redirectOnError("oauth_provider_not_found");
+			throw await redirectOnError("oauth_provider_not_found");
 		}
 
 		let tokens: OAuth2Tokens;
@@ -103,7 +101,7 @@ export const callbackOAuth = createAuthEndpoint(
 			});
 		} catch (e) {
 			c.context.logger.error("", e);
-			throw redirectOnError("invalid_code");
+			throw await redirectOnError("invalid_code");
 		}
 		const userInfo = await provider
 			.getUserInfo({
@@ -114,12 +112,12 @@ export const callbackOAuth = createAuthEndpoint(
 
 		if (!userInfo) {
 			c.context.logger.error("Unable to get user info");
-			return redirectOnError("unable_to_get_user_info");
+			return await redirectOnError("unable_to_get_user_info");
 		}
 
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
-			throw redirectOnError("no_callback_url");
+			throw await redirectOnError("no_callback_url");
 		}
 
 		if (link) {
@@ -133,14 +131,14 @@ export const callbackOAuth = createAuthEndpoint(
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
 				c.context.logger.error("Unable to link account - untrusted provider");
-				return redirectOnError("unable_to_link_account");
+				return await redirectOnError("unable_to_link_account");
 			}
 
 			if (
 				userInfo.email !== link.email &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
-				return redirectOnError("email_doesn't_match");
+				return await redirectOnError("email_doesn't_match");
 			}
 
 			const existingAccount = await c.context.internalAdapter.findAccount(
@@ -149,7 +147,7 @@ export const callbackOAuth = createAuthEndpoint(
 
 			if (existingAccount) {
 				if (existingAccount.userId.toString() !== link.userId.toString()) {
-					return redirectOnError("account_already_linked_to_different_user");
+					return await redirectOnError("account_already_linked_to_different_user");
 				}
 				const updateData = Object.fromEntries(
 					Object.entries({
@@ -179,7 +177,7 @@ export const callbackOAuth = createAuthEndpoint(
 					c,
 				);
 				if (!newAccount) {
-					return redirectOnError("unable_to_link_account");
+					return await redirectOnError("unable_to_link_account");
 				}
 			}
 			let toRedirectTo: string;
@@ -196,7 +194,7 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error(
 				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
 			);
-			return redirectOnError("email_not_found");
+			return await redirectOnError("email_not_found");
 		}
 
 		const result = await handleOAuthUserInfo(c, {
@@ -220,7 +218,7 @@ export const callbackOAuth = createAuthEndpoint(
 		});
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));
-			return redirectOnError(result.error.split(" ").join("_"));
+			return await redirectOnError(result.error.split(" ").join("_"));
 		}
 		const { session, user } = result.data!;
 		await setSessionCookie(c, {

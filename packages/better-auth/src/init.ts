@@ -162,6 +162,29 @@ export const init = async (options: BetterAuthOptions) => {
 			await runMigrations();
 		},
 		publishTelemetry: publish,
+		async getErrorURL({ error: _err, description: _desc, ctx, defaultURL }) {
+			const error = encodeURIComponent(_err);
+			const description = _desc ? encodeURIComponent(_desc) : null;
+			let baseURL: string;
+			if (!options.onAPIError?.errorURL) {
+				baseURL = defaultURL || `${options.baseURL}/error`;
+			} else if (typeof options.onAPIError.errorURL === "function") {
+				baseURL = await options.onAPIError.errorURL(
+					error,
+					description ?? null,
+					ctx,
+				);
+			} else {
+				baseURL = options.onAPIError.errorURL;
+			}
+			const url = new URL(baseURL);
+			url.searchParams.set("error", error);
+			if (description) {
+				url.searchParams.set("error_description", description);
+			}
+			const formattedURL = url.toString();
+			return formattedURL;
+		},
 	};
 	const initOrPromise = runPluginInit(ctx);
 	let context: AuthContext;

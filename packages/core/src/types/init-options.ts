@@ -1115,7 +1115,13 @@ export type BetterAuthOptions = {
 		 *
 		 * @default - "/api/auth/error"
 		 */
-		errorURL?: string;
+		errorURL?:
+			| string
+			| ((
+					error: string,
+					description: string | null,
+					ctx?: GenericEndpointContext,
+			  ) => string | Promise<string>);
 	};
 	/**
 	 * Hooks

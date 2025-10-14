@@ -28,14 +28,14 @@ export async function handleOAuthUserInfo(
 			account.accountId,
 			account.providerId,
 		)
-		.catch((e) => {
+		.catch(async (e) => {
 			logger.error(
 				"Better auth was unable to query your database.\nError: ",
 				e,
 			);
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=internal_server_error`);
+			throw c.redirect(
+				await c.context.getErrorURL({ error: "internal_server_error", ctx: c }),
+			);
 		});
 	let user = dbUser?.user;
 	let isRegister = !user;

@@ -71,9 +71,12 @@ export async function parseState(c: GenericEndpointContext) {
 		c.context.logger.error("State Mismatch. Verification not found", {
 			state,
 		});
-		const errorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+		throw c.redirect(
+			await c.context.getErrorURL({
+				error: "please_restart_the_process",
+				ctx: c,
+			}),
+		);
 	}
 
 	const parsedData = z
@@ -111,18 +114,21 @@ export async function parseState(c: GenericEndpointContext) {
 		!skipStateCookieCheck &&
 		(!stateCookieValue || stateCookieValue !== state)
 	) {
-		const errorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-		throw c.redirect(`${errorURL}?error=state_mismatch`);
+		throw c.redirect(
+			await c.context.getErrorURL({ error: "state_mismatch", ctx: c }),
+		);
 	}
 	c.setCookie(stateCookie.name, "", {
 		maxAge: 0,
 	});
 	if (parsedData.expiresAt < Date.now()) {
 		await c.context.internalAdapter.deleteVerificationValue(data.id);
-		const errorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+		throw c.redirect(
+			await c.context.getErrorURL({
+				error: "please_restart_the_process",
+				ctx: c,
+			}),
+		);
 	}
 	await c.context.internalAdapter.deleteVerificationValue(data.id);
 	return parsedData;

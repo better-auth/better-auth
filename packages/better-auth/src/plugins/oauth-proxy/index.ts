@@ -127,12 +127,13 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 						ctx.context.logger.error(e);
 						return null;
 					});
-					const error =
-						ctx.context.options.onAPIError?.errorURL ||
-						`${ctx.context.options.baseURL}/api/auth/error`;
 					if (!decryptedCookies) {
 						throw ctx.redirect(
-							`${error}?error=OAuthProxy - Invalid cookies or secret`,
+							await ctx.context.getErrorURL({
+								error: "OAuthProxy - Invalid cookies or secret",
+								ctx,
+								defaultURL: `${ctx.context.options.baseURL}/api/auth/error`,
+							}),
 						);
 					}
 

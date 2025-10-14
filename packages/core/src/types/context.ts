@@ -267,4 +267,10 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			anonymousId?: string;
 			payload: Record<string, any>;
 		}) => Promise<void>;
+		getErrorURL: (options: {
+			error: string;
+			description?: string;
+			ctx?: GenericEndpointContext<Options>;
+			defaultURL?: string;
+		}) => string | Promise<string>;
 	};

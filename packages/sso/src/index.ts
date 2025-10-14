@@ -1226,18 +1226,23 @@ export const sso = (options?: SSOOptions) => {
 					const { code, state, error, error_description } = ctx.query;
 					const stateData = await parseState(ctx);
 					if (!stateData) {
-						const errorURL =
-							ctx.context.options.onAPIError?.errorURL ||
-							`${ctx.context.baseURL}/error`;
-						throw ctx.redirect(`${errorURL}?error=invalid_state`);
+						throw ctx.redirect(
+							await ctx.context.getErrorURL({
+								error: "invalid_state",
+								ctx,
+							}),
+						);
 					}
 					const { callbackURL, errorURL, newUserURL, requestSignUp } =
 						stateData;
 					if (!code || error) {
 						throw ctx.redirect(
-							`${
-								errorURL || callbackURL
-							}?error=${error}&error_description=${error_description}`,
+							await ctx.context.getErrorURL({
+								error: error || "invalid_code",
+								description: error_description,
+								ctx,
+								defaultURL: errorURL || callbackURL,
+							}),
 						);
 					}
 					let provider: SSOProvider | null = null;
@@ -1280,18 +1285,24 @@ export const sso = (options?: SSOOptions) => {
 					}
 					if (!provider) {
 						throw ctx.redirect(
-							`${
-								errorURL || callbackURL
-							}/error?error=invalid_provider&error_description=provider not found`,
+							await ctx.context.getErrorURL({
+								error: "invalid_provider",
+								description: "provider not found",
+								ctx,
+								defaultURL: errorURL || callbackURL,
+							}),
 						);
 					}
 					let config = provider.oidcConfig;
 
 					if (!config) {
 						throw ctx.redirect(
-							`${
-								errorURL || callbackURL
-							}/error?error=invalid_provider&error_description=provider not found`,
+							await ctx.context.getErrorURL({
+								error: "invalid_provider",
+								description: "provider not found",
+								ctx,
+								defaultURL: errorURL || callbackURL,
+							}),
 						);
 					}
 
@@ -1316,9 +1327,12 @@ export const sso = (options?: SSOOptions) => {
 
 					if (!config.tokenEndpoint) {
 						throw ctx.redirect(
-							`${
-								errorURL || callbackURL
-							}/error?error=invalid_provider&error_description=token_endpoint_not_found`,
+							await ctx.context.getErrorURL({
+								error: "invalid_provider",
+								description: "token_endpoint_not_found",
+								ctx,
+								defaultURL: errorURL || callbackURL,
+							}),
 						);
 					}
 
@@ -1335,21 +1349,27 @@ export const sso = (options?: SSOOptions) => {
 							config.tokenEndpointAuthentication === "client_secret_post"
 								? "post"
 								: "basic",
-					}).catch((e) => {
+					}).catch(async (e) => {
 						if (e instanceof BetterFetchError) {
 							throw ctx.redirect(
-								`${
-									errorURL || callbackURL
-								}?error=invalid_provider&error_description=${e.message}`,
+								await ctx.context.getErrorURL({
+									error: "invalid_provider",
+									description: e.message,
+									ctx,
+									defaultURL: errorURL || callbackURL,
+								}),
 							);
 						}
 						return null;
 					});
 					if (!tokenResponse) {
 						throw ctx.redirect(
-							`${
-								errorURL || callbackURL
-							}/error?error=invalid_provider&error_description=token_response_not_found`,
+							await ctx.context.getErrorURL({
+								error: "invalid_provider",
+								description: "token_response_not_found",
+								ctx,
+								defaultURL: errorURL || callbackURL,
+							}),
 						);
 					}
 					let userInfo: {
@@ -1364,9 +1384,12 @@ export const sso = (options?: SSOOptions) => {
 						const idToken = decodeJwt(tokenResponse.idToken);
 						if (!config.jwksEndpoint) {
 							throw ctx.redirect(
-								`${
-									errorURL || callbackURL
-								}/error?error=invalid_provider&error_description=jwks_endpoint_not_found`,
+								await ctx.context.getErrorURL({
+									error: "invalid_provider",
+									description: "jwks_endpoint_not_found",
+									ctx,
+									defaultURL: errorURL || callbackURL,
+								}),
 							);
 						}
 						const verified = await validateToken(
@@ -1378,16 +1401,22 @@ export const sso = (options?: SSOOptions) => {
 						});
 						if (!verified) {
 							throw ctx.redirect(
-								`${
-									errorURL || callbackURL
-								}/error?error=invalid_provider&error_description=token_not_verified`,
+								await ctx.context.getErrorURL({
+									error: "invalid_provider",
+									description: "token_not_verified",
+									ctx,
+									defaultURL: errorURL || callbackURL,
+								}),
 							);
 						}
 						if (verified.payload.iss !== provider.issuer) {
 							throw ctx.redirect(
-								`${
-									errorURL || callbackURL
-								}/error?error=invalid_provider&error_description=issuer_mismatch`,
+								await ctx.context.getErrorURL({
+									error: "invalid_provider",
+									description: "issuer_mismatch",
+									ctx,
+									defaultURL: errorURL || callbackURL,
+								}),
 							);
 						}
 
@@ -1417,9 +1446,12 @@ export const sso = (options?: SSOOptions) => {
 					if (!userInfo) {
 						if (!config.userInfoEndpoint) {
 							throw ctx.redirect(
-								`${
-									errorURL || callbackURL
-								}/error?error=invalid_provider&error_description=user_info_endpoint_not_found`,
+								await ctx.context.getErrorURL({
+									error: "invalid_provider",
+									description: "user_info_endpoint_not_found",
+									ctx,
+									defaultURL: errorURL || callbackURL,
+								}),
 							);
 						}
 						const userInfoResponse = await betterFetch<{
@@ -1435,11 +1467,12 @@ export const sso = (options?: SSOOptions) => {
 						});
 						if (userInfoResponse.error) {
 							throw ctx.redirect(
-								`${
-									errorURL || callbackURL
-								}/error?error=invalid_provider&error_description=${
-									userInfoResponse.error.message
-								}`,
+								await ctx.context.getErrorURL({
+									error: "invalid_provider",
+									description: userInfoResponse.error.message,
+									ctx,
+									defaultURL: errorURL || callbackURL,
+								}),
 							);
 						}
 						userInfo = userInfoResponse.data;
@@ -1447,9 +1480,12 @@ export const sso = (options?: SSOOptions) => {
 
 					if (!userInfo.email || !userInfo.id) {
 						throw ctx.redirect(
-							`${
-								errorURL || callbackURL
-							}/error?error=invalid_provider&error_description=missing_user_info`,
+							await ctx.context.getErrorURL({
+								error: "invalid_provider",
+								description: "missing_user_info",
+								ctx,
+								defaultURL: errorURL || callbackURL,
+							}),
 						);
 					}
 					const linked = await handleOAuthUserInfo(ctx, {
@@ -1478,7 +1514,11 @@ export const sso = (options?: SSOOptions) => {
 					});
 					if (linked.error) {
 						throw ctx.redirect(
-							`${errorURL || callbackURL}/error?error=${linked.error}`,
+							await ctx.context.getErrorURL({
+								error: linked.error,
+								ctx,
+								defaultURL: errorURL || callbackURL,
+							}),
 						);
 					}
 					const { session, user } = linked.data!;
