@@ -41,8 +41,45 @@ import Prism from "prismjs";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { ScrollArea, ScrollViewport, ScrollBar } from "../docs/ui/scroll-area";
 import "prismjs/components/prism-sql";
+import "prismjs/components/prism-typescript";
 import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
+import { prismaResolver } from "@/lib/copy-schema/adapter/prisma";
+import { drizzleResolver } from "@/lib/copy-schema/adapter/drizzle";
+
+Prism.languages.prisma = {
+	comment: /\/\/.*|\/\*[\s\S]*?\*\//,
+	string: {
+		pattern: /"(?:\\.|[^"\\])*"/,
+		greedy: true,
+	},
+	keyword: /\b(model|enum|datasource|generator|type)\b/,
+	"model-name": {
+		pattern: /(?<=\bmodel\s+)[A-Za-z_]\w*/,
+		alias: "class-name",
+	},
+	type: {
+		pattern:
+			/\b(Int|String|Float|Boolean|DateTime|Json|BigInt|Decimal|Bytes|[A-Z][a-zA-Z0-9_]+)\b/,
+		alias: "class-name",
+	},
+	boolean: /\b(true|false)\b/,
+	number: /\b\d+(\.\d+)?\b/,
+	attribute: {
+		pattern: /@@?\w+/,
+		alias: "function",
+	},
+	function: {
+		pattern: /\b\w+(?=\s*\()/,
+		alias: "function",
+	},
+	operator: /[=:@]/,
+	punctuation: /[()[\]{}.,;]/,
+	variable: {
+		pattern: /\b[a-z_]\w*\b/,
+		alias: "symbol",
+	},
+};
 
 interface DatabaseTableProps {
 	modelName: string;
@@ -246,7 +283,13 @@ function CopySchemaContent() {
 						},
 						{
 							dialect:
-								tab !== "drizzle" && tab !== "prisma" ? tab : "postgresql",
+								tab === "drizzle"
+									? drizzleResolver()
+									: tab === "prisma"
+										? prismaResolver({
+												provider: "postgresql",
+											})
+										: tab,
 							conditions,
 							useNumberId,
 							mode: data.mode,
@@ -418,7 +461,13 @@ function CopySchemaContent() {
 					key={theme.resolvedTheme}
 					code={code}
 					theme={codeTheme}
-					language={"sql"}
+					language={
+						tab === "drizzle"
+							? "typescript"
+							: tab === "prisma"
+								? "prisma"
+								: "sql"
+					}
 					prism={Prism}
 				>
 					{({ className, style, tokens, getLineProps, getTokenProps }) => (
