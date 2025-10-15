@@ -9,7 +9,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { CopyIcon, Key, Link } from "lucide-react";
+import { CopyIcon, Key, Link, SlashIcon, CheckIcon } from "lucide-react";
 import {
 	Tooltip,
 	TooltipContent,
@@ -20,8 +20,10 @@ import { DBFieldAttribute, DefaultDialects } from "@/lib/copy-schema/types";
 import { Button, buttonVariants } from "../ui/button";
 import {
 	Dialog,
+	DialogClose,
 	DialogContent,
 	DialogDescription,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from "../ui/dialog";
@@ -42,10 +44,16 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { ScrollArea, ScrollViewport, ScrollBar } from "../docs/ui/scroll-area";
 import "prismjs/components/prism-sql";
 import "prismjs/components/prism-typescript";
-import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { prismaResolver } from "@/lib/copy-schema/adapter/prisma";
 import { drizzleResolver } from "@/lib/copy-schema/adapter/drizzle";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "../ui/accordion";
+import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 
 Prism.languages.prisma = {
 	comment: /\/\/.*|\/\*[\s\S]*?\*\//,
@@ -249,7 +257,7 @@ export function CopySchemaDialogProvider({
 						</DialogDescription>
 					</DialogHeader>
 
-					<CopySchemaContent />
+					{!!data && <CopySchemaContent />}
 				</DialogContent>
 			</Dialog>
 		</CopySchemaDialogContext.Provider>
@@ -261,11 +269,23 @@ function CopySchemaContent() {
 	const { data } = useCopySchemaDialog();
 	const theme = useTheme();
 	const [codeTheme, setCodeTheme] = useState(themes.synthwave84);
-	const [useNumberId, setUseNumberId] = useState(false);
 	const [conditions, setConditions] = useState<Record<string, boolean>>({});
+	const [controls, setControls] = useState<Record<string, any>>({});
+	const setControl = (key: string, value: any) => {
+		setControls((prev) => ({
+			...prev,
+			[key]: value,
+		}));
+	};
 	const [tab, setTab] = useState<DefaultDialects | "drizzle" | "prisma">(
 		"drizzle",
 	);
+	useEffect(() => {
+		setControls((prev) => ({
+			// Preserve default controls
+			useNumberId: prev.useNumberId,
+		}));
+	}, [tab]);
 
 	useEffect(() => {
 		setCodeTheme(
@@ -273,30 +293,26 @@ function CopySchemaContent() {
 		);
 	}, [theme.resolvedTheme]);
 
-	const code = useMemo(
+	const schema = useMemo(
 		() =>
-			data
-				? copySchema(
-						{
-							modelName: data.modelName,
-							fields: data.fields,
-						},
-						{
-							dialect:
-								tab === "drizzle"
-									? drizzleResolver()
-									: tab === "prisma"
-										? prismaResolver({
-												provider: "postgresql",
-											})
-										: tab,
-							conditions,
-							useNumberId,
-							mode: data.mode,
-						},
-					)
-				: "",
-		[data, tab, useNumberId, conditions],
+			copySchema(
+				{
+					modelName: data!.modelName,
+					fields: data!.fields,
+				},
+				{
+					dialect:
+						tab === "drizzle"
+							? drizzleResolver(controls)
+							: tab === "prisma"
+								? prismaResolver(controls)
+								: tab,
+					conditions,
+					useNumberId: controls?.useNumberId ?? false,
+					mode: data!.mode,
+				},
+			),
+		[data, tab, controls, conditions],
 	);
 
 	return (
@@ -457,61 +473,136 @@ function CopySchemaContent() {
 					</ScrollViewport>
 					<ScrollBar orientation="horizontal" />
 				</ScrollArea>
-				<Highlight
-					key={theme.resolvedTheme}
-					code={code}
-					theme={codeTheme}
-					language={
-						tab === "drizzle"
-							? "typescript"
-							: tab === "prisma"
-								? "prisma"
-								: "sql"
-					}
-					prism={Prism}
-				>
-					{({ className, style, tokens, getLineProps, getTokenProps }) => (
-						<pre
-							className={clsx(className, "flex overflow-x-auto py-3")}
-							style={style}
-						>
-							<code className="px-4">
-								{tokens.map((line, lineIndex) => (
-									<div key={lineIndex} {...getLineProps({ line })}>
-										{line.map((token, tokenIndex) => (
-											<span key={tokenIndex} {...getTokenProps({ token })} />
-										))}
-									</div>
-								))}
-							</code>
-						</pre>
-					)}
-				</Highlight>
+				<div role="tabpanel">
+					<Highlight
+						key={theme.resolvedTheme}
+						code={schema.result}
+						theme={codeTheme}
+						language={schema.language}
+						prism={Prism}
+					>
+						{({ className, style, tokens, getLineProps, getTokenProps }) => (
+							<pre
+								className={clsx(className, "flex overflow-x-auto py-3")}
+								style={style}
+							>
+								<code className="px-4">
+									{tokens.map((line, lineIndex) => (
+										<div key={lineIndex} {...getLineProps({ line })}>
+											{line.map((token, tokenIndex) => (
+												<span key={tokenIndex} {...getTokenProps({ token })} />
+											))}
+										</div>
+									))}
+								</code>
+							</pre>
+						)}
+					</Highlight>
 
-				<div className="border-t p-6 space-y-4">
-					<Label>Controls</Label>
-					<div>
-						<div className="flex items-center gap-2.5">
-							<Checkbox
-								id={`${id}-controls-use-number-id`}
-								defaultChecked={useNumberId}
-								onCheckedChange={(open) => setUseNumberId(!!open)}
-							/>
-							<Label htmlFor={`${id}-controls-use-number-id`}>
-								Use number ID
-							</Label>
-						</div>
-						<TabsPrimitive.Content value="drizzle">
-							{/* TODO: */}
-							Drizzle controls
-						</TabsPrimitive.Content>
-						<TabsPrimitive.Content value="prisma">
-							{/* TODO: */}
-							Prisma controls
-						</TabsPrimitive.Content>
-					</div>
+					<Accordion
+						type="multiple"
+						defaultValue={["controls"]}
+						className="border-t"
+					>
+						<AccordionItem value="controls">
+							<AccordionTrigger className="text-base items-center font-medium px-6 py-3">
+								Controls
+							</AccordionTrigger>
+							<AccordionContent className="border-t grid grid-cols-1 md:grid-cols-2 gap-3 p-6">
+								<div className="space-y-2">
+									<Label htmlFor={`${id}-controls-use-number-id`}>
+										Use number ID
+									</Label>
+									<ToggleGroup
+										id={`${id}-controls-use-number-id`}
+										type="single"
+										variant="outline"
+										value={controls.useNumberId === true ? "true" : "false"}
+										onValueChange={(value) =>
+											setControl("useNumberId", value === "true" ? true : false)
+										}
+									>
+										<ToggleGroupItem
+											value="false"
+											className="size-8"
+											aria-label="No"
+										>
+											<SlashIcon className="size-3" aria-hidden="true" />
+										</ToggleGroupItem>
+										<ToggleGroupItem
+											value="true"
+											className="size-8"
+											aria-label="Yes"
+										>
+											<CheckIcon className="size-4" aria-hidden="true" />
+										</ToggleGroupItem>
+									</ToggleGroup>
+								</div>
+								{schema.controls && (
+									<schema.controls
+										id={id}
+										values={controls}
+										setValue={setControl}
+									/>
+								)}
+							</AccordionContent>
+						</AccordionItem>
+						{schema.conditions?.length && (
+							<AccordionItem value="conditions">
+								<AccordionTrigger className="text-base items-center font-medium px-6 py-3">
+									Conditions
+								</AccordionTrigger>
+								<AccordionContent className="border-t grid grid-cols-1 md:grid-cols-2 gap-3 p-6">
+									{schema.conditions.map((condition) => {
+										const conditionId = `${id}-conditions-${condition.toLowerCase().replace(/\s+/g, "-")}`;
+
+										return (
+											<div key={condition} className="space-y-2">
+												<Label htmlFor={conditionId}>{condition}</Label>
+												<ToggleGroup
+													id={conditionId}
+													type="single"
+													variant="outline"
+													value={
+														conditions[condition] === true ? "true" : "false"
+													}
+													onValueChange={(value) =>
+														setConditions((prev) => ({
+															...prev,
+															[condition]: value === "true" ? true : false,
+														}))
+													}
+												>
+													<ToggleGroupItem
+														value="false"
+														className="size-8"
+														aria-label="No"
+													>
+														<SlashIcon className="size-3" aria-hidden="true" />
+													</ToggleGroupItem>
+													<ToggleGroupItem
+														value="true"
+														className="size-8"
+														aria-label="Yes"
+													>
+														<CheckIcon className="size-4" aria-hidden="true" />
+													</ToggleGroupItem>
+												</ToggleGroup>
+											</div>
+										);
+									})}
+								</AccordionContent>
+							</AccordionItem>
+						)}
+					</Accordion>
 				</div>
 			</TabsPrimitive.Root>
+			<DialogFooter className="p-3 border-t">
+				<DialogClose asChild>
+					<Button variant="secondary">Cancel</Button>
+				</DialogClose>
+				<Button>Copy schema</Button>
+			</DialogFooter>
 		</div>
 	);
 }

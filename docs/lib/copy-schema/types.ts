@@ -16,11 +16,22 @@ export type CopySchemaOptions = SharedOptions & {
 	conditions?: Record<string, boolean>;
 };
 
-export type ResolverContext = Required<SharedOptions> & {
+export type ResolverHandlerContext = Required<SharedOptions> & {
 	schema: DBSchema<false>;
 };
 
-export type Resolver = (ctx: ResolverContext) => string;
+export type Resolver = {
+	/**
+	 * @default "sql"
+	 */
+	language?: "sql" | "typescript" | "prisma";
+	handler: (ctx: ResolverHandlerContext) => string;
+	controls?: React.ComponentType<{
+		id: string;
+		setValue: (key: string, value: any) => void;
+		values: Record<string, any>;
+	}>;
+};
 
 type LiteralString = "" | (string & Record<never, never>);
 type DBFieldType =

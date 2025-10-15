@@ -37,3 +37,7 @@ export function getTypeFactory(
 export function filterForeignKeys({ fields }: { fields: DBFieldAttribute[] }) {
 	return fields.filter(({ references }) => !!references);
 }
+
+export function capitalize(str: string) {
+	return str.charAt(0).toUpperCase() + str.slice(1);
+}

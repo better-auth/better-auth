@@ -7,7 +7,7 @@ import type {
 	DBSchema,
 	DefaultDialects,
 	Resolver,
-	ResolverContext,
+	ResolverHandlerContext,
 } from "./types";
 
 const defaultResolvers: Record<DefaultDialects, Resolver> = {
@@ -24,8 +24,9 @@ export const copySchema = <
 	schema: S,
 	options: O,
 ) => {
+	const conditions = new Set<string>();
 	const resolver =
-		typeof options.dialect === "function"
+		typeof options.dialect !== "string"
 			? options.dialect
 			: defaultResolvers[options.dialect];
 
@@ -33,19 +34,24 @@ export const copySchema = <
 		...schema,
 		fields: schema.fields.filter((field) => {
 			const condition = field.condition;
-			if (!condition) {
+			if (condition === undefined || condition === "") {
 				return true;
 			}
-			field.condition = undefined;
+			conditions.add(condition);
 			return options.conditions?.[condition] ?? false;
 		}),
 	};
 
-	const ctx: ResolverContext = {
+	const ctx: ResolverHandlerContext = {
 		useNumberId: options.useNumberId ?? false,
 		mode: options.mode ?? "create",
 		schema: filteredSchema,
 	};
 
-	return resolver(ctx);
+	return {
+		result: resolver.handler(ctx),
+		language: resolver.language ?? "sql",
+		controls: resolver.controls,
+		conditions: conditions.size > 0 ? [...conditions] : undefined,
+	};
 };
