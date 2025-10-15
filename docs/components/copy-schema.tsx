@@ -39,6 +39,7 @@ import Link from "next/link";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import clsx from "clsx";
 import { Highlight, themes, Prism } from "prism-react-renderer";
+import { toast } from "sonner";
 
 Prism.languages.prisma = {
 	comment: /\/\/.*|\/\*[\s\S]*?\*\//,
@@ -128,7 +129,7 @@ export function CopySchemaDialogProvider({
 
 function CopySchemaContent() {
 	const id = useId();
-	const { data } = useCopySchemaDialog();
+	const { data, setOpen } = useCopySchemaDialog();
 	const theme = useTheme();
 	const [codeTheme, setCodeTheme] = useState(themes.synthwave84);
 	const [conditions, setConditions] = useState<Record<string, boolean>>({});
@@ -395,38 +396,17 @@ function CopySchemaContent() {
 						className="border-t"
 					>
 						<AccordionItem value="controls">
-							<AccordionTrigger className="text-base items-center font-medium px-6 py-3">
-								Controls
-							</AccordionTrigger>
-							<AccordionContent className="border-t grid grid-cols-1 sm:grid-cols-2 gap-3 p-6">
+							<CopySchemaAccordionTrigger>Controls</CopySchemaAccordionTrigger>
+							<CopySchemaAccordionContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 								<div className="space-y-2">
 									<Label htmlFor={`${id}-controls-use-number-id`}>
 										Use number ID
 									</Label>
-									<ToggleGroup
+									<CopySchemaToggleButtonSwitch
 										id={`${id}-controls-use-number-id`}
-										type="single"
-										variant="outline"
-										value={controls.useNumberId === true ? "true" : "false"}
-										onValueChange={(value) =>
-											setControl("useNumberId", value === "true" ? true : false)
-										}
-									>
-										<ToggleGroupItem
-											value="false"
-											className="size-8"
-											aria-label="No"
-										>
-											<SlashIcon className="size-3" aria-hidden="true" />
-										</ToggleGroupItem>
-										<ToggleGroupItem
-											value="true"
-											className="size-8"
-											aria-label="Yes"
-										>
-											<CheckIcon className="size-4" aria-hidden="true" />
-										</ToggleGroupItem>
-									</ToggleGroup>
+										value={controls.useNumberId === true}
+										onValueChange={(value) => setControl("useNumberId", value)}
+									/>
 								</div>
 								{schema.controls && (
 									<schema.controls
@@ -435,53 +415,34 @@ function CopySchemaContent() {
 										setValue={setControl}
 									/>
 								)}
-							</AccordionContent>
+							</CopySchemaAccordionContent>
 						</AccordionItem>
 						{schema.conditions?.length && schema.conditions?.length > 0 && (
 							<AccordionItem value="conditions">
-								<AccordionTrigger className="text-base items-center font-medium px-6 py-3">
+								<CopySchemaAccordionTrigger>
 									Conditions
-								</AccordionTrigger>
-								<AccordionContent className="border-t grid grid-cols-1 sm:grid-cols-2 gap-3 p-6">
+								</CopySchemaAccordionTrigger>
+								<CopySchemaAccordionContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 									{schema.conditions.map((condition) => {
 										const conditionId = `${id}-conditions-${condition.toLowerCase().replace(/\s+/g, "-")}`;
 
 										return (
 											<div key={condition} className="space-y-2">
 												<Label htmlFor={conditionId}>{condition}</Label>
-												<ToggleGroup
+												<CopySchemaToggleButtonSwitch
 													id={conditionId}
-													type="single"
-													variant="outline"
-													value={
-														conditions[condition] === true ? "true" : "false"
-													}
+													value={conditions[condition]}
 													onValueChange={(value) =>
 														setConditions((prev) => ({
 															...prev,
-															[condition]: value === "true" ? true : false,
+															[condition]: value,
 														}))
 													}
-												>
-													<ToggleGroupItem
-														value="false"
-														className="size-8"
-														aria-label="No"
-													>
-														<SlashIcon className="size-3" aria-hidden="true" />
-													</ToggleGroupItem>
-													<ToggleGroupItem
-														value="true"
-														className="size-8"
-														aria-label="Yes"
-													>
-														<CheckIcon className="size-4" aria-hidden="true" />
-													</ToggleGroupItem>
-												</ToggleGroup>
+												/>
 											</div>
 										);
 									})}
-								</AccordionContent>
+								</CopySchemaAccordionContent>
 							</AccordionItem>
 						)}
 					</Accordion>
@@ -503,18 +464,29 @@ function CopySchemaContent() {
 					<DialogClose asChild>
 						<Button variant="secondary">Close</Button>
 					</DialogClose>
-					<Button onClick={onCopy} disabled={checked} aria-disabled={checked}>
-						{!checked ? (
-							<>
-								<CopyIcon aria-hidden="true" />
-								Copy schema
-							</>
-						) : (
-							<>
-								<CheckIcon aria-hidden="true" />
-								Schema copied
-							</>
-						)}
+					<Button
+						onClick={() => {
+							setOpen(false);
+							navigator.clipboard
+								.writeText(schema.result)
+								.then(() => {
+									toast.success(
+										<p className="text-sm prose select-none">
+											<code>{data!.modelName}</code> schema copied.
+										</p>,
+										{
+											duration: 1_200,
+										},
+									);
+								})
+								.catch((err) => {
+									console.error("Failed to copy schema:", err);
+									toast.error("Failed to copy schema.");
+								});
+						}}
+					>
+						<CopyIcon aria-hidden="true" />
+						Copy schema
 					</Button>
 				</div>
 			</DialogFooter>
@@ -538,6 +510,29 @@ function CopySchemaTabTrigger({
 	);
 }
 
+function CopySchemaAccordionTrigger({
+	className,
+	...props
+}: React.ComponentProps<typeof AccordionTrigger>) {
+	return (
+		<AccordionTrigger
+			className={clsx(
+				"text-base items-center font-medium px-6 py-3",
+				className,
+			)}
+			{...props}
+		/>
+	);
+}
+function CopySchemaAccordionContent({
+	className,
+	...props
+}: React.ComponentProps<typeof AccordionContent>) {
+	return (
+		<AccordionContent className={clsx("border-t p-6", className)} {...props} />
+	);
+}
+
 export function useCopySchemaDialog() {
 	const state = useContext(CopySchemaDialogContext);
 	if (state === null) {
@@ -546,4 +541,33 @@ export function useCopySchemaDialog() {
 		);
 	}
 	return state;
+}
+
+export type CopySchemaToggleButtonSwitchProps = {
+	id?: string;
+	value: boolean;
+	onValueChange: (value: boolean) => void;
+};
+
+export function CopySchemaToggleButtonSwitch({
+	id,
+	value,
+	onValueChange,
+}: CopySchemaToggleButtonSwitchProps) {
+	return (
+		<ToggleGroup
+			id={id}
+			type="single"
+			variant="outline"
+			value={value === true ? "true" : "false"}
+			onValueChange={(value) => onValueChange(value === "true" ? true : false)}
+		>
+			<ToggleGroupItem value="false" className="size-8" aria-label="No">
+				<SlashIcon className="size-3" aria-hidden="true" />
+			</ToggleGroupItem>
+			<ToggleGroupItem value="true" className="size-8" aria-label="Yes">
+				<CheckIcon className="size-4" aria-hidden="true" />
+			</ToggleGroupItem>
+		</ToggleGroup>
+	);
 }

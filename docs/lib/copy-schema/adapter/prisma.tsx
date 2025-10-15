@@ -1,8 +1,6 @@
 import type { Resolver } from "../types";
 import { capitalize, getTypeFactory } from "../utils";
 import { Label } from "@/components/ui/label";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { CheckIcon, SlashIcon } from "lucide-react";
 import {
 	Select,
 	SelectContent,
@@ -10,6 +8,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { CopySchemaToggleButtonSwitch } from "@/components/copy-schema";
 
 export type PrismaResolverOptions = {
 	/**
@@ -67,6 +66,9 @@ export const prismaResolver = (options: PrismaResolverOptions) => {
 			const lines = [
 				`model ${capitalize(ctx.schema.modelName)}${options.usePlural ? "s" : ""} {`,
 			];
+			if (ctx.mode === "alter") {
+				lines.push("\t// ...existing fields");
+			}
 			for (const field of ctx.schema.fields) {
 				const type = getType(field);
 				let newLine = `${field.fieldName} ${type}`;
@@ -92,9 +94,6 @@ export const prismaResolver = (options: PrismaResolverOptions) => {
 				}
 				lines.push(`\t${newLine}`);
 			}
-			if (ctx.mode === "alter") {
-				lines.push("\t// ...existing fields");
-			}
 			lines.push(
 				`\t@@map("${ctx.schema.modelName}${options.usePlural ? "s" : ""}")`,
 			);
@@ -108,22 +107,11 @@ export const prismaResolver = (options: PrismaResolverOptions) => {
 						<Label htmlFor={`${id}-prisma-controls-use-plural`}>
 							Use plural
 						</Label>
-						<ToggleGroup
+						<CopySchemaToggleButtonSwitch
 							id={`${id}-prisma-controls-use-plural`}
-							type="single"
-							variant="outline"
-							value={values.usePlural === true ? "true" : "false"}
-							onValueChange={(value) =>
-								setValue("usePlural", value === "true" ? true : false)
-							}
-						>
-							<ToggleGroupItem value="false" className="size-8" aria-label="No">
-								<SlashIcon className="size-3" aria-hidden="true" />
-							</ToggleGroupItem>
-							<ToggleGroupItem value="true" className="size-8" aria-label="Yes">
-								<CheckIcon className="size-4" aria-hidden="true" />
-							</ToggleGroupItem>
-						</ToggleGroup>
+							value={values.usePlural === true}
+							onValueChange={(value) => setValue("usePlural", value)}
+						/>
 					</div>
 
 					<div className="space-y-2">

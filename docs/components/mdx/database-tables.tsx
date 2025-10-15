@@ -19,6 +19,7 @@ import {
 import { DBFieldAttribute } from "@/lib/copy-schema/types";
 import { Button } from "../ui/button";
 import { useCopySchemaDialog } from "@/components/copy-schema";
+
 export interface DatabaseTableProps {
 	modelName: string;
 	fields: (

@@ -7,9 +7,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { CheckIcon, SlashIcon } from "lucide-react";
 import { getTypeFactory } from "../utils";
+import { CopySchemaToggleButtonSwitch } from "@/components/copy-schema";
 
 export type DrizzleResolverOptions = {
 	/**
@@ -101,6 +100,10 @@ export const drizzleResolver = (options: DrizzleResolverOptions) => {
 				`export const ${ctx.schema.modelName} = ${tableFnName}(\"${convertToSnakeCase(ctx.schema.modelName, options.camelCase)}${options.usePlural ? "s" : ""}\", {`,
 			];
 
+			if (ctx.mode === "alter") {
+				table.push("\t// ...existing fields");
+			}
+
 			for (const field of ctx.schema.fields) {
 				let value = getType(field);
 				if (field.required !== false && field.fieldName !== "id") {
@@ -115,10 +118,6 @@ export const drizzleResolver = (options: DrizzleResolverOptions) => {
 				table.push(`\t${field.fieldName}: ${value},`);
 			}
 
-			if (ctx.mode === "alter") {
-				table.push("\t// ...existing fields");
-			}
-
 			table.push("});");
 
 			return [...imports, "", ...table].join("\n");
@@ -130,44 +129,22 @@ export const drizzleResolver = (options: DrizzleResolverOptions) => {
 						<Label htmlFor={`${id}-drizzle-controls-use-plural`}>
 							Use plural
 						</Label>
-						<ToggleGroup
+						<CopySchemaToggleButtonSwitch
 							id={`${id}-drizzle-controls-use-plural`}
-							type="single"
-							variant="outline"
-							value={values.usePlural === true ? "true" : "false"}
-							onValueChange={(value) =>
-								setValue("usePlural", value === "true" ? true : false)
-							}
-						>
-							<ToggleGroupItem value="false" className="size-8" aria-label="No">
-								<SlashIcon className="size-3" aria-hidden="true" />
-							</ToggleGroupItem>
-							<ToggleGroupItem value="true" className="size-8" aria-label="Yes">
-								<CheckIcon className="size-4" aria-hidden="true" />
-							</ToggleGroupItem>
-						</ToggleGroup>
+							value={values.usePlural === true}
+							onValueChange={(value) => setValue("usePlural", value)}
+						/>
 					</div>
 
 					<div className="space-y-2">
 						<Label htmlFor={`${id}-drizzle-controls-camel-case`}>
 							Camel case
 						</Label>
-						<ToggleGroup
+						<CopySchemaToggleButtonSwitch
 							id={`${id}-drizzle-controls-camel-case`}
-							type="single"
-							variant="outline"
-							value={values.camelCase === true ? "true" : "false"}
-							onValueChange={(value) =>
-								setValue("camelCase", value === "true" ? true : false)
-							}
-						>
-							<ToggleGroupItem value="false" className="size-8" aria-label="No">
-								<SlashIcon className="size-3" aria-hidden="true" />
-							</ToggleGroupItem>
-							<ToggleGroupItem value="true" className="size-8" aria-label="Yes">
-								<CheckIcon className="size-4" aria-hidden="true" />
-							</ToggleGroupItem>
-						</ToggleGroup>
+							value={values.camelCase === true}
+							onValueChange={(value) => setValue("camelCase", value)}
+						/>
 					</div>
 
 					<div className="space-y-2">
