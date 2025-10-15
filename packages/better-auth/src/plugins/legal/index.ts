@@ -1,13 +1,7 @@
-// import type { BetterAuthPlugin, User } from "../../types";
-import type { BetterAuthPlugin } from "../../../../core/src/types/plugin";
-import type { User } from "../../../../core/src/db/index";
+import type { BetterAuthPlugin, User } from "../../types";
 import { APIError } from "better-call";
 import z, { ZodDate, ZodObject, ZodOptional } from "zod";
-// import { createAuthEndpoint, createAuthMiddleware } from "../../api";
-import {
-	createAuthEndpoint,
-	createAuthMiddleware,
-} from "../../../../core/src/middleware";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api";
 import { createFieldAttribute } from "../../db";
 import { userSchema as coreUserSchema } from "@better-auth/core/db";
 import { generateRandomString } from "../../crypto";
