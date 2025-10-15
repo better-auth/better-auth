@@ -44,47 +44,56 @@ export const drizzleResolver = (options: DrizzleResolverOptions) => {
 				`import * as t from "drizzle-orm/${corePath}";`,
 			];
 			const getType = getTypeFactory((field) => {
+				const fieldName = convertToSnakeCase(
+					field.fieldName,
+					options.camelCase,
+				);
 				const number = field.bigint
 					? provider === "sqlite"
-						? 't.blob({ mode: "bigint" })'
-						: "t.bigint()"
+						? `t.blob("${fieldName}", { mode: "bigint" })`
+						: `t.bigint("${fieldName}")`
 					: provider === "mysql"
-						? "t.int()"
-						: "t.integer()";
+						? `t.int("${fieldName}")`
+						: `t.integer("${fieldName}")`;
 
 				return {
 					string:
 						provider === "sqlite"
-							? "t.text()"
+							? `t.text("${fieldName}")`
 							: field.unique
-								? "t.varchar({ length: 255 })"
+								? `t.varchar("${fieldName}", { length: 255 })`
 								: field.references
-									? "t.varchar(36)"
-									: "t.text()",
-					boolean: provider === "sqlite" ? "t.integer()" : "t.boolean()",
+									? `t.varchar("${fieldName}", { length: 36 })`
+									: `t.text("${fieldName}")`,
+					boolean:
+						provider === "sqlite"
+							? `t.integer("${fieldName}")`
+							: `t.boolean("${fieldName}")`,
 					number,
 					date:
 						provider === "pg"
-							? "t.timestamp({ precision: 6, withTimezone: true })"
+							? `t.timestamp("${fieldName}", { precision: 6, withTimezone: true })`
 							: provider === "sqlite"
-								? 't.integer({ mode: "timestamp_ms" })'
-								: 't.timestamp({ mode: "date", fsp: 3 })',
+								? `t.integer("${fieldName}", { mode: "timestamp_ms" })`
+								: `t.timestamp("${fieldName}", { mode: "date", fsp: 3 })`,
 					json:
 						provider === "pg"
-							? "t.jsonb()"
+							? `t.jsonb("${fieldName}")`
 							: provider === "sqlite"
-								? 't.text({ mode: "json" })'
-								: "t.json()",
+								? `t.text("${fieldName}", { mode: "json" })`
+								: `t.json("${fieldName}")`,
 					id: ctx.useNumberId
 						? provider === "pg"
-							? 't.serial("id").primaryKey()'
-							: `t.integer("id").primaryKey${provider === "sqlite" ? "({ autoIncrement: true })" : "().autoincrement()"}`
+							? `t.serial("${fieldName}").primaryKey()`
+							: `t.integer("${fieldName}").primaryKey${provider === "sqlite" ? "({ autoIncrement: true })" : "().autoincrement()"}`
 						: provider === "mysql"
-							? 't.varchar("id", { length: 36 }).primaryKey()'
-							: 't.text("id").primaryKey()',
-					foreignKeyId: ctx.useNumberId ? "t.integer()" : "t.text()",
+							? `t.varchar("${fieldName}", { length: 36 }).primaryKey()`
+							: `t.text("${fieldName}").primaryKey()`,
+					foreignKeyId: ctx.useNumberId
+						? `t.integer("${fieldName}")`
+						: `t.text("${fieldName}")`,
 					"number[]": `${number}.array()`,
-					"string[]": "text().array()",
+					"string[]": `text("${fieldName}").array()`,
 				};
 			});
 
@@ -103,9 +112,7 @@ export const drizzleResolver = (options: DrizzleResolverOptions) => {
 				if (field.references) {
 					value += `.references(() => ${field.references.model}.${convertToSnakeCase(field.references.field, options.camelCase)}${field.references.onDelete ? `, { onDelete: "${field.references.onDelete}" }` : ""})`;
 				}
-				table.push(
-					`\t${convertToSnakeCase(field.fieldName, options.camelCase)}: ${value},`,
-				);
+				table.push(`\t${field.fieldName}: ${value},`);
 			}
 
 			if (ctx.mode === "alter") {
