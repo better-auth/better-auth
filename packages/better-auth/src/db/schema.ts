@@ -169,7 +169,7 @@ export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 		[K in keyof S]?: {
 			modelName?: string;
 			fields?: {
-				[P: string]: string;
+				[P: string]: string | Partial<DBFieldAttribute>;
 			};
 		};
 	},
@@ -187,7 +187,14 @@ export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 			if (!newField) {
 				continue;
 			}
-			schema[table]!.fields[field]!.fieldName = newField;
+			if (typeof newField === "string") {
+				schema[table]!.fields[field]!.fieldName = newField;
+			} else {
+				schema[table]!.fields[field] = {
+					...schema[table]!.fields[field]!,
+					...newField,
+				};
+			}
 		}
 	}
 	return schema;
