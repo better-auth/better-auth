@@ -5,7 +5,7 @@ description: The OAuth provider was not found.
 
 ## What is it?
 
-This error occurs only at the OAuth callback endpoint when the provider identifier is missing
+This error occurs when Better Auth cannot identify a provider for the callback path—either because the provider segment is missing or because no provider with that id is configured.
 from the URL path. Better Auth expects the callback route to be shaped like
 `/api/auth/callback/<provider>`. If the `<provider>` segment is absent (e.g., request hits
 `/api/auth/callback`), we cannot determine which integration should handle the callback and the
