@@ -469,7 +469,7 @@ describe("Cookie Cache Field Filtering", () => {
 		const request = new Request("https://example.com/api/auth/session", {
 			headers,
 		});
-		
+
 		const cache = await getCookieCache(request, {
 			secret: "better-auth.secret",
 		});
