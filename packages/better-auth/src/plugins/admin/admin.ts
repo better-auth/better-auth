@@ -1483,10 +1483,13 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						newPassword: z.string().meta({
-							description: "The new password",
-						}),
-						userId: z.coerce.string().meta({
+						newPassword: z
+							.string()
+							.nonempty("newPassword cannot be empty")
+							.meta({
+								description: "The new password",
+							}),
+						userId: z.coerce.string().nonempty("userId cannot be empty").meta({
 							description: "The user id",
 						}),
 					}),
@@ -1531,11 +1534,27 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PASSWORD,
 						});
 					}
-					const hashedPassword = await ctx.context.password.hash(
-						ctx.body.newPassword,
-					);
+
+					const { newPassword, userId } = ctx.body;
+					const minPasswordLength =
+						ctx.context.password.config.minPasswordLength;
+					if (newPassword.length < minPasswordLength) {
+						ctx.context.logger.error("Password is too short");
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+						});
+					}
+					const maxPasswordLength =
+						ctx.context.password.config.maxPasswordLength;
+					if (newPassword.length > maxPasswordLength) {
+						ctx.context.logger.error("Password is too long");
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+						});
+					}
+					const hashedPassword = await ctx.context.password.hash(newPassword);
 					await ctx.context.internalAdapter.updatePassword(
-						ctx.body.userId,
+						userId,
 						hashedPassword,
 					);
 					return ctx.json({
