@@ -505,11 +505,9 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				.optional(),
 			metadata: {
 				$Infer: {
-					query: {} as
-						| {
-								organizationId?: string | undefined;
-						  }
-						| undefined,
+					query: {} as {
+						organizationId?: string | undefined;
+					},
 				},
 			},
 		},
