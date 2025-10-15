@@ -112,7 +112,7 @@ export function CopySchemaDialogProvider({
 			{children}
 
 			<Dialog open={open} onOpenChange={setOpen}>
-				<DialogContent className="w-full sm:max-w-xl p-0 pt-6 flex flex-col outline-none">
+				<DialogContent className="w-full sm:max-w-xl p-0 pt-6 flex flex-col outline-none overflow-y-auto max-h-screen">
 					<DialogHeader className="px-6">
 						<DialogTitle>Copy Schema</DialogTitle>
 						<DialogDescription className="prose">
