@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { phoneNumber } from ".";
+import { phoneNumber, type PhoneNumberOptions } from ".";
 import { createAuthClient } from "../../client";
 import { phoneNumberClient } from "./client";
 import { bearer } from "../bearer";
@@ -435,5 +435,103 @@ describe("phone number verification requirement", async () => {
 		expect(signInRes.error?.status).toBe(401);
 		expect(signInRes.error?.code).toMatch("PHONE_NUMBER_NOT_VERIFIED");
 		expect(otp).toHaveLength(6);
+	});
+});
+
+describe("custom otp", async () => {
+	let otp = "";
+	let sent = false;
+	const testPhoneNumber = "+251911121314";
+	const customOtpPhoneNumber = "+12345678900";
+
+	const createClient = async (customOTP: PhoneNumberOptions["customOTP"]) => {
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+						sent = true;
+					},
+					customOTP,
+				}),
+			],
+		});
+		return createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [phoneNumberClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+	};
+
+	const reset = () => {
+		otp = "";
+		sent = false;
+	};
+
+	const clientWithMap = await createClient({
+		phoneNumbers: { [customOtpPhoneNumber]: "123456" },
+	});
+
+	const clientWithFn = await createClient({
+		phoneNumbers: async () => ({
+			[customOtpPhoneNumber]: "123456",
+		}),
+	});
+
+	const clientWithSkip = await createClient({
+		phoneNumbers: { [customOtpPhoneNumber]: "123456" },
+		skipSendOTP: true,
+	});
+
+	it("should send random verification code to regular phone number", async () => {
+		const res = await clientWithMap.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+		expect(res.error).toBe(null);
+		expect(otp).toHaveLength(6);
+		reset();
+	});
+
+	it("should send custom verification code to phone numbers from record", async () => {
+		const res = await clientWithMap.phoneNumber.sendOtp({
+			phoneNumber: customOtpPhoneNumber,
+		});
+		expect(res.error).toBe(null);
+		expect(otp).toBe("123456");
+		expect(otp).toHaveLength(6);
+		reset();
+	});
+
+	it("should send custom verification code to phone numbers from async function", async () => {
+		const res = await clientWithFn.phoneNumber.sendOtp({
+			phoneNumber: customOtpPhoneNumber,
+		});
+		expect(res.error).toBe(null);
+		expect(otp).toBe("123456");
+		expect(otp).toHaveLength(6);
+		reset();
+	});
+
+	it("should skip sendOTP when using phone number with custom OTP", async () => {
+		const currentOtp = otp;
+		const res = await clientWithSkip.phoneNumber.sendOtp({
+			phoneNumber: customOtpPhoneNumber,
+		});
+		expect(res.error).toBe(null);
+		expect(otp).toBe(currentOtp);
+		expect(sent).toBe(false);
+		reset();
+	});
+
+	it("shouldn't skip sentOTP when using regular phone number", async () => {
+		const res = await clientWithSkip.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+		expect(res.error).toBe(null);
+		expect(otp).toHaveLength(6);
+		expect(sent).toBe(true);
+		reset();
 	});
 });

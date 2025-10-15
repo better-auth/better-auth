@@ -255,6 +255,50 @@ export const auth = betterAuth({
     - `getTempName`: A function that generates a temporary name for the user. It takes the phone number as an argument and returns the temporary name.
 
 - `requireVerification`: When enabled, users cannot sign in with their phone number until it has been verified. If an unverified user attempts to sign in, the server will respond with a 401 error (PHONE_NUMBER_NOT_VERIFIED) and automatically trigger an OTP send to start the verification process.
+
+- `customOTP`: An object with the following properties to customize OTP generation:
+    - `phoneNumbers`: A record or an function that returns a record of phone numbers mapped to custom OTP codes. This is useful for testing purposes.
+    - `skipSendOTP`: A boolean to skip sending the OTP code for phone numbers listed in `customOTP.phoneNumbers`. Default is `false`. 
+
+```ts
+// Example usage of custom OTPs using a static record
+export const auth = betterAuth({
+    plugins: [
+        phoneNumber({
+            sendOTP: ({ phoneNumber, code }, request) => {
+                // Implement sending OTP code via SMS
+            },
+            customOTP: {
+                phoneNumbers: {
+                  "+1234567890": "654321", 
+                  "+1987654321": "123456" 
+                },
+                skipSendOTP: true // this will avoid calling sendOTP() for custom OTPs
+            }
+        })
+    ]
+})
+```
+
+```ts
+// Example usage of custom OTPs with async function
+export const auth = betterAuth({
+    plugins: [
+        phoneNumber({
+            sendOTP: ({ phoneNumber, code }, request) => {
+                // Implement sending OTP code via SMS
+            },
+            customOTP: {
+                phoneNumbers: async () => {
+                  return getCustomOTPsFromDB() 
+                },
+                skipSendOTP: true // this will avoid calling sendOTP() for custom OTPs
+            }
+        })
+    ]
+})
+```
+
     
 ## Schema
 
