@@ -317,8 +317,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					model: "member",
 					where: [{ field: "id", value: memberId }],
 				});
-				if (!member) return;
-				userId = member?.userId;
+				if (!member) {
+					throw new BetterAuthError("Member not found");
+				}
+				userId = member.userId;
 			} else {
 				userId = _userId;
 			}
@@ -337,15 +339,17 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					model: "team",
 					where: [{ field: "organizationId", value: organizationId }],
 				});
-				for (const team of teams) {
-					await adapter.deleteMany({
-						model: "teamMember",
-						where: [
-							{ field: "teamId", value: team.id },
-							{ field: "userId", value: userId },
-						],
-					});
-				}
+				await Promise.all(
+					teams.map((team) =>
+						adapter.deleteMany({
+							model: "teamMember",
+							where: [
+								{ field: "teamId", value: team.id },
+								{ field: "userId", value: userId },
+							],
+						}),
+					),
+				);
 			}
 			return member;
 		},
