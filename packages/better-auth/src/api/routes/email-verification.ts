@@ -52,9 +52,9 @@ export async function sendVerificationEmailFn(
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
 	);
-	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
-		encodeURIComponent(ctx.body.callbackURL || "/")
-	}`;
+	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+		ctx.body.callbackURL || "/",
+	)}`;
 	await ctx.context.options.emailVerification.sendVerificationEmail(
 		{
 			user: user,
@@ -365,9 +365,9 @@ export const verifyEmail = createAuthEndpoint(
 					user: updatedUser,
 					url: `${
 						ctx.context.baseURL
-					}/verify-email?token=${newToken}&callbackURL=${
-						encodeURIComponent(ctx.query.callbackURL || "/")
-					}`,
+					}/verify-email?token=${newToken}&callbackURL=${encodeURIComponent(
+						ctx.query.callbackURL || "/",
+					)}`,
 					token: newToken,
 				},
 				ctx.request,

@@ -520,9 +520,9 @@ export const signInEmail = createAuthEndpoint(
 				);
 				const url = `${
 					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${
-					encodeURIComponent(ctx.body.callbackURL || "/")
-				}`;
+				}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+					ctx.body.callbackURL || "/",
+				)}`;
 				await ctx.context.options.emailVerification.sendVerificationEmail(
 					{
 						user: user.user,
