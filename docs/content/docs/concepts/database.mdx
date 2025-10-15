@@ -473,9 +473,9 @@ export const auth = betterAuth({
 
 Better Auth by default will generate unique IDs for users, sessions, and other entities. You can customize ID generation behavior using the `advanced.database.generateId` option or `advanced.database.useNumberId`.
 
-#### Option 1: Let Database Generate IDs
+#### Option 1: Auto-Increment Numeric IDs
 
-Setting `generateId` to `false` disables ID generation globally, letting your database handle all ID generation:
+For auto-incrementing numeric IDs (serial, auto_increment) across all tables, use `useNumberId`:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -485,19 +485,37 @@ export const auth = betterAuth({
   database: db,
   advanced: {
     database: {
-      generateId: false, // Database generates all IDs
+      useNumberId: true,
     },
   },
 });
 ```
 
 <Callout type="info">
-  **Note**: For auto-incrementing numeric IDs (serial, auto_increment), use `useNumberId: true` instead (see the Numeric IDs section below).
+  **How it works:** `useNumberId` automatically disables Better Auth ID generation and configures the system to expect numeric IDs from your database. The Better Auth CLI will generate schema with numeric ID fields with auto-incrementing attributes (serial, auto_increment, etc.). IDs are returned as strings in Better Auth responses.
 </Callout>
 
-#### Option 2: Custom ID Generation Function
+#### Option 2: Database-Generated IDs
 
-Use a function to generate IDs. You can return `false` or `undefined` from the function to let the database generate the ID for specific models:
+If your database generates IDs using functions (like PostgreSQL `gen_random_uuid()`) or other mechanisms, set `generateId` to `false`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+  database: db,
+  advanced: {
+    database: {
+      generateId: false,
+    },
+  },
+});
+```
+
+#### Option 3: Custom ID Generation Function
+
+Use a function to generate IDs with custom logic. You can return `false` or `undefined` from the function to let the database generate the ID for specific models:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -524,7 +542,7 @@ export const auth = betterAuth({
   **Important**: Returning `false` or `undefined` from the `generateId` function lets the database handle ID generation for that specific model. Setting `generateId: false` (without a function) disables ID generation for **all** tables.
 </Callout>
 
-#### Option 3: Consistent Custom ID Generator
+#### Option 4: Consistent Custom ID Generator
 
 Generate the same type of ID for all tables:
 
@@ -541,37 +559,6 @@ export const auth = betterAuth({
   },
 });
 ```
-
-### Numeric IDs
-
-If you prefer auto-incrementing numeric IDs, you can set the `advanced.database.useNumberId` option to `true`.
-Doing this will disable Better-Auth from generating IDs for any table, and will assume your
-database will generate the numeric ID automatically.
-
-When enabled, the Better-Auth CLI will generate or migrate the schema with the `id` field as a numeric type for your database
-with auto-incrementing attributes associated with it.
-
-```ts
-import { betterAuth } from "better-auth";
-import { db } from "./db";
-
-export const auth = betterAuth({
-  database: db,
-  advanced: {
-    database: {
-      useNumberId: true,
-    },
-  },
-});
-```
-
-<Callout type="info">
-  Better-Auth will continue to infer the type of the `id` field as a `string` for the database, but will
-  automatically convert it to a numeric type when fetching or inserting data from the database.
-
-  It's likely when grabbing `id` values returned from Better-Auth that you'll receive a string version of a number,
-  this is normal. It's also expected that all id values passed to Better-Auth (eg via an endpoint body) is expected to be a string.
-</Callout>
 
 ### Mixed ID Types
 
