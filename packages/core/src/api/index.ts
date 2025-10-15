@@ -49,7 +49,7 @@ export const createAuthEndpoint = <
 			use: [...(options?.use || []), ...use],
 		},
 		// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-		(ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
+		async (ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
 	);
 };
 
