@@ -89,9 +89,9 @@ export default function ArticleLayout() {
 												initial={{ opacity: 0, height: 0 }}
 												animate={{ opacity: 1, height: "auto" }}
 												exit={{ opacity: 0, height: 0 }}
-												className="relative overflow-hidden mb-2"
+												className="relative overflow-hidden"
 											>
-												<motion.div className="text-sm">
+												<motion.div className="text-sm mb-2">
 													{item.list.map((listItem, j) => (
 														<div key={listItem.title}>
 															<Suspense fallback={<>Loading...</>}>
