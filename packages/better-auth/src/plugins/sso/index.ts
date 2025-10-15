@@ -72,6 +72,19 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	defaultOverrideUserInfo?: boolean;
+	/**
+	 * Extend or customize the underlying ssoProvider model.
+	 *
+	 * Similar to other plugins, you can:
+	 *  - Provide custom DB column names for existing fields via `fields`
+	 *  - Add additional fields via `additionalFields`
+	 *  - Change the table/model name via `modelName`
+	 */
+	schema?: InferOptionSchema<ReturnType<typeof schema>> & {
+		ssoProvider?: {
+			additionalFields?: Record<string, FieldAttribute>;
+		};
+	};
 }
 
 /**
@@ -1053,6 +1066,7 @@ export const sso = (options?: SSOOptions) => {
 };
 
 export interface SSOProvider {
+	id: string;
 	issuer: string;
 	oidcConfig: OIDCConfig;
 	userId?: string;
