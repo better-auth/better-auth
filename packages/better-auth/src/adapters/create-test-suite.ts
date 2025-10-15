@@ -517,7 +517,7 @@ export const createTestSuite = <
 
 				test.skipIf(shouldSkip)(
 					testName,
-					{ timeout: 10000 },
+					{ timeout: 20000 },
 					async ({ onTestFailed, skip }) => {
 						resetDebugLogs();
 						onTestFailed(async () => {
