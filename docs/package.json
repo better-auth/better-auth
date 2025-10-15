@@ -9,7 +9,7 @@
     "start": "next start",
     "postinstall": "fumadocs-mdx",
     "scripts:endpoint-to-doc": "bun ./scripts/endpoint-to-doc/index.ts",
-    "scripts:sync-orama": "ts-node ./scripts/sync-orama.ts"
+    "scripts:sync-orama": "ts-node --esm ./scripts/sync-orama.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.20",
