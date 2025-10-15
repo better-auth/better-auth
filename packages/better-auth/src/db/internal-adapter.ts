@@ -4,6 +4,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	type Account,
 	type Session,
+	type SessionWithSoftDelete,
 	type User,
 	type Verification,
 } from "../types";
@@ -181,10 +182,11 @@ export const createInternalAdapter = (
 						});
 
 						if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+							const sessionWithSoftDelete = s.session as SessionWithSoftDelete;
 							if (options.session.deleteSessionOnSignOut.timestamp === true) {
-								if (s.session.invalidatedAt !== null) continue;
+								if (sessionWithSoftDelete.invalidatedAt !== null) continue;
 							} else {
-								if (s.session.isActive !== true) continue;
+								if (sessionWithSoftDelete.isActive !== true) continue;
 							}
 						}
 
@@ -208,10 +210,11 @@ export const createInternalAdapter = (
 
 			if (options.session?.deleteSessionOnSignOut?.enabled === false) {
 				return sessions.filter((session) => {
+					const sessionWithSoftDelete = session as SessionWithSoftDelete;
 					if (options.session?.deleteSessionOnSignOut?.timestamp === true) {
-						return session.invalidatedAt === null;
+						return sessionWithSoftDelete.invalidatedAt === null;
 					}
-					return session.isActive === true;
+					return sessionWithSoftDelete.isActive === true;
 				});
 			}
 
@@ -457,10 +460,11 @@ export const createInternalAdapter = (
 			}
 
 			if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+				const sessionWithSoftDelete = session as SessionWithSoftDelete;
 				if (options.session.deleteSessionOnSignOut.timestamp === true) {
-					if (session.invalidatedAt !== null) return null;
+					if (sessionWithSoftDelete.invalidatedAt !== null) return null;
 				} else {
-					if (session.isActive !== true) return null;
+					if (sessionWithSoftDelete.isActive !== true) return null;
 				}
 			}
 
@@ -514,10 +518,12 @@ export const createInternalAdapter = (
 						};
 
 						if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+							const sessionWithSoftDelete =
+								session.session as SessionWithSoftDelete;
 							if (options.session.deleteSessionOnSignOut.timestamp === true) {
-								if (session.session.invalidatedAt !== null) continue;
+								if (sessionWithSoftDelete.invalidatedAt !== null) continue;
 							} else {
-								if (session.session.isActive !== true) continue;
+								if (sessionWithSoftDelete.isActive !== true) continue;
 							}
 						}
 
@@ -556,10 +562,11 @@ export const createInternalAdapter = (
 			return sessions
 				.filter((session) => {
 					if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+						const sessionWithSoftDelete = session as SessionWithSoftDelete;
 						if (options.session.deleteSessionOnSignOut.timestamp === true) {
-							if (session.invalidatedAt !== null) return false;
+							if (sessionWithSoftDelete.invalidatedAt !== null) return false;
 						} else {
-							if (session.isActive !== true) return false;
+							if (sessionWithSoftDelete.isActive !== true) return false;
 						}
 					}
 					return true;

@@ -107,7 +107,8 @@ export const getAuthTables = (
 									required: false,
 									defaultValue: null,
 									fieldName:
-										options.session?.fields?.invalidatedAt || "invalidatedAt",
+										(options.session?.fields as any)?.invalidatedAt ||
+										"invalidatedAt",
 								},
 							}
 						: {
@@ -115,7 +116,8 @@ export const getAuthTables = (
 									type: "boolean",
 									required: true,
 									defaultValue: true,
-									fieldName: options.session?.fields?.isActive || "isActive",
+									fieldName:
+										(options.session?.fields as any)?.isActive || "isActive",
 								},
 							}
 					: {}),

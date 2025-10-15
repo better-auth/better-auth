@@ -7,8 +7,6 @@ export const sessionSchema = coreSchema.extend({
 	token: z.string(),
 	ipAddress: z.string().nullish(),
 	userAgent: z.string().nullish(),
-	isActive: z.boolean().nullish(),
-	invalidatedAt: z.date().nullish(),
 });
 
 /**

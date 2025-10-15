@@ -3,6 +3,7 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	Session,
+	SessionWithSoftDelete,
 	User,
 } from "../types";
 import Database from "better-sqlite3";
@@ -640,10 +641,10 @@ describe("adapter test", async () => {
 			testCtx as unknown as GenericEndpointContext,
 		);
 
-		const session = await testCtx.internalAdapter.createSession(
+		const session = (await testCtx.internalAdapter.createSession(
 			user.id,
 			testCtx as unknown as GenericEndpointContext,
-		);
+		)) as SessionWithSoftDelete;
 
 		expect(session.isActive).toBeDefined();
 		expect(session.isActive).toBeTruthy();
@@ -715,10 +716,10 @@ describe("adapter test", async () => {
 			testCtx as unknown as GenericEndpointContext,
 		);
 
-		const session = await testCtx.internalAdapter.createSession(
+		const session = (await testCtx.internalAdapter.createSession(
 			user.id,
 			testCtx as unknown as GenericEndpointContext,
-		);
+		)) as SessionWithSoftDelete;
 
 		expect(session.invalidatedAt).toBeDefined();
 		expect(session.invalidatedAt).toBeNull();
