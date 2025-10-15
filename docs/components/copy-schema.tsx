@@ -1,6 +1,13 @@
 "use client";
 
-import { CopyIcon, SlashIcon, CheckIcon, CircleHelpIcon } from "lucide-react";
+import {
+	CopyIcon,
+	SlashIcon,
+	CheckIcon,
+	CircleHelpIcon,
+	ExpandIcon,
+	MinimizeIcon,
+} from "lucide-react";
 import { DefaultDialects } from "@/lib/copy-schema/types";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -18,6 +25,7 @@ import {
 	useEffect,
 	useId,
 	useMemo,
+	useRef,
 	useState,
 } from "react";
 import { DatabaseTableProps } from "@/components/mdx/database-tables";
@@ -127,6 +135,34 @@ export function CopySchemaDialogProvider({
 	);
 }
 
+function useIsScrollable(ref: React.RefObject<HTMLElement | null>) {
+	const [scrollable, setScrollable] = useState(false);
+
+	useEffect(() => {
+		const el = ref.current;
+		if (!el) {
+			return;
+		}
+
+		const checkScrollable = () => {
+			const style = getComputedStyle(el);
+			const overflowY = style.overflowY;
+			const canScroll =
+				el.scrollHeight > el.clientHeight &&
+				(overflowY === "auto" || overflowY === "scroll");
+			setScrollable(canScroll);
+		};
+		checkScrollable();
+
+		const observer = new ResizeObserver(checkScrollable);
+		observer.observe(el);
+
+		return () => observer.disconnect();
+	});
+
+	return scrollable;
+}
+
 function CopySchemaContent() {
 	const id = useId();
 	const { data, setOpen } = useCopySchemaDialog();
@@ -134,6 +170,9 @@ function CopySchemaContent() {
 	const [codeTheme, setCodeTheme] = useState(themes.synthwave84);
 	const [conditions, setConditions] = useState<Record<string, boolean>>({});
 	const [controls, setControls] = useState<Record<string, any>>({});
+	const codeRef = useRef<HTMLPreElement>(null);
+	const isCodeScrollable = useIsScrollable(codeRef);
+	const [collapseCode, setCollapseCode] = useState(true);
 	const setControl = (key: string, value: any) => {
 		setControls((prev) => ({
 			...prev,
@@ -351,9 +390,11 @@ function CopySchemaContent() {
 						>
 							{({ className, style, tokens, getLineProps, getTokenProps }) => (
 								<pre
+									ref={codeRef}
 									className={clsx(
 										className,
-										"peer flex overflow-x-auto py-3 max-h-76",
+										"peer flex overflow-x-auto py-3",
+										collapseCode ? "max-h-76" : "",
 									)}
 									style={style}
 								>
@@ -388,6 +429,29 @@ function CopySchemaContent() {
 								<CheckIcon aria-hidden="true" />
 							)}
 						</Button>
+
+						{collapseCode && isCodeScrollable && (
+							<Button
+								size="icon"
+								variant="outline"
+								className="absolute text-muted-foreground bottom-0 right-0 border-r-0 border-b-0 transition-[color,background-color,opacity] duration-200 delay-75 ease-out hover:opacity-100 focus-visible:opacity-100 peer-focus-visible:opacity-100 peer-hover:opacity-100 opacity-0"
+								onClick={() => setCollapseCode(false)}
+								aria-label="Expand"
+							>
+								<ExpandIcon aria-hidden="true" />
+							</Button>
+						)}
+						{!collapseCode && (
+							<Button
+								size="icon"
+								variant="outline"
+								className="absolute text-muted-foreground bottom-0 right-0 border-r-0 border-b-0 transition-[color,background-color,opacity] duration-200 delay-75 ease-out hover:opacity-100 focus-visible:opacity-100 peer-focus-visible:opacity-100 peer-hover:opacity-100 opacity-0"
+								onClick={() => setCollapseCode(true)}
+								aria-label="Collapse"
+							>
+								<MinimizeIcon aria-hidden="true" />
+							</Button>
+						)}
 					</div>
 
 					<Accordion
