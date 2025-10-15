@@ -355,6 +355,25 @@ describe("Admin plugin", async () => {
 		expect(res.data?.users[0]!.email).toBe("test@test.com");
 	});
 
+	it("should allow to filter and search users simultaneously", async () => {  
+		const res = await client.admin.listUsers({  
+			query: {  
+			filterValue: "admin",  
+			filterField: "role",  
+			filterOperator: "eq",  
+			searchValue: "Admin",  
+			searchField: "name",  
+			searchOperator: "contains",  
+			},  
+			fetchOptions: {  
+			headers: adminHeaders,  
+			},  
+		});  
+		expect(res.data?.users.length).toBe(1);  
+		expect(res.data?.users[0]!.role).toBe("admin");  
+		expect(res.data?.users[0]!.name).toContain("Admin");  
+	});
+
 	it("should allow to set user role", async () => {
 		const res = await client.admin.setRole(
 			{
@@ -804,6 +823,7 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS");
 	});
+
 });
 
 describe("access control", async (it) => {
