@@ -1472,7 +1472,6 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	it("should not modify lastRequest when updating API key configuration", async () => {
-		// Create API key (lastRequest = null)
 		const key = await auth.api.createApiKey({
 			body: {
 				userId: user.id,
@@ -1480,7 +1479,6 @@ describe("api-key", async () => {
 		});
 		expect(key.lastRequest).toBeNull();
 
-		// Update name
 		const updated = await auth.api.updateApiKey({
 			body: {
 				keyId: key.id,
@@ -1489,12 +1487,10 @@ describe("api-key", async () => {
 			},
 		});
 
-		// lastRequest should still be null
 		expect(updated.lastRequest).toBeNull();
 	});
 
 	it("should not auto-decrement remaining when updating API key", async () => {
-		// Create API key with remaining = 100
 		const key = await auth.api.createApiKey({
 			body: {
 				remaining: 100,
@@ -1503,7 +1499,6 @@ describe("api-key", async () => {
 		});
 		expect(key.remaining).toBe(100);
 
-		// Update metadata
 		const updated = await auth.api.updateApiKey({
 			body: {
 				keyId: key.id,
@@ -1512,12 +1507,10 @@ describe("api-key", async () => {
 			},
 		});
 
-		// remaining should still be 100
 		expect(updated.remaining).toBe(100);
 	});
 
 	it("should allow explicit remaining updates via body parameter", async () => {
-		// Create API key with remaining = 100
 		const key = await auth.api.createApiKey({
 			body: {
 				remaining: 100,
@@ -1525,7 +1518,6 @@ describe("api-key", async () => {
 			},
 		});
 
-		// Explicitly update remaining
 		const updated = await auth.api.updateApiKey({
 			body: {
 				keyId: key.id,
@@ -1534,14 +1526,11 @@ describe("api-key", async () => {
 			},
 		});
 
-		// remaining should be updated to 50
 		expect(updated.remaining).toBe(50);
-		// lastRequest should still be null
 		expect(updated.lastRequest).toBeNull();
 	});
 
 	it("verifyApiKey should still update lastRequest", async () => {
-		// Create API key
 		const key = await auth.api.createApiKey({
 			body: {
 				userId: user.id,
@@ -1549,13 +1538,11 @@ describe("api-key", async () => {
 		});
 		expect(key.lastRequest).toBeNull();
 
-		// Verify API key
 		const verified = await auth.api.verifyApiKey({
 			body: { key: key.key },
 		});
 		expect(verified.valid).toBe(true);
 
-		// Get updated key
 		const updated = await auth.api.getApiKey({
 			query: { id: key.id },
 			headers,
@@ -1565,7 +1552,6 @@ describe("api-key", async () => {
 	});
 
 	it("verifyApiKey should still decrement remaining", async () => {
-		// Create API key with remaining = 100
 		const key = await auth.api.createApiKey({
 			body: {
 				remaining: 100,
@@ -1573,12 +1559,10 @@ describe("api-key", async () => {
 			},
 		});
 
-		// Verify API key
 		await auth.api.verifyApiKey({
 			body: { key: key.key },
 		});
 
-		// Get updated key
 		const updated = await auth.api.getApiKey({
 			query: { id: key.id },
 			headers,
