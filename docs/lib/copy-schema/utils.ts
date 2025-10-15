@@ -6,7 +6,8 @@ export function getTypeFactory(
 	) => Record<
 		"string" | "boolean" | "number" | "date" | "json" | "id" | "foreignKeyId",
 		string
-	>,
+	> &
+		Partial<Record<"string[]" | "number[]", string>>,
 	config?: {
 		/**
 		 * @default "jsonb"
@@ -25,6 +26,9 @@ export function getTypeFactory(
 		}
 
 		if (type === "string[]" || type === "number[]") {
+			if (typeMap[type] !== undefined) {
+				return typeMap[type];
+			}
 			return config?.arrayDataType ?? "jsonb";
 		}
 		if (Array.isArray(type)) {

@@ -17,6 +17,8 @@ const defaultResolvers: Record<DefaultDialects, Resolver> = {
 	mssql: mssqlResolver,
 };
 
+const defaultModels = ["user", "session", "account", "verification"];
+
 export const copySchema = <
 	const S extends DBSchema,
 	O extends CopySchemaOptions,
@@ -42,9 +44,16 @@ export const copySchema = <
 		}),
 	};
 
+	let mode = options.mode;
+	if (!mode) {
+		mode = defaultModels.includes(filteredSchema.modelName)
+			? "alter"
+			: "create";
+	}
+
 	const ctx: ResolverHandlerContext = {
 		useNumberId: options.useNumberId ?? false,
-		mode: options.mode ?? "create",
+		mode,
 		schema: filteredSchema,
 	};
 

@@ -9,7 +9,14 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { CopyIcon, Key, Link, SlashIcon, CheckIcon } from "lucide-react";
+import {
+	CopyIcon,
+	Key,
+	SlashIcon,
+	CheckIcon,
+	CircleHelpIcon,
+	LinkIcon,
+} from "lucide-react";
 import {
 	Tooltip,
 	TooltipContent,
@@ -54,6 +61,8 @@ import {
 	AccordionTrigger,
 } from "../ui/accordion";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
+import Link from "next/link";
+import { useCopyButton } from "../ui/use-copy-button";
 
 Prism.languages.prisma = {
 	comment: /\/\/.*|\/\*[\s\S]*?\*\//,
@@ -176,7 +185,7 @@ export default function DatabaseTable(props: DatabaseTableProps) {
 														variant="secondary"
 														className="mr-1 rounded-sm bg-blue-500"
 													>
-														<Link className="w-3 h-3 mr-1" size={14} />
+														<LinkIcon className="w-3 h-3 mr-1" size={14} />
 														FK
 													</Badge>
 												</TooltipTrigger>
@@ -315,15 +324,19 @@ function CopySchemaContent() {
 		[data, tab, controls, conditions],
 	);
 
+	const [checked, onCopy] = useCopyButton(() => {
+		navigator.clipboard.writeText(schema.result);
+	});
+
 	return (
 		<div className="flex flex-col">
 			<TabsPrimitive.Root
 				defaultValue={tab}
 				onValueChange={(value) => setTab(value as any)}
 			>
-				<ScrollArea className="w-full">
+				<ScrollArea className="w-full border-y">
 					<ScrollViewport className="scroll-smooth">
-						<TabsPrimitive.List className="flex *:border-l-transparent *:last:border-r-0">
+						<TabsPrimitive.List className="flex divide-x divide-border">
 							<CopySchemaTabTrigger value="drizzle">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -474,30 +487,54 @@ function CopySchemaContent() {
 					<ScrollBar orientation="horizontal" />
 				</ScrollArea>
 				<div role="tabpanel">
-					<Highlight
-						key={theme.resolvedTheme}
-						code={schema.result}
-						theme={codeTheme}
-						language={schema.language}
-						prism={Prism}
-					>
-						{({ className, style, tokens, getLineProps, getTokenProps }) => (
-							<pre
-								className={clsx(className, "flex overflow-x-auto py-3")}
-								style={style}
-							>
-								<code className="px-4">
-									{tokens.map((line, lineIndex) => (
-										<div key={lineIndex} {...getLineProps({ line })}>
-											{line.map((token, tokenIndex) => (
-												<span key={tokenIndex} {...getTokenProps({ token })} />
-											))}
-										</div>
-									))}
-								</code>
-							</pre>
-						)}
-					</Highlight>
+					<div className="relative">
+						<Highlight
+							key={theme.resolvedTheme}
+							code={schema.result}
+							theme={codeTheme}
+							language={schema.language}
+							prism={Prism}
+						>
+							{({ className, style, tokens, getLineProps, getTokenProps }) => (
+								<pre
+									className={clsx(
+										className,
+										"peer flex overflow-x-auto py-3 max-h-76",
+									)}
+									style={style}
+								>
+									<code className="px-4">
+										{tokens.map((line, lineIndex) => (
+											<div key={lineIndex} {...getLineProps({ line })}>
+												{line.map((token, tokenIndex) => (
+													<span
+														key={tokenIndex}
+														{...getTokenProps({ token })}
+													/>
+												))}
+											</div>
+										))}
+									</code>
+								</pre>
+							)}
+						</Highlight>
+
+						<Button
+							size="icon"
+							variant="outline"
+							className="absolute text-muted-foreground top-0 right-0 border-r-0 border-t-0 transition-[color,background-color,opacity] duration-200 ease-out hover:opacity-100 focus-visible:opacity-100 peer-focus-visible:opacity-100 peer-hover:opacity-100 opacity-0"
+							disabled={checked}
+							onClick={onCopy}
+							aria-disabled={checked}
+							aria-label={!checked ? "Copy schema" : "Schema copied"}
+						>
+							{!checked ? (
+								<CopyIcon aria-hidden="true" />
+							) : (
+								<CheckIcon aria-hidden="true" />
+							)}
+						</Button>
+					</div>
 
 					<Accordion
 						type="multiple"
@@ -597,11 +634,36 @@ function CopySchemaContent() {
 					</Accordion>
 				</div>
 			</TabsPrimitive.Root>
-			<DialogFooter className="p-3 border-t">
-				<DialogClose asChild>
-					<Button variant="secondary">Cancel</Button>
-				</DialogClose>
-				<Button>Copy schema</Button>
+			<DialogFooter className="p-3 border-t flex flex-col! space-x-0! sm:flex-row! sm:items-center gap-4 sm:gap-6">
+				<p className="text-xs leading-relaxed prose text-muted-foreground">
+					<CircleHelpIcon
+						className="inline shrink-0 size-3.5 me-1.5"
+						aria-hidden="true"
+					/>
+					Use{" "}
+					<Link href="/docs/concepts/cli" className="no-underline">
+						<code className="text-xs!">@better-auth/cli</code>
+					</Link>
+					to generate more accurate and consistent schemas.
+				</p>
+				<div className="flex items-center gap-2 max-sm:ms-auto">
+					<DialogClose asChild>
+						<Button variant="secondary">Close</Button>
+					</DialogClose>
+					<Button onClick={onCopy} disabled={checked} aria-disabled={checked}>
+						{!checked ? (
+							<>
+								<CopyIcon aria-hidden="true" />
+								Copy schema
+							</>
+						) : (
+							<>
+								<CheckIcon aria-hidden="true" />
+								Schema copied
+							</>
+						)}
+					</Button>
+				</div>
 			</DialogFooter>
 		</div>
 	);
@@ -614,7 +676,7 @@ function CopySchemaTabTrigger({
 	return (
 		<TabsPrimitive.Trigger
 			className={buttonVariants({
-				variant: "outline",
+				variant: "ghost",
 				className:
 					"h-auto aria-selected:bg-muted focus-visible:border focus-visible:border-primary! focus-visible:ring-0! transition-colors duration-200 ease-out",
 			})}

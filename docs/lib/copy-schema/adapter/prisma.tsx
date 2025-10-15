@@ -22,7 +22,6 @@ export type PrismaResolverOptions = {
 		| "postgresql"
 		| "sqlserver"
 		| "mongodb";
-	// TODO:
 	usePlural?: boolean;
 };
 
@@ -65,7 +64,9 @@ export const prismaResolver = (options: PrismaResolverOptions) => {
 				};
 			});
 
-			const lines = [`model ${capitalize(ctx.schema.modelName)} {`];
+			const lines = [
+				`model ${capitalize(ctx.schema.modelName)}${options.usePlural ? "s" : ""} {`,
+			];
 			for (const field of ctx.schema.fields) {
 				const type = getType(field);
 				let newLine = `${field.fieldName} ${type}`;
@@ -84,7 +85,7 @@ export const prismaResolver = (options: PrismaResolverOptions) => {
 					if (field.required === false) {
 						dataType += "?";
 					}
-					additionalLine = `${fieldName} ${dataType} @relation(fields: [${field.fieldName}], references: [${field.references.field}])`;
+					additionalLine = `${fieldName} ${dataType}${options.usePlural ? "s" : ""} @relation(fields: [${field.fieldName}], references: [${field.references.field}])`;
 				}
 				if (additionalLine !== "") {
 					lines.push(`\t${additionalLine}`);
@@ -94,7 +95,9 @@ export const prismaResolver = (options: PrismaResolverOptions) => {
 			if (ctx.mode === "alter") {
 				lines.push("\t// ...existing fields");
 			}
-			lines.push(`\t@@map("${ctx.schema.modelName}")`);
+			lines.push(
+				`\t@@map("${ctx.schema.modelName}${options.usePlural ? "s" : ""}")`,
+			);
 			lines.push("}");
 			return lines.join("\n");
 		},

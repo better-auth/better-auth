@@ -39,6 +39,7 @@ const formatForeignKey = (field: DBFieldAttribute) => {
 	}
 
 	newLine += ",";
+	return newLine;
 };
 
 export const mysqlResolver = {

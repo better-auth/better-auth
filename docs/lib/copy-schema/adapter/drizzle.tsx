@@ -9,17 +9,27 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { CheckIcon, SlashIcon } from "lucide-react";
+import { getTypeFactory } from "../utils";
 
 export type DrizzleResolverOptions = {
 	/**
 	 * @default "pg"
 	 */
 	provider?: "pg" | "mysql" | "sqlite";
-	// TODO:
 	usePlural?: boolean;
-	// TODO: Implement snake_case
 	camelCase?: boolean;
 };
+
+function convertToSnakeCase(str: string, camelCase?: boolean) {
+	if (camelCase) {
+		return str;
+	}
+	// Handle consecutive capitals (like ID, URL, API) by treating them as a single word
+	return str
+		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2") // Handle AABb -> AA_Bb
+		.replace(/([a-z\d])([A-Z])/g, "$1_$2") // Handle aBb -> a_Bb
+		.toLowerCase();
+}
 
 export const drizzleResolver = (options: DrizzleResolverOptions) => {
 	const provider = options.provider ?? "pg";
@@ -27,17 +37,84 @@ export const drizzleResolver = (options: DrizzleResolverOptions) => {
 	return {
 		language: "typescript",
 		handler: (ctx) => {
-			// TODO: not implemented yet
 			const corePath = `${provider}-core`;
 			const tableFnName = `${provider}Table`;
 			const imports = [
 				`import { ${tableFnName} } from "drizzle-orm/${corePath}";`,
 				`import * as t from "drizzle-orm/${corePath}";`,
 			];
+			const getType = getTypeFactory((field) => {
+				const number = field.bigint
+					? provider === "sqlite"
+						? 't.blob({ mode: "bigint" })'
+						: "t.bigint()"
+					: provider === "mysql"
+						? "t.int()"
+						: "t.integer()";
 
-			const tables = [];
+				return {
+					string:
+						provider === "sqlite"
+							? "t.text()"
+							: field.unique
+								? "t.varchar({ length: 255 })"
+								: field.references
+									? "t.varchar(36)"
+									: "t.text()",
+					boolean: provider === "sqlite" ? "t.integer()" : "t.boolean()",
+					number,
+					date:
+						provider === "pg"
+							? "t.timestamp({ precision: 6, withTimezone: true })"
+							: provider === "sqlite"
+								? 't.integer({ mode: "timestamp_ms" })'
+								: 't.timestamp({ mode: "date", fsp: 3 })',
+					json:
+						provider === "pg"
+							? "t.jsonb()"
+							: provider === "sqlite"
+								? 't.text({ mode: "json" })'
+								: "t.json()",
+					id: ctx.useNumberId
+						? provider === "pg"
+							? 't.serial("id").primaryKey()'
+							: `t.integer("id").primaryKey${provider === "sqlite" ? "({ autoIncrement: true })" : "().autoincrement()"}`
+						: provider === "mysql"
+							? 't.varchar("id", { length: 36 }).primaryKey()'
+							: 't.text("id").primaryKey()',
+					foreignKeyId: ctx.useNumberId ? "t.integer()" : "t.text()",
+					"number[]": `${number}.array()`,
+					"string[]": "text().array()",
+				};
+			});
 
-			return [...imports, ""].join("\n");
+			let table = [
+				`export const ${ctx.schema.modelName} = ${tableFnName}(\"${convertToSnakeCase(ctx.schema.modelName, options.camelCase)}${options.usePlural ? "s" : ""}\", {`,
+			];
+
+			for (const field of ctx.schema.fields) {
+				let value = getType(field);
+				if (field.required !== false && field.fieldName !== "id") {
+					value += ".notNull()";
+				}
+				if (field.unique) {
+					value += ".unique()";
+				}
+				if (field.references) {
+					value += `.references(() => ${field.references.model}.${convertToSnakeCase(field.references.field, options.camelCase)}${field.references.onDelete ? `, { onDelete: "${field.references.onDelete}" }` : ""})`;
+				}
+				table.push(
+					`\t${convertToSnakeCase(field.fieldName, options.camelCase)}: ${value},`,
+				);
+			}
+
+			if (ctx.mode === "alter") {
+				table.push("\t// ...existing fields");
+			}
+
+			table.push("});");
+
+			return [...imports, "", ...table].join("\n");
 		},
 		controls: ({ id, setValue, values }) => {
 			return (
