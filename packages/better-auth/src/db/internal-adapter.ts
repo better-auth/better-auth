@@ -1,33 +1,37 @@
 import { getDate } from "../utils/date";
 import { parseSessionOutput, parseUserOutput } from "./schema";
-import type {
-	Adapter,
-	AuthContext,
-	BetterAuthOptions,
-	GenericEndpointContext,
-	Where,
-} from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	type Account,
 	type Session,
 	type User,
 	type Verification,
 } from "../types";
+import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
-import { generateId, type InternalLogger } from "../utils";
-import { getCurrentAdapter, runWithTransaction } from "../context/transaction";
+import { generateId } from "../utils";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
+import type { InternalLogger } from "@better-auth/core/env";
+import type {
+	AuthContext,
+	GenericEndpointContext,
+	InternalAdapter,
+} from "@better-auth/core";
 
 export const createInternalAdapter = (
-	adapter: Adapter,
+	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
 		options: Omit<BetterAuthOptions, "logger">;
 		logger: InternalLogger;
 		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
 		generateId: AuthContext["generateId"];
 	},
-) => {
+): InternalAdapter => {
 	const logger = ctx.logger;
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
@@ -1077,5 +1081,3 @@ export const createInternalAdapter = (
 		},
 	};
 };
-
-export type InternalAdapter = ReturnType<typeof createInternalAdapter>;

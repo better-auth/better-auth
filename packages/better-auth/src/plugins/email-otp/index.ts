@@ -1,15 +1,21 @@
 import * as z from "zod";
-import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
-import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+import { APIError, getSessionFromCtx } from "../../api";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
 import { getDate } from "../../utils/date";
-import { setSessionCookie } from "../../cookies";
+import { setCookieCache, setSessionCookie } from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
 export interface EmailOTPOptions {
 	/**
@@ -91,6 +97,14 @@ const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const defaultOTPGenerator = (options: EmailOTPOptions) =>
 	generateRandomString(options.otpLength ?? 6, "0-9");
 
+const ERROR_CODES = defineErrorCodes({
+	OTP_EXPIRED: "otp expired",
+	INVALID_OTP: "Invalid OTP",
+	INVALID_EMAIL: "Invalid email",
+	USER_NOT_FOUND: "User not found",
+	TOO_MANY_ATTEMPTS: "Too many attempts",
+});
+
 export const emailOTP = (options: EmailOTPOptions) => {
 	const opts = {
 		expiresIn: 5 * 60,
@@ -98,13 +112,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		storeOTP: "plain",
 		...options,
 	} satisfies EmailOTPOptions;
-	const ERROR_CODES = {
-		OTP_EXPIRED: "otp expired",
-		INVALID_OTP: "Invalid OTP",
-		INVALID_EMAIL: "Invalid email",
-		USER_NOT_FOUND: "User not found",
-		TOO_MANY_ATTEMPTS: "Too many attempts",
-	} as const;
 
 	async function storeOTP(ctx: GenericEndpointContext, otp: string) {
 		if (opts.storeOTP === "encrypted") {
@@ -720,7 +727,24 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							},
 						});
 					}
-
+					const currentSession = await getSessionFromCtx(ctx);
+					if (currentSession && updatedUser.emailVerified) {
+						const dontRememberMeCookie = await ctx.getSignedCookie(
+							ctx.context.authCookies.dontRememberToken.name,
+							ctx.context.secret,
+						);
+						await setCookieCache(
+							ctx,
+							{
+								session: currentSession.session,
+								user: {
+									...currentSession.user,
+									emailVerified: true,
+								},
+							},
+							!!dontRememberMeCookie,
+						);
+					}
 					return ctx.json({
 						status: true,
 						token: null,

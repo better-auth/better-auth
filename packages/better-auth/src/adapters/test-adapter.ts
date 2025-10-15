@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe } from "vitest";
-import type { Adapter, BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { getAuthTables } from "../db";
 import type { createTestSuite } from "./create-test-suite";
-import { colors } from "../utils/colors";
+import { TTY_COLORS } from "@better-auth/core/env";
 import { deepmerge } from "./utils";
 
 export type Logger = {
@@ -22,7 +23,6 @@ export const testAdapter = async ({
 	prefixTests,
 	onFinish,
 	customIdGenerator,
-	defaultRetryCount,
 }: {
 	/**
 	 * A function that will return the adapter instance to test with.
@@ -38,8 +38,8 @@ export const testAdapter = async ({
 	adapter: (
 		options: BetterAuthOptions,
 	) =>
-		| Promise<(options: BetterAuthOptions) => Adapter>
-		| ((options: BetterAuthOptions) => Adapter);
+		| Promise<(options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>>
+		| ((options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>);
 	/**
 	 * A function that will run the database migrations.
 	 */
@@ -76,10 +76,6 @@ export const testAdapter = async ({
 	 * Custom ID generator function to be used by the helper functions. (such as `insertRandom`)
 	 */
 	customIdGenerator?: () => string | Promise<string>;
-	/**
-	 * Default retry count for the tests.
-	 */
-	defaultRetryCount?: number;
 }) => {
 	const defaultBAOptions = {} satisfies BetterAuthOptions;
 	let betterAuthOptions = (() => {
@@ -89,9 +85,9 @@ export const testAdapter = async ({
 		} satisfies BetterAuthOptions;
 	})();
 
-	let adapter: Adapter = (await getAdapter(betterAuthOptions))(
-		betterAuthOptions,
-	);
+	let adapter: DBAdapter<BetterAuthOptions> = (
+		await getAdapter(betterAuthOptions)
+	)(betterAuthOptions);
 
 	const adapterName = adapter.options?.adapterConfig.adapterName;
 	const adapterId = adapter.options?.adapterConfig.adapterId || adapter.id;
@@ -108,27 +104,27 @@ export const testAdapter = async ({
 		return {
 			info: (...args: any[]) =>
 				console.log(
-					`${colors.fg.blue}INFO   ${colors.reset} [${adapterDisplayName}]`,
+					`${TTY_COLORS.fg.blue}INFO   ${TTY_COLORS.reset} [${adapterDisplayName}]`,
 					...args,
 				),
 			success: (...args: any[]) =>
 				console.log(
-					`${colors.fg.green}SUCCESS${colors.reset} [${adapterDisplayName}]`,
+					`${TTY_COLORS.fg.green}SUCCESS${TTY_COLORS.reset} [${adapterDisplayName}]`,
 					...args,
 				),
 			warn: (...args: any[]) =>
 				console.log(
-					`${colors.fg.yellow}WARN   ${colors.reset} [${adapterDisplayName}]`,
+					`${TTY_COLORS.fg.yellow}WARN   ${TTY_COLORS.reset} [${adapterDisplayName}]`,
 					...args,
 				),
 			error: (...args: any[]) =>
 				console.log(
-					`${colors.fg.red}ERROR  ${colors.reset} [${adapterDisplayName}]`,
+					`${TTY_COLORS.fg.red}ERROR  ${TTY_COLORS.reset} [${adapterDisplayName}]`,
 					...args,
 				),
 			debug: (...args: any[]) =>
 				console.log(
-					`${colors.fg.magenta}DEBUG  ${colors.reset} [${adapterDisplayName}]`,
+					`${TTY_COLORS.fg.magenta}DEBUG  ${TTY_COLORS.reset} [${adapterDisplayName}]`,
 					...args,
 				),
 		};
@@ -167,7 +163,7 @@ export const testAdapter = async ({
 		}
 		await refreshAdapter(betterAuthOptions);
 		log.success(
-			`${colors.bright}CLEAN-UP${colors.reset} completed successfully (${(performance.now() - start).toFixed(3)}ms)`,
+			`${TTY_COLORS.bright}CLEAN-UP${TTY_COLORS.reset} completed successfully (${(performance.now() - start).toFixed(3)}ms)`,
 		);
 	};
 
@@ -187,7 +183,7 @@ export const testAdapter = async ({
 			});
 		}
 		log.success(
-			`${colors.bright}MIGRATIONS${colors.reset} completed successfully (${(performance.now() - start).toFixed(3)}ms)`,
+			`${TTY_COLORS.bright}MIGRATIONS${TTY_COLORS.reset} completed successfully (${(performance.now() - start).toFixed(3)}ms)`,
 		);
 	};
 
@@ -226,7 +222,6 @@ export const testAdapter = async ({
 						runMigrations: migrate,
 						onTestFinish: async () => {},
 						customIdGenerator,
-						defaultRetryCount: defaultRetryCount,
 					});
 				}
 			});
