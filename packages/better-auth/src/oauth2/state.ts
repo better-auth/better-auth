@@ -21,6 +21,8 @@ export async function generateState(
 	const state = generateRandomString(32);
 	const stateCookie = c.context.createAuthCookie("state", {
 		maxAge: 5 * 60 * 1000, // 5 minutes
+		sameSite: "none",
+		secure: true
 	});
 	await c.setSignedCookie(
 		stateCookie.name,
