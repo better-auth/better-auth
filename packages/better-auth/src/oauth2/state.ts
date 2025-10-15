@@ -22,7 +22,7 @@ export async function generateState(
 	const stateCookie = c.context.createAuthCookie("state", {
 		maxAge: 5 * 60 * 1000, // 5 minutes
 		sameSite: "none",
-		secure: true
+		secure: true,
 	});
 	await c.setSignedCookie(
 		stateCookie.name,
