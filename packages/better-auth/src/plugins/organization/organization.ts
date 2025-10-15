@@ -1,7 +1,7 @@
 import { APIError } from "better-call";
 import * as z from "zod";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { getSessionFromCtx } from "../../api/routes";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { shimContext } from "../../utils/shim";

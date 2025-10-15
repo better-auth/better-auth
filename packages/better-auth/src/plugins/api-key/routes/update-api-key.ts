@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
