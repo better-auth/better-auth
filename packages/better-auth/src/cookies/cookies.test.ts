@@ -434,7 +434,7 @@ describe("getSessionCookie", async () => {
 	});
 });
 
-describe("Cookie Cache Field Filtering (Issue #5293)", () => {
+describe("Cookie Cache Field Filtering", () => {
 	it("should exclude user fields with returned: false from cookie cache", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			secret: "better-auth.secret",
@@ -456,7 +456,6 @@ describe("Cookie Cache Field Filtering (Issue #5293)", () => {
 
 		const headers = new Headers();
 
-		// Sign in with testUser
 		await client.signIn.email(
 			{
 				email: testUser.email,
@@ -467,19 +466,16 @@ describe("Cookie Cache Field Filtering (Issue #5293)", () => {
 			},
 		);
 
-		// Create request with the cookies
 		const request = new Request("https://example.com/api/auth/session", {
 			headers,
 		});
-
-		// Get cookie cache and verify internalNote is NOT included
+		
 		const cache = await getCookieCache(request, {
 			secret: "better-auth.secret",
 		});
 
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
-		// Field with returned: false should not be in cookie
 		expect(cache?.user?.internalNote).toBeUndefined();
 	});
 
@@ -518,8 +514,6 @@ describe("Cookie Cache Field Filtering (Issue #5293)", () => {
 		});
 
 		const headers = new Headers();
-
-		// Sign in with testUser
 		await client.signIn.email(
 			{
 				email: testUser.email,
@@ -585,7 +579,6 @@ describe("Cookie Cache Field Filtering (Issue #5293)", () => {
 			},
 		);
 
-		// Parse cookies to get session_data
 		const request = new Request("https://example.com/api/auth/session", {
 			headers,
 		});
@@ -674,7 +667,6 @@ describe("Cookie Cache Field Filtering (Issue #5293)", () => {
 
 		const headers = new Headers();
 
-		// Sign in with testUser
 		await client.signIn.email(
 			{
 				email: testUser.email,
