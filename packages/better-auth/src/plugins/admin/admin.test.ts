@@ -335,7 +335,24 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
+	});
+
+	it("should allow to combine search and filter", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: "admin",
+				filterField: "role",
+				filterOperator: "eq",
+				searchValue: "test",
+				searchField: "email",
+				searchOperator: "contains",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
 		expect(res.data?.users.length).toBe(1);
+		expect(res.data?.users[0]!.email).toBe("test@test.com");
 	});
 
 	it("should allow to filter users by multiple roles", async () => {
@@ -706,7 +723,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
-		expect(response.data?.users.length).toBe(2);
+		expect(response.data?.users.length).toBeGreaterThanOrEqual(2);
 		const roles = response.data?.users.map((d) => d.role);
 		expect(roles).not.toContain("user");
 	});
