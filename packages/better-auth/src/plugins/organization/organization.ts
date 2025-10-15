@@ -881,25 +881,17 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				permission?: never;
 		  };
 
-	type IncludeTeamEndpoints<ExistingEndpoints extends Record<string, any>> =
-		O["teams"] extends { enabled: true }
-			? ExistingEndpoints & typeof teamEndpoints
-			: ExistingEndpoints;
-
-	type IncludeDynamicAccessControlEndpoints<
-		ExistingEndpoints extends Record<string, any>,
-	> = O["dynamicAccessControl"] extends { enabled: true }
-		? ExistingEndpoints & typeof dynamicAccessControlEndpoints
-		: ExistingEndpoints;
-
-	type AllEndpoints = IncludeDynamicAccessControlEndpoints<
-		IncludeTeamEndpoints<typeof endpoints>
-	>;
+	type OrganizationEndpoints = O["dynamicAccessControl"] extends {
+		enabled: true;
+	}
+		? typeof dynamicAccessControlEndpoints
+		: {} & (O["teams"] extends { enabled: true } ? typeof teamEndpoints : {}) &
+				typeof endpoints;
 
 	return {
 		id: "organization",
 		endpoints: {
-			...(api as AllEndpoints),
+			...(api as OrganizationEndpoints),
 			hasPermission: createAuthEndpoint(
 				"/organization/has-permission",
 				{
