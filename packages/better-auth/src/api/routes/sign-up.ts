@@ -277,7 +277,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				);
 				const url = `${
 					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${body.callbackURL || "/"}`;
+				}/verify-email?token=${token}&callbackURL=${
+					encodeURIComponent(body.callbackURL || "/")
+				}`;
 
 				const args: Parameters<
 					Required<

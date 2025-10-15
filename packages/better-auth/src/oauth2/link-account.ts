@@ -181,7 +181,9 @@ export async function handleOAuthUserInfo(
 					undefined,
 					c.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${
+					encodeURIComponent(callbackURL || "/")
+				}`;
 				await c.context.options.emailVerification?.sendVerificationEmail?.(
 					{
 						user,
