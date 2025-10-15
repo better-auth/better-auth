@@ -32,18 +32,22 @@ export const dribbble = (options: DribbbleOptions) => {
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
 			if (!codeVerifier) {
-				throw new BetterAuthError("codeVerifier is required for Dribbble");
+				throw new BetterAuthError(
+					"Code verifier is required for Dribbble. Make sure to provide it in the request.",
+				);
 			}
 
-			const _scopes = options.disableDefaultScope ? [] : ["public", "upload"];
+			const _scopes = options.disableDefaultScope ? [] : ["public"];
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
+
+			const uniqueScopes = Array.from(new Set(_scopes));
 
 			const url = await createAuthorizationURL({
 				id: "dribbble",
 				options,
 				authorizationEndpoint: "https://dribbble.com/oauth/authorize",
-				scopes: _scopes,
+				scopes: uniqueScopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -97,8 +101,8 @@ export const dribbble = (options: DribbbleOptions) => {
 
 				return {
 					user: {
-						id: profile.id,
-					name: profile.name,
+						id: String(profile.id),
+						name: profile.name,
 						email: profile.email,
 						image: profile.avatar_url,
 						emailVerified: !!profile.email,
