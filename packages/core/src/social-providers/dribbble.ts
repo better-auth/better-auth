@@ -98,7 +98,7 @@ export const dribbble = (options: DribbbleOptions) => {
 				return {
 					user: {
 						id: profile.id,
-						profile: profile.name,
+					name: profile.name,
 						email: profile.email,
 						image: profile.avatar_url,
 						emailVerified: !!profile.email,
