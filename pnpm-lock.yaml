@@ -837,6 +837,15 @@ importers:
         specifier: 4.33.2
         version: 4.33.2(@cloudflare/workers-types@4.20250903.0)
 
+  e2e/smoke/test/fixtures/tsconfig-decelration:
+    dependencies:
+      better-auth:
+        specifier: workspace:*
+        version: link:../../../../../packages/better-auth
+      better-sqlite3:
+        specifier: ^12.4.1
+        version: 12.4.1
+
   e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types:
     dependencies:
       better-auth:
