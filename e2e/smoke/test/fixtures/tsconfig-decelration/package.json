@@ -1,5 +1,5 @@
 {
-  "name": "tsconfig-decelration",
+  "name": "tsconfig-declaration",
   "private": true,
   "type": "module",
   "scripts": {
