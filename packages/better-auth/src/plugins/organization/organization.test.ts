@@ -101,6 +101,31 @@ describe("organization", async (it) => {
 		expect(existingSlug.error?.status).toBe(400);
 		expect(existingSlug.error?.message).toBe("slug is taken");
 	});
+
+	it("should prevent creating organization with empty slug", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.create({
+			name: "test-empty-slug",
+			slug: "",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(organization.error?.status).toBe(400);
+	});
+
+	it("should prevent creating organization with empty name", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.create({
+			name: "",
+			slug: "test-empty-name",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(organization.error?.status).toBe(400);
+	});
+
 	it("should create organization directly in the server without cookie", async () => {
 		const session = await client.getSession({
 			fetchOptions: {
@@ -144,6 +169,27 @@ describe("organization", async (it) => {
 		expect(organization.data?.name).toBe("test2");
 	});
 
+	it("should prevent updating organization to duplicate slug", async () => {
+		const { headers } = await signInWithTestUser();
+
+		// Try to update organization2 (slug: "test2") to use organization1's slug ("test")
+		const organization = await client.organization.update({
+			organizationId: organization2Id,
+			data: {
+				slug: "test",
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// This should fail with duplicate slug error
+		expect(organization.error?.status).toBe(400);
+		expect(organization.error?.message).toContain(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
+		);
+	});
+
 	it("should allow updating organization metadata", async () => {
 		const { headers } = await signInWithTestUser();
 		const organization = await client.organization.update({
@@ -158,6 +204,34 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(organization.data?.metadata?.test).toBe("test2");
+	});
+
+	it("should prevent updating organization to empty slug", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.update({
+			organizationId,
+			data: {
+				slug: "",
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(organization.error?.status).toBe(400);
+	});
+
+	it("should prevent updating organization to empty name", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.update({
+			organizationId,
+			data: {
+				name: "",
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(organization.error?.status).toBe(400);
 	});
 
 	it("should allow activating organization and set session", async () => {
@@ -324,7 +398,8 @@ describe("organization", async (it) => {
 			},
 		});
 		if (!invite.data) throw new Error("Invitation not created");
-		expect(invite.data?.email).toBe(user.email);
+		expect(invite.data.createdAt).toBeInstanceOf(Date);
+		expect(invite.data.email).toBe(user.email);
 
 		const inviteAgain = await client.organization.inviteMember({
 			organizationId,
@@ -1893,6 +1968,7 @@ describe("Additional Fields", async () => {
 			email: string;
 			role: "member" | "admin" | "owner";
 			status: InvitationStatus;
+			createdAt: Date;
 			expiresAt: Date;
 			inviterId: string;
 			invitationRequiredField: string;

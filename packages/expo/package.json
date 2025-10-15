@@ -1,9 +1,10 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.4.0-beta.6",
-  "description": "",
-  "main": "dist/index.cjs",
-  "module": "dist/index.mjs",
+  "version": "1.4.0-beta.10",
+  "type": "module",
+  "description": "Better Auth integration for Expo and React Native applications.",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",
@@ -12,20 +13,19 @@
   "homepage": "https://www.better-auth.com/docs/integrations/expo",
   "scripts": {
     "test": "vitest",
-    "build": "unbuild --clean",
-    "dev": "unbuild --watch",
-    "stub": "unbuild --stub",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
   },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
+      "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./client": {
       "types": "./dist/client.d.ts",
-      "import": "./dist/client.mjs",
+      "import": "./dist/client.js",
       "require": "./dist/client.cjs"
     }
   },
@@ -61,7 +61,7 @@
     "expo-secure-store": "~14.2.3",
     "expo-web-browser": "~14.2.0",
     "react-native": "~0.80.2",
-    "unbuild": "^3.6.1"
+    "tsdown": "catalog:"
   },
   "peerDependencies": {
     "better-auth": "workspace:*",

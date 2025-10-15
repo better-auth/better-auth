@@ -11,7 +11,7 @@ import {
 import { getMigrations } from "../../../db";
 import * as Tedious from "tedious";
 import * as Tarn from "tarn";
-import type { BetterAuthOptions } from "../../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 
 // We are not allowed to handle the mssql connection
 // we must let kysely handle it. This is because if kysely is already

@@ -1,12 +1,14 @@
 import { getClientConfig } from "../config";
 import type {
-	BetterAuthClientPlugin,
-	ClientOptions,
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
 } from "../types";
+import type {
+	BetterAuthClientPlugin,
+	BetterAuthClientOptions,
+} from "@better-auth/core";
 import { createDynamicPathProxy } from "../proxy";
 import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
 import type {
@@ -14,7 +16,7 @@ import type {
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import { useStore } from "./lynx-store";
-import type { BASE_ERROR_CODES } from "../../error/codes";
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { SessionQueryParams } from "../types";
 
 function getAtomKey(str: string) {
@@ -25,25 +27,27 @@ export function capitalizeFirstLetter(str: string) {
 	return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
-	infer Plugin
->
-	? Plugin extends BetterAuthClientPlugin
-		? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
-			? Atoms extends Record<string, any>
-				? {
-						[key in keyof Atoms as IsSignal<key> extends true
-							? never
-							: key extends string
-								? `use${Capitalize<key>}`
-								: never]: () => ReturnType<Atoms[key]["get"]>;
-					}
+type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
+	plugins: Array<infer Plugin>;
+}
+	? UnionToIntersection<
+			Plugin extends BetterAuthClientPlugin
+				? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+					? Atoms extends Record<string, any>
+						? {
+								[key in keyof Atoms as IsSignal<key> extends true
+									? never
+									: key extends string
+										? `use${Capitalize<key>}`
+										: never]: () => ReturnType<Atoms[key]["get"]>;
+							}
+						: {}
+					: {}
 				: {}
-			: {}
-		: {}
+		>
 	: {};
 
-export function createAuthClient<Option extends ClientOptions>(
+export function createAuthClient<Option extends BetterAuthClientOptions>(
 	options?: Option,
 ) {
 	const {

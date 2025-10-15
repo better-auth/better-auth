@@ -1,15 +1,20 @@
 import * as z from "zod";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { APIError } from "better-call";
 import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { getSchema, type UsernameSchema } from "./schema";
-import { mergeSchema } from "../../db/schema";
+import { mergeSchema } from "../../db";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import { createEmailVerificationToken } from "../../api";
-export * from "./error-codes";
+
+export { USERNAME_ERROR_CODES } from "./error-codes";
+
 export type UsernameOptions = {
 	schema?: InferOptionSchema<UsernameSchema>;
 	/**
