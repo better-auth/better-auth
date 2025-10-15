@@ -214,34 +214,31 @@ export async function authorize(
 		/**
 		 * Save the code in the database
 		 */
-		await ctx.context.internalAdapter.createVerificationValue(
-			{
-				value: JSON.stringify({
-					clientId: client.clientId,
-					redirectURI: query.redirect_uri,
-					scope: requestScope,
-					userId: session.user.id,
-					authTime: new Date(session.session.createdAt).getTime(),
-					/**
-					 * Consent is required per OIDC spec unless:
-					 * 1. Client is trusted (skipConsent = true)
-					 * 2. User has already consented (and prompt is not "consent")
-					 *
-					 * When consent is required, the code needs to be treated as a
-					 * consent request. Once the user consents, the code will be
-					 * updated with the actual authorization code.
-					 */
-					requireConsent,
-					state: requireConsent ? query.state : null,
-					codeChallenge: query.code_challenge,
-					codeChallengeMethod: query.code_challenge_method,
-					nonce: query.nonce,
-				}),
-				identifier: code,
-				expiresAt,
-			},
-			ctx,
-		);
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: JSON.stringify({
+				clientId: client.clientId,
+				redirectURI: query.redirect_uri,
+				scope: requestScope,
+				userId: session.user.id,
+				authTime: new Date(session.session.createdAt).getTime(),
+				/**
+				 * Consent is required per OIDC spec unless:
+				 * 1. Client is trusted (skipConsent = true)
+				 * 2. User has already consented (and prompt is not "consent")
+				 *
+				 * When consent is required, the code needs to be treated as a
+				 * consent request. Once the user consents, the code will be
+				 * updated with the actual authorization code.
+				 */
+				requireConsent,
+				state: requireConsent ? query.state : null,
+				codeChallenge: query.code_challenge,
+				codeChallengeMethod: query.code_challenge_method,
+				nonce: query.nonce,
+			}),
+			identifier: code,
+			expiresAt,
+		});
 	} catch (e) {
 		return handleRedirect(
 			formatErrorURL(

@@ -9,7 +9,7 @@ import type {
 import type { BetterAuthPluginDBSchema } from "../db";
 import type { LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
-import type { AuthMiddleware } from "../middleware";
+import type { AuthMiddleware } from "../api";
 
 type Awaitable<T> = T | Promise<T>;
 type DeepPartial<T> = T extends Function

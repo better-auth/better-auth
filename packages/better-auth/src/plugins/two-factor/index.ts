@@ -3,7 +3,7 @@ import * as z from "zod";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import { sessionMiddleware } from "../../api";
 import { symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "@better-auth/core";
@@ -136,11 +136,9 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							{
 								twoFactorEnabled: true,
 							},
-							ctx,
 						);
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
-							ctx,
 							false,
 							ctx.context.session.session,
 						);
@@ -250,7 +248,6 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						{
 							twoFactorEnabled: false,
 						},
-						ctx,
 					);
 					await ctx.context.adapter.delete({
 						model: opts.twoFactorTable,
@@ -263,7 +260,6 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					const newSession = await ctx.context.internalAdapter.createSession(
 						updatedUser.id,
-						ctx,
 						false,
 						ctx.context.session.session,
 					);
@@ -346,14 +342,11 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							},
 						);
 						const identifier = `2fa-${generateRandomString(20)}`;
-						await ctx.context.internalAdapter.createVerificationValue(
-							{
-								value: data.user.id,
-								identifier,
-								expiresAt: new Date(Date.now() + maxAge * 1000),
-							},
-							ctx,
-						);
+						await ctx.context.internalAdapter.createVerificationValue({
+							value: data.user.id,
+							identifier,
+							expiresAt: new Date(Date.now() + maxAge * 1000),
+						});
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
 							identifier,

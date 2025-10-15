@@ -1878,7 +1878,7 @@ export const sso = (options?: SSOOptions) => {
 
 					// Create session and set cookie
 					let session: Session =
-						await ctx.context.internalAdapter.createSession(user.id, ctx);
+						await ctx.context.internalAdapter.createSession(user.id);
 					await setSessionCookie(ctx, { session, user });
 
 					// Redirect to callback URL
@@ -2237,7 +2237,7 @@ export const sso = (options?: SSOOptions) => {
 					}
 
 					let session: Session =
-						await ctx.context.internalAdapter.createSession(user.id, ctx);
+						await ctx.context.internalAdapter.createSession(user.id);
 					await setSessionCookie(ctx, { session, user });
 
 					const callbackUrl =

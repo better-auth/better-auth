@@ -4,7 +4,7 @@ import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	generateRandomString,

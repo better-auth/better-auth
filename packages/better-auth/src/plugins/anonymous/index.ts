@@ -2,7 +2,7 @@ import { APIError, getSessionFromCtx } from "../../api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import type { InferOptionSchema, Session, User } from "../../types";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
@@ -134,17 +134,14 @@ export const anonymous = (options?: AnonymousOptions) => {
 					const id = generateId();
 					const email = `temp-${id}@${emailDomainName}`;
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
-					const newUser = await ctx.context.internalAdapter.createUser(
-						{
-							email,
-							emailVerified: false,
-							isAnonymous: true,
-							name,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						},
-						ctx,
-					);
+					const newUser = await ctx.context.internalAdapter.createUser({
+						email,
+						emailVerified: false,
+						isAnonymous: true,
+						name,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					});
 					if (!newUser) {
 						throw ctx.error("INTERNAL_SERVER_ERROR", {
 							message: ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -152,7 +149,6 @@ export const anonymous = (options?: AnonymousOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						newUser.id,
-						ctx,
 					);
 					if (!session) {
 						return ctx.json(null, {

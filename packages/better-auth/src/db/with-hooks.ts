@@ -2,7 +2,7 @@ import type { DBPreservedModels } from "@better-auth/core/db";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { getCurrentAdapter } from "@better-auth/core/context";
-import type { GenericEndpointContext } from "@better-auth/core";
+import { getEndpointContext } from "@better-auth/core/context";
 
 export function getWithHooks(
 	adapter: DBAdapter<BetterAuthOptions>,
@@ -23,8 +23,8 @@ export function getWithHooks(
 			fn: (data: Record<string, any>) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
-		context?: GenericEndpointContext,
 	) {
+		const context = await getEndpointContext();
 		let actualData = data;
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.before;
@@ -73,8 +73,8 @@ export function getWithHooks(
 			fn: (data: Record<string, any>) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
-		context?: GenericEndpointContext,
 	) {
+		const context = await getEndpointContext();
 		let actualData = data;
 
 		for (const hook of hooks || []) {
@@ -119,8 +119,8 @@ export function getWithHooks(
 			fn: (data: Record<string, any>) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
-		context?: GenericEndpointContext,
 	) {
+		const context = await getEndpointContext();
 		let actualData = data;
 
 		for (const hook of hooks || []) {
@@ -165,8 +165,8 @@ export function getWithHooks(
 			fn: (where: Where[]) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
-		context?: GenericEndpointContext,
 	) {
+		const context = await getEndpointContext();
 		let entityToDelete: T | null = null;
 
 		try {
@@ -223,8 +223,8 @@ export function getWithHooks(
 			fn: (where: Where[]) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
-		context?: GenericEndpointContext,
 	) {
+		const context = await getEndpointContext();
 		let entitiesToDelete: T[] = [];
 
 		try {
