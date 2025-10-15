@@ -29,12 +29,14 @@ import { kakao } from "./kakao";
 import { naver } from "./naver";
 import { line } from "./line";
 import { paypal } from "./paypal";
+import { dribbble } from "./dribbble";
 
 export const socialProviders = {
 	apple,
 	atlassian,
 	cognito,
 	discord,
+	dribbble,
 	facebook,
 	figma,
 	github,
@@ -86,6 +88,7 @@ export * from "./apple";
 export * from "./atlassian";
 export * from "./cognito";
 export * from "./discord";
+export * from "./dribbble";
 export * from "./dropbox";
 export * from "./facebook";
 export * from "./figma";
