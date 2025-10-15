@@ -164,6 +164,10 @@ const authClient = createAuthClient({
 });
 ```
 
+<Callout type="warn">
+Using the `twoFactorPage` option will cause a full page reload when redirecting users to the two-factor authentication page. If you want to avoid page reloads, consider using the `onTwoFactorRedirect` callback instead to handle the redirect programmatically within your application.
+</Callout>
+
 
 
 <Callout type="warn">
