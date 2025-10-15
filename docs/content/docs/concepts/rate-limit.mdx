@@ -234,29 +234,30 @@ await authClient.signIn.email({
 
 If you are using a database to store rate limit data you need this schema:
 
-Table Name: `rateLimit`
-
 <DatabaseTable
+    modelName="rateLimit"
     fields={[
         { 
-        name: "id", 
-        type: "string", 
-        description: "Database ID",
-        isPrimaryKey: true
+            fieldName: "id", 
+            type: "string", 
+            description: "Database ID",
         },
         { 
-        name: "key", 
-        type: "string", 
-        description: "Unique identifier for each rate limit key",
+            fieldName: "key", 
+            type: "string", 
+            description: "Unique identifier for each rate limit key",
+            unique: true,
         },
         { 
-        name: "count", 
-        type: "integer", 
-        description: "Time window in seconds" 
+            fieldName: "count", 
+            type: "integer", 
+            description: "Time window in seconds" 
         },
         { 
-        name: "lastRequest", 
-        type: "bigint", 
-        description: "Max requests in the window" 
-        }]}
-    />
+            fieldName: "lastRequest", 
+            type: "number", 
+            description: "Max requests in the window" ,
+            bigint: true,
+        }
+    ]}
+/>

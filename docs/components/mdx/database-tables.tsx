@@ -97,9 +97,13 @@ Prism.languages.prisma = {
 
 interface DatabaseTableProps {
 	modelName: string;
-	fields: (DBFieldAttribute & {
-		description: string;
-	})[];
+	fields: (
+		| (DBFieldAttribute & {
+				displayType?: string;
+				description: string;
+		  })
+		| { note: string }
+	)[];
 	/**
 	 * @default "create"
 	 */
@@ -144,6 +148,17 @@ export default function DatabaseTable(props: DatabaseTableProps) {
 				</TableHeader>
 				<TableBody>
 					{fields.map((field, index) => {
+						if ("note" in field) {
+							return (
+								<TableRow
+									key={index}
+									className={index % 2 === 0 ? "bga-muted/50" : ""}
+								>
+									<TableCell colSpan={4}>{field.note}</TableCell>
+								</TableRow>
+							);
+						}
+
 						const isPrimaryKey = field.fieldName === "id";
 						const isForeignKey = field.references !== undefined;
 						const isOptional = field.required === false;
@@ -155,7 +170,11 @@ export default function DatabaseTable(props: DatabaseTableProps) {
 							>
 								<TableCell className="font-medium">{field.fieldName}</TableCell>
 								<TableCell className="font-mono text-sm">
-									<Badge variant="outline">{field.type}</Badge>
+									<Badge variant="outline">
+										{field.displayType || field.type === "date"
+											? "Date"
+											: field.type}
+									</Badge>
 								</TableCell>
 								<TableCell>
 									{isPrimaryKey && (
@@ -272,7 +291,7 @@ export function CopySchemaDialogProvider({
 
 function CopySchemaContent() {
 	const id = useId();
-	const { data } = useCopySchemaDialog();
+	const { data, open } = useCopySchemaDialog();
 	const theme = useTheme();
 	const [codeTheme, setCodeTheme] = useState(themes.synthwave84);
 	const [conditions, setConditions] = useState<Record<string, boolean>>({});
@@ -304,7 +323,7 @@ function CopySchemaContent() {
 			copySchema(
 				{
 					modelName: data!.modelName,
-					fields: data!.fields,
+					fields: data!.fields.filter((field) => !("note" in field)) as any,
 				},
 				{
 					dialect:
@@ -581,7 +600,7 @@ function CopySchemaContent() {
 								)}
 							</AccordionContent>
 						</AccordionItem>
-						{schema.conditions?.length && (
+						{schema.conditions?.length && schema.conditions?.length > 0 && (
 							<AccordionItem value="conditions">
 								<AccordionTrigger className="text-base items-center font-medium px-6 py-3">
 									Conditions

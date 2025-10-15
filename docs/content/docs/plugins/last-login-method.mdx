@@ -186,11 +186,15 @@ By default, the last login method is stored only in cookies. For more persistent
 
 When `storeInDatabase` is enabled, the plugin adds the following field to the `user` table:
 
-Table: `user`
-
 <DatabaseTable
+    modelName="user"
     fields={[
-        { name: "lastLoginMethod", type: "string", description: "The last authentication method used by the user", isOptional: true },
+        {
+            fieldName: "lastLoginMethod",
+            type: "string",
+            description: "The last authentication method used by the user",
+            required: false,
+        },
     ]}
 />
 

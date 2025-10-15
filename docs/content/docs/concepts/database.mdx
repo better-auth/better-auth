@@ -102,45 +102,44 @@ Better Auth requires the following tables to be present in the database. The typ
 
 ### User
 
-Table Name: `user`
-
 <DatabaseTable
+  modelName="user"
   fields={[
     {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Unique identifier for each user",
-      isPrimaryKey: true,
     },
     {
-      name: "name",
+      fieldName: "name",
       type: "string",
       description: "User's chosen display name",
     },
     {
-      name: "email",
+      fieldName: "email",
       type: "string",
       description: "User's email address for communication and login",
+      unique: true,
     },
     {
-      name: "emailVerified",
+      fieldName: "emailVerified",
       type: "boolean",
       description: "Whether the user's email is verified",
     },
     {
-      name: "image",
+      fieldName: "image",
       type: "string",
       description: "User's image url",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "createdAt",
-      type: "Date",
+      fieldName: "createdAt",
+      type: "date",
       description: "Timestamp of when the user account was created",
     },
     {
-      name: "updatedAt",
-      type: "Date",
+      fieldName: "updatedAt",
+      type: "date",
       description: "Timestamp of the last update to the user's information",
     },
   ]}
@@ -148,53 +147,55 @@ Table Name: `user`
 
 ### Session
 
-Table Name: `session`
-
 <DatabaseTable
+  modelName="session"
   fields={[
     {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Unique identifier for each session",
-      isPrimaryKey: true,
     },
     {
-      name: "userId",
+      fieldName: "userId",
       type: "string",
       description: "The ID of the user",
-      isForeignKey: true,
+      references: {
+				model: "user",
+				field: "id",
+				onDelete: "cascade",
+			},
     },
     {
-      name: "token",
+      fieldName: "token",
       type: "string",
       description: "The unique session token",
-      isUnique: true,
+      unique: true,
     },
     {
-      name: "expiresAt",
-      type: "Date",
+      fieldName: "expiresAt",
+      type: "date",
       description: "The time when the session expires",
     },
     {
-      name: "ipAddress",
+      fieldName: "ipAddress",
       type: "string",
       description: "The IP address of the device",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "userAgent",
+      fieldName: "userAgent",
       type: "string",
       description: "The user agent information of the device",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "createdAt",
-      type: "Date",
+      fieldName: "createdAt",
+      type: "date",
       description: "Timestamp of when the session was created",
     },
     {
-      name: "updatedAt",
-      type: "Date",
+      fieldName: "updatedAt",
+      type: "date",
       description: "Timestamp of when the session was updated",
     },
   ]}
@@ -202,84 +203,87 @@ Table Name: `session`
 
 ### Account
 
-Table Name: `account`
-
 <DatabaseTable
+  mode="create"
+  modelName="account"
   fields={[
     {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Unique identifier for each account",
-      isPrimaryKey: true,
     },
     {
-      name: "userId",
+      fieldName: "userId",
       type: "string",
       description: "The ID of the user",
-      isForeignKey: true,
+      references: {
+        model: "user",
+        field: "id",
+        onDelete: "cascade",
+      },
     },
     {
-      name: "accountId",
+      fieldName: "accountId",
       type: "string",
       description:
         "The ID of the account as provided by the SSO or equal to userId for credential accounts",
     },
     {
-      name: "providerId",
+      fieldName: "providerId",
       type: "string",
       description: "The ID of the provider",
     },
     {
-      name: "accessToken",
+      fieldName: "accessToken",
       type: "string",
       description: "The access token of the account. Returned by the provider",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "refreshToken",
+      fieldName: "refreshToken",
       type: "string",
       description: "The refresh token of the account. Returned by the provider",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "accessTokenExpiresAt",
-      type: "Date",
+      fieldName: "accessTokenExpiresAt",
+      type: "date",
       description: "The time when the access token expires",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "refreshTokenExpiresAt",
-      type: "Date",
+      fieldName: "refreshTokenExpiresAt",
+      type: "date",
       description: "The time when the refresh token expires",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "scope",
+      fieldName: "scope",
       type: "string",
       description: "The scope of the account. Returned by the provider",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "idToken",
+      fieldName: "idToken",
       type: "string",
       description: "The ID token returned from the provider",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "password",
+      fieldName: "password",
       type: "string",
       description:
         "The password of the account. Mainly used for email and password authentication",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "createdAt",
-      type: "Date",
+      fieldName: "createdAt",
+      type: "date",
       description: "Timestamp of when the account was created",
     },
     {
-      name: "updatedAt",
-      type: "Date",
+      fieldName: "updatedAt",
+      type: "date",
       description: "Timestamp of when the account was updated",
     },
   ]}
@@ -287,39 +291,38 @@ Table Name: `account`
 
 ### Verification
 
-Table Name: `verification`
-
 <DatabaseTable
+  mode="create"
+  modelName="verification"
   fields={[
     {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Unique identifier for each verification",
-      isPrimaryKey: true,
     },
     {
-      name: "identifier",
+      fieldName: "identifier",
       type: "string",
       description: "The identifier for the verification request",
     },
     {
-      name: "value",
+      fieldName: "value",
       type: "string",
       description: "The value to be verified",
     },
     {
-      name: "expiresAt",
-      type: "Date",
+      fieldName: "expiresAt",
+      type: "date",
       description: "The time when the verification request expires",
     },
     {
-      name: "createdAt",
-      type: "Date",
+      fieldName: "createdAt",
+      type: "date",
       description: "Timestamp of when the verification request was created",
     },
     {
-      name: "updatedAt",
-      type: "Date",
+      fieldName: "updatedAt",
+      type: "date",
       description: "Timestamp of when the verification request was updated",
     },
   ]}

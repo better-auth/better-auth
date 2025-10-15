@@ -385,141 +385,141 @@ The OIDC Provider plugin adds the following tables to the database:
 
 ### OAuth Application
 
-Table Name: `oauthApplication`
-
 <DatabaseTable
+  modelName="oauthApplication"
   fields={[
    {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Database ID of the OAuth client",
-      isPrimaryKey: true
    },
     { 
-      name: "clientId", 
+      fieldName: "clientId", 
       type: "string", 
       description: "Unique identifier for each OAuth client",
-      isPrimaryKey: true
+      unique: true,
     },
     { 
-      name: "clientSecret", 
+      fieldName: "clientSecret", 
       type: "string", 
       description: "Secret key for the OAuth client. Optional for public clients using PKCE.",
-      isOptional: true
+      required: false,
     },
     { 
-      name: "name", 
+      fieldName: "name", 
       type: "string", 
       description: "Name of the OAuth client",
-      isRequired: true
     },
     { 
-      name: "redirectURLs", 
+      fieldName: "redirectURLs", 
       type: "string", 
       description: "Comma-separated list of redirect URLs",
-      isRequired: true
     },
     { 
-      name: "metadata", 
+      fieldName: "metadata", 
       type: "string",
       description: "Additional metadata for the OAuth client",
-      isOptional: true
+      required: false,
     },
     { 
-      name: "type", 
+      fieldName: "type", 
       type: "string",
       description: "Type of OAuth client (e.g., web, mobile)",
-      isRequired: true
     },
     { 
-      name: "disabled", 
+      fieldName: "disabled", 
       type: "boolean", 
       description: "Indicates if the client is disabled",
-      isRequired: true
     },
     { 
-      name: "userId", 
+      fieldName: "userId", 
       type: "string", 
       description: "ID of the user who owns the client. (optional)",
-      isOptional: true,
-      references: { model: "user", field: "id" }
+      required: false,
+      references: {
+        model: "user",
+        field: "id"
+      },
     },
     { 
-      name: "createdAt", 
-      type: "Date", 
+      fieldName: "createdAt", 
+      type: "date", 
       description: "Timestamp of when the OAuth client was created" 
     },
-   {
-      name: "updatedAt",
-      type: "Date",
+    {
+      fieldName: "updatedAt",
+      type: "date",
       description: "Timestamp of when the OAuth client was last updated"
-   }
+    }
   ]}
 />
 
 ### OAuth Access Token
 
-Table Name: `oauthAccessToken`
-
 <DatabaseTable
+  modelName="oauthAccessToken"
   fields={[
     {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Database ID of the access token",
-      isPrimaryKey: true
    },
     { 
-      name: "accessToken", 
+      fieldName: "accessToken", 
       type: "string", 
       description: "Access token issued to the client",
+      unique: true,
     },
     { 
-      name: "refreshToken", 
+      fieldName: "refreshToken", 
       type: "string", 
       description: "Refresh token issued to the client",
-      isRequired: true
+      unique: true,
     },
     { 
-      name: "accessTokenExpiresAt", 
-      type: "Date", 
+      fieldName: "accessTokenExpiresAt", 
+      type: "date", 
       description: "Expiration date of the access token",
-      isRequired: true
     },
     { 
-      name: "refreshTokenExpiresAt", 
-      type: "Date", 
+      fieldName: "refreshTokenExpiresAt", 
+      type: "date", 
       description: "Expiration date of the refresh token",
-      isRequired: true
     },
     { 
-      name: "clientId", 
+      fieldName: "clientId", 
       type: "string", 
       description: "ID of the OAuth client",
-      isForeignKey: true,
-      references: { model: "oauthApplication", field: "clientId" }
+      references: {
+        model: "oauthApplication",
+        field: "clientId",
+        onDelete: "cascade",
+      },
     },
     { 
-      name: "userId", 
+      fieldName: "userId", 
       type: "string", 
       description: "ID of the user associated with the token",
-      isForeignKey: true,
-      references: { model: "user", field: "id" }
+      required: false,
+      references: {
+        model: "user",
+        field: "id",
+        onDelete: "cascade",
+      },
     },
     { 
-      name: "scopes", 
+      fieldName: "scopes", 
       type: "string", 
       description: "Comma-separated list of scopes granted",
-      isRequired: true
     },
     { 
-      name: "createdAt", 
-      type: "Date", 
+      fieldName: "createdAt", 
+      type: "date", 
       description: "Timestamp of when the access token was created" 
     },
     {
-      name: "updatedAt",
-      type: "Date",
+      fieldName: "updatedAt",
+      type: "date",
       description: "Timestamp of when the access token was last updated"
     }
   ]}
@@ -527,50 +527,52 @@ Table Name: `oauthAccessToken`
 
 ### OAuth Consent
 
-Table Name: `oauthConsent`
-
 <DatabaseTable
+  modelName="oauthConsent"
   fields={[
     { 
-      name: "id", 
+      fieldName: "id", 
       type: "string", 
       description: "Database ID of the consent",
-      isPrimaryKey: true
     },
     { 
-      name: "userId", 
+      fieldName: "userId", 
       type: "string", 
       description: "ID of the user who gave consent",
-      isForeignKey: true,
-      references: { model: "user", field: "id" }
+      references: {
+        model: "user",
+        field: "id",
+        onDelete: "cascade",
+      },
     },
     { 
-      name: "clientId", 
+      fieldName: "clientId", 
       type: "string", 
       description: "ID of the OAuth client",
-      isForeignKey: true,
-      references: { model: "oauthApplication", field: "clientId" }
+      references: {
+        model: "oauthApplication",
+        field: "clientId",
+        onDelete: "cascade",
+      },
     },
     { 
-      name: "scopes", 
+      fieldName: "scopes", 
       type: "string", 
       description: "Comma-separated list of scopes consented to",
-      isRequired: true
     },
     { 
-      name: "consentGiven", 
+      fieldName: "consentGiven", 
       type: "boolean", 
       description: "Indicates if consent was given",
-      isRequired: true
     },
     { 
-      name: "createdAt", 
-      type: "Date", 
+      fieldName: "createdAt", 
+      type: "date", 
       description: "Timestamp of when the consent was given" 
     },
     {
-      name: "updatedAt",
-      type: "Date",
+      fieldName: "updatedAt",
+      type: "date",
       description: "Timestamp of when the consent was last updated"
     }
   ]}

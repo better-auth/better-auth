@@ -297,18 +297,21 @@ const auth = betterAuth({
 The plugin requires 2 fields to be added to the user table:
 
 <DatabaseTable
+    modelName="user"
     fields={[
         { 
-            name: "username", 
+            fieldName: "username", 
             type: "string", 
             description: "The username of the user",
-            isUnique: true
+            unique: true,
+            required: false,
         },
         { 
-            name: "displayUsername", 
+            fieldName: "displayUsername", 
             type: "string", 
             description: "Non normalized username of the user",
-            isUnique: true
+            unique: true,
+            required: false,
         },
     ]}
 />

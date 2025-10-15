@@ -197,14 +197,45 @@ export const authClient = createAuthClient({
 
 The SIWE plugin adds a `walletAddress` table to store user wallet associations:
 
-| Field     | Type    | Description                               |
-| --------- | ------- | ----------------------------------------- |
-| id        | string  | Primary key                               |
-| userId    | string  | Reference to user.id                      |
-| address   | string  | Ethereum wallet address                   |
-| chainId   | number  | Chain ID (e.g., 1 for Ethereum mainnet)   |
-| isPrimary | boolean | Whether this is the user's primary wallet |
-| createdAt | date    | Creation timestamp                        |
+<DatabaseTable
+  modelName="walletAddress"
+  fields={[
+    {
+      fieldName: "id",
+      type: "string",
+      description: "Unique identifier for each wallet address",
+    },
+    {
+      fieldName: "userId",
+      type: "string",
+      description: "The ID of the user",
+      references: {
+        model: "user",
+        field: "id",
+      },
+    },
+    {
+      fieldName: "address",
+      type: "string",
+      description: "Ethereum wallet address",
+    },
+    {
+      fieldName: "chainId",
+      type: "number",
+      description: "Chain ID (e.g., 1 for Ethereum mainnet)",
+    },
+    {
+      fieldName: "isPrimary",
+      type: "boolean",
+      description: "Whether this is the user's primary wallet",
+    },
+    {
+      fieldName: "createdAt",
+      type: "date",
+      description: "Creation timestamp",
+    },
+  ]}
+/>
 
 ## Example Implementation
 

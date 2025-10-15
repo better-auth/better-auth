@@ -261,71 +261,72 @@ To test your passkey implementation you can use [emulated authenticators](https:
 
 The plugin require a new table in the database to store passkey data.
 
-Table Name: `passkey`
-
 <DatabaseTable
+    modelName="passkey"
     fields={[
         { 
-            name: "id", 
+            fieldName: "id", 
             type: "string", 
             description: "Unique identifier for each passkey",
-            isPrimaryKey: true
         },
         {
-            name: "name",
+            fieldName: "name",
             type: "string",
             description: "The name of the passkey",
-            isOptional: true
+            required: false,
         },
         { 
-            name: "publicKey", 
+            fieldName: "publicKey", 
             type: "string", 
             description: "The public key of the passkey",
         },
         { 
-            name: "userId", 
+            fieldName: "userId", 
             type: "string", 
             description: "The ID of the user",
-            isForeignKey: true
+            references: {
+                model: "user",
+                field: "id",
+            },
         },
         {
-            name: "credentialID",
+            fieldName: "credentialID",
             type: "string",
             description: "The unique identifier of the registered credential",
         },
         { 
-            name: "counter", 
+            fieldName: "counter", 
             type: "number", 
             description: "The counter of the passkey",
         },
         {
-            name: "deviceType",
+            fieldName: "deviceType",
             type: "string",
             description: "The type of device used to register the passkey",
         },
         {
-            name: "backedUp",
+            fieldName: "backedUp",
             type: "boolean",
             description: "Whether the passkey is backed up",
         },
         {
-            name: "transports",
+            fieldName: "transports",
             type: "string",
             description: "The transports used to register the passkey",
         },
         { 
-            name: "createdAt", 
-            type: "Date", 
+            fieldName: "createdAt", 
+            type: "date", 
             description: "The time when the passkey was created",
         },
         {
-                name: "aaguid",
-                type: "string",
-                description: "Authenticator's Attestation GUID indicating the type of the authenticator",
-                isOptional: true
+            fieldName: "aaguid",
+            type: "string",
+            description: "Authenticator's Attestation GUID indicating the type of the authenticator",
+            required: false,
         },
     ]}
-    />
+/>
 
 ## Options
 
