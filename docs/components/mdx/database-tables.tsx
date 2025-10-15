@@ -43,14 +43,11 @@ import {
 	useState,
 } from "react";
 import { useTheme } from "next-themes";
-import { Highlight, themes } from "prism-react-renderer";
+import { Highlight, themes, Prism } from "prism-react-renderer";
 import { copySchema } from "@/lib/copy-schema";
 import clsx from "clsx";
-import Prism from "prismjs";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { ScrollArea, ScrollViewport, ScrollBar } from "../docs/ui/scroll-area";
-import "prismjs/components/prism-sql";
-import "prismjs/components/prism-typescript";
 import { Label } from "../ui/label";
 import { prismaResolver } from "@/lib/copy-schema/adapter/prisma";
 import { drizzleResolver } from "@/lib/copy-schema/adapter/drizzle";
