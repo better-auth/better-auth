@@ -881,12 +881,13 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				permission?: never;
 		  };
 
-	type OrganizationEndpoints = O["dynamicAccessControl"] extends {
+	type OrganizationEndpoints = (O["dynamicAccessControl"] extends {
 		enabled: true;
 	}
 		? typeof dynamicAccessControlEndpoints
-		: {} & (O["teams"] extends { enabled: true } ? typeof teamEndpoints : {}) &
-				typeof endpoints;
+		: {}) &
+		(O["teams"] extends { enabled: true } ? typeof teamEndpoints : {}) &
+		typeof endpoints;
 
 	return {
 		id: "organization",
