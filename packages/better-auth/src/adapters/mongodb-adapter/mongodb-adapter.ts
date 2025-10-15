@@ -151,15 +151,22 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 						case "ne":
 							condition = { [field]: { $ne: value } };
 							break;
-
 						case "contains":
-							condition = { [field]: { $regex: `.*${value}.*` } };
+							condition = {
+								[field]: {
+									$regex: `.*${escapeForMongoRegex(value as string)}.*`,
+								},
+							};
 							break;
 						case "starts_with":
-							condition = { [field]: { $regex: `${value}.*` } };
+							condition = {
+								[field]: { $regex: `^${escapeForMongoRegex(value as string)}` },
+							};
 							break;
 						case "ends_with":
-							condition = { [field]: { $regex: `.*${value}` } };
+							condition = {
+								[field]: { $regex: `${escapeForMongoRegex(value as string)}$` },
+							};
 							break;
 						default:
 							throw new Error(`Unsupported operator: ${operator}`);
@@ -387,3 +394,20 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 		return lazyAdapter(options);
 	};
 };
+
+/**
+ * Safely escape user input for use in a MongoDB regex.
+ * This ensures the resulting pattern is treated as literal text,
+ * and not as a regex with special syntax.
+ *
+ * @param input - The input string to escape. Any type that isn't a string will be converted to an empty string.
+ * @param maxLength - The maximum length of the input string to escape. Defaults to 256. This is to prevent DOS attacks.
+ * @returns The escaped string.
+ */
+function escapeForMongoRegex(input: string, maxLength = 256): string {
+	if (typeof input !== "string") return "";
+
+	// Escape all PCRE special characters
+	// Source: PCRE docs — https://www.pcre.org/original/doc/html/pcrepattern.html
+	return input.slice(0, maxLength).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
