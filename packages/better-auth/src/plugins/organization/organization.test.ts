@@ -11,7 +11,13 @@ import { APIError, type Prettify } from "better-call";
 import { memoryAdapter } from "../../adapters/memory-adapter";
 import type { OrganizationOptions } from "./types";
 import type { PrettifyDeep } from "../../types/helper";
-import type { InvitationStatus } from "./schema";
+import type {
+	InferInvitation,
+	InferMember,
+	InferOrganization,
+	InferTeam,
+	InvitationStatus,
+} from "./schema";
 import type { User } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
@@ -19,6 +25,7 @@ import { createAccessControl } from "../access";
 import { admin } from "../admin";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { nextCookies } from "../../integrations/next-js";
+import { getFullOrganization } from "./routes/crud-org";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
@@ -2069,6 +2076,7 @@ describe("Additional Fields", async () => {
 			status: InvitationStatus;
 			inviterId: string;
 			expiresAt: Date;
+			createdAt: Date;
 			teamId?: string | undefined;
 			invitationRequiredField: string;
 			invitationOptionalField?: string | undefined;
@@ -2084,6 +2092,15 @@ describe("Additional Fields", async () => {
 			teamOptionalField?: string | undefined;
 			teamHiddenField?: string | undefined;
 		}[];
+
+		type O = typeof orgOptions;
+		type Members = PrettifyDeep<InferMember<O, false>>[];
+		type Invitations = PrettifyDeep<InferInvitation<O, false>>[];
+		type Teams = PrettifyDeep<InferTeam<O, false>>[];
+
+		expectTypeOf<Members>().toEqualTypeOf<ExpectedMembers>();
+		expectTypeOf<Invitations>().toEqualTypeOf<ExpectedInvitations>();
+		expectTypeOf<Teams>().toEqualTypeOf<ExpectedTeams>();
 
 		expectTypeOf<NonNullable<Result>>().toEqualTypeOf<{
 			id: string;
@@ -2350,6 +2367,7 @@ describe("Additional Fields", async () => {
 			role: "member" | "admin" | "owner";
 			status: InvitationStatus;
 			inviterId: string;
+			createdAt: Date;
 			expiresAt: Date;
 			teamId?: string | undefined;
 			invitationRequiredField: string;
@@ -2383,6 +2401,7 @@ describe("Additional Fields", async () => {
 				role: "member" | "admin" | "owner";
 				status: InvitationStatus;
 				inviterId: string;
+				createdAt: Date;
 				expiresAt: Date;
 				teamId?: string | undefined;
 				invitationRequiredField: string;

@@ -20,6 +20,7 @@ import {
 	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
+import type { PrettifyDeep } from "../../../types/helper";
 
 export const createOrganization = <O extends OrganizationOptions>(
 	options?: O,
@@ -736,16 +737,22 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
+
+			type Members = PrettifyDeep<InferMember<O, false>>[];
+			type Invitations = PrettifyDeep<InferInvitation<O, false>>[];
+			type Teams = PrettifyDeep<InferTeam<O, false>>[];
+			type Organization = PrettifyDeep<InferOrganization<O, false>>;
+
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-						teams: InferTeam<O, false>[];
-					} & InferOrganization<O, false>
+						members: Members;
+						invitations: Invitations;
+						teams: Teams;
+					} & Organization
 				: {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-					} & InferOrganization<O, false>;
+						members: Members;
+						invitations: Invitations;
+					} & Organization;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
