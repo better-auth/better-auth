@@ -659,10 +659,10 @@ describe("adapter test", async () => {
 
 		await testCtx.internalAdapter.deleteSession(sessionToken);
 
-		const inActiveSession =
+		const inactiveSession =
 			await testCtx.internalAdapter.findSession(sessionToken);
 
-		expect(inActiveSession).toBeNull();
+		expect(inactiveSession).toBeNull();
 
 		const sessionInDb = await db
 			.selectFrom("session")
