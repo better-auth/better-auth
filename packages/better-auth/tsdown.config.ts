@@ -53,7 +53,6 @@ export default defineConfig({
 		"./src/plugins/organization/access/index.ts",
 		"./src/plugins/passkey/index.ts",
 		"./src/plugins/phone-number/index.ts",
-		"./src/plugins/sso/index.ts",
 		"./src/plugins/two-factor/index.ts",
 		"./src/plugins/username/index.ts",
 		"./src/plugins/haveibeenpwned/index.ts",
