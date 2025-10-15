@@ -190,9 +190,18 @@ export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 			if (typeof newField === "string") {
 				schema[table]!.fields[field]!.fieldName = newField;
 			} else {
+				const original = schema[table]!.fields[field]!;
 				schema[table]!.fields[field] = {
-					...schema[table]!.fields[field]!,
+					...original,
 					...newField,
+					transform: {
+						input: newField.transform?.input || original.transform?.input,
+						output: newField.transform?.output || original.transform?.output,
+					},
+					validator: {
+						input: newField.validator?.input || original.validator?.input,
+						output: newField.validator?.output || original.validator?.output,
+					},
 				};
 			}
 		}
