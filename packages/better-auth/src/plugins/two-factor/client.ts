@@ -3,8 +3,10 @@ import type { twoFactor as twoFa } from "../../plugins/two-factor";
 
 export const twoFactorClient = (options?: {
 	/**
-	 * the page to redirect if a user needs to verify
-	 * their two factor
+	 * The page to redirect to if a user needs to verify
+	 * their two factor.
+	 *
+	 * @warning This causes a full page reload when used.
 	 */
 	twoFactorPage?: string;
 	/**
@@ -35,15 +37,14 @@ export const twoFactorClient = (options?: {
 				hooks: {
 					async onSuccess(context) {
 						if (context.data?.twoFactorRedirect) {
-							if (options?.twoFactorPage) {
-								if (typeof window !== "undefined" && window.location) {
-									window.location.href = options.twoFactorPage;
-									return;
-								}
-							}
-
 							if (options?.onTwoFactorRedirect) {
 								await options.onTwoFactorRedirect();
+								return;
+							}
+
+							// Fallback to simple redirect. Causes full page load
+							if (options?.twoFactorPage && typeof window !== "undefined") {
+								window.location.href = options.twoFactorPage;
 							}
 						}
 					},
