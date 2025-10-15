@@ -9,7 +9,7 @@
     "start": "next start",
     "postinstall": "fumadocs-mdx",
     "scripts:endpoint-to-doc": "bun ./scripts/endpoint-to-doc/index.ts",
-    "scripts:sync-orama": "node ./scripts/sync-orama.ts"
+    "scripts:sync-orama": "ts-node ./scripts/sync-orama.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.20",
@@ -108,6 +108,7 @@
     "mini-svg-data-uri": "^1.4.4",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.13",
+    "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   }
 }
