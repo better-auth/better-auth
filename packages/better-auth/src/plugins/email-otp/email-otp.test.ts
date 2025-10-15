@@ -118,6 +118,13 @@ describe("email-otp", async () => {
 		});
 	});
 
+	it("should send request password reset otp", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "request-password-reset",
+		});
+	});
+
 	it("should reset password", async () => {
 		await client.emailOtp.resetPassword({
 			email: testUser.email,
@@ -159,7 +166,7 @@ describe("email-otp", async () => {
 
 		await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
-			type: "forget-password",
+			type: "request-password-reset",
 		});
 
 		await client.emailOtp.resetPassword({
@@ -196,7 +203,7 @@ describe("email-otp", async () => {
 		);
 		await client.emailOtp.sendVerificationOtp({
 			email: testUser2.email,
-			type: "forget-password",
+			type: "request-password-reset",
 		});
 		await client.emailOtp.resetPassword({
 			email: testUser2.email,
@@ -401,7 +408,7 @@ describe("email-otp-verify", async () => {
 	it("should block reset password after exceeding allowed attempts", async () => {
 		await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
-			type: "forget-password",
+			type: "request-password-reset",
 		});
 
 		for (let i = 0; i < 3; i++) {
@@ -521,7 +528,11 @@ describe("custom storeOTP", async () => {
 		let sendVerificationOtpFn = async (data: {
 			email: string;
 			otp: string;
-			type: "sign-in" | "email-verification" | "forget-password";
+			type:
+				| "sign-in"
+				| "email-verification"
+				| "forget-password"
+				| "request-password-reset";
 		}) => {};
 
 		function getTheSentOTP() {
@@ -622,7 +633,11 @@ describe("custom storeOTP", async () => {
 		let sendVerificationOtpFn = async (data: {
 			email: string;
 			otp: string;
-			type: "sign-in" | "email-verification" | "forget-password";
+			type:
+				| "sign-in"
+				| "email-verification"
+				| "forget-password"
+				| "request-password-reset";
 		}) => {};
 
 		function getTheSentOTP() {
@@ -723,7 +738,11 @@ describe("custom storeOTP", async () => {
 		let sendVerificationOtpFn = async (data: {
 			email: string;
 			otp: string;
-			type: "sign-in" | "email-verification" | "forget-password";
+			type:
+				| "sign-in"
+				| "email-verification"
+				| "forget-password"
+				| "request-password-reset";
 		}) => {};
 
 		function getTheSentOTP() {
@@ -829,7 +848,11 @@ describe("custom storeOTP", async () => {
 		let sendVerificationOtpFn = async (data: {
 			email: string;
 			otp: string;
-			type: "sign-in" | "email-verification" | "forget-password";
+			type:
+				| "sign-in"
+				| "email-verification"
+				| "forget-password"
+				| "request-password-reset";
 		}) => {};
 
 		function getTheSentOTP() {
