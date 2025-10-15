@@ -292,6 +292,31 @@ const auth = betterAuth({
 })
 ```
 
+### Customize schema
+
+To customize any of the fields provided by the username plugin, you can use the `schema` property in the plugin config.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            schema: {
+                user: {
+                    fields: {
+                        username: {
+                            required: true
+                        }
+                    }
+                }
+            }
+        })
+    ]
+})
+```
+
 ## Schema
 
 The plugin requires 2 fields to be added to the user table:
