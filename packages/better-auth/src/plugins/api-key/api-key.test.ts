@@ -1468,6 +1468,125 @@ describe("api-key", async () => {
 	});
 
 	// =========================================================================
+	// API KEY LASTREQUEST BUG FIX (#5309)
+	// =========================================================================
+
+	it("should not modify lastRequest when updating API key configuration", async () => {
+		// Create API key (lastRequest = null)
+		const key = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+		expect(key.lastRequest).toBeNull();
+
+		// Update name
+		const updated = await auth.api.updateApiKey({
+			body: {
+				keyId: key.id,
+				name: "updated-name",
+				userId: user.id,
+			},
+		});
+
+		// lastRequest should still be null
+		expect(updated.lastRequest).toBeNull();
+	});
+
+	it("should not auto-decrement remaining when updating API key", async () => {
+		// Create API key with remaining = 100
+		const key = await auth.api.createApiKey({
+			body: {
+				remaining: 100,
+				userId: user.id,
+			},
+		});
+		expect(key.remaining).toBe(100);
+
+		// Update metadata
+		const updated = await auth.api.updateApiKey({
+			body: {
+				keyId: key.id,
+				metadata: { foo: "bar" },
+				userId: user.id,
+			},
+		});
+
+		// remaining should still be 100
+		expect(updated.remaining).toBe(100);
+	});
+
+	it("should allow explicit remaining updates via body parameter", async () => {
+		// Create API key with remaining = 100
+		const key = await auth.api.createApiKey({
+			body: {
+				remaining: 100,
+				userId: user.id,
+			},
+		});
+
+		// Explicitly update remaining
+		const updated = await auth.api.updateApiKey({
+			body: {
+				keyId: key.id,
+				remaining: 50,
+				userId: user.id,
+			},
+		});
+
+		// remaining should be updated to 50
+		expect(updated.remaining).toBe(50);
+		// lastRequest should still be null
+		expect(updated.lastRequest).toBeNull();
+	});
+
+	it("verifyApiKey should still update lastRequest", async () => {
+		// Create API key
+		const key = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+		expect(key.lastRequest).toBeNull();
+
+		// Verify API key
+		const verified = await auth.api.verifyApiKey({
+			body: { key: key.key },
+		});
+		expect(verified.valid).toBe(true);
+
+		// Get updated key
+		const updated = await auth.api.getApiKey({
+			query: { id: key.id },
+			headers,
+		});
+		expect(updated.lastRequest).not.toBeNull();
+		expect(updated.lastRequest).toBeInstanceOf(Date);
+	});
+
+	it("verifyApiKey should still decrement remaining", async () => {
+		// Create API key with remaining = 100
+		const key = await auth.api.createApiKey({
+			body: {
+				remaining: 100,
+				userId: user.id,
+			},
+		});
+
+		// Verify API key
+		await auth.api.verifyApiKey({
+			body: { key: key.key },
+		});
+
+		// Get updated key
+		const updated = await auth.api.getApiKey({
+			query: { id: key.id },
+			headers,
+		});
+		expect(updated.remaining).toBe(99);
+	});
+
+	// =========================================================================
 	// GET API KEY
 	// =========================================================================
 

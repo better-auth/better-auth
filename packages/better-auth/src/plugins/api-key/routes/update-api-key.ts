@@ -405,8 +405,6 @@ export function updateApiKey({
 						},
 					],
 					update: {
-						lastRequest: new Date(),
-						remaining: apiKey.remaining === null ? null : apiKey.remaining - 1,
 						...newValues,
 					},
 				});
