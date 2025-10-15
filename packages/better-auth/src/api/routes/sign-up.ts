@@ -11,8 +11,6 @@ import type {
 import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
-import { runWithTransaction } from "../../context/transaction";
-import { parseUserInput } from "../../db";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -222,7 +220,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			const hash = await ctx.context.password.hash(password);
 			let createdUser: User;
 			try {
-				const data = parseUserInput(ctx.context.options, rest, "create");
+				const data = parseUserInput(ctx.context.options, additionalFields, "create");
 				createdUser = await ctx.context.internalAdapter.createUser(
 					{
 						email: email.toLowerCase(),
