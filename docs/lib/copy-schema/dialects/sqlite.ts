@@ -56,7 +56,7 @@ export const sqliteResolver = {
 		const lines = [
 			ctx.mode === "create"
 				? `CREATE TABLE IF NOT EXISTS "${ctx.schema.modelName}" (`
-				: `ALTER TABLE IF EXISTS "${ctx.schema.modelName}"`,
+				: `ALTER TABLE "${ctx.schema.modelName}"`,
 		];
 
 		for (const field of ctx.schema.fields) {

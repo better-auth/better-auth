@@ -59,6 +59,8 @@ export const prismaResolver = (options: PrismaResolverOptions) => {
 					date: `DateTime${field.required === false ? "?" : ""}`,
 					json: `Json${field.required === false ? "?" : ""}`,
 					id,
+					"string[]": `String[]${field.required === false ? "?" : ""}`,
+					"number[]": `${field.bigint ? "BigInt" : "Int"}[]${field.required === false ? "?" : ""}`,
 					foreignKeyId,
 				};
 			});
