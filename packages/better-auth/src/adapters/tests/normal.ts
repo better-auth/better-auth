@@ -482,7 +482,7 @@ export const getNormalTestSuiteTests = ({
 				expect(result3.length).toBe(1);
 				expect(result3[0]!.email).toBe("john@example.com");
 				expect(result3[0]!.name).toBe("john doe");
-      },
+			},
 		"findMany - should find many models with contains operator (using symbol)":
 			async () => {
 				const users = (await insertRandom("user", 3)).map((x) => x[0]);
