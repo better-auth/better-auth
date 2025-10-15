@@ -2,9 +2,8 @@ import { source } from "@/lib/source";
 import { DocsPage, DocsBody, DocsTitle } from "@/components/docs/page";
 import { notFound } from "next/navigation";
 import { absoluteUrl } from "@/lib/utils";
-import DatabaseTable, {
-	CopySchemaDialogProvider,
-} from "@/components/mdx/database-tables";
+import DatabaseTable from "@/components/mdx/database-tables";
+import { CopySchemaDialogProvider } from "@/components/copy-schema";
 import { cn } from "@/lib/utils";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
