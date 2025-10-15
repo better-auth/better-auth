@@ -16,6 +16,7 @@ import type { Logger } from "../env";
 import type { AuthContext, GenericEndpointContext } from "./context";
 import type { AuthMiddleware } from "../middleware";
 import type { BetterAuthPlugin } from "..";
+import type { ComponentPluginConfig } from "../plugins";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type OmitId<T extends { id: unknown }> = Omit<T, "id">;
@@ -242,6 +243,13 @@ export type BetterAuthOptions = {
 	 * @default "/api/auth"
 	 */
 	basePath?: string;
+	/**
+	 * Used to pass config between plugins
+	 * Exact copy of AuthContext.pluginConfig
+	 */
+	pluginConfig?: {
+		components?: ComponentPluginConfig;
+	};
 	/**
 	 * The secret to use for encryption,
 	 * signing and hashing.

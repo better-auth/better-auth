@@ -1,0 +1,15 @@
+{
+  "name": "react",
+  "module": "index.ts",
+  "type": "module",
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@base-ui-components/react": "1.0.0-beta.4",
+    "@better-auth/core": "^1.3.27",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.3.1"
+  }
+}
