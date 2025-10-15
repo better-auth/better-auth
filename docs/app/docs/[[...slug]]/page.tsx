@@ -25,7 +25,10 @@ import { AutoTypeTable } from "fumadocs-typescript/ui";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Endpoint } from "@/components/endpoint";
 import { DividerText } from "@/components/divider-text";
-import { APIMethod, TypeTable as CustomTypeTable } from "@/components/api-method";
+import {
+	APIMethod,
+	TypeTable as CustomTypeTable,
+} from "@/components/api-method";
 import { LLMCopyButton, ViewOptions } from "./page.client";
 import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
 import { Callout } from "@/components/ui/callout";

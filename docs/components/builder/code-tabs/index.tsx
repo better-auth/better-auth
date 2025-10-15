@@ -58,8 +58,12 @@ ${
 			}),
 			`
 					: ""
-			}${ options.passkey ? `passkey(),
-			 ` : ""}${
+			}${
+				options.passkey
+					? `passkey(),
+			 `
+					: ""
+			}${
 				options.legal
 					? `legal(${
 							options.legalDocuments.length > 0
@@ -115,7 +119,7 @@ ${
 			content: signInString(options),
 		},
 	];
-	
+
 	if (options.email || options.legal) {
 		initialFiles.push({
 			id: "4",
@@ -128,9 +132,9 @@ ${
 		initialFiles.push({
 			id: (initialFiles.length + 1).toString(),
 			name: `${doc.name.toLowerCase()}.tsx`,
-			content: legalContent(doc.name, doc.view)
-		})
-	})
+			content: legalContent(doc.name, doc.view),
+		});
+	});
 
 	const [files, setFiles] = useState(initialFiles);
 	const [activeFileId, setActiveFileId] = useState(files[0].id);

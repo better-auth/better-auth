@@ -333,11 +333,15 @@ export default function SignUp() {
 	};`
 			: ""
 	}
-	${options.legal ? `	const [legalDocumentsAccepted, setLegalDocumentsAccepted] = useState<
+	${
+		options.legal
+			? `	const [legalDocumentsAccepted, setLegalDocumentsAccepted] = useState<
 		string[]
 	>([]);
 	const [accepted, setAccepted] = useState(false);
-` : ""}
+`
+			: ""
+	}
 
 	return (
 		<Card className="z-50 rounded-md rounded-t-none max-w-md">
@@ -538,16 +542,12 @@ export default function SignUp() {
             </div>`
 											: ""
 									}
-													${options.legalDocuments.length > 0 ? (
-					`
-						${options.email || options.socialProviders.length > 0 ? (
-							`<Separator className="my-2" />`
-						) : (
-							""
-						)}
+													${
+														options.legalDocuments.length > 0
+															? `
+						${options.email || options.socialProviders.length > 0 ? `<Separator className="my-2" />` : ""}
 						${options.legalDocuments.map((doc) => {
-							return (
-								`<div>
+							return `<div>
 									<Checkbox
 										onCheckedChange={(checked) => {
 											setLegalDocumentsAccepted(
@@ -564,13 +564,11 @@ export default function SignUp() {
 										${doc.name}
 									</a>
 								</div>
-								`
-							);
+								`;
 						})}
 					`
-				) : (
-					""
-				)}
+															: ""
+													}
 
 			</CardContent>
 			${
