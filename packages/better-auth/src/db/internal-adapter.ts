@@ -594,10 +594,24 @@ export const createInternalAdapter = (
 
 				await secondaryStorage.delete(token);
 
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
+				if (!options.session?.storeSessionInDatabase) {
+					return;
+				}
+
+				// If preserveSessionInDatabase is true, update expiresAt instead of deleting
+				if (ctx.options.session?.preserveSessionInDatabase) {
+					await (await getCurrentAdapter(adapter)).update<Session>({
+						model: "session",
+						where: [
+							{
+								field: "token",
+								value: token,
+							},
+						],
+						update: {
+							expiresAt: new Date(0), // Set to epoch to mark as expired
+						},
+					});
 					return;
 				}
 			}
@@ -652,10 +666,29 @@ export const createInternalAdapter = (
 					}
 				}
 
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
+				if (!options.session?.storeSessionInDatabase) {
+					return;
+				}
+
+				// If preserveSessionInDatabase is true, update expiresAt instead of deleting
+				if (ctx.options.session?.preserveSessionInDatabase) {
+					await (await getCurrentAdapter(adapter)).updateMany({
+						model: "session",
+						where: [
+							{
+								field: Array.isArray(userIdOrSessionTokens)
+									? "token"
+									: "userId",
+								value: userIdOrSessionTokens,
+								operator: Array.isArray(userIdOrSessionTokens)
+									? "in"
+									: undefined,
+							},
+						],
+						update: {
+							expiresAt: new Date(0), // Set to epoch to mark as expired
+						},
+					});
 					return;
 				}
 			}
