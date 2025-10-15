@@ -220,6 +220,20 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.error?.status).toBe(403);
 	});
+
+	it("should allow admin to list user with default offset and limit value", async () => {
+		const res = await client.admin.listUsers({
+			query: {},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data).toBeDefined();
+		expect(res.data?.limit).toBe(10);
+		expect(res.data?.offset).toBe(0);
+		expect(res.data?.users.length).toBe(3);
+	});
+
 	it("should allow admin to list users", async () => {
 		const res = await client.admin.listUsers({
 			query: {
