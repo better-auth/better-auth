@@ -3,7 +3,18 @@ title: Cookies
 description: Learn how cookies are used in Better Auth.
 ---
 
-Cookies are used to store data such as session tokens, OAuth state, and more. All cookies are signed using the `secret` key provided in the auth options.
+### Cookie Information & Requirements
+
+Cookies are used to store data such as session tokens, OAuth state, and more.
+All cookies are signed using the `secret` key provided in the auth options or the `BETTER_AUTH_SECRET` enviroment variable.
+
+For cookies to work correctly, your frontend and auth server must share the same domain.
+Browsers enforce this as a security standard - cookies are only accessible to the domain (and optional subdomains)
+they were set on. This means that if your auth server runs on a different domain (e.g. auth.example.org) 
+than your frontend (e.g. example.com), the browser will not send or store cookies between them. 
+
+To enable cross-subdomain cookies, check out our documentation on [cross-subdomain cookies](#cross-subdomain-cookies).
+
 
 ### Cookie Prefix
 
