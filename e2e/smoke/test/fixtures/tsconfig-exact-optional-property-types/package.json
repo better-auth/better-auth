@@ -1,13 +1,12 @@
 {
-  "name": "tsconfig-verbatim-module-syntax-node10",
+  "name": "tsconfig-exact-optional-property-types",
   "private": true,
   "type": "module",
   "scripts": {
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "@better-auth/expo": "workspace:^",
-    "better-auth": "workspace:^",
+    "better-auth": "workspace:*",
     "better-sqlite3": "^12.4.1"
   }
 }

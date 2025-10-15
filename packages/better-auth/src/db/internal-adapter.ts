@@ -13,7 +13,10 @@ import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId } from "../utils";
-import { getCurrentAdapter, runWithTransaction } from "../context/transaction";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import type { InternalLogger } from "@better-auth/core/env";
 import type {
 	AuthContext,
