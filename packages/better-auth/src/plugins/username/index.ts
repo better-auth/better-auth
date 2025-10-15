@@ -9,7 +9,7 @@ import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { getSchema, type UsernameSchema } from "./schema";
-import { mergeSchema } from '../../db';
+import { mergeSchema } from "../../db";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import { createEmailVerificationToken } from "../../api";
 

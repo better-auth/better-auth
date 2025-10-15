@@ -21,7 +21,7 @@ type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type OmitId<T extends { id: unknown }> = Omit<T, "id">;
 type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
-}
+};
 
 export type GenerateIdFn = (options: {
 	model: LiteralUnion<DBPreservedModels, string>;
