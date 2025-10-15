@@ -597,7 +597,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 						return ctx.json({
 							access_token: accessToken,
-							token_type: "bearer",
+							token_type: "Bearer",
 							expires_in: opts.accessTokenExpiresIn,
 							refresh_token: newRefreshToken,
 							scope: token.scopes,
