@@ -1,7 +1,7 @@
 import { APIError } from "better-call";
 import * as z from "zod";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { getSessionFromCtx } from "../../api/routes";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { shimContext } from "../../utils/shim";
@@ -866,25 +866,18 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				permission?: never;
 		  };
 
-	type IncludeTeamEndpoints<ExistingEndpoints extends Record<string, any>> =
-		O["teams"] extends { enabled: true }
-			? ExistingEndpoints & typeof teamEndpoints
-			: ExistingEndpoints;
-
-	type IncludeDynamicAccessControlEndpoints<
-		ExistingEndpoints extends Record<string, any>,
-	> = O["dynamicAccessControl"] extends { enabled: true }
-		? ExistingEndpoints & typeof dynamicAccessControlEndpoints
-		: ExistingEndpoints;
-
-	type AllEndpoints = IncludeDynamicAccessControlEndpoints<
-		IncludeTeamEndpoints<typeof endpoints>
-	>;
+	type OrganizationEndpoints = (O["dynamicAccessControl"] extends {
+		enabled: true;
+	}
+		? typeof dynamicAccessControlEndpoints
+		: {}) &
+		(O["teams"] extends { enabled: true } ? typeof teamEndpoints : {}) &
+		typeof endpoints;
 
 	return {
 		id: "organization",
 		endpoints: {
-			...(api as AllEndpoints),
+			...(api as OrganizationEndpoints),
 			hasPermission: createAuthEndpoint(
 				"/organization/has-permission",
 				{

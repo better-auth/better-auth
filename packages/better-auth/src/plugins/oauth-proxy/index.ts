@@ -3,7 +3,7 @@ import { originCheck } from "../../api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
