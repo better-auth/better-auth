@@ -1409,6 +1409,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			};
 		},
 		schema: getSchema(options),
+		$ERROR_CODES: STRIPE_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
 
