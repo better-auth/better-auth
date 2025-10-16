@@ -66,7 +66,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	return createCookie;
 }
 
-export function getCookies(options: BetterAuthOptions) {
+export function getCookies(options: BetterAuthOptions): BetterAuthCookies {
 	const createCookie = createCookieGetter(options);
 	const sessionMaxAge = options.session?.expiresIn || ms("7d") / 1000;
 	const sessionToken = createCookie("session_token", {

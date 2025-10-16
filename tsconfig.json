@@ -13,7 +13,11 @@
     "exactOptionalPropertyTypes": false,
     "incremental": true,
     "noErrorTruncation": true,
-    "types": ["node", "bun"]
+    "types": ["node", "bun"],
+    "paths": {
+      "@better-auth/core": ["./packages/core/src"],
+      "@better-auth/core/*": ["./packages/core/src/*"]
+    }
   },
   "exclude": ["**/dist/**", "**/node_modules/**"]
 }
