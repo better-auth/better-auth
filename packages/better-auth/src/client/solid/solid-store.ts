@@ -1,15 +1,7 @@
 import type { Store, StoreValue } from "nanostores";
 import { createStore, reconcile } from "solid-js/store";
 import type { Accessor } from "solid-js";
-import { onCleanup, onMount } from "solid-js";
-
-export interface UseStoreOptions {
-	/**
-	 * Skip updating state on first mount.
-	 * Useful to prevent side effects like fetching on initial render.
-	 */
-	skipOnMount?: boolean;
-}
+import { onCleanup } from "solid-js";
 
 /**
  * Subscribes to store changes and gets store’s value.
@@ -20,7 +12,7 @@ export interface UseStoreOptions {
 export function useStore<
 	SomeStore extends Store,
 	Value extends StoreValue<SomeStore>,
->(store: SomeStore, options?: UseStoreOptions): Accessor<Value> {
+>(store: SomeStore): Accessor<Value> {
 	// Activate the store explicitly:
 	// https://github.com/nanostores/solid/issues/19
 	const unbindActivation = store.listen(() => {});
@@ -29,15 +21,8 @@ export function useStore<
 		value: store.get(),
 	});
 
-	let isMounted = false;
-
 	const unsubscribe = store.subscribe((newValue) => {
-		if (options?.skipOnMount && !isMounted) return;
 		setState("value", reconcile(newValue));
-	});
-
-	onMount(() => {
-		isMounted = true;
 	});
 
 	onCleanup(() => unsubscribe());

@@ -131,7 +131,3 @@ export type SessionQueryParams = {
 	disableCookieCache?: boolean;
 	disableRefresh?: boolean;
 };
-
-export type SharedHookOptions = {
-	fetchOnMount?: boolean;
-};

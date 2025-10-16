@@ -20,12 +20,6 @@ export interface UseStoreOptions<SomeStore> {
 	 * Will re-render components only on specific key changes.
 	 */
 	keys?: StoreKeys<SomeStore>[];
-
-	/**
-	 * Skip updating state on first mount.
-	 * Useful to prevent side effects like fetching on initial render.
-	 */
-	skipOnMount?: boolean;
 }
 
 /**
@@ -55,21 +49,18 @@ export function useStore<SomeStore extends Store>(
 	store: SomeStore,
 	options: UseStoreOptions<SomeStore> = {},
 ): StoreValue<SomeStore> {
-	const mounted = useRef(false);
 	let snapshotRef = useRef<StoreValue<SomeStore>>(store.get());
 
 	const { keys, deps = [store, keys] } = options;
 
 	let subscribe = useCallback((onChange: () => void) => {
 		const emitChange = (value: StoreValue<SomeStore>) => {
-			if (options.skipOnMount && !mounted.current) return;
 			if (snapshotRef.current === value) return;
 			snapshotRef.current = value;
 			onChange();
 		};
 
 		emitChange(store.value);
-		mounted.current = true;
 		if (keys?.length) {
 			return listenKeys(store as any, keys, emitChange);
 		}
