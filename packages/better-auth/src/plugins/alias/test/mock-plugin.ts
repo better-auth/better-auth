@@ -85,7 +85,7 @@ export function createMockClientPlugin<ID extends LiteralString>(id: ID) {
 			},
 			{
 				matcher: (path) => path === "/checkout",
-				signal: "$test",
+				signal: "$signal",
 			},
 		],
 		fetchPlugins: [
