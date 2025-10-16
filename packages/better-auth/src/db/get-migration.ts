@@ -1,7 +1,6 @@
 import type {
 	AlterTableColumnAlteringBuilder,
 	CreateTableBuilder,
-	AlterTableBuilder,
 	CreateIndexBuilder,
 } from "kysely";
 import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
@@ -295,6 +294,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 		}
 	}
+	let toBeIndexed: CreateIndexBuilder[] = [];
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
 			let dbT = db.schema
@@ -355,14 +355,24 @@ export async function getMigrations(config: BetterAuthOptions) {
 						)
 						.on(table.table)
 						.columns([fieldName]);
-					migrations.push(field.unique ? builder.unique() : builder);
+					toBeIndexed.push(field.unique ? builder.unique() : builder);
 				}
 			}
 			migrations.push(dbT);
 		}
 	}
+
+	// instead of adding the index straight to `migrations`,
+	// we do this at the end so that indexes are created after the table is created
+	if (toBeIndexed.length) {
+		for (const index of toBeIndexed) {
+			migrations.push(index);
+		}
+	}
+
 	async function runMigrations() {
 		for (const migration of migrations) {
+			console.log(migration.compile().sql);
 			await migration.execute();
 		}
 	}

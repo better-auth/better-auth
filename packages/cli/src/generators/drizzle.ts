@@ -187,13 +187,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							const fieldName = attr.fieldName || field;
 							let type = getType(fieldName, attr);
 
-							if(attr.index && !attr.unique) {
+							if (attr.index && !attr.unique) {
 								indexes.push({
 									type: "index",
 									name: `${modelName}_${fieldName}_idx`,
 									on: fieldName,
 								});
-							}else if(attr.index && attr.unique) {
+							} else if (attr.index && attr.unique) {
 								indexes.push({
 									type: "uniqueIndex",
 									name: `${modelName}_${fieldName}_uidx`,

@@ -476,7 +476,9 @@ describe("Enum field support in Drizzle schemas", () => {
 				},
 			} as BetterAuthOptions,
 		});
-		expect(schema.code).toMatch(/import.*pgEnum.*from.*drizzle-orm\/pg-core/);
+		expect(schema.code).toMatch(
+			/import[\s\S]*pgEnum[\s\S]*from.*drizzle-orm\/pg-core/,
+		);
 	});
 
 	it("should include correct imports for enum fields in MySQL", async () => {
