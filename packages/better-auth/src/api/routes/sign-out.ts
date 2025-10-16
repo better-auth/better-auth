@@ -1,4 +1,4 @@
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { deleteSessionCookie } from "../../cookies";
 import { APIError } from "better-call";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";

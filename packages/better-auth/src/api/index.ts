@@ -363,4 +363,4 @@ export {
 	optionsMiddleware,
 	type AuthEndpoint,
 	type AuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
