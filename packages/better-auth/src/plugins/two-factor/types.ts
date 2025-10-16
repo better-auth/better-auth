@@ -1,5 +1,5 @@
 import type { User } from "../../types";
-import type { AuthEndpoint } from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import type { LiteralString } from "../../types/helper";
 import type { BackupCodeOptions } from "./backup-codes";
 import type { OTPOptions } from "./otp";
@@ -44,7 +44,7 @@ export interface UserWithTwoFactor extends User {
 
 export interface TwoFactorProvider {
 	id: LiteralString;
-	endpoints?: Record<string, AuthEndpoint>;
+	endpoints?: BetterAuthPlugin["endpoints"];
 }
 
 export interface TwoFactorTable {

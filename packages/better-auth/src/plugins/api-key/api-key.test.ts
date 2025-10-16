@@ -1069,20 +1069,36 @@ describe("api-key", async () => {
 	// UPDATE API KEY
 	// =========================================================================
 
+	interface Err {
+		body: {
+			code: string | undefined;
+			message: string | undefined;
+		};
+		status: string;
+		statusCode: string;
+	}
+
 	it("should fail to update API key name without headers or userId", async () => {
-		let error: APIError | null = null;
-		await auth.api
-			.updateApiKey({
+		let res: { data: ApiKey | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.updateApiKey({
 				body: {
 					keyId: firstApiKey.id,
 					name: "test-api-key",
 				},
-			})
-			.catch((e) => {
-				error = e;
 			});
-		expect(error).not.toBeNull();
-		expect(error).toBeInstanceOf(APIError);
+			res.data = apiKey as ApiKey;
+		} catch (error: any) {
+			res.error = error;
+		}
+		expect(res.data).toBeNull();
+		expect(res.error).toBeDefined();
+		expect(res.error?.statusCode).toEqual(401);
+		expect(res.error?.status).toEqual("UNAUTHORIZED");
+		expect(res.error?.body.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
 	});
 
 	it("should update API key name with headers", async () => {

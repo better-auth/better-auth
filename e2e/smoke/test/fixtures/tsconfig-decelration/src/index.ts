@@ -1,10 +1,8 @@
 import { betterAuth } from "better-auth";
-import Database from "better-sqlite3";
-import { expo } from "@better-auth/expo";
+import { organization } from "better-auth/plugins";
 
-const auth = betterAuth({
-	database: new Database("./sqlite.db"),
-	plugins: [expo()],
+export const auth = betterAuth({
+	plugins: [organization({})],
 });
 
 auth.api

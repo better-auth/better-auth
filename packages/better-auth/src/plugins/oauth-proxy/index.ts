@@ -3,7 +3,7 @@ import { originCheck } from "../../api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
@@ -153,7 +153,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return (
+						return !!(
 							context.path?.startsWith("/callback") ||
 							context.path?.startsWith("/oauth2/callback")
 						);
@@ -224,7 +224,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 				},
 				{
 					matcher(context) {
-						return (
+						return !!(
 							context.path?.startsWith("/sign-in/social") ||
 							context.path?.startsWith("/sign-in/oauth2")
 						);

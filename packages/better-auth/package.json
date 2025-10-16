@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.4.0-beta.10",
+  "version": "1.4.0-beta.11",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -411,16 +411,6 @@
         "default": "./dist/plugins/haveibeenpwned/index.cjs"
       }
     },
-    "./plugins/sso": {
-      "import": {
-        "types": "./dist/plugins/sso/index.d.ts",
-        "default": "./dist/plugins/sso/index.js"
-      },
-      "require": {
-        "types": "./dist/plugins/sso/index.d.cts",
-        "default": "./dist/plugins/sso/index.cjs"
-      }
-    },
     "./plugins/oidc-provider": {
       "import": {
         "types": "./dist/plugins/oidc-provider/index.d.ts",
@@ -664,9 +654,6 @@
       ],
       "plugins/one-time-token": [
         "./dist/plugins/one-time-token/index.d.ts"
-      ],
-      "plugins/sso": [
-        "./dist/plugins/sso/index.d.ts"
       ],
       "plugins/oidc-provider": [
         "./dist/plugins/oidc-provider/index.d.ts"
