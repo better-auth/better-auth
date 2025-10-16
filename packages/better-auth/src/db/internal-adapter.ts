@@ -18,7 +18,7 @@ import {
 } from "@better-auth/core/context";
 import type { InternalLogger } from "@better-auth/core/env";
 import type { AuthContext, InternalAdapter } from "@better-auth/core";
-import { getEndpointContext } from "@better-auth/core/context";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
@@ -263,7 +263,7 @@ export const createInternalAdapter = (
 			override?: Partial<Session> & Record<string, any>,
 			overrideAll?: boolean,
 		) => {
-			const ctx = await getEndpointContext();
+			const ctx = await getCurrentAuthContext();
 			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
 			const data: Omit<Session, "id"> = {
