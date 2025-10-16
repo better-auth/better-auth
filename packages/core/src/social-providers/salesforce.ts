@@ -2,7 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
-import { logger } from "../env";
+import { globalLog } from "../env";
 import { refreshAccessToken } from "../oauth2";
 
 export interface SalesforceProfile {
@@ -61,8 +61,10 @@ export const salesforce = (options: SalesforceOptions) => {
 
 		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			if (!options.clientId || !options.clientSecret) {
-				logger.error(
+				globalLog(
+					"error",
 					"Client Id and Client Secret are required for Salesforce. Make sure to provide them in the options.",
+					null,
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
@@ -126,7 +128,7 @@ export const salesforce = (options: SalesforceOptions) => {
 				);
 
 				if (!user) {
-					logger.error("Failed to fetch user info from Salesforce");
+					globalLog("error", "Failed to fetch user info from Salesforce", null);
 					return null;
 				}
 
@@ -144,7 +146,12 @@ export const salesforce = (options: SalesforceOptions) => {
 					data: user,
 				};
 			} catch (error) {
-				logger.error("Failed to fetch user info from Salesforce:", error);
+				globalLog(
+					"error",
+					"Failed to fetch user info from Salesforce:",
+					null,
+					error,
+				);
 				return null;
 			}
 		},

@@ -22,8 +22,7 @@ import { parseSetCookieHeader } from "../../cookies";
 import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
 import { getBaseURL } from "../../utils/url";
-import { isProduction } from "@better-auth/core/env";
-import { logger } from "@better-auth/core/env";
+import { isProduction, globalLog } from "@better-auth/core/env";
 import type { GenericEndpointContext } from "@better-auth/core";
 
 interface MCPOptions {
@@ -943,7 +942,11 @@ export const withMcpAuth = <
 	return async (req: Request) => {
 		const baseURL = getBaseURL(auth.options.baseURL, auth.options.basePath);
 		if (!baseURL && !isProduction) {
-			logger.warn("Unable to get the baseURL, please check your config!");
+			globalLog(
+				"warn",
+				"Unable to get the baseURL, please check your config!",
+				null,
+			);
 		}
 		const session = await auth.api.getMcpSession({
 			headers: req.headers,

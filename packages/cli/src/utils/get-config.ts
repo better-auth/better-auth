@@ -1,6 +1,6 @@
 import { loadConfig } from "c12";
 import type { BetterAuthOptions } from "better-auth";
-import { logger } from "better-auth";
+import { globalLog } from "better-auth";
 import path from "path";
 // @ts-expect-error
 import babelPresetTypeScript from "@babel/preset-typescript";
@@ -68,7 +68,7 @@ function getPathAliasesRecursive(
 	visited.add(tsconfigPath);
 
 	if (!fs.existsSync(tsconfigPath)) {
-		logger.warn(`Referenced tsconfig not found: ${tsconfigPath}`);
+		globalLog("warn", `Referenced tsconfig not found: ${tsconfigPath}`, null);
 		return {};
 	}
 
@@ -106,7 +106,11 @@ function getPathAliasesRecursive(
 
 		return result;
 	} catch (error) {
-		logger.warn(`Error parsing tsconfig at ${tsconfigPath}: ${error}`);
+		globalLog(
+			"warn",
+			`Error parsing tsconfig at ${tsconfigPath}: ${error}`,
+			null,
+		);
 		return {};
 	}
 }
@@ -195,8 +199,10 @@ export async function getConfig({
 						`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
 					);
 				}
-				logger.error(
+				globalLog(
+					"error",
 					`[#better-auth]: Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
+					null,
 				);
 				process.exit(1);
 			}
@@ -227,10 +233,16 @@ export async function getConfig({
 									"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
 								);
 							}
-							logger.error("[#better-auth]: Couldn't read your auth config.");
+							globalLog(
+								"error",
+								"[#better-auth]: Couldn't read your auth config.",
+								null,
+							);
 							console.log("");
-							logger.info(
+							globalLog(
+								"info",
 								"[#better-auth]: Make sure to default export your auth instance or to export as a variable named auth.",
+								null,
 							);
 							process.exit(1);
 						}
@@ -251,15 +263,22 @@ export async function getConfig({
 								`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
 							);
 						}
-						logger.error(
+						globalLog(
+							"error",
 							`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
+							null,
 						);
 						process.exit(1);
 					}
 					if (shouldThrowOnError) {
 						throw e;
 					}
-					logger.error("[#better-auth]: Couldn't read your auth config.", e);
+					globalLog(
+						"error",
+						"[#better-auth]: Couldn't read your auth config.",
+						null,
+						e,
+					);
 					process.exit(1);
 				}
 			}
@@ -280,8 +299,10 @@ export async function getConfig({
 					`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
 				);
 			}
-			logger.error(
+			globalLog(
+				"error",
 				`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
+				null,
 			);
 			process.exit(1);
 		}
@@ -289,7 +310,7 @@ export async function getConfig({
 			throw e;
 		}
 
-		logger.error("Couldn't read your auth config.", e);
+		globalLog("error", "Couldn't read your auth config.", null, e);
 		process.exit(1);
 	}
 }

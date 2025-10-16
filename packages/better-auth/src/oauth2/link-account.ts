@@ -1,7 +1,6 @@
 import { APIError, createEmailVerificationToken } from "../api";
 import type { Account } from "../types";
 import type { User } from "../types";
-import { logger } from "@better-auth/core/env";
 import { isDevelopment } from "@better-auth/core/env";
 import { setTokenUtil } from "./utils";
 import type { GenericEndpointContext } from "@better-auth/core";
@@ -29,7 +28,7 @@ export async function handleOAuthUserInfo(
 			account.providerId,
 		)
 		.catch((e) => {
-			logger.error(
+			c.context.logger.error(
 				"Better auth was unable to query your database.\nError: ",
 				e,
 			);
@@ -57,7 +56,7 @@ export async function handleOAuthUserInfo(
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
 				if (isDevelopment) {
-					logger.warn(
+					c.context.logger.warn(
 						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
 					);
 				}
@@ -79,7 +78,7 @@ export async function handleOAuthUserInfo(
 					scope: account.scope,
 				});
 			} catch (e) {
-				logger.error("Unable to link account", e);
+				c.context.logger.error("Unable to link account", e);
 				return {
 					error: "unable to link account",
 					data: null,
@@ -188,7 +187,7 @@ export async function handleOAuthUserInfo(
 				);
 			}
 		} catch (e: any) {
-			logger.error(e);
+			c.context.logger.error(e);
 			if (e instanceof APIError) {
 				return {
 					error: e.message,

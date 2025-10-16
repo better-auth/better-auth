@@ -3,7 +3,7 @@ import { decodeJwt } from "jose";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
-import { logger } from "../env";
+import { globalLog } from "../env";
 import { refreshAccessToken } from "../oauth2";
 
 export interface GoogleProfile {
@@ -62,9 +62,11 @@ export const google = (options: GoogleOptions) => {
 			display,
 		}) {
 			if (!options.clientId || !options.clientSecret) {
-				logger.error(
+				globalLog(
+					"error",
 					"Client Id and Client Secret is required for Google. Make sure to provide them in the options.",
-				);
+					null,
+				); // Can't set the better auth's logger options here!
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
 			if (!codeVerifier) {

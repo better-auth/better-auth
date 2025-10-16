@@ -1,4 +1,4 @@
-import { logger } from "@better-auth/core/env";
+import { globalLog } from "@better-auth/core/env";
 
 export function safeJSONParse<T>(data: unknown): T | null {
 	function reviver(_: string, value: any): any {
@@ -19,7 +19,7 @@ export function safeJSONParse<T>(data: unknown): T | null {
 		}
 		return JSON.parse(data, reviver);
 	} catch (e) {
-		logger.error("Error parsing JSON", { error: e });
+		globalLog("error", "Error parsing JSON", null, { error: e }); // Can't set the better auth's logger options here!
 		return null;
 	}
 }

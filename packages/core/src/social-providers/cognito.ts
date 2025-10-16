@@ -3,7 +3,7 @@ import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
-import { logger } from "../env";
+import { globalLog } from "../env";
 import { refreshAccessToken } from "../oauth2";
 import { APIError } from "better-call";
 
@@ -43,9 +43,11 @@ export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
 
 export const cognito = (options: CognitoOptions) => {
 	if (!options.domain || !options.region || !options.userPoolId) {
-		logger.error(
+		globalLog(
+			"error",
 			"Domain, region and userPoolId are required for Amazon Cognito. Make sure to provide them in the options.",
-		);
+			null,
+		); // Can't set the better auth's logger options here!
 		throw new BetterAuthError("DOMAIN_AND_REGION_REQUIRED");
 	}
 
@@ -59,16 +61,20 @@ export const cognito = (options: CognitoOptions) => {
 		name: "Cognito",
 		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			if (!options.clientId) {
-				logger.error(
+				globalLog(
+					"error",
 					"ClientId is required for Amazon Cognito. Make sure to provide them in the options.",
-				);
+					null,
+				); // Can't set the better auth's logger options here!
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
 
 			if (options.requireClientSecret && !options.clientSecret) {
-				logger.error(
+				globalLog(
+					"error",
 					"Client Secret is required when requireClientSecret is true. Make sure to provide it in the options.",
-				);
+					null,
+				); // Can't set the better auth's logger options here!
 				throw new BetterAuthError("CLIENT_SECRET_REQUIRED");
 			}
 			const _scopes = options.disableDefaultScope
@@ -148,7 +154,7 @@ export const cognito = (options: CognitoOptions) => {
 				}
 				return true;
 			} catch (error) {
-				logger.error("Failed to verify ID token:", error);
+				globalLog("error", "Failed to verify ID token:", null, error); // Can't set the better auth's logger options here!
 				return false;
 			}
 		},
@@ -187,7 +193,7 @@ export const cognito = (options: CognitoOptions) => {
 						data: enrichedProfile,
 					};
 				} catch (error) {
-					logger.error("Failed to decode ID token:", error);
+					globalLog("error", "Failed to decode ID token:", null, error); // Can't set the better auth's logger options here!
 				}
 			}
 
@@ -217,7 +223,12 @@ export const cognito = (options: CognitoOptions) => {
 						};
 					}
 				} catch (error) {
-					logger.error("Failed to fetch user info from Cognito:", error);
+					globalLog(
+						"error",
+						"Failed to fetch user info from Cognito:",
+						null,
+						error,
+					); // Can't set the better auth's logger options here!
 				}
 			}
 
@@ -260,7 +271,7 @@ export const getCognitoPublicKey = async (
 
 		return await importJWK(jwk, jwk.alg);
 	} catch (error) {
-		logger.error("Failed to fetch Cognito public key:", error);
+		globalLog("error", "Failed to fetch Cognito public key:", null, error); // Can't set the better auth's logger options here!
 		throw error;
 	}
 };

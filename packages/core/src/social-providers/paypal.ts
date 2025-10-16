@@ -2,7 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL } from "../oauth2";
-import { logger } from "../env";
+import { globalLog } from "../env";
 import { decodeJwt } from "jose";
 import { base64 } from "@better-auth/utils/base64";
 
@@ -78,9 +78,11 @@ export const paypal = (options: PayPalOptions) => {
 		name: "PayPal",
 		async createAuthorizationURL({ state, codeVerifier, redirectURI }) {
 			if (!options.clientId || !options.clientSecret) {
-				logger.error(
+				globalLog(
+					"error",
 					"Client Id and Client Secret is required for PayPal. Make sure to provide them in the options.",
-				);
+					null,
+				); // Can't set the better auth's logger options here!
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
 
@@ -147,7 +149,7 @@ export const paypal = (options: PayPalOptions) => {
 
 				return result;
 			} catch (error) {
-				logger.error("PayPal token exchange failed:", error);
+				globalLog("error", "PayPal token exchange failed:", null, error); // Can't set the better auth's logger options here!
 				throw new BetterAuthError("FAILED_TO_GET_ACCESS_TOKEN");
 			}
 		},
@@ -187,7 +189,7 @@ export const paypal = (options: PayPalOptions) => {
 								: undefined,
 						};
 					} catch (error) {
-						logger.error("PayPal token refresh failed:", error);
+						globalLog("error", "PayPal token refresh failed:", null, error); // Can't set the better auth's logger options here!
 						throw new BetterAuthError("FAILED_TO_REFRESH_ACCESS_TOKEN");
 					}
 				},
@@ -203,7 +205,7 @@ export const paypal = (options: PayPalOptions) => {
 				const payload = decodeJwt(token);
 				return !!payload.sub;
 			} catch (error) {
-				logger.error("Failed to verify PayPal ID token:", error);
+				globalLog("error", "Failed to verify PayPal ID token:", null, error); // Can't set the better auth's logger options here!
 				return false;
 			}
 		},
@@ -214,7 +216,11 @@ export const paypal = (options: PayPalOptions) => {
 			}
 
 			if (!token.accessToken) {
-				logger.error("Access token is required to fetch PayPal user info");
+				globalLog(
+					"error",
+					"Access token is required to fetch PayPal user info",
+					null,
+				); // Can't set the better auth's logger options here!
 				return null;
 			}
 
@@ -230,7 +236,7 @@ export const paypal = (options: PayPalOptions) => {
 				);
 
 				if (!response.data) {
-					logger.error("Failed to fetch user info from PayPal");
+					globalLog("error", "Failed to fetch user info from PayPal", null); // Can't set the better auth's logger options here!
 					return null;
 				}
 
@@ -251,7 +257,12 @@ export const paypal = (options: PayPalOptions) => {
 
 				return result;
 			} catch (error) {
-				logger.error("Failed to fetch user info from PayPal:", error);
+				globalLog(
+					"error",
+					"Failed to fetch user info from PayPal:",
+					null,
+					error,
+				); // Can't set the better auth's logger options here!
 				return null;
 			}
 		},

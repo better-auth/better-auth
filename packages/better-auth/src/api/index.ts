@@ -40,7 +40,7 @@ import {
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
-import { type InternalLogger, logger } from "@better-auth/core/env";
+import { type InternalLogger, globalLog } from "@better-auth/core/env";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
@@ -308,13 +308,6 @@ export const router = <Option extends BetterAuthOptions>(
 				return;
 			}
 
-			const optLogLevel = options.logger?.level;
-			const log =
-				optLogLevel === "error" ||
-				optLogLevel === "warn" ||
-				optLogLevel === "debug"
-					? logger
-					: undefined;
 			if (options.logger?.disabled !== true) {
 				if (
 					e &&
@@ -329,7 +322,7 @@ export const router = <Option extends BetterAuthOptions>(
 						e.message.includes("table") ||
 						e.message.includes("does not exist")
 					) {
-						ctx.logger?.error(e.message);
+						ctx.logger.error(e.message);
 						return;
 					}
 				}
@@ -338,9 +331,11 @@ export const router = <Option extends BetterAuthOptions>(
 					if (e.status === "INTERNAL_SERVER_ERROR") {
 						ctx.logger.error(e.status, e);
 					}
-					log?.error(e.message);
+					globalLog("error", e.message, {
+						logger: { level: options?.logger?.level },
+					}); // Fallback if ctx.logger is broken. But is possible for it to be broken? Is this a relic of past, when `ctx.logger` might been undefined?
 				} else {
-					ctx.logger?.error(
+					ctx.logger.error(
 						e && typeof e === "object" && "name" in e ? (e.name as string) : "",
 						e,
 					);

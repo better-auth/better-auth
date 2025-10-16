@@ -2,7 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
-import { logger } from "../env";
+import { globalLog } from "../env";
 import { refreshAccessToken } from "../oauth2";
 
 export interface AtlassianProfile {
@@ -31,7 +31,11 @@ export const atlassian = (options: AtlassianOptions) => {
 
 		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			if (!options.clientId || !options.clientSecret) {
-				logger.error("Client Id and Secret are required for Atlassian");
+				globalLog(
+					"error",
+					"Client Id and Secret are required for Atlassian",
+					null,
+				); // Can't set the better auth's logger options here!
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
 			if (!codeVerifier) {
@@ -117,7 +121,12 @@ export const atlassian = (options: AtlassianOptions) => {
 					data: profile,
 				};
 			} catch (error) {
-				logger.error("Failed to fetch user info from Figma:", error);
+				globalLog(
+					"error",
+					"Failed to fetch user info from Atlassian:",
+					null,
+					error,
+				); // Can't set the better auth's logger options here!
 				return null;
 			}
 		},

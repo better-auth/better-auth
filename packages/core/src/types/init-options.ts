@@ -12,7 +12,7 @@ import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
 import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { Logger } from "../env";
+import type { Logger } from "./logger";
 import type { AuthContext, GenericEndpointContext } from "./context";
 import type { AuthMiddleware } from "../api";
 import type { BetterAuthPlugin } from "..";

@@ -2,7 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
-import { logger } from "../env";
+import { globalLog } from "../env";
 import { refreshAccessToken } from "../oauth2";
 
 export interface FigmaProfile {
@@ -22,9 +22,11 @@ export const figma = (options: FigmaOptions) => {
 		name: "Figma",
 		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			if (!options.clientId || !options.clientSecret) {
-				logger.error(
+				globalLog(
+					"error",
 					"Client Id and Client Secret are required for Figma. Make sure to provide them in the options.",
-				);
+					null,
+				); // Can't set the better auth's logger options here!
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
 			if (!codeVerifier) {
@@ -85,7 +87,7 @@ export const figma = (options: FigmaOptions) => {
 				);
 
 				if (!profile) {
-					logger.error("Failed to fetch user from Figma");
+					globalLog("error", "Failed to fetch user from Figma", null); // Can't set the better auth's logger options here!
 					return null;
 				}
 
@@ -103,7 +105,12 @@ export const figma = (options: FigmaOptions) => {
 					data: profile,
 				};
 			} catch (error) {
-				logger.error("Failed to fetch user info from Figma:", error);
+				globalLog(
+					"error",
+					"Failed to fetch user info from Figma:",
+					null,
+					error,
+				); // Can't set the better auth's logger options here!
 				return null;
 			}
 		},
