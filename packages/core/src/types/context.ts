@@ -20,7 +20,9 @@ import type {
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
-> = EndpointContext<string, any, AuthContext<Options>>;
+> = EndpointContext<string, any> & {
+	context: AuthContext<Options>;
+};
 
 export interface InternalAdapter<
 	Options extends BetterAuthOptions = BetterAuthOptions,
