@@ -14,7 +14,7 @@ import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Logger } from "../env";
 import type { AuthContext, GenericEndpointContext } from "./context";
-import type { AuthMiddleware } from "../middleware";
+import type { AuthMiddleware } from "../api";
 import type { BetterAuthPlugin } from "..";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
