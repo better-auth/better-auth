@@ -77,6 +77,17 @@ export interface OpenAPIOptions {
 	 * @default "default"
 	 */
 	theme?: ScalarTheme;
+	/**
+	 * Base URL for the OpenAPI documentation server.
+	 * This is useful when your auth backend is on a different domain/port than your frontend.
+	 *
+	 * If not provided, it will fall back to the `BETTER_AUTH_URL` environment variable
+	 * or the base URL configured in Better Auth.
+	 *
+	 * @example "http://localhost:3001"
+	 * @example "https://api.example.com"
+	 */
+	baseUrl?: string;
 }
 
 export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
@@ -90,7 +101,7 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
 					method: "GET",
 				},
 				async (ctx) => {
-					const schema = await generator(ctx.context, ctx.context.options);
+					const schema = await generator(ctx.context, ctx.context.options, options);
 					return ctx.json(schema);
 				},
 			),
@@ -106,7 +117,7 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
 					if (options?.disableDefaultReference) {
 						throw new APIError("NOT_FOUND");
 					}
-					const schema = await generator(ctx.context, ctx.context.options);
+					const schema = await generator(ctx.context, ctx.context.options, options);
 					return new Response(getHTML(schema, options?.theme), {
 						headers: {
 							"Content-Type": "text/html",
