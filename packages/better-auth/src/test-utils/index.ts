@@ -14,6 +14,7 @@ import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
 import type { BetterAuthClientOptions } from "@better-auth/core";
+import { getCurrentAuthContextAsyncLocalStorage } from "@better-auth/core/context";
 
 export async function getTestInstanceMemory<
 	O extends Partial<BetterAuthOptions>,
@@ -95,6 +96,12 @@ export async function getTestInstanceMemory<
 		},
 		plugins: [bearer(), ...(options?.plugins || [])],
 	} as unknown as O extends undefined ? typeof opts : O & typeof opts);
+
+	// Set the context for the current async storage
+	const als = await getCurrentAuthContextAsyncLocalStorage();
+	als.enterWith({
+		context: await auth.$context,
+	});
 
 	const testUser = {
 		email: "test@test.com",
