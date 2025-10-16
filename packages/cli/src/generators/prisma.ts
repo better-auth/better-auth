@@ -54,6 +54,22 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		}
 	}
 
+	const indexedFields = new Map<string, string[]>();
+	for (const table in tables) {
+		const fields = tables[table]?.fields;
+		const customModelName = tables[table]?.modelName || table;
+		const modelName = capitalizeFirstLetter(customModelName);
+		indexedFields.set(modelName, []);
+
+		for (const field in fields) {
+			const attr = fields[field]!;
+			if (attr.index) {
+				const fieldName = attr.fieldName || field;
+				indexedFields.get(modelName)!.push(fieldName);
+			}
+		}
+	}
+
 	const schema = produceSchema(schemaPrisma, (builder) => {
 		for (const table in tables) {
 			const originalTableName = table;
@@ -230,6 +246,14 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						builder.model(modelName).field(fieldName, `${relatedModel}[]`);
 					}
 				}
+			}
+
+			// Add indexes
+			const indexedFieldsForModel = indexedFields.get(modelName);
+			if (indexedFieldsForModel && indexedFieldsForModel.length > 0) {
+				builder
+					.model(modelName)
+					.blockAttribute(`index([${indexedFieldsForModel.join(", ")}])`);
 			}
 
 			const hasAttribute = builder.findByType("attribute", {

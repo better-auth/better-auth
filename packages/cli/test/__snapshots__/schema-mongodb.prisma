@@ -25,6 +25,7 @@ model User {
 
   @@unique([email])
   @@unique([username])
+  @@index([email, username])
   @@map("user")
 }
 
@@ -40,6 +41,7 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([token])
+  @@index([token, userId])
   @@map("session")
 }
 
@@ -59,6 +61,7 @@ model Account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  @@index([userId])
   @@map("account")
 }
 
@@ -70,6 +73,7 @@ model Verification {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  @@index([identifier])
   @@map("verification")
 }
 
@@ -80,5 +84,6 @@ model TwoFactor {
   userId      String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([secret, userId])
   @@map("twoFactor")
 }
