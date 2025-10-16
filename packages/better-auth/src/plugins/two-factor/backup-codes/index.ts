@@ -422,9 +422,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					await ctx.context.password.checkPassword(user.id, ctx);
 
 					// First, find the twoFactor record to get its id
-					const twoFactor = await ctx.context.adapter.findOne<
-						TwoFactorTable & { id: string }
-					>({
+					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,
 						where: [
 							{
