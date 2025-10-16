@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { APIError } from "../../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OrganizationOptions } from "../types";
 import { orgSessionMiddleware } from "../call";
 import { hasPermission } from "../has-permission";
@@ -503,15 +503,6 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 					}),
 				})
 				.optional(),
-			metadata: {
-				$Infer: {
-					query: {} as
-						| {
-								organizationId?: string | undefined;
-						  }
-						| undefined,
-				},
-			},
 		},
 		async (ctx) => {
 			const { session, user } = ctx.context.session;

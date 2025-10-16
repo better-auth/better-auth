@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
@@ -352,7 +352,6 @@ export const verifyEmail = createAuthEndpoint(
 					email: parsed.updateTo,
 					emailVerified: false,
 				},
-				ctx,
 			);
 
 			const newToken = await createEmailVerificationToken(
@@ -409,7 +408,6 @@ export const verifyEmail = createAuthEndpoint(
 			{
 				emailVerified: true,
 			},
-			ctx,
 		);
 		if (ctx.context.options.emailVerification?.afterEmailVerification) {
 			await ctx.context.options.emailVerification.afterEmailVerification(
@@ -422,7 +420,6 @@ export const verifyEmail = createAuthEndpoint(
 			if (!currentSession || currentSession.user.email !== parsed.email) {
 				const session = await ctx.context.internalAdapter.createSession(
 					user.user.id,
-					ctx,
 				);
 				if (!session) {
 					throw new APIError("INTERNAL_SERVER_ERROR", {

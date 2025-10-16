@@ -4,7 +4,7 @@ import { getEndpoints, router } from "./api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import { init } from "./init";
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import * as z from "zod";

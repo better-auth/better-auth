@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { verifyTwoFactor } from "../verify-two-factor";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
@@ -178,14 +178,11 @@ export const otp2fa = (options?: OTPOptions) => {
 			}
 			const code = generateRandomString(opts.digits, "0-9");
 			const hashedCode = await storeOTP(ctx, code);
-			await ctx.context.internalAdapter.createVerificationValue(
-				{
-					value: `${hashedCode}:0`,
-					identifier: `2fa-otp-${key}`,
-					expiresAt: new Date(Date.now() + opts.period),
-				},
-				ctx,
-			);
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: `${hashedCode}:0`,
+				identifier: `2fa-otp-${key}`,
+				expiresAt: new Date(Date.now() + opts.period),
+			});
 			await options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
 				ctx.request,
@@ -325,7 +322,6 @@ export const otp2fa = (options?: OTPOptions) => {
 					);
 					const newSession = await ctx.context.internalAdapter.createSession(
 						session.user.id,
-						ctx,
 						false,
 						session.session,
 					);

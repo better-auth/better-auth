@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt } from "../../../crypto";
 import type { BackupCodeOptions } from "../backup-codes";
@@ -268,10 +268,9 @@ export const totp2fa = (options?: TOTPOptions) => {
 					{
 						twoFactorEnabled: true,
 					},
-					ctx,
 				);
 				const newSession = await ctx.context.internalAdapter
-					.createSession(user.id, ctx, false, session.session)
+					.createSession(user.id, false, session.session)
 					.catch((e) => {
 						throw e;
 					});

@@ -1,5 +1,5 @@
 import { APIError } from "../../api";
-import { createAuthMiddleware } from "@better-auth/core/middleware";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { mergeSchema } from "../../db";
 import { apiKeySchema } from "./schema";

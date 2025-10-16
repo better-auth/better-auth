@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { APIError } from "../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { setSessionCookie } from "../../cookies";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { jwtVerify, createRemoteJWKSet } from "jose";
@@ -116,7 +116,6 @@ export const oneTap = (options?: OneTapOptions) =>
 								providerId: "google",
 								accountId: sub,
 							},
-							ctx,
 						);
 						if (!newUser) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -125,7 +124,6 @@ export const oneTap = (options?: OneTapOptions) =>
 						}
 						const session = await ctx.context.internalAdapter.createSession(
 							newUser.user.id,
-							ctx,
 						);
 						await setSessionCookie(ctx, {
 							user: newUser.user,
@@ -167,7 +165,6 @@ export const oneTap = (options?: OneTapOptions) =>
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.user.id,
-						ctx,
 					);
 
 					await setSessionCookie(ctx, {

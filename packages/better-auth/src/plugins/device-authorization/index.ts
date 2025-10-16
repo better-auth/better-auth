@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { APIError } from "better-call";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import type { InferOptionSchema } from "../../types/plugins";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { generateRandomString } from "../../crypto";
@@ -569,7 +569,6 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 
 						const session = await ctx.context.internalAdapter.createSession(
 							user.id,
-							ctx,
 						);
 
 						if (!session) {

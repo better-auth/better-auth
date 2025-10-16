@@ -26,29 +26,6 @@ export const getNormalTestSuiteTests = ({
 	customIdGenerator,
 	getBetterAuthOptions,
 }: Parameters<Parameters<typeof createTestSuite>[2]>[0]) => {
-	/**
-	 * Some databases (such as SQLite) sort rows orders using raw byte values
-	 * Meaning that capitalization, numbers and others goes before the rest of the alphabet
-	 * Because of the inconsistency, as a bare minimum for testing sorting functionality, we should
-	 * remove all capitalizations and numbers from the `name` field
-	 */
-	const createBinarySortFriendlyUsers = async (count: number) => {
-		let users: User[] = [];
-		for (let i = 0; i < count; i++) {
-			const user = await generate("user");
-			const userResult = await adapter.create<User>({
-				model: "user",
-				data: {
-					...user,
-					name: user.name.replace(/[0-9]/g, "").toLowerCase(),
-				},
-				forceAllowId: true,
-			});
-			users.push(userResult);
-		}
-		return users;
-	};
-
 	return {
 		"create - should create a model": async () => {
 			const user = await generate("user");
@@ -289,31 +266,232 @@ export const getNormalTestSuiteTests = ({
 				});
 				expect(sortModels(result)).toEqual(sortModels(users));
 			},
+		"findMany - starts_with should not interpret regex patterns": async () => {
+			// Create a user whose name literally starts with the regex-like prefix
+			const userTemplate = await generate("user");
+			const literalRegexUser = await adapter.create<User>({
+				model: "user",
+				data: {
+					...userTemplate,
+					name: ".*danger",
+				},
+				forceAllowId: true,
+			});
+
+			// Also create some normal users that do NOT start with ".*"
+			await insertRandom("user", 3);
+
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [{ field: "name", value: ".*", operator: "starts_with" }],
+			});
+
+			// Should only match the literal ".*" prefix, not treat it as a regex matching everything
+			expect(result.length).toBe(1);
+			expect(result[0]!.id).toBe(literalRegexUser.id);
+			expect(result[0]!.name.startsWith(".*")).toBe(true);
+		},
+		"findMany - ends_with should not interpret regex patterns": async () => {
+			// Create a user whose name literally ends with the regex-like suffix
+			const userTemplate = await generate("user");
+			const literalRegexUser = await adapter.create<User>({
+				model: "user",
+				data: {
+					...userTemplate,
+					name: "danger.*",
+				},
+				forceAllowId: true,
+			});
+
+			// Also create some normal users that do NOT end with ".*"
+			await insertRandom("user", 3);
+
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [{ field: "name", value: ".*", operator: "ends_with" }],
+			});
+
+			// Should only match the literal ".*" suffix, not treat it as a regex matching everything
+			expect(result.length).toBe(1);
+			expect(result[0]!.id).toBe(literalRegexUser.id);
+			expect(result[0]!.name.endsWith(".*")).toBe(true);
+		},
+		"findMany - contains should not interpret regex patterns": async () => {
+			// Create a user whose name literally contains the regex-like pattern
+			const userTemplate = await generate("user");
+			const literalRegexUser = await adapter.create<User>({
+				model: "user",
+				data: {
+					...userTemplate,
+					name: "prefix-.*-suffix",
+				},
+				forceAllowId: true,
+			});
+
+			// Also create some normal users that do NOT contain ".*"
+			await insertRandom("user", 3);
+
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [{ field: "name", value: ".*", operator: "contains" }],
+			});
+
+			// Should only match the literal substring ".*", not treat it as a regex matching everything
+			expect(result.length).toBe(1);
+			expect(result[0]!.id).toBe(literalRegexUser.id);
+			expect(result[0]!.name.includes(".*")).toBe(true);
+		},
 		"findMany - should find many models with ends_with operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			for (const user of users) {
+				const res = await adapter.update<User>({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+					update: { name: user.name.toLowerCase() }, // make name lowercase
+				});
+				if (!res) throw new Error("No result");
+				let u = users.find((u) => u.id === user.id)!;
+				u.name = res.name;
+				u.updatedAt = res.updatedAt;
+			}
+			const ends_with = users[0]!.name.slice(-1);
 			const result = await adapter.findMany<User>({
 				model: "user",
 				where: [
 					{
 						field: "name",
-						value: users[0]!.name.slice(-1),
+						value: ends_with,
 						operator: "ends_with",
 					},
 				],
 			});
 			const expectedResult = sortModels(
-				users.filter((user) => user.name.endsWith(users[0]!.name.slice(-1))),
+				users.filter((user) => user.name.endsWith(ends_with)),
 			);
-			expect(sortModels(result)).toEqual(sortModels(expectedResult));
+			if (result.length !== expectedResult.length) {
+				console.log(`Result length: ${result.length}`);
+				console.log(sortModels(result));
+				console.log("--------------------------------");
+				console.log(
+					`Expected result length: ${expectedResult.length} - key: ${JSON.stringify(ends_with)}`,
+				);
+				console.log(expectedResult);
+			}
+			expect(sortModels(result)).toEqual(expectedResult);
 		},
 		"findMany - should find many models with contains operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+
+			// if this check fails, the test will fail.
+			// insertRandom needs to generate emails that contain `@email.com`
+			expect(users[0]!.email).toContain("@email.com");
+
 			const result = await adapter.findMany<User>({
 				model: "user",
-				where: [{ field: "email", value: "@", operator: "contains" }],
+				where: [
+					{
+						field: "email",
+						value: "mail", // all emails contains `@email.com` from `insertRandom`
+						operator: "contains",
+					},
+				],
 			});
 			expect(sortModels(result)).toEqual(sortModels(users));
 		},
+		"findMany - should handle multiple where conditions with different operators":
+			async () => {
+				const testData = [
+					{ name: "john doe", email: "john@example.com" },
+					{ name: "jane smith", email: "jane@gmail.com" },
+				];
+
+				const createdUsers: User[] = [];
+				for (const data of testData) {
+					const user = await adapter.create({
+						model: "user",
+						data: {
+							...generate("user"),
+							...data,
+						},
+						forceAllowId: true,
+					});
+					createdUsers.push(user as User);
+				}
+
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{
+							field: "email",
+							value: "john@example.com",
+							operator: "eq",
+							connector: "AND",
+						},
+						{
+							field: "name",
+							value: "john",
+							operator: "contains",
+							connector: "AND",
+						},
+					],
+				});
+				expect(result.length).toBe(1);
+				expect(result[0]!.email).toBe("john@example.com");
+				expect(result[0]!.name).toBe("john doe");
+
+				const result2 = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{
+							field: "email",
+							value: "gmail",
+							operator: "contains",
+							connector: "AND",
+						},
+						{
+							field: "name",
+							value: "jane",
+							operator: "contains",
+							connector: "AND",
+						},
+					],
+				});
+
+				expect(result2.length).toBe(1);
+				expect(result2[0]!.email).toBe("jane@gmail.com");
+				expect(result2[0]!.name).toBe("jane smith");
+
+				const result3 = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{
+							field: "email",
+							value: "john",
+							operator: "starts_with",
+							connector: "AND",
+						},
+						{
+							field: "name",
+							value: "john",
+							operator: "contains",
+							connector: "AND",
+						},
+					],
+				});
+
+				expect(result3.length).toBe(1);
+				expect(result3[0]!.email).toBe("john@example.com");
+				expect(result3[0]!.name).toBe("john doe");
+			},
+		"findMany - should find many models with contains operator (using symbol)":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "email", value: "@", operator: "contains" }],
+				});
+				expect(sortModels(result)).toEqual(sortModels(users));
+			},
 		"findMany - should find many models with eq operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const result = await adapter.findMany<User>({
@@ -430,14 +608,47 @@ export const getNormalTestSuiteTests = ({
 			expect(sortModels(result)).toEqual([users[2]]);
 		},
 		"findMany - should find many models with sortBy": async () => {
-			const users = await createBinarySortFriendlyUsers(5);
-			const result = await adapter.findMany<User>({
-				model: "user",
-				sortBy: { field: "name", direction: "asc" },
-			});
-			expect(result.map((x) => x.name)).toEqual(
-				users.map((x) => x.name).sort((a, b) => a.localeCompare(b)),
+			let n = -1;
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							numericField: {
+								type: "number",
+								defaultValue() {
+									return n++;
+								},
+							},
+						},
+					},
+				},
+				true,
 			);
+			const users = (await insertRandom("user", 5)).map(
+				(x) => x[0],
+			) as (User & { numericField: number })[];
+			const result = await adapter.findMany<User & { numericField: number }>({
+				model: "user",
+				sortBy: { field: "numericField", direction: "asc" },
+			});
+			const expectedResult = users
+				.map((x) => x.numericField)
+				.sort((a, b) => a - b);
+			try {
+				expect(result.map((x) => x.numericField)).toEqual(expectedResult);
+			} catch (error) {
+				console.log(`--------------------------------`);
+				console.log(`result:`);
+				console.log(result.map((x) => x.id));
+				console.log(`expected result:`);
+				console.log(expectedResult);
+				console.log(`--------------------------------`);
+				throw error;
+			}
+			const options = getBetterAuthOptions();
+			if (options.advanced?.database?.useNumberId) {
+				expect(Number(users[0]!.id)).not.toBeNaN();
+			}
 		},
 		"findMany - should find many models with limit": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
@@ -478,54 +689,177 @@ export const getNormalTestSuiteTests = ({
 			});
 		},
 		"findMany - should find many models with sortBy and offset": async () => {
-			const users = await createBinarySortFriendlyUsers(5);
+			let n = -1;
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							numericField: {
+								type: "number",
+								defaultValue() {
+									return n++;
+								},
+							},
+						},
+					},
+				},
+				true,
+			);
+			const users = (await insertRandom("user", 5)).map(
+				(x) => x[0],
+			) as (User & { numericField: number })[];
 			const result = await adapter.findMany<User>({
 				model: "user",
-				sortBy: { field: "name", direction: "asc" },
+				sortBy: { field: "numericField", direction: "asc" },
 				offset: 2,
 			});
 			expect(result).toHaveLength(3);
 			expect(result).toEqual(
-				users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(2),
+				users.sort((a, b) => a.numericField - b.numericField).slice(2),
 			);
 		},
 		"findMany - should find many models with sortBy and limit": async () => {
-			const users = await createBinarySortFriendlyUsers(5);
+			let n = -1;
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							numericField: {
+								type: "number",
+								defaultValue() {
+									return n++;
+								},
+							},
+						},
+					},
+				},
+				true,
+			);
+			const users = (await insertRandom("user", 5)).map(
+				(x) => x[0],
+			) as (User & { numericField: number })[];
 			const result = await adapter.findMany<User>({
 				model: "user",
-				sortBy: { field: "name", direction: "asc" },
+				sortBy: { field: "numericField", direction: "asc" },
 				limit: 2,
 			});
 			expect(result).toEqual(
-				users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(0, 2),
+				users.sort((a, b) => a.numericField - b.numericField).slice(0, 2),
 			);
 		},
 		"findMany - should find many models with sortBy and limit and offset":
 			async () => {
-				const users = await createBinarySortFriendlyUsers(5);
+				let n = -1;
+				await modifyBetterAuthOptions(
+					{
+						user: {
+							additionalFields: {
+								numericField: {
+									type: "number",
+									defaultValue() {
+										return n++;
+									},
+								},
+							},
+						},
+					},
+					true,
+				);
+				const users = (await insertRandom("user", 5)).map(
+					(x) => x[0],
+				) as (User & { numericField: number })[];
 				const result = await adapter.findMany<User>({
 					model: "user",
-					sortBy: { field: "name", direction: "asc" },
+					sortBy: { field: "numericField", direction: "asc" },
 					limit: 2,
 					offset: 2,
 				});
+				expect(result.length).toBe(2);
 				expect(result).toEqual(
-					users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(2, 4),
+					users.sort((a, b) => a.numericField - b.numericField).slice(2, 4),
 				);
 			},
 		"findMany - should find many models with sortBy and limit and offset and where":
 			async () => {
-				const users = await createBinarySortFriendlyUsers(5);
-				const result = await adapter.findMany<User>({
+				let n = -1;
+				await modifyBetterAuthOptions(
+					{
+						user: {
+							additionalFields: {
+								numericField: {
+									type: "number",
+									defaultValue() {
+										return n++;
+									},
+								},
+							},
+						},
+					},
+					true,
+				);
+				let users = (await insertRandom("user", 10)).map(
+					(x) => x[0],
+				) as (User & { numericField: number })[];
+
+				// update the last three users to end with "last"
+				let i = -1;
+				for (const user of users) {
+					i++;
+					if (i < 5) continue;
+					const result = await adapter.update<User>({
+						model: "user",
+						where: [{ field: "id", value: user.id }],
+						update: { name: user.name + "-last" },
+					});
+					if (!result) throw new Error("No result");
+					users[i]!.name = result.name;
+					users[i]!.updatedAt = result.updatedAt;
+				}
+
+				const result = await adapter.findMany<User & { numericField: number }>({
 					model: "user",
-					sortBy: { field: "name", direction: "asc" },
+					sortBy: { field: "numericField", direction: "asc" },
 					limit: 2,
 					offset: 2,
-					where: [{ field: "name", value: "user", operator: "starts_with" }],
+					where: [{ field: "name", value: "last", operator: "ends_with" }],
 				});
-				expect(result).toEqual(
-					users.sort((a, b) => a["name"].localeCompare(b["name"])).slice(2, 4),
-				);
+
+				// Order of operation for most DBs:
+				// FROM → WHERE → SORT BY → OFFSET → LIMIT
+
+				let expectedResult: any[] = [];
+				expectedResult = users
+					.filter((user) => user.name.endsWith("last"))
+					.sort((a, b) => a.numericField - b.numericField)
+					.slice(2, 4);
+
+				try {
+					expect(result.length).toBe(2);
+					expect(result).toEqual(expectedResult);
+				} catch (error) {
+					console.log(`--------------------------------`);
+					console.log(`results:`);
+					console.log(result.map((x) => x.id));
+					console.log(`expected results, sorted:`);
+					console.log(
+						users
+							.filter((x) => x.name.toString().endsWith("last"))
+							.map((x) => x.numericField)
+							.sort((a, b) => a - b),
+					);
+					console.log(`expected results, sorted + offset:`);
+					console.log(
+						users
+							.filter((x) => x.name.toString().endsWith("last"))
+							.map((x) => x.numericField)
+							.sort((a, b) => a - b)
+							.slice(2, 4),
+					);
+					console.log(`--------------------------------`);
+					console.log("FAIL", error);
+					console.log(`--------------------------------`);
+					throw error;
+				}
 			},
 		"update - should update a model": async () => {
 			const [user] = await insertRandom("user");
@@ -639,6 +973,109 @@ export const getNormalTestSuiteTests = ({
 				model: "user",
 			});
 			expect(sortModels(result)).toEqual(sortModels(users.slice(2)));
+		},
+		"deleteMany - starts_with should not interpret regex patterns":
+			async () => {
+				// Create a user whose name literally starts with the regex-like prefix
+				const userTemplate = await generate("user");
+				const literalRegexUser = await adapter.create<User>({
+					model: "user",
+					data: {
+						...userTemplate,
+						name: ".*danger",
+					},
+					forceAllowId: true,
+				});
+
+				// Also create some normal users that do NOT start with ".*"
+				const normalUsers = (await insertRandom("user", 3)).map((x) => x[0]);
+
+				await adapter.deleteMany({
+					model: "user",
+					where: [{ field: "name", value: ".*", operator: "starts_with" }],
+				});
+
+				// The literal ".*danger" user should be deleted
+				const deleted = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: literalRegexUser.id }],
+				});
+				expect(deleted).toBeNull();
+
+				// Normal users should remain
+				for (const user of normalUsers) {
+					const stillThere = await adapter.findOne<User>({
+						model: "user",
+						where: [{ field: "id", value: user.id }],
+					});
+					expect(stillThere).not.toBeNull();
+				}
+			},
+		"deleteMany - ends_with should not interpret regex patterns": async () => {
+			// Create a user whose name literally ends with the regex-like suffix
+			const userTemplate = await generate("user");
+			const literalRegexUser = await adapter.create<User>({
+				model: "user",
+				data: {
+					...userTemplate,
+					name: "danger.*",
+				},
+				forceAllowId: true,
+			});
+
+			const normalUsers = (await insertRandom("user", 3)).map((x) => x[0]);
+
+			await adapter.deleteMany({
+				model: "user",
+				where: [{ field: "name", value: ".*", operator: "ends_with" }],
+			});
+
+			const deleted = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: literalRegexUser.id }],
+			});
+			expect(deleted).toBeNull();
+
+			for (const user of normalUsers) {
+				const stillThere = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+				});
+				expect(stillThere).not.toBeNull();
+			}
+		},
+		"deleteMany - contains should not interpret regex patterns": async () => {
+			// Create a user whose name literally contains the regex-like pattern
+			const userTemplate = await generate("user");
+			const literalRegexUser = await adapter.create<User>({
+				model: "user",
+				data: {
+					...userTemplate,
+					name: "prefix-.*-suffix",
+				},
+				forceAllowId: true,
+			});
+
+			const normalUsers = (await insertRandom("user", 3)).map((x) => x[0]);
+
+			await adapter.deleteMany({
+				model: "user",
+				where: [{ field: "name", value: ".*", operator: "contains" }],
+			});
+
+			const deleted = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: literalRegexUser.id }],
+			});
+			expect(deleted).toBeNull();
+
+			for (const user of normalUsers) {
+				const stillThere = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+				});
+				expect(stillThere).not.toBeNull();
+			}
 		},
 		"deleteMany - should delete many models with numeric values": async () => {
 			let i = 0;

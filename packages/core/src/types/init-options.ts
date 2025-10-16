@@ -14,11 +14,14 @@ import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Logger } from "../env";
 import type { AuthContext, GenericEndpointContext } from "./context";
-import type { AuthMiddleware } from "../middleware";
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { AuthMiddleware } from "../api";
+import type { BetterAuthPlugin } from "..";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type OmitId<T extends { id: unknown }> = Omit<T, "id">;
+type Optional<T> = {
+	[P in keyof T]?: T[P] | undefined;
+};
 
 export type GenerateIdFn = (options: {
 	model: LiteralUnion<DBPreservedModels, string>;
@@ -634,6 +637,10 @@ export type BetterAuthOptions = {
 			[key: string]: DBFieldAttribute;
 		};
 		/**
+		 * @default false
+		 */
+		storeSessionInJWT?: boolean;
+		/**
 		 * By default if secondary storage is provided
 		 * the session is stored in the secondary storage.
 		 *
@@ -820,7 +827,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<User> & Record<string, any>;
+							data: Optional<User> & Record<string, any>;
 					  }
 				>;
 				/**
@@ -844,7 +851,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<User & Record<string, any>>;
+							data: Optional<User & Record<string, any>>;
 					  }
 				>;
 				/**
@@ -890,7 +897,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<Session> & Record<string, any>;
+							data: Optional<Session> & Record<string, any>;
 					  }
 				>;
 				/**
@@ -917,7 +924,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<Session & Record<string, any>>;
+							data: Optional<Session & Record<string, any>>;
 					  }
 				>;
 				/**
@@ -963,7 +970,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<Account> & Record<string, any>;
+							data: Optional<Account> & Record<string, any>;
 					  }
 				>;
 				/**
@@ -990,7 +997,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<Account & Record<string, any>>;
+							data: Optional<Account & Record<string, any>>;
 					  }
 				>;
 				/**
@@ -1036,7 +1043,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<Verification> & Record<string, any>;
+							data: Optional<Verification> & Record<string, any>;
 					  }
 				>;
 				/**
@@ -1060,7 +1067,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<Verification & Record<string, any>>;
+							data: Optional<Verification & Record<string, any>>;
 					  }
 				>;
 				/**

@@ -34,7 +34,7 @@ export const numberIdTestSuite = createTestSuite(
 				});
 				expect(res).toHaveProperty("id");
 				expect(typeof res.id).toBe("string");
-				expect(parseInt(res.id)).toBeGreaterThan(0);
+				expect(Number(res.id)).toBeGreaterThan(0);
 			},
 			...normalTests,
 		};

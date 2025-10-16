@@ -1,8 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
-import { createAuthorizationURL } from "@better-auth/core/oauth2";
-import { logger } from "@better-auth/core/env";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { createAuthorizationURL } from "../oauth2";
+import { logger } from "../env";
 import { decodeJwt } from "jose";
 import { base64 } from "@better-auth/utils/base64";
 

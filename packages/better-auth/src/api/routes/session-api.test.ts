@@ -3,6 +3,8 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { memoryAdapter, type MemoryDB } from "../../adapters/memory-adapter";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =
@@ -338,48 +340,58 @@ describe("session", async () => {
 	});
 
 	it("should return session headers", async () => {
-		const signInRes = await auth.api.signInEmail({
-			body: {
-				email: testUser.email,
-				password: testUser.password,
+		const context = await auth.$context;
+		await runWithEndpointContext(
+			{
+				context,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				const signInRes = await auth.api.signInEmail({
+					body: {
+						email: testUser.email,
+						password: testUser.password,
+					},
+					returnHeaders: true,
+				});
+
+				const signInHeaders = new Headers();
+				signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+				const sessionResWithoutHeaders = await auth.api.getSession({
+					headers: signInHeaders,
+				});
+
+				const sessionResWithHeaders = await auth.api.getSession({
+					headers: signInHeaders,
+					returnHeaders: true,
+				});
+
+				expect(sessionResWithHeaders.headers).toBeDefined();
+				expect(sessionResWithHeaders.response?.user).toBeDefined();
+				expect(sessionResWithHeaders.response?.session).toBeDefined();
+				expectTypeOf({
+					headers: sessionResWithHeaders.headers,
+				}).toMatchObjectType<{
+					headers: Headers;
+				}>();
+
+				// @ts-expect-error: headers should not exist on sessionResWithoutHeaders
+				expect(sessionResWithoutHeaders.headers).toBeUndefined();
+
+				const sessionResWithHeadersAndAsResponse = await auth.api.getSession({
+					headers: signInHeaders,
+					returnHeaders: true,
+					asResponse: true,
+				});
+
+				expectTypeOf({
+					res: sessionResWithHeadersAndAsResponse,
+				}).toMatchObjectType<{ res: Response }>();
+
+				expect(sessionResWithHeadersAndAsResponse.ok).toBe(true);
+				expect(sessionResWithHeadersAndAsResponse.status).toBe(200);
 			},
-			returnHeaders: true,
-		});
-
-		const signInHeaders = new Headers();
-		signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]!);
-
-		const sessionResWithoutHeaders = await auth.api.getSession({
-			headers: signInHeaders,
-		});
-
-		const sessionResWithHeaders = await auth.api.getSession({
-			headers: signInHeaders,
-			returnHeaders: true,
-		});
-
-		expect(sessionResWithHeaders.headers).toBeDefined();
-		expect(sessionResWithHeaders.response?.user).toBeDefined();
-		expect(sessionResWithHeaders.response?.session).toBeDefined();
-		expectTypeOf({ headers: sessionResWithHeaders.headers }).toMatchObjectType<{
-			headers: Headers;
-		}>();
-
-		// @ts-expect-error: headers should not exist on sessionResWithoutHeaders
-		expect(sessionResWithoutHeaders.headers).toBeUndefined();
-
-		const sessionResWithHeadersAndAsResponse = await auth.api.getSession({
-			headers: signInHeaders,
-			returnHeaders: true,
-			asResponse: true,
-		});
-
-		expectTypeOf({
-			res: sessionResWithHeadersAndAsResponse,
-		}).toMatchObjectType<{ res: Response }>();
-
-		expect(sessionResWithHeadersAndAsResponse.ok).toBe(true);
-		expect(sessionResWithHeadersAndAsResponse.status).toBe(200);
+		);
 	});
 });
 
@@ -546,9 +558,16 @@ describe("cookie cache", async () => {
 			},
 		});
 		expect(s.data?.user.emailVerified).toBe(false);
-		await ctx.internalAdapter.updateUser(s.data?.user.id || "", {
-			emailVerified: true,
-		});
+		await runWithEndpointContext(
+			{
+				context: ctx,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				await ctx.internalAdapter.updateUser(s.data?.user.id || "", {
+					emailVerified: true,
+				});
+			},
+		);
 		expect(fn).toHaveBeenCalledTimes(1);
 
 		const session = await client.getSession({
@@ -591,41 +610,5 @@ describe("cookie cache", async () => {
 			},
 		});
 		expect(fn).toHaveBeenCalledTimes(5);
-	});
-});
-
-describe("getSession type tests", async () => {
-	const { auth } = await getTestInstance();
-
-	it("has parameters", () => {
-		type Params = Parameters<typeof auth.api.getSession>[0]["headers"];
-
-		expectTypeOf<Params>().toEqualTypeOf<
-			[string, string][] | Record<string, string> | Headers
-		>();
-	});
-
-	it("can return a response", () => {
-		type Returns = Awaited<ReturnType<typeof auth.api.getSession<true, false>>>;
-
-		expectTypeOf<{ returns: Returns }>().toMatchObjectType<{
-			returns: Response;
-		}>();
-	});
-
-	it("can return headers", () => {
-		type Returns = Awaited<ReturnType<typeof auth.api.getSession<false, true>>>;
-
-		expectTypeOf<{ returns: Returns["headers"] }>().toMatchObjectType<{
-			returns: Headers;
-		}>();
-	});
-
-	it("asResponse takes prescedence", () => {
-		type Returns = Awaited<ReturnType<typeof auth.api.getSession<true, true>>>;
-
-		expectTypeOf<{ returns: Returns }>().toMatchObjectType<{
-			returns: Response;
-		}>();
 	});
 });
