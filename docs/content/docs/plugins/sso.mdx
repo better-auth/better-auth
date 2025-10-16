@@ -746,6 +746,8 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 **trustEmailVerified**: Trust the email verified flag from the provider.
 
+**schema**: Custom database schema options for the SSO plugin.
+
 <TypeTable
   type={{
     provisionUser: {
@@ -813,6 +815,11 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
                 required: false,
             },
         },
+    },
+    schema: {
+        description: "Custom database schema options for the SSO plugin.",
+        type: "InferOptionSchema<ReturnType<typeof ssoSchema>>",
+        required: false
     },
   }}
 />
