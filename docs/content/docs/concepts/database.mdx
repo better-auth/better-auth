@@ -64,8 +64,10 @@ betterAuth({
 });
 ```
 
-Note: Better Auth uses **seconds** for the TTL value in `set()`.
+<Callout type="warn">
+Better Auth uses **seconds** for the TTL value in `set()`.
 If your storage expects milliseconds, multiply by 1000 when passing the TTL (`ttl * 1000`).
+</Callout>
 
 **Example: Redis Implementation**
 
