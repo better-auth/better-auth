@@ -611,4 +611,122 @@ describe("view backup codes", async () => {
 		});
 		expect(viewResult.backupCodes).toEqual(generateResult.backupCodes);
 	});
+
+	it("should successfully regenerate backup codes multiple times (Issue #5331)", async () => {
+		// This test specifically addresses the Prisma validation error:
+		// "Argument `where` of type TwoFactorWhereUniqueInput needs at least one of `id` arguments"
+		// By generating backup codes multiple times, we ensure the update operation
+		// uses the correct unique identifier (id) instead of userId
+
+		// First generation
+		const firstGeneration = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		expect(firstGeneration.backupCodes).toBeDefined();
+		expect(firstGeneration.backupCodes.length).toBe(10);
+		expect(firstGeneration.status).toBe(true);
+
+		// Second generation - this should update the existing record using id
+		const secondGeneration = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		expect(secondGeneration.backupCodes).toBeDefined();
+		expect(secondGeneration.backupCodes.length).toBe(10);
+		expect(secondGeneration.status).toBe(true);
+
+		// Verify the codes are different
+		expect(secondGeneration.backupCodes).not.toEqual(firstGeneration.backupCodes);
+
+		// Third generation - ensure it still works
+		const thirdGeneration = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		expect(thirdGeneration.backupCodes).toBeDefined();
+		expect(thirdGeneration.backupCodes.length).toBe(10);
+		expect(thirdGeneration.status).toBe(true);
+
+		// Verify the latest codes are in the database
+		const viewResult = await auth.api.viewBackupCodes({
+			body: { userId },
+		});
+		expect(viewResult.backupCodes).toEqual(thirdGeneration.backupCodes);
+	});
+
+	it("should correctly update backup codes after verification (Issue #5331)", async () => {
+		// This test ensures that verifyBackupCode also uses the correct update method
+		// with id instead of userId, preventing the Prisma validation error
+
+		// Generate fresh backup codes
+		const generation = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		const backupCodes = generation.backupCodes;
+		expect(backupCodes.length).toBe(10);
+
+		// Create a new auth client for this test
+		const testClient = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+
+		// Sign in to get the two-factor cookie
+		const verifyHeaders = new Headers();
+		await testClient.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess(context: any) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					verifyHeaders.append(
+						"cookie",
+						`better-auth.two_factor=${
+							parsed.get("better-auth.two_factor")?.value
+						}`,
+					);
+				},
+			},
+		});
+
+		// Use the first backup code
+		const usedBackupCode = backupCodes[0]!;
+		let sessionToken = "";
+		await testClient.twoFactor.verifyBackupCode({
+			code: usedBackupCode,
+			fetchOptions: {
+				headers: verifyHeaders,
+				onSuccess(context: any) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					sessionToken = parsed.get("better-auth.session_token")?.value || "";
+				},
+			},
+		});
+
+		// Verify we got a session token
+		expect(sessionToken.length).toBeGreaterThan(0);
+
+		// Verify the used backup code was removed from the database
+		// This update operation should use id instead of userId
+		const updatedCodes = await auth.api.viewBackupCodes({
+			body: { userId },
+		});
+
+		expect(updatedCodes.backupCodes).toBeDefined();
+		expect(updatedCodes.backupCodes.length).toBe(9); // One code was used
+		expect(updatedCodes.backupCodes).not.toContain(usedBackupCode);
+
+		// Verify remaining codes are still valid
+		backupCodes.slice(1).forEach((code) => {
+			expect(updatedCodes.backupCodes).toContain(code);
+		});
+	});
 });

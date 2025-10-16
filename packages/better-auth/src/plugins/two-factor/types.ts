@@ -48,6 +48,7 @@ export interface TwoFactorProvider {
 }
 
 export interface TwoFactorTable {
+	id: string;
 	userId: string;
 	secret: string;
 	backupCodes: string;
