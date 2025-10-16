@@ -332,18 +332,21 @@ Make sure to provide `authorizeReference` in your plugin config to authorize the
 ```ts title="auth.ts"
 stripe({
     // ... other options
-    authorizeReference: async ({ user, session, referenceId, action }) => {
-        if(action === "list-subscription") {
-            const org = await db.member.findFirst({
-                where: {
-                    organizationId: referenceId,
-                    userId: user.id
-                }   
-            });
-            return org?.role === "owner"
+    subscription: {
+        // ... other subscription options
+        authorizeReference: async ({ user, session, referenceId, action }) => {
+            if(action === "list-subscription") {
+                const org = await db.member.findFirst({
+                    where: {
+                        organizationId: referenceId,
+                        userId: user.id
+                    }   
+                });
+                return org?.role === "owner"
+            }
+            // Check if the user has permission to list subscriptions for this reference
+            return true;
         }
-        // Check if the user has permission to list subscriptions for this reference
-        return true;
     }
 })
 ```
@@ -768,15 +771,18 @@ await client.subscription.upgrade({
 Make sure to implement the `authorizeReference` function to verify that the user has permission to manage subscriptions for the organization:
 
 ```ts title="auth.ts"
-authorizeReference: async ({ user, referenceId, action }) => {
-    const member = await db.members.findFirst({
-        where: {
-            userId: user.id,
-            organizationId: referenceId
-        }
-    });
-    
-    return member?.role === "owner" || member?.role === "admin";
+subscription: {
+    // ... other subscription options
+    authorizeReference: async ({ user, referenceId, action }) => {
+        const member = await db.members.findFirst({
+            where: {
+                userId: user.id,
+                organizationId: referenceId
+            }
+        });
+        
+        return member?.role === "owner" || member?.role === "admin";
+    }
 }
 ```
 
