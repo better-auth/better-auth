@@ -637,7 +637,9 @@ describe("view backup codes", async () => {
 		expect(secondGeneration.status).toBe(true);
 
 		// Verify the codes are different
-		expect(secondGeneration.backupCodes).not.toEqual(firstGeneration.backupCodes);
+		expect(secondGeneration.backupCodes).not.toEqual(
+			firstGeneration.backupCodes,
+		);
 
 		// Third generation - ensure it still works
 		const thirdGeneration = await auth.api.generateBackupCodes({
