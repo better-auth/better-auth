@@ -5,6 +5,7 @@ import {
 	type OAuth2Tokens,
 	type Session,
 	type User,
+	type InferOptionSchema,
 } from "better-auth";
 import { APIError, sessionMiddleware } from "better-auth/api";
 import {
@@ -14,6 +15,7 @@ import {
 	validateAuthorizationCode,
 	validateToken,
 } from "better-auth/oauth2";
+import { mergeSchema, type BetterAuthPluginDBSchema } from "better-auth/db";
 
 import { createAuthEndpoint } from "better-auth/plugins";
 import * as z from "zod/v4";
@@ -252,11 +254,55 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	trustEmailVerified?: boolean;
+	/**
+	 * Custom schema for the SSO plugin
+	 */
+	schema?: InferOptionSchema<typeof ssoSchema>;
 }
+
+const ssoSchema = {
+	ssoProvider: {
+		fields: {
+			issuer: {
+				type: "string",
+				required: true,
+			},
+			oidcConfig: {
+				type: "string",
+				required: false,
+			},
+			samlConfig: {
+				type: "string",
+				required: false,
+			},
+			userId: {
+				type: "string",
+				references: {
+					model: "user",
+					field: "id",
+				},
+			},
+			providerId: {
+				type: "string",
+				required: true,
+				unique: true,
+			},
+			organizationId: {
+				type: "string",
+				required: false,
+			},
+			domain: {
+				type: "string",
+				required: true,
+			},
+		},
+	},
+} satisfies BetterAuthPluginDBSchema;
 
 export const sso = (options?: SSOOptions) => {
 	return {
 		id: "sso",
+		schema: mergeSchema(ssoSchema, options?.schema),
 		endpoints: {
 			spMetadata: createAuthEndpoint(
 				"/sso/saml2/sp/metadata",
@@ -2245,44 +2291,6 @@ export const sso = (options?: SSOOptions) => {
 					throw ctx.redirect(callbackUrl);
 				},
 			),
-		},
-		schema: {
-			ssoProvider: {
-				fields: {
-					issuer: {
-						type: "string",
-						required: true,
-					},
-					oidcConfig: {
-						type: "string",
-						required: false,
-					},
-					samlConfig: {
-						type: "string",
-						required: false,
-					},
-					userId: {
-						type: "string",
-						references: {
-							model: "user",
-							field: "id",
-						},
-					},
-					providerId: {
-						type: "string",
-						required: true,
-						unique: true,
-					},
-					organizationId: {
-						type: "string",
-						required: false,
-					},
-					domain: {
-						type: "string",
-						required: true,
-					},
-				},
-			},
 		},
 	} satisfies BetterAuthPlugin;
 };
