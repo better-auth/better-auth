@@ -21,32 +21,24 @@ export async function getAdapter(
 		logger.warn(
 			"No database configuration provided. Using memory adapter in development",
 		);
-		adapter = memoryAdapter(memoryDB)(options);
-	} else if (typeof options.database === "function") {
-		adapter = options.database(options);
-	} else {
-		const { kysely, databaseType, transaction } =
-			await createKyselyAdapter(options);
-		if (!kysely) {
-			throw new BetterAuthError("Failed to initialize database adapter");
-		}
-		adapter = kyselyAdapter(kysely, {
-			type: databaseType || "sqlite",
-			debugLogs:
-				"debugLogs" in options.database ? options.database.debugLogs : false,
-			transaction: transaction,
-		})(options);
+		return memoryAdapter(memoryDB)(options);
 	}
-	// patch for 1.3.x to ensure we have a transaction function in the adapter
-	if (!adapter.transaction) {
-		logger.warn(
-			"Adapter does not correctly implement transaction function, patching it automatically. Please update your adapter implementation.",
-		);
-		adapter.transaction = async (cb) => {
-			return cb(adapter);
-		};
+
+	if (typeof options.database === "function") {
+		return options.database(options);
 	}
-	return adapter;
+
+	const { kysely, databaseType, transaction } =
+		await createKyselyAdapter(options);
+	if (!kysely) {
+		throw new BetterAuthError("Failed to initialize database adapter");
+	}
+	return kyselyAdapter(kysely, {
+		type: databaseType || "sqlite",
+		debugLogs:
+			"debugLogs" in options.database ? options.database.debugLogs : false,
+		transaction: transaction,
+	})(options);
 }
 
 export function convertToDB<T extends Record<string, any>>(

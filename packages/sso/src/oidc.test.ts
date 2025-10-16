@@ -208,7 +208,6 @@ describe("SSO", async () => {
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		expect(res.url).toContain("login_hint=my-email%40localhost.com");
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
@@ -236,7 +235,6 @@ describe("SSO", async () => {
 		const headers = new Headers();
 		const res = await authClient.signIn.sso({
 			providerId: "test",
-			loginHint: "user@example.com",
 			callbackURL: "/dashboard",
 			fetchOptions: {
 				throw: true,
@@ -247,7 +245,6 @@ describe("SSO", async () => {
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		expect(res.url).toContain("login_hint=user%40example.com");
 
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
@@ -391,7 +388,9 @@ describe("SSO disable implicit sign in", async () => {
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
-		expect(callbackURL).toContain("/api/auth/error?error=signup+disabled");
+		expect(callbackURL).toContain(
+			"/api/auth/error/error?error=signup disabled",
+		);
 	});
 
 	it("should create user with SSO provider when sign ups are disabled but sign up is requested", async () => {

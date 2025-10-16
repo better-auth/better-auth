@@ -12,9 +12,7 @@ import { getSchema, type UsernameSchema } from "./schema";
 import { mergeSchema } from "../../db";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import { createEmailVerificationToken } from "../../api";
-
-export { USERNAME_ERROR_CODES } from "./error-codes";
-
+export * from "./error-codes";
 export type UsernameOptions = {
 	schema?: InferOptionSchema<UsernameSchema>;
 	/**

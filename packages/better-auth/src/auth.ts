@@ -12,7 +12,6 @@ import type { PrettifyDeep, Expand } from "./types/helper";
 import { getBaseURL, getOrigin } from "./utils/url";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { BetterAuthError } from "@better-auth/core/error";
-import { runWithAdapter } from "@better-auth/core/context";
 import type { AuthContext } from "@better-auth/core";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
@@ -59,14 +58,20 @@ export const betterAuth = <Options extends BetterAuthOptions>(
 			const { handler } = router(ctx, options);
 			return runWithAdapter(ctx.adapter, () => handler(request));
 		},
-		api,
-		options: options,
+		api: api as never,
+		options: options as Options,
 		$context: authContext,
+		$Infer: {} as {
+			Session: {
+				session: PrettifyDeep<InferSession<Options>>;
+				user: PrettifyDeep<InferUser<Options>>;
+			};
+		} & InferPluginTypes<Options>,
 		$ERROR_CODES: {
 			...errorCodes,
 			...BASE_ERROR_CODES,
-		},
-	} as any;
+		} as InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES,
+	};
 };
 
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
@@ -78,14 +83,10 @@ export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	/**
 	 * Share types
 	 */
-	$Infer: InferPluginTypes<Options> extends {
-		Session: any;
-	}
-		? InferPluginTypes<Options>
-		: {
-				Session: {
-					session: PrettifyDeep<InferSession<Options>>;
-					user: PrettifyDeep<InferUser<Options>>;
-				};
-			} & InferPluginTypes<Options>;
+	$Infer: {
+		Session: {
+			session: PrettifyDeep<InferSession<Options>>;
+			user: PrettifyDeep<InferUser<Options>>;
+		};
+	} & InferPluginTypes<Options>;
 };

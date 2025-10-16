@@ -290,7 +290,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 			},
 			supportsNumericIds: false,
 			transaction:
-				config?.client && (config?.transaction ?? true)
+				config?.client && (config?.transaction ?? false)
 					? async (cb) => {
 							if (!config.client) {
 								return cb(lazyAdapter!(lazyOptions!));

@@ -5,6 +5,23 @@ import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
 import type { GenericEndpointContext } from "@better-auth/core";
 
+function formatErrorURL(url: string, error: string, description: string) {
+	return `${
+		url.includes("?") ? "&" : "?"
+	}error=${error}&error_description=${description}`;
+}
+
+function getErrorURL(
+	ctx: GenericEndpointContext,
+	error: string,
+	description: string,
+) {
+	const baseURL =
+		ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
+	const formattedURL = formatErrorURL(baseURL, error, description);
+	return formattedURL;
+}
+
 export async function authorize(
 	ctx: GenericEndpointContext,
 	options: OIDCOptions,

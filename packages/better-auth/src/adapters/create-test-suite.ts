@@ -156,6 +156,7 @@ export const createTestSuite = <
 			prefixTests?: string;
 			onTestFinish: () => Promise<void>;
 			customIdGenerator?: () => string | Promise<string>;
+			defaultRetryCount?: number;
 		}) => {
 			const createdRows: Record<string, any[]> = {};
 
@@ -517,7 +518,7 @@ export const createTestSuite = <
 
 				test.skipIf(shouldSkip)(
 					testName,
-					{ timeout: 20000 },
+					{ retry: helpers?.defaultRetryCount ?? 10, timeout: 10000 },
 					async ({ onTestFailed, skip }) => {
 						resetDebugLogs();
 						onTestFailed(async () => {

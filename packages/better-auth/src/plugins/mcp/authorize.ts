@@ -8,6 +8,12 @@ import type {
 import { generateRandomString } from "../../crypto";
 import type { GenericEndpointContext } from "@better-auth/core";
 
+function redirectErrorURL(url: string, error: string, description: string) {
+	return `${
+		url.includes("?") ? "&" : "?"
+	}error=${error}&error_description=${description}`;
+}
+
 export async function authorizeMCPOAuth(
 	ctx: GenericEndpointContext,
 	options: OIDCOptions,

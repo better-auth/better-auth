@@ -2,7 +2,6 @@ import { APIError } from "../../api";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { defineErrorCodes } from "@better-auth/core/utils";
 
 const ERROR_CODES = defineErrorCodes({
 	PASSWORD_COMPROMISED:

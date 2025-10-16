@@ -4,7 +4,6 @@ import type {
 	DBFieldType,
 	DBPrimitive,
 	BetterAuthDBSchema,
-	DBPreservedModels,
 } from "./type";
 import type { BetterAuthPluginDBSchema } from "./plugin";
 export type { BetterAuthPluginDBSchema } from "./plugin";
@@ -22,7 +21,6 @@ export type {
 	DBFieldType,
 	DBPrimitive,
 	BetterAuthDBSchema,
-	DBPreservedModels,
 };
 
 /**

@@ -114,9 +114,9 @@ export async function parseState(c: GenericEndpointContext) {
 		!skipStateCookieCheck &&
 		(!stateCookieValue || stateCookieValue !== state)
 	) {
-		throw c.redirect(
-			await c.context.getErrorURL({ error: "state_mismatch", ctx: c }),
-		);
+		const errorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+		throw c.redirect(`${errorURL}?error=state_mismatch`);
 	}
 	c.setCookie(stateCookie.name, "", {
 		maxAge: 0,

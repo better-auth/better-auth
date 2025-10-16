@@ -11,7 +11,7 @@ export type {
 	GenericEndpointContext,
 	InternalAdapter,
 } from "./context";
-export type { BetterAuthPlugin, HookEndpointContext } from "./plugin";
+export type { BetterAuthPlugin } from "./plugin";
 export type {
 	BetterAuthClientPlugin,
 	BetterAuthClientOptions,

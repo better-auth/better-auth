@@ -27,7 +27,6 @@ import type {
 import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
 import { getSchema } from "./schema";
 import { defu } from "defu";
-import { defineErrorCodes } from "@better-auth/core/utils";
 
 const STRIPE_ERROR_CODES = defineErrorCodes({
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",

@@ -23,7 +23,6 @@ import { generateId } from "../../utils";
 import { mergeSchema } from "../../db/schema";
 import { base64 } from "@better-auth/utils/base64";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { defineErrorCodes } from "@better-auth/core/utils";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;

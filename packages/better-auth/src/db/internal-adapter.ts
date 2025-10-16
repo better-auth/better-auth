@@ -4,6 +4,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	type Account,
 	type Session,
+	type TransactionAdapter,
 	type User,
 	type Verification,
 } from "../types";
@@ -12,10 +13,6 @@ import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId } from "../utils";
-import {
-	getCurrentAdapter,
-	runWithTransaction,
-} from "@better-auth/core/context";
 import type { InternalLogger } from "@better-auth/core/env";
 import type {
 	AuthContext,
@@ -36,13 +33,8 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
-	const {
-		createWithHooks,
-		updateWithHooks,
-		updateManyWithHooks,
-		deleteWithHooks,
-		deleteManyWithHooks,
-	} = getWithHooks(adapter, ctx);
+	const { createWithHooks, updateWithHooks, updateManyWithHooks } =
+		getWithHooks(adapter, ctx);
 
 	async function refreshUserSessions(user: User) {
 		if (!secondaryStorage) return;
@@ -863,6 +855,7 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 				context,
+				trxAdapter,
 			);
 			await refreshUserSessions(user);
 			await refreshUserSessions(user);

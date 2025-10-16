@@ -1158,7 +1158,6 @@ export const sso = (options?: SSOOptions) => {
 									"profile",
 									"offline_access",
 								],
-							loginHint: ctx.body.loginHint || email,
 							authorizationEndpoint: provider.oidcConfig.authorizationEndpoint!,
 						});
 						return ctx.json({
@@ -1256,6 +1255,13 @@ export const sso = (options?: SSOOptions) => {
 								ctx,
 								defaultURL: errorURL || callbackURL,
 							}),
+						);
+					}
+					let provider: SSOProvider | null = null;
+					if (options?.defaultSSO?.length) {
+						const matchingDefault = options.defaultSSO.find(
+							(defaultProvider) =>
+								defaultProvider.providerId === ctx.params.providerId,
 						);
 					}
 					let provider: SSOProvider | null = null;

@@ -307,11 +307,14 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 			use: [orgSessionMiddleware],
 			metadata: {
 				$Infer: {
-					body: {} as {
-						roleName?: string | undefined;
-						roleId?: string | undefined;
-						organizationId?: string | undefined;
-					},
+					body: {} as (
+						| {
+								roleName: string;
+						  }
+						| {
+								roleId: string;
+						  }
+					) & { organizationId?: string | undefined },
 				},
 			},
 		},
@@ -641,9 +644,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				$Infer: {
 					query: {} as {
 						organizationId?: string | undefined;
-						roleName?: string | undefined;
-						roleId?: string | undefined;
-					},
+					} & ({ roleName: string } | { roleId: string }),
 				},
 			},
 		},

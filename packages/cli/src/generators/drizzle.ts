@@ -168,7 +168,6 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							const attr = fields[field]!;
 							const fieldName = attr.fieldName || field;
 							let type = getType(fieldName, attr);
-
 							if (
 								attr.defaultValue !== null &&
 								typeof attr.defaultValue !== "undefined"
@@ -201,7 +200,6 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
-
 							return `${fieldName}: ${type}${attr.required ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
@@ -280,17 +278,6 @@ function generateImport({
 		if (needsInt) {
 			coreImports.push("int");
 		}
-		const hasEnum = Object.values(tables).some((table) =>
-			Object.values(table.fields).some(
-				(field) =>
-					typeof field.type !== "string" &&
-					Array.isArray(field.type) &&
-					field.type.every((x) => typeof x === "string"),
-			),
-		);
-		if (hasEnum) {
-			coreImports.push("mysqlEnum");
-		}
 	} else if (databaseType === "pg") {
 		// Only include integer for PG if actually needed
 		const hasNonBigintNumber = Object.values(tables).some((table) =>
@@ -311,18 +298,6 @@ function generateImport({
 			(options.advanced?.database?.useNumberId && hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");
-		}
-
-		const hasEnum = Object.values(tables).some((table) =>
-			Object.values(table.fields).some(
-				(field) =>
-					typeof field.type !== "string" &&
-					Array.isArray(field.type) &&
-					field.type.every((x) => typeof x === "string"),
-			),
-		);
-		if (hasEnum) {
-			coreImports.push("pgEnum");
 		}
 	} else {
 		coreImports.push("integer");

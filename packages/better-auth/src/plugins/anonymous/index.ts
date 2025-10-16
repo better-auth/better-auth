@@ -12,7 +12,6 @@ import type { EndpointContext } from "better-call";
 import { generateId } from "../../utils/id";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { AuthContext } from "@better-auth/core";
-import { defineErrorCodes } from "@better-auth/core/utils";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;

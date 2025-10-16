@@ -16,7 +16,6 @@ import type {
 	Where,
 	CleanedWhere,
 } from "@better-auth/core/db/adapter";
-import { BetterAuthError } from "@better-auth/core/error";
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
@@ -305,11 +304,7 @@ export const createAdapterFactory =
 
 			const fields = schema[defaultModelName]!.fields;
 			fields.id = idField({ customModelName: defaultModelName });
-			const fieldAttributes = fields[defaultFieldName];
-			if (!fieldAttributes) {
-				throw new BetterAuthError(`Field ${field} not found in model ${model}`);
-			}
-			return fieldAttributes;
+			return fields[defaultFieldName]!;
 		};
 
 		const transformInput = async (

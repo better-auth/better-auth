@@ -232,6 +232,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx);
+						console.log("skipProxy", skipProxy);
 						if (skipProxy) {
 							return;
 						}

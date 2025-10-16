@@ -8,7 +8,6 @@ import type { KyselyDatabaseType } from "./types";
 import {
 	type InsertQueryBuilder,
 	type Kysely,
-	type RawBuilder,
 	type UpdateQueryBuilder,
 } from "kysely";
 import type {
@@ -52,7 +51,7 @@ export const kyselyAdapter = (
 	const createCustomAdapter = (
 		db: Kysely<any>,
 	): AdapterFactoryCustomizeAdapterCreator => {
-		return ({ getFieldName }) => {
+		return ({ getFieldName, schema, getDefaultModelName }) => {
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -99,6 +98,60 @@ export const kyselyAdapter = (
 				res = await builder.returningAll().executeTakeFirst();
 				return res;
 			};
+			function transformValueToDB(value: any, model: string, field: string) {
+				if (field === "id") {
+					return value;
+				}
+				const { type = "sqlite" } = config || {};
+				let f = schema[model]?.fields[field];
+				if (!f) {
+					//@ts-expect-error - The model name can be a sanitized, thus using the custom model name, not one of the default ones.
+					f = Object.values(schema).find((f) => f.modelName === model)!;
+				}
+				if (
+					f!.type === "boolean" &&
+					(type === "sqlite" || type === "mssql") &&
+					value !== null &&
+					value !== undefined
+				) {
+					return value ? 1 : 0;
+				}
+				if (f!.type === "date" && value && value instanceof Date) {
+					if (type === "sqlite") return value.toISOString();
+					return value;
+				}
+				return value;
+			}
+
+			function transformValueFromDB(value: any) {
+				function transformObject(obj: any) {
+					for (const key in obj) {
+						if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+
+						const field = obj[key];
+
+						if (field instanceof Date && config?.type === "mysql") {
+							// obj[key] = ensureUTC(field);
+						} else if (typeof field === "object" && field !== null) {
+							transformObject(field);
+						}
+					}
+				}
+
+				if (Array.isArray(value)) {
+					for (let i = 0; i < value.length; i++) {
+						const item = value[i];
+						if (typeof item === "object" && item !== null) {
+							transformObject(item);
+						}
+					}
+				} else if (typeof value === "object" && value !== null) {
+					transformObject(value);
+				}
+
+				return value;
+			}
+
 			function convertWhereClause(model: string, w?: Where[]) {
 				if (!w)
 					return {
@@ -192,7 +245,7 @@ export const kyselyAdapter = (
 				async create({ data, model }) {
 					const builder = db.insertInto(model).values(data);
 					const returned = await withReturning(data, builder, model, []);
-					return returned;
+					return transformValueFromDB(returned) as any;
 				},
 				async findOne({ model, where, select }) {
 					const { and, or } = convertWhereClause(model, where);
