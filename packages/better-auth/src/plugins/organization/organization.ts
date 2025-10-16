@@ -614,6 +614,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								field: "id",
 							},
 							fieldName: options?.schema?.team?.fields?.organizationId,
+							index: true,
 						},
 						createdAt: {
 							type: "date",
@@ -640,6 +641,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								field: "id",
 							},
 							fieldName: options?.schema?.teamMember?.fields?.teamId,
+							index: true,
 						},
 						userId: {
 							type: "string",
@@ -649,6 +651,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								field: "id",
 							},
 							fieldName: options?.schema?.teamMember?.fields?.userId,
+							index: true,
 						},
 						createdAt: {
 							type: "date",
@@ -673,11 +676,13 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							},
 							fieldName:
 								options?.schema?.organizationRole?.fields?.organizationId,
+							index: true,
 						},
 						role: {
 							type: "string",
 							required: true,
 							fieldName: options?.schema?.organizationRole?.fields?.role,
+							index: true,
 						},
 						permission: {
 							type: "string",
@@ -722,6 +727,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						unique: true,
 						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,
+						index: true,
 					},
 					logo: {
 						type: "string",
@@ -752,6 +758,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							field: "id",
 						},
 						fieldName: options?.schema?.member?.fields?.organizationId,
+						index: true,
 					},
 					userId: {
 						type: "string",
@@ -761,6 +768,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							model: "user",
 							field: "id",
 						},
+						index: true,
 					},
 					role: {
 						type: "string",
@@ -788,12 +796,14 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							field: "id",
 						},
 						fieldName: options?.schema?.invitation?.fields?.organizationId,
+						index: true,
 					},
 					email: {
 						type: "string",
 						required: true,
 						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.email,
+						index: true,
 					},
 					role: {
 						type: "string",

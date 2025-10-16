@@ -18,6 +18,7 @@ export const schema = {
 			clientId: {
 				type: "string",
 				unique: true,
+				index: true
 			},
 			clientSecret: {
 				type: "string",
@@ -42,6 +43,7 @@ export const schema = {
 					field: "id",
 					onDelete: "cascade",
 				},
+				index: true,
 			},
 			createdAt: {
 				type: "date",
@@ -75,6 +77,7 @@ export const schema = {
 					field: "clientId",
 					onDelete: "cascade",
 				},
+				index: true,
 			},
 			userId: {
 				type: "string",
@@ -84,6 +87,7 @@ export const schema = {
 					field: "id",
 					onDelete: "cascade",
 				},
+				index: true,
 			},
 			scopes: {
 				type: "string",
@@ -106,6 +110,7 @@ export const schema = {
 					field: "clientId",
 					onDelete: "cascade",
 				},
+				index: true,
 			},
 			userId: {
 				type: "string",
@@ -114,6 +119,7 @@ export const schema = {
 					field: "id",
 					onDelete: "cascade",
 				},
+				index: true,
 			},
 			scopes: {
 				type: "string",

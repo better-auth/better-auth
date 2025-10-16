@@ -20,6 +20,7 @@ export const getSchema = (normalizer: {
 								: normalizer.username(value as string);
 						},
 					},
+					index: true,
 				},
 				displayUsername: {
 					type: "string",

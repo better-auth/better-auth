@@ -1,6 +1,8 @@
 import type {
 	AlterTableColumnAlteringBuilder,
 	CreateTableBuilder,
+	AlterTableBuilder,
+	CreateIndexBuilder,
 } from "kysely";
 import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
 import { sql } from "kysely";
@@ -169,6 +171,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
 		| CreateTableBuilder<string, string>
+		| CreateIndexBuilder
 	)[] = [];
 
 	function getType(field: DBFieldAttribute, fieldName: string) {
@@ -258,36 +261,37 @@ export async function getMigrations(config: BetterAuthOptions) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
-				const exec = db.schema
-					.alterTable(table.table)
-					.addColumn(fieldName, type, (col) => {
-						col = field.required !== false ? col.notNull() : col;
-						if (field.references) {
-							col = col
-								.references(
-									`${field.references.model}.${field.references.field}`,
-								)
-								.onDelete(field.references.onDelete || "cascade");
+				let builder = db.schema.alterTable(table.table);
+
+				if (field.index) {
+					//@ts-expect-error
+					builder = builder.addIndex(`${table.table}_${fieldName}_idx`);
+				}
+
+				let built = builder.addColumn(fieldName, type, (col) => {
+					col = field.required !== false ? col.notNull() : col;
+					if (field.references) {
+						col = col
+							.references(`${field.references.model}.${field.references.field}`)
+							.onDelete(field.references.onDelete || "cascade");
+					}
+					if (field.unique) {
+						col = col.unique();
+					}
+					if (
+						field.type === "date" &&
+						typeof field.defaultValue === "function" &&
+						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
+					) {
+						if (dbType === "mysql") {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
+						} else {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
-						if (field.unique) {
-							col = col.unique();
-						}
-						if (
-							field.type === "date" &&
-							typeof field.defaultValue === "function" &&
-							(dbType === "postgres" ||
-								dbType === "mysql" ||
-								dbType === "mssql")
-						) {
-							if (dbType === "mysql") {
-								col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
-							} else {
-								col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
-							}
-						}
-						return col;
-					});
-				migrations.push(exec);
+					}
+					return col;
+				});
+				migrations.push(built);
 			}
 		}
 	}
@@ -317,7 +321,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 					},
 				);
 
-			const indices: Array<{ table: string; field: string }> = [];
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
 				dbT = dbT.addColumn(fieldName, type, (col) => {
@@ -344,6 +347,16 @@ export async function getMigrations(config: BetterAuthOptions) {
 					}
 					return col;
 				});
+
+				if (field.index) {
+					let builder = db.schema
+						.createIndex(
+							`${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`,
+						)
+						.on(table.table)
+						.columns([fieldName]);
+					migrations.push(field.unique ? builder.unique() : builder);
+				}
 			}
 			migrations.push(dbT);
 		}

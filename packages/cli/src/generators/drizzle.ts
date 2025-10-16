@@ -158,6 +158,24 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 		}
 
+		type Index = { type: "uniqueIndex" | "index"; name: string; on: string };
+
+		let indexes: Index[] = [];
+
+		const assignIndexes = (indexes: Index[]): string => {
+			if (!indexes.length) return "";
+
+			let code: string[] = [`, (table) => [`];
+
+			for (const index of indexes) {
+				code.push(`  ${index.type}("${index.name}").on(table.${index.on}),`);
+			}
+
+			code.push(`]`);
+
+			return code.join("\n");
+		};
+
 		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
 			modelName,
 			adapter.options?.camelCase,
@@ -168,6 +186,20 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							const attr = fields[field]!;
 							const fieldName = attr.fieldName || field;
 							let type = getType(fieldName, attr);
+
+							if(attr.index && !attr.unique) {
+								indexes.push({
+									type: "index",
+									name: `${modelName}_${fieldName}_idx`,
+									on: fieldName,
+								});
+							}else if(attr.index && attr.unique) {
+								indexes.push({
+									type: "uniqueIndex",
+									name: `${modelName}_${fieldName}_uidx`,
+									on: fieldName,
+								});
+							}
 
 							if (
 								attr.defaultValue !== null &&
@@ -217,7 +249,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}`;
 						})
 						.join(",\n ")}
-				});`;
+					}${assignIndexes(indexes)});`;
 		code += `\n${schema}\n`;
 	}
 	const formattedCode = await prettier.format(code, {
@@ -351,6 +383,20 @@ function generateImport({
 
 	if (hasSQLiteTimestamp) {
 		rootImports.push("sql");
+	}
+
+	//handle indexes
+	const hasIndexes = Object.values(tables).some((table) =>
+		Object.values(table.fields).some((field) => field.index && !field.unique),
+	);
+	const hasUniqueIndexes = Object.values(tables).some((table) =>
+		Object.values(table.fields).some((field) => field.unique && field.index),
+	);
+	if (hasIndexes) {
+		coreImports.push("index");
+	}
+	if (hasUniqueIndexes) {
+		coreImports.push("uniqueIndex");
 	}
 
 	return `${rootImports.length > 0 ? `import { ${rootImports.join(", ")} } from "drizzle-orm";\n` : ""}import { ${coreImports
