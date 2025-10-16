@@ -9,7 +9,7 @@ import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
 import type { Accessor } from "solid-js";
 import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
-import type { Session, SessionQueryParams } from "../types";
+import type { Session, SessionQueryParams, SharedHookOptions } from "../types";
 import { BetterFetchError } from "@better-fetch/fetch";
 import { twoFactorClient } from "../plugins";
 import { organizationClient, passkeyClient } from "./plugins";
@@ -99,6 +99,43 @@ describe("run time proxy", async () => {
 		});
 	});
 
+	it("should skip initial fetch in hook when fetchOnMount is false", async () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async () => {
+					return new Response(
+						JSON.stringify({
+							user: {
+								id: 1,
+								email: "test@email.com",
+							},
+						}),
+					);
+				},
+				baseURL: "http://localhost:3000",
+			},
+		});
+		const res = client.useSession({ fetchOnMount: false });
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(res()).toMatchObject({
+			data: null,
+			error: null,
+			isPending: false,
+		});
+		/**
+		 * recall
+		 */
+		await client.test2.signOut();
+		await vi.advanceTimersByTimeAsync(10);
+		expect(res()).toMatchObject({
+			data: { user: { id: 1, email: "test@email.com" } },
+			error: null,
+			isPending: false,
+		});
+	});
+
 	it("should allow second argument fetch options", async () => {
 		let called = false;
 		const client = createSolidClient({
@@ -178,7 +215,9 @@ describe("type", () => {
 				},
 			},
 		});
-		expectTypeOf(client.useComputedAtom).toEqualTypeOf<() => number>();
+		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
+			(options?: { skipOnMount?: boolean }) => number
+		>();
 	});
 	it("should infer resolved hooks solid", () => {
 		const client = createSolidClient({
@@ -191,7 +230,7 @@ describe("type", () => {
 			},
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
-			() => Accessor<number>
+			(opts?: SharedHookOptions) => Accessor<number>
 		>();
 	});
 	it("should infer resolved hooks vue", () => {

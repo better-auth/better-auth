@@ -4,6 +4,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SharedHookOptions,
 } from "../types";
 import type {
 	BetterAuthClientPlugin,
@@ -27,6 +28,10 @@ export function capitalizeFirstLetter(str: string) {
 	return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+type HookOptions = {
+	skipOnMount?: boolean;
+};
+
 type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 	plugins: Array<infer Plugin>;
 }
@@ -39,7 +44,9 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 									? never
 									: key extends string
 										? `use${Capitalize<key>}`
-										: never]: () => ReturnType<Atoms[key]["get"]>;
+										: never]: (
+									options?: HookOptions,
+								) => ReturnType<Atoms[key]["get"]>;
 							}
 						: {}
 					: {}
@@ -60,7 +67,10 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	} = getClientConfig(options);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
-		resolvedHooks[getAtomKey(key)] = () => useStore(value);
+		resolvedHooks[getAtomKey(key)] = ({ fetchOnMount }: SharedHookOptions) =>
+			useStore(value, {
+				skipOnMount: fetchOnMount,
+			});
 	}
 
 	const routes = {
@@ -88,7 +98,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		ClientAPI &
 		InferActions<Option> & {
-			useSession: () => {
+			useSession: (opts?: SharedHookOptions) => {
 				data: Session;
 				isPending: boolean;
 				isRefetching: boolean;

@@ -6,6 +6,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SharedHookOptions,
 } from "../types";
 import type {
 	BetterAuthClientPlugin,
@@ -37,7 +38,9 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 									? never
 									: key extends string
 										? `use${Capitalize<key>}`
-										: never]: () => Accessor<ReturnType<Atoms[key]["get"]>>;
+										: never]: (
+									opts?: SharedHookOptions,
+								) => Accessor<ReturnType<Atoms[key]["get"]>>;
 							}
 						: {}
 					: {}
@@ -57,7 +60,10 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	} = getClientConfig(options);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
-		resolvedHooks[getAtomKey(key)] = () => useStore(value);
+		resolvedHooks[getAtomKey(key)] = (opts?: SharedHookOptions) =>
+			useStore(value, {
+				skipOnMount: opts?.fetchOnMount,
+			});
 	}
 	const routes = {
 		...pluginsActions,
@@ -83,7 +89,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
-			useSession: () => Accessor<{
+			useSession: (opts?: SharedHookOptions) => Accessor<{
 				data: Session;
 				isPending: boolean;
 				isRefetching: boolean;
