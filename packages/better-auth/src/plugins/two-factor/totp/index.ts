@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt } from "../../../crypto";
 import type { BackupCodeOptions } from "../backup-codes";
@@ -13,7 +13,7 @@ import type {
 import { setSessionCookie } from "../../../cookies";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { createOTP } from "@better-auth/utils/otp";
-import { BASE_ERROR_CODES } from "../../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 
 export type TOTPOptions = {
 	/**
@@ -55,7 +55,9 @@ export const totp2fa = (options?: TOTPOptions) => {
 		{
 			method: "POST",
 			body: z.object({
-				secret: z.string().describe("The secret to generate the TOTP code"),
+				secret: z.string().meta({
+					description: "The secret to generate the TOTP code",
+				}),
 			}),
 			metadata: {
 				openapi: {
@@ -105,7 +107,9 @@ export const totp2fa = (options?: TOTPOptions) => {
 			method: "POST",
 			use: [sessionMiddleware],
 			body: z.object({
-				password: z.string().describe("User password"),
+				password: z.string().meta({
+					description: "User password",
+				}),
 			}),
 			metadata: {
 				openapi: {
@@ -175,7 +179,9 @@ export const totp2fa = (options?: TOTPOptions) => {
 		{
 			method: "POST",
 			body: z.object({
-				code: z.string().describe("The otp code to verify. Eg: "),
+				code: z.string().meta({
+					description: 'The otp code to verify. Eg: "012345"',
+				}),
 				/**
 				 * if true, the device will be trusted
 				 * for 30 days. It'll be refreshed on
@@ -183,7 +189,10 @@ export const totp2fa = (options?: TOTPOptions) => {
 				 */
 				trustDevice: z
 					.boolean()
-					.describe("If true, the device will be trusted for 30 days. It")
+					.meta({
+						description:
+							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+					})
 					.optional(),
 			}),
 			metadata: {
@@ -259,10 +268,9 @@ export const totp2fa = (options?: TOTPOptions) => {
 					{
 						twoFactorEnabled: true,
 					},
-					ctx,
 				);
 				const newSession = await ctx.context.internalAdapter
-					.createSession(user.id, ctx, false, session.session)
+					.createSession(user.id, false, session.session)
 					.catch((e) => {
 						throw e;
 					});

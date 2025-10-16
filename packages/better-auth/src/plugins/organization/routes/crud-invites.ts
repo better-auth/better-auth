@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { getSessionFromCtx } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -26,30 +26,49 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	});
 
 	const baseSchema = z.object({
-		email: z.string().describe("The email address of the user to invite"),
+		email: z.string().meta({
+			description: "The email address of the user to invite",
+		}),
 		role: z
 			.union([
-				z.string().describe("The role to assign to the user"),
-				z.array(z.string().describe("The roles to assign to the user")),
+				z.string().meta({
+					description: "The role to assign to the user",
+				}),
+				z.array(
+					z.string().meta({
+						description: "The roles to assign to the user",
+					}),
+				),
 			])
-			.describe(
-				"The role(s) to assign to the user. It can be `admin`, `member`, or `guest`. Eg: ",
-			),
+			.meta({
+				description:
+					'The role(s) to assign to the user. It can be `admin`, `member`, or `guest`. Eg: "member"',
+			}),
 		organizationId: z
 			.string()
-			.describe("The organization ID to invite the user to")
+			.meta({
+				description: "The organization ID to invite the user to",
+			})
 			.optional(),
 		resend: z
 			.boolean()
-			.describe(
-				"Resend the invitation email, if the user is already invited. Eg: true",
-			)
+			.meta({
+				description:
+					"Resend the invitation email, if the user is already invited. Eg: true",
+			})
 			.optional(),
 		teamId: z.union([
-			z.string().describe("The team ID to invite the user to").optional(),
+			z
+				.string()
+				.meta({
+					description: "The team ID to invite the user to",
+				})
+				.optional(),
 			z
 				.array(z.string())
-				.describe("The team IDs to invite the user to")
+				.meta({
+					description: "The team IDs to invite the user to",
+				})
 				.optional(),
 		]),
 	});
@@ -81,7 +100,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 * The organization ID to invite
 						 * the user to
 						 */
-						organizationId?: string;
+						organizationId?: string | undefined;
 						/**
 						 * Resend the invitation email, if
 						 * the user is already invited
@@ -129,6 +148,9 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											expiresAt: {
 												type: "string",
 											},
+											createdAt: {
+												type: "string",
+											},
 										},
 										required: [
 											"id",
@@ -138,6 +160,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											"inviterId",
 											"status",
 											"expiresAt",
+											"createdAt",
 										],
 									},
 								},
@@ -434,7 +457,9 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				invitationId: z.string().describe("The ID of the invitation to accept"),
+				invitationId: z.string().meta({
+					description: "The ID of the invitation to accept",
+				}),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
@@ -631,7 +656,9 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				invitationId: z.string().describe("The ID of the invitation to reject"),
+				invitationId: z.string().meta({
+					description: "The ID of the invitation to reject",
+				}),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
@@ -737,7 +764,9 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				invitationId: z.string().describe("The ID of the invitation to cancel"),
+				invitationId: z.string().meta({
+					description: "The ID of the invitation to cancel",
+				}),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			openapi: {
@@ -844,7 +873,9 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 			use: [orgMiddleware],
 			requireHeaders: true,
 			query: z.object({
-				id: z.string().describe("The ID of the invitation to get"),
+				id: z.string().meta({
+					description: "The ID of the invitation to get",
+				}),
 			}),
 			metadata: {
 				openapi: {
@@ -970,7 +1001,9 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 				.object({
 					organizationId: z
 						.string()
-						.describe("The ID of the organization to list invitations for")
+						.meta({
+							description: "The ID of the organization to list invitations for",
+						})
 						.optional(),
 				})
 				.optional(),
@@ -1021,9 +1054,10 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 				.object({
 					email: z
 						.string()
-						.describe(
-							"The email of the user to list invitations for. This only works for server side API calls.",
-						)
+						.meta({
+							description:
+								"The email of the user to list invitations for. This only works for server side API calls.",
+						})
 						.optional(),
 				})
 				.optional(),

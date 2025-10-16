@@ -1,11 +1,11 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../call";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import type { AuthContext } from "../../init";
 import { getDate } from "../../utils/date";
 import { generateId } from "../../utils";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { originCheck } from "../middlewares";
+import type { AuthContext } from "@better-auth/core";
 
 function redirectError(
 	ctx: AuthContext,
@@ -39,11 +39,10 @@ export const requestPasswordReset = createAuthEndpoint(
 			/**
 			 * The email address of the user to send a password reset email to.
 			 */
-			email: z
-				.email()
-				.describe(
+			email: z.email().meta({
+				description:
 					"The email address of the user to send a password reset email to",
-				),
+			}),
 			/**
 			 * The URL to redirect the user to reset their password.
 			 * If the token isn't valid or expired, it'll be redirected with a query parameter `?
@@ -52,7 +51,10 @@ export const requestPasswordReset = createAuthEndpoint(
 			 */
 			redirectTo: z
 				.string()
-				.describe("The URL to redirect the user to reset their password")
+				.meta({
+					description:
+						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
+				})
 				.optional(),
 		}),
 		metadata: {
@@ -110,14 +112,11 @@ export const requestPasswordReset = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue(
-			{
-				value: user.user.id,
-				identifier: `reset-password:${verificationToken}`,
-				expiresAt,
-			},
-			ctx,
-		);
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: user.user.id,
+			identifier: `reset-password:${verificationToken}`,
+			expiresAt,
+		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
@@ -130,6 +129,8 @@ export const requestPasswordReset = createAuthEndpoint(
 		);
 		return ctx.json({
 			status: true,
+			message:
+				"If this email exists in our system, check your email for the reset link",
 		});
 	},
 );
@@ -146,12 +147,10 @@ export const forgetPassword = createAuthEndpoint(
 			/**
 			 * The email address of the user to send a password reset email to.
 			 */
-			email: z
-				.string()
-				.email()
-				.describe(
+			email: z.string().email().meta({
+				description:
 					"The email address of the user to send a password reset email to",
-				),
+			}),
 			/**
 			 * The URL to redirect the user to reset their password.
 			 * If the token isn't valid or expired, it'll be redirected with a query parameter `?
@@ -160,7 +159,10 @@ export const forgetPassword = createAuthEndpoint(
 			 */
 			redirectTo: z
 				.string()
-				.describe("The URL to redirect the user to reset their password")
+				.meta({
+					description:
+						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
+				})
 				.optional(),
 		}),
 		metadata: {
@@ -218,14 +220,11 @@ export const forgetPassword = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue(
-			{
-				value: user.user.id,
-				identifier: `reset-password:${verificationToken}`,
-				expiresAt,
-			},
-			ctx,
-		);
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: user.user.id,
+			identifier: `reset-password:${verificationToken}`,
+			expiresAt,
+		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
@@ -247,9 +246,9 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			callbackURL: z
-				.string()
-				.describe("The URL to redirect the user to reset their password"),
+			callbackURL: z.string().meta({
+				description: "The URL to redirect the user to reset their password",
+			}),
 		}),
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
 		metadata: {
@@ -312,8 +311,15 @@ export const resetPassword = createAuthEndpoint(
 			})
 			.optional(),
 		body: z.object({
-			newPassword: z.string().describe("The new password to set"),
-			token: z.string().describe("The token to reset the password").optional(),
+			newPassword: z.string().meta({
+				description: "The new password to set",
+			}),
+			token: z
+				.string()
+				.meta({
+					description: "The token to reset the password",
+				})
+				.optional(),
 		}),
 		metadata: {
 			openapi: {
@@ -375,21 +381,14 @@ export const resetPassword = createAuthEndpoint(
 		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
 		const account = accounts.find((ac) => ac.providerId === "credential");
 		if (!account) {
-			await ctx.context.internalAdapter.createAccount(
-				{
-					userId,
-					providerId: "credential",
-					password: hashedPassword,
-					accountId: userId,
-				},
-				ctx,
-			);
-		} else {
-			await ctx.context.internalAdapter.updatePassword(
+			await ctx.context.internalAdapter.createAccount({
 				userId,
-				hashedPassword,
-				ctx,
-			);
+				providerId: "credential",
+				password: hashedPassword,
+				accountId: userId,
+			});
+		} else {
+			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		}
 		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 

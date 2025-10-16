@@ -1,10 +1,9 @@
 import { APIError } from "better-call";
 import * as z from "zod";
-import type { AuthPluginSchema } from "../../types";
-import { createAuthEndpoint } from "../../api/call";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { getSessionFromCtx } from "../../api/routes";
-import type { AuthContext } from "../../init";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { shimContext } from "../../utils/shim";
 import { type AccessControl } from "../access";
 import { getOrgAdapter } from "./adapter";
@@ -65,6 +64,7 @@ import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 import type { OrganizationOptions } from "./types";
+import type { AuthContext } from "@better-auth/core";
 
 export function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -657,7 +657,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						},
 					},
 				},
-			} satisfies AuthPluginSchema)
+			} satisfies BetterAuthPluginDBSchema)
 		: {};
 
 	const organizationRoleSchema = options?.dynamicAccessControl?.enabled
@@ -700,7 +700,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 					modelName: options?.schema?.organizationRole?.modelName,
 				},
-			} satisfies AuthPluginSchema)
+			} satisfies BetterAuthPluginDBSchema)
 		: {};
 
 	const schema = {
@@ -718,6 +718,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 					slug: {
 						type: "string",
+						required: true,
 						unique: true,
 						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,
@@ -822,6 +823,12 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						required: true,
 						fieldName: options?.schema?.invitation?.fields?.expiresAt,
 					},
+					createdAt: {
+						type: "date",
+						required: true,
+						fieldName: options?.schema?.invitation?.fields?.createdAt,
+						defaultValue: () => new Date(),
+					},
 					inviterId: {
 						type: "string",
 						references: {
@@ -834,7 +841,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					...(options?.schema?.invitation?.additionalFields || {}),
 				},
 			},
-		} satisfies AuthPluginSchema),
+		} satisfies BetterAuthPluginDBSchema),
 	};
 
 	/**
@@ -874,25 +881,18 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				permission?: never;
 		  };
 
-	type IncludeTeamEndpoints<ExistingEndpoints extends Record<string, any>> =
-		O["teams"] extends { enabled: true }
-			? ExistingEndpoints & typeof teamEndpoints
-			: ExistingEndpoints;
-
-	type IncludeDynamicAccessControlEndpoints<
-		ExistingEndpoints extends Record<string, any>,
-	> = O["dynamicAccessControl"] extends { enabled: true }
-		? ExistingEndpoints & typeof dynamicAccessControlEndpoints
-		: ExistingEndpoints;
-
-	type AllEndpoints = IncludeDynamicAccessControlEndpoints<
-		IncludeTeamEndpoints<typeof endpoints>
-	>;
+	type OrganizationEndpoints = (O["dynamicAccessControl"] extends {
+		enabled: true;
+	}
+		? typeof dynamicAccessControlEndpoints
+		: {}) &
+		(O["teams"] extends { enabled: true } ? typeof teamEndpoints : {}) &
+		typeof endpoints;
 
 	return {
 		id: "organization",
 		endpoints: {
-			...(api as AllEndpoints),
+			...(api as OrganizationEndpoints),
 			hasPermission: createAuthEndpoint(
 				"/organization/has-permission",
 				{
@@ -1006,7 +1006,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			),
 		},
 		schema: {
-			...(schema as AuthPluginSchema),
+			...(schema as BetterAuthPluginDBSchema),
 			session: {
 				fields: {
 					activeOrganizationId: {

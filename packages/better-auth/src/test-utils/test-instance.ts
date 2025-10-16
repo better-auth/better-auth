@@ -2,7 +2,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
-import type { BetterAuthOptions, ClientOptions, Session, User } from "../types";
+import type { Session, User } from "../types";
+import type { BetterAuthClientOptions } from "@better-auth/core";
 import { getMigrations } from "../db/get-migration";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
@@ -15,6 +16,7 @@ import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
+import type { BetterAuthOptions } from "@better-auth/core";
 
 const cleanupSet = new Set<Function>();
 
@@ -32,7 +34,7 @@ afterAll(async () => {
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
-	C extends ClientOptions,
+	C extends BetterAuthClientOptions,
 >(
 	options?: O,
 	config?: {
@@ -243,7 +245,7 @@ export async function getTestInstance<
 			user: data.user as User,
 			headers,
 			setCookie,
-			runWithDefaultUser: async (fn: (headers: Headers) => Promise<void>) => {
+			runWithUser: async (fn: (headers: Headers) => Promise<void>) => {
 				return currentUserContextStorage.run({ headers }, async () => {
 					await fn(headers);
 				});
@@ -299,7 +301,7 @@ export async function getTestInstance<
 		runWithUser: async (
 			email: string,
 			password: string,
-			fn: (headers: Headers) => Promise<void>,
+			fn: (headers: Headers) => Promise<void> | void,
 		) => {
 			const { headers } = await signInWithUser(email, password);
 			return currentUserContextStorage.run({ headers }, async () => {

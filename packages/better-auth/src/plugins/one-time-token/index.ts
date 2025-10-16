@@ -1,12 +1,11 @@
 import * as z from "zod";
-import {
-	createAuthEndpoint,
-	defaultKeyHasher,
-	type BetterAuthPlugin,
-} from "..";
+import { defaultKeyHasher } from "..";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { sessionMiddleware } from "../../api";
 import { generateRandomString } from "../../crypto";
-import type { GenericEndpointContext, Session, User } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import type { Session, User } from "../../types";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 interface OneTimeTokenOptions {
 	/**
@@ -129,7 +128,9 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						token: z.string().describe("The token to verify. Eg: "),
+						token: z.string().meta({
+							description: 'The token to verify. Eg: "some-token"',
+						}),
 					}),
 				},
 				async (c) => {

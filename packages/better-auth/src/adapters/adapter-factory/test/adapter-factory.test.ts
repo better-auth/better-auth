@@ -2,10 +2,11 @@ import { describe, test, expect } from "vitest";
 import { createAdapterFactory } from "..";
 import type {
 	AdapterFactoryConfig,
-	CleanedWhere,
 	AdapterFactoryCustomizeAdapterCreator,
 } from "../types";
-import type { BetterAuthOptions, User, Where } from "../../../types";
+import type { CleanedWhere, Where } from "@better-auth/core/db/adapter";
+import type { User } from "../../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { betterAuth } from "../../../auth";
 
 /*
@@ -232,6 +233,73 @@ describe("Create Adapter Helper", async () => {
 				expect(res?.image).toEqual(undefined);
 				expect(res?.createdAt).toBeInstanceOf(Date);
 				expect(res?.updatedAt).toBeInstanceOf(Date);
+			});
+
+			test("should not return string for nullable foreign keys", async () => {
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+					},
+					options: {
+						plugins: [
+							{
+								id: "test",
+								schema: {
+									testModel: {
+										fields: {
+											nullableReference: {
+												type: "string",
+												references: { field: "id", model: "user" },
+												required: false,
+											},
+										},
+									},
+								},
+							},
+						],
+					},
+				});
+				const res = await adapter.create({
+					model: "testModel",
+					data: { nullableReference: null },
+				});
+				expect(res).toHaveProperty("nullableReference");
+				expect(res.nullableReference).toBeNull();
+
+				const adapter2 = await createTestAdapter({
+					config: {
+						debugLogs: {},
+					},
+					options: {
+						plugins: [
+							{
+								id: "test",
+								schema: {
+									testModel: {
+										fields: {
+											nullableReference: {
+												type: "string",
+												references: { field: "id", model: "user" },
+												required: false,
+											},
+										},
+									},
+								},
+							},
+						],
+						advanced: {
+							database: {
+								useNumberId: true,
+							},
+						},
+					},
+				});
+				const res2 = await adapter2.create({
+					model: "testModel",
+					data: { nullableReference: null },
+				});
+				expect(res2).toHaveProperty("nullableReference");
+				expect(res2.nullableReference).toBeNull();
 			});
 
 			test('Should include an "id" in the result in all cases, unless "select" is used to exclude it', async () => {

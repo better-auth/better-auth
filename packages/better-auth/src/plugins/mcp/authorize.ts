@@ -1,5 +1,4 @@
 import { APIError } from "better-call";
-import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
 import type {
 	AuthorizationQuery,
@@ -7,6 +6,7 @@ import type {
 	OIDCOptions,
 } from "../oidc-provider/types";
 import { generateRandomString } from "../../crypto";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 function redirectErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -176,37 +176,34 @@ export async function authorizeMCPOAuth(
 		/**
 		 * Save the code in the database
 		 */
-		await ctx.context.internalAdapter.createVerificationValue(
-			{
-				value: JSON.stringify({
-					clientId: client.clientId,
-					redirectURI: query.redirect_uri,
-					scope: requestScope,
-					userId: session.user.id,
-					authTime: new Date(session.session.createdAt).getTime(),
-					/**
-					 * If the prompt is set to `consent`, then we need
-					 * to require the user to consent to the scopes.
-					 *
-					 * This means the code now needs to be treated as a
-					 * consent request.
-					 *
-					 * once the user consents, the code will be updated
-					 * with the actual code. This is to prevent the
-					 * client from using the code before the user
-					 * consents.
-					 */
-					requireConsent: query.prompt === "consent",
-					state: query.prompt === "consent" ? query.state : null,
-					codeChallenge: query.code_challenge,
-					codeChallengeMethod: query.code_challenge_method,
-					nonce: query.nonce,
-				}),
-				identifier: code,
-				expiresAt,
-			},
-			ctx,
-		);
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: JSON.stringify({
+				clientId: client.clientId,
+				redirectURI: query.redirect_uri,
+				scope: requestScope,
+				userId: session.user.id,
+				authTime: new Date(session.session.createdAt).getTime(),
+				/**
+				 * If the prompt is set to `consent`, then we need
+				 * to require the user to consent to the scopes.
+				 *
+				 * This means the code now needs to be treated as a
+				 * consent request.
+				 *
+				 * once the user consents, the code will be updated
+				 * with the actual code. This is to prevent the
+				 * client from using the code before the user
+				 * consents.
+				 */
+				requireConsent: query.prompt === "consent",
+				state: query.prompt === "consent" ? query.state : null,
+				codeChallenge: query.code_challenge,
+				codeChallengeMethod: query.code_challenge_method,
+				nonce: query.nonce,
+			}),
+			identifier: code,
+			expiresAt,
+		});
 	} catch (e) {
 		throw ctx.redirect(
 			redirectErrorURL(

@@ -1,19 +1,17 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../api/call";
-import type {
-	BetterAuthPlugin,
-	InferOptionSchema,
-	AuthPluginSchema,
-} from "../../types/plugins";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import type { InferOptionSchema } from "../../types/plugins";
 import { APIError } from "better-call";
 import { mergeSchema } from "../../db/schema";
 import { generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx } from "../../api";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { User } from "../../types";
 import { ERROR_CODES } from "./phone-number-error";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import type { BetterAuthPlugin } from "@better-auth/core";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
@@ -164,11 +162,17 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string().describe("Phone number to sign in. Eg: "),
-						password: z.string().describe("Password to use for sign in."),
+						phoneNumber: z.string().meta({
+							description: 'Phone number to sign in. Eg: "+1234567890"',
+						}),
+						password: z.string().meta({
+							description: "Password to use for sign in.",
+						}),
 						rememberMe: z
 							.boolean()
-							.describe("Remember the session. Eg: true")
+							.meta({
+								description: "Remember the session. Eg: true",
+							})
 							.optional(),
 					}),
 					metadata: {
@@ -232,14 +236,11 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					if (opts.requireVerification) {
 						if (!user.phoneNumberVerified) {
 							const otp = generateOTP(opts.otpLength);
-							await ctx.context.internalAdapter.createVerificationValue(
-								{
-									value: otp,
-									identifier: phoneNumber,
-									expiresAt: getDate(opts.expiresIn, "sec"),
-								},
-								ctx,
-							);
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: otp,
+								identifier: phoneNumber,
+								expiresAt: getDate(opts.expiresIn, "sec"),
+							});
 							await opts.sendOTP?.(
 								{
 									phoneNumber,
@@ -284,7 +285,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx,
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {
@@ -338,7 +338,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string().describe("Phone number to send OTP. Eg: "),
+						phoneNumber: z.string().meta({
+							description: 'Phone number to send OTP. Eg: "+1234567890"',
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -384,14 +386,11 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 
 					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							value: `${code}:0`,
-							identifier: ctx.body.phoneNumber,
-							expiresAt: getDate(opts.expiresIn, "sec"),
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: `${code}:0`,
+						identifier: ctx.body.phoneNumber,
+						expiresAt: getDate(opts.expiresIn, "sec"),
+					});
 					await options.sendOTP(
 						{
 							phoneNumber: ctx.body.phoneNumber,
@@ -426,20 +425,25 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						/**
 						 * Phone number
 						 */
-						phoneNumber: z.string().describe("Phone number to verify. Eg: "),
+						phoneNumber: z.string().meta({
+							description: 'Phone number to verify. Eg: "+1234567890"',
+						}),
 						/**
 						 * OTP code
 						 */
-						code: z.string().describe("OTP code. Eg: "),
+						code: z.string().meta({
+							description: 'OTP code. Eg: "123456"',
+						}),
 						/**
 						 * Disable session creation after verification
 						 * @default false
 						 */
 						disableSession: z
 							.boolean()
-							.describe(
-								"Disable session creation after verification. Eg: false",
-							)
+							.meta({
+								description:
+									"Disable session creation after verification. Eg: false",
+							})
 							.optional(),
 						/**
 						 * This checks if there is a session already
@@ -448,9 +452,10 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						 */
 						updatePhoneNumber: z
 							.boolean()
-							.describe(
-								"Check if there is a session and update the phone number. Eg: true",
-							)
+							.meta({
+								description:
+									"Check if there is a session and update the phone number. Eg: true",
+							})
 							.optional(),
 					}),
 					metadata: {
@@ -614,7 +619,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 								[opts.phoneNumber]: ctx.body.phoneNumber,
 								[opts.phoneNumberVerified]: true,
 							},
-							ctx,
 						);
 						return ctx.json({
 							status: true,
@@ -644,21 +648,21 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					});
 					if (!user) {
 						if (options?.signUpOnVerification) {
-							user = await ctx.context.internalAdapter.createUser(
-								{
-									email: options.signUpOnVerification.getTempEmail(
-										ctx.body.phoneNumber,
-									),
-									name: options.signUpOnVerification.getTempName
-										? options.signUpOnVerification.getTempName(
-												ctx.body.phoneNumber,
-											)
-										: ctx.body.phoneNumber,
-									[opts.phoneNumber]: ctx.body.phoneNumber,
-									[opts.phoneNumberVerified]: true,
-								},
-								ctx,
-							);
+							user =
+								await ctx.context.internalAdapter.createUser<UserWithPhoneNumber>(
+									{
+										email: options.signUpOnVerification.getTempEmail(
+											ctx.body.phoneNumber,
+										),
+										name: options.signUpOnVerification.getTempName
+											? options.signUpOnVerification.getTempName(
+													ctx.body.phoneNumber,
+												)
+											: ctx.body.phoneNumber,
+										[opts.phoneNumber]: ctx.body.phoneNumber,
+										[opts.phoneNumberVerified]: true,
+									},
+								);
 							if (!user) {
 								throw new APIError("INTERNAL_SERVER_ERROR", {
 									message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -666,13 +670,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							}
 						}
 					} else {
-						user = await ctx.context.internalAdapter.updateUser(
-							user.id,
-							{
-								[opts.phoneNumberVerified]: true,
-							},
-							ctx,
-						);
+						user = await ctx.context.internalAdapter.updateUser(user.id, {
+							[opts.phoneNumberVerified]: true,
+						});
 					}
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -691,7 +691,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					if (!ctx.body.disableSession) {
 						const session = await ctx.context.internalAdapter.createSession(
 							user.id,
-							ctx,
 						);
 						if (!session) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -744,11 +743,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z
-							.string()
-							.describe(
-								`The phone number which is associated with the user. Eg: "+1234567890"`,
-							),
+						phoneNumber: z.string().meta({
+							description: `The phone number which is associated with the user. Eg: "+1234567890"`,
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -793,14 +790,11 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						});
 					}
 					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							value: `${code}:0`,
-							identifier: `${ctx.body.phoneNumber}-request-password-reset`,
-							expiresAt: getDate(opts.expiresIn, "sec"),
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: `${code}:0`,
+						identifier: `${ctx.body.phoneNumber}-request-password-reset`,
+						expiresAt: getDate(opts.expiresIn, "sec"),
+					});
 					await options?.sendForgetPasswordOTP?.(
 						{
 							phoneNumber: ctx.body.phoneNumber,
@@ -863,14 +857,11 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						});
 					}
 					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							value: `${code}:0`,
-							identifier: `${ctx.body.phoneNumber}-request-password-reset`,
-							expiresAt: getDate(opts.expiresIn, "sec"),
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: `${code}:0`,
+						identifier: `${ctx.body.phoneNumber}-request-password-reset`,
+						expiresAt: getDate(opts.expiresIn, "sec"),
+					});
 					await options?.sendPasswordResetOTP?.(
 						{
 							phoneNumber: ctx.body.phoneNumber,
@@ -888,17 +879,17 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						otp: z
-							.string()
-							.describe("The one time password to reset the password. Eg: "),
-						phoneNumber: z
-							.string()
-							.describe(
-								"The phone number to the account which intends to reset the password for. Eg: ",
-							),
-						newPassword: z
-							.string()
-							.describe(`The new password. Eg: "new-and-secure-password"`),
+						otp: z.string().meta({
+							description:
+								'The one time password to reset the password. Eg: "123456"',
+						}),
+						phoneNumber: z.string().meta({
+							description:
+								'The phone number to the account which intends to reset the password for. Eg: "+1234567890"',
+						}),
+						newPassword: z.string().meta({
+							description: `The new password. Eg: "new-and-secure-password"`,
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -1025,4 +1016,4 @@ const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;

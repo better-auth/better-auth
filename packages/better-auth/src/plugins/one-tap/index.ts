@@ -1,7 +1,8 @@
 import * as z from "zod";
-import { APIError, createAuthEndpoint } from "../../api";
+import { APIError } from "../../api";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { setSessionCookie } from "../../cookies";
-import type { BetterAuthPlugin } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { jwtVerify, createRemoteJWKSet } from "jose";
 import { toBoolean } from "../../utils/boolean";
 
@@ -30,11 +31,10 @@ export const oneTap = (options?: OneTapOptions) =>
 				{
 					method: "POST",
 					body: z.object({
-						idToken: z
-							.string()
-							.describe(
+						idToken: z.string().meta({
+							description:
 								"Google ID token, which the client obtains from the One Tap API",
-							),
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -116,7 +116,6 @@ export const oneTap = (options?: OneTapOptions) =>
 								providerId: "google",
 								accountId: sub,
 							},
-							ctx,
 						);
 						if (!newUser) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -125,7 +124,6 @@ export const oneTap = (options?: OneTapOptions) =>
 						}
 						const session = await ctx.context.internalAdapter.createSession(
 							newUser.user.id,
-							ctx,
 						);
 						await setSessionCookie(ctx, {
 							user: newUser.user,
@@ -167,7 +165,6 @@ export const oneTap = (options?: OneTapOptions) =>
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.user.id,
-						ctx,
 					);
 
 					await setSessionCookie(ctx, {

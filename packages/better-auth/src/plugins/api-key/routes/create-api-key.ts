@@ -1,13 +1,14 @@
 import * as z from "zod";
-import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
+import { APIError, getSessionFromCtx } from "../../../api";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { getDate } from "../../../utils/date";
 import { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { defaultKeyHasher } from "../";
+import type { AuthContext } from "@better-auth/core";
 
 export function createApiKey({
 	keyGenerator,
@@ -31,10 +32,15 @@ export function createApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				name: z.string().describe("Name of the Api Key").optional(),
+				name: z
+					.string()
+					.meta({ description: "Name of the Api Key" })
+					.optional(),
 				expiresIn: z
 					.number()
-					.describe("Expiration time of the Api Key in seconds")
+					.meta({
+						description: "Expiration time of the Api Key in seconds",
+					})
 					.min(1)
 					.optional()
 					.nullable()
@@ -42,13 +48,14 @@ export function createApiKey({
 
 				userId: z.coerce
 					.string()
-					.describe(
-						"User Id of the user that the Api Key belongs to. server-only",
-					)
+					.meta({
+						description:
+							'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
+					})
 					.optional(),
 				prefix: z
 					.string()
-					.describe("Prefix of the Api Key")
+					.meta({ description: "Prefix of the Api Key" })
 					.regex(/^[a-zA-Z0-9_-]+$/, {
 						message:
 							"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
@@ -56,7 +63,9 @@ export function createApiKey({
 					.optional(),
 				remaining: z
 					.number()
-					.describe("Remaining number of requests. Server side only")
+					.meta({
+						description: "Remaining number of requests. Server side only",
+					})
 					.min(0)
 					.optional()
 					.nullable()
@@ -64,36 +73,45 @@ export function createApiKey({
 				metadata: z.any().optional(),
 				refillAmount: z
 					.number()
-					.describe(
-						"Amount to refill the remaining count of the Api Key. server-only",
-					)
+					.meta({
+						description:
+							"Amount to refill the remaining count of the Api Key. server-only. Eg: 100",
+					})
 					.min(1)
 					.optional(),
 				refillInterval: z
 					.number()
-					.describe(
-						"Interval to refill the Api Key in milliseconds. server-only",
-					)
+					.meta({
+						description:
+							"Interval to refill the Api Key in milliseconds. server-only. Eg: 1000",
+					})
 					.optional(),
 				rateLimitTimeWindow: z
 					.number()
-					.describe(
-						"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only",
-					)
+					.meta({
+						description:
+							"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
+					})
 					.optional(),
 				rateLimitMax: z
 					.number()
-					.describe(
-						"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only",
-					)
+					.meta({
+						description:
+							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
+					})
 					.optional(),
 				rateLimitEnabled: z
 					.boolean()
-					.describe("Whether the key has rate limiting enabled. server-only")
+					.meta({
+						description:
+							"Whether the key has rate limiting enabled. server-only. Eg: true",
+					})
 					.optional(),
 				permissions: z
 					.record(z.string(), z.array(z.string()))
-					.describe("Permissions of the Api Key.")
+					.meta({
+						description: "Permissions of the Api Key.",
+					})
 					.optional(),
 			}),
 			metadata: {
@@ -251,10 +269,19 @@ export function createApiKey({
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
-			const authRequired = (ctx.request || ctx.headers) && !ctx.body.userId;
+			const authRequired = ctx.request || ctx.headers;
 			const user =
-				session?.user ?? (authRequired ? null : { id: ctx.body.userId });
+				authRequired && !session
+					? null
+					: session?.user || { id: ctx.body.userId };
+
 			if (!user?.id) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
+			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.UNAUTHORIZED_SESSION,
 				});

@@ -2,16 +2,12 @@ import * as z from "zod";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSession,
-} from "../../api";
-import type {
-	BetterAuthOptions,
-	BetterAuthPlugin,
-	GenericEndpointContext,
-	InferSession,
-	InferUser,
-} from "../../types";
+} from "@better-auth/core/api";
+import { getSession } from "../../api";
+import type { InferSession, InferUser } from "../../types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 const getSessionQuerySchema = z.optional(
 	z.object({
@@ -21,14 +17,17 @@ const getSessionQuerySchema = z.optional(
 		 */
 		disableCookieCache: z
 			.boolean()
-			.describe("Disable cookie cache and fetch session from database")
+			.meta({
+				description: "Disable cookie cache and fetch session from database",
+			})
 			.or(z.string().transform((v) => v === "true"))
 			.optional(),
 		disableRefresh: z
 			.boolean()
-			.describe(
-				"Disable session refresh. Useful for checking session status, without updating the session",
-			)
+			.meta({
+				description:
+					"Disable session refresh. Useful for checking session status, without updating the session",
+			})
 			.optional(),
 	}),
 );
@@ -104,7 +103,7 @@ export const customSession = <
 					},
 					requireHeaders: true,
 				},
-				async (ctx) => {
+				async (ctx): Promise<Returns | null> => {
 					const session = await getSession()({
 						...ctx,
 						asResponse: false,
@@ -117,12 +116,22 @@ export const customSession = <
 						return ctx.json(null);
 					}
 					const fnResult = await fn(session.response as any, ctx);
+
+					const setCookie = session.headers.get("set-cookie");
+					if (setCookie) {
+						ctx.setHeader("set-cookie", setCookie);
+						session.headers.delete("set-cookie");
+					}
+
 					session.headers.forEach((value, key) => {
 						ctx.setHeader(key, value);
 					});
 					return ctx.json(fnResult);
 				},
 			),
+		},
+		$Infer: {
+			Session: {} as Awaited<ReturnType<typeof fn>>,
 		},
 	} satisfies BetterAuthPlugin;
 };

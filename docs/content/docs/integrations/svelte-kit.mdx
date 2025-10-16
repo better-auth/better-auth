@@ -92,7 +92,7 @@ Some of the actions are reactive. The client use [nano-store](https://github.com
       {#if $session.data}
         <div>
           <p>
-            {$session?.data?.user.name}
+            {$session.data.user.name}
           </p>
           <button
             on:click={async () => {

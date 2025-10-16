@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.4.0-beta.3",
+  "version": "1.4.0-beta.11",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -23,19 +23,18 @@
     "access": "public"
   },
   "scripts": {
-    "build": "unbuild --clean",
-    "stub": "unbuild --stub",
+    "build": "tsdown",
     "test": "vitest",
-    "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/normal-tests/schema.prisma && prisma generate --schema ./src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
+    "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/base.prisma",
     "typecheck": "tsc --project tsconfig.json"
   },
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "exports": {
     ".": {
       "import": {
         "types": "./dist/index.d.ts",
-        "default": "./dist/index.mjs"
+        "default": "./dist/index.js"
       },
       "require": {
         "types": "./dist/index.d.cts",
@@ -45,7 +44,7 @@
     "./social-providers": {
       "import": {
         "types": "./dist/social-providers/index.d.ts",
-        "default": "./dist/social-providers/index.mjs"
+        "default": "./dist/social-providers/index.js"
       },
       "require": {
         "types": "./dist/social-providers/index.d.cts",
@@ -55,7 +54,7 @@
     "./client": {
       "import": {
         "types": "./dist/client/index.d.ts",
-        "default": "./dist/client/index.mjs"
+        "default": "./dist/client/index.js"
       },
       "require": {
         "types": "./dist/client/index.d.cts",
@@ -65,7 +64,7 @@
     "./client/plugins": {
       "import": {
         "types": "./dist/client/plugins/index.d.ts",
-        "default": "./dist/client/plugins/index.mjs"
+        "default": "./dist/client/plugins/index.js"
       },
       "require": {
         "types": "./dist/client/plugins/index.d.cts",
@@ -75,7 +74,7 @@
     "./types": {
       "import": {
         "types": "./dist/types/index.d.ts",
-        "default": "./dist/types/index.mjs"
+        "default": "./dist/types/index.js"
       },
       "require": {
         "types": "./dist/types/index.d.cts",
@@ -85,7 +84,7 @@
     "./crypto": {
       "import": {
         "types": "./dist/crypto/index.d.ts",
-        "default": "./dist/crypto/index.mjs"
+        "default": "./dist/crypto/index.js"
       },
       "require": {
         "types": "./dist/crypto/index.d.cts",
@@ -95,7 +94,7 @@
     "./cookies": {
       "import": {
         "types": "./dist/cookies/index.d.ts",
-        "default": "./dist/cookies/index.mjs"
+        "default": "./dist/cookies/index.js"
       },
       "require": {
         "types": "./dist/cookies/index.d.cts",
@@ -105,7 +104,7 @@
     "./oauth2": {
       "import": {
         "types": "./dist/oauth2/index.d.ts",
-        "default": "./dist/oauth2/index.mjs"
+        "default": "./dist/oauth2/index.js"
       },
       "require": {
         "types": "./dist/oauth2/index.d.cts",
@@ -115,7 +114,7 @@
     "./react": {
       "import": {
         "types": "./dist/client/react/index.d.ts",
-        "default": "./dist/client/react/index.mjs"
+        "default": "./dist/client/react/index.js"
       },
       "require": {
         "types": "./dist/client/react/index.d.cts",
@@ -125,17 +124,27 @@
     "./solid": {
       "import": {
         "types": "./dist/client/solid/index.d.ts",
-        "default": "./dist/client/solid/index.mjs"
+        "default": "./dist/client/solid/index.js"
       },
       "require": {
         "types": "./dist/client/solid/index.d.cts",
         "default": "./dist/client/solid/index.cjs"
       }
     },
+    "./lynx": {
+      "import": {
+        "types": "./dist/client/lynx/index.d.ts",
+        "default": "./dist/client/lynx/index.js"
+      },
+      "require": {
+        "types": "./dist/client/lynx/index.d.cts",
+        "default": "./dist/client/lynx/index.cjs"
+      }
+    },
     "./test": {
       "import": {
         "types": "./dist/test-utils/index.d.ts",
-        "default": "./dist/test-utils/index.mjs"
+        "default": "./dist/test-utils/index.js"
       },
       "require": {
         "types": "./dist/test-utils/index.d.cts",
@@ -145,7 +154,7 @@
     "./api": {
       "import": {
         "types": "./dist/api/index.d.ts",
-        "default": "./dist/api/index.mjs"
+        "default": "./dist/api/index.js"
       },
       "require": {
         "types": "./dist/api/index.d.cts",
@@ -155,7 +164,7 @@
     "./db": {
       "import": {
         "types": "./dist/db/index.d.ts",
-        "default": "./dist/db/index.mjs"
+        "default": "./dist/db/index.js"
       },
       "require": {
         "types": "./dist/db/index.d.cts",
@@ -165,7 +174,7 @@
     "./vue": {
       "import": {
         "types": "./dist/client/vue/index.d.ts",
-        "default": "./dist/client/vue/index.mjs"
+        "default": "./dist/client/vue/index.js"
       },
       "require": {
         "types": "./dist/client/vue/index.d.cts",
@@ -175,7 +184,7 @@
     "./plugins": {
       "import": {
         "types": "./dist/plugins/index.d.ts",
-        "default": "./dist/plugins/index.mjs"
+        "default": "./dist/plugins/index.js"
       },
       "require": {
         "types": "./dist/plugins/index.d.cts",
@@ -185,7 +194,7 @@
     "./svelte-kit": {
       "import": {
         "types": "./dist/integrations/svelte-kit.d.ts",
-        "default": "./dist/integrations/svelte-kit.mjs"
+        "default": "./dist/integrations/svelte-kit.js"
       },
       "require": {
         "types": "./dist/integrations/svelte-kit.d.cts",
@@ -195,7 +204,7 @@
     "./solid-start": {
       "import": {
         "types": "./dist/integrations/solid-start.d.ts",
-        "default": "./dist/integrations/solid-start.mjs"
+        "default": "./dist/integrations/solid-start.js"
       },
       "require": {
         "types": "./dist/integrations/solid-start.d.cts",
@@ -205,7 +214,7 @@
     "./svelte": {
       "import": {
         "types": "./dist/client/svelte/index.d.ts",
-        "default": "./dist/client/svelte/index.mjs"
+        "default": "./dist/client/svelte/index.js"
       },
       "require": {
         "types": "./dist/client/svelte/index.d.cts",
@@ -215,7 +224,7 @@
     "./next-js": {
       "import": {
         "types": "./dist/integrations/next-js.d.ts",
-        "default": "./dist/integrations/next-js.mjs"
+        "default": "./dist/integrations/next-js.js"
       },
       "require": {
         "types": "./dist/integrations/next-js.d.cts",
@@ -225,7 +234,7 @@
     "./react-start": {
       "import": {
         "types": "./dist/integrations/react-start.d.ts",
-        "default": "./dist/integrations/react-start.mjs"
+        "default": "./dist/integrations/react-start.js"
       },
       "require": {
         "types": "./dist/integrations/react-start.d.cts",
@@ -235,7 +244,7 @@
     "./node": {
       "import": {
         "types": "./dist/integrations/node.d.ts",
-        "default": "./dist/integrations/node.mjs"
+        "default": "./dist/integrations/node.js"
       },
       "require": {
         "types": "./dist/integrations/node.d.cts",
@@ -245,7 +254,7 @@
     "./adapters/prisma": {
       "import": {
         "types": "./dist/adapters/prisma-adapter/index.d.ts",
-        "default": "./dist/adapters/prisma-adapter/index.mjs"
+        "default": "./dist/adapters/prisma-adapter/index.js"
       },
       "require": {
         "types": "./dist/adapters/prisma-adapter/index.d.cts",
@@ -255,7 +264,7 @@
     "./adapters/drizzle": {
       "import": {
         "types": "./dist/adapters/drizzle-adapter/index.d.ts",
-        "default": "./dist/adapters/drizzle-adapter/index.mjs"
+        "default": "./dist/adapters/drizzle-adapter/index.js"
       },
       "require": {
         "types": "./dist/adapters/drizzle-adapter/index.d.cts",
@@ -265,7 +274,7 @@
     "./adapters/mongodb": {
       "import": {
         "types": "./dist/adapters/mongodb-adapter/index.d.ts",
-        "default": "./dist/adapters/mongodb-adapter/index.mjs"
+        "default": "./dist/adapters/mongodb-adapter/index.js"
       },
       "require": {
         "types": "./dist/adapters/mongodb-adapter/index.d.cts",
@@ -275,7 +284,7 @@
     "./adapters/memory": {
       "import": {
         "types": "./dist/adapters/memory-adapter/index.d.ts",
-        "default": "./dist/adapters/memory-adapter/index.mjs"
+        "default": "./dist/adapters/memory-adapter/index.js"
       },
       "require": {
         "types": "./dist/adapters/memory-adapter/index.d.cts",
@@ -285,7 +294,7 @@
     "./adapters/test": {
       "import": {
         "types": "./dist/adapters/test.d.ts",
-        "default": "./dist/adapters/test.mjs"
+        "default": "./dist/adapters/test.js"
       },
       "require": {
         "types": "./dist/adapters/test.d.cts",
@@ -295,7 +304,7 @@
     "./adapters": {
       "import": {
         "types": "./dist/adapters/index.d.ts",
-        "default": "./dist/adapters/index.mjs"
+        "default": "./dist/adapters/index.js"
       },
       "require": {
         "types": "./dist/adapters/index.d.cts",
@@ -305,7 +314,7 @@
     "./plugins/access": {
       "import": {
         "types": "./dist/plugins/access/index.d.ts",
-        "default": "./dist/plugins/access/index.mjs"
+        "default": "./dist/plugins/access/index.js"
       },
       "require": {
         "types": "./dist/plugins/access/index.d.cts",
@@ -315,7 +324,7 @@
     "./plugins/admin": {
       "import": {
         "types": "./dist/plugins/admin/index.d.ts",
-        "default": "./dist/plugins/admin/index.mjs"
+        "default": "./dist/plugins/admin/index.js"
       },
       "require": {
         "types": "./dist/plugins/admin/index.d.cts",
@@ -325,7 +334,7 @@
     "./plugins/admin/access": {
       "import": {
         "types": "./dist/plugins/admin/access/index.d.ts",
-        "default": "./dist/plugins/admin/access/index.mjs"
+        "default": "./dist/plugins/admin/access/index.js"
       },
       "require": {
         "types": "./dist/plugins/admin/access/index.d.cts",
@@ -335,7 +344,7 @@
     "./plugins/anonymous": {
       "import": {
         "types": "./dist/plugins/anonymous/index.d.ts",
-        "default": "./dist/plugins/anonymous/index.mjs"
+        "default": "./dist/plugins/anonymous/index.js"
       },
       "require": {
         "types": "./dist/plugins/anonymous/index.d.cts",
@@ -345,7 +354,7 @@
     "./plugins/bearer": {
       "import": {
         "types": "./dist/plugins/bearer/index.d.ts",
-        "default": "./dist/plugins/bearer/index.mjs"
+        "default": "./dist/plugins/bearer/index.js"
       },
       "require": {
         "types": "./dist/plugins/bearer/index.d.cts",
@@ -355,7 +364,7 @@
     "./plugins/custom-session": {
       "import": {
         "types": "./dist/plugins/custom-session/index.d.ts",
-        "default": "./dist/plugins/custom-session/index.mjs"
+        "default": "./dist/plugins/custom-session/index.js"
       },
       "require": {
         "types": "./dist/plugins/custom-session/index.d.cts",
@@ -365,7 +374,7 @@
     "./plugins/email-otp": {
       "import": {
         "types": "./dist/plugins/email-otp/index.d.ts",
-        "default": "./dist/plugins/email-otp/index.mjs"
+        "default": "./dist/plugins/email-otp/index.js"
       },
       "require": {
         "types": "./dist/plugins/email-otp/index.d.cts",
@@ -375,7 +384,7 @@
     "./plugins/generic-oauth": {
       "import": {
         "types": "./dist/plugins/generic-oauth/index.d.ts",
-        "default": "./dist/plugins/generic-oauth/index.mjs"
+        "default": "./dist/plugins/generic-oauth/index.js"
       },
       "require": {
         "types": "./dist/plugins/generic-oauth/index.d.cts",
@@ -385,7 +394,7 @@
     "./plugins/jwt": {
       "import": {
         "types": "./dist/plugins/jwt/index.d.ts",
-        "default": "./dist/plugins/jwt/index.mjs"
+        "default": "./dist/plugins/jwt/index.js"
       },
       "require": {
         "types": "./dist/plugins/jwt/index.d.cts",
@@ -395,27 +404,17 @@
     "./plugins/haveibeenpwned": {
       "import": {
         "types": "./dist/plugins/haveibeenpwned/index.d.ts",
-        "default": "./dist/plugins/haveibeenpwned/index.mjs"
+        "default": "./dist/plugins/haveibeenpwned/index.js"
       },
       "require": {
         "types": "./dist/plugins/haveibeenpwned/index.d.cts",
         "default": "./dist/plugins/haveibeenpwned/index.cjs"
       }
     },
-    "./plugins/sso": {
-      "import": {
-        "types": "./dist/plugins/sso/index.d.ts",
-        "default": "./dist/plugins/sso/index.mjs"
-      },
-      "require": {
-        "types": "./dist/plugins/sso/index.d.cts",
-        "default": "./dist/plugins/sso/index.cjs"
-      }
-    },
     "./plugins/oidc-provider": {
       "import": {
         "types": "./dist/plugins/oidc-provider/index.d.ts",
-        "default": "./dist/plugins/oidc-provider/index.mjs"
+        "default": "./dist/plugins/oidc-provider/index.js"
       },
       "require": {
         "types": "./dist/plugins/oidc-provider/index.d.cts",
@@ -425,7 +424,7 @@
     "./plugins/magic-link": {
       "import": {
         "types": "./dist/plugins/magic-link/index.d.ts",
-        "default": "./dist/plugins/magic-link/index.mjs"
+        "default": "./dist/plugins/magic-link/index.js"
       },
       "require": {
         "types": "./dist/plugins/magic-link/index.d.cts",
@@ -435,7 +434,7 @@
     "./plugins/multi-session": {
       "import": {
         "types": "./dist/plugins/multi-session/index.d.ts",
-        "default": "./dist/plugins/multi-session/index.mjs"
+        "default": "./dist/plugins/multi-session/index.js"
       },
       "require": {
         "types": "./dist/plugins/multi-session/index.d.cts",
@@ -445,7 +444,7 @@
     "./plugins/oauth-proxy": {
       "import": {
         "types": "./dist/plugins/oauth-proxy/index.d.ts",
-        "default": "./dist/plugins/oauth-proxy/index.mjs"
+        "default": "./dist/plugins/oauth-proxy/index.js"
       },
       "require": {
         "types": "./dist/plugins/oauth-proxy/index.d.cts",
@@ -455,7 +454,7 @@
     "./plugins/organization": {
       "import": {
         "types": "./dist/plugins/organization/index.d.ts",
-        "default": "./dist/plugins/organization/index.mjs"
+        "default": "./dist/plugins/organization/index.js"
       },
       "require": {
         "types": "./dist/plugins/organization/index.d.cts",
@@ -465,7 +464,7 @@
     "./plugins/organization/access": {
       "import": {
         "types": "./dist/plugins/organization/access/index.d.ts",
-        "default": "./dist/plugins/organization/access/index.mjs"
+        "default": "./dist/plugins/organization/access/index.js"
       },
       "require": {
         "types": "./dist/plugins/organization/access/index.d.cts",
@@ -475,7 +474,7 @@
     "./plugins/one-time-token": {
       "import": {
         "types": "./dist/plugins/one-time-token/index.d.ts",
-        "default": "./dist/plugins/one-time-token/index.mjs"
+        "default": "./dist/plugins/one-time-token/index.js"
       },
       "require": {
         "types": "./dist/plugins/one-time-token/index.d.cts",
@@ -485,7 +484,7 @@
     "./plugins/passkey": {
       "import": {
         "types": "./dist/plugins/passkey/index.d.ts",
-        "default": "./dist/plugins/passkey/index.mjs"
+        "default": "./dist/plugins/passkey/index.js"
       },
       "require": {
         "types": "./dist/plugins/passkey/index.d.cts",
@@ -495,7 +494,7 @@
     "./plugins/phone-number": {
       "import": {
         "types": "./dist/plugins/phone-number/index.d.ts",
-        "default": "./dist/plugins/phone-number/index.mjs"
+        "default": "./dist/plugins/phone-number/index.js"
       },
       "require": {
         "types": "./dist/plugins/phone-number/index.d.cts",
@@ -505,7 +504,7 @@
     "./plugins/two-factor": {
       "import": {
         "types": "./dist/plugins/two-factor/index.d.ts",
-        "default": "./dist/plugins/two-factor/index.mjs"
+        "default": "./dist/plugins/two-factor/index.js"
       },
       "require": {
         "types": "./dist/plugins/two-factor/index.d.cts",
@@ -515,7 +514,7 @@
     "./plugins/username": {
       "import": {
         "types": "./dist/plugins/username/index.d.ts",
-        "default": "./dist/plugins/username/index.mjs"
+        "default": "./dist/plugins/username/index.js"
       },
       "require": {
         "types": "./dist/plugins/username/index.d.cts",
@@ -525,7 +524,7 @@
     "./plugins/siwe": {
       "import": {
         "types": "./dist/plugins/siwe/index.d.ts",
-        "default": "./dist/plugins/siwe/index.mjs"
+        "default": "./dist/plugins/siwe/index.js"
       },
       "require": {
         "types": "./dist/plugins/siwe/index.d.cts",
@@ -535,7 +534,7 @@
     "./plugins/device-authorization": {
       "import": {
         "types": "./dist/plugins/device-authorization/index.d.ts",
-        "default": "./dist/plugins/device-authorization/index.mjs"
+        "default": "./dist/plugins/device-authorization/index.js"
       },
       "require": {
         "types": "./dist/plugins/device-authorization/index.d.cts",
@@ -583,6 +582,9 @@
       ],
       "solid": [
         "./dist/client/solid/index.d.ts"
+      ],
+      "lynx": [
+        "./dist/client/lynx/index.d.ts"
       ],
       "api": [
         "./dist/api/index.d.ts"
@@ -653,9 +655,6 @@
       "plugins/one-time-token": [
         "./dist/plugins/one-time-token/index.d.ts"
       ],
-      "plugins/sso": [
-        "./dist/plugins/sso/index.d.ts"
-      ],
       "plugins/oidc-provider": [
         "./dist/plugins/oidc-provider/index.d.ts"
       ],
@@ -692,6 +691,8 @@
     }
   },
   "dependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/telemetry": "workspace:*",
     "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.0.0",
@@ -705,7 +706,7 @@
     "nanostores": "^1.0.1",
     "zod": "^4.1.5"
   },
-  "peerDependencies": {
+  "peerDependenciesOptional": {
     "@lynx-js/react": "*",
     "@sveltejs/kit": "^2.0.0",
     "next": "^14.0.0 || ^15.0.0",
@@ -742,40 +743,42 @@
     }
   },
   "devDependencies": {
-    "@lynx-js/react": "^0.112.5",
+    "@lynx-js/react": "^0.114.0",
     "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.37.1",
     "@tanstack/react-start": "^1.131.3",
     "@tanstack/start-server-core": "^1.131.36",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/bun": "^1.2.20",
+    "@types/bun": "^1.2.23",
     "@types/keccak": "^3.0.5",
     "@types/pg": "^8.15.5",
     "@types/prompts": "^2.4.9",
-    "@types/react": "^18.3.23",
+    "@types/react": "^19.2.2",
     "better-sqlite3": "^12.2.0",
     "concurrently": "^9.2.1",
     "deepmerge": "^4.3.1",
+    "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.38.2",
-    "happy-dom": "^18.0.1",
+    "happy-dom": "^20.0.0",
     "hono": "^4.9.7",
     "listhen": "^1.9.0",
     "mongodb": "^6.18.0",
     "ms": "4.0.0-nightly.202508271359",
+    "msw": "^2.11.5",
     "mysql2": "^3.14.4",
-    "next": "^15.5.2",
+    "next": "^15.5.4",
     "oauth2-mock-server": "^7.2.1",
     "pg": "^8.16.3",
     "prisma": "^5.22.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "react-native": "~0.80.2",
     "solid-js": "^1.9.8",
     "tarn": "^3.0.2",
     "tedious": "^18.6.1",
+    "tsdown": "catalog:",
     "type-fest": "^4.41.0",
     "typescript": "catalog:",
-    "unbuild": "catalog:",
     "vue": "^3.5.18"
   },
   "files": [

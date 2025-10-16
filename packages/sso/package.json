@@ -1,8 +1,9 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.4.0-beta.3",
-  "main": "dist/index.cjs",
+  "version": "1.4.0-beta.11",
+  "type": "module",
+  "main": "dist/index.js",
   "license": "MIT",
   "keywords": [
     "sso",
@@ -19,23 +20,23 @@
   "publishConfig": {
     "access": "public"
   },
-  "module": "dist/index.mjs",
+  "module": "dist/index.js",
   "description": "SSO plugin for Better Auth",
   "scripts": {
     "test": "vitest",
-    "build": "unbuild",
-    "dev": "unbuild --watch",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
   },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
+      "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./client": {
       "types": "./dist/client.d.ts",
-      "import": "./dist/client.mjs",
+      "import": "./dist/client.js",
       "require": "./dist/client.cjs"
     }
   },
@@ -64,7 +65,7 @@
     "better-call": "catalog:",
     "body-parser": "^2.2.0",
     "express": "^5.1.0",
-    "unbuild": "catalog:"
+    "tsdown": "catalog:"
   },
   "peerDependencies": {
     "better-auth": "workspace:*"

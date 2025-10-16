@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "../types";
 import type { BetterAuthPlugin } from "../types";
-import { createAuthMiddleware } from "../api";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { parseSetCookieHeader } from "../cookies";
 import type { RequestEvent } from "@sveltejs/kit";
 

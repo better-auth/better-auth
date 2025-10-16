@@ -1,42 +1,27 @@
 import { defu } from "defu";
 import { hashPassword, verifyPassword } from "./crypto/password";
-import {
-	type BetterAuthDbSchema,
-	createInternalAdapter,
-	getAuthTables,
-	getMigrations,
-} from "./db";
+import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
 import type { Entries } from "type-fest";
 import { getAdapter } from "./db/utils";
-import type {
-	Adapter,
-	BetterAuthOptions,
-	BetterAuthPlugin,
-	Models,
-	SecondaryStorage,
-	Session,
-	User,
-} from "./types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { DEFAULT_SECRET } from "./utils/constants";
+import { createCookieGetter, getCookies } from "./cookies";
+import { createLogger } from "@better-auth/core/env";
 import {
-	type BetterAuthCookies,
-	createCookieGetter,
-	getCookies,
-} from "./cookies";
-import { createLogger } from "./utils/logger";
-import { type SocialProviders, socialProviders } from "./social-providers";
-import type { OAuthProvider } from "./oauth2";
+	type SocialProviders,
+	socialProviders,
+} from "@better-auth/core/social-providers";
+import type { OAuthProvider } from "@better-auth/core/oauth2";
 import { generateId } from "./utils";
-import { env, isProduction } from "./utils/env";
+import { env, isProduction } from "@better-auth/core/env";
 import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
-import type { LiteralUnion } from "./types/helper";
-import { BetterAuthError } from "./error";
-import { createTelemetry } from "./telemetry";
-import type { TelemetryEvent } from "./telemetry/types";
+import { BetterAuthError } from "@better-auth/core/error";
+import { createTelemetry } from "@better-auth/telemetry";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
 import { isPromise } from "./utils/is-promise";
+import type { AuthContext } from "@better-auth/core";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -95,8 +80,8 @@ export const init = async (options: BetterAuthOptions) => {
 		.filter((x) => x !== null);
 
 	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
-		if (typeof options.advanced?.generateId === "function") {
-			return options.advanced.generateId({ model, size });
+		if (typeof (options.advanced as any)?.generateId === "function") {
+			return (options.advanced as any).generateId({ model, size });
 		}
 		if (typeof options?.advanced?.database?.generateId === "function") {
 			return options.advanced.database.generateId({ model, size });
@@ -186,68 +171,6 @@ export const init = async (options: BetterAuthOptions) => {
 		({ context } = initOrPromise);
 	}
 	return context;
-};
-
-export type AuthContext = {
-	options: BetterAuthOptions;
-	appName: string;
-	baseURL: string;
-	trustedOrigins: string[];
-	/**
-	 * New session that will be set after the request
-	 * meaning: there is a `set-cookie` header that will set
-	 * the session cookie. This is the fetched session. And it's set
-	 * by `setNewSession` method.
-	 */
-	newSession: {
-		session: Session & Record<string, any>;
-		user: User & Record<string, any>;
-	} | null;
-	session: {
-		session: Session & Record<string, any>;
-		user: User & Record<string, any>;
-	} | null;
-	setNewSession: (
-		session: {
-			session: Session & Record<string, any>;
-			user: User & Record<string, any>;
-		} | null,
-	) => void;
-	socialProviders: OAuthProvider[];
-	authCookies: BetterAuthCookies;
-	logger: ReturnType<typeof createLogger>;
-	rateLimit: {
-		enabled: boolean;
-		window: number;
-		max: number;
-		storage: "memory" | "database" | "secondary-storage";
-	} & BetterAuthOptions["rateLimit"];
-	adapter: Adapter;
-	internalAdapter: ReturnType<typeof createInternalAdapter>;
-	createAuthCookie: ReturnType<typeof createCookieGetter>;
-	secret: string;
-	sessionConfig: {
-		updateAge: number;
-		expiresIn: number;
-		freshAge: number;
-	};
-	generateId: (options: {
-		model: LiteralUnion<Models, string>;
-		size?: number;
-	}) => string | false;
-	secondaryStorage: SecondaryStorage | undefined;
-	password: {
-		hash: (password: string) => Promise<string>;
-		verify: (data: { password: string; hash: string }) => Promise<boolean>;
-		config: {
-			minPasswordLength: number;
-			maxPasswordLength: number;
-		};
-		checkPassword: typeof checkPassword;
-	};
-	tables: BetterAuthDbSchema;
-	runMigrations: () => Promise<void>;
-	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
 };
 
 async function runPluginInit(ctx: AuthContext) {

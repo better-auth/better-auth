@@ -1,13 +1,14 @@
 import * as z from "zod";
-import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
+import { APIError, getSessionFromCtx } from "../../../api";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import { getDate } from "../../../utils/date";
-import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME } from "..";
+import type { AuthContext } from "@better-auth/core";
 export function updateApiKey({
 	opts,
 	schema,
@@ -25,51 +26,81 @@ export function updateApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				keyId: z.string().describe("The id of the Api Key"),
+				keyId: z.string().meta({
+					description: "The id of the Api Key",
+				}),
 				userId: z.coerce
 					.string()
-					.describe(
-						"The id of the user which the api key belongs to. server-only. Eg: ",
-					)
+					.meta({
+						description:
+							'The id of the user which the api key belongs to. server-only. Eg: "some-user-id"',
+					})
 					.optional(),
-				name: z.string().describe("The name of the key").optional(),
+				name: z
+					.string()
+					.meta({
+						description: "The name of the key",
+					})
+					.optional(),
 				enabled: z
 					.boolean()
-					.describe("Whether the Api Key is enabled or not")
+					.meta({
+						description: "Whether the Api Key is enabled or not",
+					})
 					.optional(),
 				remaining: z
 					.number()
-					.describe("The number of remaining requests")
+					.meta({
+						description: "The number of remaining requests",
+					})
 					.min(1)
 					.optional(),
-				refillAmount: z.number().describe("The refill amount").optional(),
-				refillInterval: z.number().describe("The refill interval").optional(),
+				refillAmount: z
+					.number()
+					.meta({
+						description: "The refill amount",
+					})
+					.optional(),
+				refillInterval: z
+					.number()
+					.meta({
+						description: "The refill interval",
+					})
+					.optional(),
 				metadata: z.any().optional(),
 				expiresIn: z
 					.number()
-					.describe("Expiration time of the Api Key in seconds")
+					.meta({
+						description: "Expiration time of the Api Key in seconds",
+					})
 					.min(1)
 					.optional()
 					.nullable(),
 				rateLimitEnabled: z
 					.boolean()
-					.describe("Whether the key has rate limiting enabled.")
+					.meta({
+						description: "Whether the key has rate limiting enabled.",
+					})
 					.optional(),
 				rateLimitTimeWindow: z
 					.number()
-					.describe(
-						"The duration in milliseconds where each request is counted. server-only. Eg: 1000",
-					)
+					.meta({
+						description:
+							"The duration in milliseconds where each request is counted. server-only. Eg: 1000",
+					})
 					.optional(),
 				rateLimitMax: z
 					.number()
-					.describe(
-						"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
-					)
+					.meta({
+						description:
+							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
+					})
 					.optional(),
 				permissions: z
 					.record(z.string(), z.array(z.string()))
-					.describe("Update the permissions on the API Key. server-only.")
+					.meta({
+						description: "Update the permissions on the API Key. server-only.",
+					})
 					.optional()
 					.nullable(),
 			}),
@@ -113,7 +144,7 @@ export function updateApiKey({
 												type: "number",
 												nullable: true,
 												description:
-													"The interval in which the `remaining` count is refilled by day. Example: 1 // every day",
+													"The interval in milliseconds between refills of the `remaining` count. Example: 3600000 // refill every hour (3600000ms = 1h)",
 											},
 											refillAmount: {
 												type: "number",
@@ -227,10 +258,19 @@ export function updateApiKey({
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
-			const authRequired = (ctx.request || ctx.headers) && !ctx.body.userId;
+			const authRequired = ctx.request || ctx.headers;
 			const user =
-				session?.user ?? (authRequired ? null : { id: ctx.body.userId });
+				authRequired && !session
+					? null
+					: session?.user || { id: ctx.body.userId };
+
 			if (!user?.id) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
+			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.UNAUTHORIZED_SESSION,
 				});
@@ -374,7 +414,6 @@ export function updateApiKey({
 						},
 					],
 					update: {
-						lastRequest: new Date(),
 						remaining: apiKey.remaining === null ? null : apiKey.remaining - 1,
 						...newValues,
 					},

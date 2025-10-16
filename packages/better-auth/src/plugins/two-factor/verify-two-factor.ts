@@ -8,8 +8,8 @@ import { setSessionCookie } from "../../cookies";
 import { getSessionFromCtx } from "../../api";
 import type { UserWithTwoFactor } from "./types";
 import { createHMAC } from "@better-auth/utils/hmac";
-import type { GenericEndpointContext } from "../../types";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 	const session = await getSessionFromCtx(ctx);
@@ -47,7 +47,6 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			valid: async (ctx: GenericEndpointContext) => {
 				const session = await ctx.context.internalAdapter.createSession(
 					verificationToken.value,
-					ctx,
 					!!dontRememberMe,
 				);
 				if (!session) {

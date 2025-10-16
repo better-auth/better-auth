@@ -1,13 +1,13 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../api/call";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { originCheck } from "../../api";
 import { defaultKeyHasher } from "./utils";
-import type { GenericEndpointContext } from "../../types";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 interface MagicLinkopts {
 	/**
@@ -107,27 +107,35 @@ export const magicLink = (options: MagicLinkopts) => {
 					body: z.object({
 						email: z
 							.string()
-							.describe("Email address to send the magic link")
+							.meta({
+								description: "Email address to send the magic link",
+							})
 							.email(),
 						name: z
 							.string()
-							.describe(
-								"User display name. Only used if the user is registering for the first time. Eg: ",
-							)
+							.meta({
+								description:
+									'User display name. Only used if the user is registering for the first time. Eg: "my-name"',
+							})
 							.optional(),
 						callbackURL: z
 							.string()
-							.describe("URL to redirect after magic link verification")
+							.meta({
+								description: "URL to redirect after magic link verification",
+							})
 							.optional(),
 						newUserCallbackURL: z
 							.string()
-							.describe(
-								"URL to redirect after new user signup. Only used if the user is registering for the first time.",
-							)
+							.meta({
+								description:
+									"URL to redirect after new user signup. Only used if the user is registering for the first time.",
+							})
 							.optional(),
 						errorCallbackURL: z
 							.string()
-							.describe("URL to redirect after error.")
+							.meta({
+								description: "URL to redirect after error.",
+							})
 							.optional(),
 					}),
 					metadata: {
@@ -171,16 +179,11 @@ export const magicLink = (options: MagicLinkopts) => {
 						? await opts.generateToken(email)
 						: generateRandomString(32, "a-z", "A-Z");
 					const storedToken = await storeToken(ctx, verificationToken);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							identifier: storedToken,
-							value: JSON.stringify({ email, name: ctx.body.name }),
-							expiresAt: new Date(
-								Date.now() + (opts.expiresIn || 60 * 5) * 1000,
-							),
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: storedToken,
+						value: JSON.stringify({ email, name: ctx.body.name }),
+						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
+					});
 					const realBaseURL = new URL(ctx.context.baseURL);
 					const pathname =
 						realBaseURL.pathname === "/" ? "" : realBaseURL.pathname;
@@ -233,22 +236,28 @@ export const magicLink = (options: MagicLinkopts) => {
 				{
 					method: "GET",
 					query: z.object({
-						token: z.string().describe("Verification token"),
+						token: z.string().meta({
+							description: "Verification token",
+						}),
 						callbackURL: z
 							.string()
-							.describe(
-								"URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: ",
-							)
+							.meta({
+								description:
+									'URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: "/dashboard"',
+							})
 							.optional(),
 						errorCallbackURL: z
 							.string()
-							.describe("URL to redirect after error.")
+							.meta({
+								description: "URL to redirect after error.",
+							})
 							.optional(),
 						newUserCallbackURL: z
 							.string()
-							.describe(
-								"URL to redirect after new user signup. Only used if the user is registering for the first time.",
-							)
+							.meta({
+								description:
+									"URL to redirect after new user signup. Only used if the user is registering for the first time.",
+							})
 							.optional(),
 					}),
 					use: [
@@ -351,14 +360,11 @@ export const magicLink = (options: MagicLinkopts) => {
 
 					if (!user) {
 						if (!opts.disableSignUp) {
-							const newUser = await ctx.context.internalAdapter.createUser(
-								{
-									email: email,
-									emailVerified: true,
-									name: name || "",
-								},
-								ctx,
-							);
+							const newUser = await ctx.context.internalAdapter.createUser({
+								email: email,
+								emailVerified: true,
+								name: name || "",
+							});
 							isNewUser = true;
 							user = newUser;
 							if (!user) {
@@ -374,18 +380,13 @@ export const magicLink = (options: MagicLinkopts) => {
 					}
 
 					if (!user.emailVerified) {
-						await ctx.context.internalAdapter.updateUser(
-							user.id,
-							{
-								emailVerified: true,
-							},
-							ctx,
-						);
+						await ctx.context.internalAdapter.updateUser(user.id, {
+							emailVerified: true,
+						});
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx,
 					);
 
 					if (!session) {
