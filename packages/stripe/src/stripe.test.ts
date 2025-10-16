@@ -9,6 +9,7 @@ import { stripe } from ".";
 import { stripeClient } from "./client";
 import type { StripeOptions, Subscription } from "./types";
 import { expect, describe, it, beforeEach } from "vitest";
+import { getTestInstanceMemory } from "better-auth/test";
 
 describe("stripe", async () => {
 	const mockStripe = {
@@ -83,30 +84,28 @@ describe("stripe", async () => {
 			],
 		},
 	} satisfies StripeOptions;
-	const auth = betterAuth({
-		database: memory,
-		baseURL: "http://localhost:3000",
-		// database: new Database(":memory:"),
-		emailAndPassword: {
-			enabled: true,
+
+	const { auth, client: authClient } = await getTestInstanceMemory(
+		{
+			database: memory,
+			baseURL: "http://localhost:3000",
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [stripe(stripeOptions)],
 		},
-		plugins: [stripe(stripeOptions)],
-	});
-	const ctx = await auth.$context;
-	const authClient = createAuthClient({
-		baseURL: "http://localhost:3000",
-		plugins: [
-			bearer(),
-			stripeClient({
-				subscription: true,
-			}),
-		],
-		fetchOptions: {
-			customFetchImpl: async (url, init) => {
-				return auth.handler(new Request(url, init));
+		{
+			clientOptions: {
+				plugins: [
+					bearer(),
+					stripeClient({
+						subscription: true,
+					}),
+				],
 			},
 		},
-	});
+	);
+	const ctx = await auth.$context;
 
 	const testUser = {
 		email: "test@email.com",
