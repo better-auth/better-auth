@@ -14,6 +14,7 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
 > & {
+	path: string;
 	asResponse?: boolean;
 	context: AuthContext & {
 		logger: AuthContext["logger"];
