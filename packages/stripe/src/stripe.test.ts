@@ -1989,5 +1989,64 @@ describe("stripe", async () => {
 			const data = await response.json();
 			expect(data).toEqual({ success: true });
 		});
+
+		it("should call constructEventAsync with exactly 3 required parameters", async () => {
+			const mockEvent = {
+				type: "customer.subscription.created",
+				data: {
+					object: {
+						id: "sub_test_params",
+						customer: "cus_test_params",
+						status: "active",
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret_params",
+			};
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptions)],
+			});
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": "test_signature_params",
+					},
+					body: JSON.stringify(mockEvent),
+				},
+			);
+
+			await testAuth.handler(mockRequest);
+
+			// Verify that constructEventAsync is called with exactly 3 required parameters
+			// (payload, signature, secret) and no optional parameters
+			expect(stripeForTest.webhooks.constructEventAsync).toHaveBeenCalledWith(
+				expect.any(String), // payload
+				"test_signature_params", // signature
+				"test_secret_params", // secret
+			);
+
+			// Verify it was called exactly once
+			expect(stripeForTest.webhooks.constructEventAsync).toHaveBeenCalledTimes(
+				1,
+			);
+		});
 	});
 });
