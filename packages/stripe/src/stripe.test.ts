@@ -2048,5 +2048,91 @@ describe("stripe", async () => {
 				1,
 			);
 		});
+
+		it("should support Stripe v18 with sync constructEvent method", async () => {
+			const mockEvent = {
+				type: "customer.subscription.updated",
+				data: {
+					object: {
+						id: "sub_test_v18",
+						customer: "cus_test_v18",
+						status: "active",
+						items: {
+							data: [
+								{
+									price: { id: process.env.STRIPE_PRICE_ID_1 },
+									quantity: 1,
+									current_period_start: Math.floor(Date.now() / 1000),
+									current_period_end:
+										Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+								},
+							],
+						},
+						current_period_start: Math.floor(Date.now() / 1000),
+						current_period_end:
+							Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+					},
+				},
+			};
+
+			// Simulate Stripe v18 - only has sync constructEvent, no constructEventAsync
+			const stripeV18 = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEvent: vi.fn().mockReturnValue(mockEvent),
+					// v18 doesn't have constructEventAsync
+					constructEventAsync: undefined,
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeV18 as unknown as Stripe,
+				stripeWebhookSecret: "test_secret_v18",
+			};
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptions)],
+			});
+
+			const { id: subId } = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_test_v18",
+					stripeSubscriptionId: "sub_test_v18",
+					status: "incomplete",
+					plan: "starter",
+				},
+			});
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": "test_signature_v18",
+					},
+					body: JSON.stringify(mockEvent),
+				},
+			);
+
+			const response = await testAuth.handler(mockRequest);
+			expect(response.status).toBe(200);
+
+			// Verify that constructEvent (sync) was called instead of constructEventAsync
+			expect(stripeV18.webhooks.constructEvent).toHaveBeenCalledWith(
+				expect.any(String),
+				"test_signature_v18",
+				"test_secret_v18",
+			);
+			expect(stripeV18.webhooks.constructEvent).toHaveBeenCalledTimes(1);
+
+			const data = await response.json();
+			expect(data).toEqual({ success: true });
+		});
 	});
 });

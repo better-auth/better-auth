@@ -50,7 +50,7 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "stripe": "^19"
+    "stripe": "^18 || ^19"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
