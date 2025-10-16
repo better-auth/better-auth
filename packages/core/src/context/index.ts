@@ -4,7 +4,7 @@ export {
 	runWithTransaction,
 } from "./transaction";
 export {
-	getEndpointContext,
+	getCurrentAuthContext,
 	runWithEndpointContext,
 	type AuthEndpointContext,
 } from "./endpoint-context";
