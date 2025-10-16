@@ -29,6 +29,7 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.before;
 			if (toRun) {
+				// @ts-expect-error context type mismatch
 				const result = await toRun(actualData as any, context);
 				if (result === false) {
 					return null;
@@ -58,6 +59,7 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.after;
 			if (toRun) {
+				// @ts-expect-error context type mismatch
 				await toRun(created as any, context);
 			}
 		}
@@ -80,6 +82,7 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.before;
 			if (toRun) {
+				// @ts-expect-error context type mismatch
 				const result = await toRun(data as any, context);
 				if (result === false) {
 					return null;
@@ -105,6 +108,7 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.after;
 			if (toRun) {
+				// @ts-expect-error context type mismatch
 				await toRun(updated as any, context);
 			}
 		}
@@ -126,6 +130,7 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.before;
 			if (toRun) {
+				// @ts-expect-error context type mismatch
 				const result = await toRun(data as any, context);
 				if (result === false) {
 					return null;
@@ -151,6 +156,7 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.after;
 			if (toRun) {
+				// @ts-expect-error context type mismatch
 				await toRun(updated as any, context);
 			}
 		}
@@ -184,6 +190,7 @@ export function getWithHooks(
 			for (const hook of hooks || []) {
 				const toRun = hook[model]?.delete?.before;
 				if (toRun) {
+					// @ts-expect-error context type mismatch
 					const result = await toRun(entityToDelete as any, context);
 					if (result === false) {
 						return null;
@@ -208,6 +215,7 @@ export function getWithHooks(
 			for (const hook of hooks || []) {
 				const toRun = hook[model]?.delete?.after;
 				if (toRun) {
+					// @ts-expect-error context type mismatch
 					await toRun(entityToDelete as any, context);
 				}
 			}
@@ -240,6 +248,7 @@ export function getWithHooks(
 			for (const hook of hooks || []) {
 				const toRun = hook[model]?.delete?.before;
 				if (toRun) {
+					// @ts-expect-error context type mismatch
 					const result = await toRun(entity as any, context);
 					if (result === false) {
 						return null;
@@ -264,6 +273,7 @@ export function getWithHooks(
 			for (const hook of hooks || []) {
 				const toRun = hook[model]?.delete?.after;
 				if (toRun) {
+					// @ts-expect-error context type mismatch
 					await toRun(entity as any, context);
 				}
 			}
