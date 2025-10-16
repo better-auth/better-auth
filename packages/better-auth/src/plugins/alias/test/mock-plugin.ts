@@ -84,7 +84,7 @@ export function createMockClientPlugin<ID extends LiteralString>(id: ID) {
 				signal: "$sessionSignal",
 			},
 			{
-				matcher: (path) => path === "/customer/portal",
+				matcher: (path) => path === "/checkout",
 				signal: "$test",
 			},
 		],

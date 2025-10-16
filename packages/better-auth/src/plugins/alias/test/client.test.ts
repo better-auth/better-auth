@@ -316,7 +316,7 @@ describe("aliasClient plugin", () => {
 
 		// recall
 		returnNull = true;
-		await client.polar.customer.portal();
+		await client.polar.checkout({ amount: 3 });
 		await vi.advanceTimersByTimeAsync(10);
 		expect(res()).toMatchObject({
 			data: null,
