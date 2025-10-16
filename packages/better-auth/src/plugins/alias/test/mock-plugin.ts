@@ -1,4 +1,4 @@
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import type {
 	BetterAuthClientPlugin,
 	BetterAuthPlugin,

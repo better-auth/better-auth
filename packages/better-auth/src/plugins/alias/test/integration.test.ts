@@ -9,7 +9,7 @@ import type {
 	BetterAuthClientPlugin,
 	BetterAuthPlugin,
 } from "@better-auth/core";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import z from "zod/v4";
 
 describe("Alias Plugin", async () => {

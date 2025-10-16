@@ -281,6 +281,38 @@ describe("aliasClient plugin", () => {
 		expect(calledURL?.toString()).toEqual(
 			"http://localhost:3000/api/auth/polar/customer/portal",
 		);
+	});
+
+	it("", async () => {
+		let returnNull = false;
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: async () => {
+					if (returnNull) {
+						return new Response(JSON.stringify(null));
+					}
+					return new Response(
+						JSON.stringify({
+							success: true,
+						}),
+					);
+				},
+			},
+			baseURL: "http://localhost:3000",
+			plugins: [
+				aliasClient("/polar", createMockClientPlugin("polar"), {
+					// unstable_prefixAtoms: true,
+				}),
+			],
+		});
+		const res = client.useQueryAtomPolar();
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(res()).toMatchObject({
+			data: { success: true },
+			error: null,
+			isPending: false,
+		});
 
 		// recall
 		returnNull = true;
