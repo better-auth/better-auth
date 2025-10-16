@@ -290,9 +290,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				async (ctx) => {
 					const { session, valid } = await verifyTwoFactor(ctx);
 					const user = session.user as UserWithTwoFactor;
-					const twoFactor = await ctx.context.adapter.findOne<
-						TwoFactorTable & { id: string }
-					>({
+					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,
 						where: [
 							{
