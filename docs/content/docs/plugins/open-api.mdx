@@ -74,7 +74,26 @@ app.get("/docs", Scalar({
 }));
 ```
 
+### Using a different base URL for OpenAPI reference
+
+If your authentication backend is hosted on a different domain or port than your frontend, you can specify a different `baseUrl` for the OpenAPI reference. This ensures that the API requests made from the OpenAPI Scalar UI are directed to the correct server:
+
+```ts
+import { betterAuth } from "better-auth"
+import { openAPI } from "better-auth/plugins"
+
+export const auth = betterAuth({
+  plugins: [
+    openAPI({
+      baseUrl: "http://localhost:3001" // Your backend URL
+    })
+  ]
+})
+```
+
 ## Configuration
+
+`baseUrl` - The base URL for the OpenAPI documentation server. This is useful when your auth backend is on a different domain or port than your frontend. If not provided, it will fall back to the `BETTER_AUTH_URL` environment variable or the base URL configured in Better Auth.
 
 `path` - The path where the Open API reference is served. Default is `/api/auth/reference`. You can change it to any path you like, but keep in mind that it will be appended to the base path of your auth server.
 

@@ -101,7 +101,11 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
 					method: "GET",
 				},
 				async (ctx) => {
-					const schema = await generator(ctx.context, ctx.context.options, options);
+					const schema = await generator(
+						ctx.context,
+						ctx.context.options,
+						options,
+					);
 					return ctx.json(schema);
 				},
 			),
@@ -117,7 +121,11 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
 					if (options?.disableDefaultReference) {
 						throw new APIError("NOT_FOUND");
 					}
-					const schema = await generator(ctx.context, ctx.context.options, options);
+					const schema = await generator(
+						ctx.context,
+						ctx.context.options,
+						options,
+					);
 					return new Response(getHTML(schema, options?.theme), {
 						headers: {
 							"Content-Type": "text/html",
