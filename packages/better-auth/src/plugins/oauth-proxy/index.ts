@@ -153,7 +153,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return (
+						return !!(
 							context.path?.startsWith("/callback") ||
 							context.path?.startsWith("/oauth2/callback")
 						);
@@ -224,7 +224,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 				},
 				{
 					matcher(context) {
-						return (
+						return !!(
 							context.path?.startsWith("/sign-in/social") ||
 							context.path?.startsWith("/sign-in/oauth2")
 						);

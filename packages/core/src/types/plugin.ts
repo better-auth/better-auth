@@ -18,14 +18,16 @@ type DeepPartial<T> = T extends Function
 		? { [K in keyof T]?: DeepPartial<T[K]> }
 		: T;
 
-export type HookEndpointContext = EndpointContext<string, any> &
-	Omit<InputContext<string, any>, "method"> & {
-		context: AuthContext & {
-			returned?: unknown;
-			responseHeaders?: Headers;
-		};
-		headers?: Headers | undefined;
+export type HookEndpointContext = Partial<
+	EndpointContext<string, any> & Omit<InputContext<string, any>, "method">
+> & {
+	path: string;
+	context: AuthContext & {
+		returned?: unknown;
+		responseHeaders?: Headers;
 	};
+	headers?: Headers | undefined;
+};
 
 export type BetterAuthPlugin = {
 	id: LiteralString;
