@@ -80,7 +80,7 @@ export function createMockClientPlugin<ID extends LiteralString>(id: ID) {
 		},
 		atomListeners: [
 			{
-				matcher: (path) => path.startsWith("/checkout"),
+				matcher: (path) => path.startsWith("/customer/portal"),
 				signal: "$sessionSignal",
 			},
 			{

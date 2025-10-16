@@ -114,11 +114,6 @@ export function alias<
 				? key
 				: toCamelCase(newPath);
 
-			// const clonedEndpoint = Object.assign(
-			// 	Object.create(Object.getPrototypeOf(endpoint)),
-			// 	endpoint,
-			// );
-			// clonedEndpoint.path = newPath;
 			const clonedEndpoint = cloneEndpoint(endpoint, newPath);
 
 			prefixedEndpoints[newKey] = clonedEndpoint;
@@ -184,7 +179,7 @@ function cloneEndpoint<
 		// Preserve original path
 		originalPath: endpoint.originalPath || endpoint.path,
 		options: endpoint.options,
-	});
+	}) as any as AuthEndpoint;
 }
 
 function resolveNewPath(originalPath: string, cleanPrefix: string) {

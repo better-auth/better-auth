@@ -35,12 +35,14 @@ describe("aliasClient plugin", () => {
 		const secondListener = aliased.atomListeners![1];
 
 		// Test that matchers work with prefixed paths
-		expect(firstListener?.matcher("/paypal/checkout")).toBe(true);
-		expect(firstListener?.matcher("/paypal/checkout/confirm")).toBe(true);
-		expect(firstListener?.matcher("/checkout")).toBe(false);
+		expect(firstListener?.matcher("/paypal/customer/portal")).toBe(true);
+		expect(firstListener?.matcher("/paypal/customer/portal/confirm")).toBe(
+			true,
+		);
+		expect(firstListener?.matcher("/customer/portal")).toBe(false);
 
-		expect(secondListener?.matcher("/paypal/customer/portal")).toBe(true);
-		expect(secondListener?.matcher("/customer/portal")).toBe(false);
+		expect(secondListener?.matcher("/paypal/checkout")).toBe(true);
+		expect(secondListener?.matcher("/checkout")).toBe(false);
 	});
 
 	it("should preserve getActions functionality", () => {
