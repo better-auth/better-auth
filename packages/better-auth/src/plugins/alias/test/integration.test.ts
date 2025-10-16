@@ -277,9 +277,13 @@ describe("Alias Plugin", async () => {
 		});
 
 		it("should preserve $Infer key", async () => {
+			// @ts-expect-error
+			expectTypeOf<typeof auth.$Infer.SomeType>().toEqualTypeOf<never>();
 			expectTypeOf<typeof auth.$Infer.TestSomeType>().toMatchObjectType<{
 				success: true;
 			}>();
+			// @ts-expect-error
+			expectTypeOf<typeof client.$Infer.SomeType>().toEqualTypeOf<never>();
 			expectTypeOf<typeof client.$Infer.TestSomeType>().toMatchObjectType<{
 				success: true;
 			}>();

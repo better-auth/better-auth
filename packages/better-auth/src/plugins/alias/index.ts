@@ -4,6 +4,7 @@ import type { LiteralString } from "../../types/helper";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import type {
 	CamelCasePrefix,
+	MatchesExcluded,
 	NormalizePrefix,
 	TransformEndpointKey,
 } from "./types";
@@ -29,14 +30,13 @@ export type InferAliasedPlugin<
 				? Handler extends (...args: infer Args) => infer Return
 					? ((...args: Args) => Return) & {
 							options: Options;
-							path: OldPath extends `${NormalizePrefix<SpecialEndpoints>}/${infer R}`
-								? OldPath extends `${infer S}/${R}`
-									? `${S}${NormalizePrefix<Prefix>}${NormalizePrefix<R>}`
-									: `${NormalizePrefix<Prefix>}${OldPath}`
-								: `${NormalizePrefix<Prefix>}${OldPath}`;
-							// path: OldPath extends `/sign-in/${infer R}`
-							// 	? `/sign-in${NormalizePrefix<Prefix>}${NormalizePrefix<R>}`
-							// 	: `${NormalizePrefix<Prefix>}${OldPath}`;
+							path: MatchesExcluded<OldPath, O["excludeEndpoints"]> extends true
+								? OldPath
+								: OldPath extends `${NormalizePrefix<SpecialEndpoints>}/${infer R}`
+									? OldPath extends `${infer S}/${R}`
+										? `${S}${NormalizePrefix<Prefix>}${NormalizePrefix<R>}`
+										: `${NormalizePrefix<Prefix>}${OldPath}`
+									: `${NormalizePrefix<Prefix>}${OldPath}`;
 						}
 					: T
 				: T["endpoints"][K];
@@ -66,7 +66,16 @@ export type AliasOptions = {
 	 * @default false
 	 */
 	unstable_prefixEndpointMethods?: boolean;
+	/**
+	 * If `true`, adds a prefix `$Infer` types.
+	 *
+	 * @default false
+	 */
 	prefixTypeInference?: boolean;
+	/**
+	 * Endpoints that should not be prefixed with the alias.
+	 */
+	excludeEndpoints?: string[];
 };
 
 /**
@@ -109,14 +118,16 @@ export function alias<
 
 		for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
 			const originalPath = endpoint.path || `/${key}`;
-			const newPath = resolveNewPath(originalPath, cleanPrefix);
+			const newPath = options?.excludeEndpoints?.includes(originalPath)
+				? originalPath
+				: resolveNewPath(originalPath, cleanPrefix);
 			const newKey = !options?.unstable_prefixEndpointMethods
 				? key
 				: toCamelCase(newPath);
 
 			const clonedEndpoint = cloneEndpoint(endpoint, newPath);
 
-			prefixedEndpoints[newKey] = clonedEndpoint;
+			prefixedEndpoints[newKey] = clonedEndpoint as AuthEndpoint;
 		}
 
 		aliasedPlugin.endpoints = prefixedEndpoints;
@@ -125,7 +136,9 @@ export function alias<
 	if (plugin.middlewares) {
 		aliasedPlugin.middlewares = plugin.middlewares.map((middleware) => ({
 			...middleware,
-			path: `${cleanPrefix}${middleware.path}`,
+			path: options?.excludeEndpoints?.includes(middleware.path)
+				? middleware.path
+				: `${cleanPrefix}${middleware.path}`,
 		}));
 	}
 
@@ -145,7 +158,7 @@ export function alias<
 				...hook,
 				matcher: updateMatcher(hook.matcher),
 			})),
-			after: plugin.hooks.after?.map((hook) => ({
+			after: plugin.hooks?.after?.map((hook) => ({
 				...hook,
 				matcher: updateMatcher(hook.matcher),
 			})),
@@ -170,7 +183,7 @@ export function alias<
 
 function cloneEndpoint<
 	T extends ((...args: any[]) => any) & Record<string, any>,
->(endpoint: T, path: string) {
+>(endpoint: T, path: string): Omit<AuthEndpoint, "wrap"> {
 	const cloned = ((...args: Parameters<T>) => endpoint(...args)) as T &
 		Record<string, any>;
 
@@ -179,7 +192,7 @@ function cloneEndpoint<
 		// Preserve original path
 		originalPath: endpoint.originalPath || endpoint.path,
 		options: endpoint.options,
-	}) as any as AuthEndpoint;
+	});
 }
 
 function resolveNewPath(originalPath: string, cleanPrefix: string) {

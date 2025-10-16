@@ -6,21 +6,28 @@ import type { LiteralString } from "../../types/helper";
 import type { InferAliasedPlugin } from ".";
 import type {
 	CamelCasePrefix,
+	MatchesExcluded,
 	NormalizePrefix,
 	TransformNormalizedPrefix,
 } from "./types";
 import { getBaseURL } from "../../utils/url";
-import { SPECIAL_ENDPOINTS, toCamelCase } from "./utils";
+import { SPECIAL_ENDPOINTS, toCamelCase, type SpecialEndpoints } from "./utils";
 
 type ExtendPathMethods<
 	T extends BetterAuthClientPlugin,
 	P extends string,
+	O extends AliasClientOptions,
 > = T extends {
 	pathMethods: infer U;
 }
 	? {
 			pathMethods: {
-				[K in keyof U as `${P}${K & string}`]: U[K];
+				[K in keyof U as MatchesExcluded<
+					K & string,
+					O["excludeEndpoints"]
+				> extends true
+					? K & string
+					: `${P}${K & string}`]: U[K];
 			};
 		}
 	: {
@@ -47,15 +54,13 @@ type ExtendGetActions<
 				[T in P as CamelCasePrefix<P>]: {
 					[K in keyof Actions & string as K extends
 						| "$Infer"
-						| "signIn"
-						| "signUp"
+						| CamelCasePrefix<SpecialEndpoints>
 						? never
 						: K]: Actions[K];
 				};
 			} & {
-				[T in keyof Actions & string as T extends "signIn" | "signUp"
-					? T
-					: never]: {
+				[T in keyof Actions &
+					string as T extends CamelCasePrefix<SpecialEndpoints> ? T : never]: {
 					[I in CamelCasePrefix<P>]: Actions[T];
 				};
 			} & (Actions extends {
@@ -76,6 +81,7 @@ type ExtendGetActions<
 type ExtendGetAtoms<
 	T extends BetterAuthClientPlugin,
 	P extends string,
+	Options extends AliasClientOptions,
 > = T extends {
 	getAtoms: (fetch: infer F, options: infer O) => infer Atoms;
 }
@@ -85,7 +91,9 @@ type ExtendGetAtoms<
 				options: O,
 			) => {
 				[K in keyof Atoms &
-					string as `${K}${Capitalize<CamelCasePrefix<P>>}`]: Atoms[K];
+					string as Options["unstable_prefixAtoms"] extends true
+					? `${K}${Capitalize<CamelCasePrefix<P>>}`
+					: K]: Atoms[K];
 			};
 		}
 	: {
@@ -119,20 +127,28 @@ export type InferAliasedClientPlugin<
 	"id" | "pathMethods" | "getActions" | "getAtoms" | "$InferServerPlugin"
 > & {
 	id: `${T["id"]}-${TransformNormalizedPrefix<NormalizePrefix<Prefix>>}`;
-} & ExtendPathMethods<T, NormalizePrefix<Prefix>> &
+} & ExtendPathMethods<T, NormalizePrefix<Prefix>, O> &
 	ExtendGetActions<T, NormalizePrefix<Prefix>, O> &
-	ExtendGetAtoms<T, NormalizePrefix<Prefix>> &
+	ExtendGetAtoms<T, NormalizePrefix<Prefix>, O> &
 	ExtendEndpoints<T, NormalizePrefix<Prefix>>;
 
 export type AliasClientOptions = {
 	/**
 	 * Endpoints that should not be prefixed with the alias.
 	 */
-	excludeEndpoints?: string[];
+	excludeEndpoints?: LiteralString[];
 	/**
 	 * If `true`, adds a prefix `$Infer` types.
+	 *
+	 * @default false
 	 */
 	prefixTypeInference?: boolean;
+	/**
+	 * If `true`, adds an prefix to atoms.
+	 *
+	 * @default false
+	 */
+	unstable_prefixAtoms?: boolean;
 };
 
 /**
@@ -177,6 +193,11 @@ export function aliasClient<
 	if (plugin.pathMethods) {
 		const prefixedPathMethods: Record<string, "POST" | "GET"> = {};
 		for (const [path, method] of Object.entries(plugin.pathMethods)) {
+			if (options?.excludeEndpoints?.includes(path)) {
+				prefixedPathMethods[path] = method;
+				continue;
+			}
+
 			prefixedPathMethods[`${cleanPrefix}${path}`] = method;
 		}
 		aliasedPlugin.pathMethods = prefixedPathMethods;
@@ -186,7 +207,7 @@ export function aliasClient<
 	if (plugin.atomListeners) {
 		aliasedPlugin.atomListeners = plugin.atomListeners.map((listener) => ({
 			signal:
-				listener.signal !== "$sessionSignal"
+				listener.signal !== "$sessionSignal" && !!options?.unstable_prefixAtoms
 					? `${listener.signal}${camelCasePrefix.charAt(0).toUpperCase() + camelCasePrefix.slice(1)}`
 					: listener.signal,
 			matcher: (path: string) => {
@@ -266,14 +287,16 @@ export function aliasClient<
 				clientOptions,
 			);
 
-			return Object.fromEntries(
-				Object.entries(originalAtoms).map(([key, value]) => {
-					return [
-						`${key}${camelCasePrefix.charAt(0).toUpperCase() + camelCasePrefix.slice(1)}`,
-						value,
-					];
-				}),
-			);
+			return options?.unstable_prefixAtoms
+				? Object.fromEntries(
+						Object.entries(originalAtoms).map(([key, value]) => {
+							return [
+								`${key}${camelCasePrefix.charAt(0).toUpperCase() + camelCasePrefix.slice(1)}`,
+								value,
+							];
+						}),
+					)
+				: originalAtoms;
 		};
 	}
 
