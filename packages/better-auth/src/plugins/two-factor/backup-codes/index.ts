@@ -1,6 +1,6 @@
 import { generateRandomString } from "../../../crypto/random";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import type {
@@ -423,8 +423,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						ctx.context.secret,
 						opts,
 					);
-
-					await ctx.context.adapter.update({
+					await ctx.context.adapter.updateMany({
 						model: twoFactorTable,
 						update: {
 							backupCodes: backupCodes.encryptedBackupCodes,

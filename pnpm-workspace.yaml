@@ -6,9 +6,9 @@ packages:
 
 catalog:
   '@better-fetch/fetch': 1.1.18
-  better-call: 1.0.19
+  better-call: 1.0.23
   typescript: ^5.9.2
-  unbuild: 3.6.1
+  tsdown: ^0.15.6
   vitest: ^3.2.4
 
 catalogs:

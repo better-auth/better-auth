@@ -2,7 +2,7 @@ import { APIError, getSessionFromCtx } from "../../api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import type { InferOptionSchema, Session, User } from "../../types";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
@@ -12,6 +12,7 @@ import type { EndpointContext } from "better-call";
 import { generateId } from "../../utils/id";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { AuthContext } from "@better-auth/core";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
@@ -72,13 +73,14 @@ const schema = {
 	},
 } satisfies BetterAuthPluginDBSchema;
 
+const ERROR_CODES = defineErrorCodes({
+	FAILED_TO_CREATE_USER: "Failed to create user",
+	COULD_NOT_CREATE_SESSION: "Could not create session",
+	ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY:
+		"Anonymous users cannot sign in again anonymously",
+});
+
 export const anonymous = (options?: AnonymousOptions) => {
-	const ERROR_CODES = {
-		FAILED_TO_CREATE_USER: "Failed to create user",
-		COULD_NOT_CREATE_SESSION: "Could not create session",
-		ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY:
-			"Anonymous users cannot sign in again anonymously",
-	} as const;
 	return {
 		id: "anonymous",
 		endpoints: {
@@ -132,17 +134,14 @@ export const anonymous = (options?: AnonymousOptions) => {
 					const id = generateId();
 					const email = `temp-${id}@${emailDomainName}`;
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
-					const newUser = await ctx.context.internalAdapter.createUser(
-						{
-							email,
-							emailVerified: false,
-							isAnonymous: true,
-							name,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						},
-						ctx,
-					);
+					const newUser = await ctx.context.internalAdapter.createUser({
+						email,
+						emailVerified: false,
+						isAnonymous: true,
+						name,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					});
 					if (!newUser) {
 						throw ctx.error("INTERNAL_SERVER_ERROR", {
 							message: ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -150,7 +149,6 @@ export const anonymous = (options?: AnonymousOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						newUser.id,
-						ctx,
 					);
 					if (!session) {
 						return ctx.json(null, {
@@ -190,7 +188,8 @@ export const anonymous = (options?: AnonymousOptions) => {
 							ctx.path.startsWith("/magic-link/verify") ||
 							ctx.path.startsWith("/email-otp/verify-email") ||
 							ctx.path.startsWith("/one-tap/callback") ||
-							ctx.path.startsWith("/passkey/verify-authentication")
+							ctx.path.startsWith("/passkey/verify-authentication") ||
+							ctx.path.startsWith("/phone-number/verify")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
