@@ -96,9 +96,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				});
 			}
 			/**
-			 * if referenceId is provided, check if the user is authorized to access the subscription.
-			 * If referenceId is the same as the active session user's id, allow access.
+			 * if referenceId is the same as the active session user's id
 			 */
+			const sameReference =
+				ctx.query?.referenceId === session.user.id ||
+				ctx.body?.referenceId === session.user.id;
 			const isAuthorized =
 				ctx.body?.referenceId || ctx.query?.referenceId
 					? (await options.subscription?.authorizeReference?.(
@@ -109,9 +111,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								action,
 							},
 							ctx,
-						)) ||
-						ctx.query?.referenceId === session.user.id ||
-						ctx.body?.referenceId === session.user.id
+						)) || sameReference
 					: true;
 			if (!isAuthorized) {
 				throw new APIError("UNAUTHORIZED", {
