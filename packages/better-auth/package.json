@@ -410,7 +410,9 @@
     "@tanstack/start-server-core": "^1.0.0",
     "drizzle-orm": "^0.30.0",
     "mongodb": "^6.0.0",
+    "mysql2": "^3.0.0",
     "next": "^14.0.0 || ^15.0.0",
+    "pg": "^8.0.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
     "solid-js": "^1.0.0",
@@ -436,7 +438,13 @@
     "mongodb": {
       "optional": true
     },
+    "mysql2": {
+      "optional": true
+    },
     "next": {
+      "optional": true
+    },
+    "pg": {
       "optional": true
     },
     "react": {
