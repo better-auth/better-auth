@@ -1,7 +1,13 @@
 import { type AsyncLocalStorage, getAsyncLocalStorage } from "../async_hooks";
-import type { GenericEndpointContext } from "../types";
+import type { EndpointContext, InputContext } from 'better-call'
+import type { AuthContext } from '../types'
 
-let currentContextAsyncStorage: AsyncLocalStorage<GenericEndpointContext> | null =
+export type AuthEndpointContext = Partial<InputContext<string, any> &
+	EndpointContext<string, any>> & {
+	context: AuthContext
+}
+
+let currentContextAsyncStorage: AsyncLocalStorage<AuthEndpointContext> | null =
 	null;
 
 const ensureAsyncStorage = async () => {
@@ -12,7 +18,7 @@ const ensureAsyncStorage = async () => {
 	return currentContextAsyncStorage;
 };
 
-export async function getEndpointContext(): Promise<GenericEndpointContext> {
+export async function getEndpointContext(): Promise<AuthEndpointContext> {
 	const als = await ensureAsyncStorage();
 	const context = als.getStore();
 	if (!context) {
@@ -24,7 +30,7 @@ export async function getEndpointContext(): Promise<GenericEndpointContext> {
 }
 
 export async function runWithEndpointContext<T>(
-	context: GenericEndpointContext,
+	context: AuthEndpointContext,
 	fn: () => T,
 ): Promise<T> {
 	const als = await ensureAsyncStorage();

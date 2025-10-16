@@ -18,8 +18,8 @@ type DeepPartial<T> = T extends Function
 		? { [K in keyof T]?: DeepPartial<T[K]> }
 		: T;
 
-export type HookEndpointContext = EndpointContext<string, any> &
-	Omit<InputContext<string, any>, "method"> & {
+export type HookEndpointContext = Partial<EndpointContext<string, any> &
+	Omit<InputContext<string, any>, "method">> & {
 		context: AuthContext & {
 			returned?: unknown;
 			responseHeaders?: Headers;
