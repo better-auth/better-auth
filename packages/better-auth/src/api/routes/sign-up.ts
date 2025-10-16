@@ -203,6 +203,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				}
 				const pattern = ctx.context.password.config.pattern;
 				if (pattern && !pattern.test(password)) {
+					ctx.context.logger.error(BASE_ERROR_CODES.PASSWORD_NOT_VALID_PATTERN);
 					throw new APIError("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.PASSWORD_NOT_VALID_PATTERN,
 					});
