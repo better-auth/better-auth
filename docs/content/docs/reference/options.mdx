@@ -194,7 +194,8 @@ export const auth = betterAuth({
 				// Custom password verification
 				return isValid;
 			}
-		}
+		},
+		pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,128}$/
 	},
 })
 ```
@@ -208,6 +209,7 @@ export const auth = betterAuth({
 - `sendResetPassword`: Function to send reset password email
 - `resetPasswordTokenExpiresIn`: Number of seconds the reset password token is valid for (default: `3600` seconds)
 - `password`: Custom password hashing and verification functions
+- `pattern`: Custom regular expression (regex) to enforce password strength rules (default: `null`).
 
 ## `socialProviders`
 
