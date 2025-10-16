@@ -27,10 +27,9 @@ const defuReplaceArrays = createDefu((obj, key, value) => {
 	}
 });
 
-export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
-	endpoints: E,
-	ctx: AuthContext | Promise<AuthContext>,
-) {
+export function toAuthEndpoints<
+	const E extends Record<string, Omit<AuthEndpoint, "wrap">>,
+>(endpoints: E, ctx: AuthContext | Promise<AuthContext>): E {
 	const api: Record<
 		string,
 		((
@@ -98,7 +97,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				internalContext.asResponse = false;
 				internalContext.returnHeaders = true;
 				const result = (await runWithEndpointContext(internalContext, () =>
-					endpoint(internalContext as any),
+					(endpoint as any)(internalContext as any),
 				).catch((e: any) => {
 					if (e instanceof APIError) {
 						/**
@@ -158,7 +157,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 		api[key].path = endpoint.path;
 		api[key].options = endpoint.options;
 	}
-	return api as E;
+	return api as unknown as E;
 }
 
 async function runBeforeHooks(
