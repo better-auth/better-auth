@@ -322,7 +322,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						data: JSON.stringify(validate.updated),
 					});
 
-					// Use the id to update the record
+					// Use the userId to update the record
 					await ctx.context.adapter.update({
 						model: twoFactorTable,
 						update: {
@@ -330,8 +330,8 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						},
 						where: [
 							{
-								field: "id",
-								value: twoFactor.id,
+								field: "userId",
+								value: user.id,
 							},
 						],
 					});
@@ -443,7 +443,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						opts,
 					);
 
-					// Use the id to update the record
+					// Use the userId to update the record
 					await ctx.context.adapter.update({
 						model: twoFactorTable,
 						update: {
@@ -451,8 +451,8 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						},
 						where: [
 							{
-								field: "id",
-								value: twoFactor.id,
+								field: "userId",
+								value: user.id,
 							},
 						],
 					});
