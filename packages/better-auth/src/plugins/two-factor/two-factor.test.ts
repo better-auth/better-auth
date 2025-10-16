@@ -541,23 +541,32 @@ describe("two factor auth API", async () => {
 
 describe("view backup codes", async () => {
 	const sendOTP = vi.fn();
-	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
-		secret: DEFAULT_SECRET,
-		plugins: [
-			twoFactor({
-				otpOptions: {
-					sendOTP({ otp }) {
-						sendOTP(otp);
+	const { auth, signInWithTestUser, testUser, db, customFetchImpl } =
+		await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							sendOTP(otp);
+						},
 					},
-				},
-				skipVerificationOnEnable: true,
-			}),
-		],
-	});
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
 	let { headers } = await signInWithTestUser();
 
 	let session = await auth.api.getSession({ headers });
 	const userId = session?.user.id!;
+
+	const client = createAuthClient({
+		plugins: [twoFactorClient()],
+		fetchOptions: {
+			customFetchImpl,
+			baseURL: "http://localhost:3000/api/auth",
+		},
+	});
 
 	it("should return parsed array of backup codes, not JSON string", async () => {
 		const enableRes = await auth.api.enableTwoFactor({
@@ -612,12 +621,7 @@ describe("view backup codes", async () => {
 		expect(viewResult.backupCodes).toEqual(generateResult.backupCodes);
 	});
 
-	it("should successfully regenerate backup codes multiple times (Issue #5331)", async () => {
-		// This test specifically addresses the Prisma validation error:
-		// "Argument `where` of type TwoFactorWhereUniqueInput needs at least one of `id` arguments"
-		// By generating backup codes multiple times, we ensure the update operation
-		// uses the correct unique identifier (id) instead of userId
-
+	it("should successfully regenerate backup codes multiple times", async () => {
 		// First generation
 		const firstGeneration = await auth.api.generateBackupCodes({
 			body: { password: testUser.password },
@@ -657,11 +661,8 @@ describe("view backup codes", async () => {
 		expect(viewResult.backupCodes).toEqual(thirdGeneration.backupCodes);
 	});
 
-	it("should correctly update backup codes after verification (Issue #5331)", async () => {
-		// This test ensures that verifyBackupCode also uses the correct update method
-		// with id instead of userId, preventing the Prisma validation error
-
-		// Generate fresh backup codes
+	it("should correctly update backup codes after verification", async () => {
+		// Generate fresh backup codes for this test
 		const generation = await auth.api.generateBackupCodes({
 			body: { password: testUser.password },
 			headers,
@@ -669,21 +670,13 @@ describe("view backup codes", async () => {
 		const backupCodes = generation.backupCodes;
 		expect(backupCodes.length).toBe(10);
 
-		// Create a new auth client for this test
-		const testClient = createAuthClient({
-			plugins: [twoFactorClient()],
-			fetchOptions: {
-				baseURL: "http://localhost:3000/api/auth",
-			},
-		});
-
-		// Sign in to get the two-factor cookie
+		// Sign in to get the two-factor cookie (similar to existing test pattern)
 		const verifyHeaders = new Headers();
-		await testClient.signIn.email({
+		await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
-				onSuccess(context: any) {
+				onSuccess(context) {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
@@ -700,11 +693,11 @@ describe("view backup codes", async () => {
 		// Use the first backup code
 		const usedBackupCode = backupCodes[0]!;
 		let sessionToken = "";
-		await testClient.twoFactor.verifyBackupCode({
+		await client.twoFactor.verifyBackupCode({
 			code: usedBackupCode,
 			fetchOptions: {
 				headers: verifyHeaders,
-				onSuccess(context: any) {
+				onSuccess(context) {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
@@ -717,7 +710,6 @@ describe("view backup codes", async () => {
 		expect(sessionToken.length).toBeGreaterThan(0);
 
 		// Verify the used backup code was removed from the database
-		// This update operation should use id instead of userId
 		const updatedCodes = await auth.api.viewBackupCodes({
 			body: { userId },
 		});
