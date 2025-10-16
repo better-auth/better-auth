@@ -637,6 +637,10 @@ export type BetterAuthOptions = {
 			[key: string]: DBFieldAttribute;
 		};
 		/**
+		 * @default false
+		 */
+		storeSessionInJWT?: boolean;
+		/**
 		 * By default if secondary storage is provided
 		 * the session is stored in the secondary storage.
 		 *

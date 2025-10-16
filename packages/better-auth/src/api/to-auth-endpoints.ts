@@ -11,15 +11,16 @@ import { shouldPublishLog } from "@better-auth/core/env";
 import type { AuthContext, HookEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 
-type InternalContext = Partial<InputContext<string, any> &
-	EndpointContext<string, any>> & {
-		asResponse?: boolean;
-		context: AuthContext & {
-			logger: AuthContext["logger"];
-			returned?: unknown;
-			responseHeaders?: Headers;
-		};
+type InternalContext = Partial<
+	InputContext<string, any> & EndpointContext<string, any>
+> & {
+	asResponse?: boolean;
+	context: AuthContext & {
+		logger: AuthContext["logger"];
+		returned?: unknown;
+		responseHeaders?: Headers;
 	};
+};
 
 const defuReplaceArrays = createDefu((obj, key, value) => {
 	if (Array.isArray(obj[key]) && Array.isArray(value)) {
@@ -42,7 +43,11 @@ export function toAuthEndpoints<
 	> = {};
 
 	for (const [key, endpoint] of Object.entries(endpoints)) {
-		api[key] = async (context: Partial<InputContext<string, any> & EndpointContext<string, any>>) => {
+		api[key] = async (
+			context: Partial<
+				InputContext<string, any> & EndpointContext<string, any>
+			>,
+		) => {
 			const authContext = await ctx;
 			let internalContext: InternalContext = {
 				...context,

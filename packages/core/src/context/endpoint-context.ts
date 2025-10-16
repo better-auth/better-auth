@@ -1,11 +1,12 @@
 import { type AsyncLocalStorage, getAsyncLocalStorage } from "../async_hooks";
-import type { EndpointContext, InputContext } from 'better-call'
-import type { AuthContext } from '../types'
+import type { EndpointContext, InputContext } from "better-call";
+import type { AuthContext } from "../types";
 
-export type AuthEndpointContext = Partial<InputContext<string, any> &
-	EndpointContext<string, any>> & {
-	context: AuthContext
-}
+export type AuthEndpointContext = Partial<
+	InputContext<string, any> & EndpointContext<string, any>
+> & {
+	context: AuthContext;
+};
 
 let currentContextAsyncStorage: AsyncLocalStorage<AuthEndpointContext> | null =
 	null;
