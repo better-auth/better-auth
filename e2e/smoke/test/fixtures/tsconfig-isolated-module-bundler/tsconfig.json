@@ -1,10 +1,7 @@
 {
   "compilerOptions": {
     "strict": true,
-    "lib": [
-      "ESNext",
-      "DOM"
-    ],
+    "lib": ["ESNext", "DOM"],
     "module": "ESNext",
     "target": "ESNext",
     "resolveJsonModule": true,
@@ -17,7 +14,5 @@
     "noUnusedParameters": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": [
-    "./src"
-  ]
+  "include": ["./src"]
 }
