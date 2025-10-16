@@ -19,6 +19,15 @@ const ensureAsyncStorage = async () => {
 	return currentContextAsyncStorage;
 };
 
+/**
+ * This is for internal use only. Most users should use `getCurrentAuthContext` instead.
+ *
+ * It is exposed for advanced use cases where you need direct access to the AsyncLocalStorage instance.
+ */
+export async function getCurrentAuthContextAsyncLocalStorage() {
+	return ensureAsyncStorage();
+}
+
 export async function getCurrentAuthContext(): Promise<AuthEndpointContext> {
 	const als = await ensureAsyncStorage();
 	const context = als.getStore();
