@@ -85,7 +85,7 @@ export const auth = betterAuth({
 			return await redis.get(key);
 		},
 		set: async (key, value, ttl) => {
-			// Redis uses seconds, for ms, divide by 1000 (like: ttl * 1000)
+			// TTL in seconds — convert ms with ttl * 1000.
 			if (ttl) await redis.set(key, value, { EX: ttl });
 			// or for ioredis:
 			// if (ttl) await redis.set(key, value, 'EX', ttl)
