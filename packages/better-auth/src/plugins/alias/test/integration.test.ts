@@ -114,14 +114,6 @@ describe("Alias Plugin", async () => {
 		expect(nestedClient.v1.polar.anotherAction("test")).toEqual("result-test");
 	});
 
-	it("should handle atoms correctly", async () => {
-		// TODO:
-	});
-
-	it("should handle rateLimit correctly", async () => {
-		// TODO:
-	});
-
 	it("should wrap getActions to prefix any path-based actions", async () => {
 		const spyFetch = vi.fn(async (req: Request | string | URL) => {
 			return new Response(
@@ -158,6 +150,71 @@ describe("Alias Plugin", async () => {
 		expect(calledURL?.toString()).toEqual(
 			"http://localhost:3000/api/auth/other-plugin",
 		);
+	});
+
+	it("should remove prefix from url for fetchPlugins", async () => {
+		const testPlugin = {
+			id: "test-plugin",
+			endpoints: {
+				test: createAuthEndpoint(
+					"/test",
+					{
+						method: "GET",
+					},
+					async (ctx) => {
+						return {
+							success: true,
+						};
+					},
+				),
+			},
+		} satisfies BetterAuthPlugin;
+
+		const mockHookFn = vi.fn((url: string | URL, fnName?: string) => {
+			expect(url.toString(), fnName).toEqual(
+				"http://localhost:3000/api/auth/test",
+			);
+		});
+		const mockInitFn = vi.fn((url: string, options: any) => {
+			expect(url.toString(), "init").toEqual("/test");
+			return {
+				url,
+				options,
+			};
+		});
+		const testPluginClient = {
+			id: "test-plugin",
+			fetchPlugins: [
+				{
+					id: "fetch-plugin",
+					name: "Fetch plugin",
+					hooks: {
+						onRequest: (ctx) => mockHookFn(ctx.url, "onRequest"),
+						onResponse: (ctx) => mockHookFn(ctx.request.url, "onResponse"),
+						onError: (ctx) => mockHookFn(ctx.request.url, "onError"),
+						onSuccess: (ctx) => mockHookFn(ctx.request.url, "onSuccess"),
+					},
+					init: mockInitFn,
+				},
+			],
+			$InferServerPlugin: {} as typeof testPlugin,
+		} satisfies BetterAuthClientPlugin;
+
+		const { customFetchImpl } = await getTestInstanceMemory({
+			plugins: [alias("/prefix", testPlugin)],
+		});
+
+		const client = await createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			plugins: [aliasClient("/prefix", testPluginClient)],
+		});
+
+		await client.prefix.test();
+		expect(mockInitFn).toHaveBeenCalled();
+		expect(mockHookFn).toHaveBeenCalled();
 	});
 
 	describe("special endpoints", async () => {
