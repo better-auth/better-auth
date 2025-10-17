@@ -251,26 +251,27 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			// Add indexes
 			const indexedFieldsForModel = indexedFields.get(modelName);
 			if (indexedFieldsForModel && indexedFieldsForModel.length > 0) {
-				const indexFieldsWithLength = indexedFieldsForModel.map((fieldName) => {
+				for (const fieldName of indexedFieldsForModel) {
 					const field = Object.entries(fields!).find(
 						([key, attr]) => (attr.fieldName || key) === fieldName,
 					)?.[1];
 
+					let indexField = fieldName;
 					if (provider === "mysql" && field && field.type === "string") {
 						if (
 							field.references?.field === "id" &&
 							options.advanced?.database?.useNumberId
 						) {
-							return `${fieldName}`;
+							indexField = `${fieldName}`;
 						} else {
-							return `${fieldName}(length: 191)`; // length of 191 because String in Prisma is varchar(191)
+							indexField = `${fieldName}(length: 191)`; // length of 191 because String in Prisma is varchar(191)
 						}
 					}
-					return fieldName;
-				});
-				builder
-					.model(modelName)
-					.blockAttribute(`index([${indexFieldsWithLength.join(", ")}])`);
+
+					builder
+						.model(modelName)
+						.blockAttribute(`index([${indexField}])`);
+				}
 			}
 
 			const hasAttribute = builder.findByType("attribute", {
