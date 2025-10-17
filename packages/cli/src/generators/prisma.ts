@@ -252,7 +252,10 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			const indexedFieldsForModel = indexedFields.get(modelName);
 			if (indexedFieldsForModel && indexedFieldsForModel.length > 0) {
 				const indexFieldsWithLength = indexedFieldsForModel.map((fieldName) => {
-					const field = fields![fieldName];
+					const field = Object.entries(fields!).find(
+						([key, attr]) => (attr.fieldName || key) === fieldName,
+					)?.[1];
+
 					if (provider === "mysql" && field && field.type === "string") {
 						if (
 							field.references?.field === "id" &&
