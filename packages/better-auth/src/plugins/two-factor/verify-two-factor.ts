@@ -43,7 +43,6 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			valid: async (ctx: GenericEndpointContext) => {
 				const session = await ctx.context.internalAdapter.createSession(
 					verificationToken.value,
-					ctx,
 					!!dontRememberMe,
 				);
 				if (!session) {
