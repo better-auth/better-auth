@@ -152,7 +152,7 @@ describe("Alias Plugin", async () => {
 		);
 	});
 
-	it("should remove prefix from url for fetchPlugins", async () => {
+	it("should prefix urls in fetchPlugins", async () => {
 		const testPlugin = {
 			id: "test-plugin",
 			endpoints: {
@@ -172,11 +172,11 @@ describe("Alias Plugin", async () => {
 
 		const mockHookFn = vi.fn((url: string | URL, fnName?: string) => {
 			expect(url.toString(), fnName).toEqual(
-				"http://localhost:3000/api/auth/test",
+				"http://localhost:3000/api/auth/prefix/test",
 			);
 		});
 		const mockInitFn = vi.fn((url: string, options: any) => {
-			expect(url.toString(), "init").toEqual("/test");
+			expect(url.toString(), "init").toEqual("/prefix/test");
 			return {
 				url,
 				options,

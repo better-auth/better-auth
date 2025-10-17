@@ -300,40 +300,10 @@ export function aliasClient<
 		};
 	}
 
-	// Update fetchPlugins hooks to handle prefixed paths
 	if (plugin.fetchPlugins) {
 		aliasedPlugin.fetchPlugins = plugin.fetchPlugins.map((fetchPlugin) => ({
 			...fetchPlugin,
 			id: `${fetchPlugin.id}-${cleanPrefix.replace(/\//g, "-")}`,
-			hooks: fetchPlugin.hooks
-				? {
-						...fetchPlugin.hooks,
-						onRequest: fetchPlugin.hooks.onRequest
-							? async (context) => {
-									// Prefix the URL path
-									if (context.url && typeof context.url === "string") {
-										const url = new URL(context.url, "http://localhost");
-										const pathMatch = plugin.pathMethods
-											? Object.keys(plugin.pathMethods).some((p) =>
-													url.pathname.endsWith(p),
-												)
-											: false;
-										if (pathMatch) {
-											const segments = url.pathname.split("/");
-											const authIndex = segments.findIndex((s) => s === "auth");
-											if (authIndex !== -1) {
-												// Insert prefix after /auth/
-												segments.splice(authIndex + 1, 0, cleanPrefix.slice(1));
-												url.pathname = segments.join("/");
-												context.url = url.href.replace("http://localhost", "");
-											}
-										}
-									}
-									return fetchPlugin.hooks!.onRequest!(context);
-								}
-							: undefined,
-					}
-				: undefined,
 		}));
 	}
 
@@ -375,12 +345,12 @@ const resolveURL = (
 	prefix?: string,
 ) => {
 	let url: URL;
-	try {
-		url = new URL(context.url);
-	} catch {
+	if (typeof context.url === "string") {
 		url = new URL(
 			`${context.baseURL?.endsWith("/") ? context.baseURL.slice(0, -1) : context.baseURL}${(context.url.toString().startsWith("/") ? "" : "/") + context.url.toString()}`,
 		);
+	} else {
+		url = new URL(context.url);
 	}
 	const base = new URL(context.baseURL || "");
 	if (!url.pathname.startsWith(base.pathname)) {
