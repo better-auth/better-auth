@@ -217,6 +217,18 @@ export type BetterAuthAdvancedOptions = {
 		 */
 		generateId?: GenerateIdFn | false;
 	};
+	/**
+	 * OAuth configuration
+	 */
+	oauthConfig?: {
+		/**
+		 * Skip state cookie check
+		 *
+		 * ⚠︎ this has security implications and should only be enabled if you know what you are doing.
+		 * @default false
+		 */
+		skipStateCookieCheck?: boolean;
+	};
 };
 
 export type BetterAuthOptions = {
