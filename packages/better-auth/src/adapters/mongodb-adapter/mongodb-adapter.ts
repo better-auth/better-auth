@@ -10,6 +10,7 @@ import type {
 	DBAdapter,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createLogger, type Logger } from "@better-auth/core/env";
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -37,14 +38,83 @@ export interface MongoDBAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean;
+	/**
+	 * By default we convert all IDs to ObjectId instances.
+	 * If you don't want this behavior, set this to `true` and IDs will be saved as strings.
+	 * @default false
+	 */
+	disableObjectIdConversion?: boolean;
 }
 
 export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null;
 
+	const createConvertId =
+		(loggerOptions?: Logger) =>
+		(
+			id: string | ObjectId | ObjectId[] | string[] | null,
+			createIdOnFailure: boolean = false,
+		): ObjectId | string | ObjectId[] | string[] | null => {
+			const logger = createLogger(loggerOptions);
+
+			if (!id) return null;
+
+			const { disableObjectIdConversion } = config || {};
+			if (disableObjectIdConversion) {
+				if (id instanceof ObjectId) return id.toHexString();
+				if (Array.isArray(id))
+					return id.map((x) => {
+						if (x instanceof ObjectId) return x.toHexString();
+						return x;
+					});
+				if (typeof id === "string") return id;
+				return id;
+			}
+
+			const convert = (
+				id: string | ObjectId | ObjectId[] | string[] | null,
+			): ObjectId | string | ObjectId[] | string[] | null => {
+				if (!id) return null;
+				if (id instanceof ObjectId) {
+					return id;
+				}
+				if (typeof id === "string") {
+					try {
+						return new ObjectId(id);
+					} catch (e) {
+						if (createIdOnFailure) {
+							return new ObjectId();
+						}
+						logger.error(
+							`[Mongo Adapter] Failed to wrap the id into an ObjectID instance. ID given:`,
+							id,
+							e,
+						);
+						throw new Error("[Adapter] Invalid ID value", {
+							cause: e,
+						});
+					}
+				}
+				if (Array.isArray(id)) {
+					return id.map((x: ObjectId | string) => convert(x)) as
+						| ObjectId[]
+						| string[];
+				}
+				if (createIdOnFailure) {
+					return new ObjectId();
+				}
+				logger.error(`[Mongo Adapter] Invalid id type provided. ID given:`, id);
+				throw new Error("[Adapter] Invalid ID value");
+			};
+
+			return convert(id);
+		};
+
 	const createCustomAdapter =
 		(db: Db, session?: ClientSession): AdapterFactoryCustomizeAdapterCreator =>
-		({ options, getFieldName, schema, getDefaultModelName }) => {
+		({ getFieldName, schema, getDefaultModelName }) => {
+			const convertId = createConvertId({ disabled: true });
+
 			function serializeID({
 				field,
 				value,
@@ -60,32 +130,8 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					field === "_id" ||
 					schema[model]!.fields[field]?.references?.field === "id"
 				) {
-					if (typeof value !== "string") {
-						if (value instanceof ObjectId) {
-							return value;
-						}
-						if (Array.isArray(value)) {
-							return value.map((v) => {
-								if (typeof v === "string") {
-									try {
-										return new ObjectId(v);
-									} catch (e) {
-										return v;
-									}
-								}
-								if (v instanceof ObjectId) {
-									return v;
-								}
-								throw new Error("Invalid id value");
-							});
-						}
-						throw new Error("Invalid id value");
-					}
-					try {
-						return new ObjectId(value);
-					} catch (e) {
-						return value;
-					}
+					const result = convertId(value);
+					return result;
 				}
 				return value;
 			}
@@ -200,7 +246,14 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return insertedData as any;
 				},
 				async findOne({ model, where, select }) {
-					const clause = convertWhereClause({ where, model });
+					let clause: any;
+					try {
+						clause = convertWhereClause({ where, model });
+					} catch (error) {
+						// an invalid `id` value was provided
+						// given this you couldn't possibly find a record
+						return null;
+					}
 					const projection = select
 						? Object.fromEntries(
 								select.map((field) => [getFieldName({ field, model }), 1]),
@@ -213,7 +266,14 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return res as any;
 				},
 				async findMany({ model, where, limit, offset, sortBy }) {
-					const clause = where ? convertWhereClause({ where, model }) : {};
+					let clause: any;
+					try {
+						clause = where ? convertWhereClause({ where, model }) : {};
+					} catch (error) {
+						// an invalid `id` value was provided
+						// given this you couldn't possibly find any records
+						return [];
+					}
 					const cursor = db.collection(model).find(clause, { session });
 					if (limit) cursor.limit(limit);
 					if (offset) cursor.skip(offset);
@@ -226,14 +286,28 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return res as any;
 				},
 				async count({ model, where }) {
-					const clause = where ? convertWhereClause({ where, model }) : {};
+					let clause: any;
+					try {
+						clause = where ? convertWhereClause({ where, model }) : {};
+					} catch (error) {
+						// an invalid `id` value was provided
+						// given this you couldn't possibly count any records
+						return 0;
+					}
 					const res = await db
 						.collection(model)
 						.countDocuments(clause, { session });
 					return res;
 				},
 				async update({ model, where, update: values }) {
-					const clause = convertWhereClause({ where, model });
+					let clause: any;
+					try {
+						clause = convertWhereClause({ where, model });
+					} catch (error) {
+						// an invalid `id` value was provided
+						// given this you couldn't possibly update any records
+						return null;
+					}
 
 					const res = await db.collection(model).findOneAndUpdate(
 						clause,
@@ -247,7 +321,14 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return res as any;
 				},
 				async updateMany({ model, where, update: values }) {
-					const clause = convertWhereClause({ where, model });
+					let clause: any;
+					try {
+						clause = convertWhereClause({ where, model });
+					} catch (error) {
+						// an invalid `id` value was provided
+						// given this you couldn't possibly update any records
+						return 0;
+					}
 
 					const res = await db.collection(model).updateMany(
 						clause,
@@ -259,11 +340,25 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return res.modifiedCount;
 				},
 				async delete({ model, where }) {
-					const clause = convertWhereClause({ where, model });
+					let clause: any;
+					try {
+						clause = convertWhereClause({ where, model });
+					} catch (error) {
+						// an invalid `id` value was provided
+						// given this you couldn't possibly delete any records
+						return;
+					}
 					await db.collection(model).deleteOne(clause, { session });
 				},
 				async deleteMany({ model, where }) {
-					const clause = convertWhereClause({ where, model });
+					let clause: any;
+					try {
+						clause = convertWhereClause({ where, model });
+					} catch (error) {
+						// an invalid `id` value was provided
+						// given this you couldn't possibly delete any records
+						return 0;
+					}
 					const res = await db
 						.collection(model)
 						.deleteMany(clause, { session });
@@ -328,39 +423,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				options,
 			}) {
 				if (field === "_id" || fieldAttributes.references?.field === "id") {
-					if (action === "update") {
-						if (typeof data === "string") {
-							try {
-								return new ObjectId(data);
-							} catch (error) {
-								return data;
-							}
-						}
-						return data;
-					}
-					if (Array.isArray(data)) {
-						return data.map((v) => {
-							if (typeof v === "string") {
-								try {
-									return new ObjectId(v);
-								} catch (error) {
-									return v;
-								}
-							}
-							return v;
-						});
-					}
-					if (typeof data === "string") {
-						try {
-							return new ObjectId(data);
-						} catch (error) {
-							return new ObjectId();
-						}
-					}
-					if (data === null && fieldAttributes.references?.field === "id") {
-						return null;
-					}
-					return new ObjectId();
+					const convertId = createConvertId(options.logger);
+					const result = convertId(data, true);
+					return result;
 				}
 				return data;
 			},
