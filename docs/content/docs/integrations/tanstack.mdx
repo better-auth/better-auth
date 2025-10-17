@@ -13,35 +13,17 @@ We need to mount the handler to a TanStack API endpoint/Server Route.
 Create a new file: `/src/routes/api/auth/$.ts`
 
 ```ts title="src/routes/api/auth/$.ts"
-import { auth } from '@/lib/auth'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute } from "@tanstack/react-router"
+import { auth } from "@/lib/auth"
 
-export const Route = createFileRoute('/api/auth/$')({
-  server: {
-    handlers: {
-      GET: ({ request }) => {
-        return auth.handler(request)
-      },
-      POST: ({ request }) => {
-        return auth.handler(request)
-      },
+export const Route = createFileRoute("/api/auth/$")({
+    server: {
+        handlers: {
+            GET: ({ request }) => auth.handler(request),
+            POST: ({ request }) => auth.handler(request),
+        },
     },
-  },
 })
-```
-
-If you haven't created your server route handler yet, you can do so by creating a file: `/src/server.ts`
-
-```ts title="src/server.ts"
-import {
-  createStartHandler,
-  defaultStreamHandler,
-} from '@tanstack/react-start/server'
-import { createRouter } from './router'
-
-export default createStartHandler({
-  createRouter,
-})(defaultStreamHandler)
 ```
 
 ### Usage tips
