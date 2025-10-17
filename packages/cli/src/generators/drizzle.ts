@@ -94,7 +94,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						? `varchar('${name}', { length: 255 })`
 						: field.references
 							? `varchar('${name}', { length: 36 })`
-							: `text('${name}')`,
+							: field.sortable
+								? `varchar('${name}', { length: 255 })`
+								: field.index
+									? `varchar('${name}', { length: 255 })`
+									: `text('${name}')`,
 				},
 				boolean: {
 					sqlite: `integer('${name}', { mode: 'boolean' })`,
