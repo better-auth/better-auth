@@ -78,7 +78,9 @@ type OrganizationSchema<O extends OrganizationOptions> =
 					modelName: O["schema"] extends {
 						organizationRole: { modelName: infer M };
 					}
-						? M
+						? M extends string
+							? M
+							: string | undefined
 						: string | undefined;
 					fields: {
 						organizationId: {
@@ -93,8 +95,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 									fields: { organizationId: infer F };
 								};
 							}
-								? F
-								: undefined;
+								? F extends string
+									? F
+									: string | undefined
+								: string | undefined;
 						};
 						role: {
 							type: "string";
@@ -104,8 +108,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 									fields: { role: infer F };
 								};
 							}
-								? F
-								: undefined;
+								? F extends string
+									? F
+									: string | undefined
+								: string | undefined;
 						};
 						permission: {
 							type: "string";
@@ -115,20 +121,24 @@ type OrganizationSchema<O extends OrganizationOptions> =
 									fields: { permission: infer F };
 								};
 							}
-								? F
-								: undefined;
+								? F extends string
+									? F
+									: string | undefined
+								: string | undefined;
 						};
 						createdAt: {
 							type: "date";
 							required: true;
-							defaultValue: () => Date;
+							defaultValue: Date;
 							fieldName?: O["schema"] extends {
 								organizationRole: {
 									fields: { createdAt: infer F };
 								};
 							}
-								? F
-								: undefined;
+								? F extends string
+									? F
+									: string | undefined
+								: string | undefined;
 						};
 						updatedAt: {
 							type: "date";
@@ -138,8 +148,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 									fields: { updatedAt: infer F };
 								};
 							}
-								? F
-								: undefined;
+								? F extends string
+									? F
+									: string | undefined
+								: string | undefined;
 						};
 					} & (O["schema"] extends {
 						organizationRole: { additionalFields: infer F };
@@ -152,7 +164,9 @@ type OrganizationSchema<O extends OrganizationOptions> =
 				? {
 						team: {
 							modelName: O["schema"] extends { team: { modelName: infer M } }
-								? M
+								? M extends string
+									? M
+									: string | undefined
 								: string | undefined;
 							fields: {
 								name: {
@@ -161,8 +175,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 									fieldName?: O["schema"] extends {
 										team: { fields: { name: infer F } };
 									}
-										? F
-										: undefined;
+										? F extends string
+											? F
+											: string | undefined
+										: string | undefined;
 								};
 								organizationId: {
 									type: "string";
@@ -174,8 +190,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 									fieldName?: O["schema"] extends {
 										team: { fields: { organizationId: infer F } };
 									}
-										? F
-										: undefined;
+										? F extends string
+											? F
+											: string | undefined
+										: string | undefined;
 								};
 								createdAt: {
 									type: "date";
@@ -183,8 +201,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 									fieldName?: O["schema"] extends {
 										team: { fields: { createdAt: infer F } };
 									}
-										? F
-										: undefined;
+										? F extends string
+											? F
+											: string | undefined
+										: string | undefined;
 								};
 								updatedAt: {
 									type: "date";
@@ -192,9 +212,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 									fieldName?: O["schema"] extends {
 										team: { fields: { updatedAt: infer F } };
 									}
-										? F
-										: undefined;
-									onUpdate: () => Date;
+										? F extends string
+											? F
+											: string | undefined
+										: string | undefined;
 								};
 							} & (O["schema"] extends { team: { additionalFields: infer F } }
 								? F
@@ -204,7 +225,9 @@ type OrganizationSchema<O extends OrganizationOptions> =
 							modelName: O["schema"] extends {
 								teamMember: { modelName: infer M };
 							}
-								? M
+								? M extends string
+									? M
+									: string | undefined
 								: string | undefined;
 							fields: {
 								teamId: {
@@ -217,8 +240,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 									fieldName?: O["schema"] extends {
 										teamMember: { fields: { teamId: infer F } };
 									}
-										? F
-										: undefined;
+										? F extends string
+											? F
+											: string | undefined
+										: string | undefined;
 								};
 								userId: {
 									type: "string";
@@ -230,8 +255,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 									fieldName?: O["schema"] extends {
 										teamMember: { fields: { userId: infer F } };
 									}
-										? F
-										: undefined;
+										? F extends string
+											? F
+											: string | undefined
+										: string | undefined;
 								};
 								createdAt: {
 									type: "date";
@@ -239,8 +266,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 									fieldName?: O["schema"] extends {
 										teamMember: { fields: { createdAt: infer F } };
 									}
-										? F
-										: undefined;
+										? F extends string
+											? F
+											: string | undefined
+										: string | undefined;
 								};
 							};
 						};
@@ -250,7 +279,9 @@ type OrganizationSchema<O extends OrganizationOptions> =
 						modelName: O["schema"] extends {
 							organization: { modelName: infer M };
 						}
-							? M
+							? M extends string
+								? M
+								: string | undefined
 							: string | undefined;
 						fields: {
 							name: {
@@ -260,8 +291,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									organization: { fields: { name: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 							slug: {
 								type: "string";
@@ -271,8 +304,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									organization: { fields: { slug: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 							logo: {
 								type: "string";
@@ -280,8 +315,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									organization: { fields: { logo: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 							createdAt: {
 								type: "date";
@@ -289,8 +326,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									organization: { fields: { createdAt: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 							updatedAt: {
 								type: "date";
@@ -298,14 +337,18 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									organization: { fields: { updatedAt: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 						};
 					};
 					member: {
 						modelName: O["schema"] extends { member: { modelName: infer M } }
-							? M
+							? M extends string
+								? M
+								: string | undefined
 							: string | undefined;
 						fields: {
 							organizationId: {
@@ -318,8 +361,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									member: { fields: { organizationId: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 							userId: {
 								type: "string";
@@ -331,8 +376,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									member: { fields: { userId: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 							role: {
 								type: "string";
@@ -340,8 +387,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									member: { fields: { role: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 								defaultValue: "member";
 							};
 							createdAt: {
@@ -350,8 +399,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									member: { fields: { createdAt: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 						} & (O["schema"] extends { member: { additionalFields: infer F } }
 							? F
@@ -374,8 +425,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									invitation: { fields: { organizationId: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 							email: {
 								type: "string";
@@ -384,8 +437,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									invitation: { fields: { email: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 							role: {
 								type: "string";
@@ -394,8 +449,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									invitation: { fields: { role: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 							status: {
 								type: "string";
@@ -404,8 +461,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									invitation: { fields: { status: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 								defaultValue: "pending";
 							};
 							expiresAt: {
@@ -414,8 +473,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									invitation: { fields: { expiresAt: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 							createdAt: {
 								type: "date";
@@ -423,9 +484,11 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									invitation: { fields: { createdAt: infer F } };
 								}
-									? F
-									: undefined;
-								defaultValue: () => Date;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
+								defaultValue: Date;
 							};
 							inviterId: {
 								type: "string";
@@ -437,8 +500,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									invitation: { fields: { inviterId: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 						} & (O["schema"] extends {
 							invitation: { additionalFields: infer F };
@@ -454,8 +519,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 										fieldName?: O["schema"] extends {
 											invitation: { fields: { teamId: infer F } };
 										}
-											? F
-											: undefined;
+											? F extends string
+												? F
+												: string | undefined
+											: string | undefined;
 									};
 								}
 							: {};
@@ -468,8 +535,10 @@ type OrganizationSchema<O extends OrganizationOptions> =
 								fieldName?: O["schema"] extends {
 									session: { fields: { activeOrganizationId: infer F } };
 								}
-									? F
-									: undefined;
+									? F extends string
+										? F
+										: string | undefined
+									: string | undefined;
 							};
 						} & O["teams"] extends { enabled: true }
 							? {
@@ -477,11 +546,36 @@ type OrganizationSchema<O extends OrganizationOptions> =
 										type: "string";
 										required: false;
 									};
+									activeOrganizationId: {
+										type: "string";
+										required: false;
+										fieldName?: O["schema"] extends {
+											session: { fields: { activeOrganizationId: infer F } };
+										}
+											? F extends string
+												? F
+												: string | undefined
+											: string | undefined;
+									};
 								}
-							: {} & (O["schema"] extends {
+							: {
+									activeOrganizationId: {
+										type: "string";
+										required: false;
+										fieldName?: O["schema"] extends {
+											session: { fields: { activeOrganizationId: infer F } };
+										}
+											? F extends string
+												? F
+												: string | undefined
+											: string | undefined;
+									};
+								} & (O["schema"] extends {
 									session: { additionalFields: infer F };
 								}
-									? F
+									? F extends string
+										? F
+										: string | undefined
 									: {});
 					};
 				};
@@ -669,28 +763,27 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
-export type OrganizationPlugin<O extends OrganizationOptions> =
-	BetterAuthPlugin & {
-		id: "organization";
-		endpoints: OrganizationEndpoints<O> &
-			(O extends { teams: { enabled: true } } ? TeamEndpoints<O> : {}) &
-			(O extends { dynamicAccessControl: { enabled: true } }
-				? DynamicAccessControlEndpoints<O>
-				: {});
-		schema: OrganizationSchema<O>;
-		$Infer: {
-			Organization: InferOrganization<O>;
-			Invitation: InferInvitation<O>;
-			Member: InferMember<O>;
-			Team: O["teams"] extends { enabled: true } ? Team : any;
-			TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
-			ActiveOrganization: Awaited<
-				ReturnType<ReturnType<typeof getFullOrganization<O>>>
-			>;
-		};
-		$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
-		options: O;
+export type OrganizationPlugin<O extends OrganizationOptions> = {
+	id: "organization";
+	endpoints: OrganizationEndpoints<O> &
+		(O extends { teams: { enabled: true } } ? TeamEndpoints<O> : {}) &
+		(O extends { dynamicAccessControl: { enabled: true } }
+			? DynamicAccessControlEndpoints<O>
+			: {});
+	schema: OrganizationSchema<O>;
+	$Infer: {
+		Organization: InferOrganization<O>;
+		Invitation: InferInvitation<O>;
+		Member: InferMember<O>;
+		Team: O["teams"] extends { enabled: true } ? Team : any;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		ActiveOrganization: Awaited<
+			ReturnType<ReturnType<typeof getFullOrganization<O>>>
+		>;
 	};
+	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
+	options: O;
+};
 
 /**
  * Organization plugin for Better Auth. Organization allows you to create teams, members,
