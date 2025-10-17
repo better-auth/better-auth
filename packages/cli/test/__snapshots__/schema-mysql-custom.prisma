@@ -86,7 +86,8 @@ model TwoFactor {
   userId      String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([secret(length: 191), userId(length: 191)])
+  @@index([secret(length: 191)])
+  @@index([userId(length: 191)])
   @@map("twoFactor")
 }
 
@@ -113,7 +114,8 @@ model Member {
   role           String    @db.Text
   createdAt      DateTime
 
-  @@index([organizationId(length: 191), userId(length: 191)])
+  @@index([organizationId(length: 191)])
+  @@index([userId(length: 191)])
   @@map("member")
 }
 
@@ -129,6 +131,7 @@ model WorkspaceInvitation {
   inviterId      String
   user           User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId(length: 191), email(length: 191)])
+  @@index([organizationId(length: 191)])
+  @@index([email(length: 191)])
   @@map("workspaceInvitation")
 }

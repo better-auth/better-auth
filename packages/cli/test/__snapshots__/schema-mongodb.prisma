@@ -83,6 +83,7 @@ model TwoFactor {
   userId      String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([secret, userId])
+  @@index([secret])
+  @@index([userId])
   @@map("twoFactor")
 }
