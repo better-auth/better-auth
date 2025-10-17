@@ -28,9 +28,9 @@ description: LINE provider setup and usage.
             line: {
               clientId: process.env.LINE_CLIENT_ID as string,
               clientSecret: process.env.LINE_CLIENT_SECRET as string,
-              // Optional: override redirect if needed
-              // redirectURI: "https://your.app/api/auth/callback/line",
-              // scopes are prefilled: ["openid","profile","email"]. Append if needed
+              // redirectURI: "https://your.app/api/auth/callback/line", // uncomment to use a custom redirect URI
+              // scope: ["custom"], // uncomment to add additional scopes
+              // disableDefaultScope: true, // uncomment to replace default scopes [`openid`, `profile`, `email`]
             },
           },
         });
