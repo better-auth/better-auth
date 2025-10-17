@@ -25,7 +25,6 @@ model User {
 
   @@unique([email])
   @@unique([username])
-  @@index([email])
   @@map("user")
 }
 
