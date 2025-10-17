@@ -295,4 +295,14 @@ describe("expo with cookieCache", async () => {
 		expect(ctx.options.trustedOrigins).toContain("exp://");
 		expect(ctx.options.trustedOrigins).toContain("http://localhost:3000");
 	});
+
+	it("should allow independent cookiePrefix configuration", async () => {
+		const { hasBetterAuthCookies } = await import("./client");
+
+		const customCookieHeader = "my-app.session_token=abc; Path=/";
+
+		expect(hasBetterAuthCookies(customCookieHeader, "my-app")).toBe(true);
+
+		expect(hasBetterAuthCookies(customCookieHeader, "better-auth")).toBe(false);
+	});
 });
