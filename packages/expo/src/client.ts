@@ -74,7 +74,18 @@ interface ExpoClientOptions {
 		setItem: (key: string, value: string) => any;
 		getItem: (key: string) => string | null;
 	};
+	/**
+	 * Prefix for local storage keys (e.g., "my-app_cookie", "my-app_session_data")
+	 * @default "better-auth"
+	 */
 	storagePrefix?: string;
+	/**
+	 * Prefix for server cookie names to filter (e.g., "better-auth.session_token")
+	 * This is used to identify which cookies belong to better-auth to prevent
+	 * infinite refetching when third-party cookies are set.
+	 * @default "better-auth"
+	 */
+	cookiePrefix?: string;
 	disableCache?: boolean;
 }
 
@@ -133,7 +144,8 @@ function getOrigin(scheme: string) {
 }
 
 /**
- * Check if the Set-Cookie header contains any better-auth cookies
+ * Check if the Set-Cookie header contains any better-auth cookies.
+ * Reuses parseSetCookieHeader for robust parsing of cookie attributes and edge cases.
  * @param setCookieHeader - The Set-Cookie header value
  * @param cookiePrefix - The cookie prefix to check for (default: "better-auth")
  * @returns true if the header contains better-auth cookies, false otherwise
@@ -142,26 +154,27 @@ export function hasBetterAuthCookies(
 	setCookieHeader: string,
 	cookiePrefix: string,
 ): boolean {
-	const cookies = splitSetCookieHeader(setCookieHeader);
-	return cookies.some((cookie) => {
-		const nameValue = cookie.split(";")[0]?.trim();
-		if (!nameValue) return false;
-		const name = nameValue.split("=")[0];
-		// Check for both regular and secure cookie prefixes
-		return (
-			name?.startsWith(`${cookiePrefix}.`) ||
-			name?.startsWith(`__Secure-${cookiePrefix}.`)
-		);
-	});
+	const cookies = parseSetCookieHeader(setCookieHeader);
+	// Check if any cookie name starts with the better-auth prefix (with or without __Secure-)
+	for (const name of cookies.keys()) {
+		if (
+			name.startsWith(`${cookiePrefix}.`) ||
+			name.startsWith(`__Secure-${cookiePrefix}.`)
+		) {
+			return true;
+		}
+	}
+	return false;
 }
 
 export const expoClient = (opts: ExpoClientOptions) => {
 	let store: Store | null = null;
-	const cookieName = `${opts?.storagePrefix || "better-auth"}_cookie`;
-	const localCacheName = `${opts?.storagePrefix || "better-auth"}_session_data`;
+	const storagePrefix = opts?.storagePrefix || "better-auth";
+	const cookieName = `${storagePrefix}_cookie`;
+	const localCacheName = `${storagePrefix}_session_data`;
 	const storage = opts?.storage;
 	const isWeb = Platform.OS === "web";
-	const cookiePrefix = opts?.storagePrefix || "better-auth";
+	const cookiePrefix = opts?.cookiePrefix || "better-auth";
 
 	const rawScheme =
 		opts?.scheme || Constants.expoConfig?.scheme || Constants.platform?.scheme;
