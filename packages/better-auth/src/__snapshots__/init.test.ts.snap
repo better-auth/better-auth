@@ -213,6 +213,7 @@ exports[`init > should match config 1`] = `
         },
         "userId": {
           "fieldName": "userId",
+          "index": true,
           "references": {
             "field": "id",
             "model": "user",
@@ -245,6 +246,7 @@ exports[`init > should match config 1`] = `
         },
         "token": {
           "fieldName": "token",
+          "index": true,
           "required": true,
           "type": "string",
           "unique": true,
@@ -262,6 +264,7 @@ exports[`init > should match config 1`] = `
         },
         "userId": {
           "fieldName": "userId",
+          "index": true,
           "references": {
             "field": "id",
             "model": "user",
@@ -284,6 +287,7 @@ exports[`init > should match config 1`] = `
         },
         "email": {
           "fieldName": "email",
+          "index": true,
           "required": true,
           "sortable": true,
           "type": "string",
@@ -332,6 +336,7 @@ exports[`init > should match config 1`] = `
         },
         "identifier": {
           "fieldName": "identifier",
+          "index": true,
           "required": true,
           "type": "string",
         },

@@ -372,7 +372,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	async function runMigrations() {
 		for (const migration of migrations) {
-			console.log(migration.compile().sql);
 			await migration.execute();
 		}
 	}
