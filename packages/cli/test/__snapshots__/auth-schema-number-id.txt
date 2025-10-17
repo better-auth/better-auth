@@ -26,10 +26,7 @@ export const custom_user = pgTable(
     username: text("username").unique(),
     displayUsername: text("display_username"),
   },
-  (table) => [
-    uniqueIndex("custom_user_email_uidx").on(table.email),
-    uniqueIndex("custom_user_username_uidx").on(table.username),
-  ],
+  (table) => [uniqueIndex("custom_user_email_uidx").on(table.email)],
 );
 
 export const custom_session = pgTable(
@@ -48,10 +45,7 @@ export const custom_session = pgTable(
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
   },
-  (table) => [
-    uniqueIndex("custom_session_token_uidx").on(table.token),
-    index("custom_session_userId_idx").on(table.userId),
-  ],
+  (table) => [index("custom_session_userId_idx").on(table.userId)],
 );
 
 export const custom_account = pgTable(

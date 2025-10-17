@@ -27,7 +27,7 @@ model User {
 
   @@unique([email])
   @@unique([username])
-  @@index([email, username])
+  @@index([email])
   @@map("user")
 }
 
@@ -44,7 +44,7 @@ model Session {
   activeOrganizationId String?  @db.Text
 
   @@unique([token])
-  @@index([token, userId])
+  @@index([userId])
   @@map("session")
 }
 
@@ -102,7 +102,6 @@ model Workspace {
   workspaceinvitations WorkspaceInvitation[]
 
   @@unique([slug])
-  @@index([slug])
   @@map("workspace")
 }
 

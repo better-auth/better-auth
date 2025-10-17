@@ -25,7 +25,7 @@ model User {
 
   @@unique([email])
   @@unique([username])
-  @@index([email, username])
+  @@index([email])
   @@map("user")
 }
 
@@ -41,7 +41,7 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([token])
-  @@index([token, userId])
+  @@index([userId])
   @@map("session")
 }
 

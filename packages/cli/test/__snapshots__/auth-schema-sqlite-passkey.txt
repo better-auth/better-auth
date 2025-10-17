@@ -46,10 +46,7 @@ export const custom_session = sqliteTable(
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
   },
-  (table) => [
-    uniqueIndex("custom_session_token_uidx").on(table.token),
-    index("custom_session_userId_idx").on(table.userId),
-  ],
+  (table) => [index("custom_session_userId_idx").on(table.userId)],
 );
 
 export const custom_account = sqliteTable(

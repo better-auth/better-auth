@@ -8,8 +8,6 @@ create table "verification" ("id" text not null primary key, "identifier" text n
 
 create unique index "user_email_uidx" on "user" ("email");
 
-create unique index "session_token_uidx" on "session" ("token");
-
 create index "session_userId_idx" on "session" ("userId");
 
 create index "account_userId_idx" on "account" ("userId");
