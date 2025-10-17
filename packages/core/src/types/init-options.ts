@@ -439,7 +439,7 @@ export type BetterAuthOptions = {
 		 */
 		minPasswordLength?: number;
 		/**
-		 * The pattern to validete the password.
+		 * The pattern to validate the password.
 		 *
 		 * @default null
 		 */
