@@ -453,6 +453,15 @@ export const signInEmail = createAuthEndpoint(
 				message: "Email and password is not enabled",
 			});
 		}
+		if (ctx.context.options?.session?.storeSessionInJWT) {
+			ctx.context.logger.error(
+				"Email/password authentication is not supported with stateless JWT sessions (session.storeSessionInJWT). Use social OAuth providers instead.",
+			);
+			throw new APIError("BAD_REQUEST", {
+				message:
+					"Email/password authentication is not supported with stateless JWT sessions",
+			});
+		}
 		const { email, password } = ctx.body;
 		const isValidEmail = z.string().email().safeParse(email);
 		if (!isValidEmail.success) {

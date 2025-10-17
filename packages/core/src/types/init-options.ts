@@ -649,6 +649,19 @@ export type BetterAuthOptions = {
 			[key: string]: DBFieldAttribute;
 		};
 		/**
+		 * Enable stateless session management by storing session
+		 * and user data in JWT cookies instead of database.
+		 *
+		 * When enabled:
+		 * - User data is stored in encrypted JWT tokens
+		 * - No database queries for session validation
+		 * - Social OAuth sign-in works without database
+		 * - Password-based authentication is disabled
+		 * - Session revocation features are disabled
+		 *
+		 * ⚠️ This mode is stateless, similar to next-auth.
+		 * Sessions cannot be revoked server-side.
+		 *
 		 * @default false
 		 */
 		storeSessionInJWT?: boolean;
