@@ -63,7 +63,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 		for (const field in fields) {
 			const attr = fields[field]!;
-			if (attr.index) {
+			if (attr.index && !attr.unique) {
 				const fieldName = attr.fieldName || field;
 				indexedFields.get(modelName)!.push(fieldName);
 			}
@@ -251,9 +251,23 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			// Add indexes
 			const indexedFieldsForModel = indexedFields.get(modelName);
 			if (indexedFieldsForModel && indexedFieldsForModel.length > 0) {
+				const indexFieldsWithLength = indexedFieldsForModel.map((fieldName) => {
+					const field = fields![fieldName];
+					if (provider === "mysql" && field && field.type === "string") {
+						if (
+							field.references?.field === "id" &&
+							options.advanced?.database?.useNumberId
+						) {
+							return `${fieldName}`;
+						} else {
+							return `${fieldName}(length: 191)`; // length of 191 because String in Prisma is varchar(191)
+						}
+					}
+					return fieldName;
+				});
 				builder
 					.model(modelName)
-					.blockAttribute(`index([${indexedFieldsForModel.join(", ")}])`);
+					.blockAttribute(`index([${indexFieldsWithLength.join(", ")}])`);
 			}
 
 			const hasAttribute = builder.findByType("attribute", {

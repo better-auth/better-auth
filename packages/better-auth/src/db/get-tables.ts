@@ -123,7 +123,6 @@ export const getAuthTables = (
 					required: true,
 					fieldName: options.user?.fields?.email || "email",
 					sortable: true,
-					index: true,
 				},
 				emailVerified: {
 					type: "boolean",
