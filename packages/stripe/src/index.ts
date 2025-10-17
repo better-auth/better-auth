@@ -3,7 +3,10 @@ import {
 	type BetterAuthPlugin,
 	logger,
 } from "better-auth";
-import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
 import Stripe from "stripe";
 import { type Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
@@ -92,17 +95,24 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						"Reference id is not allowed. Read server logs for more details.",
 				});
 			}
-			const isAuthorized = ctx.body?.referenceId
-				? await options.subscription?.authorizeReference?.(
-						{
-							user: session.user,
-							session: session.session,
-							referenceId,
-							action,
-						},
-						ctx,
-					)
-				: true;
+			/**
+			 * if referenceId is the same as the active session user's id
+			 */
+			const sameReference =
+				ctx.query?.referenceId === session.user.id ||
+				ctx.body?.referenceId === session.user.id;
+			const isAuthorized =
+				ctx.body?.referenceId || ctx.query?.referenceId
+					? (await options.subscription?.authorizeReference?.(
+							{
+								user: session.user,
+								session: session.session,
+								referenceId,
+								action,
+							},
+							ctx,
+						)) || sameReference
+					: true;
 			if (!isAuthorized) {
 				throw new APIError("UNAUTHORIZED", {
 					message: "Unauthorized",
@@ -1399,6 +1409,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			};
 		},
 		schema: getSchema(options),
+		$ERROR_CODES: STRIPE_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
 
