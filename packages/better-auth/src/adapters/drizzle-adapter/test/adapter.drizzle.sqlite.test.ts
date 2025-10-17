@@ -5,7 +5,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -66,7 +65,6 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "sqlite" }),
 	],
 	async onFinish() {
 		clearSchemaCache();

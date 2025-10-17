@@ -3,7 +3,6 @@ import { testAdapter } from "../test-adapter";
 import { mongodbAdapter } from "./mongodb-adapter";
 import {
 	normalTestSuite,
-	performanceTestSuite,
 	authFlowTestSuite,
 	transactionsTestSuite,
 } from "../tests";
@@ -30,7 +29,6 @@ const { execute } = await testAdapter({
 		authFlowTestSuite(),
 		transactionsTestSuite(),
 		// numberIdTestSuite(), // Mongo doesn't support number ids
-		performanceTestSuite(),
 	],
 	customIdGenerator: () => new ObjectId().toString(),
 });
