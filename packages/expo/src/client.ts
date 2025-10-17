@@ -144,24 +144,48 @@ function getOrigin(scheme: string) {
 }
 
 /**
- * Check if the Set-Cookie header contains any better-auth cookies.
- * Reuses parseSetCookieHeader for robust parsing of cookie attributes and edge cases.
+ * Check if the Set-Cookie header contains session-related better-auth cookies.
+ * Only triggers session updates when session_token or session_data cookies are present.
+ * This prevents infinite refetching when non-session cookies (like third-party cookies) change.
+ *
+ * Supports multiple cookie naming patterns:
+ * - Default: "better-auth.session_token", "__Secure-better-auth.session_token"
+ * - Custom prefix: "myapp.session_token", "__Secure-myapp.session_token"
+ * - Custom full names: "my_custom_session_token", "custom_session_data"
+ * - No prefix (cookiePrefix=""): "session_token", "my_session_token", etc.
+ *
  * @param setCookieHeader - The Set-Cookie header value
- * @param cookiePrefix - The cookie prefix to check for (default: "better-auth")
- * @returns true if the header contains better-auth cookies, false otherwise
+ * @param cookiePrefix - The cookie prefix to check for. Can be empty string for custom cookie names.
+ * @returns true if the header contains session-related cookies, false otherwise
  */
 export function hasBetterAuthCookies(
 	setCookieHeader: string,
 	cookiePrefix: string,
 ): boolean {
 	const cookies = parseSetCookieHeader(setCookieHeader);
-	// Check if any cookie name starts with the better-auth prefix (with or without __Secure-)
+	const sessionCookieSuffixes = ["session_token", "session_data"];
+
+	// Check if any cookie is a session-related cookie
 	for (const name of cookies.keys()) {
-		if (
-			name.startsWith(`${cookiePrefix}.`) ||
-			name.startsWith(`__Secure-${cookiePrefix}.`)
-		) {
-			return true;
+		// Remove __Secure- prefix if present for comparison
+		const nameWithoutSecure = name.startsWith("__Secure-")
+			? name.slice(9)
+			: name;
+
+		for (const suffix of sessionCookieSuffixes) {
+			if (cookiePrefix) {
+				// When prefix is provided, only match exact pattern: "prefix.suffix"
+				if (nameWithoutSecure === `${cookiePrefix}.${suffix}`) {
+					return true;
+				}
+			} else {
+				// When prefix is empty, check for:
+				// 1. Exact match: "session_token"
+				// 2. Custom names ending with suffix: "my_custom_session_token"
+				if (nameWithoutSecure.endsWith(suffix)) {
+					return true;
+				}
+			}
 		}
 	}
 	return false;

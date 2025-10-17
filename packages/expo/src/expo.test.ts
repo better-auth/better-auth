@@ -164,9 +164,18 @@ describe("expo", async () => {
 			true,
 		);
 
+		const sessionDataHeader = "better-auth.session_data=xyz; Path=/";
+		expect(hasBetterAuthCookies(sessionDataHeader, "better-auth")).toBe(true);
+
 		const secureBetterAuthHeader =
 			"__Secure-better-auth.session_token=abc; Path=/";
 		expect(hasBetterAuthCookies(secureBetterAuthHeader, "better-auth")).toBe(
+			true,
+		);
+
+		const secureSessionDataHeader =
+			"__Secure-better-auth.session_data=xyz; Path=/";
+		expect(hasBetterAuthCookies(secureSessionDataHeader, "better-auth")).toBe(
 			true,
 		);
 
@@ -183,10 +192,27 @@ describe("expo", async () => {
 		expect(hasBetterAuthCookies(customPrefixHeader, "my-app")).toBe(true);
 		expect(hasBetterAuthCookies(customPrefixHeader, "better-auth")).toBe(false);
 
+		const customPrefixDataHeader = "my-app.session_data=abc; Path=/";
+		expect(hasBetterAuthCookies(customPrefixDataHeader, "my-app")).toBe(true);
+
+		const emptyPrefixHeader = "session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(emptyPrefixHeader, "")).toBe(true);
+
+		const customFullNameHeader = "my_custom_session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(customFullNameHeader, "")).toBe(true);
+
+		const customFullDataHeader = "my_custom_session_data=xyz; Path=/";
+		expect(hasBetterAuthCookies(customFullDataHeader, "")).toBe(true);
+
 		const multipleNonBetterAuthHeader =
 			"__cf_bm=abc123; Path=/, _ga=GA1.2.123456789.1234567890; Path=/";
 		expect(
 			hasBetterAuthCookies(multipleNonBetterAuthHeader, "better-auth"),
+		).toBe(false);
+
+		const nonSessionBetterAuthHeader = "better-auth.other_cookie=abc; Path=/";
+		expect(
+			hasBetterAuthCookies(nonSessionBetterAuthHeader, "better-auth"),
 		).toBe(false);
 	});
 
