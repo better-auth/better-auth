@@ -268,9 +268,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						}
 					}
 
-					builder
-						.model(modelName)
-						.blockAttribute(`index([${indexField}])`);
+					builder.model(modelName).blockAttribute(`index([${indexField}])`);
 				}
 			}
 
