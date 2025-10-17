@@ -1,7 +1,7 @@
 import type { DBAdapter, BetterAuthOptions } from "better-auth";
 
-export interface SchemaGenerator<Options extends BetterAuthOptions> {
-	(opts: {
+export interface SchemaGenerator {
+	<Options extends BetterAuthOptions>(opts: {
 		file?: string;
 		adapter: DBAdapter;
 		options: Options;
