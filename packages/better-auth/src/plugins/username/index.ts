@@ -2,7 +2,7 @@ import * as z from "zod";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { APIError } from "better-call";
 import type { Account, InferOptionSchema, User } from "../../types";
@@ -368,7 +368,6 @@ export const username = (options?: UsernameOptions) => {
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx,
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {

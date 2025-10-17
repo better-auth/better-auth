@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, test } from "vitest";
 import { betterAuth, type Auth } from "./auth";
 import { router } from "better-auth/api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 
 describe("auth type", () => {
 	test("default auth type should be okay", () => {

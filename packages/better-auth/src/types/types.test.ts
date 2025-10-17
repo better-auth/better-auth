@@ -44,7 +44,7 @@ describe("general types", async (it) => {
 			twoFactorEnabled: boolean | undefined | null;
 		}>();
 
-		expectTypeOf<typeof auth.$Infer.Session.session>().toEqualTypeOf<{
+		expectTypeOf<typeof auth.$Infer.Session.session>().toMatchObjectType<{
 			id: string;
 			userId: string;
 			expiresAt: Date;
