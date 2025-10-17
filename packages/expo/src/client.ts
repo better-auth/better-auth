@@ -132,12 +132,36 @@ function getOrigin(scheme: string) {
 	return schemeURI;
 }
 
+/**
+ * Check if the Set-Cookie header contains any better-auth cookies
+ * @param setCookieHeader - The Set-Cookie header value
+ * @param cookiePrefix - The cookie prefix to check for (default: "better-auth")
+ * @returns true if the header contains better-auth cookies, false otherwise
+ */
+export function hasBetterAuthCookies(
+	setCookieHeader: string,
+	cookiePrefix: string,
+): boolean {
+	const cookies = splitSetCookieHeader(setCookieHeader);
+	return cookies.some((cookie) => {
+		const nameValue = cookie.split(";")[0]?.trim();
+		if (!nameValue) return false;
+		const name = nameValue.split("=")[0];
+		// Check for both regular and secure cookie prefixes
+		return (
+			name?.startsWith(`${cookiePrefix}.`) ||
+			name?.startsWith(`__Secure-${cookiePrefix}.`)
+		);
+	});
+}
+
 export const expoClient = (opts: ExpoClientOptions) => {
 	let store: Store | null = null;
 	const cookieName = `${opts?.storagePrefix || "better-auth"}_cookie`;
 	const localCacheName = `${opts?.storagePrefix || "better-auth"}_session_data`;
 	const storage = opts?.storage;
 	const isWeb = Platform.OS === "web";
+	const cookiePrefix = opts?.storagePrefix || "better-auth";
 
 	const rawScheme =
 		opts?.scheme || Constants.expoConfig?.scheme || Constants.platform?.scheme;
@@ -183,13 +207,17 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						if (isWeb) return;
 						const setCookie = context.response.headers.get("set-cookie");
 						if (setCookie) {
-							const prevCookie = await storage.getItem(cookieName);
-							const toSetCookie = getSetCookie(
-								setCookie || "",
-								prevCookie ?? undefined,
-							);
-							await storage.setItem(cookieName, toSetCookie);
-							store?.notify("$sessionSignal");
+							// Only process and notify if the Set-Cookie header contains better-auth cookies
+							// This prevents infinite refetching when other cookies (like Cloudflare's __cf_bm) are present
+							if (hasBetterAuthCookies(setCookie, cookiePrefix)) {
+								const prevCookie = await storage.getItem(cookieName);
+								const toSetCookie = getSetCookie(
+									setCookie || "",
+									prevCookie ?? undefined,
+								);
+								await storage.setItem(cookieName, toSetCookie);
+								store?.notify("$sessionSignal");
+							}
 						}
 
 						if (
