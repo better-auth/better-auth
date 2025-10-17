@@ -9,10 +9,10 @@ export const adapters = {
 	kysely: generateMigrations,
 };
 
-export const generateSchema = <Options extends BetterAuthOptions>(opts: {
-	adapter: DBAdapter<Options>;
+export const generateSchema = (opts: {
+	adapter: DBAdapter;
 	file?: string;
-	options: Options;
+	options: BetterAuthOptions;
 }) => {
 	const adapter = opts.adapter;
 	const generator =
