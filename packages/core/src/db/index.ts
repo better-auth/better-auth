@@ -4,7 +4,6 @@ import type {
 	DBFieldType,
 	DBPrimitive,
 	BetterAuthDBSchema,
-	DBPreservedModels,
 } from "./type";
 import type { BetterAuthPluginDBSchema } from "./plugin";
 export type { BetterAuthPluginDBSchema } from "./plugin";
@@ -23,7 +22,7 @@ export type {
 	DBPrimitive,
 	BetterAuthDBSchema,
 	DBPreservedModels,
-};
+} from "./type";
 
 /**
  * @deprecated Backport for 1.3.x, we will remove this in 1.4.x
