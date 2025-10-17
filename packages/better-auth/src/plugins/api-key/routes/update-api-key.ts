@@ -414,7 +414,6 @@ export function updateApiKey({
 						},
 					],
 					update: {
-						remaining: apiKey.remaining === null ? null : apiKey.remaining - 1,
 						...newValues,
 					},
 				});

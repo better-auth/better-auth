@@ -1484,6 +1484,109 @@ describe("api-key", async () => {
 	});
 
 	// =========================================================================
+	// API KEY LASTREQUEST BUG FIX (#5309)
+	// =========================================================================
+
+	it("should not modify lastRequest when updating API key configuration", async () => {
+		const key = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+		expect(key.lastRequest).toBeNull();
+
+		const updated = await auth.api.updateApiKey({
+			body: {
+				keyId: key.id,
+				name: "updated-name",
+				userId: user.id,
+			},
+		});
+
+		expect(updated.lastRequest).toBeNull();
+	});
+
+	it("should not auto-decrement remaining when updating API key", async () => {
+		const key = await auth.api.createApiKey({
+			body: {
+				remaining: 100,
+				userId: user.id,
+			},
+		});
+		expect(key.remaining).toBe(100);
+
+		const updated = await auth.api.updateApiKey({
+			body: {
+				keyId: key.id,
+				metadata: { foo: "bar" },
+				userId: user.id,
+			},
+		});
+
+		expect(updated.remaining).toBe(100);
+	});
+
+	it("should allow explicit remaining updates via body parameter", async () => {
+		const key = await auth.api.createApiKey({
+			body: {
+				remaining: 100,
+				userId: user.id,
+			},
+		});
+
+		const updated = await auth.api.updateApiKey({
+			body: {
+				keyId: key.id,
+				remaining: 50,
+				userId: user.id,
+			},
+		});
+
+		expect(updated.remaining).toBe(50);
+		expect(updated.lastRequest).toBeNull();
+	});
+
+	it("verifyApiKey should still update lastRequest", async () => {
+		const key = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+		expect(key.lastRequest).toBeNull();
+
+		const verified = await auth.api.verifyApiKey({
+			body: { key: key.key },
+		});
+		expect(verified.valid).toBe(true);
+
+		const updated = await auth.api.getApiKey({
+			query: { id: key.id },
+			headers,
+		});
+		expect(updated.lastRequest).not.toBeNull();
+		expect(updated.lastRequest).toBeInstanceOf(Date);
+	});
+
+	it("verifyApiKey should still decrement remaining", async () => {
+		const key = await auth.api.createApiKey({
+			body: {
+				remaining: 100,
+				userId: user.id,
+			},
+		});
+
+		await auth.api.verifyApiKey({
+			body: { key: key.key },
+		});
+
+		const updated = await auth.api.getApiKey({
+			query: { id: key.id },
+			headers,
+		});
+		expect(updated.remaining).toBe(99);
+	});
+
+	// =========================================================================
 	// GET API KEY
 	// =========================================================================
 
