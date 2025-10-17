@@ -323,7 +323,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					});
 
 					// Use the id to update the record
-					await ctx.context.adapter.updateMany({
+					await ctx.context.adapter.update({
 						model: twoFactorTable,
 						update: {
 							backupCodes: updatedBackupCodes,
@@ -444,7 +444,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					);
 
 					// Use the id to update the record
-					await ctx.context.adapter.updateMany({
+					await ctx.context.adapter.update({
 						model: twoFactorTable,
 						update: {
 							backupCodes: backupCodes.encryptedBackupCodes,
