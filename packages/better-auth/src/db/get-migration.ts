@@ -183,7 +183,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 					? "varchar(255)"
 					: field.references
 						? "varchar(36)"
-						: "text",
+						: field.sortable
+							? "varchar(255)"
+							: field.index
+								? "varchar(255)"
+								: "text",
 				mssql:
 					field.unique || field.sortable
 						? "varchar(255)"
