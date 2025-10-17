@@ -1,7 +1,14 @@
 import { type AsyncLocalStorage, getAsyncLocalStorage } from "../async_hooks";
-import type { GenericEndpointContext } from "../types";
+import type { EndpointContext, InputContext } from "better-call";
+import type { AuthContext } from "../types";
 
-let currentContextAsyncStorage: AsyncLocalStorage<GenericEndpointContext> | null =
+export type AuthEndpointContext = Partial<
+	InputContext<string, any> & EndpointContext<string, any>
+> & {
+	context: AuthContext;
+};
+
+let currentContextAsyncStorage: AsyncLocalStorage<AuthEndpointContext> | null =
 	null;
 
 const ensureAsyncStorage = async () => {
@@ -12,19 +19,28 @@ const ensureAsyncStorage = async () => {
 	return currentContextAsyncStorage;
 };
 
-export async function getEndpointContext(): Promise<GenericEndpointContext> {
+/**
+ * This is for internal use only. Most users should use `getCurrentAuthContext` instead.
+ *
+ * It is exposed for advanced use cases where you need direct access to the AsyncLocalStorage instance.
+ */
+export async function getCurrentAuthContextAsyncLocalStorage() {
+	return ensureAsyncStorage();
+}
+
+export async function getCurrentAuthContext(): Promise<AuthEndpointContext> {
 	const als = await ensureAsyncStorage();
 	const context = als.getStore();
 	if (!context) {
 		throw new Error(
-			"No auth context found. Please make sure you are calling this function within a `getEndpointContext` callback.",
+			"No auth context found. Please make sure you are calling this function within a `getCurrentAuthContext` callback.",
 		);
 	}
 	return context;
 }
 
 export async function runWithEndpointContext<T>(
-	context: GenericEndpointContext,
+	context: AuthEndpointContext,
 	fn: () => T,
 ): Promise<T> {
 	const als = await ensureAsyncStorage();
