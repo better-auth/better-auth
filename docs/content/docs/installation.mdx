@@ -368,17 +368,21 @@ Create a new file or route in your framework's designated catch-all route handle
     </Tab>
     <Tab value="tanstack-start">
     ```ts title="src/routes/api/auth/$.ts"
-    import { auth } from '~/lib/server/auth'
-    import { createServerFileRoute } from '@tanstack/react-start/server'
+    import { createFileRoute } from '@tanstack/react-router'
+    import { auth } from '@/lib/auth/auth'
 
-    export const ServerRoute = createServerFileRoute('/api/auth/$').methods({
-    GET: ({ request }) => {
-        return auth.handler(request)
+    export const Route = createFileRoute('/api/auth/$')({
+    server: {
+        handlers: {
+            GET: async ({ request }:{ request: Request }) => {
+                return await auth.handler(request)
+            },
+            POST: async ({ request }:{ request: Request }) => {
+                return await auth.handler(request)
+            },
+        },
     },
-    POST: ({ request }) => {
-        return auth.handler(request)
-    },
-    });
+    })
     ```
     </Tab>
     <Tab value="expo">
