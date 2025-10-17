@@ -190,11 +190,20 @@ or on the server
 await auth.api.getSession({
     query: {
         disableCookieCache: true,
-    }, 
+    },
     headers: req.headers, // pass the headers
 });
 ```
 
+## Stateless Sessions (JWT)
+
+For high-scale applications, Better Auth supports **stateless JWT-based sessions** that eliminate database queries for session validation.
+
+<Callout type="warn">
+**Advanced Feature**: Stateless sessions have important security trade-offs. They cannot be revoked server-side and are only suitable for specific use cases.
+</Callout>
+
+Learn more in the [Stateless Sessions Guide](/docs/guides/stateless-sessions).
 
 ## Customizing Session Response
 

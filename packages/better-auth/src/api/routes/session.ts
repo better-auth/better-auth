@@ -9,6 +9,7 @@ import {
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
+import { decodeSessionJWT, isCookieCacheEnabled } from "../../jwt";
 import * as z from "zod";
 import type { InferSession, InferUser, Session, User } from "../../types";
 import type { BetterAuthOptions } from "@better-auth/core";
@@ -86,6 +87,96 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (!sessionCookieToken) {
 					return null;
 				}
+
+				// If using stateless JWT sessions
+				if (isCookieCacheEnabled(ctx.context.options)) {
+					// Check cookie cache first if enabled
+					const sessionDataCookie = ctx.getCookie(
+						ctx.context.authCookies.sessionData.name,
+					);
+					const sessionDataPayload = sessionDataCookie
+						? safeJSONParse<{
+								session: {
+									session: Session;
+									user: User;
+								};
+								signature: string;
+								expiresAt: number;
+							}>(binary.decode(base64Url.decode(sessionDataCookie)))
+						: null;
+
+					if (sessionDataPayload) {
+						const isValid = await createHMAC(
+							"SHA-256",
+							"base64urlnopad",
+						).verify(
+							ctx.context.secret,
+							JSON.stringify({
+								...sessionDataPayload.session,
+								expiresAt: sessionDataPayload.expiresAt,
+							}),
+							sessionDataPayload.signature,
+						);
+						if (!isValid) {
+							const dataCookie = ctx.context.authCookies.sessionData.name;
+							ctx.setCookie(dataCookie, "", {
+								maxAge: 0,
+							});
+						} else if (
+							ctx.context.options.session?.cookieCache?.enabled &&
+							!ctx.query?.disableCookieCache
+						) {
+							// Use cached session data if valid and not expired
+							const session = sessionDataPayload.session;
+							const hasExpired =
+								sessionDataPayload.expiresAt < Date.now() ||
+								session.session.expiresAt < new Date();
+							if (!hasExpired) {
+								ctx.context.session = session;
+								return ctx.json(
+									session as {
+										session: InferSession<Option>;
+										user: InferUser<Option>;
+									},
+								);
+							} else {
+								const dataCookie = ctx.context.authCookies.sessionData.name;
+								ctx.setCookie(dataCookie, "", {
+									maxAge: 0,
+								});
+							}
+						}
+					}
+
+					const decoded = await decodeSessionJWT(sessionCookieToken);
+					if (!decoded) {
+						deleteSessionCookie(ctx);
+						return ctx.json(null);
+					}
+
+					const session = {
+						session: decoded.session as Session & Record<string, any>,
+						user: decoded.user as User & Record<string, any>,
+					};
+
+					// Check if session has expired
+					if (
+						session.session.expiresAt &&
+						new Date(session.session.expiresAt) < new Date()
+					) {
+						deleteSessionCookie(ctx);
+						return ctx.json(null);
+					}
+
+					ctx.context.session = session;
+					return ctx.json(
+						session as {
+							session: InferSession<Option>;
+							user: InferUser<Option>;
+						},
+					);
+				}
+
 				const sessionDataCookie = ctx.getCookie(
 					ctx.context.authCookies.sessionData.name,
 				);

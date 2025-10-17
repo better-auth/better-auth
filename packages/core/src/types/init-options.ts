@@ -671,10 +671,6 @@ export type BetterAuthOptions = {
 			[key: string]: DBFieldAttribute;
 		};
 		/**
-		 * @default false
-		 */
-		storeSessionInJWT?: boolean;
-		/**
 		 * By default if secondary storage is provided
 		 * the session is stored in the secondary storage.
 		 *
@@ -697,16 +693,43 @@ export type BetterAuthOptions = {
 		 */
 		preserveSessionInDatabase?: boolean;
 		/**
-		 * Enable caching session in cookie
+		 * Cookie cache configuration for session management.
+		 *
+		 * When `enabled: true`, sessions are stored entirely in encrypted JWT cookies
+		 * for stateless session management (similar to next-auth).
+		 *
+		 * **Stateless mode benefits:**
+		 * - No database queries for session validation
+		 * - Works with social OAuth providers without database
+		 * - Reduced server load and faster session checks
+		 * - Simplified infrastructure (no session storage needed)
+		 *
+		 * **Important limitations:**
+		 * - Sessions cannot be revoked server-side (relies on JWT expiration)
+		 * - Session data is stored in cookies (size limits apply)
+		 * - Best suited for authentication with trusted OAuth providers
+		 *
+		 * **Security notes:**
+		 * - Session data is encrypted using JWE (A256CBC-HS512)
+		 * - Requires a secure secret for encryption
+		 * - Sessions automatically expire based on `expiresIn` config
 		 */
 		cookieCache?: {
 			/**
-			 * max age of the cookie
+			 * Max age of the cookie cache in seconds.
+			 * This is separate from session expiration.
 			 * @default 5 minutes (5 * 60)
 			 */
 			maxAge?: number;
 			/**
-			 * Enable caching session in cookie
+			 * Enable stateless session management via encrypted JWT cookies.
+			 *
+			 * When enabled:
+			 * - Session and user data stored in encrypted cookies
+			 * - No database required for session validation
+			 * - Social OAuth sign-in works without database
+			 * - Sessions cannot be revoked server-side
+			 *
 			 * @default false
 			 */
 			enabled?: boolean;

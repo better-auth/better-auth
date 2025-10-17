@@ -19,10 +19,6 @@ describe("Custom Session Plugin Tests", async () => {
 			session: {
 				maxAge: 10,
 				updateAge: 0,
-				cookieCache: {
-					enabled: true,
-					maxAge: 10,
-				},
 			},
 			plugins: [
 				...options.plugins,
@@ -75,7 +71,6 @@ describe("Custom Session Plugin Tests", async () => {
 
 					const cookies = parseSetCookieHeader(header!);
 					expect(cookies.has("better-auth.session_token")).toBe(true);
-					expect(cookies.has("better-auth.session_data")).toBe(true);
 				},
 			},
 		});

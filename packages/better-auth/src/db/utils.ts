@@ -1,7 +1,7 @@
 import { getAuthTables } from ".";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterAuthOptions } from "@better-auth/core";
-import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
+import { createKyselyAdapter } from "../adapters/kysely-adapter";
 import { kyselyAdapter } from "../adapters/kysely-adapter";
 import { memoryAdapter, type MemoryDB } from "../adapters/memory-adapter";
 import { logger } from "@better-auth/core/env";
