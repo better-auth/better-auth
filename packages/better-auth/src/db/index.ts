@@ -1,4 +1,4 @@
-export type * from "@better-auth/core/db";
+export * from "@better-auth/core/db";
 export * from "./internal-adapter";
 export * from "./field";
 export * from "./get-tables";
