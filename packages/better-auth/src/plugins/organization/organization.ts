@@ -669,6 +669,29 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+export type OrganizationPlugin<O extends OrganizationOptions> =
+	BetterAuthPlugin & {
+		id: "organization";
+		endpoints: OrganizationEndpoints<O> &
+			(O extends { teams: { enabled: true } } ? TeamEndpoints<O> : {}) &
+			(O extends { dynamicAccessControl: { enabled: true } }
+				? DynamicAccessControlEndpoints<O>
+				: {});
+		schema: OrganizationSchema<O>;
+		$Infer: {
+			Organization: InferOrganization<O>;
+			Invitation: InferInvitation<O>;
+			Member: InferMember<O>;
+			Team: O["teams"] extends { enabled: true } ? Team : any;
+			TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+			ActiveOrganization: Awaited<
+				ReturnType<ReturnType<typeof getFullOrganization<O>>>
+			>;
+		};
+		$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
+		options: O;
+	};
+
 /**
  * Organization plugin for Better Auth. Organization allows you to create teams, members,
  * and manage access control for your users.
