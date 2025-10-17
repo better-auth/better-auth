@@ -159,36 +159,30 @@ describe("expo", async () => {
 	it("should not trigger infinite refetch with non-better-auth cookies", async () => {
 		const { hasBetterAuthCookies } = await import("./client");
 
-		// Test with only better-auth cookies - should return true
 		const betterAuthOnlyHeader = "better-auth.session_token=abc; Path=/";
 		expect(hasBetterAuthCookies(betterAuthOnlyHeader, "better-auth")).toBe(
 			true,
 		);
 
-		// Test with secure better-auth cookies - should return true
 		const secureBetterAuthHeader =
 			"__Secure-better-auth.session_token=abc; Path=/";
 		expect(hasBetterAuthCookies(secureBetterAuthHeader, "better-auth")).toBe(
 			true,
 		);
 
-		// Test with only non-better-auth cookies (like Cloudflare's __cf_bm) - should return false
 		const nonBetterAuthHeader = "__cf_bm=abc123; Path=/; HttpOnly; Secure";
 		expect(hasBetterAuthCookies(nonBetterAuthHeader, "better-auth")).toBe(
 			false,
 		);
 
-		// Test with mixed cookies - should return true (contains better-auth cookie)
 		const mixedHeader =
 			"__cf_bm=abc123; Path=/; HttpOnly; Secure, better-auth.session_token=xyz; Path=/";
 		expect(hasBetterAuthCookies(mixedHeader, "better-auth")).toBe(true);
 
-		// Test with custom prefix
 		const customPrefixHeader = "my-app.session_token=abc; Path=/";
 		expect(hasBetterAuthCookies(customPrefixHeader, "my-app")).toBe(true);
 		expect(hasBetterAuthCookies(customPrefixHeader, "better-auth")).toBe(false);
 
-		// Test with multiple non-better-auth cookies
 		const multipleNonBetterAuthHeader =
 			"__cf_bm=abc123; Path=/, _ga=GA1.2.123456789.1234567890; Path=/";
 		expect(
