@@ -286,7 +286,6 @@ exports[`init > should match config 1`] = `
         },
         "email": {
           "fieldName": "email",
-          "index": true,
           "required": true,
           "sortable": true,
           "type": "string",
