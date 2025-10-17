@@ -9,6 +9,8 @@ import { stripe } from ".";
 import { stripeClient } from "./client";
 import type { StripeOptions, Subscription } from "./types";
 import { expect, describe, it, beforeEach } from "vitest";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 describe("stripe", async () => {
 	const mockStripe = {
@@ -1468,24 +1470,12 @@ describe("stripe", async () => {
 			email: "newemail@example.com",
 		});
 
-		// Create a mock request context
-		const mockRequest = new Request("http://localhost:3000/api/test", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-			},
-		});
-
 		// Update the user's email using internal adapter (which triggers hooks)
-		await ctx.internalAdapter.updateUserByEmail(
-			testUser.email,
-			{
+		const endpointCtx = { context: ctx } as GenericEndpointContext;
+		await runWithEndpointContext(endpointCtx, () =>
+			ctx.internalAdapter.updateUserByEmail(testUser.email, {
 				email: "newemail@example.com",
-			},
-			{
-				request: mockRequest,
-				context: ctx,
-			} as any,
+			}),
 		);
 
 		// Verify that Stripe customer.retrieve was called

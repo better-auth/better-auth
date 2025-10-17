@@ -6,7 +6,7 @@ import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { API_KEY_TABLE_NAME } from "..";
 import type { AuthContext } from "@better-auth/core";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 export function deleteApiKey({
 	opts,
 	schema,
