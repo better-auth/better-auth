@@ -213,8 +213,6 @@ describe("sign-up with pattern password", async (it) => {
 			expect(error.body).toHaveProperty("message");
 			expect(error.body.code).toBe("PASSWORD_NOT_VALID_PATTERN");
 			expect(error.body.message).toBe("Password not valid pattern");
-
-			console.log("error :>> ", error);
 		}
 	});
 });
