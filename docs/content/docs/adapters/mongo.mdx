@@ -30,3 +30,18 @@ export const auth = betterAuth({
 ## Schema generation & migration
 
 For MongoDB, we don't need to generate or migrate the schema.
+
+## Object ID vs String ID
+
+By default, Better Auth uses Object ID for the `id` field.
+You can change this behavior by setting the `disableObjectIdConversion` option to `true` in the adapter options.
+
+This will cause the `id` field to be saved as a string in the database rather than an Object ID.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  database: mongodbAdapter(db, {
+    disableObjectIdConversion: true, // [!code highlight]
+  }),
+});
+```
