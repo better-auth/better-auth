@@ -6,7 +6,7 @@ import type {
 	DBFieldAttribute,
 	DBPreservedModels,
 	SecondaryStorage,
-} from "../db/type";
+} from "../db";
 import type { Account, RateLimit, Session, User, Verification } from "../db";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
@@ -14,8 +14,8 @@ import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Logger } from "../env";
 import type { AuthContext, GenericEndpointContext } from "./context";
-import type { AuthMiddleware } from "../middleware";
-import type { BetterAuthPlugin } from "..";
+import type { AuthMiddleware } from "../api";
+import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type OmitId<T extends { id: unknown }> = Omit<T, "id">;
@@ -216,6 +216,18 @@ export type BetterAuthAdvancedOptions = {
 		 * If set to false, the database's auto generated id will be used.
 		 */
 		generateId?: GenerateIdFn | false;
+	};
+	/**
+	 * OAuth configuration
+	 */
+	oauthConfig?: {
+		/**
+		 * Skip state cookie check
+		 *
+		 * ⚠︎ this has security implications and should only be enabled if you know what you are doing.
+		 * @default false
+		 */
+		skipStateCookieCheck?: boolean;
 	};
 };
 
@@ -636,6 +648,10 @@ export type BetterAuthOptions = {
 		additionalFields?: {
 			[key: string]: DBFieldAttribute;
 		};
+		/**
+		 * @default false
+		 */
+		storeSessionInJWT?: boolean;
 		/**
 		 * By default if secondary storage is provided
 		 * the session is stored in the secondary storage.
