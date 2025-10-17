@@ -62,7 +62,7 @@ export async function generateState(
 }
 
 export async function parseState(c: GenericEndpointContext) {
-	const state = c.query.state || c.body.state;
+	const state = c.query.state || c.body?.state;
 	const data = await c.context.internalAdapter.findVerificationValue(state);
 	if (!data) {
 		c.context.logger.error("State Mismatch. Verification not found", {

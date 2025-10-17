@@ -147,6 +147,12 @@ export interface GenericOAuthConfig {
 	 * @default false
 	 */
 	overrideUserInfo?: boolean;
+	/**
+	 * Whether the state parameter is optional for this provider.
+	 * Enable this for providers that initiate the OAuth flow themselves without state (e.g. Clever).
+	 * @default false
+	 */
+	stateOptional?: boolean;
 }
 
 interface GenericOAuthOptions {
@@ -587,7 +593,18 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						});
 					}
 					let tokens: OAuth2Tokens | undefined = undefined;
-					const parsedState = await parseState(ctx);
+
+					const parsedState =
+						!provider.stateOptional || ctx.query.state || ctx.body?.state
+							? await parseState(ctx)
+							: {
+									link: undefined,
+									callbackURL: ctx.context.baseURL,
+									codeVerifier: undefined,
+									errorURL: undefined,
+									newUserURL: undefined,
+									requestSignUp: false,
+								};
 
 					const {
 						callbackURL,
