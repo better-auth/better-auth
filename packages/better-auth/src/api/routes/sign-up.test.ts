@@ -149,3 +149,72 @@ describe("sign-up with custom fields", async (it) => {
 		expect(session?.user.role).toBeNull();
 	});
 });
+
+describe("sign-up with pattern password", async (it) => {
+	const mockFn = vi.fn();
+	const { auth } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				pattern:
+					/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
+			},
+		},
+		{ disableTestUser: true },
+	);
+	afterEach(() => {
+		mockFn.mockReset();
+	});
+	it("should work with password pattern", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "email1@test.com",
+				password: "Zxcvbnm123!@",
+				name: "Test Name 1",
+				image: "https://picsum.photos/200",
+			},
+		});
+		expect(res).toBeDefined();
+		expect(res.token).toBeDefined();
+		expect(res.user).toBeDefined();
+		expect(res.user).toHaveProperty("id");
+
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session).toBeDefined();
+		expect(session?.session).toBeDefined();
+		expect(session?.user).toBeDefined();
+		expect(session?.user).toHaveProperty("id");
+	});
+
+	it("should not allows invalid password pattern", async () => {
+		try {
+			await auth.api.signUpEmail({
+				body: {
+					email: "email2@test.com",
+					password: "zxcvbnmasdwq",
+					name: "Test Name 2",
+					image: "https://picsum.photos/200",
+				},
+			});
+		} catch (error: any) {
+			expect(error).toBeDefined();
+			expect(error).toHaveProperty("status");
+			expect(error.statusCode).toBe(400);
+
+			expect(error).toHaveProperty("statusCode");
+			expect(error.status).toBe("BAD_REQUEST");
+
+			expect(error).toHaveProperty("body");
+			expect(error.body).toHaveProperty("code");
+			expect(error.body).toHaveProperty("message");
+			expect(error.body.code).toBe("PASSWORD_NOT_VALID_PATTERN");
+			expect(error.body.message).toBe("Password not valid pattern");
+
+			console.log("error :>> ", error);
+		}
+	});
+});
