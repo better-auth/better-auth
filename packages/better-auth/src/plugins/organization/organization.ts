@@ -70,6 +70,605 @@ export function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
 }
 
+// TODO: we need a better way to define plugin schema and endpoints
+type OrganizationSchema<O extends OrganizationOptions> =
+	O["dynamicAccessControl"] extends { enabled: true }
+		? {
+				organizationRole: {
+					modelName: O["schema"] extends {
+						organizationRole: { modelName: infer M };
+					}
+						? M
+						: string | undefined;
+					fields: {
+						organizationId: {
+							type: "string";
+							required: true;
+							references: {
+								model: "organization";
+								field: "id";
+							};
+							fieldName?: O["schema"] extends {
+								organizationRole: {
+									fields: { organizationId: infer F };
+								};
+							}
+								? F
+								: undefined;
+						};
+						role: {
+							type: "string";
+							required: true;
+							fieldName?: O["schema"] extends {
+								organizationRole: {
+									fields: { role: infer F };
+								};
+							}
+								? F
+								: undefined;
+						};
+						permission: {
+							type: "string";
+							required: true;
+							fieldName?: O["schema"] extends {
+								organizationRole: {
+									fields: { permission: infer F };
+								};
+							}
+								? F
+								: undefined;
+						};
+						createdAt: {
+							type: "date";
+							required: true;
+							defaultValue: () => Date;
+							fieldName?: O["schema"] extends {
+								organizationRole: {
+									fields: { createdAt: infer F };
+								};
+							}
+								? F
+								: undefined;
+						};
+						updatedAt: {
+							type: "date";
+							required: false;
+							fieldName?: O["schema"] extends {
+								organizationRole: {
+									fields: { updatedAt: infer F };
+								};
+							}
+								? F
+								: undefined;
+						};
+					} & (O["schema"] extends {
+						organizationRole: { additionalFields: infer F };
+					}
+						? F
+						: {});
+				};
+			}
+		: {} & (O["teams"] extends { enabled: true }
+				? {
+						team: {
+							modelName: O["schema"] extends { team: { modelName: infer M } }
+								? M
+								: string | undefined;
+							fields: {
+								name: {
+									type: "string";
+									required: true;
+									fieldName?: O["schema"] extends {
+										team: { fields: { name: infer F } };
+									}
+										? F
+										: undefined;
+								};
+								organizationId: {
+									type: "string";
+									required: true;
+									references: {
+										model: "organization";
+										field: "id";
+									};
+									fieldName?: O["schema"] extends {
+										team: { fields: { organizationId: infer F } };
+									}
+										? F
+										: undefined;
+								};
+								createdAt: {
+									type: "date";
+									required: true;
+									fieldName?: O["schema"] extends {
+										team: { fields: { createdAt: infer F } };
+									}
+										? F
+										: undefined;
+								};
+								updatedAt: {
+									type: "date";
+									required: false;
+									fieldName?: O["schema"] extends {
+										team: { fields: { updatedAt: infer F } };
+									}
+										? F
+										: undefined;
+									onUpdate: () => Date;
+								};
+							} & (O["schema"] extends { team: { additionalFields: infer F } }
+								? F
+								: {});
+						};
+						teamMember: {
+							modelName: O["schema"] extends {
+								teamMember: { modelName: infer M };
+							}
+								? M
+								: string | undefined;
+							fields: {
+								teamId: {
+									type: "string";
+									required: true;
+									references: {
+										model: "team";
+										field: "id";
+									};
+									fieldName?: O["schema"] extends {
+										teamMember: { fields: { teamId: infer F } };
+									}
+										? F
+										: undefined;
+								};
+								userId: {
+									type: "string";
+									required: true;
+									references: {
+										model: "user";
+										field: "id";
+									};
+									fieldName?: O["schema"] extends {
+										teamMember: { fields: { userId: infer F } };
+									}
+										? F
+										: undefined;
+								};
+								createdAt: {
+									type: "date";
+									required: false;
+									fieldName?: O["schema"] extends {
+										teamMember: { fields: { createdAt: infer F } };
+									}
+										? F
+										: undefined;
+								};
+							};
+						};
+					}
+				: {}) & {
+					organization: {
+						modelName: O["schema"] extends {
+							organization: { modelName: infer M };
+						}
+							? M
+							: string | undefined;
+						fields: {
+							name: {
+								type: "string";
+								required: true;
+								sortable: true;
+								fieldName?: O["schema"] extends {
+									organization: { fields: { name: infer F } };
+								}
+									? F
+									: undefined;
+							};
+							slug: {
+								type: "string";
+								required: true;
+								unique: true;
+								sortable: true;
+								fieldName?: O["schema"] extends {
+									organization: { fields: { slug: infer F } };
+								}
+									? F
+									: undefined;
+							};
+							logo: {
+								type: "string";
+								required: false;
+								fieldName?: O["schema"] extends {
+									organization: { fields: { logo: infer F } };
+								}
+									? F
+									: undefined;
+							};
+							createdAt: {
+								type: "date";
+								required: true;
+								fieldName?: O["schema"] extends {
+									organization: { fields: { createdAt: infer F } };
+								}
+									? F
+									: undefined;
+							};
+							updatedAt: {
+								type: "date";
+								required: false;
+								fieldName?: O["schema"] extends {
+									organization: { fields: { updatedAt: infer F } };
+								}
+									? F
+									: undefined;
+							};
+						};
+					};
+					member: {
+						modelName: O["schema"] extends { member: { modelName: infer M } }
+							? M
+							: string | undefined;
+						fields: {
+							organizationId: {
+								type: "string";
+								required: true;
+								references: {
+									model: "organization";
+									field: "id";
+								};
+								fieldName?: O["schema"] extends {
+									member: { fields: { organizationId: infer F } };
+								}
+									? F
+									: undefined;
+							};
+							userId: {
+								type: "string";
+								required: true;
+								references: {
+									model: "user";
+									field: "id";
+								};
+								fieldName?: O["schema"] extends {
+									member: { fields: { userId: infer F } };
+								}
+									? F
+									: undefined;
+							};
+							role: {
+								type: "string";
+								required: true;
+								fieldName?: O["schema"] extends {
+									member: { fields: { role: infer F } };
+								}
+									? F
+									: undefined;
+								defaultValue: "member";
+							};
+							createdAt: {
+								type: "date";
+								required: true;
+								fieldName?: O["schema"] extends {
+									member: { fields: { createdAt: infer F } };
+								}
+									? F
+									: undefined;
+							};
+						} & (O["schema"] extends { member: { additionalFields: infer F } }
+							? F
+							: {});
+					};
+					invitation: {
+						modelName: O["schema"] extends {
+							invitation: { modelName: infer M };
+						}
+							? M
+							: string | undefined;
+						fields: {
+							organizationId: {
+								type: "string";
+								required: true;
+								references: {
+									model: "organization";
+									field: "id";
+								};
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { organizationId: infer F } };
+								}
+									? F
+									: undefined;
+							};
+							email: {
+								type: "string";
+								required: true;
+								sortable: true;
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { email: infer F } };
+								}
+									? F
+									: undefined;
+							};
+							role: {
+								type: "string";
+								required: true;
+								sortable: true;
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { role: infer F } };
+								}
+									? F
+									: undefined;
+							};
+							status: {
+								type: "string";
+								required: true;
+								sortable: true;
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { status: infer F } };
+								}
+									? F
+									: undefined;
+								defaultValue: "pending";
+							};
+							expiresAt: {
+								type: "date";
+								required: false;
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { expiresAt: infer F } };
+								}
+									? F
+									: undefined;
+							};
+							createdAt: {
+								type: "date";
+								required: true;
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { createdAt: infer F } };
+								}
+									? F
+									: undefined;
+								defaultValue: () => Date;
+							};
+							inviterId: {
+								type: "string";
+								required: true;
+								references: {
+									model: "user";
+									field: "id";
+								};
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { inviterId: infer F } };
+								}
+									? F
+									: undefined;
+							};
+						} & (O["schema"] extends {
+							invitation: { additionalFields: infer F };
+						}
+							? F
+							: {}) &
+							O extends { teams: { enabled: true } }
+							? {
+									teamId: {
+										type: "string";
+										required: false;
+										sortable: true;
+										fieldName?: O["schema"] extends {
+											invitation: { fields: { teamId: infer F } };
+										}
+											? F
+											: undefined;
+									};
+								}
+							: {};
+					};
+					session: {
+						fields: {
+							activeOrganizationId: {
+								type: "string";
+								required: false;
+								fieldName?: O["schema"] extends {
+									session: { fields: { activeOrganizationId: infer F } };
+								}
+									? F
+									: undefined;
+							};
+						} & O["teams"] extends { enabled: true }
+							? {
+									activeTeamId: {
+										type: "string";
+										required: false;
+									};
+								}
+							: {} & (O["schema"] extends {
+									session: { additionalFields: infer F };
+								}
+									? F
+									: {});
+					};
+				};
+
+export type DynamicAccessControlEndpoints<O extends OrganizationOptions> = {
+	createOrgRole: ReturnType<typeof createOrgRole<O>>;
+	deleteOrgRole: ReturnType<typeof deleteOrgRole<O>>;
+	listOrgRoles: ReturnType<typeof listOrgRoles<O>>;
+	getOrgRole: ReturnType<typeof getOrgRole<O>>;
+	updateOrgRole: ReturnType<typeof updateOrgRole<O>>;
+};
+
+export type TeamEndpoints<O extends OrganizationOptions> = {
+	createTeam: ReturnType<typeof createTeam<O>>;
+	listOrganizationTeams: ReturnType<typeof listOrganizationTeams<O>>;
+	removeTeam: ReturnType<typeof removeTeam<O>>;
+	updateTeam: ReturnType<typeof updateTeam<O>>;
+	setActiveTeam: ReturnType<typeof setActiveTeam<O>>;
+	listUserTeams: ReturnType<typeof listUserTeams<O>>;
+	listTeamMembers: ReturnType<typeof listTeamMembers<O>>;
+	addTeamMember: ReturnType<typeof addTeamMember<O>>;
+	removeTeamMember: ReturnType<typeof removeTeamMember<O>>;
+};
+
+export type OrganizationEndpoints<O extends OrganizationOptions> = {
+	createOrganization: ReturnType<typeof createOrganization<O>>;
+	updateOrganization: ReturnType<typeof updateOrganization<O>>;
+	deleteOrganization: ReturnType<typeof deleteOrganization<O>>;
+	setActiveOrganization: ReturnType<typeof setActiveOrganization<O>>;
+	getFullOrganization: ReturnType<typeof getFullOrganization<O>>;
+	listOrganizations: ReturnType<typeof listOrganizations<O>>;
+	createInvitation: ReturnType<typeof createInvitation<O>>;
+	cancelInvitation: ReturnType<typeof cancelInvitation<O>>;
+	acceptInvitation: ReturnType<typeof acceptInvitation<O>>;
+	getInvitation: ReturnType<typeof getInvitation<O>>;
+	rejectInvitation: ReturnType<typeof rejectInvitation<O>>;
+	listInvitations: ReturnType<typeof listInvitations<O>>;
+	getActiveMember: ReturnType<typeof getActiveMember<O>>;
+	checkOrganizationSlug: ReturnType<typeof checkOrganizationSlug<O>>;
+	addMember: ReturnType<typeof addMember<O>>;
+	removeMember: ReturnType<typeof removeMember<O>>;
+	updateMemberRole: ReturnType<typeof updateMemberRole<O>>;
+	leaveOrganization: ReturnType<typeof leaveOrganization<O>>;
+	listUserInvitations: ReturnType<typeof listUserInvitations<O>>;
+	listMembers: ReturnType<typeof listMembers<O>>;
+	getActiveMemberRole: ReturnType<typeof getActiveMemberRole<O>>;
+	hasPermission: ReturnType<typeof createHasPermission<O>>;
+};
+
+const createHasPermission = <O extends OrganizationOptions>(options: O) => {
+	type DefaultStatements = typeof defaultStatements;
+	type Statements = O["ac"] extends AccessControl<infer S>
+		? S
+		: DefaultStatements;
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? Statements[key][number]
+				: never
+		>;
+	};
+	type PermissionExclusive =
+		| {
+				/**
+				 * @deprecated Use `permissions` instead
+				 */
+				permission: PermissionType;
+				permissions?: never;
+		  }
+		| {
+				permissions: PermissionType;
+				permission?: never;
+		  };
+
+	return createAuthEndpoint(
+		"/organization/has-permission",
+		{
+			method: "POST",
+			requireHeaders: true,
+			body: z
+				.object({
+					organizationId: z.string().optional(),
+				})
+				.and(
+					z.union([
+						z.object({
+							permission: z.record(z.string(), z.array(z.string())),
+							permissions: z.undefined(),
+						}),
+						z.object({
+							permission: z.undefined(),
+							permissions: z.record(z.string(), z.array(z.string())),
+						}),
+					]),
+				),
+			use: [orgSessionMiddleware],
+			metadata: {
+				$Infer: {
+					body: {} as PermissionExclusive & {
+						organizationId?: string;
+					},
+				},
+				openapi: {
+					description: "Check if the user has permission",
+					requestBody: {
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										permission: {
+											type: "object",
+											description: "The permission to check",
+											deprecated: true,
+										},
+										permissions: {
+											type: "object",
+											description: "The permission to check",
+										},
+									},
+									required: ["permissions"],
+								},
+							},
+						},
+					},
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											error: {
+												type: "string",
+											},
+											success: {
+												type: "boolean",
+											},
+										},
+										required: ["success"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const activeOrganizationId =
+				ctx.body.organizationId ||
+				ctx.context.session.session.activeOrganizationId;
+			if (!activeOrganizationId) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				});
+			}
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const member = await adapter.findMemberByOrgId({
+				userId: ctx.context.session.user.id,
+				organizationId: activeOrganizationId,
+			});
+			if (!member) {
+				throw new APIError("UNAUTHORIZED", {
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				});
+			}
+			const result = await hasPermission(
+				{
+					role: member.role,
+					options: options || {},
+					permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+					organizationId: activeOrganizationId,
+				},
+				ctx,
+			);
+
+			return ctx.json({
+				error: null,
+				success: result,
+			});
+		},
+	);
+};
+
 /**
  * Organization plugin for Better Auth. Organization allows you to create teams, members,
  * and manage access control for your users.
@@ -77,15 +676,106 @@ export function parseRoles(roles: string | string[]): string {
  * @example
  * ```ts
  * const auth = betterAuth({
- * 	plugins: [
- * 		organization({
- * 			allowUserToCreateOrganization: true,
- * 		}),
- * 	],
+ *  plugins: [
+ *    organization({
+ *      allowUserToCreateOrganization: true,
+ *    }),
+ *  ],
  * });
  * ```
  */
-export const organization = <O extends OrganizationOptions>(options?: O) => {
+export function organization<
+	O extends OrganizationOptions & {
+		teams: { enabled: true };
+	},
+>(
+	options?: O,
+): {
+	id: "organization";
+	endpoints: OrganizationEndpoints<O> & TeamEndpoints<O>;
+	schema: OrganizationSchema<O>;
+	$Infer: {
+		Organization: InferOrganization<O>;
+		Invitation: InferInvitation<O>;
+		Member: InferMember<O>;
+		Team: O["teams"] extends { enabled: true } ? Team : any;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		ActiveOrganization: Awaited<
+			ReturnType<ReturnType<typeof getFullOrganization<O>>>
+		>;
+	};
+	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
+	options: O;
+};
+export function organization<
+	O extends OrganizationOptions & {
+		teams: { enabled: true };
+		dynamicAccessControl: { enabled: true };
+	},
+>(
+	options?: O,
+): {
+	id: "organization";
+	endpoints: OrganizationEndpoints<O> &
+		TeamEndpoints<O> &
+		DynamicAccessControlEndpoints<O>;
+	schema: OrganizationSchema<O>;
+	$Infer: {
+		Organization: InferOrganization<O>;
+		Invitation: InferInvitation<O>;
+		Member: InferMember<O>;
+		Team: O["teams"] extends { enabled: true } ? Team : any;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		ActiveOrganization: Awaited<
+			ReturnType<ReturnType<typeof getFullOrganization<O>>>
+		>;
+	};
+	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
+	options: O;
+};
+export function organization<
+	O extends OrganizationOptions & {
+		dynamicAccessControl: { enabled: true };
+	},
+>(
+	options?: O,
+): {
+	id: "organization";
+	endpoints: OrganizationEndpoints<O> & DynamicAccessControlEndpoints<O>;
+	schema: OrganizationSchema<O>;
+	$Infer: {
+		Organization: InferOrganization<O>;
+		Invitation: InferInvitation<O>;
+		Member: InferMember<O>;
+		Team: O["teams"] extends { enabled: true } ? Team : any;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		ActiveOrganization: Awaited<
+			ReturnType<ReturnType<typeof getFullOrganization<O>>>
+		>;
+	};
+	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
+	options: O;
+};
+export function organization<O extends OrganizationOptions>(
+	options?: O,
+): {
+	id: "organization";
+	endpoints: OrganizationEndpoints<O>;
+	schema: OrganizationSchema<O>;
+	$Infer: {
+		Organization: InferOrganization<O>;
+		Invitation: InferInvitation<O>;
+		Member: InferMember<O>;
+		Team: O["teams"] extends { enabled: true } ? Team : any;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		ActiveOrganization: Awaited<
+			ReturnType<ReturnType<typeof getFullOrganization<O>>>
+		>;
+	};
+	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
+	options: O;
+};
+export function organization<O extends OrganizationOptions>(options?: O): any {
 	let endpoints = {
 		/**
 		 * ### Endpoint
@@ -857,153 +1547,11 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		},
 	});
 
-	type DefaultStatements = typeof defaultStatements;
-	type Statements = O["ac"] extends AccessControl<infer S>
-		? S
-		: DefaultStatements;
-	type PermissionType = {
-		[key in keyof Statements]?: Array<
-			Statements[key] extends readonly unknown[]
-				? Statements[key][number]
-				: never
-		>;
-	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never;
-		  };
-
-	type OrganizationEndpoints = (O["dynamicAccessControl"] extends {
-		enabled: true;
-	}
-		? typeof dynamicAccessControlEndpoints
-		: {}) &
-		(O["teams"] extends { enabled: true } ? typeof teamEndpoints : {}) &
-		typeof endpoints;
-
 	return {
 		id: "organization",
 		endpoints: {
-			...(api as OrganizationEndpoints),
-			hasPermission: createAuthEndpoint(
-				"/organization/has-permission",
-				{
-					method: "POST",
-					requireHeaders: true,
-					body: z
-						.object({
-							organizationId: z.string().optional(),
-						})
-						.and(
-							z.union([
-								z.object({
-									permission: z.record(z.string(), z.array(z.string())),
-									permissions: z.undefined(),
-								}),
-								z.object({
-									permission: z.undefined(),
-									permissions: z.record(z.string(), z.array(z.string())),
-								}),
-							]),
-						),
-					use: [orgSessionMiddleware],
-					metadata: {
-						$Infer: {
-							body: {} as PermissionExclusive & {
-								organizationId?: string;
-							},
-						},
-						openapi: {
-							description: "Check if the user has permission",
-							requestBody: {
-								content: {
-									"application/json": {
-										schema: {
-											type: "object",
-											properties: {
-												permission: {
-													type: "object",
-													description: "The permission to check",
-													deprecated: true,
-												},
-												permissions: {
-													type: "object",
-													description: "The permission to check",
-												},
-											},
-											required: ["permissions"],
-										},
-									},
-								},
-							},
-							responses: {
-								"200": {
-									description: "Success",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													error: {
-														type: "string",
-													},
-													success: {
-														type: "boolean",
-													},
-												},
-												required: ["success"],
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				async (ctx) => {
-					const activeOrganizationId =
-						ctx.body.organizationId ||
-						ctx.context.session.session.activeOrganizationId;
-					if (!activeOrganizationId) {
-						throw new APIError("BAD_REQUEST", {
-							message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-						});
-					}
-					const adapter = getOrgAdapter<O>(ctx.context, options);
-					const member = await adapter.findMemberByOrgId({
-						userId: ctx.context.session.user.id,
-						organizationId: activeOrganizationId,
-					});
-					if (!member) {
-						throw new APIError("UNAUTHORIZED", {
-							message:
-								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-						});
-					}
-					const result = await hasPermission(
-						{
-							role: member.role,
-							options: options || {},
-							permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
-							organizationId: activeOrganizationId,
-						},
-						ctx,
-					);
-
-					return ctx.json({
-						error: null,
-						success: result,
-					});
-				},
-			),
+			...(api as unknown as OrganizationEndpoints<O>),
+			hasPermission: createHasPermission(options as O),
 		},
 		schema: {
 			...(schema as BetterAuthPluginDBSchema),
@@ -1057,4 +1605,4 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 		options: options as O,
 	} satisfies BetterAuthPlugin;
-};
+}

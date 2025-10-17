@@ -6,7 +6,7 @@ import {
 } from "better-call";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { UnionToIntersection } from "../types/helper";
-import { originCheckMiddleware } from "./middlewares/origin-check";
+import { originCheckMiddleware } from "./middlewares";
 import {
 	callbackOAuth,
 	forgetPassword,
@@ -37,9 +37,9 @@ import {
 	requestPasswordReset,
 	requestPasswordResetCallback,
 } from "./routes";
-import { ok } from "./routes/ok";
-import { signUpEmail } from "./routes/sign-up";
-import { error } from "./routes/error";
+import { ok } from "./routes";
+import { signUpEmail } from "./routes";
+import { error } from "./routes";
 import { type InternalLogger, logger } from "@better-auth/core/env";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { onRequestRateLimit } from "./rate-limiter";
