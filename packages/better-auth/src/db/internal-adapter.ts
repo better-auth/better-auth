@@ -687,12 +687,7 @@ export const createInternalAdapter = (
 
 				const where: Where[] = [{ value: token, field: "token" }];
 
-				await updateWithHooks(
-					updateData,
-					where,
-					"session",
-					undefined
-				);
+				await updateWithHooks(updateData, where, "session", undefined);
 			}
 		},
 		deleteAccounts: async (userId: string) => {
@@ -737,8 +732,9 @@ export const createInternalAdapter = (
 				}
 
 				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
+					(!options.session?.storeSessionInDatabase ||
+						ctx.options.session?.preserveSessionInDatabase) &&
+					ctx.options.session?.deleteSessionOnSignOut?.enabled !== false
 				) {
 					return;
 				}
@@ -754,7 +750,7 @@ export const createInternalAdapter = (
 						},
 					],
 					"session",
-					undefined
+					undefined,
 				);
 			} else {
 				const updateData: { isActive?: boolean; invalidatedAt?: Date } = {};
@@ -775,7 +771,7 @@ export const createInternalAdapter = (
 						},
 					],
 					"session",
-					undefined
+					undefined,
 				);
 			}
 		},

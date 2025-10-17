@@ -640,6 +640,10 @@ describe("adapter test", async () => {
 		(await getMigrations(testOpts)).runMigrations();
 
 		const testCtx = await init(testOpts);
+		const ctx = {
+			context: testCtx,
+		} as GenericEndpointContext;
+		const internalAdapter = testCtx.internalAdapter;
 
 		const testUser = {
 			id: "test-user-id",
@@ -651,14 +655,12 @@ describe("adapter test", async () => {
 			updatedAt: new Date(),
 		};
 
-		const user = await testCtx.internalAdapter.createUser(
-			testUser,
-			testCtx as unknown as GenericEndpointContext,
+		const user = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createUser(testUser),
 		);
 
-		const session = (await testCtx.internalAdapter.createSession(
-			user.id,
-			testCtx as unknown as GenericEndpointContext,
+		const session = (await runWithEndpointContext(ctx, () =>
+			internalAdapter.createSession(user.id),
 		)) as SessionWithSoftDelete;
 
 		expect(session.isActive).toBeDefined();
@@ -666,16 +668,16 @@ describe("adapter test", async () => {
 
 		const sessionToken = session.token;
 
-		const activeSession =
-			await testCtx.internalAdapter.findSession(sessionToken);
+		const activeSession = await internalAdapter.findSession(sessionToken);
 
 		expect(activeSession).toBeDefined();
 		expect(activeSession?.session).toBeDefined();
 
-		await testCtx.internalAdapter.deleteSession(sessionToken);
+		await runWithEndpointContext(ctx, () =>
+			internalAdapter.deleteSession(sessionToken),
+		);
 
-		const inactiveSession =
-			await testCtx.internalAdapter.findSession(sessionToken);
+		const inactiveSession = await internalAdapter.findSession(sessionToken);
 
 		expect(inactiveSession).toBeNull();
 
@@ -715,6 +717,10 @@ describe("adapter test", async () => {
 		(await getMigrations(testOpts)).runMigrations();
 
 		const testCtx = await init(testOpts);
+		const ctx = {
+			context: testCtx,
+		} as GenericEndpointContext;
+		const internalAdapter = testCtx.internalAdapter;
 
 		const testUser = {
 			id: "test-user-id",
@@ -726,14 +732,12 @@ describe("adapter test", async () => {
 			updatedAt: new Date(),
 		};
 
-		const user = await testCtx.internalAdapter.createUser(
-			testUser,
-			testCtx as unknown as GenericEndpointContext,
+		const user = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createUser(testUser),
 		);
 
-		const session = (await testCtx.internalAdapter.createSession(
-			user.id,
-			testCtx as unknown as GenericEndpointContext,
+		const session = (await runWithEndpointContext(ctx, () =>
+			internalAdapter.createSession(user.id),
 		)) as SessionWithSoftDelete;
 
 		expect(session.invalidatedAt).toBeDefined();
@@ -741,15 +745,15 @@ describe("adapter test", async () => {
 
 		const sessionToken = session.token;
 
-		const validSession =
-			await testCtx.internalAdapter.findSession(sessionToken);
+		const validSession = await internalAdapter.findSession(sessionToken);
 
 		expect(validSession?.session).toBeDefined();
 
-		await testCtx.internalAdapter.deleteSession(sessionToken);
+		await runWithEndpointContext(ctx, () =>
+			internalAdapter.deleteSession(sessionToken),
+		);
 
-		const invalidatedSession =
-			await testCtx.internalAdapter.findSession(sessionToken);
+		const invalidatedSession = await internalAdapter.findSession(sessionToken);
 
 		expect(invalidatedSession).toBeNull();
 
@@ -779,36 +783,40 @@ describe("adapter test", async () => {
 
 		(await getMigrations(testOpts)).runMigrations();
 		const testCtx = await init(testOpts);
+		const ctx = {
+			context: testCtx,
+		} as GenericEndpointContext;
+		const internalAdapter = testCtx.internalAdapter;
 
-		const user = await testCtx.internalAdapter.createUser(
-			{
-				id: "test-user",
-				name: "Test User",
-				email: "test@example.com",
-				emailVerified: true,
-				image: null,
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			},
-			testCtx as unknown as GenericEndpointContext,
+		const testUser = {
+			id: "test-user-id",
+			name: "Test User",
+			email: "test@example.com",
+			emailVerified: true,
+			image: null,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+
+		const user = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createUser(testUser),
 		);
 
-		const session1 = await testCtx.internalAdapter.createSession(
-			user.id,
-			testCtx as unknown as GenericEndpointContext,
+		const session1 = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createSession(user.id),
 		);
-		const session2 = await testCtx.internalAdapter.createSession(
-			user.id,
-			testCtx as unknown as GenericEndpointContext,
+		const session2 = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createSession(user.id),
 		);
-		const session3 = await testCtx.internalAdapter.createSession(
-			user.id,
-			testCtx as unknown as GenericEndpointContext,
+		const session3 = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createSession(user.id),
 		);
 
-		await testCtx.internalAdapter.deleteSession(session2.token);
+		await runWithEndpointContext(ctx, () =>
+			internalAdapter.deleteSession(session2.token),
+		);
 
-		const activeSessions = await testCtx.internalAdapter.listSessions(user.id);
+		const activeSessions = await internalAdapter.listSessions(user.id);
 
 		expect(activeSessions.length).toBe(2);
 		expect(
@@ -838,9 +846,13 @@ describe("adapter test", async () => {
 
 		(await getMigrations(testOpts)).runMigrations();
 		const testCtx = await init(testOpts);
+		const ctx = {
+			context: testCtx,
+		} as GenericEndpointContext;
+		const internalAdapter = testCtx.internalAdapter;
 
-		const user = await testCtx.internalAdapter.createUser(
-			{
+		const user = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createUser({
 				id: "test-user",
 				name: "Test User",
 				email: "test@example.com",
@@ -848,32 +860,29 @@ describe("adapter test", async () => {
 				image: null,
 				createdAt: new Date(),
 				updatedAt: new Date(),
-			},
-			testCtx as unknown as GenericEndpointContext,
+			}),
 		);
 
 		const sessions = await Promise.all([
-			testCtx.internalAdapter.createSession(
-				user.id,
-				testCtx as unknown as GenericEndpointContext,
+			await runWithEndpointContext(ctx, () =>
+				internalAdapter.createSession(user.id),
 			),
-			testCtx.internalAdapter.createSession(
-				user.id,
-				testCtx as unknown as GenericEndpointContext,
+			await runWithEndpointContext(ctx, () =>
+				internalAdapter.createSession(user.id),
 			),
-			testCtx.internalAdapter.createSession(
-				user.id,
-				testCtx as unknown as GenericEndpointContext,
+			await runWithEndpointContext(ctx, () =>
+				internalAdapter.createSession(user.id),
 			),
 		]);
 
-		await testCtx.internalAdapter.deleteSessions(
-			user.id,
-			testCtx as unknown as GenericEndpointContext,
+		await runWithEndpointContext(ctx, () =>
+			internalAdapter.deleteSessions(user.id),
 		);
 
 		for (const session of sessions) {
-			const found = await testCtx.internalAdapter.findSession(session.token);
+			const found = await ctx.context.internalAdapter.findSession(
+				session.token,
+			);
 			expect(found).toBeNull();
 		}
 	});
