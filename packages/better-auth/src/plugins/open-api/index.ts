@@ -6,6 +6,8 @@ import type { LiteralString } from "../../types/helper";
 import { APIError } from "../../api";
 import { createAuthEndpoint } from "@better-auth/core/api";
 
+export type { FieldSchema, Path, OpenAPIModelSchema } from "./generator";
+
 type ScalarTheme =
 	| "alternate"
 	| "default"

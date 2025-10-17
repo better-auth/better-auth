@@ -6,7 +6,9 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
+    "@better-auth/sso": "workspace:*",
+    "@better-auth/stripe": "workspace:*",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.4.1"
+    "stripe": "^18.5.0"
   }
 }

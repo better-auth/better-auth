@@ -81,13 +81,13 @@ function getTypeFromZodType(zodType: z.ZodType<any>) {
 	return allowedType.has(type) ? (type as AllowedType) : "string";
 }
 
-type FieldSchema = {
+export type FieldSchema = {
 	type: DBFieldType;
 	default?: DBFieldAttributeConfig["defaultValue"] | "Generated at runtime";
 	readOnly?: boolean;
 };
 
-type OpenAPIModelSchema = {
+export type OpenAPIModelSchema = {
 	type: "object";
 	properties: Record<string, FieldSchema>;
 	required?: string[];

@@ -6,7 +6,7 @@ import type {
 	DBFieldAttribute,
 	DBPreservedModels,
 	SecondaryStorage,
-} from "../db/type";
+} from "../db";
 import type { Account, RateLimit, Session, User, Verification } from "../db";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
@@ -15,7 +15,7 @@ import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Logger } from "../env";
 import type { AuthContext, GenericEndpointContext } from "./context";
 import type { AuthMiddleware } from "../api";
-import type { BetterAuthPlugin } from "..";
+import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type OmitId<T extends { id: unknown }> = Omit<T, "id">;
