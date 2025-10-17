@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "strict": true,
+    "composite": true,
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",

@@ -5,5 +5,10 @@
     "outDir": "./dist",
     "lib": ["esnext", "dom", "dom.iterable"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../better-auth"
+    }
+  ]
 }
