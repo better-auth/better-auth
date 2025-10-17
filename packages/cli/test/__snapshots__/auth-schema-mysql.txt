@@ -12,7 +12,7 @@ export const custom_user = mysqlTable(
   "custom_user",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
-    name: text("name").notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
     email: varchar("email", { length: 255 }).notNull().unique(),
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
@@ -81,7 +81,7 @@ export const custom_verification = mysqlTable(
   "custom_verification",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
-    identifier: text("identifier").notNull(),
+    identifier: varchar("identifier", { length: 255 }).notNull(),
     value: text("value").notNull(),
     expiresAt: timestamp("expires_at", { fsp: 3 }).notNull(),
     createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
@@ -97,7 +97,7 @@ export const twoFactor = mysqlTable(
   "two_factor",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
-    secret: text("secret").notNull(),
+    secret: varchar("secret", { length: 255 }).notNull(),
     backupCodes: text("backup_codes").notNull(),
     userId: varchar("user_id", { length: 36 })
       .notNull()

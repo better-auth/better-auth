@@ -246,7 +246,6 @@ exports[`init > should match config 1`] = `
         },
         "token": {
           "fieldName": "token",
-          "index": true,
           "required": true,
           "type": "string",
           "unique": true,

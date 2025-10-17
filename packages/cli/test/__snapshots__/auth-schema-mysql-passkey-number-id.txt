@@ -13,7 +13,7 @@ export const custom_user = mysqlTable(
   "custom_user",
   {
     id: int("id").autoincrement().primaryKey(),
-    name: text("name").notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
     email: varchar("email", { length: 255 }).notNull().unique(),
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
@@ -76,7 +76,7 @@ export const custom_verification = mysqlTable(
   "custom_verification",
   {
     id: int("id").autoincrement().primaryKey(),
-    identifier: text("identifier").notNull(),
+    identifier: varchar("identifier", { length: 255 }).notNull(),
     value: text("value").notNull(),
     expiresAt: timestamp("expires_at", { fsp: 3 }).notNull(),
     createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
