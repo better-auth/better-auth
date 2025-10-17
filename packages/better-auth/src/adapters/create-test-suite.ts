@@ -138,14 +138,16 @@ export const createTestSuite = <
 			/**
 			 * Some adapters may change the ID type, this function allows you to pass the entire model
 			 * data and it will return the correct better-auth-expected transformed data.
-			 * 
+			 *
 			 * Eg:
 			 * MongoDB uses ObjectId for IDs, but it's possible the user can disable that option in the adapter config.
 			 * Because of this, the expected data would be a string.
 			 * These sorts of conversions will cause issues with the test when you use the `generate` function.
 			 * This is because the `generate` function will return the raw data expected to be saved in DB, not the excpected BA output.
 			 */
-			transformGeneratedModel: (data: Record<string, any>) => Record<string, any>;
+			transformGeneratedModel: (
+				data: Record<string, any>,
+			) => Record<string, any>;
 		},
 		additionalOptions?: AdditionalOptions,
 	) => Tests,
@@ -289,7 +291,8 @@ export const createTestSuite = <
 						id,
 						createdAt: randomDate,
 						updatedAt: new Date(),
-						email: `user-${helpers.transformIdOutput?.(id) ?? id}@email.com`.toLowerCase(),
+						email:
+							`user-${helpers.transformIdOutput?.(id) ?? id}@email.com`.toLowerCase(),
 						emailVerified: true,
 						name: `user-${helpers.transformIdOutput?.(id) ?? id}`,
 						image: null,

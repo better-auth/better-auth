@@ -227,7 +227,7 @@ export const testAdapter = async ({
 						runMigrations: migrate,
 						onTestFinish: async () => {},
 						customIdGenerator,
-						transformIdOutput
+						transformIdOutput,
 					});
 				}
 			});
