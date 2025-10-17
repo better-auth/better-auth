@@ -21,7 +21,7 @@ function getVenderBaseURL() {
 	return vercel || netlify || render || aws || google || azure;
 }
 
-interface OAuthProxyOptions {
+export interface OAuthProxyOptions {
 	/**
 	 * The current URL of the application.
 	 * The plugin will attempt to infer the current URL from your environment

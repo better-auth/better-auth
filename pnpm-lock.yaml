@@ -352,7 +352,7 @@ importers:
         version: 12.23.12(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       geist:
         specifier: ^1.4.2
-        version: 1.4.2(next@16.0.0-beta.0(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
+        version: 1.4.2(next@16.0.0-beta.0(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -608,7 +608,7 @@ importers:
         version: 15.8.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(algoliasearch@5.36.0)(lucide-react@0.542.0(react@19.2.0))(next@16.0.0-beta.0(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(tailwindcss@4.1.13)
       geist:
         specifier: ^1.4.2
-        version: 1.4.2(next@16.0.0-beta.0(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
+        version: 1.4.2(next@16.0.0-beta.0(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
@@ -839,12 +839,18 @@ importers:
 
   e2e/smoke/test/fixtures/tsconfig-decelration:
     dependencies:
+      '@better-auth/sso':
+        specifier: workspace:*
+        version: link:../../../../../packages/sso
+      '@better-auth/stripe':
+        specifier: workspace:*
+        version: link:../../../../../packages/stripe
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
-      better-sqlite3:
-        specifier: ^12.4.1
-        version: 12.4.1
+      stripe:
+        specifier: ^18.5.0
+        version: 18.5.0(@types/node@24.7.2)
 
   e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types:
     dependencies:
@@ -17523,7 +17529,9 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
@@ -21641,7 +21649,7 @@ snapshots:
 
   function-bind@1.1.2: {}
 
-  geist@1.4.2(next@16.0.0-beta.0(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)):
+  geist@1.4.2(next@16.0.0-beta.0(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)):
     dependencies:
       next: 16.0.0-beta.0(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)
 
