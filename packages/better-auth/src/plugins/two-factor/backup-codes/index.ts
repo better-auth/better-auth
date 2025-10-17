@@ -322,7 +322,6 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						data: JSON.stringify(validate.updated),
 					});
 
-					// Use the id to update the record
 					await ctx.context.adapter.update({
 						model: twoFactorTable,
 						update: {
