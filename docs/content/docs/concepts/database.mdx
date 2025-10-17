@@ -64,6 +64,11 @@ betterAuth({
 });
 ```
 
+<Callout type="warn">
+Better Auth uses **seconds** for the TTL value in `set()`.
+If your storage expects milliseconds, multiply by 1000 when passing the TTL (`ttl * 1000`).
+</Callout>
+
 **Example: Redis Implementation**
 
 Here's a basic example using Redis:
@@ -82,6 +87,7 @@ export const auth = betterAuth({
 			return await redis.get(key);
 		},
 		set: async (key, value, ttl) => {
+			// TTL in seconds — convert ms with ttl * 1000.
 			if (ttl) await redis.set(key, value, { EX: ttl });
 			// or for ioredis:
 			// if (ttl) await redis.set(key, value, 'EX', ttl)
