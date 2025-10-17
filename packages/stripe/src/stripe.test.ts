@@ -49,7 +49,7 @@ describe("stripe", async () => {
 			update: vi.fn(),
 		},
 		webhooks: {
-			constructEvent: vi.fn(),
+			constructEventAsync: vi.fn(),
 		},
 	};
 
