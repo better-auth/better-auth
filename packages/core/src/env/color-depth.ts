@@ -88,7 +88,7 @@ export function getColorDepth(): number {
 		return COLORS_2;
 	}
 
-	if (typeof process !== "undefined" && process.platform === "win32") {
+	if (typeof process !== "undefined" && process?.platform === "win32") {
 		// Windows 10 build 14931 (from 2016) has true color support
 		return COLORS_16m;
 	}
