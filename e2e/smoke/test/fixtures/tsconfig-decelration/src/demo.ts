@@ -198,3 +198,12 @@ export const auth = betterAuth({
 		lastLoginMethod(),
 	],
 });
+
+auth.api
+	.createOrganization({
+		body: {
+			name: "My Org",
+			slug: "my-org",
+		},
+	})
+	.catch();
