@@ -18,7 +18,6 @@ export const schema = {
 			clientId: {
 				type: "string",
 				unique: true,
-				index: true,
 			},
 			clientSecret: {
 				type: "string",

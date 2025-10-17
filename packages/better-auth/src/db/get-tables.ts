@@ -66,7 +66,6 @@ export const getAuthTables = (
 					required: true,
 					fieldName: options.session?.fields?.token || "token",
 					unique: true,
-					index: true,
 				},
 				createdAt: {
 					type: "date",

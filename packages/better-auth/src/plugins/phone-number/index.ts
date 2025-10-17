@@ -1007,7 +1007,6 @@ const schema = {
 				unique: true,
 				sortable: true,
 				returned: true,
-				index: true,
 			},
 			phoneNumberVerified: {
 				type: "boolean",
