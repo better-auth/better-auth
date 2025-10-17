@@ -424,7 +424,10 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 			}) {
 				if (field === "_id" || fieldAttributes.references?.field === "id") {
 					const convertId = createConvertId(options.logger);
-				const result = convertId(data, action !== "update" && action !== "updateMany");
+					const result = convertId(
+						data,
+						action !== "update",
+					);
 					return result;
 				}
 				return data;
