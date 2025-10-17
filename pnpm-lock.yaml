@@ -10,8 +10,8 @@ catalogs:
       specifier: 1.1.18
       version: 1.1.18
     better-call:
-      specifier: 1.0.19
-      version: 1.0.19
+      specifier: 1.0.24
+      version: 1.0.24
     tsdown:
       specifier: ^0.15.6
       version: 0.15.6
@@ -322,7 +322,7 @@ importers:
         version: link:../../packages/better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.19
+        version: 1.0.24
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.4.1
@@ -839,12 +839,18 @@ importers:
 
   e2e/smoke/test/fixtures/tsconfig-decelration:
     dependencies:
+      '@better-auth/sso':
+        specifier: workspace:*
+        version: link:../../../../../packages/sso
+      '@better-auth/stripe':
+        specifier: workspace:*
+        version: link:../../../../../packages/stripe
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
-      better-sqlite3:
-        specifier: ^12.4.1
-        version: 12.4.1
+      stripe:
+        specifier: ^18.5.0
+        version: 18.5.0(@types/node@24.7.2)
 
   e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types:
     dependencies:
@@ -854,6 +860,15 @@ importers:
       better-sqlite3:
         specifier: ^12.4.1
         version: 12.4.1
+
+  e2e/smoke/test/fixtures/tsconfig-isolated-module-bundler:
+    dependencies:
+      better-auth:
+        specifier: workspace:*
+        version: link:../../../../../packages/better-auth
+      better-auth-harmony:
+        specifier: ^1.2.5
+        version: 1.2.5(better-auth@packages+better-auth)
 
   e2e/smoke/test/fixtures/tsconfig-verbatim-module-syntax-node10:
     dependencies:
@@ -905,7 +920,7 @@ importers:
         version: 13.1.2
       better-call:
         specifier: 'catalog:'
-        version: 1.0.19
+        version: 1.0.24
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1145,7 +1160,7 @@ importers:
         version: 7.6.13
       better-call:
         specifier: 'catalog:'
-        version: 1.0.19
+        version: 1.0.24
       better-sqlite3:
         specifier: ^12.4.1
         version: 12.4.1
@@ -1234,7 +1249,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.19
+        version: 1.0.24
       body-parser:
         specifier: ^2.2.0
         version: 2.2.0
@@ -1262,7 +1277,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.19
+        version: 1.0.24
       stripe:
         specifier: ^18.5.0
         version: 18.5.0(@types/node@24.7.2)
@@ -6620,8 +6635,13 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  better-call@1.0.19:
-    resolution: {integrity: sha512-sI3GcA1SCVa3H+CDHl8W8qzhlrckwXOTKhqq3OOPXjgn5aTOMIqGY34zLY/pHA6tRRMjTUC3lz5Mi7EbDA24Kw==}
+  better-auth-harmony@1.2.5:
+    resolution: {integrity: sha512-4YaAK5vrLnB6heImYJB8Pf524BPFrOYmUy1IFTHk6btGDCbgh3xT/hBCM6Ougwv/drURxtfZlB/FPktIjKLMtg==}
+    peerDependencies:
+      better-auth: ^1.0.3
+
+  better-call@1.0.24:
+    resolution: {integrity: sha512-iGqL29cstPp4xLD2MjKL1EmyAqQHjYS+cBMt4W27rPs3vf+kuqkVPA0NYaf7JciBOzVsJdNj4cbZWXC5TardWQ==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -9358,6 +9378,9 @@ packages:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
     engines: {node: '>=6'}
 
+  libphonenumber-js@1.12.24:
+    resolution: {integrity: sha512-l5IlyL9AONj4voSd7q9xkuQOL4u8Ty44puTic7J88CmdXkxfGsRfoVLXHCxppwehgpb/Chdb80FFehHqjN3ItQ==}
+
   libsql@0.3.19:
     resolution: {integrity: sha512-Aj5cQ5uk/6fHdmeW0TiXK42FqUlwx7ytmMLPSaUQPin5HKKKuUPD62MAbN4OEweGBBI7q1BekoEN4gPUEL6MZA==}
     cpu: [x64, arm64, wasm32]
@@ -9645,6 +9668,10 @@ packages:
 
   magicast@0.3.5:
     resolution: {integrity: sha512-L0WhttDl+2BOsybvEOLK7fW3UA0OQ0IQ2d6Zl2x/a6vVRs3bAY0ECOSHHeL5jD+SbOpOCUEi0y1DgHEn9Qn1AQ==}
+
+  mailchecker@6.0.18:
+    resolution: {integrity: sha512-dSTFLe6VYpcvDXcDTPQ5ANCZFbeAFjxBukl+V8eZKKSaWwPsSPDWEbHIo6EBm8CnCU7qanEPdHW1H3WBYhTV1g==}
+    engines: {node: '>=0.10'}
 
   make-dir@2.1.0:
     resolution: {integrity: sha512-LS9X+dc8KLxXCb8dni79fLIIUA5VyZoyjSMCwTluaXA0o27cCK0bhXkpgw+sTXVpPy/lSO57ilRixqk0vDmtRA==}
@@ -12694,6 +12721,10 @@ packages:
   validate-npm-package-name@5.0.1:
     resolution: {integrity: sha512-OljLrQ9SQdOUqTaQxqL5dEfZWrXExyyWsozYlAWFawPVNuD83igl7uJD2RTkNMbniIYgt8l81eCJGIdQF7avLQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
+
+  validator@13.15.15:
+    resolution: {integrity: sha512-BgWVbCI72aIQy937xbawcs+hrVaN/CZ2UwutgaJ36hGqRrLNM+f5LUT/YPRbo8IV/ASeFzXszezV+y2+rq3l8A==}
+    engines: {node: '>= 0.10'}
 
   vary@1.1.2:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
@@ -17498,7 +17529,9 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
@@ -19513,7 +19546,14 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  better-call@1.0.19:
+  better-auth-harmony@1.2.5(better-auth@packages+better-auth):
+    dependencies:
+      better-auth: link:packages/better-auth
+      libphonenumber-js: 1.12.24
+      mailchecker: 6.0.18
+      validator: 13.15.15
+
+  better-call@1.0.24:
     dependencies:
       '@better-auth/utils': 0.3.0
       '@better-fetch/fetch': 1.1.18
@@ -22455,6 +22495,8 @@ snapshots:
 
   leven@3.1.0: {}
 
+  libphonenumber-js@1.12.24: {}
+
   libsql@0.3.19:
     dependencies:
       '@neon-rs/load': 0.0.4
@@ -22736,6 +22778,8 @@ snapshots:
       '@babel/parser': 7.28.4
       '@babel/types': 7.28.4
       source-map-js: 1.2.1
+
+  mailchecker@6.0.18: {}
 
   make-dir@2.1.0:
     dependencies:
@@ -26945,6 +26989,8 @@ snapshots:
       spdx-expression-parse: 3.0.1
 
   validate-npm-package-name@5.0.1: {}
+
+  validator@13.15.15: {}
 
   vary@1.1.2: {}
 
