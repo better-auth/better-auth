@@ -127,6 +127,8 @@ export const getMetadata = (
  *
  * @param options - The options for the OIDC plugin.
  * @returns A Better Auth plugin.
+ *
+ * @deprecated Use [oauthProvider](../oauth-provider/index.ts) instead
  */
 export const oidcProvider = (options: OIDCOptions) => {
 	const modelName = {
