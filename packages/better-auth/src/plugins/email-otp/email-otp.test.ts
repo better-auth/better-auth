@@ -344,19 +344,72 @@ describe("email-otp-verify", async () => {
 		},
 	);
 
-	it("should return USER_NOT_FOUND error when disableSignUp and user not registered", async () => {
+	it("should prevent user enumeration when disableSignUp is enabled", async () => {
+		// Should return success for non-existent user to prevent enumeration
 		const response = await client.emailOtp.sendVerificationOtp({
 			email: "non-existent@domain.com",
 			type: "email-verification",
 		});
 
-		expect(response.error?.message).toBe("User not found");
-		// Existing user should still succeed
+		expect(response.data?.success).toBe(true);
+		expect(response.error).toBeFalsy();
+
+		// Existing user should also succeed
 		const successRes = await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
 			type: "email-verification",
 		});
+		expect(successRes.data?.success).toBe(true);
 		expect(successRes.error).toBeFalsy();
+	});
+
+	it("should not send OTP email for non-existent users when disableSignUp is enabled", async () => {
+		const sendOtpSpy = vi.fn();
+		const { client: testClient, testUser: existingUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						emailOTP({
+							async sendVerificationOTP({ email, otp: _otp, type }) {
+								sendOtpSpy(email, _otp, type);
+							},
+							disableSignUp: true,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+		sendOtpSpy.mockClear();
+
+		// Try to send OTP to non-existent user
+		const nonExistentResponse = await testClient.emailOtp.sendVerificationOtp({
+			email: "non-existent-user@example.com",
+			type: "sign-in",
+		});
+
+		// Should return success but not actually call sendVerificationOTP
+		expect(nonExistentResponse.data?.success).toBe(true);
+		expect(sendOtpSpy).not.toHaveBeenCalled();
+
+		// Now try with an existing user - should actually send OTP
+		const existingResponse = await testClient.emailOtp.sendVerificationOtp({
+			email: existingUser.email,
+			type: "sign-in",
+		});
+
+		// Should return success AND call sendVerificationOTP
+		expect(existingResponse.data?.success).toBe(true);
+		expect(sendOtpSpy).toHaveBeenCalledTimes(1);
+		expect(sendOtpSpy).toHaveBeenCalledWith(
+			existingUser.email,
+			expect.any(String),
+			"sign-in",
+		);
 	});
 
 	it("should verify email with last otp", async () => {
