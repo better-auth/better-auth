@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getTestInstanceMemory as getTestInstance } from "better-auth/test";
+import {
+	getTestInstanceMemory as getTestInstanceMemory,
+	getTestInstance,
+} from "better-auth/test";
 import { sso } from ".";
 import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
@@ -11,7 +14,7 @@ let server = new OAuth2Server();
 
 describe("SSO", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
-		await getTestInstance({
+		await getTestInstanceMemory({
 			plugins: [sso(), organization()],
 		});
 
@@ -569,5 +572,224 @@ describe("provisioning", async (ctx) => {
 		});
 
 		expect(res.url).toContain("http://localhost:8080/authorize");
+	});
+});
+
+describe("SSO Foreign Key Constraints", async () => {
+	// Create a dedicated server instance for this test suite
+	const fkConstraintsServer = new OAuth2Server();
+
+	const { auth, runWithUser, customFetchImpl } = await getTestInstance({
+		plugins: [sso(), organization()],
+	});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	beforeAll(async () => {
+		await fkConstraintsServer.issuer.keys.generate("RS256");
+		fkConstraintsServer.issuer.on;
+		await fkConstraintsServer.start(8083, "localhost");
+
+		// Set up token signing
+		fkConstraintsServer.service.on("beforeTokenSigning", (token, req) => {
+			token.payload.email = "sso-user@localhost:8000.com";
+			token.payload.email_verified = true;
+			token.payload.name = "Test User";
+			token.payload.picture = "https://test.com/picture.png";
+		});
+	});
+
+	afterAll(async () => {
+		await fkConstraintsServer.stop();
+	});
+
+	it("should not delete SSO provider when creator user is deleted", async () => {
+		// Create a user for this test
+		const testUser = {
+			email: "user-delete-test@example.com",
+			password: "password123456",
+			name: "User Delete Test",
+		};
+
+		const { data: signUpData } = await authClient.signUp.email(testUser);
+		const userId = signUpData?.user.id!;
+
+		await runWithUser(testUser.email, testUser.password, async (headers) => {
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					issuer: fkConstraintsServer.issuer.url!,
+					domain: "oidc-delete-test.com",
+					oidcConfig: {
+						clientId: "test-delete",
+						clientSecret: "test-delete",
+						authorizationEndpoint: `${fkConstraintsServer.issuer.url}/authorize`,
+						tokenEndpoint: `${fkConstraintsServer.issuer.url}/token`,
+						jwksEndpoint: `${fkConstraintsServer.issuer.url}/jwks`,
+						discoveryEndpoint: `${fkConstraintsServer.issuer.url}/.well-known/openid-configuration`,
+						mapping: {
+							id: "sub",
+							email: "email",
+							emailVerified: "email_verified",
+							name: "name",
+							image: "picture",
+						},
+					},
+					providerId: "oidc-delete-test",
+				},
+				headers,
+			});
+
+			// Verify provider exists before deletion and has the correct userId
+			const providerBeforeDelete = await auth.$context.then((ctx) =>
+				ctx.adapter.findOne<{
+					userId: string | null;
+					domain: string;
+					providerId: string;
+				}>({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: "oidc-delete-test" }],
+				}),
+			);
+
+			expect(providerBeforeDelete).toBeTruthy();
+			expect(providerBeforeDelete?.userId).toBe(userId);
+		});
+
+		// Delete the user who created the SSO provider (outside runWithUser)
+		// The database foreign key constraint with SET NULL should handle setting userId to null
+		await auth.$context.then((ctx) =>
+			ctx.adapter.delete({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: userId,
+					},
+				],
+			}),
+		);
+
+		// Verify SSO provider still exists but userId is null
+		const ssoProvider = await auth.$context.then((ctx) =>
+			ctx.adapter.findOne<{
+				userId: string | null;
+				domain: string;
+				providerId: string;
+			}>({
+				model: "ssoProvider",
+				where: [
+					{
+						field: "providerId",
+						value: "oidc-delete-test",
+					},
+				],
+			}),
+		);
+
+		expect(ssoProvider).toBeTruthy();
+		expect(ssoProvider?.userId).toBeNull();
+		expect(ssoProvider?.domain).toBe("oidc-delete-test.com");
+	});
+
+	it("should delete SSO provider when organization is deleted", async () => {
+		// Create a different user for this test
+		const testUser = {
+			email: "org-delete-test@example.com",
+			password: "password123456",
+			name: "Org Delete Test",
+		};
+
+		await authClient.signUp.email(testUser);
+
+		await runWithUser(testUser.email, testUser.password, async (headers) => {
+			// Create an organization
+			const org = await auth.api.createOrganization({
+				body: {
+					name: "Test Org For Cascade Delete",
+					slug: "test-org-cascade",
+				},
+				headers,
+			});
+
+			// Register an SSO provider for the organization
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					issuer: fkConstraintsServer.issuer.url!,
+					domain: "org-cascade-delete.com",
+					oidcConfig: {
+						clientId: "test-org-cascade",
+						clientSecret: "test-org-cascade",
+						authorizationEndpoint: `${fkConstraintsServer.issuer.url}/authorize`,
+						tokenEndpoint: `${fkConstraintsServer.issuer.url}/token`,
+						jwksEndpoint: `${fkConstraintsServer.issuer.url}/jwks`,
+						discoveryEndpoint: `${fkConstraintsServer.issuer.url}/.well-known/openid-configuration`,
+						mapping: {
+							id: "sub",
+							email: "email",
+							emailVerified: "email_verified",
+							name: "name",
+							image: "picture",
+						},
+					},
+					providerId: "oidc-org-cascade",
+					organizationId: org!.id,
+				},
+				headers,
+			});
+
+			// Verify provider exists and is linked to the organization
+			const providerBeforeDelete = await auth.$context.then((ctx) =>
+				ctx.adapter.findOne<{
+					organizationId: string | null;
+					domain: string;
+					providerId: string;
+				}>({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: "oidc-org-cascade" }],
+				}),
+			);
+
+			expect(providerBeforeDelete).toBeTruthy();
+			expect(providerBeforeDelete?.organizationId).toBe(org!.id);
+
+			// Delete the organization
+			// The database foreign key constraint with CASCADE should handle deleting the SSO provider
+			await auth.$context.then((ctx) =>
+				ctx.adapter.delete({
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: org!.id,
+						},
+					],
+				}),
+			);
+
+			// Verify SSO provider is deleted
+			const ssoProvider = await auth.$context.then((ctx) =>
+				ctx.adapter.findOne<{
+					organizationId: string | null;
+					domain: string;
+					providerId: string;
+				}>({
+					model: "ssoProvider",
+					where: [
+						{
+							field: "providerId",
+							value: "oidc-org-cascade",
+						},
+					],
+				}),
+			);
+
+			expect(ssoProvider).toBeNull();
+		});
 	});
 });

@@ -12,7 +12,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { betterFetch } from "@better-fetch/fetch";
 import { setCookieToHeader } from "better-auth/cookies";
-import { bearer } from "better-auth/plugins";
+import { bearer, organization } from "better-auth/plugins";
 import { sso } from ".";
 import { ssoClient } from "./client";
 import { createServer } from "http";
@@ -25,7 +25,7 @@ import type {
 import express from "express";
 import bodyParser from "body-parser";
 import { randomUUID } from "crypto";
-import { getTestInstanceMemory } from "better-auth/test";
+import { getTestInstanceMemory, getTestInstance } from "better-auth/test";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -1116,6 +1116,201 @@ describe("SAML SSO", async () => {
 			body: {
 				message: "SSO provider with this providerId already exists",
 			},
+		});
+	});
+});
+
+describe("SAML SSO Foreign Key Constraints", async () => {
+	const mockIdP = createMockSAMLIdP(8082);
+
+	const { auth, runWithUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			plugins: [sso(), organization()],
+		});
+
+	const authClient = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [bearer(), ssoClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	beforeAll(async () => {
+		await mockIdP.start();
+	});
+
+	afterAll(async () => {
+		await mockIdP.stop();
+	});
+
+	it("should not delete SSO provider when creator user is deleted", async () => {
+		// Create a user for this test
+		const testUser = {
+			email: "user-delete-test@example.com",
+			password: "password123456",
+			name: "User Delete Test",
+		};
+
+		const { data: signUpData } = await authClient.signUp.email(testUser);
+		const userId = signUpData?.user.id!;
+
+		await runWithUser(testUser.email, testUser.password, async (headers) => {
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "saml-delete-test",
+					issuer: "http://localhost:8082",
+					domain: "delete-test.com",
+					samlConfig: {
+						entryPoint: mockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8082/api/sso/saml2/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			// Verify provider exists before deletion and has the correct userId
+			const providerBeforeDelete = await auth.$context.then((ctx) =>
+				ctx.adapter.findOne<{
+					userId: string | null;
+					domain: string;
+					providerId: string;
+				}>({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: "saml-delete-test" }],
+				}),
+			);
+
+			expect(providerBeforeDelete).toBeTruthy();
+			expect(providerBeforeDelete?.userId).toBe(userId);
+		});
+
+		// Delete the user who created the SSO provider (outside runWithUser)
+		// The database foreign key constraint with SET NULL should handle setting userId to null
+		await auth.$context.then((ctx) =>
+			ctx.adapter.delete({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: userId,
+					},
+				],
+			}),
+		);
+
+		// Verify SSO provider still exists but userId is null
+		const ssoProvider = await auth.$context.then((ctx) =>
+			ctx.adapter.findOne<{
+				userId: string | null;
+				domain: string;
+				providerId: string;
+			}>({
+				model: "ssoProvider",
+				where: [
+					{
+						field: "providerId",
+						value: "saml-delete-test",
+					},
+				],
+			}),
+		);
+
+		expect(ssoProvider).toBeTruthy();
+		expect(ssoProvider?.userId).toBeNull();
+		expect(ssoProvider?.domain).toBe("delete-test.com");
+	});
+
+	it("should delete SSO provider when organization is deleted", async () => {
+		// Create a different user for this test
+		const testUser = {
+			email: "org-delete-test@example.com",
+			password: "password123456",
+			name: "Org Delete Test",
+		};
+
+		await authClient.signUp.email(testUser);
+
+		await runWithUser(testUser.email, testUser.password, async (headers) => {
+			// Create an organization
+			const org = await auth.api.createOrganization({
+				body: {
+					name: "Test Org For Cascade Delete",
+					slug: "test-org-cascade-saml",
+				},
+				headers,
+			});
+
+			// Register an SSO provider for the organization
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "saml-org-cascade",
+					issuer: "http://localhost:8082",
+					domain: "org-cascade-delete.com",
+					organizationId: org!.id,
+					samlConfig: {
+						entryPoint: mockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8082/api/sso/saml2/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			// Verify provider exists and is linked to the organization
+			const providerBeforeDelete = await auth.$context.then((ctx) =>
+				ctx.adapter.findOne<{
+					organizationId: string | null;
+					domain: string;
+					providerId: string;
+				}>({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: "saml-org-cascade" }],
+				}),
+			);
+
+			expect(providerBeforeDelete).toBeTruthy();
+			expect(providerBeforeDelete?.organizationId).toBe(org!.id);
+
+			// Delete the organization
+			// The database foreign key constraint with CASCADE should handle deleting the SSO provider
+			await auth.$context.then((ctx) =>
+				ctx.adapter.delete({
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: org!.id,
+						},
+					],
+				}),
+			);
+
+			// Verify SSO provider is deleted
+			const ssoProvider = await auth.$context.then((ctx) =>
+				ctx.adapter.findOne<{
+					organizationId: string | null;
+					domain: string;
+					providerId: string;
+				}>({
+					model: "ssoProvider",
+					where: [
+						{
+							field: "providerId",
+							value: "saml-org-cascade",
+						},
+					],
+				}),
+			);
+
+			expect(ssoProvider).toBeNull();
 		});
 	});
 });
