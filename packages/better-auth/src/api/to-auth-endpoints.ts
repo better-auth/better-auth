@@ -11,15 +11,18 @@ import { shouldPublishLog } from "@better-auth/core/env";
 import type { AuthContext, HookEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 
-type InternalContext = InputContext<string, any> &
-	EndpointContext<string, any> & {
-		asResponse?: boolean;
-		context: AuthContext & {
-			logger: AuthContext["logger"];
-			returned?: unknown;
-			responseHeaders?: Headers;
-		};
+type InternalContext = Partial<
+	InputContext<string, any> & EndpointContext<string, any>
+> & {
+	path: string;
+	asResponse?: boolean;
+	context: AuthContext & {
+		logger: AuthContext["logger"];
+		returned?: unknown;
+		responseHeaders?: Headers;
 	};
+};
+
 const defuReplaceArrays = createDefu((obj, key, value) => {
 	if (Array.isArray(obj[key]) && Array.isArray(value)) {
 		obj[key] = value;
@@ -27,10 +30,9 @@ const defuReplaceArrays = createDefu((obj, key, value) => {
 	}
 });
 
-export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
-	endpoints: E,
-	ctx: AuthContext | Promise<AuthContext>,
-) {
+export function toAuthEndpoints<
+	const E extends Record<string, Omit<AuthEndpoint, "wrap">>,
+>(endpoints: E, ctx: AuthContext | Promise<AuthContext>): E {
 	const api: Record<
 		string,
 		((
@@ -42,7 +44,11 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 	> = {};
 
 	for (const [key, endpoint] of Object.entries(endpoints)) {
-		api[key] = async (context) => {
+		api[key] = async (
+			context: Partial<
+				InputContext<string, any> & EndpointContext<string, any>
+			>,
+		) => {
 			const authContext = await ctx;
 			let internalContext: InternalContext = {
 				...context,
@@ -98,7 +104,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				internalContext.asResponse = false;
 				internalContext.returnHeaders = true;
 				const result = (await runWithEndpointContext(internalContext, () =>
-					endpoint(internalContext as any),
+					(endpoint as any)(internalContext as any),
 				).catch((e: any) => {
 					if (e instanceof APIError) {
 						/**
@@ -158,7 +164,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 		api[key].path = endpoint.path;
 		api[key].options = endpoint.options;
 	}
-	return api as E;
+	return api as unknown as E;
 }
 
 async function runBeforeHooks(

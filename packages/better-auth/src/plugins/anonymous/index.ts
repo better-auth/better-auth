@@ -3,7 +3,10 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import type { InferOptionSchema, Session, User } from "../../types";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { getOrigin } from "../../utils/url";
@@ -37,6 +40,7 @@ export interface AnonymousOptions {
 			user: User & Record<string, any>;
 			session: Session & Record<string, any>;
 		};
+		ctx: GenericEndpointContext;
 	}) => Promise<void> | void;
 	/**
 	 * Disable deleting the anonymous user after linking
@@ -242,6 +246,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 							await options?.onLinkAccount?.({
 								anonymousUser: session,
 								newUser: newSession,
+								ctx,
 							});
 						}
 						if (!options?.disableDeleteAnonymousUser) {
