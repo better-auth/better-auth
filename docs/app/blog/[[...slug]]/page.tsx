@@ -23,6 +23,7 @@ import { BlogPage } from "../_components/blog-list";
 import { Callout } from "@/components/ui/callout";
 import { ArrowLeftIcon, ExternalLink } from "lucide-react";
 import { Support } from "../_components/support";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const metaTitle = "Blogs";
 const metaDescription = "Latest changes , fixes and updates.";
@@ -59,15 +60,17 @@ export default async function Page({
 					</p>
 				)}
 				<div className="my-2 flex items-center justify-center gap-3">
-					{page.data?.author?.avatar && (
-						<Image
-							src={page.data.author.avatar}
-							alt={page.data?.author?.name ?? "Author"}
-							width={40}
-							height={40}
-							className="rounded-full border"
-						/>
-					)}
+					<div>
+						<Avatar>
+							<AvatarImage
+								src={page.data.author.avatar}
+								alt={page.data?.author?.name ?? "Author"}
+							/>
+							<AvatarFallback>
+								{page.data?.author?.name?.charAt(0).toUpperCase() ?? ""}
+							</AvatarFallback>
+						</Avatar>
+					</div>
 					<div className="flex items-center gap-2 text-sm text-muted-foreground">
 						{page.data?.author?.name && (
 							<span className="font-medium text-foreground">
