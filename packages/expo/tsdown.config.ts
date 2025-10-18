@@ -2,7 +2,9 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
 	dts: true,
-	format: ["esm", "cjs"],
+	format: "esm",
+	unbundle: true,
+	clean: true,
 	entry: ["./src/index.ts", "./src/client.ts"],
 	external: [
 		"better-auth",
@@ -13,5 +15,4 @@ export default defineConfig({
 		"expo-linking",
 		"expo-constants",
 	],
-	treeshake: true,
 });
