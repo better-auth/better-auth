@@ -201,9 +201,14 @@ describe("aliasClient plugin", () => {
 				},
 				{
 					matcher: (path) => path.includes("admin"),
-					signal: "adminSignal",
+					signal: "$adminSignal",
 				},
 			],
+			getAtoms($fetch, options) {
+				return {
+					$adminSignal: atom(false),
+				};
+			},
 		};
 
 		const aliased = aliasClient("/app", plugin, {
@@ -211,7 +216,7 @@ describe("aliasClient plugin", () => {
 		});
 
 		expect(aliased.atomListeners()![0]?.signal).toBe("$sessionSignal");
-		expect(aliased.atomListeners()![1]?.signal).toBe("adminSignalApp");
+		expect(aliased.atomListeners()![1]?.signal).toBe("$adminSignalApp");
 	});
 
 	it("should handle complex path patterns in atomListeners", () => {
