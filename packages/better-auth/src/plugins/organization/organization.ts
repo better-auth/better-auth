@@ -673,21 +673,6 @@ export function organization<O extends OrganizationOptions>(options?: O): any {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-leave)
 		 */
 		leaveOrganization: leaveOrganization(options as O),
-		/**
-		 * ### Endpoint
-		 *
-		 * GET `/organization/list-members`
-		 *
-		 * ### API Methods
-		 *
-		 * **server:**
-		 * `auth.api.listMembers`
-		 *
-		 * **client:**
-		 * `authClient.organization.listMembers`
-		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-members)
-		 */
 		listUserInvitations: listUserInvitations(options as O),
 		/**
 		 * ### Endpoint
@@ -1157,7 +1142,7 @@ export function organization<O extends OrganizationOptions>(options?: O): any {
 	return {
 		id: "organization",
 		endpoints: {
-			...(api as unknown as OrganizationEndpoints<O>),
+			...(api as OrganizationEndpoints<O>),
 			hasPermission: createHasPermission(options as O),
 		},
 		schema: {
