@@ -141,6 +141,9 @@ export const mcp = (options: MCPOptions) => {
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
+						ctx.setCookie("oidc_login_prompt", "", {
+							maxAge: 0,
+						});
 						const cookieName = ctx.context.authCookies.sessionToken.name;
 						const parsedSetCookieHeader = parseSetCookieHeader(
 							ctx.context.responseHeaders?.get("set-cookie") || "",
@@ -149,9 +152,6 @@ export const mcp = (options: MCPOptions) => {
 						if (!cookie || !hasSessionToken) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
-						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
 						if (!sessionToken) {
