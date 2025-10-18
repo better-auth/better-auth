@@ -63,7 +63,7 @@ export default async function Page({
 					<div>
 						<Avatar>
 							<AvatarImage
-								src={page.data.author.avatar}
+								src={page.data?.author?.avatar}
 								alt={page.data?.author?.name ?? "Author"}
 							/>
 							<AvatarFallback>
