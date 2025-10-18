@@ -129,6 +129,7 @@ exports[`init > should match config 1`] = `
     "config": {
       "maxPasswordLength": 128,
       "minPasswordLength": 8,
+      "pattern": null,
     },
     "hash": [Function],
     "verify": [Function],

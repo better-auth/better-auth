@@ -136,6 +136,7 @@ export const init = async (options: BetterAuthOptions) => {
 			config: {
 				minPasswordLength: options.emailAndPassword?.minPasswordLength || 8,
 				maxPasswordLength: options.emailAndPassword?.maxPasswordLength || 128,
+				pattern: options.emailAndPassword?.pattern || null,
 			},
 			checkPassword,
 		},
