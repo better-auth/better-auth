@@ -34,9 +34,9 @@ export default function SignIn() {
 					{options.email && (
 						<>
 							<div className="grid gap-2">
-								<Label htmlFor="email">Email</Label>
+								<Label htmlFor="signin-email">Email</Label>
 								<Input
-									id="email"
+									id="signin-email"
 									type="email"
 									placeholder="m@example.com"
 									required
@@ -75,9 +75,9 @@ export default function SignIn() {
 
 					{options.magicLink && (
 						<div className="grid gap-2">
-							<Label htmlFor="email">Email</Label>
+							<Label htmlFor="signin-email">Email</Label>
 							<Input
-								id="email"
+								id="signin-email"
 								type="email"
 								placeholder="m@example.com"
 								required
