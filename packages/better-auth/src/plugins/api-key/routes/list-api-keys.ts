@@ -1,11 +1,13 @@
-import { sessionMiddleware } from "../../../api";
+import { APIError, getSessionFromCtx } from "../../../api";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
-import { API_KEY_TABLE_NAME } from "..";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { AuthContext } from "@better-auth/core";
+import * as z from "zod";
+
 export function listApiKeys({
 	opts,
 	schema,
@@ -22,7 +24,17 @@ export function listApiKeys({
 		"/api-key/list",
 		{
 			method: "GET",
-			use: [sessionMiddleware],
+			query: z
+				.object({
+					userId: z.coerce
+						.string()
+						.meta({
+							description:
+								'User Id of the user that the Api Keys belong to. server-only. Eg: "user-id"',
+						})
+						.optional(),
+				})
+				.optional(),
 			metadata: {
 				openapi: {
 					description: "List all API keys for the authenticated user",
@@ -164,13 +176,35 @@ export function listApiKeys({
 			},
 		},
 		async (ctx) => {
-			const session = ctx.context.session;
+			const session = await getSessionFromCtx(ctx);
+			const authRequired = ctx.request || ctx.headers;
+			const user =
+				authRequired && !session
+					? null
+					: session?.user || { id: ctx.query?.userId };
+
+			if (!user?.id) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
+			if (
+				session &&
+				ctx.query?.userId &&
+				session?.user.id !== ctx.query.userId
+			) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
 			let apiKeys = await ctx.context.adapter.findMany<ApiKey>({
 				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "userId",
-						value: session.user.id,
+						value: user.id,
 					},
 				],
 			});

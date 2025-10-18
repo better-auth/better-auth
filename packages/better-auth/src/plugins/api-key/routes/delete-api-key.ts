@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../../api";
+import { APIError, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -27,8 +27,14 @@ export function deleteApiKey({
 				keyId: z.string().meta({
 					description: "The id of the Api Key",
 				}),
+				userId: z.coerce
+					.string()
+					.meta({
+						description:
+							'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
+					})
+					.optional(),
 			}),
-			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
 					description: "Delete an existing API key",
@@ -73,12 +79,32 @@ export function deleteApiKey({
 		},
 		async (ctx) => {
 			const { keyId } = ctx.body;
-			const session = ctx.context.session;
-			if (session.user.banned === true) {
+
+			const session = await getSessionFromCtx(ctx);
+			const authRequired = ctx.request || ctx.headers;
+			const user =
+				authRequired && !session
+					? null
+					: session?.user || { id: ctx.body.userId };
+
+			if (!user?.id) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
+			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
+			if (session && session.user.banned === true) {
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.USER_BANNED,
 				});
 			}
+
 			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
 				model: API_KEY_TABLE_NAME,
 				where: [
@@ -89,7 +115,7 @@ export function deleteApiKey({
 				],
 			});
 
-			if (!apiKey || apiKey.userId !== session.user.id) {
+			if (!apiKey || apiKey.userId !== user.id) {
 				throw new APIError("NOT_FOUND", {
 					message: ERROR_CODES.KEY_NOT_FOUND,
 				});
