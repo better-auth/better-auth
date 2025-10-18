@@ -849,8 +849,8 @@ importers:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
       stripe:
-        specifier: ^18.5.0
-        version: 18.5.0(@types/node@24.7.2)
+        specifier: ^19.1.0
+        version: 19.1.0(@types/node@24.7.2)
 
   e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types:
     dependencies:
