@@ -4,7 +4,7 @@ import { getTestInstanceMemory } from "../../../test-utils";
 import { alias } from "..";
 import { createMockClientPlugin, createMockPlugin } from "./mock-plugin";
 import { createAuthClient } from "../../../client";
-import { aliasClient } from "../client";
+import { aliasClient, aliasCompatClient } from "../client";
 import type {
 	BetterAuthClientPlugin,
 	BetterAuthPlugin,

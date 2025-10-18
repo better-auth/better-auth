@@ -92,7 +92,13 @@ export const getClientConfig = (
 			Object.assign(pluginPathMethods, plugin.pathMethods);
 		}
 		if (plugin.atomListeners) {
-			atomListeners.push(...plugin.atomListeners);
+			const listerners =
+				typeof plugin.atomListeners === "function"
+					? plugin.atomListeners()
+					: plugin.atomListeners;
+			if (listerners?.length) {
+				atomListeners.push(...listerners);
+			}
 		}
 	}
 

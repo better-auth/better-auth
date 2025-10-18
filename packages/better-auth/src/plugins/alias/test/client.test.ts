@@ -31,8 +31,8 @@ describe("aliasClient plugin", () => {
 		expect(aliased.atomListeners).toBeDefined();
 		expect(aliased.atomListeners).toHaveLength(2);
 
-		const firstListener = aliased.atomListeners![0];
-		const secondListener = aliased.atomListeners![1];
+		const firstListener = aliased.atomListeners()![0];
+		const secondListener = aliased.atomListeners()![1];
 
 		// Test that matchers work with prefixed paths
 		expect(firstListener?.matcher("/paypal/customer/portal")).toBe(true);
@@ -187,8 +187,8 @@ describe("aliasClient plugin", () => {
 
 		const aliased = aliasClient("/app", plugin);
 
-		expect(aliased.atomListeners![0]?.signal).toBe("$sessionSignal");
-		expect(aliased.atomListeners![1]?.signal).toBe("adminSignal");
+		expect(aliased.atomListeners()![0]?.signal).toBe("$sessionSignal");
+		expect(aliased.atomListeners()![1]?.signal).toBe("adminSignal");
 	});
 
 	it("should prefix atoms when enabled", () => {
@@ -210,8 +210,8 @@ describe("aliasClient plugin", () => {
 			unstable_prefixAtoms: true,
 		});
 
-		expect(aliased.atomListeners![0]?.signal).toBe("$sessionSignal");
-		expect(aliased.atomListeners![1]?.signal).toBe("adminSignalApp");
+		expect(aliased.atomListeners()![0]?.signal).toBe("$sessionSignal");
+		expect(aliased.atomListeners()![1]?.signal).toBe("adminSignalApp");
 	});
 
 	it("should handle complex path patterns in atomListeners", () => {
@@ -229,7 +229,7 @@ describe("aliasClient plugin", () => {
 		};
 
 		const aliased = aliasClient("/service", plugin);
-		const listener = aliased.atomListeners![0];
+		const listener = aliased.atomListeners()![0];
 
 		// The matcher should now check for the prefixed path
 		expect(listener?.matcher("/service/api/v1/resource")).toBe(true);

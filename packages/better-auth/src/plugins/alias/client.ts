@@ -1,6 +1,7 @@
 import type {
 	BetterAuthClientPlugin,
 	BetterAuthPlugin,
+	ClientAtomListener,
 } from "@better-auth/core";
 import type { LiteralString } from "../../types/helper";
 import type { InferAliasedPlugin } from ".";
@@ -130,11 +131,13 @@ type InferMeta<AliasedPlugin extends BetterAuthClientPlugin> =
 		"~meta": {
 			prefix: infer P extends LiteralString;
 			options?: infer O extends AliasClientOptions;
+			signals: infer S extends LiteralString | null;
 		};
 	}
 		? {
 				prefix: P;
 				options: O;
+				signals: S;
 			}
 		: never;
 
@@ -150,7 +153,12 @@ type InferAliasedClientPlugin_base<
 	O extends AliasClientOptions,
 > = Omit<
 	T,
-	"id" | "pathMethods" | "getActions" | "getAtoms" | "$InferServerPlugin"
+	| "id"
+	| "pathMethods"
+	| "getActions"
+	| "getAtoms"
+	| "atomListeners"
+	| "$InferServerPlugin"
 > & {
 	id: `${T["id"]}-${TransformNormalizedPrefix<NormalizePrefix<Prefix>>}`;
 } & ExtendPathMethods<T, NormalizePrefix<Prefix>, O> &
@@ -168,6 +176,7 @@ type InferAliasedClientPlugin_base<
 						| null
 				: null;
 		};
+		atomListeners: () => ClientAtomListener[] | undefined;
 	};
 
 export type InferAliasedClientPlugin<
@@ -266,21 +275,29 @@ export function aliasClient<
 
 	// Update atomListeners matchers
 	if (plugin.atomListeners) {
-		aliasedPlugin.atomListeners = plugin.atomListeners.map((listener) => ({
-			signal:
-				// TODO: add exclude signals option
-				listener.signal !== "$sessionSignal" && !!options?.unstable_prefixAtoms
-					? `${listener.signal}${capitalizeFirstLetter(camelCasePrefix)}`
-					: listener.signal,
-			matcher: (path: string) => {
-				// Check if the path starts with the prefix, then strip it and check the original matcher
-				if (path.startsWith(cleanPrefix)) {
-					const originalPath = path.slice(cleanPrefix.length);
-					return listener.matcher(originalPath);
-				}
-				return false;
-			},
-		}));
+		aliasedPlugin.atomListeners = () => {
+			// TODO: Only modify signals created by getAtoms by default
+			const originalListeners =
+				(typeof plugin.atomListeners === "function"
+					? plugin.atomListeners()
+					: plugin.atomListeners) || [];
+			return originalListeners.map((listener) => ({
+				signal:
+					listener.signal !== "$sessionSignal" &&
+					lazySignals?.includes(`${listener.signal}`) &&
+					!!options?.unstable_prefixAtoms
+						? `${listener.signal}${capitalizeFirstLetter(camelCasePrefix)}`
+						: listener.signal,
+				matcher: (path: string) => {
+					// Check if the path starts with the prefix, then strip it and check the original matcher
+					if (path.startsWith(cleanPrefix)) {
+						const originalPath = path.slice(cleanPrefix.length);
+						return listener.matcher(originalPath);
+					}
+					return false;
+				},
+			}));
+		};
 	}
 
 	// Wrap getActions to prefix any path-based actions
@@ -436,9 +453,11 @@ export function aliasCompatClient<
 			"Invalid aliasedPlugin provided.",
 		);
 	}
-	const { prefix, options: aliasOptions } = aliasedPlugin[
-		"~meta"
-	] as InferMeta<AliasedPlugin>;
+	const {
+		prefix,
+		options: aliasOptions,
+		signals,
+	} = aliasedPlugin["~meta"] as InferMeta<AliasedPlugin>;
 	const camelCasePrefix = toCamelCase(prefix);
 	const compatPlugin: BetterAuthClientPlugin = {
 		...plugin,
@@ -446,7 +465,7 @@ export function aliasCompatClient<
 
 	const includeEndpoints = new Set([
 		...(options?.includeEndpoints || []),
-		...(aliasOptions.includeEndpoints || []),
+		...(aliasOptions?.includeEndpoints || []),
 		...Object.keys(aliasedPlugin.pathMethods || {}).filter((path) =>
 			path.startsWith(prefix),
 		),
@@ -454,6 +473,25 @@ export function aliasCompatClient<
 
 	// Update atomListeners matchers
 	if (plugin.atomListeners) {
+		compatPlugin.atomListeners = () => {
+			const originalListeners =
+				(typeof plugin.atomListeners === "function"
+					? plugin.atomListeners()
+					: plugin.atomListeners) || [];
+
+			return originalListeners.map((listener) => ({
+				signal:
+					listener.signal !== "$sessionSignal" &&
+					signals?.includes(`${listener.signal}`) &&
+					aliasOptions?.unstable_prefixAtoms
+						? `${listener.signal}${capitalizeFirstLetter(camelCasePrefix)}`
+						: listener.signal,
+				matcher: (path: string) => {
+					// TODO:
+					return false;
+				},
+			}));
+		};
 	}
 
 	// Wrap getActions to prefix specific path-based action

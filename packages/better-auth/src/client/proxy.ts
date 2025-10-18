@@ -97,7 +97,11 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						/**
 						 * We trigger listeners
 						 */
-						const matches = atomListeners.filter((s) => s.matcher(routePath));
+						const matches =
+							(typeof atomListeners === "function"
+								? atomListeners()
+								: atomListeners
+							)?.filter((s) => s.matcher(routePath)) || [];
 						if (!matches.length) return;
 						for (const match of matches) {
 							const signal = atoms[match.signal as any];

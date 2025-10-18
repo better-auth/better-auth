@@ -68,5 +68,7 @@ export interface BetterAuthClientPlugin {
 	 * The signal name needs to match a signal in this
 	 * plugin or any plugin the user might have added.
 	 */
-	atomListeners?: ClientAtomListener[];
+	atomListeners?:
+		| ClientAtomListener[]
+		| (() => ClientAtomListener[] | undefined);
 }
