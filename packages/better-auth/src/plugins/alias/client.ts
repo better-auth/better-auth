@@ -276,7 +276,6 @@ export function aliasClient<
 	// Update atomListeners matchers
 	if (plugin.atomListeners) {
 		aliasedPlugin.atomListeners = () => {
-			// TODO: Only modify signals created by getAtoms by default
 			const originalListeners =
 				(typeof plugin.atomListeners === "function"
 					? plugin.atomListeners()
@@ -487,7 +486,12 @@ export function aliasCompatClient<
 						? `${listener.signal}${capitalizeFirstLetter(camelCasePrefix)}`
 						: listener.signal,
 				matcher: (path: string) => {
-					// TODO:
+					// Check if the path starts with the prefix, then strip it and check the original matcher
+					if (path.startsWith(prefix)) {
+						const originalPath = path.slice(prefix.length);
+						console.log(originalPath);
+						return listener.matcher(originalPath);
+					}
 					return false;
 				},
 			}));
