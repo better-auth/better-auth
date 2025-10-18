@@ -145,7 +145,9 @@ export type InferAliasCompatClientPlugin<
 	AliasedPlugin extends BetterAuthClientPlugin,
 	T extends BetterAuthClientPlugin,
 	O extends AliasCompatClientOptions,
-> = T; // TODO:
+> = Omit<T, "atomListeners"> & {
+	atomListeners?: () => ClientAtomListener[] | undefined;
+}; // TODO:
 
 type InferAliasedClientPlugin_base<
 	Prefix extends LiteralString,
@@ -176,7 +178,7 @@ type InferAliasedClientPlugin_base<
 						| null
 				: null;
 		};
-		atomListeners: () => ClientAtomListener[] | undefined;
+		atomListeners?: () => ClientAtomListener[] | undefined;
 	};
 
 export type InferAliasedClientPlugin<

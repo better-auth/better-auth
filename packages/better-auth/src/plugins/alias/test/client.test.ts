@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import type { BetterAuthClientPlugin } from "../../../client/types";
-import { aliasClient, aliasCompatClient } from "../client";
+import { aliasClient } from "../client";
 import { createMockClientPlugin } from "./mock-plugin";
 import { createAuthClient as createSolidClient } from "../../../client/solid";
 import { atom } from "nanostores";
@@ -29,11 +29,11 @@ describe("aliasClient plugin", () => {
 		const plugin = createMockClientPlugin("payment");
 		const aliased = aliasClient("/paypal", plugin);
 
-		expect(aliased.atomListeners()).toBeDefined();
-		expect(aliased.atomListeners()).toHaveLength(2);
+		expect(aliased.atomListeners?.()).toBeDefined();
+		expect(aliased.atomListeners?.()).toHaveLength(2);
 
-		const firstListener = aliased.atomListeners()![0];
-		const secondListener = aliased.atomListeners()![1];
+		const firstListener = aliased.atomListeners?.()![0];
+		const secondListener = aliased.atomListeners?.()![1];
 
 		// Test that matchers work with prefixed paths
 		expect(firstListener?.matcher("/paypal/customer/portal")).toBe(true);
@@ -188,8 +188,8 @@ describe("aliasClient plugin", () => {
 
 		const aliased = aliasClient("/app", plugin);
 
-		expect(aliased.atomListeners()![0]?.signal).toBe("$sessionSignal");
-		expect(aliased.atomListeners()![1]?.signal).toBe("adminSignal");
+		expect(aliased.atomListeners?.()![0]?.signal).toBe("$sessionSignal");
+		expect(aliased.atomListeners?.()![1]?.signal).toBe("adminSignal");
 	});
 
 	it("should prefix atoms when enabled", () => {
@@ -217,10 +217,10 @@ describe("aliasClient plugin", () => {
 		});
 
 		// Call getAtoms manually to lazy load available signals
-		aliased.getAtoms?.({} as any, {});
+		aliased.getAtoms({} as any, {});
 
-		expect(aliased.atomListeners()![0]?.signal).toBe("$sessionSignal");
-		expect(aliased.atomListeners()![1]?.signal).toBe("$adminSignalApp");
+		expect(aliased.atomListeners?.()![0]?.signal).toBe("$sessionSignal");
+		expect(aliased.atomListeners?.()![1]?.signal).toBe("$adminSignalApp");
 	});
 
 	it("should handle complex path patterns in atomListeners", () => {
@@ -238,7 +238,7 @@ describe("aliasClient plugin", () => {
 		};
 
 		const aliased = aliasClient("/service", plugin);
-		const listener = aliased.atomListeners()![0];
+		const listener = aliased.atomListeners?.()![0];
 
 		// The matcher should now check for the prefixed path
 		expect(listener?.matcher("/service/api/v1/resource")).toBe(true);
@@ -340,6 +340,41 @@ describe("aliasClient plugin", () => {
 	});
 });
 
-// describe("aliasCompatClient plugin", () => {
-// 	// TODO:
-// });
+describe("aliasCompatClient plugin", () => {
+	it("should prefix atoms when enabled", () => {
+		const plugin = {
+			id: "test",
+			atomListeners: [
+				{
+					matcher: (path) => path === "/specific",
+					signal: "$sessionSignal",
+				},
+				{
+					matcher: (path) => path.includes("admin"),
+					signal: "$adminSignal",
+				},
+			],
+			getAtoms($fetch, options) {
+				return {
+					$adminSignal: atom(false),
+				};
+			},
+		} satisfies BetterAuthClientPlugin;
+
+		const aliased = aliasClient("/app", plugin, {
+			unstable_prefixAtoms: true,
+		});
+		aliased.getAtoms({} as any, {});
+		const compat = aliased.compat({
+			id: "compat",
+			atomListeners: [
+				{
+					matcher: (path) => path.includes("test"),
+					signal: "$adminSignal",
+				},
+			],
+		});
+
+		expect(compat.atomListeners?.()![0]?.signal).toBe("$adminSignalApp");
+	});
+});
