@@ -15,6 +15,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { parseUserOutput } from "../db/schema";
+import { encodeSessionJWT } from "../jwt";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -179,16 +180,34 @@ export async function setSessionCookie(
 	const maxAge = dontRememberMe
 		? undefined
 		: ctx.context.sessionConfig.expiresIn;
-	await ctx.setSignedCookie(
-		ctx.context.authCookies.sessionToken.name,
-		session.session.token,
-		ctx.context.secret,
-		{
-			...options,
-			maxAge,
-			...overrides,
-		},
-	);
+
+	if (ctx.context.options.session?.storeSessionInJWT) {
+		const jwtToken = await encodeSessionJWT({
+			session: session.session,
+			user: session.user,
+		});
+		await ctx.setSignedCookie(
+			ctx.context.authCookies.sessionToken.name,
+			jwtToken,
+			ctx.context.secret,
+			{
+				...options,
+				maxAge,
+				...overrides,
+			},
+		);
+	} else {
+		await ctx.setSignedCookie(
+			ctx.context.authCookies.sessionToken.name,
+			session.session.token,
+			ctx.context.secret,
+			{
+				...options,
+				maxAge,
+				...overrides,
+			},
+		);
+	}
 
 	if (dontRememberMe) {
 		await ctx.setSignedCookie(
@@ -198,14 +217,22 @@ export async function setSessionCookie(
 			ctx.context.authCookies.dontRememberToken.options,
 		);
 	}
-	await setCookieCache(ctx, session, dontRememberMe);
+
+	// Skip cookie cache when using JWT sessions (data is already in JWT)
+	if (!ctx.context.options.session?.storeSessionInJWT) {
+		await setCookieCache(ctx, session, dontRememberMe);
+	}
+
 	ctx.context.setNewSession(session);
 	/**
 	 * If secondary storage is enabled, store the session data in the secondary storage
 	 * This is useful if the session got updated and we want to update the session data in the
 	 * secondary storage
 	 */
-	if (ctx.context.options.secondaryStorage) {
+	if (
+		ctx.context.options.secondaryStorage &&
+		!ctx.context.options.session?.storeSessionInJWT
+	) {
 		await ctx.context.secondaryStorage?.set(
 			session.session.token,
 			JSON.stringify({

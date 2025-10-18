@@ -82,6 +82,27 @@ export const createInternalAdapter = (
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 		) => {
+			// When using JWT sessions, skip database and return mock user data
+			if (options.session?.storeSessionInJWT) {
+				const mockUserId = generateId(32);
+				const now = new Date();
+				return {
+					user: {
+						id: mockUserId,
+						createdAt: now,
+						updatedAt: now,
+						...user,
+					} as User,
+					account: {
+						id: generateId(32),
+						userId: mockUserId,
+						createdAt: now,
+						updatedAt: now,
+						...account,
+					} as Account,
+				};
+			}
+
 			return runWithTransaction(adapter, async () => {
 				const createdUser = await createWithHooks(
 					{
@@ -288,6 +309,15 @@ export const createInternalAdapter = (
 				updatedAt: new Date(),
 				...(overrideAll ? rest : {}),
 			};
+
+			// When using JWT sessions, skip database storage entirely
+			if (options.session?.storeSessionInJWT) {
+				return {
+					...data,
+					id: generateId(32), // Generate a mock ID for the session object
+				} as Session;
+			}
+
 			const res = await createWithHooks(
 				data,
 				"session",
@@ -676,6 +706,11 @@ export const createInternalAdapter = (
 			accountId: string,
 			providerId: string,
 		) => {
+			// When using JWT sessions, there's no database to query
+			if (options.session?.storeSessionInJWT) {
+				return null;
+			}
+
 			// we need to find account first to avoid missing user if the email changed with the provider for the same account
 			const account = await (await getCurrentAdapter(adapter))
 				.findMany<Account>({

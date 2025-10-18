@@ -162,6 +162,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						message: "Email and password sign up is not enabled",
 					});
 				}
+				if (ctx.context.options?.session?.storeSessionInJWT) {
+					ctx.context.logger.error(
+						"Email/password authentication is not supported with stateless JWT sessions (session.storeSessionInJWT). Use social OAuth providers instead.",
+					);
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"Email/password authentication is not supported with stateless JWT sessions",
+					});
+				}
 				const body = ctx.body as any as User & {
 					password: string;
 					callbackURL?: string;

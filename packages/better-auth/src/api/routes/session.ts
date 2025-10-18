@@ -19,6 +19,7 @@ import { createHMAC } from "@better-auth/utils/hmac";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { decodeSessionJWT } from "../../jwt";
 
 export const getSessionQuerySchema = z.optional(
 	z.object({
@@ -86,6 +87,38 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (!sessionCookieToken) {
 					return null;
 				}
+
+				// When using JWT sessions, decode the JWT to get session and user data
+				if (ctx.context.options.session?.storeSessionInJWT) {
+					const decoded = await decodeSessionJWT(sessionCookieToken);
+					if (!decoded) {
+						deleteSessionCookie(ctx);
+						return ctx.json(null);
+					}
+
+					const session = {
+						session: decoded.session as Session & Record<string, any>,
+						user: decoded.user as User & Record<string, any>,
+					};
+
+					// Check if session has expired
+					if (
+						session.session.expiresAt &&
+						new Date(session.session.expiresAt) < new Date()
+					) {
+						deleteSessionCookie(ctx);
+						return ctx.json(null);
+					}
+
+					ctx.context.session = session;
+					return ctx.json(
+						session as {
+							session: InferSession<Option>;
+							user: InferUser<Option>;
+						},
+					);
+				}
+
 				const sessionDataCookie = ctx.getCookie(
 					ctx.context.authCookies.sessionData.name,
 				);
@@ -466,6 +499,12 @@ export const revokeSession = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
+		if (ctx.context.options?.session?.storeSessionInJWT) {
+			throw new APIError("BAD_REQUEST", {
+				message:
+					"Session revocation is not supported with stateless JWT sessions",
+			});
+		}
 		const token = ctx.body.token;
 		const findSession = await ctx.context.internalAdapter.findSession(token);
 		if (!findSession) {
@@ -528,6 +567,12 @@ export const revokeSessions = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
+		if (ctx.context.options?.session?.storeSessionInJWT) {
+			throw new APIError("BAD_REQUEST", {
+				message:
+					"Session revocation is not supported with stateless JWT sessions",
+			});
+		}
 		try {
 			await ctx.context.internalAdapter.deleteSessions(
 				ctx.context.session.user.id,
@@ -581,6 +626,12 @@ export const revokeOtherSessions = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
+		if (ctx.context.options?.session?.storeSessionInJWT) {
+			throw new APIError("BAD_REQUEST", {
+				message:
+					"Session revocation is not supported with stateless JWT sessions",
+			});
+		}
 		const session = ctx.context.session;
 		if (!session.user) {
 			throw new APIError("UNAUTHORIZED");
