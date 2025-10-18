@@ -27,14 +27,16 @@ describe("Alias Plugin", async () => {
 		],
 	});
 
+	const c = aliasClient("/stripe", createMockClientPlugin("payment"));
 	const client = createAuthClient({
 		fetchOptions: {
 			customFetchImpl,
 		},
 		baseURL: "http://localhost:3000",
 		plugins: [
+			c,
+			aliasCompatClient(c, createMockClientPlugin("test")),
 			aliasClient("/polar", createMockClientPlugin("polar")),
-			aliasClient("/stripe", createMockClientPlugin("payment")),
 			aliasClient("/dodo", createMockClientPlugin("payment")),
 		],
 	});

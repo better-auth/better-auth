@@ -1,4 +1,4 @@
-// @vitest-environment happy-dom
+// @svitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import type { BetterAuthClientPlugin } from "../../../client/types";
 import { aliasClient, aliasCompatClient } from "../client";
@@ -29,8 +29,8 @@ describe("aliasClient plugin", () => {
 		const plugin = createMockClientPlugin("payment");
 		const aliased = aliasClient("/paypal", plugin);
 
-		expect(aliased.atomListeners).toBeDefined();
-		expect(aliased.atomListeners).toHaveLength(2);
+		expect(aliased.atomListeners()).toBeDefined();
+		expect(aliased.atomListeners()).toHaveLength(2);
 
 		const firstListener = aliased.atomListeners()![0];
 		const secondListener = aliased.atomListeners()![1];
@@ -193,7 +193,7 @@ describe("aliasClient plugin", () => {
 	});
 
 	it("should prefix atoms when enabled", () => {
-		const plugin: BetterAuthClientPlugin = {
+		const plugin = {
 			id: "test",
 			atomListeners: [
 				{
@@ -210,11 +210,14 @@ describe("aliasClient plugin", () => {
 					$adminSignal: atom(false),
 				};
 			},
-		};
+		} satisfies BetterAuthClientPlugin;
 
 		const aliased = aliasClient("/app", plugin, {
 			unstable_prefixAtoms: true,
 		});
+
+		// Call getAtoms manually to lazy load available signals
+		aliased.getAtoms?.({} as any, {});
 
 		expect(aliased.atomListeners()![0]?.signal).toBe("$sessionSignal");
 		expect(aliased.atomListeners()![1]?.signal).toBe("$adminSignalApp");
@@ -337,6 +340,6 @@ describe("aliasClient plugin", () => {
 	});
 });
 
-describe("aliasCompatClient plugin", () => {
-	// TODO:
-});
+// describe("aliasCompatClient plugin", () => {
+// 	// TODO:
+// });
