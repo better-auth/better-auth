@@ -10,7 +10,6 @@ import type {
 	DBAdapter,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { createLogger, type Logger } from "@better-auth/core/env";
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -38,82 +37,24 @@ export interface MongoDBAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean;
-	/**
-	 * By default we convert all IDs to ObjectId instances.
-	 * If you don't want this behavior, set this to `true` and IDs will be saved as strings.
-	 * @default false
-	 */
-	disableObjectIdConversion?: boolean;
 }
 
 export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null;
 
-	const createConvertId =
-		(loggerOptions?: Logger) =>
-		(
-			id: string | ObjectId | ObjectId[] | string[] | null,
-			createIdOnFailure: boolean = false,
-		): ObjectId | string | ObjectId[] | string[] | null => {
-			const logger = createLogger(loggerOptions);
-
-			if (!id) return null;
-
-			const { disableObjectIdConversion } = config || {};
-			if (disableObjectIdConversion) {
-				if (id instanceof ObjectId) return id.toHexString();
-				if (Array.isArray(id))
-					return id.map((x) => {
-						if (x instanceof ObjectId) return x.toHexString();
-						return x;
-					});
-				if (typeof id === "string") return id;
-				return id;
-			}
-
-			const convert = (
-				id: string | ObjectId | ObjectId[] | string[] | null,
-			): ObjectId | string | ObjectId[] | string[] | null => {
-				if (!id) return null;
-				if (id instanceof ObjectId) {
-					return id;
-				}
-				if (typeof id === "string") {
-					try {
-						return new ObjectId(id);
-					} catch (e) {
-						if (createIdOnFailure) {
-							return new ObjectId();
-						}
-						logger.error(
-							`[Mongo Adapter] Failed to wrap the id into an ObjectID instance. ID given:`,
-							id,
-							e,
-						);
-						throw new Error("[Adapter] Invalid ID value", {
-							cause: e,
-						});
-					}
-				}
-				if (Array.isArray(id)) {
-					return id.map((x: ObjectId | string) => convert(x)) as
-						| ObjectId[]
-						| string[];
-				}
-				if (createIdOnFailure) {
-					return new ObjectId();
-				}
-				logger.error(`[Mongo Adapter] Invalid id type provided. ID given:`, id);
-				throw new Error("[Adapter] Invalid ID value");
-			};
-
-			return convert(id);
-		};
+	const getCustomIdGenerator = (options: BetterAuthOptions) => {
+		const generator =
+			options.advanced?.database?.generateId || options.advanced?.generateId;
+		if (typeof generator === "function") {
+			return generator;
+		}
+		return undefined;
+	};
 
 	const createCustomAdapter =
 		(db: Db, session?: ClientSession): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldName, schema, getDefaultModelName }) => {
-			const convertId = createConvertId({ disabled: true });
+		({ options, getFieldName, schema, getDefaultModelName }) => {
+			const customIdGen = getCustomIdGenerator(options);
 
 			function serializeID({
 				field,
@@ -124,14 +65,41 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				value: any;
 				model: string;
 			}) {
+				if (customIdGen) {
+					return value;
+				}
 				model = getDefaultModelName(model);
 				if (
 					field === "id" ||
 					field === "_id" ||
 					schema[model]!.fields[field]?.references?.field === "id"
 				) {
-					const result = convertId(value);
-					return result;
+					if (typeof value !== "string") {
+						if (value instanceof ObjectId) {
+							return value;
+						}
+						if (Array.isArray(value)) {
+							return value.map((v) => {
+								if (typeof v === "string") {
+									try {
+										return new ObjectId(v);
+									} catch (e) {
+										return v;
+									}
+								}
+								if (v instanceof ObjectId) {
+									return v;
+								}
+								throw new Error("Invalid id value");
+							});
+						}
+						throw new Error("Invalid id value");
+					}
+					try {
+						return new ObjectId(value);
+					} catch (e) {
+						return value;
+					}
 				}
 				return value;
 			}
@@ -422,13 +390,32 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				model,
 				options,
 			}) {
+				const customIdGen = getCustomIdGenerator(options);
 				if (field === "_id" || fieldAttributes.references?.field === "id") {
-					const convertId = createConvertId(options.logger);
-					const result = convertId(
-						data,
-						action !== "update",
-					);
-					return result;
+					if (customIdGen) {
+						return data;
+					}
+					if (action === "update") {
+						return data;
+					}
+					if (Array.isArray(data)) {
+						return data.map((v) => new ObjectId());
+					}
+					if (typeof data === "string") {
+						try {
+							return new ObjectId(data);
+						} catch (error) {
+							return new ObjectId();
+						}
+					}
+					if (
+						fieldAttributes?.references?.field === "id" &&
+						!fieldAttributes?.required &&
+						data === null
+					) {
+						return null;
+					}
+					return new ObjectId();
 				}
 				return data;
 			},
@@ -449,7 +436,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				}
 				return data;
 			},
-			customIdGenerator(props) {
+			customIdGenerator() {
 				return new ObjectId().toString();
 			},
 		},
