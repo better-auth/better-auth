@@ -489,7 +489,6 @@ export function aliasCompatClient<
 					// Check if the path starts with the prefix, then strip it and check the original matcher
 					if (path.startsWith(prefix)) {
 						const originalPath = path.slice(prefix.length);
-						console.log(originalPath);
 						return listener.matcher(originalPath);
 					}
 					return false;
