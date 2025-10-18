@@ -67,7 +67,7 @@ export default async function Page({
 								alt={page.data?.author?.name ?? "Author"}
 							/>
 							<AvatarFallback>
-								{page.data?.author?.name?.charAt(0).toUpperCase() ?? ""}
+								{page.data?.author?.name?.charAt(0)?.toUpperCase() ?? ""}
 							</AvatarFallback>
 						</Avatar>
 					</div>
