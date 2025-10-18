@@ -55,6 +55,11 @@ export type InferPluginTypes<O extends BetterAuthOptions> =
 			>
 		: {};
 
+export interface SessionWithSoftDelete extends Session {
+	invalidatedAt?: Date | null;
+	isActive?: boolean | null;
+}
+
 export type {
 	User,
 	Account,

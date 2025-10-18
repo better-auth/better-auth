@@ -4,6 +4,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	type Account,
 	type Session,
+	type SessionWithSoftDelete,
 	type User,
 	type Verification,
 } from "../types";
@@ -172,6 +173,16 @@ export const createInternalAdapter = (
 							...s.session,
 							expiresAt: new Date(s.session.expiresAt),
 						});
+
+						if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+							const sessionWithSoftDelete = s.session as SessionWithSoftDelete;
+							if (options.session.deleteSessionOnSignOut.timestamp === true) {
+								if (sessionWithSoftDelete.invalidatedAt !== null) continue;
+							} else {
+								if (sessionWithSoftDelete.isActive !== true) continue;
+							}
+						}
+
 						sessions.push(parsedSession);
 					}
 				}
@@ -189,6 +200,17 @@ export const createInternalAdapter = (
 					},
 				],
 			});
+
+			if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+				return sessions.filter((session) => {
+					const sessionWithSoftDelete = session as SessionWithSoftDelete;
+					if (options.session?.deleteSessionOnSignOut?.timestamp === true) {
+						return sessionWithSoftDelete.invalidatedAt === null;
+					}
+					return sessionWithSoftDelete.isActive === true;
+				});
+			}
+
 			return sessions;
 		},
 		listUsers: async (
@@ -286,8 +308,17 @@ export const createInternalAdapter = (
 				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				// Conditionally include invalidatedAt or isActive based on the session config
+				...(options.session?.deleteSessionOnSignOut?.enabled === false
+					? {
+							...(options.session?.deleteSessionOnSignOut?.timestamp === true
+								? { invalidatedAt: null } // Only add invalidatedAt if timestamp is true
+								: { isActive: true }), // Otherwise, add isActive
+						}
+					: {}),
 				...(overrideAll ? rest : {}),
 			};
+
 			const res = await createWithHooks(
 				data,
 				"session",
@@ -418,6 +449,15 @@ export const createInternalAdapter = (
 				return null;
 			}
 
+			if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+				const sessionWithSoftDelete = session as SessionWithSoftDelete;
+				if (options.session.deleteSessionOnSignOut.timestamp === true) {
+					if (sessionWithSoftDelete.invalidatedAt !== null) return null;
+				} else {
+					if (sessionWithSoftDelete.isActive !== true) return null;
+				}
+			}
+
 			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
 				model: "user",
 				where: [
@@ -466,6 +506,17 @@ export const createInternalAdapter = (
 							session: Session;
 							user: User;
 						};
+
+						if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+							const sessionWithSoftDelete =
+								session.session as SessionWithSoftDelete;
+							if (options.session.deleteSessionOnSignOut.timestamp === true) {
+								if (sessionWithSoftDelete.invalidatedAt !== null) continue;
+							} else {
+								if (sessionWithSoftDelete.isActive !== true) continue;
+							}
+						}
+
 						sessions.push(session);
 					}
 				}
@@ -498,14 +549,26 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			return sessions.map((session) => {
-				const user = users.find((u) => u.id === session.userId);
-				if (!user) return null;
-				return {
-					session,
-					user,
-				};
-			}) as {
+			return sessions
+				.filter((session) => {
+					if (options.session?.deleteSessionOnSignOut?.enabled === false) {
+						const sessionWithSoftDelete = session as SessionWithSoftDelete;
+						if (options.session.deleteSessionOnSignOut.timestamp === true) {
+							if (sessionWithSoftDelete.invalidatedAt !== null) return false;
+						} else {
+							if (sessionWithSoftDelete.isActive !== true) return false;
+						}
+					}
+					return true;
+				})
+				.map((session) => {
+					const user = users.find((u) => u.id === session.userId);
+					if (!user) return null;
+					return {
+						session,
+						user,
+					};
+				}) as {
 				session: Session;
 				user: User;
 			}[];
@@ -595,21 +658,37 @@ export const createInternalAdapter = (
 				await secondaryStorage.delete(token);
 
 				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
+					(!options.session?.storeSessionInDatabase ||
+						ctx.options.session?.preserveSessionInDatabase) &&
+					ctx.options.session?.deleteSessionOnSignOut?.enabled !== false
 				) {
 					return;
 				}
 			}
-			await (await getCurrentAdapter(adapter)).delete<Session>({
-				model: "session",
-				where: [
-					{
-						field: "token",
-						value: token,
-					},
-				],
-			});
+
+			if (options.session?.deleteSessionOnSignOut?.enabled !== false) {
+				await (await getCurrentAdapter(adapter)).delete<Session>({
+					model: "session",
+					where: [
+						{
+							field: "token",
+							value: token,
+						},
+					],
+				});
+			} else {
+				const updateData: { isActive?: boolean; invalidatedAt?: Date } = {};
+
+				if (options.session?.deleteSessionOnSignOut?.timestamp === true) {
+					updateData.invalidatedAt = new Date();
+				} else {
+					updateData.isActive = false;
+				}
+
+				const where: Where[] = [{ value: token, field: "token" }];
+
+				await updateWithHooks(updateData, where, "session", undefined);
+			}
 		},
 		deleteAccounts: async (userId: string) => {
 			await deleteManyWithHooks(
@@ -653,23 +732,48 @@ export const createInternalAdapter = (
 				}
 
 				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
+					(!options.session?.storeSessionInDatabase ||
+						ctx.options.session?.preserveSessionInDatabase) &&
+					ctx.options.session?.deleteSessionOnSignOut?.enabled !== false
 				) {
 					return;
 				}
 			}
-			await deleteManyWithHooks(
-				[
-					{
-						field: Array.isArray(userIdOrSessionTokens) ? "token" : "userId",
-						value: userIdOrSessionTokens,
-						operator: Array.isArray(userIdOrSessionTokens) ? "in" : undefined,
-					},
-				],
-				"session",
-				undefined,
-			);
+
+			if (options.session?.deleteSessionOnSignOut?.enabled !== false) {
+				await deleteManyWithHooks(
+					[
+						{
+							field: Array.isArray(userIdOrSessionTokens) ? "token" : "userId",
+							value: userIdOrSessionTokens,
+							operator: Array.isArray(userIdOrSessionTokens) ? "in" : undefined,
+						},
+					],
+					"session",
+					undefined,
+				);
+			} else {
+				const updateData: { isActive?: boolean; invalidatedAt?: Date } = {};
+
+				if (options.session?.deleteSessionOnSignOut?.timestamp === true) {
+					updateData.invalidatedAt = new Date();
+				} else {
+					updateData.isActive = false;
+				}
+
+				await updateManyWithHooks(
+					updateData,
+					[
+						{
+							field: Array.isArray(userIdOrSessionTokens) ? "token" : "userId",
+							value: userIdOrSessionTokens,
+							operator: Array.isArray(userIdOrSessionTokens) ? "in" : undefined,
+						},
+					],
+					"session",
+					undefined,
+				);
+			}
 		},
 		findOAuthUser: async (
 			email: string,
