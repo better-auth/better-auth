@@ -4,7 +4,7 @@ import { getTestInstanceMemory } from "../../../test-utils";
 import { alias } from "..";
 import { createMockClientPlugin, createMockPlugin } from "./mock-plugin";
 import { createAuthClient } from "../../../client";
-import { aliasClient, aliasCompatClient } from "../client";
+import { aliasClient } from "../client";
 import type {
 	BetterAuthClientPlugin,
 	BetterAuthPlugin,
@@ -27,15 +27,13 @@ describe("Alias Plugin", async () => {
 		],
 	});
 
-	const c = aliasClient("/stripe", createMockClientPlugin("payment"));
 	const client = createAuthClient({
 		fetchOptions: {
 			customFetchImpl,
 		},
 		baseURL: "http://localhost:3000",
 		plugins: [
-			c,
-			aliasCompatClient(c, createMockClientPlugin("test")),
+			aliasClient("/stripe", createMockClientPlugin("payment")),
 			aliasClient("/polar", createMockClientPlugin("polar")),
 			aliasClient("/dodo", createMockClientPlugin("payment")),
 		],
