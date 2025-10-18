@@ -385,9 +385,8 @@ describe("Enum field support in Drizzle schemas", () => {
 				},
 			} as BetterAuthOptions,
 		});
-		expect(schema.code).toContain("pgEnum");
 		expect(schema.code).toContain(
-			'role: pgEnum("role", ["admin", "user", "guest"])',
+			'role: text("role", { enum: ["admin", "user", "guest"] })',
 		);
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-pg-enum.txt",
@@ -455,30 +454,6 @@ describe("Enum field support in Drizzle schemas", () => {
 		);
 	});
 
-	it("should include correct imports for enum fields in PostgreSQL", async () => {
-		const schema = await generateDrizzleSchema({
-			file: "test.drizzle",
-			adapter: {
-				id: "drizzle",
-				options: {
-					provider: "pg",
-					schema: {},
-				},
-			} as any,
-			options: {
-				database: {} as any,
-				user: {
-					additionalFields: {
-						role: {
-							type: ["admin", "user"],
-						},
-					},
-				},
-			} as BetterAuthOptions,
-		});
-		expect(schema.code).toMatch(/import.*pgEnum.*from.*drizzle-orm\/pg-core/);
-	});
-
 	it("should include correct imports for enum fields in MySQL", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",
@@ -526,6 +501,6 @@ describe("Enum field support in Drizzle schemas", () => {
 				},
 			} as BetterAuthOptions,
 		});
-		expect(schema.code).not.toContain("pgEnum");
+		expect(schema.code).not.toContain("enum");
 	});
 });
