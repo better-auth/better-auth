@@ -8,6 +8,7 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 - [Cloudflare Turnstile](https://www.cloudflare.com/application-services/products/turnstile/)
 - [hCaptcha](https://www.hcaptcha.com/)
 - [CaptchaFox](https://captchafox.com/)
+- [Cap](https://capjs.js.org/)
 
 <Callout type="info">
   This plugin works out of the box with <Link href="/docs/authentication/email-password">Email & Password</Link> authentication. To use it with other authentication methods, you will need to configure the <Link href="/docs/plugins/captcha#plugin-options">endpoints</Link> array in the plugin options.
@@ -26,7 +27,7 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
     export const auth = betterAuth({
         plugins: [ // [!code highlight]
             captcha({ // [!code highlight]
-                provider: "cloudflare-turnstile", // or google-recaptcha, hcaptcha, captchafox // [!code highlight]
+                provider: "cloudflare-turnstile", // or google-recaptcha, hcaptcha, captchafox, cap // [!code highlight]
                 secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
             }), // [!code highlight]
         ], // [!code highlight]
@@ -56,6 +57,7 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
     - To implement Google reCAPTCHA on the client side, follow the official [Google reCAPTCHA documentation](https://developers.google.com/recaptcha/intro) or use libraries like [react-google-recaptcha](https://www.npmjs.com/package/react-google-recaptcha) (v2) and [react-google-recaptcha-v3](https://www.npmjs.com/package/react-google-recaptcha-v3) (v3).
     - To implement hCaptcha on the client side, follow the official [hCaptcha documentation](https://docs.hcaptcha.com/#add-the-hcaptcha-widget-to-your-webpage) or use libraries like [@hcaptcha/react-hcaptcha](https://www.npmjs.com/package/@hcaptcha/react-hcaptcha)
     - To implement CaptchaFox on the client side, follow the official [CaptchaFox documentation](https://docs.captchafox.com/getting-started) or use libraries like [@captchafox/react](https://www.npmjs.com/package/@captchafox/react)
+    - To implement Cap on the client side, follow the official [Cap documentation](https://capjs.js.org/guide/widget.html) or use [community libraries](https://capjs.js.org/guide/community.html)
   </Step>
 </Steps>
 

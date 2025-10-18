@@ -66,6 +66,10 @@ export const captcha = (options: CaptchaOptions) =>
 						siteKey: options.siteKey,
 					});
 				}
+
+				if (options.provider === Providers.CAP) {
+					return await verifyHandlers.cap(handlerParams);
+				}
 			} catch (_error) {
 				const errorMessage =
 					_error instanceof Error ? _error.message : undefined;

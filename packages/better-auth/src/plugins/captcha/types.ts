@@ -27,8 +27,13 @@ export interface CaptchaFoxOptions extends BaseCaptchaOptions {
 	siteKey?: string;
 }
 
+export interface CapOptions extends BaseCaptchaOptions {
+	provider: typeof Providers.CAP;
+}
+
 export type CaptchaOptions =
 	| GoogleRecaptchaOptions
 	| CloudflareTurnstileOptions
 	| HCaptchaOptions
-	| CaptchaFoxOptions;
+	| CaptchaFoxOptions
+	| CapOptions;
