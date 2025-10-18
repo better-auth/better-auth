@@ -23,7 +23,7 @@ import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
-import { getJwtToken } from "../jwt/sign";
+import { signJwt } from "../jwt/sign";
 import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
 import { mergeSchema } from "../../db";
@@ -805,10 +805,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							)
 						: {};
 
-					const payload = {
-						sub: user.id,
-						aud: client_id.toString(),
-						iat: Date.now(),
+					const data = {
 						auth_time: ctx.context.session
 							? new Date(ctx.context.session.session.createdAt).getTime()
 							: undefined,
@@ -834,7 +831,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 								error: "internal_server_error",
 							});
 						}
-						idToken = await getJwtToken(
+						idToken = await signJwt(
 							{
 								...ctx,
 								context: {
@@ -853,22 +850,24 @@ export const oidcProvider = (options: OIDCOptions) => {
 									},
 								},
 							},
+							data,
 							{
-								...jwtPlugin.options,
-								jwt: {
-									...jwtPlugin.options?.jwt,
-									getSubject: () => user.id,
-									audience: client_id.toString(),
-									issuer: ctx.context.options.baseURL,
-									expirationTime,
-									definePayload: () => payload,
+								claims: {
+									aud: client_id.toString(),
+									exp: expirationTime,
+									sub: user.id,
 								},
 							},
 						);
 
 						// If the JWT token is not enabled, create a key and use it to sign
 					} else {
-						idToken = await new SignJWT(payload)
+						idToken = await new SignJWT({
+							...data,
+							sub: user.id,
+							aud: client_id.toString(),
+							iat: Date.now(),
+						})
 							.setProtectedHeader({ alg: "HS256" })
 							.setIssuedAt(iat)
 							.setExpirationTime(accessTokenExpiresAt)
