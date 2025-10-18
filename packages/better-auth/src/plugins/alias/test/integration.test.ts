@@ -346,4 +346,8 @@ describe("Alias Plugin", async () => {
 			}>();
 		});
 	});
+
+	describe("compat plugin", async () => {
+		// TODO:
+	});
 });

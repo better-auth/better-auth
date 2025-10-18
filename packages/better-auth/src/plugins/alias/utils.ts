@@ -7,3 +7,12 @@ export function toCamelCase(path: string) {
 		.replace(/[-_/](.)?/g, (_, c) => (c ? c.toUpperCase() : ""))
 		.replace(/^[A-Z]/, (match) => match.toLowerCase());
 }
+
+export function normalizePrefix(prefix: string) {
+	const normalizedPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
+	const cleanPrefix = normalizedPrefix.endsWith("/")
+		? normalizedPrefix.slice(0, -1)
+		: normalizedPrefix;
+
+	return cleanPrefix;
+}

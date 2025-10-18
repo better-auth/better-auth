@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import type { BetterAuthClientPlugin } from "../../../client/types";
-import { aliasClient } from "../client";
+import { aliasClient, aliasCompatClient } from "../client";
 import { createMockClientPlugin } from "./mock-plugin";
 import { createAuthClient as createSolidClient } from "../../../client/solid";
 
@@ -329,4 +329,8 @@ describe("aliasClient plugin", () => {
 			isPending: false,
 		});
 	});
+});
+
+describe("aliasCompatClient plugin", () => {
+	// TODO:
 });

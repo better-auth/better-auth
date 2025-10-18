@@ -8,13 +8,18 @@ import type {
 	NormalizePrefix,
 	TransformEndpointKey,
 } from "./types";
-import { SPECIAL_ENDPOINTS, toCamelCase, type SpecialEndpoints } from "./utils";
+import {
+	SPECIAL_ENDPOINTS,
+	toCamelCase,
+	normalizePrefix,
+	type SpecialEndpoints,
+} from "./utils";
 
 export type InferAliasedPlugin<
 	T extends BetterAuthPlugin,
 	Prefix extends string,
 	O extends AliasOptions,
-	IsClient extends true | false = false,
+	IsClient extends boolean = false,
 > = Omit<T, "endpoints" | "$Infer"> & {
 	endpoints: {
 		[K in keyof T["endpoints"] &
@@ -106,10 +111,7 @@ export function alias<
 	T extends BetterAuthPlugin,
 	O extends AliasOptions,
 >(prefix: Prefix, plugin: T, options?: O) {
-	const normalizedPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
-	const cleanPrefix = normalizedPrefix.endsWith("/")
-		? normalizedPrefix.slice(0, -1)
-		: normalizedPrefix;
+	const cleanPrefix = normalizePrefix(prefix);
 	const aliasedPlugin: BetterAuthPlugin = {
 		...plugin,
 	};

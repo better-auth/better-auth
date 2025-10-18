@@ -11,7 +11,14 @@ import type {
 	TransformNormalizedPrefix,
 } from "./types";
 import { getBaseURL } from "../../utils/url";
-import { SPECIAL_ENDPOINTS, toCamelCase, type SpecialEndpoints } from "./utils";
+import {
+	normalizePrefix,
+	SPECIAL_ENDPOINTS,
+	toCamelCase,
+	type SpecialEndpoints,
+} from "./utils";
+import { BetterAuthError } from "@better-auth/core/error";
+import { capitalizeFirstLetter } from "../../utils";
 
 type ExtendPathMethods<
 	T extends BetterAuthClientPlugin,
@@ -118,7 +125,26 @@ type ExtendEndpoints<
 		: never;
 };
 
-export type InferAliasedClientPlugin<
+type InferMeta<AliasedPlugin extends BetterAuthClientPlugin> =
+	AliasedPlugin extends {
+		"~meta": {
+			prefix: infer P extends LiteralString;
+			options?: infer O extends AliasClientOptions;
+		};
+	}
+		? {
+				prefix: P;
+				options: O;
+			}
+		: never;
+
+export type InferAliasCompatClientPlugin<
+	AliasedPlugin extends BetterAuthClientPlugin,
+	T extends BetterAuthClientPlugin,
+	O extends AliasCompatClientOptions,
+> = T; // TODO:
+
+type InferAliasedClientPlugin_base<
 	Prefix extends LiteralString,
 	T extends BetterAuthClientPlugin,
 	O extends AliasClientOptions,
@@ -130,9 +156,47 @@ export type InferAliasedClientPlugin<
 } & ExtendPathMethods<T, NormalizePrefix<Prefix>, O> &
 	ExtendGetActions<T, NormalizePrefix<Prefix>, O> &
 	ExtendGetAtoms<T, NormalizePrefix<Prefix>, O> &
-	ExtendEndpoints<T, NormalizePrefix<Prefix>>;
+	ExtendEndpoints<T, NormalizePrefix<Prefix>> & {
+		"~meta": {
+			prefix: NormalizePrefix<Prefix>;
+			options: O;
+			signals: T["getAtoms"] extends (...args: any[]) => infer R
+				?
+						| {
+								[K in keyof R & string]: K extends `$${string}` ? K : never;
+						  }[keyof R & string][]
+						| null
+				: null;
+		};
+	};
+
+export type InferAliasedClientPlugin<
+	Prefix extends LiteralString,
+	T extends BetterAuthClientPlugin,
+	O extends AliasClientOptions,
+> = InferAliasedClientPlugin_base<Prefix, T, O> & {
+	compat: <
+		Plugin extends BetterAuthClientPlugin,
+		Option extends AliasCompatClientOptions,
+	>(
+		plugin: Plugin,
+		options?: Option,
+	) => InferAliasCompatClientPlugin<
+		InferAliasedClientPlugin_base<Prefix, T, O>,
+		Plugin,
+		Option
+	>;
+};
 
 export type AliasClientOptions = {
+	/**
+	 * Additional endpoints that should be prefixed.
+	 *
+	 * Use this in conjunction with the compat plugin
+	 * to define endpoints that should be prefixed and
+	 * are not present in the plugin's pathMethods.
+	 */
+	includeEndpoints?: LiteralString[];
 	/**
 	 * Endpoints that should not be prefixed with the alias.
 	 */
@@ -179,10 +243,7 @@ export function aliasClient<
 	T extends BetterAuthClientPlugin,
 	O extends AliasClientOptions,
 >(prefix: Prefix, plugin: T, options?: O) {
-	const normalizedPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
-	const cleanPrefix = normalizedPrefix.endsWith("/")
-		? normalizedPrefix.slice(0, -1)
-		: normalizedPrefix;
+	const cleanPrefix = normalizePrefix(prefix);
 	const camelCasePrefix = toCamelCase(cleanPrefix);
 	const aliasedPlugin: BetterAuthClientPlugin = {
 		...plugin,
@@ -207,8 +268,9 @@ export function aliasClient<
 	if (plugin.atomListeners) {
 		aliasedPlugin.atomListeners = plugin.atomListeners.map((listener) => ({
 			signal:
+				// TODO: add exclude signals option
 				listener.signal !== "$sessionSignal" && !!options?.unstable_prefixAtoms
-					? `${listener.signal}${camelCasePrefix.charAt(0).toUpperCase() + camelCasePrefix.slice(1)}`
+					? `${listener.signal}${capitalizeFirstLetter(camelCasePrefix)}`
 					: listener.signal,
 			matcher: (path: string) => {
 				// Check if the path starts with the prefix, then strip it and check the original matcher
@@ -262,6 +324,7 @@ export function aliasClient<
 		};
 	}
 
+	let lazySignals: string[] | null = null;
 	// Wrap getAtoms to prefix any path-based actions
 	if (plugin.getAtoms) {
 		aliasedPlugin.getAtoms = ($fetch, clientOptions) => {
@@ -287,13 +350,15 @@ export function aliasClient<
 				clientOptions,
 			);
 
+			if (!lazySignals) {
+				lazySignals = Object.keys(originalAtoms).filter(
+					(key) => key.charAt(0) === "$",
+				);
+			}
 			return options?.unstable_prefixAtoms
 				? Object.fromEntries(
 						Object.entries(originalAtoms).map(([key, value]) => {
-							return [
-								`${key}${camelCasePrefix.charAt(0).toUpperCase() + camelCasePrefix.slice(1)}`,
-								value,
-							];
+							return [`${key}${capitalizeFirstLetter(camelCasePrefix)}`, value];
 						}),
 					)
 				: originalAtoms;
@@ -329,11 +394,89 @@ export function aliasClient<
 		aliasedPlugin.$InferServerPlugin = wrappedServerPlugin;
 	}
 
+	Object.assign(aliasedPlugin, {
+		compat: aliasCompatClient.bind(
+			null,
+			aliasedPlugin as InferAliasedClientPlugin_base<Prefix, T, O>,
+		),
+		"~meta": {
+			prefix: cleanPrefix,
+			options,
+			get signals() {
+				return lazySignals;
+			},
+		},
+	});
+
 	return aliasedPlugin as InferAliasedClientPlugin<
 		Prefix,
 		T,
 		O
 	> satisfies BetterAuthClientPlugin;
+}
+
+export type AliasCompatClientOptions = {
+	/**
+	 * Additional endpoints that should be prefixed.
+	 *
+	 * Use this to define endpoints that should be prefixed
+	 * and are not present in the plugin's pathMethods.
+	 */
+	includeEndpoints?: LiteralString[];
+};
+
+export function aliasCompatClient<
+	AliasedPlugin extends BetterAuthClientPlugin,
+	T extends BetterAuthClientPlugin,
+	O extends AliasCompatClientOptions,
+>(aliasedPlugin: AliasedPlugin, plugin: T, options?: O) {
+	if (!("~meta" in aliasedPlugin)) {
+		throw new BetterAuthError(
+			"aliasedPlugin",
+			"Invalid aliasedPlugin provided.",
+		);
+	}
+	const { prefix, options: aliasOptions } = aliasedPlugin[
+		"~meta"
+	] as InferMeta<AliasedPlugin>;
+	const camelCasePrefix = toCamelCase(prefix);
+	const compatPlugin: BetterAuthClientPlugin = {
+		...plugin,
+	};
+
+	const includeEndpoints = new Set([
+		...(options?.includeEndpoints || []),
+		...(aliasOptions.includeEndpoints || []),
+		...Object.keys(aliasedPlugin.pathMethods || {}).filter((path) =>
+			path.startsWith(prefix),
+		),
+	]);
+
+	// Update atomListeners matchers
+	if (plugin.atomListeners) {
+	}
+
+	// Wrap getActions to prefix specific path-based action
+	if (plugin.getActions) {
+	}
+
+	// Wrap getAtoms to prefix specific path-based action
+	if (plugin.getAtoms) {
+	}
+
+	// Update fetchPlugins hooks to prefix specific paths
+	if (plugin.fetchPlugins) {
+	}
+
+	return compatPlugin as InferAliasCompatClientPlugin<
+		InferAliasedClientPlugin_base<
+			InferMeta<AliasedPlugin>["prefix"],
+			AliasedPlugin,
+			InferMeta<AliasedPlugin>["options"]
+		>,
+		T,
+		O
+	>;
 }
 
 const resolveURL = (
