@@ -92,12 +92,12 @@ export const getClientConfig = (
 			Object.assign(pluginPathMethods, plugin.pathMethods);
 		}
 		if (plugin.atomListeners) {
-			const listerners =
+			const listeners =
 				typeof plugin.atomListeners === "function"
 					? plugin.atomListeners()
 					: plugin.atomListeners;
-			if (listerners?.length) {
-				atomListeners.push(...listerners);
+			if (listeners?.length) {
+				atomListeners.push(...listeners);
 			}
 		}
 	}
