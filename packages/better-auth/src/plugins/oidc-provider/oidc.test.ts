@@ -115,7 +115,7 @@ describe("oidc", async () => {
 	let application: Client = {
 		clientId: "test-client-id",
 		clientSecret: "test-client-secret-oidc",
-		redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+		redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
 		metadata: {},
 		icon: "",
 		type: "web",
@@ -126,7 +126,7 @@ describe("oidc", async () => {
 	it("should create oidc client", async ({ expect }) => {
 		const createdClient = await serverClient.oauth2.register({
 			client_name: application.name,
-			redirect_uris: application.redirectURLs,
+			redirect_uris: application.redirectUrls,
 			logo_uri: application.icon,
 		});
 		expect(createdClient.data).toMatchObject({
@@ -145,7 +145,7 @@ describe("oidc", async () => {
 			application = {
 				clientId: createdClient.data.client_id,
 				clientSecret: createdClient.data.client_secret,
-				redirectURLs: createdClient.data.redirect_uris,
+				redirectUrls: createdClient.data.redirect_uris,
 				metadata: {},
 				icon: createdClient.data.logo_uri || "",
 				type: "web",
@@ -480,7 +480,7 @@ describe("oidc storage", async () => {
 		let application: Client = {
 			clientId: "test-client-id",
 			clientSecret: "test-client-secret-oidc",
-			redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
 			metadata: {},
 			icon: "",
 			type: "web",
@@ -489,7 +489,7 @@ describe("oidc storage", async () => {
 		};
 		const createdClient = await serverClient.oauth2.register({
 			client_name: application.name,
-			redirect_uris: application.redirectURLs,
+			redirect_uris: application.redirectUrls,
 			logo_uri: application.icon,
 		});
 		expect(createdClient.data).toMatchObject({
@@ -508,7 +508,7 @@ describe("oidc storage", async () => {
 			application = {
 				clientId: createdClient.data.client_id,
 				clientSecret: createdClient.data.client_secret,
-				redirectURLs: createdClient.data.redirect_uris,
+				redirectUrls: createdClient.data.redirect_uris,
 				metadata: {},
 				icon: createdClient.data.logo_uri || "",
 				type: "web",
@@ -858,7 +858,7 @@ describe("oidc-jwt", async () => {
 			let application: Client = {
 				clientId: "test-client-id",
 				clientSecret: "test-client-secret-oidc",
-				redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+				redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
 				metadata: {},
 				icon: "",
 				type: "web",
@@ -867,7 +867,7 @@ describe("oidc-jwt", async () => {
 			};
 			const createdClient = await serverClient.oauth2.register({
 				client_name: application.name,
-				redirect_uris: application.redirectURLs,
+				redirect_uris: application.redirectUrls,
 				logo_uri: application.icon,
 			});
 			expect(createdClient.data).toMatchObject({
@@ -886,7 +886,7 @@ describe("oidc-jwt", async () => {
 				application = {
 					clientId: createdClient.data.client_id,
 					clientSecret: createdClient.data.client_secret,
-					redirectURLs: createdClient.data.redirect_uris,
+					redirectUrls: createdClient.data.redirect_uris,
 					metadata: {},
 					icon: createdClient.data.logo_uri || "",
 					type: "web",
