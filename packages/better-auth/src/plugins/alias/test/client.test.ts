@@ -4,6 +4,7 @@ import type { BetterAuthClientPlugin } from "../../../client/types";
 import { aliasClient, aliasCompatClient } from "../client";
 import { createMockClientPlugin } from "./mock-plugin";
 import { createAuthClient as createSolidClient } from "../../../client/solid";
+import { atom } from "nanostores";
 
 describe("aliasClient plugin", () => {
 	it("should prefix pathMethods", () => {
