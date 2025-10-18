@@ -172,6 +172,7 @@ export const mcp = (options: MCPOptions) => {
 			],
 		},
 		endpoints: {
+			oAuthConsent: provider.endpoints.oAuthConsent,
 			getMcpOAuthConfig: createAuthEndpoint(
 				"/.well-known/oauth-authorization-server",
 				{
