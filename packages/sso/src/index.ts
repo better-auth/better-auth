@@ -1217,7 +1217,7 @@ export const sso = (options?: SSOOptions) => {
 					method: "GET",
 					query: z.object({
 						code: z.string().optional(),
-						state: z.string(),
+						state: z.string().optional(),
 						error: z.string().optional(),
 						error_description: z.string().optional(),
 					}),
@@ -1237,7 +1237,15 @@ export const sso = (options?: SSOOptions) => {
 				},
 				async (ctx) => {
 					const { code, state, error, error_description } = ctx.query;
-					const stateData = await parseState(ctx);
+					const stateData = state
+						? await parseState(ctx)
+						: {
+								callbackURL: ctx.context.baseURL,
+								errorURL: undefined,
+								newUserURL: undefined,
+								requestSignUp: false,
+								codeVerifier: undefined,
+							};
 					if (!stateData) {
 						const errorURL =
 							ctx.context.options.onAPIError?.errorURL ||
