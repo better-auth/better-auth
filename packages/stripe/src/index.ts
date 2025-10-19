@@ -1229,7 +1229,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 	} as const;
 	return {
 		id: "stripe",
-
 		endpoints: {
 			stripeWebhook: createAuthEndpoint(
 				"/stripe/webhook",
