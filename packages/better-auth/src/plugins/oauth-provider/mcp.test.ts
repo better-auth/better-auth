@@ -57,6 +57,7 @@ describe("mcp", async () => {
 						issuer: authServerUrl,
 						audience: resource,
 					},
+					jwksUrl: `${authServerUrl}/api/auth/jwks`,
 				});
 				expect.unreachable();
 			} catch (error) {
