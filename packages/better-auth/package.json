@@ -25,6 +25,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest",
+    "bench": "vitest bench",
     "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/base.prisma",
     "typecheck": "tsc --project tsconfig.json"
   },
@@ -777,6 +778,7 @@
     "tarn": "^3.0.2",
     "tedious": "^18.6.1",
     "tsdown": "catalog:",
+    "tinybench": "^5.0.1",
     "type-fest": "^4.41.0",
     "typescript": "catalog:",
     "vue": "^3.5.18"
