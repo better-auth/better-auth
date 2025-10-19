@@ -1,101 +1,30 @@
-import type { FieldAttribute } from "../../db";
-import type { BetterAuthDbSchema } from "../../db/get-tables";
+import type {
+	DBFieldAttribute,
+	BetterAuthDBSchema,
+} from "@better-auth/core/db";
+import type {
+	DBAdapterFactoryConfig,
+	CustomAdapter as CoreCustomAdapter,
+} from "@better-auth/core/db/adapter";
 import type {
 	AdapterSchemaCreation,
-	BetterAuthOptions,
 	TransactionAdapter,
 	Where,
 	Join,
 } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type { Prettify } from "../../types/helper";
-
-export type AdapterDebugLogs =
-	| boolean
-	| {
-			/**
-			 * Useful when you want to log only certain conditions.
-			 */
-			logCondition?: (() => boolean) | undefined;
-			create?: boolean;
-			update?: boolean;
-			updateMany?: boolean;
-			findOne?: boolean;
-			findMany?: boolean;
-			delete?: boolean;
-			deleteMany?: boolean;
-			count?: boolean;
-	  }
-	| {
-			/**
-			 * Only used for adapter tests to show debug logs if a test fails.
-			 *
-			 * @deprecated Not actually deprecated. Doing this for IDEs to show this option at the very bottom and stop end-users from using this.
-			 */
-			isRunningAdapterTests: boolean;
-	  };
 
 export type AdapterFactoryOptions = {
 	config: AdapterFactoryConfig;
 	adapter: AdapterFactoryCustomizeAdapterCreator;
 };
 
-export interface AdapterFactoryConfig {
-	/**
-	 * Use plural table names.
-	 *
-	 * All tables will be named with an `s` at the end.
-	 *
-	 * @default false
-	 */
-	usePlural?: boolean;
-	/**
-	 * Enable debug logs.
-	 *
-	 * @default false
-	 */
-	debugLogs?: AdapterDebugLogs;
-	/**
-	 * Name of the adapter.
-	 *
-	 * This is used to identify the adapter in the debug logs.
-	 *
-	 * @default `adapterId`
-	 */
-	adapterName?: string;
-	/**
-	 * Adapter id
-	 */
-	adapterId: string;
-	/**
-	 * If the database supports numeric ids, set this to `true`.
-	 *
-	 * @default true
-	 */
-	supportsNumericIds?: boolean;
-	/**
-	 * If the database doesn't support JSON columns, set this to `false`.
-	 *
-	 * We will handle the translation between using `JSON` columns, and saving `string`s to the database.
-	 *
-	 * @default false
-	 */
-	supportsJSON?: boolean;
-	/**
-	 * If the database doesn't support dates, set this to `false`.
-	 *
-	 * We will handle the translation between using `Date` objects, and saving `string`s to the database.
-	 *
-	 * @default true
-	 */
-	supportsDates?: boolean;
-	/**
-	 * If the database doesn't support booleans, set this to `false`.
-	 *
-	 * We will handle the translation between using `boolean`s, and saving `0`s and `1`s to the database.
-	 *
-	 * @default true
-	 */
-	supportsBooleans?: boolean;
+/**
+ * @deprecated Use `DBAdapterFactoryConfig` from `@better-auth/core/db/adapter` instead.
+ */
+export interface AdapterFactoryConfig
+	extends Omit<DBAdapterFactoryConfig<BetterAuthOptions>, "transaction"> {
 	/**
 	 * Execute multiple operations in a transaction.
 	 *
@@ -256,7 +185,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	/**
 	 * The schema of the user's Better-Auth instance.
 	 */
-	schema: BetterAuthDbSchema;
+	schema: BetterAuthDBSchema;
 	/**
 	 * The debug log function.
 	 *
@@ -313,7 +242,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	}: {
 		model: string;
 		field: string;
-	}) => FieldAttribute;
+	}) => DBFieldAttribute;
 }) => CustomAdapter;
 
 export interface CustomAdapter {
@@ -361,26 +290,37 @@ export interface CustomAdapter {
 		offset?: number;
 	}) => Promise<T[]>;
 	delete: ({
+    model,
+		where,
+	}: {
+		where: W;
+		model: string;
+	}) => W extends undefined ? undefined : CleanedWhere[];
+	// The following functions are exposed primarily for the purpose of having wrapper adapters.
+	transformInput: (
+		data: Record<string, any>,
+		defaultModelName: string,
+		action: "create" | "update",
+		forceAllowId?: boolean,
+	) => Promise<Record<string, any>>;
+	transformOutput: (
+		data: Record<string, any>,
+		defaultModelName: string,
+		select?: string[],
+	) => Promise<Record<string, any>>;
+	transformWhereClause: <W extends Where[] | undefined>({
 		model,
 		where,
 	}: {
+		where: W;
 		model: string;
-		where: CleanedWhere[];
-	}) => Promise<void>;
-	deleteMany: ({
-		model,
-		where,
-	}: {
-		model: string;
-		where: CleanedWhere[];
-	}) => Promise<number>;
-	count: ({
-		model,
-		where,
-	}: {
-		model: string;
-		where?: CleanedWhere[];
-	}) => Promise<number>;
+	}) => W extends undefined ? undefined : CleanedWhere[];
+}) => CustomAdapter;
+
+/**
+ * @deprecated Use `CustomAdapter` from `@better-auth/core/db/adapter` instead.
+ */
+export interface CustomAdapter extends Omit<CoreCustomAdapter, "createSchema"> {
 	createSchema?: (props: {
 		/**
 		 * The file the user may have passed in to the `generate` command as the expected schema file output path.
@@ -389,14 +329,13 @@ export interface CustomAdapter {
 		/**
 		 * The tables from the user's Better-Auth instance schema.
 		 */
-		tables: BetterAuthDbSchema;
+		tables: BetterAuthDBSchema;
 	}) => Promise<AdapterSchemaCreation>;
-	/**
-	 * Your adapter's options.
-	 */
-	options?: Record<string, any> | undefined;
 }
 
+/**
+ * @deprecated Use `CleanedWhere` from `@better-auth/core/db/adapter` instead.
+ */
 export type CleanedWhere = Prettify<Required<Where>>;
 
 export type AdapterTestDebugLogs = {

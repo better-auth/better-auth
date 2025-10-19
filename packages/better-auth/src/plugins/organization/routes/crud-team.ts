@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
@@ -700,6 +700,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 				const updatedSession = await adapter.setActiveTeam(
 					session.session.token,
 					null,
+					ctx,
 				);
 
 				await setSessionCookie(ctx, {
@@ -745,6 +746,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 			const updatedSession = await adapter.setActiveTeam(
 				session.session.token,
 				team.id,
+				ctx,
 			);
 
 			await setSessionCookie(ctx, {

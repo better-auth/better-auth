@@ -7,6 +7,8 @@
 
 :root {
 	--fd-nav-height: 56px;
+	--fd-banner-height: 0px;
+	--fd-tocnav-height: 0px;
 
 	--background: oklch(1 0 0);
 
@@ -255,13 +257,17 @@
 }
 
 html {
-	scroll-behavior: smooth;
+	scroll-behavior: auto;
 	scroll-padding-top: calc(
-		var(--fd-nav-height) +
+		var(--fd-nav-height, 56px) +
 		var(--fd-banner-height, 0px) +
 		var(--fd-tocnav-height, 0px) +
-		16px
+		24px
 	);
+}
+
+html:not([data-anchor-scrolling]) {
+	scroll-behavior: smooth;
 }
 
 /* Global, accessible custom scrollbars */
@@ -299,4 +305,77 @@ html {
 		-ms-overflow-style: none;
 		scrollbar-width: none;
 	}
+}
+
+.markdown-content {
+	@apply text-sm leading-relaxed;
+}
+
+.markdown-content pre {
+	@apply max-w-full overflow-x-auto;
+}
+
+.markdown-content pre code {
+	@apply whitespace-pre-wrap break-words;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+	@apply font-semibold text-foreground;
+}
+
+.markdown-content p {
+	@apply mb-2 last:mb-0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+	@apply space-y-2 list-disc;
+}
+
+.markdown-content li {
+	@apply text-sm;
+}
+
+.markdown-content code {
+	@apply bg-muted px-1.5 py-0.5 rounded text-xs font-mono;
+}
+
+.markdown-content pre {
+	@apply overflow-x-auto;
+}
+
+.markdown-content blockquote {
+	@apply border-l-4 border-muted-foreground/20 pl-4 my-2 italic;
+}
+
+.markdown-content table {
+	@apply w-full border-collapse;
+}
+
+.markdown-content th,
+.markdown-content td {
+	@apply border border-border px-2 py-1 text-xs;
+}
+
+.markdown-content th {
+	@apply bg-muted font-medium;
+}
+
+@keyframes stream-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.5;
+	}
+}
+
+.streaming-cursor {
+	animation: stream-pulse 1s ease-in-out infinite;
 }

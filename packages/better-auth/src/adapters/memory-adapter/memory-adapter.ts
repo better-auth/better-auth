@@ -1,17 +1,17 @@
-import { logger } from "../../utils";
-import {
-	createAdapterFactory,
-	type AdapterDebugLogs,
-	type CleanedWhere,
-} from "../adapter-factory";
-import type { BetterAuthOptions } from "../../types";
+import { logger } from "@better-auth/core/env";
+import { createAdapterFactory } from "../adapter-factory";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	DBAdapterDebugLogOption,
+	CleanedWhere,
+} from "@better-auth/core/db/adapter";
 
 export interface MemoryDB {
 	[key: string]: any[];
 }
 
 export interface MemoryAdapterConfig {
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 }
 
 export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
@@ -28,20 +28,21 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 					props.field === "id" &&
 					props.action === "create"
 				) {
-					return db[props.model].length + 1;
+					return db[props.model]!.length + 1;
 				}
 				return props.data;
 			},
 			transaction: async (cb) => {
 				let clone = structuredClone(db);
 				try {
-					return cb(adapterCreator(lazyOptions!));
-				} catch {
+					const r = await cb(adapterCreator(lazyOptions!));
+					return r;
+				} catch (error) {
 					// Rollback changes
 					Object.keys(db).forEach((key) => {
-						db[key] = clone[key];
+						db[key] = clone[key]!;
 					});
-					throw new Error("Transaction failed, rolling back changes");
+					throw error;
 				}
 			},
 		},
@@ -77,6 +78,16 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 							return record[field].startsWith(value);
 						case "ends_with":
 							return record[field].endsWith(value);
+						case "ne":
+							return record[field] !== value;
+						case "gt":
+							return value != null && Boolean(record[field] > value);
+						case "gte":
+							return value != null && Boolean(record[field] >= value);
+						case "lt":
+							return value != null && Boolean(record[field] < value);
+						case "lte":
+							return value != null && Boolean(record[field] <= value);
 						default:
 							return record[field] === value;
 					}
@@ -87,7 +98,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 						return true;
 					}
 
-					let result = evalClause(record, where[0]);
+					let result = evalClause(record, where[0]!);
 					for (const clause of where) {
 						const clauseResult = evalClause(record, clause);
 
@@ -105,12 +116,12 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 				create: async ({ model, data }) => {
 					if (options.advanced?.database?.useNumberId) {
 						// @ts-expect-error
-						data.id = db[model].length + 1;
+						data.id = db[model]!.length + 1;
 					}
 					if (!db[model]) {
 						db[model] = [];
 					}
-					db[model].push(data);
+					db[model]!.push(data);
 					return data;
 				},
 				findOne: async ({ model, where }) => {
@@ -124,25 +135,68 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 						table = convertWhereClause(where, model);
 					}
 					if (sortBy) {
-						table = table.sort((a, b) => {
+						table = table!.sort((a, b) => {
 							const field = getFieldName({ model, field: sortBy.field });
-							if (sortBy.direction === "asc") {
-								return a[field] > b[field] ? 1 : -1;
-							} else {
-								return a[field] < b[field] ? 1 : -1;
+							const aValue = a[field];
+							const bValue = b[field];
+
+							let comparison = 0;
+
+							// Handle null/undefined values
+							if (aValue == null && bValue == null) {
+								comparison = 0;
+							} else if (aValue == null) {
+								comparison = -1;
+							} else if (bValue == null) {
+								comparison = 1;
 							}
+							// Handle string comparison
+							else if (
+								typeof aValue === "string" &&
+								typeof bValue === "string"
+							) {
+								comparison = aValue.localeCompare(bValue);
+							}
+							// Handle date comparison
+							else if (aValue instanceof Date && bValue instanceof Date) {
+								comparison = aValue.getTime() - bValue.getTime();
+							}
+							// Handle numeric comparison
+							else if (
+								typeof aValue === "number" &&
+								typeof bValue === "number"
+							) {
+								comparison = aValue - bValue;
+							}
+							// Handle boolean comparison
+							else if (
+								typeof aValue === "boolean" &&
+								typeof bValue === "boolean"
+							) {
+								comparison = aValue === bValue ? 0 : aValue ? 1 : -1;
+							}
+							// Fallback to string comparison
+							else {
+								comparison = String(aValue).localeCompare(String(bValue));
+							}
+
+							return sortBy.direction === "asc" ? comparison : -comparison;
 						});
 					}
 					if (offset !== undefined) {
-						table = table.slice(offset);
+						table = table!.slice(offset);
 					}
 					if (limit !== undefined) {
-						table = table.slice(0, limit);
+						table = table!.slice(0, limit);
 					}
-					return table;
+					return table || [];
 				},
-				count: async ({ model }) => {
-					return db[model].length;
+				count: async ({ model, where }) => {
+					if (where) {
+						const filteredRecords = convertWhereClause(where, model);
+						return filteredRecords.length;
+					}
+					return db[model]!.length;
 				},
 				update: async ({ model, where, update }) => {
 					const res = convertWhereClause(where, model);
@@ -152,12 +206,12 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 					return res[0] || null;
 				},
 				delete: async ({ model, where }) => {
-					const table = db[model];
+					const table = db[model]!;
 					const res = convertWhereClause(where, model);
 					db[model] = table.filter((record) => !res.includes(record));
 				},
 				deleteMany: async ({ model, where }) => {
-					const table = db[model];
+					const table = db[model]!;
 					const res = convertWhereClause(where, model);
 					let count = 0;
 					db[model] = table.filter((record) => {

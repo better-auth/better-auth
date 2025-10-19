@@ -14,11 +14,11 @@ import type {
 	TeamInput,
 	TeamMember,
 } from "./schema";
-import { BetterAuthError } from "../../error";
-import type { AuthContext } from "../../init";
+import { BetterAuthError } from "@better-auth/core/error";
 import parseJSON from "../../client/parser";
 import { type InferAdditionalFieldsFromPluginOptions } from "../../db";
-import { getCurrentAdapter } from "../../context/transaction";
+import { getCurrentAdapter } from "@better-auth/core/context";
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
@@ -56,6 +56,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						? JSON.stringify(data.organization.metadata)
 						: undefined,
 				},
+				forceAllowId: true,
 			});
 
 			return {
@@ -377,6 +378,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		setActiveOrganization: async (
 			sessionToken: string,
 			organizationId: string | null,
+			ctx: GenericEndpointContext,
 		) => {
 			const session = await context.internalAdapter.updateSession(
 				sessionToken,
@@ -690,7 +692,11 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return invitation;
 		},
 
-		setActiveTeam: async (sessionToken: string, teamId: string | null) => {
+		setActiveTeam: async (
+			sessionToken: string,
+			teamId: string | null,
+			ctx: GenericEndpointContext,
+		) => {
 			const session = await context.internalAdapter.updateSession(
 				sessionToken,
 				{
@@ -870,6 +876,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				data: {
 					status: "pending",
 					expiresAt,
+					createdAt: new Date(),
 					inviterId: user.id,
 					...invitation,
 					teamId:

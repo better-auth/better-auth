@@ -2,8 +2,8 @@ import * as z from "zod";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-	type BetterAuthPlugin,
-} from "..";
+} from "@better-auth/core/api";
+import type { BetterAuthPlugin, BetterAuthOptions } from "@better-auth/core";
 import {
 	oidcProvider,
 	type Client,
@@ -18,13 +18,13 @@ import { generateRandomString } from "../../crypto";
 import { createHash } from "@better-auth/utils/hash";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { SignJWT } from "jose";
-import type { BetterAuthOptions, GenericEndpointContext } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
 import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
 import { getBaseURL } from "../../utils/url";
-import { isProduction } from "../../utils/env";
-import { logger } from "../../utils";
+import { isProduction } from "@better-auth/core/env";
+import { logger } from "@better-auth/core/env";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 interface MCPOptions {
 	loginPage: string;
@@ -153,7 +153,7 @@ export const mcp = (options: MCPOptions) => {
 							maxAge: 0,
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-						const sessionToken = sessionCookie?.split(".")[0];
+						const sessionToken = sessionCookie?.split(".")[0]!;
 						if (!sessionToken) {
 							return;
 						}
@@ -203,7 +203,7 @@ export const mcp = (options: MCPOptions) => {
 					return c.json(metadata);
 				},
 			),
-			mcpOAuthAuthroize: createAuthEndpoint(
+			mcpOAuthAuthorize: createAuthEndpoint(
 				"/mcp/authorize",
 				{
 					method: "GET",
@@ -578,8 +578,8 @@ export const mcp = (options: MCPOptions) => {
 						),
 					};
 					const profile = {
-						given_name: user.name.split(" ")[0],
-						family_name: user.name.split(" ")[1],
+						given_name: user.name.split(" ")[0]!,
+						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
 						updated_at: user.updatedAt.toISOString(),
@@ -884,6 +884,7 @@ export const mcp = (options: MCPOptions) => {
 					return new Response(JSON.stringify(responseData), {
 						status: 201,
 						headers: {
+							"Content-Type": "application/json",
 							"Cache-Control": "no-store",
 							Pragma: "no-cache",
 						},

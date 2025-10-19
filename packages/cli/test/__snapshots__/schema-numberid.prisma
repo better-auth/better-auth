@@ -15,7 +15,7 @@ model User {
   emailVerified    Boolean     @default(false)
   image            String?
   createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @default(now()) @updatedAt
+  updatedAt        DateTime    @updatedAt
   twoFactorEnabled Boolean?    @default(false)
   username         String?
   displayUsername  String?
@@ -68,7 +68,7 @@ model Verification {
   value      String
   expiresAt  DateTime
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
+  updatedAt  DateTime @updatedAt
 
   @@map("verification")
 }

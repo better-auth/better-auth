@@ -2,10 +2,11 @@ import { createAdapterFactory } from "..";
 import { describe, test, expect, expectTypeOf } from "vitest";
 import type {
 	AdapterFactoryConfig,
-	CleanedWhere,
 	AdapterFactoryCustomizeAdapterCreator,
 } from "../types";
-import type { BetterAuthOptions, Session, User, Where } from "../../../types";
+import type { CleanedWhere, Where } from "@better-auth/core/db/adapter";
+import type { Session, User, Where } from "../../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { betterAuth } from "../../../auth";
 import { organization, type Member } from "../../../plugins";
 
@@ -233,6 +234,73 @@ describe("Create Adapter Helper", async () => {
 				expect(res?.image).toEqual(undefined);
 				expect(res?.createdAt).toBeInstanceOf(Date);
 				expect(res?.updatedAt).toBeInstanceOf(Date);
+			});
+
+			test("should not return string for nullable foreign keys", async () => {
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+					},
+					options: {
+						plugins: [
+							{
+								id: "test",
+								schema: {
+									testModel: {
+										fields: {
+											nullableReference: {
+												type: "string",
+												references: { field: "id", model: "user" },
+												required: false,
+											},
+										},
+									},
+								},
+							},
+						],
+					},
+				});
+				const res = await adapter.create({
+					model: "testModel",
+					data: { nullableReference: null },
+				});
+				expect(res).toHaveProperty("nullableReference");
+				expect(res.nullableReference).toBeNull();
+
+				const adapter2 = await createTestAdapter({
+					config: {
+						debugLogs: {},
+					},
+					options: {
+						plugins: [
+							{
+								id: "test",
+								schema: {
+									testModel: {
+										fields: {
+											nullableReference: {
+												type: "string",
+												references: { field: "id", model: "user" },
+												required: false,
+											},
+										},
+									},
+								},
+							},
+						],
+						advanced: {
+							database: {
+								useNumberId: true,
+							},
+						},
+					},
+				});
+				const res2 = await adapter2.create({
+					model: "testModel",
+					data: { nullableReference: null },
+				});
+				expect(res2).toHaveProperty("nullableReference");
+				expect(res2.nullableReference).toBeNull();
 			});
 
 			test('Should include an "id" in the result in all cases, unless "select" is used to exclude it', async () => {
@@ -1426,7 +1494,7 @@ describe("Create Adapter Helper", async () => {
 						expect(res).toHaveProperty("email");
 						expect(res?.email).toEqual("test@test.com");
 					});
-				expect(parameters.where[0].field).toEqual("email_address");
+				expect(parameters.where[0]!.field).toEqual("email_address");
 			});
 			test("findMany: Should transform the where clause according to the schema", async () => {
 				const parameters: { where: Where[] | undefined; model: string } =
@@ -1468,7 +1536,7 @@ describe("Create Adapter Helper", async () => {
 						expect(res[0]).toHaveProperty("email");
 						expect(res[0]?.email).toEqual("test@test.com");
 					});
-				expect(parameters.where?.[0].field).toEqual("email_address");
+				expect(parameters.where?.[0]!.field).toEqual("email_address");
 			});
 
 			test("findOne: Should receive an integer id in where clause if the user has enabled `useNumberId`", async () => {
@@ -1508,7 +1576,7 @@ describe("Create Adapter Helper", async () => {
 						expect(res?.id).toEqual("1");
 					});
 				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
-				expect(parameters.where[0].value).toEqual(1);
+				expect(parameters.where[0]!.value).toEqual(1);
 			});
 			test("findMany: Should receive an integer id in where clause if the user has enabled `useNumberId`", async () => {
 				const parameters: { where: Where[] | undefined; model: string } =
@@ -1546,10 +1614,10 @@ describe("Create Adapter Helper", async () => {
 						});
 
 						expect(res[0]).toHaveProperty("id");
-						expect(res[0].id).toEqual("1");
+						expect(res[0]!.id).toEqual("1");
 					});
 				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
-				expect(parameters.where?.[0].value).toEqual(1);
+				expect(parameters.where?.[0]!.value).toEqual(1);
 			});
 		});
 

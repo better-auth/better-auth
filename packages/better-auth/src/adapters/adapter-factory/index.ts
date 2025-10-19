@@ -1,69 +1,50 @@
 import { safeJSONParse } from "../../utils/json";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type {
-	Adapter,
-	BetterAuthOptions,
+import { Adapter,
+	type BetterAuthOptions,
 	Join,
 	TransactionAdapter,
-	Where,
-} from "../../types";
+	Where,} from "@better-auth/core";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
-	CleanedWhere,
 } from "./types";
-import type { FieldAttribute } from "../../db";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import { logger, TTY_COLORS, getColorDepth } from "@better-auth/core/env";
+import type {
+	DBAdapter,
+	DBTransactionAdapter,
+	Where,
+	CleanedWhere,
+} from "@better-auth/core/db/adapter";
+import { BetterAuthError } from "@better-auth/core/error";
 export * from "./types";
 
-let debugLogs: any[] = [];
+let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
 
-const colors = {
-	reset: "\x1b[0m",
-	bright: "\x1b[1m",
-	dim: "\x1b[2m",
-	underscore: "\x1b[4m",
-	blink: "\x1b[5m",
-	reverse: "\x1b[7m",
-	hidden: "\x1b[8m",
-	fg: {
-		black: "\x1b[30m",
-		red: "\x1b[31m",
-		green: "\x1b[32m",
-		yellow: "\x1b[33m",
-		blue: "\x1b[34m",
-		magenta: "\x1b[35m",
-		cyan: "\x1b[36m",
-		white: "\x1b[37m",
-	},
-	bg: {
-		black: "\x1b[40m",
-		red: "\x1b[41m",
-		green: "\x1b[42m",
-		yellow: "\x1b[43m",
-		blue: "\x1b[44m",
-		magenta: "\x1b[45m",
-		cyan: "\x1b[46m",
-		white: "\x1b[47m",
-	},
-};
-
 const createAsIsTransaction =
-	(adapter: Adapter) =>
-	<R>(fn: (trx: TransactionAdapter) => Promise<R>) =>
+	(adapter: DBAdapter<BetterAuthOptions>) =>
+	<R>(fn: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>) =>
 		fn(adapter);
 
-export type AdapterFactory = (options: BetterAuthOptions) => Adapter;
+export type AdapterFactory = (
+	options: BetterAuthOptions,
+) => DBAdapter<BetterAuthOptions>;
 
 export const createAdapterFactory =
 	({
 		adapter: customAdapter,
 		config: cfg,
 	}: AdapterFactoryOptions): AdapterFactory =>
-	(options: BetterAuthOptions): Adapter => {
+	(options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+		const uniqueAdapterFactoryInstanceId = Math.random()
+			.toString(36)
+			.substring(2, 15);
+
 		const config = {
 			...cfg,
 			supportsBooleans: cfg.supportsBooleans ?? true,
@@ -73,13 +54,15 @@ export const createAdapterFactory =
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 			supportsJoins: cfg.supportsJoins ?? false,
 			transaction: cfg.transaction ?? false,
+			disableTransformInput: cfg.disableTransformInput ?? false,
+			disableTransformOutput: cfg.disableTransformOutput ?? false,
 		} satisfies AdapterFactoryConfig;
 
 		if (
 			options.advanced?.database?.useNumberId === true &&
 			config.supportsNumericIds === false
 		) {
-			throw new Error(
+			throw new BetterAuthError(
 				`[${config.adapterName}] Your database or database adapter does not support numeric ids. Please disable "useNumberId" in your config.`,
 			);
 		}
@@ -114,15 +97,18 @@ export const createAdapterFactory =
 
 			let f = schema[model]?.fields[field];
 			if (!f) {
-				//@ts-expect-error
-				f = Object.values(schema[model]?.fields).find(
-					(f) => f.fieldName === field,
+				const result = Object.entries(schema[model]!.fields!).find(
+					([_, f]) => f.fieldName === field,
 				);
+				if (result) {
+					f = result[1];
+					field = result[0];
+				}
 			}
 			if (!f) {
 				debugLog(`Field ${field} not found in model ${model}`);
 				debugLog(`Schema:`, schema);
-				throw new Error(`Field ${field} not found in model ${model}`);
+				throw new BetterAuthError(`Field ${field} not found in model ${model}`);
 			}
 			return field;
 		};
@@ -163,7 +149,7 @@ export const createAdapterFactory =
 			if (!m) {
 				debugLog(`Model "${model}" not found in schema`);
 				debugLog(`Schema:`, schema);
-				throw new Error(`Model "${model}" not found in schema`);
+				throw new BetterAuthError(`Model "${model}" not found in schema`);
 			}
 			return m;
 		};
@@ -183,8 +169,8 @@ export const createAdapterFactory =
 
 			if (useCustomModelName) {
 				return usePlural
-					? `${schema[defaultModelKey].modelName}s`
-					: schema[defaultModelKey].modelName;
+					? `${schema[defaultModelKey]!.modelName}s`
+					: schema[defaultModelKey]!.modelName;
 			}
 
 			return usePlural ? `${model}s` : model;
@@ -218,7 +204,7 @@ export const createAdapterFactory =
 				) {
 					if (config.debugLogs.isRunningAdapterTests) {
 						args.shift(); // Removes the {method: "..."} object from the args array.
-						debugLogs.push(args);
+						debugLogs.push({ instance: uniqueAdapterFactoryInstanceId, args });
 					}
 					return;
 				}
@@ -306,7 +292,7 @@ export const createAdapterFactory =
 							},
 						}
 					: {}),
-			} satisfies FieldAttribute;
+			} satisfies DBFieldAttribute;
 		};
 
 		const getFieldAttributes = ({
@@ -319,40 +305,34 @@ export const createAdapterFactory =
 			const defaultModelName = getDefaultModelName(model);
 			const defaultFieldName = getDefaultFieldName({
 				field: field,
-				model: model,
+				model: defaultModelName,
 			});
 
-			const fields = schema[defaultModelName].fields;
+			const fields = schema[defaultModelName]!.fields;
 			fields.id = idField({ customModelName: defaultModelName });
-			return fields[defaultFieldName];
+			const fieldAttributes = fields[defaultFieldName];
+			if (!fieldAttributes) {
+				throw new BetterAuthError(`Field ${field} not found in model ${model}`);
+			}
+			return fieldAttributes;
 		};
-
-		const adapterInstance = customAdapter({
-			options,
-			schema,
-			debugLog,
-			getFieldName,
-			getModelName,
-			getDefaultModelName,
-			getDefaultFieldName,
-			getFieldAttributes,
-		});
 
 		const transformInput = async (
 			data: Record<string, any>,
-			unsafe_model: string,
+			defaultModelName: string,
 			action: "create" | "update",
 			forceAllowId?: boolean,
 		) => {
 			const transformedData: Record<string, any> = {};
-			const fields = schema[unsafe_model].fields;
+			const fields = schema[defaultModelName]!.fields;
+
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
 			if (
 				!config.disableIdGeneration &&
 				!options.advanced?.database?.useNumberId
 			) {
 				fields.id = idField({
-					customModelName: unsafe_model,
+					customModelName: defaultModelName,
 					forceAllowId: forceAllowId && "id" in data,
 				});
 			}
@@ -361,44 +341,44 @@ export const createAdapterFactory =
 				const fieldAttributes = fields[field];
 
 				let newFieldName: string =
-					newMappedKeys[field] || fields[field].fieldName || field;
+					newMappedKeys[field] || fields[field]!.fieldName || field;
 				if (
 					value === undefined &&
-					((fieldAttributes.defaultValue === undefined &&
-						!fieldAttributes.transform?.input &&
-						!(action === "update" && fieldAttributes.onUpdate)) ||
-						(action === "update" && !fieldAttributes.onUpdate))
+					((fieldAttributes!.defaultValue === undefined &&
+						!fieldAttributes!.transform?.input &&
+						!(action === "update" && fieldAttributes!.onUpdate)) ||
+						(action === "update" && !fieldAttributes!.onUpdate))
 				) {
 					continue;
 				}
 				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
-				let newValue = withApplyDefault(value, fieldAttributes, action);
+				let newValue = withApplyDefault(value, fieldAttributes!, action);
 
 				// If the field attr provides a custom transform input, then we'll let it handle the value transformation.
 				// Afterwards, we'll continue to apply the default transformations just to make sure it saves in the correct format.
-				if (fieldAttributes.transform?.input) {
-					newValue = await fieldAttributes.transform.input(newValue);
+				if (fieldAttributes!.transform?.input) {
+					newValue = await fieldAttributes!.transform.input(newValue);
 				}
 
 				if (
-					fieldAttributes.references?.field === "id" &&
+					fieldAttributes!.references?.field === "id" &&
 					options.advanced?.database?.useNumberId
 				) {
 					if (Array.isArray(newValue)) {
-						newValue = newValue.map(Number);
+						newValue = newValue.map((x) => (x !== null ? Number(x) : null));
 					} else {
-						newValue = Number(newValue);
+						newValue = newValue !== null ? Number(newValue) : null;
 					}
 				} else if (
 					config.supportsJSON === false &&
 					typeof newValue === "object" &&
-					fieldAttributes.type === "json"
+					fieldAttributes!.type === "json"
 				) {
 					newValue = JSON.stringify(newValue);
 				} else if (
 					config.supportsDates === false &&
 					newValue instanceof Date &&
-					fieldAttributes.type === "date"
+					fieldAttributes!.type === "date"
 				) {
 					newValue = newValue.toISOString();
 				} else if (
@@ -413,8 +393,8 @@ export const createAdapterFactory =
 						data: newValue,
 						action,
 						field: newFieldName,
-						fieldAttributes: fieldAttributes,
-						model: unsafe_model,
+						fieldAttributes: fieldAttributes!,
+						model: defaultModelName,
 						schema,
 						options,
 					});
@@ -439,7 +419,7 @@ export const createAdapterFactory =
 			const newMappedKeys = config.mapKeysTransformOutput ?? {};
 			let transformedData: Record<string, any> | null = {};
 			let transformedJoinData: Record<string, any> | null = {};
-			const tableSchema = schema[unsafe_model].fields;
+			const tableSchema = schema[unsafe_model]!.fields;
 			const idKey = Object.entries(newMappedKeys).find(
 				([_, v]) => v === "id",
 			)?.[0];
@@ -560,9 +540,11 @@ export const createAdapterFactory =
 				} = w;
 				if (operator === "in") {
 					if (!Array.isArray(value)) {
-						throw new Error("Value must be an array");
+						throw new BetterAuthError("Value must be an array");
 					}
 				}
+
+				let newValue = value;
 
 				const defaultModelName = getDefaultModelName(model);
 				const defaultFieldName = getDefaultFieldName({
@@ -581,22 +563,48 @@ export const createAdapterFactory =
 					model: defaultModelName,
 				});
 
-				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
+				if (
+					defaultFieldName === "id" ||
+					fieldAttr!.references?.field === "id"
+				) {
 					if (options.advanced?.database?.useNumberId) {
 						if (Array.isArray(value)) {
-							return {
-								operator,
-								connector,
-								field: fieldName,
-								value: value.map(Number),
-							} satisfies CleanedWhere;
+							newValue = value.map(Number);
+						} else {
+							newValue = Number(value);
 						}
-						return {
-							operator,
-							connector,
-							field: fieldName,
-							value: Number(value),
-						} satisfies CleanedWhere;
+					}
+				}
+
+				if (
+					fieldAttr.type === "date" &&
+					value instanceof Date &&
+					!config.supportsDates
+				) {
+					newValue = value.toISOString();
+				}
+
+				if (
+					fieldAttr.type === "boolean" &&
+					typeof value === "boolean" &&
+					!config.supportsBooleans
+				) {
+					newValue = value ? 1 : 0;
+				}
+
+				if (
+					fieldAttr.type === "json" &&
+					typeof value === "object" &&
+					!config.supportsJSON
+				) {
+					try {
+						const stringifiedJSON = JSON.stringify(value);
+						newValue = stringifiedJSON;
+					} catch (error) {
+						throw new Error(
+							`Failed to stringify JSON value for field ${fieldName}`,
+							{ cause: error },
+						);
 					}
 				}
 
@@ -604,7 +612,7 @@ export const createAdapterFactory =
 					operator,
 					connector,
 					field: fieldName,
-					value: value,
+					value: newValue,
 				} satisfies CleanedWhere;
 			}) as any;
 		};
@@ -612,14 +620,38 @@ export const createAdapterFactory =
 		const transformSelect = (select: string[] | undefined, model: string) =>
 			(select || []).map((field) => getFieldName({ field, model }));
 
-		let lazyLoadTransaction: Adapter["transaction"] | null = null;
-		const adapter: Adapter = {
+		const adapterInstance = customAdapter({
+			options,
+			schema,
+			debugLog,
+			getFieldName,
+			getModelName,
+			getDefaultModelName,
+			getDefaultFieldName,
+			getFieldAttributes,
+			transformInput,
+			transformOutput,
+			transformWhereClause,
+		});
+
+		let lazyLoadTransaction:
+			| DBAdapter<BetterAuthOptions>["transaction"]
+			| null = null;
+		const adapter: DBAdapter<BetterAuthOptions> = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
-						logger.warn(
-							`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
-						);
+						if (
+							typeof config.debugLogs === "object" &&
+							"isRunningAdapterTests" in config.debugLogs &&
+							config.debugLogs.isRunningAdapterTests
+						) {
+							// hide warning in adapter tests
+						} else {
+							logger.warn(
+								`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
+							);
+						}
 						lazyLoadTransaction = createAsIsTransaction(adapter);
 					} else {
 						logger.debug(
@@ -644,7 +676,7 @@ export const createAdapterFactory =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
-
+				unsafeModel = getDefaultModelName(unsafeModel);
 				if ("id" in unsafeData && !forceAllowId) {
 					logger.warn(
 						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you, unless you pass in the \`forceAllowId\` parameter. The id will be ignored.`,
@@ -665,12 +697,15 @@ export const createAdapterFactory =
 					`${formatMethod("create")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
-				const data = (await transformInput(
-					unsafeData,
-					unsafeModel,
-					"create",
-					forceAllowId,
-				)) as T;
+				let data = unsafeData;
+				if (!config.disableTransformInput) {
+					data = (await transformInput(
+						unsafeData,
+						unsafeModel,
+						"create",
+						forceAllowId,
+					)) as T;
+				}
 				debugLog(
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
@@ -688,7 +723,10 @@ export const createAdapterFactory =
 					`${formatMethod("create")} ${formatAction("DB Result")}:`,
 					{ model, res },
 				);
-				const transformed = await transformOutput(res, unsafeModel, select);
+				let transformed = res as any;
+				if (!config.disableTransformOutput) {
+					transformed = await transformOutput(res as any, unsafeModel, select);
+				}
 				debugLog(
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
@@ -708,6 +746,7 @@ export const createAdapterFactory =
 			}): Promise<T | null> => {
 				transactionId++;
 				let thisTransactionId = transactionId;
+				unsafeModel = getDefaultModelName(unsafeModel);
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -719,11 +758,10 @@ export const createAdapterFactory =
 					`${formatMethod("update")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
-				const data = (await transformInput(
-					unsafeData,
-					unsafeModel,
-					"update",
-				)) as T;
+				let data = unsafeData as T;
+				if (!config.disableTransformInput) {
+					data = (await transformInput(unsafeData, unsafeModel, "update")) as T;
+				}
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
@@ -741,7 +779,10 @@ export const createAdapterFactory =
 					`${formatMethod("update")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
-				const transformed = await transformOutput(res as any, unsafeModel);
+				let transformed = res as any;
+				if (!config.disableTransformOutput) {
+					transformed = await transformOutput(res as any, unsafeModel);
+				}
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
@@ -766,13 +807,17 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
 					`${formatMethod("updateMany")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
-				const data = await transformInput(unsafeData, unsafeModel, "update");
+				let data = unsafeData;
+				if (!config.disableTransformInput) {
+					data = await transformInput(unsafeData, unsafeModel, "update");
+				}
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
@@ -817,6 +862,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "findOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
@@ -837,13 +883,10 @@ export const createAdapterFactory =
 					`${formatMethod("findOne")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
-
-				const transformed = await transformOutput(
-					res as any,
-					unsafeModel,
-					select,
-					join,
-				);
+				let transformed = res as any;
+				if (!config.disableTransformOutput) {
+					transformed = await transformOutput(res as any, unsafeModel, select, join);
+				}
 				debugLog(
 					{ method: "findOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
@@ -876,6 +919,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
@@ -895,9 +939,12 @@ export const createAdapterFactory =
 					`${formatMethod("findMany")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
-				const transformed = await Promise.all(
-					res.map(async (r) => await transformOutput(r as any, unsafeModel)),
-				);
+				let transformed = res as any;
+				if (!config.disableTransformOutput) {
+					transformed = await Promise.all(
+						res.map(async (r) => await transformOutput(r as any, unsafeModel)),
+					);
+				}
 				debugLog(
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
@@ -920,6 +967,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "delete" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -951,6 +999,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "deleteMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -983,6 +1032,7 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "count" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -1071,17 +1121,25 @@ export const createAdapterFactory =
 				? {
 						adapterTestDebugLogs: {
 							resetDebugLogs() {
-								debugLogs = [];
+								debugLogs = debugLogs.filter(
+									(log) => log.instance !== uniqueAdapterFactoryInstanceId,
+								);
 							},
 							printDebugLogs() {
 								const separator = `─`.repeat(80);
+								const logs = debugLogs.filter(
+									(log) => log.instance === uniqueAdapterFactoryInstanceId,
+								);
+								if (logs.length === 0) {
+									return;
+								}
 
 								//`${colors.fg.blue}|${colors.reset} `,
-								let log: any[] = debugLogs
+								let log: any[] = logs
 									.reverse()
 									.map((log) => {
-										log[0] = `\n${log[0]}`;
-										return [...log, "\n"];
+										log.args[0] = `\n${log.args[0]}`;
+										return [...log.args, "\n"];
 									})
 									.reduce(
 										(prev, curr) => {
@@ -1100,19 +1158,22 @@ export const createAdapterFactory =
 	};
 
 function formatTransactionId(transactionId: number) {
-	return `${colors.fg.magenta}#${transactionId}${colors.reset}`;
+	if (getColorDepth() < 8) {
+		return `#${transactionId}`;
+	}
+	return `${TTY_COLORS.fg.magenta}#${transactionId}${TTY_COLORS.reset}`;
 }
 
 function formatStep(step: number, total: number) {
-	return `${colors.bg.black}${colors.fg.yellow}[${step}/${total}]${colors.reset}`;
+	return `${TTY_COLORS.bg.black}${TTY_COLORS.fg.yellow}[${step}/${total}]${TTY_COLORS.reset}`;
 }
 
 function formatMethod(method: string) {
-	return `${colors.bright}${method}${colors.reset}`;
+	return `${TTY_COLORS.bright}${method}${TTY_COLORS.reset}`;
 }
 
 function formatAction(action: string) {
-	return `${colors.dim}(${action})${colors.reset}`;
+	return `${TTY_COLORS.dim}(${action})${TTY_COLORS.reset}`;
 }
 
 /**

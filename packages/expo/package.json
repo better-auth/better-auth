@@ -1,9 +1,10 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.4.0-beta.1",
-  "description": "",
-  "main": "dist/index.cjs",
-  "module": "dist/index.mjs",
+  "version": "1.4.0-beta.12",
+  "type": "module",
+  "description": "Better Auth integration for Expo and React Native applications.",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",
@@ -12,19 +13,19 @@
   "homepage": "https://www.better-auth.com/docs/integrations/expo",
   "scripts": {
     "test": "vitest",
-    "build": "unbuild --clean",
-    "dev": "unbuild --watch",
-    "stub": "unbuild --stub"
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
   },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
+      "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./client": {
       "types": "./dist/client.d.ts",
-      "import": "./dist/client.mjs",
+      "import": "./dist/client.js",
       "require": "./dist/client.cjs"
     }
   },
@@ -51,6 +52,7 @@
   "license": "MIT",
   "devDependencies": {
     "@better-fetch/fetch": "catalog:",
+    "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.2.0",
     "expo-constants": "~17.1.7",
@@ -58,7 +60,8 @@
     "expo-linking": "~7.1.7",
     "expo-secure-store": "~14.2.3",
     "expo-web-browser": "~14.2.0",
-    "unbuild": "^3.6.1"
+    "react-native": "~0.80.2",
+    "tsdown": "catalog:"
   },
   "peerDependencies": {
     "better-auth": "workspace:*",
@@ -69,7 +72,8 @@
     "expo-web-browser": ">=14.0.0"
   },
   "dependencies": {
-    "@better-fetch/fetch": "catalog:"
+    "@better-fetch/fetch": "catalog:",
+    "zod": "^4.1.5"
   },
   "files": [
     "dist"

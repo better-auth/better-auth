@@ -1,16 +1,20 @@
 import type { CookieOptions } from "better-call";
-import { BetterAuthError } from "../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { Session, User } from "../types";
-import type { GenericEndpointContext } from "../types/context";
-import type { BetterAuthOptions } from "../types/options";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { getDate } from "../utils/date";
-import { env, isProduction } from "../utils/env";
+import { env, isProduction } from "@better-auth/core/env";
 import { base64Url } from "@better-auth/utils/base64";
 import { ms } from "ms";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
 import { binary } from "@better-auth/utils/binary";
+import type {
+	BetterAuthCookies,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import { parseUserOutput } from "../db/schema";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -92,8 +96,6 @@ export function getCookies(options: BetterAuthOptions) {
 	};
 }
 
-export type BetterAuthCookies = ReturnType<typeof getCookies>;
-
 export async function setCookieCache(
 	ctx: GenericEndpointContext,
 	session: {
@@ -118,7 +120,9 @@ export async function setCookieCache(
 			{} as Record<string, any>,
 		);
 
-		const sessionData = { session: filteredSession, user: session.user };
+		// Apply field filtering to user data
+		const filteredUser = parseUserOutput(ctx.context.options, session.user);
+		const sessionData = { session: filteredSession, user: filteredUser };
 
 		const options = {
 			...ctx.context.authCookies.sessionData.options,
@@ -145,9 +149,10 @@ export async function setCookieCache(
 			},
 		);
 		if (data.length > 4093) {
-			throw new BetterAuthError(
-				"Session data is too large to store in the cookie. Please disable session cookie caching or reduce the size of the session data",
+			ctx.context?.logger?.error(
+				`Session data exceeds cookie size limit (${data.length} bytes > 4093 bytes). Consider reducing session data size or disabling cookie cache. Session will not be cached in cookie.`,
 			);
+			return;
 		}
 		ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
 	}
@@ -240,7 +245,7 @@ export function parseCookies(cookieHeader: string) {
 
 	cookies.forEach((cookie) => {
 		const [name, value] = cookie.split("=");
-		cookieMap.set(name, value);
+		cookieMap.set(name!, value!);
 	});
 	return cookieMap;
 }
