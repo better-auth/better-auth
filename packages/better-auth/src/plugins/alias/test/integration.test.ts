@@ -358,7 +358,7 @@ describe("Alias Plugin", async () => {
 			});
 
 			const plugin = aliasClient("/dodo", createMockClientPlugin("dodo"), {
-				excludeEndpoints: ["/other-plugin"],
+				excludeEndpoints: ["/payment/init"],
 			});
 			const client = createAuthClient({
 				fetchOptions: {
