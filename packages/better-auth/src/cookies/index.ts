@@ -131,6 +131,39 @@ export async function setCookieCache(
 				: ctx.context.authCookies.sessionData.options.maxAge,
 		};
 
+		// Check if the existing cookie has valid session data to prevent unnecessary updates
+		const existingCookieValue = ctx.getCookie(
+			ctx.context.authCookies.sessionData.name,
+		);
+		if (existingCookieValue) {
+			const existingPayload = safeJSONParse<{
+				session: {
+					session: Session & Record<string, any>;
+					user: User;
+				};
+				expiresAt: number;
+				signature: string;
+			}>(binary.decode(base64Url.decode(existingCookieValue)));
+
+			// Only update cookie if:
+			// 1. Cookie is expired or close to expiring (within 10% of maxAge)
+			// 2. Session data has actually changed
+			if (existingPayload && existingPayload.expiresAt) {
+				const timeUntilExpiry = existingPayload.expiresAt - Date.now();
+				const maxAgeMs = (options.maxAge || 60) * 1000;
+				const shouldRefreshThreshold = maxAgeMs * 0.1;
+
+				const existingSessionToken = existingPayload.session?.session?.token;
+				const currentSessionToken = sessionData.session.token;
+				const sessionTokenMatches =
+					existingSessionToken === currentSessionToken;
+
+				if (timeUntilExpiry > shouldRefreshThreshold && sessionTokenMatches) {
+					return;
+				}
+			}
+		}
+
 		const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
 		const data = base64Url.encode(
 			JSON.stringify({
