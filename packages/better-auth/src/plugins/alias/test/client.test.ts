@@ -280,23 +280,23 @@ describe("aliasClient plugin", () => {
 			baseURL: "http://localhost:3000",
 			plugins: [aliased],
 		});
-		await client.payment.triggerFetch("/customer/portal", "POST");
+		const res = client.useQueryAtom();
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1);
 		expect(spyFetch).toHaveBeenCalledTimes(1);
 		let calledURL = spyFetch.mock.calls[0]?.[0];
 		expect(calledURL?.toString()).toEqual(
 			"http://localhost:3000/api/auth/customer/portal",
 		);
-
-		await spyFetch.mockClear();
-
-		const res = client.useQueryAtom();
-		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1);
 		expect(res()).toMatchObject({
 			data: { success: true },
 			error: null,
 			isPending: false,
 		});
+
+		await spyFetch.mockClear();
+
+		await client.payment.triggerFetch("/customer/portal", "POST");
 		expect(spyFetch).toHaveBeenCalledTimes(1);
 		calledURL = spyFetch.mock.calls[0]?.[0];
 		expect(calledURL?.toString()).toEqual(
