@@ -384,5 +384,9 @@ describe("Alias Plugin", async () => {
 				"http://localhost:3000/api/auth/payment/init",
 			);
 		});
+
+		it("should prefix urls in fetchPlugins", async () => {
+			// TODO:
+		});
 	});
 });

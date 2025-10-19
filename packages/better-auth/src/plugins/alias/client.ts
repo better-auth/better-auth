@@ -551,6 +551,27 @@ export function aliasCompatClient<
 
 	// Update fetchPlugins hooks to prefix specific paths
 	if (plugin.fetchPlugins) {
+		compatPlugin.fetchPlugins = plugin.fetchPlugins.map((fetchPlugin) => ({
+			...fetchPlugin,
+			init(url, options) {
+				const resolvedURL = resolveURL(
+					{
+						url,
+						baseURL: options?.baseURL,
+					},
+					includeEndpoints,
+					prefix,
+					"include",
+				);
+
+				return fetchPlugin.init
+					? fetchPlugin.init?.(resolvedURL, options)
+					: {
+							url: resolvedURL,
+							options,
+						};
+			},
+		}));
 	}
 
 	return compatPlugin as InferAliasCompatClientPlugin<
@@ -583,7 +604,6 @@ const resolveURL = (
 		return path === normalized || path.startsWith(`${normalized}/`);
 	});
 	if ((mode === "exclude" && matches) || (mode === "include" && !matches)) {
-		console.log(matches, mode, path, specialEndpoints);
 		return context.url.toString();
 	}
 
