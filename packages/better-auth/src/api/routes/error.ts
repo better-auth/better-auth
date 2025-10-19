@@ -362,7 +362,7 @@ export const error = createAuthEndpoint(
 			return new Response(null, {
 				status: 302,
 				headers: {
-					Location: `${errorURL}?${queryParams.toString()}`,
+					Location: `${errorURL}${errorURL.includes("?") ? "&" : "?"}${queryParams.toString()}`,
 				},
 			});
 		}
