@@ -140,9 +140,17 @@ export type BetterAuthAdvancedOptions = {
 	/**
 	 * Disable trusted origins check
 	 *
-	 * ⚠︎ This is a security risk and it may expose your application to CSRF attacks
+	 * ⚠︎ This is a security risk and it may expose your application to
+	 * CSRF attacks
 	 */
 	disableCSRFCheck?: boolean;
+	/**
+	 * Disable origin check
+	 *
+	 * ⚠︎ This may allow requests from any origin to be processed by
+	 * Better Auth. And could lead to security vulnerabilities.
+	 */
+	disableOriginCheck?: boolean;
 	/**
 	 * Configure cookies to be cross subdomains
 	 */
@@ -216,6 +224,18 @@ export type BetterAuthAdvancedOptions = {
 		 * If set to false, the database's auto generated id will be used.
 		 */
 		generateId?: GenerateIdFn | false;
+	};
+	/**
+	 * OAuth configuration
+	 */
+	oauthConfig?: {
+		/**
+		 * Skip state cookie check
+		 *
+		 * ⚠︎ this has security implications and should only be enabled if you know what you are doing.
+		 * @default false
+		 */
+		skipStateCookieCheck?: boolean;
 	};
 };
 
