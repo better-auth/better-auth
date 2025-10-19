@@ -12,20 +12,29 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	if (ctx.request?.method !== "POST" || !ctx.request) {
 		return;
 	}
+	const headers = ctx.request?.headers;
+	const request = ctx.request;
 	const { body, query, context } = ctx;
-	const originHeader =
-		ctx.headers?.get("origin") || ctx.headers?.get("referer") || "";
+	const ct = (headers.get("content-type") || "")
+		.split(";")[0]
+		?.trim()
+		.toLowerCase();
+	if (ct !== "application/json") {
+		throw new APIError("FORBIDDEN", { message: "Invalid content type" });
+	}
+	const originHeader = headers?.get("origin") || headers?.get("referer") || "";
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
 	const errorCallbackURL = body?.errorCallbackURL;
 	const newUserCallbackURL = body?.newUserCallbackURL;
+
 	const trustedOrigins: string[] = Array.isArray(context.options.trustedOrigins)
 		? context.trustedOrigins
 		: [
 				...context.trustedOrigins,
-				...((await context.options.trustedOrigins?.(ctx.request)) || []),
+				...((await context.options.trustedOrigins?.(request)) || []),
 			];
-	const usesCookies = ctx.headers?.has("cookie");
+	const useCookies = headers?.has("cookie");
 
 	const matchesPattern = (url: string, pattern: string): boolean => {
 		if (url.startsWith("/")) {
@@ -65,7 +74,11 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 		}
 	};
-	if (usesCookies && !ctx.context.options.advanced?.disableCSRFCheck) {
+
+	if (useCookies && !ctx.context.options.advanced?.disableCSRFCheck) {
+		if (!originHeader || originHeader === "null") {
+			throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
+		}
 		validateURL(originHeader, "origin");
 	}
 	callbackURL && validateURL(callbackURL, "callbackURL");
