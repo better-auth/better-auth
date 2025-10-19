@@ -348,6 +348,41 @@ describe("Alias Plugin", async () => {
 	});
 
 	describe("compat plugin", async () => {
-		// TODO:
+		it("should wrap getActions to prefix specific path-based actions", async () => {
+			const spyFetch = vi.fn(async (req: Request | string | URL) => {
+				return new Response(
+					JSON.stringify({
+						success: true,
+					}),
+				);
+			});
+
+			const plugin = aliasClient("/dodo", createMockClientPlugin("dodo"), {
+				excludeEndpoints: ["/other-plugin"],
+			});
+			const client = createAuthClient({
+				fetchOptions: {
+					customFetchImpl: spyFetch,
+				},
+				baseURL: "http://localhost:3000",
+				plugins: [plugin, plugin.compat(createMockClientPlugin("test"))],
+			});
+
+			await client.triggerFetch("/checkout", "POST");
+
+			expect(spyFetch).toHaveBeenCalledTimes(1);
+			let calledURL = spyFetch.mock.calls[0]?.[0];
+			expect(calledURL?.toString()).toEqual(
+				"http://localhost:3000/api/auth/dodo/checkout",
+			);
+			spyFetch.mockClear();
+
+			await client.triggerFetch("/payment/init");
+			expect(spyFetch).toHaveBeenCalledTimes(1);
+			calledURL = spyFetch.mock.calls[0]?.[0];
+			expect(calledURL?.toString()).toEqual(
+				"http://localhost:3000/api/auth/payment/init",
+			);
+		});
 	});
 });

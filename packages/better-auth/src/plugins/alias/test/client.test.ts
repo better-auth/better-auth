@@ -377,4 +377,41 @@ describe("aliasCompatClient plugin", () => {
 
 		expect(compat.atomListeners?.()![0]?.signal).toBe("$adminSignalApp");
 	});
+
+	it("should wrap getAtoms to prefix specific path-based actions", async () => {
+		const spyFetch = vi.fn(async (req: Request | string | URL) => {
+			return new Response(
+				JSON.stringify({
+					success: true,
+				}),
+			);
+		});
+
+		const plugin = aliasClient("/test", createMockClientPlugin("payment"), {
+			unstable_prefixAtoms: true,
+		});
+
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: spyFetch,
+			},
+			baseURL: "http://localhost:3000",
+			plugins: [plugin, plugin.compat(createMockClientPlugin("test"))],
+		});
+
+		const res = client.useQueryAtom();
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(res()).toMatchObject({
+			data: { success: true },
+			error: null,
+			isPending: false,
+		});
+
+		expect(spyFetch).toHaveBeenCalledTimes(1);
+		const calledURL = spyFetch.mock.calls[0]?.[0];
+		expect(calledURL?.toString()).toEqual(
+			"http://localhost:3000/api/auth/test/customer/portal",
+		);
+	});
 });

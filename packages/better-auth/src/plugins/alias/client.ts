@@ -467,9 +467,9 @@ export function aliasCompatClient<
 		...new Set([
 			...(options?.includeEndpoints || []),
 			...(aliasOptions?.includeEndpoints || []),
-			...Object.keys(aliasedPlugin.pathMethods || {}).filter((path) =>
-				path.startsWith(prefix),
-			),
+			...Object.keys(aliasedPlugin.pathMethods || {})
+				.filter((path) => path.startsWith(prefix))
+				.map((path) => path.slice(prefix.length)),
 		]),
 	];
 
@@ -583,12 +583,14 @@ const resolveURL = (
 		return path === normalized || path.startsWith(`${normalized}/`);
 	});
 	if ((mode === "exclude" && matches) || (mode === "include" && !matches)) {
+		console.log(matches, mode, path, specialEndpoints);
 		return context.url.toString();
 	}
 
 	const relativePath = `${prefix || ""}${path}`;
 	if (typeof context.url !== "string") {
-		return new URL(`${basePath}${relativePath}`, context.url).toString();
+		const res = new URL(`${basePath}${relativePath}`, context.url).toString();
+		return res;
 	}
 
 	return relativePath;
