@@ -1,6 +1,7 @@
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { BetterAuthOptions } from "@better-auth/core";
+import { isProduction } from "@better-auth/core/env";
 
 function sanitize(input: string): string {
 	return input
@@ -330,10 +331,26 @@ export const error = createAuthEndpoint(
 	},
 	async (c) => {
 		const code =
-			new URL(c.request?.url || "").searchParams.get("error") || "Unknown";
+			new URL(c.request?.url || "").searchParams.get("error") || "unknown";
 		const description =
 			new URL(c.request?.url || "").searchParams.get("error_description") ||
 			null;
+
+		const options = c.context.options;
+		if (isProduction && !options.onAPIError?.customizeDefaultErrorPage) {
+			const queryParams = new URLSearchParams();
+			queryParams.set("error", code);
+			if (description) {
+				queryParams.set("error_description", description);
+			}
+			return new Response(null, {
+				status: 302,
+				headers: {
+					Location: `${options.onAPIError?.errorURL || "/"}?${queryParams.toString()}`,
+				},
+			});
+		}
+
 		return new Response(html(c.context.options, code, description), {
 			headers: {
 				"Content-Type": "text/html",
