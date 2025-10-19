@@ -41,8 +41,20 @@ async function _verifyAccessToken(
 		verifyOptions: JWTVerifyOptions &
 			Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
 		scopes?: string[];
-		jwksUrl?: string;
+		jwksUrl: string;
 		remoteVerify?: VerifyAccessTokenRemote;
+		/** Maps non-url (ie urn, client) resources to resource_metadata */
+		resourceMetadataMappings?: Record<string, string>;
+	},
+): Promise<JWTPayload>;
+async function _verifyAccessToken(
+	token: string | undefined,
+	opts: {
+		verifyOptions: JWTVerifyOptions &
+			Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
+		scopes?: string[];
+		jwksUrl?: string;
+		remoteVerify: VerifyAccessTokenRemote;
 		/** Maps non-url (ie urn, client) resources to resource_metadata */
 		resourceMetadataMappings?: Record<string, string>;
 	},

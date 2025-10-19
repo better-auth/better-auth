@@ -1225,7 +1225,7 @@ describe("oauth - config", () => {
 							audience: validAudience,
 							issuer: authServerUrl,
 						},
-						jwksUrl: disableJwtPlugin ? undefined : `${authServerUrl}/jwks`,
+						jwksUrl: (disableJwtPlugin ? undefined : `${authServerUrl}/jwks`)!,
 					}),
 				).rejects.toThrowError();
 			} else {
@@ -1236,7 +1236,7 @@ describe("oauth - config", () => {
 							audience: validAudience,
 							issuer: authServerUrl,
 						},
-						jwksUrl: disableJwtPlugin ? undefined : `${authServerUrl}/jwks`,
+						jwksUrl: (disableJwtPlugin ? undefined : `${authServerUrl}/jwks`)!,
 						remoteVerify: publicClient
 							? undefined
 							: {
