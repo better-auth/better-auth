@@ -263,8 +263,8 @@ describe("aliasClient plugin", () => {
 			excludeEndpoints: ["/customer/portal"],
 		});
 
-		expect(aliased.pathMethods!["/payment/checkout"]).toBe("GET");
-		expect(aliased.pathMethods!["/customer/portal"]).toBe("POST");
+		expect(aliased.pathMethods!["/payment/checkout"]).toBe("POST");
+		expect(aliased.pathMethods!["/customer/portal"]).toBe("GET");
 
 		const spyFetch = vi.fn(async (req: Request | string | URL) => {
 			return new Response(
