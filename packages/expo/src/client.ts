@@ -291,16 +291,19 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							// Only process and notify if the Set-Cookie header contains better-auth cookies
 							// This prevents infinite refetching when other cookies (like Cloudflare's __cf_bm) are present
 							if (hasBetterAuthCookies(setCookie, cookiePrefix)) {
-								const prevCookie = storage.getItem(cookieName);
+								const prevCookie = await storage.getItem(cookieName);
 								const toSetCookie = getSetCookie(
 									setCookie || "",
 									prevCookie ?? undefined,
 								);
-								// Only notify $sessionSignal if the cookie actually changed
-								// This prevents infinite refetching when the server sends the same cookie
-								if (prevCookie !== toSetCookie) {
+								// Only notify $sessionSignal if the session cookie values actually changed
+								// This prevents infinite refetching when the server sends the same cookie with updated expiry
+								if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
 									await storage.setItem(cookieName, toSetCookie);
 									store?.notify("$sessionSignal");
+								} else {
+									// Still update the storage to refresh expiry times, but don't trigger refetch
+									await storage.setItem(cookieName, toSetCookie);
 								}
 							}
 						}
