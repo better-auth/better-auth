@@ -17,7 +17,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const { body, query, context } = ctx;
 	const ct = (headers.get("content-type") || "")
 		.split(";")[0]
-		?.trim()
+		.trim()
 		.toLowerCase();
 	if (ct !== "application/json") {
 		throw new APIError("FORBIDDEN", { message: "Invalid content type" });
