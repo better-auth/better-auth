@@ -62,7 +62,7 @@ const html = (
         --corner-border: ${custom?.colors?.cornerBorder || "#BFBFBF"};
       }
 
-      button {
+      button, .btn {
         cursor: pointer;
         background: none;
         border: none;
@@ -71,7 +71,7 @@ const html = (
         transition: all var(--default-transition-duration)
           var(--default-transition-timing-function);
       }
-      button:hover {
+      button:hover, .btn:hover {
         opacity: 0.8;
       }
     </style>
@@ -272,7 +272,12 @@ ${
             justify-content: center;
           "
         >
-          <a href="/">
+          <a
+            href="/"
+            style="
+              text-decoration: none;
+            "
+          >
             <div
               style="
                 border: 2px solid var(--border);
@@ -281,11 +286,18 @@ ${
                 padding: 0.5rem 1.25rem;
                 border-radius: 0;
               "
+              class="btn"
             >
               Go Home
             </div>
           </a>
-          <a href="https://better-auth.com/docs/errors/${encodeURIComponent(code)}?askai=${encodeURIComponent(`What does the error code ${code} mean?`)}" target="_blank">
+          <a
+            href="https://better-auth.com/docs/errors/${encodeURIComponent(code)}?askai=${encodeURIComponent(`What does the error code ${code} mean?`)}"
+            target="_blank"
+            style="
+              text-decoration: none;
+            "
+          >
             <div
               style="
                 border: 2px solid var(--border);
@@ -294,6 +306,7 @@ ${
                 padding: 0.5rem 1.25rem;
                 border-radius: 0;
               "
+              class="btn"
             >
               Ask AI
             </div>
@@ -336,17 +349,29 @@ export const error = createAuthEndpoint(
 			new URL(c.request?.url || "").searchParams.get("error_description") ||
 			null;
 
+		const queryParams = new URLSearchParams();
+		queryParams.set("error", code);
+		if (description) {
+			queryParams.set("error_description", description);
+		}
+
 		const options = c.context.options;
-		if (isProduction && !options.onAPIError?.customizeDefaultErrorPage) {
-			const queryParams = new URLSearchParams();
-			queryParams.set("error", code);
-			if (description) {
-				queryParams.set("error_description", description);
-			}
+		const errorURL = options.onAPIError?.errorURL;
+
+		if (errorURL) {
 			return new Response(null, {
 				status: 302,
 				headers: {
-					Location: `${options.onAPIError?.errorURL || "/"}?${queryParams.toString()}`,
+					Location: `${errorURL}?${queryParams.toString()}`,
+				},
+			});
+		}
+
+		if (isProduction && !options.onAPIError?.customizeDefaultErrorPage) {
+			return new Response(null, {
+				status: 302,
+				headers: {
+					Location: `/?${queryParams.toString()}`,
 				},
 			});
 		}
