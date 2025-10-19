@@ -1,4 +1,4 @@
-import { createAuthMiddleware } from "@better-auth/core/middleware";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import type { GenericEndpointContext } from "@better-auth/core";
 

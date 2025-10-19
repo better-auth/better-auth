@@ -425,7 +425,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				{
 					activeOrganizationId: organizationId,
 				},
-				ctx,
 			);
 			return session as Session;
 		},
@@ -744,7 +743,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				{
 					activeTeamId: teamId,
 				},
-				ctx,
 			);
 			return session as Session;
 		},
