@@ -1,4 +1,4 @@
-import { logger, type DBAdapter, type BetterAuthOptions } from "better-auth";
+import { logger, type BetterAuthOptions } from "better-auth";
 import { generateDrizzleSchema } from "./drizzle";
 import { generatePrismaSchema } from "./prisma";
 import { generateMigrations } from "./kysely";
