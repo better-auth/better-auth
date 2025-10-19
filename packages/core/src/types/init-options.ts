@@ -140,9 +140,17 @@ export type BetterAuthAdvancedOptions = {
 	/**
 	 * Disable trusted origins check
 	 *
-	 * ! This is a security risk and it may expose your application to CSRF attacks
+	 * ⚠︎ This is a security risk and it may expose your application to
+	 * CSRF attacks
 	 */
 	disableCSRFCheck?: boolean;
+	/**
+	 * Disable origin check
+	 *
+	 * ⚠︎ This may allow requests from any origin to be processed by
+	 * Better Auth. And could lead to security vulnerabilities.
+	 */
+	disableOriginCheck?: boolean;
 	/**
 	 * Configure cookies to be cross subdomains
 	 */
