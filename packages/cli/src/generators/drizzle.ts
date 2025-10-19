@@ -74,7 +74,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				if (Array.isArray(type) && type.every((x) => typeof x === "string")) {
 					return {
 						sqlite: `text({ enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
-						pg: `pgEnum('${name}', [${type.map((x) => `'${x}'`).join(", ")}])`,
+						pg: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
 						mysql: `mysqlEnum([${type.map((x) => `'${x}'`).join(", ")}])`,
 					}[databaseType];
 				} else {
@@ -311,18 +311,6 @@ function generateImport({
 			(options.advanced?.database?.useNumberId && hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");
-		}
-
-		const hasEnum = Object.values(tables).some((table) =>
-			Object.values(table.fields).some(
-				(field) =>
-					typeof field.type !== "string" &&
-					Array.isArray(field.type) &&
-					field.type.every((x) => typeof x === "string"),
-			),
-		);
-		if (hasEnum) {
-			coreImports.push("pgEnum");
 		}
 	} else {
 		coreImports.push("integer");
