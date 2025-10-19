@@ -271,30 +271,32 @@ ${
             justify-content: center;
           "
         >
-          <button
-            style="
-              border: 2px solid var(--border);
-              background: var(--primary);
-              color: var(--primary-foreground);
-              padding: 0.5rem 1.25rem;
-              border-radius: 0;
-            "
-            onclick="window.history.back()"
-          >
-            Try again
-          </button>
-          <button
-            style="
-              border: 2px solid var(--border);
-              background: transparent;
-              color: var(--foreground);
-              padding: 0.5rem 1.25rem;
-              border-radius: 0;
-            "
-            onclick="window.location.href='/'"
-          >
-            Go home
-          </button>
+          <a href="/">
+            <button
+              style="
+                border: 2px solid var(--border);
+                background: var(--primary);
+                color: var(--primary-foreground);
+                padding: 0.5rem 1.25rem;
+                border-radius: 0;
+              "
+            >
+              Go Home
+            </button>
+          </a>
+          <a href="https://better-auth.com/docs/errors/${encodeURIComponent(code)}?askai=${encodeURIComponent(`What does the error code ${code} mean?`)}" target="_blank">
+            <button
+              style="
+                border: 2px solid var(--border);
+                background: transparent;
+                color: var(--foreground);
+                padding: 0.5rem 1.25rem;
+                border-radius: 0;
+              "
+            >
+              Ask AI
+            </button>
+          </a>
         </div>
       </div>
     </div>
