@@ -151,7 +151,10 @@ function getOrigin(scheme: string) {
  * @param newCookie - New cookie JSON string
  * @returns true if session cookies have changed, false otherwise
  */
-function hasSessionCookieChanged(prevCookie: string | null, newCookie: string): boolean {
+function hasSessionCookieChanged(
+	prevCookie: string | null,
+	newCookie: string,
+): boolean {
 	if (!prevCookie) return true;
 
 	try {
@@ -160,13 +163,13 @@ function hasSessionCookieChanged(prevCookie: string | null, newCookie: string): 
 
 		// Get all session-related cookie keys (session_token, session_data)
 		const sessionKeys = new Set<string>();
-		Object.keys(prev).forEach(key => {
-			if (key.includes('session_token') || key.includes('session_data')) {
+		Object.keys(prev).forEach((key) => {
+			if (key.includes("session_token") || key.includes("session_data")) {
 				sessionKeys.add(key);
 			}
 		});
-		Object.keys(next).forEach(key => {
-			if (key.includes('session_token') || key.includes('session_data')) {
+		Object.keys(next).forEach((key) => {
+			if (key.includes("session_token") || key.includes("session_data")) {
 				sessionKeys.add(key);
 			}
 		});
