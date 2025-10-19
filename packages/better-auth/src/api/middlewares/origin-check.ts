@@ -25,7 +25,11 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	 * true or application/json content type. This is to prevent
 	 * simple requests from being processed
 	 */
-	if (contentType !== "application/json" && authRequestHeader !== "true") {
+	if (
+		contentType !== "application/json" &&
+		authRequestHeader !== "true" &&
+		!ctx.context.skipCSRFCheck
+	) {
 		throw new APIError("FORBIDDEN", { message: "Invalid request" });
 	}
 	const originHeader = headers?.get("origin") || headers?.get("referer") || "";
@@ -80,9 +84,12 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 		}
 	};
-	console.log("skipCSRFCheck", ctx.context.skipCSRFCheck);
 
-	if (useCookies && !ctx.context.skipCSRFCheck) {
+	if (
+		useCookies &&
+		!ctx.context.skipCSRFCheck &&
+		!ctx.context.skipOriginCheck
+	) {
 		if (!originHeader || originHeader === "null") {
 			throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
 		}

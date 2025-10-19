@@ -38,6 +38,30 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
 4. **No Mutations on GET Requests (with additional safeguards)**
   `GET` requests are assumed to be read-only and should not alter the application’s state. In cases where a `GET` request must perform a mutation—such as during OAuth callbacks - Better Auth applies extra security measures, including validating `nonce` and `state` parameters to ensure the request’s authenticity.
 
+You can skip the CSRF check for all requests by setting the `disableCSRFCheck` option to `true` in the configuration.
+
+```typescript
+{
+  advanced: {
+    disableCSRFCheck: true
+  }
+}
+```
+
+You can skip the origin check for all requests by setting the `disableOriginCheck` option to `true` in the configuration.
+
+```typescript
+{
+  advanced: {
+    disableOriginCheck: true
+  }
+}
+```
+
+<Callout type="warning">
+  Skipping csrf check will open your application to CSRF attacks. And skipping origin check may open up your application to other security vulnerabilities including open redirects.
+</Callout>
+
 ## OAuth State and PKCE
 
 To secure OAuth flows, Better Auth stores the OAuth state and PKCE (Proof Key for Code Exchange) in the database. The state helps prevent CSRF attacks, while PKCE protects against code injection threats. Once the OAuth process completes, these values are removed from the database.

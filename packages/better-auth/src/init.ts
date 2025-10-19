@@ -162,9 +162,10 @@ export const init = async (options: BetterAuthOptions) => {
 			await runMigrations();
 		},
 		publishTelemetry: publish,
-		skipCSRFCheck:
-			options.advanced?.disableCSRFCheck !== undefined
-				? options.advanced.disableCSRFCheck
+		skipCSRFCheck: !!options.advanced?.disableCSRFCheck,
+		skipOriginCheck:
+			options.advanced?.disableOriginCheck !== undefined
+				? options.advanced.disableOriginCheck
 				: isTest()
 					? true
 					: false,

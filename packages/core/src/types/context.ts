@@ -232,13 +232,22 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			payload: Record<string, any>;
 		}) => Promise<void>;
 		/**
-		 * Skip CSRF check
+		 * This skips the origin check for all requests.
 		 *
 		 * set to true by default for `test` environments and `false`
 		 * for other environments.
 		 *
 		 * It's inferred from the `options.advanced?.disableCSRFCheck`
-		 * option.
+		 * option or `options.advanced?.disableOriginCheck` option.
+		 *
+		 * @default false
+		 */
+		skipOriginCheck: boolean;
+		/**
+		 * This skips the CSRF check for all requests.
+		 *
+		 * This is inferred from the `options.advanced?.
+		 * disableCSRFCheck` option.
 		 *
 		 * @default false
 		 */
