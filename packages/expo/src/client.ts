@@ -144,6 +144,50 @@ function getOrigin(scheme: string) {
 }
 
 /**
+ * Compare if session cookies have actually changed by comparing their values.
+ * Ignores expiry timestamps that naturally change on each request.
+ *
+ * @param prevCookie - Previous cookie JSON string
+ * @param newCookie - New cookie JSON string
+ * @returns true if session cookies have changed, false otherwise
+ */
+function hasSessionCookieChanged(prevCookie: string | null, newCookie: string): boolean {
+	if (!prevCookie) return true;
+
+	try {
+		const prev = JSON.parse(prevCookie) as Record<string, StoredCookie>;
+		const next = JSON.parse(newCookie) as Record<string, StoredCookie>;
+
+		// Get all session-related cookie keys (session_token, session_data)
+		const sessionKeys = new Set<string>();
+		Object.keys(prev).forEach(key => {
+			if (key.includes('session_token') || key.includes('session_data')) {
+				sessionKeys.add(key);
+			}
+		});
+		Object.keys(next).forEach(key => {
+			if (key.includes('session_token') || key.includes('session_data')) {
+				sessionKeys.add(key);
+			}
+		});
+
+		// Compare the values of session cookies (ignore expires timestamps)
+		for (const key of sessionKeys) {
+			const prevValue = prev[key]?.value;
+			const nextValue = next[key]?.value;
+			if (prevValue !== nextValue) {
+				return true;
+			}
+		}
+
+		return false;
+	} catch {
+		// If parsing fails, assume cookie changed
+		return true;
+	}
+}
+
+/**
  * Check if the Set-Cookie header contains session-related better-auth cookies.
  * Only triggers session updates when session_token or session_data cookies are present.
  * This prevents infinite refetching when non-session cookies (like third-party cookies) change.
@@ -247,13 +291,17 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							// Only process and notify if the Set-Cookie header contains better-auth cookies
 							// This prevents infinite refetching when other cookies (like Cloudflare's __cf_bm) are present
 							if (hasBetterAuthCookies(setCookie, cookiePrefix)) {
-								const prevCookie = await storage.getItem(cookieName);
+								const prevCookie = storage.getItem(cookieName);
 								const toSetCookie = getSetCookie(
 									setCookie || "",
 									prevCookie ?? undefined,
 								);
-								await storage.setItem(cookieName, toSetCookie);
-								store?.notify("$sessionSignal");
+								// Only notify $sessionSignal if the cookie actually changed
+								// This prevents infinite refetching when the server sends the same cookie
+								if (prevCookie !== toSetCookie) {
+									await storage.setItem(cookieName, toSetCookie);
+									store?.notify("$sessionSignal");
+								}
 							}
 						}
 
