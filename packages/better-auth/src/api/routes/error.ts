@@ -273,7 +273,7 @@ ${
           "
         >
           <a href="/">
-            <button
+            <div
               style="
                 border: 2px solid var(--border);
                 background: var(--primary);
@@ -283,10 +283,10 @@ ${
               "
             >
               Go Home
-            </button>
+            </div>
           </a>
           <a href="https://better-auth.com/docs/errors/${encodeURIComponent(code)}?askai=${encodeURIComponent(`What does the error code ${code} mean?`)}" target="_blank">
-            <button
+            <div
               style="
                 border: 2px solid var(--border);
                 background: transparent;
@@ -296,7 +296,7 @@ ${
               "
             >
               Ask AI
-            </button>
+            </div>
           </a>
         </div>
       </div>
