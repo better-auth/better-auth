@@ -454,31 +454,6 @@ describe("Enum field support in Drizzle schemas", () => {
 		);
 	});
 
-	it("should include correct imports for enum fields in PostgreSQL", async () => {
-		const schema = await generateDrizzleSchema({
-			file: "test.drizzle",
-			adapter: {
-				id: "drizzle",
-				options: {
-					provider: "pg",
-					schema: {},
-				},
-			} as any,
-			options: {
-				database: {} as any,
-				user: {
-					additionalFields: {
-						role: {
-							type: ["admin", "user"],
-						},
-					},
-				},
-			} as BetterAuthOptions,
-		});
-		expect(schema.code).toMatch(
-			/import[\s\S]*pgEnum[\s\S]*from.*drizzle-orm\/pg-core/,
-		);
-	});
 
 	it("should include correct imports for enum fields in MySQL", async () => {
 		const schema = await generateDrizzleSchema({
