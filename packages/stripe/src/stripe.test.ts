@@ -9,6 +9,8 @@ import { stripe } from ".";
 import { stripeClient } from "./client";
 import type { StripeOptions, Subscription } from "./types";
 import { expect, describe, it, beforeEach } from "vitest";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 describe("stripe", async () => {
 	const mockStripe = {
@@ -49,7 +51,7 @@ describe("stripe", async () => {
 			update: vi.fn(),
 		},
 		webhooks: {
-			constructEvent: vi.fn(),
+			constructEventAsync: vi.fn(),
 		},
 	};
 
@@ -1468,24 +1470,12 @@ describe("stripe", async () => {
 			email: "newemail@example.com",
 		});
 
-		// Create a mock request context
-		const mockRequest = new Request("http://localhost:3000/api/test", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-			},
-		});
-
 		// Update the user's email using internal adapter (which triggers hooks)
-		await ctx.internalAdapter.updateUserByEmail(
-			testUser.email,
-			{
+		const endpointCtx = { context: ctx } as GenericEndpointContext;
+		await runWithEndpointContext(endpointCtx, () =>
+			ctx.internalAdapter.updateUserByEmail(testUser.email, {
 				email: "newemail@example.com",
-			},
-			{
-				request: mockRequest,
-				context: ctx,
-			} as any,
+			}),
 		);
 
 		// Verify that Stripe customer.retrieve was called
@@ -1737,6 +1727,414 @@ describe("stripe", async () => {
 					userId: userRes.user.id,
 				},
 			});
+		});
+	});
+
+	describe("Webhook Error Handling (Stripe v19)", () => {
+		it("should handle invalid webhook signature with constructEventAsync", async () => {
+			const mockError = new Error("Invalid signature");
+			const stripeWithError = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockRejectedValue(mockError),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeWithError as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptions)],
+			});
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": "invalid_signature",
+					},
+					body: JSON.stringify({ type: "test.event" }),
+				},
+			);
+
+			const response = await testAuth.handler(mockRequest);
+			expect(response.status).toBe(400);
+			const data = await response.json();
+			expect(data.message).toContain("Webhook Error");
+		});
+
+		it("should reject webhook request without stripe-signature header", async () => {
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(stripeOptions)],
+			});
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({ type: "test.event" }),
+				},
+			);
+
+			const response = await testAuth.handler(mockRequest);
+			expect(response.status).toBe(400);
+			const data = await response.json();
+			expect(data.message).toContain("Stripe webhook secret not found");
+		});
+
+		it("should handle constructEventAsync returning null/undefined", async () => {
+			const stripeWithNull = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(null),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeWithNull as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptions)],
+			});
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": "test_signature",
+					},
+					body: JSON.stringify({ type: "test.event" }),
+				},
+			);
+
+			const response = await testAuth.handler(mockRequest);
+			expect(response.status).toBe(400);
+			const data = await response.json();
+			expect(data.message).toContain("Failed to construct event");
+		});
+
+		it("should handle async errors in webhook event processing", async () => {
+			const errorThrowingHandler = vi
+				.fn()
+				.mockRejectedValue(new Error("Event processing failed"));
+
+			const mockEvent = {
+				type: "checkout.session.completed",
+				data: {
+					object: {
+						mode: "subscription",
+						subscription: "sub_123",
+						metadata: {
+							referenceId: "user_123",
+							subscriptionId: "sub_123",
+						},
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				subscriptions: {
+					retrieve: vi.fn().mockRejectedValue(new Error("Stripe API error")),
+				},
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+				subscription: {
+					...stripeOptions.subscription,
+					onSubscriptionComplete: errorThrowingHandler,
+				},
+			};
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptions as StripeOptions)],
+			});
+
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: "user_123",
+					stripeCustomerId: "cus_123",
+					status: "incomplete",
+					plan: "starter",
+					id: "sub_123",
+				},
+			});
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": "test_signature",
+					},
+					body: JSON.stringify(mockEvent),
+				},
+			);
+
+			const response = await testAuth.handler(mockRequest);
+			// Errors inside event handlers are caught and logged but don't fail the webhook
+			// This prevents Stripe from retrying and is the expected behavior
+			expect(response.status).toBe(200);
+			const data = await response.json();
+			expect(data).toEqual({ success: true });
+			// Verify the error was logged (via the stripeClient.subscriptions.retrieve rejection)
+			expect(stripeForTest.subscriptions.retrieve).toHaveBeenCalled();
+		});
+
+		it("should successfully process webhook with valid async signature verification", async () => {
+			const mockEvent = {
+				type: "customer.subscription.updated",
+				data: {
+					object: {
+						id: "sub_test_async",
+						customer: "cus_test_async",
+						status: "active",
+						items: {
+							data: [
+								{
+									price: { id: process.env.STRIPE_PRICE_ID_1 },
+									quantity: 1,
+									current_period_start: Math.floor(Date.now() / 1000),
+									current_period_end:
+										Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+								},
+							],
+						},
+						current_period_start: Math.floor(Date.now() / 1000),
+						current_period_end:
+							Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					// Simulate async verification success
+					constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret_async",
+			};
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptions)],
+			});
+
+			const { id: subId } = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_test_async",
+					stripeSubscriptionId: "sub_test_async",
+					status: "incomplete",
+					plan: "starter",
+				},
+			});
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": "valid_async_signature",
+					},
+					body: JSON.stringify(mockEvent),
+				},
+			);
+
+			const response = await testAuth.handler(mockRequest);
+			expect(response.status).toBe(200);
+			expect(stripeForTest.webhooks.constructEventAsync).toHaveBeenCalledWith(
+				expect.any(String),
+				"valid_async_signature",
+				"test_secret_async",
+			);
+
+			const data = await response.json();
+			expect(data).toEqual({ success: true });
+		});
+
+		it("should call constructEventAsync with exactly 3 required parameters", async () => {
+			const mockEvent = {
+				type: "customer.subscription.created",
+				data: {
+					object: {
+						id: "sub_test_params",
+						customer: "cus_test_params",
+						status: "active",
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret_params",
+			};
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptions)],
+			});
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": "test_signature_params",
+					},
+					body: JSON.stringify(mockEvent),
+				},
+			);
+
+			await testAuth.handler(mockRequest);
+
+			// Verify that constructEventAsync is called with exactly 3 required parameters
+			// (payload, signature, secret) and no optional parameters
+			expect(stripeForTest.webhooks.constructEventAsync).toHaveBeenCalledWith(
+				expect.any(String), // payload
+				"test_signature_params", // signature
+				"test_secret_params", // secret
+			);
+
+			// Verify it was called exactly once
+			expect(stripeForTest.webhooks.constructEventAsync).toHaveBeenCalledTimes(
+				1,
+			);
+		});
+
+		it("should support Stripe v18 with sync constructEvent method", async () => {
+			const mockEvent = {
+				type: "customer.subscription.updated",
+				data: {
+					object: {
+						id: "sub_test_v18",
+						customer: "cus_test_v18",
+						status: "active",
+						items: {
+							data: [
+								{
+									price: { id: process.env.STRIPE_PRICE_ID_1 },
+									quantity: 1,
+									current_period_start: Math.floor(Date.now() / 1000),
+									current_period_end:
+										Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+								},
+							],
+						},
+						current_period_start: Math.floor(Date.now() / 1000),
+						current_period_end:
+							Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+					},
+				},
+			};
+
+			// Simulate Stripe v18 - only has sync constructEvent, no constructEventAsync
+			const stripeV18 = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEvent: vi.fn().mockReturnValue(mockEvent),
+					// v18 doesn't have constructEventAsync
+					constructEventAsync: undefined,
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeV18 as unknown as Stripe,
+				stripeWebhookSecret: "test_secret_v18",
+			};
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptions)],
+			});
+
+			const { id: subId } = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_test_v18",
+					stripeSubscriptionId: "sub_test_v18",
+					status: "incomplete",
+					plan: "starter",
+				},
+			});
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": "test_signature_v18",
+					},
+					body: JSON.stringify(mockEvent),
+				},
+			);
+
+			const response = await testAuth.handler(mockRequest);
+			expect(response.status).toBe(200);
+
+			// Verify that constructEvent (sync) was called instead of constructEventAsync
+			expect(stripeV18.webhooks.constructEvent).toHaveBeenCalledWith(
+				expect.any(String),
+				"test_signature_v18",
+				"test_secret_v18",
+			);
+			expect(stripeV18.webhooks.constructEvent).toHaveBeenCalledTimes(1);
+
+			const data = await response.json();
+			expect(data).toEqual({ success: true });
 		});
 	});
 });

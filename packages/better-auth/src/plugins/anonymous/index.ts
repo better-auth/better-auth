@@ -2,8 +2,11 @@ import { APIError, getSessionFromCtx } from "../../api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
-import type { BetterAuthPlugin } from "@better-auth/core";
+} from "@better-auth/core/api";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import type { InferOptionSchema, Session, User } from "../../types";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { getOrigin } from "../../utils/url";
@@ -37,6 +40,7 @@ export interface AnonymousOptions {
 			user: User & Record<string, any>;
 			session: Session & Record<string, any>;
 		};
+		ctx: GenericEndpointContext;
 	}) => Promise<void> | void;
 	/**
 	 * Disable deleting the anonymous user after linking
@@ -134,17 +138,14 @@ export const anonymous = (options?: AnonymousOptions) => {
 					const id = generateId();
 					const email = `temp-${id}@${emailDomainName}`;
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
-					const newUser = await ctx.context.internalAdapter.createUser(
-						{
-							email,
-							emailVerified: false,
-							isAnonymous: true,
-							name,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						},
-						ctx,
-					);
+					const newUser = await ctx.context.internalAdapter.createUser({
+						email,
+						emailVerified: false,
+						isAnonymous: true,
+						name,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					});
 					if (!newUser) {
 						throw ctx.error("INTERNAL_SERVER_ERROR", {
 							message: ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -152,7 +153,6 @@ export const anonymous = (options?: AnonymousOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						newUser.id,
-						ctx,
 					);
 					if (!session) {
 						return ctx.json(null, {
@@ -246,6 +246,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 							await options?.onLinkAccount?.({
 								anonymousUser: session,
 								newUser: newSession,
+								ctx,
 							});
 						}
 						if (!options?.disableDeleteAnonymousUser) {

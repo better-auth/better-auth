@@ -1,8 +1,8 @@
 import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { originCheck } from "./origin-check";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { isSimpleRequest, originCheck } from "./origin-check";
 import * as z from "zod";
 
 describe("Origin Check", async (it) => {
@@ -19,6 +19,7 @@ describe("Origin Check", async (it) => {
 		},
 		advanced: {
 			disableCSRFCheck: false,
+			disableOriginCheck: false,
 		},
 	});
 
@@ -488,4 +489,38 @@ describe("origin check middleware", async (it) => {
 		);
 		expect(sampleInternalEndpointInvalid.error?.status).toBe(403);
 	});
+});
+
+describe("is simple request", async (it) => {
+	it("should return true for simple requests", async () => {
+		const request = new Request("http://localhost:3000/test", {
+			method: "GET",
+		});
+		const isSimple = isSimpleRequest(request.headers);
+		expect(isSimple).toBe(true);
+	});
+
+	it("should return false for non-simple requests", async () => {
+		const request = new Request("http://localhost:3000/test", {
+			method: "POST",
+			headers: {
+				"custom-header": "value",
+			},
+		});
+		const isSimple = isSimpleRequest(request.headers);
+		expect(isSimple).toBe(false);
+	});
+
+	it("should return false for requests with a content type that is not simple", async () => {
+		const request = new Request("http://localhost:3000/test", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+			},
+		});
+		const isSimple = isSimpleRequest(request.headers);
+		expect(isSimple).toBe(false);
+	});
+
+	it;
 });

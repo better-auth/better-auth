@@ -2,7 +2,7 @@ import { APIError } from "better-call";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import { getDate } from "../../utils/date";
 import {
 	deleteSessionCookie,
