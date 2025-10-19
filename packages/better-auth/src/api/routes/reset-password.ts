@@ -366,12 +366,15 @@ export const resetPassword = createAuthEndpoint(
 				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 			});
 		}
-		const pattern = ctx.context.password.config.pattern;
-		if (pattern && !pattern.test(newPassword)) {
-			ctx.context.logger.error(BASE_ERROR_CODES.PASSWORD_NOT_VALID_PATTERN);
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_NOT_VALID_PATTERN,
-			});
+		const pattern = ctx.context.password.config.pattern!;
+		if (pattern) {
+			const schema = z.string().regex(pattern);
+			if (!schema.safeParse(newPassword).success) {
+				ctx.context.logger.error(BASE_ERROR_CODES.PASSWORD_NOT_VALID_PATTERN);
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.PASSWORD_NOT_VALID_PATTERN,
+				});
+			}
 		}
 		const id = `reset-password:${token}`;
 

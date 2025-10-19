@@ -201,13 +201,19 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 					});
 				}
-				const pattern = ctx.context.password.config.pattern;
-				if (pattern && !pattern.test(password)) {
-					ctx.context.logger.error(BASE_ERROR_CODES.PASSWORD_NOT_VALID_PATTERN);
-					throw new APIError("BAD_REQUEST", {
-						message: BASE_ERROR_CODES.PASSWORD_NOT_VALID_PATTERN,
-					});
+				const pattern = ctx.context.password.config.pattern!;
+				if (pattern) {
+					const schema = z.string().regex(pattern);
+					if (!schema.safeParse(password).success) {
+						ctx.context.logger.error(
+							BASE_ERROR_CODES.PASSWORD_NOT_VALID_PATTERN,
+						);
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.PASSWORD_NOT_VALID_PATTERN,
+						});
+					}
 				}
+
 				const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
 				if (dbUser?.user) {
 					ctx.context.logger.info(
