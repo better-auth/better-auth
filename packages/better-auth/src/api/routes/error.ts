@@ -178,7 +178,7 @@ ${
             <div
               style="
                 display: inline-block;
-                border: 2px solid ${custom.disableTitleBorder ? "transparent" : custom?.colors?.titleBorder || "var(--destructive)"};
+                border: 2px solid ${custom?.disableTitleBorder ? "transparent" : custom?.colors?.titleBorder || "var(--destructive)"};
                 padding: 0.5rem 1.5rem;
               "
             >
