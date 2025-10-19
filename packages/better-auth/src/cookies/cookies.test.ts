@@ -692,4 +692,48 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache?.user?.email).toEqual(testUser.email);
 		expect(cache?.user?.name).toBeDefined();
 	});
+
+	it("should exclude fields passed to `excludeUserFields` from the cookie cache, except mandatory fields like `id`", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+					excludeUserFields: ["id", "image", "emailVerified"],
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+
+		expect(cache).not.toBeNull();
+		// Fields `image` and `emailVerified` should be excluded
+		expect(cache?.user?.image).toBeUndefined();
+		expect(cache?.user?.emailVerified).toBeUndefined();
+
+		// `id` field should still be present even though it's in `excludeUserFields`, as it is a mandatory field
+		expect(cache?.user?.id).toBeDefined();
+
+		// Ensure other fields like `email` and `name` are set correctly
+		expect(cache?.user?.email).toEqual(testUser.email);
+		expect(cache?.user?.name).toBeDefined();
+	});
 });
