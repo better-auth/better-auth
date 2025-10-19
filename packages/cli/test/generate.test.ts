@@ -454,7 +454,6 @@ describe("Enum field support in Drizzle schemas", () => {
 		);
 	});
 
-
 	it("should include correct imports for enum fields in MySQL", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",
