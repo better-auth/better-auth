@@ -56,7 +56,7 @@ export async function handleOAuthUserInfo(
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
-				if (isDevelopment) {
+				if (isDevelopment()) {
 					logger.warn(
 						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
 					);

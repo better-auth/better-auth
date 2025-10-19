@@ -1782,7 +1782,9 @@ describe("stripe", async () => {
 				"http://localhost:3000/api/auth/stripe/webhook",
 				{
 					method: "POST",
-					headers: {},
+					headers: {
+						"content-type": "application/json",
+					},
 					body: JSON.stringify({ type: "test.event" }),
 				},
 			);

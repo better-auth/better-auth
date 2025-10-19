@@ -112,10 +112,6 @@ export async function getTestInstance<
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
-		advanced: {
-			disableCSRFCheck: true,
-			...options?.advanced,
-		},
 		plugins: [bearer(), ...(options?.plugins || [])],
 	} as unknown as O);
 
