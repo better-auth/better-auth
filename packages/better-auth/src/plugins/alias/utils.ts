@@ -55,13 +55,3 @@ export function resolvePath(url: string, baseURL?: string) {
 
 	return { path: resolvedPath, basePath: basePath ?? "/api/auth" };
 }
-
-export function pathMatchesURL(
-	url: string,
-	expectedPath: string,
-	baseURL?: string,
-) {
-	const { path } = resolvePath(url, baseURL);
-
-	return path === normalizePath(expectedPath);
-}

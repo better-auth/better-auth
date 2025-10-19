@@ -307,7 +307,28 @@ export function aliasClient<
 	// Wrap getActions to prefix any path-based actions
 	if (plugin.getActions) {
 		aliasedPlugin.getActions = ($fetch, store, clientOptions) => {
-			const originalActions = plugin.getActions!($fetch, store, clientOptions);
+			const baseURL = getBaseURL(
+				clientOptions?.baseURL,
+				clientOptions?.basePath,
+				undefined,
+			);
+			const originalActions = plugin.getActions!(
+				((url: string | URL, ...opts: any[]) => {
+					return $fetch(
+						resolveURL(
+							{
+								url,
+								baseURL,
+							},
+							options?.excludeEndpoints ?? [],
+							prefix,
+						),
+						...opts,
+					);
+				}) as any,
+				store,
+				clientOptions,
+			);
 			const prefixedActions: Record<string, any> = {};
 
 			for (const [key, action] of Object.entries(originalActions)) {
@@ -327,7 +348,24 @@ export function aliasClient<
 	// Wrap getAtoms to prefix any path-based actions
 	if (plugin.getAtoms) {
 		aliasedPlugin.getAtoms = ($fetch, clientOptions) => {
-			const originalAtoms = plugin.getAtoms!($fetch, clientOptions);
+			const baseURL = getBaseURL(
+				clientOptions?.baseURL,
+				clientOptions?.basePath,
+				undefined,
+			);
+			const originalAtoms = plugin.getAtoms!(
+				((url: string | URL, ...opts: any[]) => {
+					return $fetch(
+						resolveURL(
+							{ url, baseURL },
+							options?.excludeEndpoints ?? [],
+							prefix,
+						),
+						...opts,
+					);
+				}) as any,
+				clientOptions,
+			);
 
 			if (!lazySignals) {
 				lazySignals = Object.keys(originalAtoms).filter(
@@ -344,36 +382,11 @@ export function aliasClient<
 		};
 	}
 
-	// Update fetchPlugins hooks to prefix paths
 	if (plugin.fetchPlugins) {
-		aliasedPlugin.fetchPlugins = [
-			{
-				id: `${aliasedPlugin.id}-namespace-resolver`,
-				name: "Namespace Resolver",
-				init(url, opts) {
-					const { path } = resolvePath(url, opts?.baseURL);
-					const resolvedURL = !path.startsWith(cleanPrefix)
-						? resolveURL(
-								{
-									url,
-									baseURL: opts?.baseURL,
-								},
-								options?.excludeEndpoints || [],
-								prefix,
-							)
-						: url;
-
-					return {
-						url: resolvedURL,
-						options: opts,
-					};
-				},
-			},
-			...plugin.fetchPlugins.map((fetchPlugin) => ({
-				...fetchPlugin,
-				id: `${fetchPlugin.id}-${cleanPrefix.replace(/\//g, "-")}`,
-			})),
-		];
+		aliasedPlugin.fetchPlugins = plugin.fetchPlugins.map((fetchPlugin) => ({
+			...fetchPlugin,
+			id: `${fetchPlugin.id}-${cleanPrefix.replace(/\//g, "-")}`,
+		}));
 	}
 
 	// // Wrap the $InferServerPlugin if it exists
