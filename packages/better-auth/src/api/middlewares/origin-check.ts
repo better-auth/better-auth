@@ -15,12 +15,18 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const headers = ctx.request?.headers;
 	const request = ctx.request;
 	const { body, query, context } = ctx;
-	const ct = (headers.get("content-type") || "")
+	const contentType = (headers.get("content-type") || "")
 		.split(";")[0]
 		?.trim()
 		.toLowerCase();
-	if (ct !== "application/json") {
-		throw new APIError("FORBIDDEN", { message: "Invalid content type" });
+	const authRequestHeader = headers?.get("x-auth-request");
+	/**
+	 * We only allow requests with the x-auth-request header set to
+	 * true or application/json content type. This is to prevent
+	 * simple requests from being processed
+	 */
+	if (contentType !== "application/json" && authRequestHeader !== "true") {
+		throw new APIError("FORBIDDEN", { message: "Invalid request" });
 	}
 	const originHeader = headers?.get("origin") || headers?.get("referer") || "";
 	const callbackURL = body?.callbackURL || query?.callbackURL;
@@ -74,8 +80,9 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 		}
 	};
+	console.log("skipCSRFCheck", ctx.context.skipCSRFCheck);
 
-	if (useCookies && !ctx.context.options.advanced?.disableCSRFCheck) {
+	if (useCookies && !ctx.context.skipCSRFCheck) {
 		if (!originHeader || originHeader === "null") {
 			throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
 		}

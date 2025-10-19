@@ -231,4 +231,16 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			anonymousId?: string;
 			payload: Record<string, any>;
 		}) => Promise<void>;
+		/**
+		 * Skip CSRF check
+		 *
+		 * this is true by default for `test` environments and `false`
+		 * for `production` environments.
+		 *
+		 * It's inferred from the `options.advanced?.disableCSRFCheck`
+		 * option.
+		 *
+		 * @default false
+		 */
+		skipCSRFCheck: boolean;
 	};
