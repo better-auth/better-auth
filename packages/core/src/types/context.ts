@@ -234,8 +234,8 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		/**
 		 * Skip CSRF check
 		 *
-		 * this is true by default for `test` environments and `false`
-		 * for `production` environments.
+		 * set to true by default for `test` environments and `false`
+		 * for other environments.
 		 *
 		 * It's inferred from the `options.advanced?.disableCSRFCheck`
 		 * option.
