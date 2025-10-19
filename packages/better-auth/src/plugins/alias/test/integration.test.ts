@@ -386,7 +386,75 @@ describe("Alias Plugin", async () => {
 		});
 
 		it("should prefix urls in fetchPlugins", async () => {
-			// TODO:
+			const testPlugin = {
+				id: "test-plugin",
+				endpoints: {
+					test: createAuthEndpoint(
+						"/test",
+						{
+							method: "GET",
+						},
+						async (ctx) => {
+							return {
+								success: true,
+							};
+						},
+					),
+				},
+			} satisfies BetterAuthPlugin;
+
+			const mockHookFn = vi.fn((url: string | URL, fnName?: string) => {
+				expect(url.toString(), fnName).toEqual(
+					"http://localhost:3000/api/auth/prefix/test",
+				);
+			});
+			const mockInitFn = vi.fn((url: string, options: any) => {
+				expect(url.toString(), "init").toEqual("/prefix/test");
+				return {
+					url,
+					options,
+				};
+			});
+			const testPluginClient = {
+				id: "test-plugin",
+				fetchPlugins: [
+					{
+						id: "fetch-plugin",
+						name: "Fetch plugin",
+						hooks: {
+							onRequest: (ctx) => mockHookFn(ctx.url, "onRequest"),
+							onResponse: (ctx) => mockHookFn(ctx.request.url, "onResponse"),
+							onError: (ctx) => mockHookFn(ctx.request.url, "onError"),
+							onSuccess: (ctx) => mockHookFn(ctx.request.url, "onSuccess"),
+						},
+						init: mockInitFn,
+					},
+				],
+				$InferServerPlugin: {} as typeof testPlugin,
+			} satisfies BetterAuthClientPlugin;
+
+			const { customFetchImpl } = await getTestInstanceMemory({
+				plugins: [alias("/prefix", testPlugin)],
+			});
+
+			const aliasedPlugin = aliasClient(
+				"/prefix",
+				createMockClientPlugin("payment"),
+				{
+					includeEndpoints: ["/test"],
+				},
+			);
+			const client = await createAuthClient({
+				fetchOptions: {
+					customFetchImpl,
+				},
+				baseURL: "http://localhost:3000",
+				plugins: [aliasedPlugin, aliasedPlugin.compat(testPluginClient)],
+			});
+
+			await client.test();
+			expect(mockInitFn).toHaveBeenCalled();
+			expect(mockHookFn).toHaveBeenCalled();
 		});
 	});
 });
