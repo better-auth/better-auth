@@ -17,7 +17,7 @@ export function normalizePath(path: string) {
 
 export function normalizePrefix(prefix: string) {
 	const cleanPrefix = normalizePath(prefix);
-	return cleanPrefix !== "/" ? cleanPrefix : "/";
+	return cleanPrefix !== "/" ? cleanPrefix : "";
 }
 
 export function resolvePath(url: string, baseURL?: string) {
