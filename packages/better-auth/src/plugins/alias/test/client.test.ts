@@ -258,16 +258,50 @@ describe("aliasClient plugin", () => {
 		expect(aliased2.pathMethods!["/checkout"]).toBe("POST");
 	});
 
-	it("should handle excluded endpoints properly", () => {
+	it("should handle excluded endpoints properly", async () => {
 		const aliased = aliasClient("/payment", createMockClientPlugin("payment"), {
-			excludeEndpoints: ["/checkout"],
+			excludeEndpoints: ["/customer/portal"],
 		});
 
-		expect(aliased.pathMethods!["/payment/customer/portal"]).toBe("GET");
-		expect(aliased.pathMethods!["/checkout"]).toBe("POST");
+		expect(aliased.pathMethods!["/payment/checkout"]).toBe("GET");
+		expect(aliased.pathMethods!["/customer/portal"]).toBe("POST");
 
-		// TODO: getActions
-		// TODO: getAtoms
+		const spyFetch = vi.fn(async (req: Request | string | URL) => {
+			return new Response(
+				JSON.stringify({
+					success: true,
+				}),
+			);
+		});
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: spyFetch,
+			},
+			baseURL: "http://localhost:3000",
+			plugins: [aliased],
+		});
+		await client.payment.triggerFetch("/customer/portal", "POST");
+		expect(spyFetch).toHaveBeenCalledTimes(1);
+		let calledURL = spyFetch.mock.calls[0]?.[0];
+		expect(calledURL?.toString()).toEqual(
+			"http://localhost:3000/api/auth/customer/portal",
+		);
+
+		await spyFetch.mockClear();
+
+		const res = client.useQueryAtom();
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(res()).toMatchObject({
+			data: { success: true },
+			error: null,
+			isPending: false,
+		});
+		expect(spyFetch).toHaveBeenCalledTimes(1);
+		calledURL = spyFetch.mock.calls[0]?.[0];
+		expect(calledURL?.toString()).toEqual(
+			"http://localhost:3000/api/auth/customer/portal",
+		);
 	});
 
 	it("state listener should be called on matched path", async () => {
