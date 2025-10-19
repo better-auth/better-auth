@@ -24,7 +24,11 @@ See the [session management](/docs/concepts/session-management) for more details
 
 ## CSRF Protection
 
-Better Auth ensures CSRF protection by validating the Origin header in requests. This check confirms that requests originate from the application or a trusted source. If a request comes from an untrusted origin, it is blocked to prevent potential CSRF attacks. By default, the origin matching the base URL is trusted, but you can set a list of trusted origins in the trustedOrigins configuration option.
+Better Auth ensures CSRF protection 
+
+1. By requiring `content-type` header to be `application/json` or `x-auth-request` header to be `true`. This will prevent simple requests from being processed. This means every request to the Better Auth API must be a JSON request or a request with the `x-auth-request` header set to `true`.
+
+2. By validating the Origin header in requests. This check confirms that requests originate from the application or a trusted source. If a request comes from an untrusted origin, it is blocked to prevent potential CSRF attacks. By default, the origin matching the base URL is trusted, but you can set a list of trusted origins in the trustedOrigins configuration option.
 
 ## OAuth State and PKCE
 
