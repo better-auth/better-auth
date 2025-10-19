@@ -248,7 +248,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						});
 					}
 				} catch (e) {
-					if (isDevelopment) {
+					if (isDevelopment()) {
 						ctx.context.logger.error("Failed to create user", e);
 					}
 					if (e instanceof APIError) {

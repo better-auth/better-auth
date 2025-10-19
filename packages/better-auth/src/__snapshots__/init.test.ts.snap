@@ -151,6 +151,8 @@ exports[`init > should match config 1`] = `
     "updateAge": 86400,
   },
   "setNewSession": [Function],
+  "skipCSRFCheck": false,
+  "skipOriginCheck": true,
   "socialProviders": [],
   "tables": {
     "account": {
