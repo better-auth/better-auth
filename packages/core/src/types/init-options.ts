@@ -1156,7 +1156,7 @@ export type BetterAuthOptions = {
 				mutedForeground?: string;
 				border?: string;
 				destructive?: string;
-				titleBoarder?: string;
+				titleBorder?: string;
 				titleColor?: string;
 				gridColor?: string;
 				cardBackground?: string;
@@ -1176,7 +1176,7 @@ export type BetterAuthOptions = {
 				monoFamily?: string;
 			};
 			disableTitleBorder?: boolean;
-			disabledCornerDecorations?: boolean;
+			disableCornerDecorations?: boolean;
 			disableBackgroundGrid?: boolean;
 		};
 	};
