@@ -385,9 +385,8 @@ describe("Enum field support in Drizzle schemas", () => {
 				},
 			} as BetterAuthOptions,
 		});
-		expect(schema.code).toContain("pgEnum");
 		expect(schema.code).toContain(
-			'role: pgEnum("role", ["admin", "user", "guest"])',
+			'role: text("role", { enum: ["admin", "user", "guest"] })',
 		);
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-pg-enum.txt",
@@ -528,6 +527,6 @@ describe("Enum field support in Drizzle schemas", () => {
 				},
 			} as BetterAuthOptions,
 		});
-		expect(schema.code).not.toContain("pgEnum");
+		expect(schema.code).not.toContain("enum");
 	});
 });

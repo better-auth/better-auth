@@ -411,8 +411,8 @@ importers:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       stripe:
-        specifier: ^18.5.0
-        version: 18.5.0(@types/node@24.7.2)
+        specifier: ^19.1.0
+        version: 19.1.0(@types/node@24.7.2)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.3.1
@@ -1282,8 +1282,8 @@ importers:
         specifier: 'catalog:'
         version: 1.0.24
       stripe:
-        specifier: ^18.5.0
-        version: 18.5.0(@types/node@24.7.2)
+        specifier: ^19.1.0
+        version: 19.1.0(@types/node@24.7.2)
       tsdown:
         specifier: 'catalog:'
         version: 0.15.6(typescript@5.9.2)
@@ -12076,6 +12076,15 @@ packages:
     engines: {node: '>=12.*'}
     peerDependencies:
       '@types/node': '>=12.x.x'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  stripe@19.1.0:
+    resolution: {integrity: sha512-FjgIiE98dMMTNssfdjMvFdD4eZyEzdWAOwPYqzhPRNZeg9ggFWlPXmX1iJKD5pPIwZBaPlC3SayQQkwsPo6/YQ==}
+    engines: {node: '>=16'}
+    peerDependencies:
+      '@types/node': '>=16'
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -26333,6 +26342,12 @@ snapshots:
       js-tokens: 9.0.1
 
   stripe@18.5.0(@types/node@24.7.2):
+    dependencies:
+      qs: 6.14.0
+    optionalDependencies:
+      '@types/node': 24.7.2
+
+  stripe@19.1.0(@types/node@24.7.2):
     dependencies:
       qs: 6.14.0
     optionalDependencies:
