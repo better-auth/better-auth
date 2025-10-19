@@ -13,6 +13,7 @@ import {
 	toCamelCase,
 	normalizePrefix,
 	type SpecialEndpoints,
+	normalizePath,
 } from "./utils";
 
 export type InferAliasedPlugin<
@@ -200,8 +201,8 @@ function cloneEndpoint<
 function resolveNewPath(originalPath: string, cleanPrefix: string) {
 	for (const specialPrefix of SPECIAL_ENDPOINTS) {
 		if (originalPath.startsWith(specialPrefix)) {
-			const rest = originalPath.slice(specialPrefix.length);
-			return `${specialPrefix.replace(/\/$/, "")}${cleanPrefix}/${rest}`;
+			const rest = originalPath.slice(specialPrefix.length).replace(/^\/+/, "");
+			return `${normalizePath(specialPrefix)}${cleanPrefix}/${rest}`;
 		}
 	}
 

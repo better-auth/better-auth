@@ -13,7 +13,9 @@ import type {
 } from "./types";
 import { getBaseURL } from "../../utils/url";
 import {
+	normalizePath,
 	normalizePrefix,
+	resolvePath,
 	SPECIAL_ENDPOINTS,
 	toCamelCase,
 	type SpecialEndpoints,
@@ -260,6 +262,7 @@ export function aliasClient<
 		...plugin,
 		id: `${plugin.id}-${cleanPrefix.replace(/\//g, "-")}`,
 	};
+	let lazySignals: string[] | null = null;
 
 	// Prefix pathMethods
 	if (plugin.pathMethods) {
@@ -314,7 +317,7 @@ export function aliasClient<
 					return $fetch(
 						resolveURL(
 							{
-								url: url,
+								url,
 								baseURL,
 							},
 							options?.excludeEndpoints ?? [],
@@ -342,7 +345,6 @@ export function aliasClient<
 		};
 	}
 
-	let lazySignals: string[] | null = null;
 	// Wrap getAtoms to prefix any path-based actions
 	if (plugin.getAtoms) {
 		aliasedPlugin.getAtoms = ($fetch, clientOptions) => {
@@ -355,10 +357,7 @@ export function aliasClient<
 				((url: string | URL, ...opts: any[]) => {
 					return $fetch(
 						resolveURL(
-							{
-								url: url,
-								baseURL,
-							},
+							{ url, baseURL },
 							options?.excludeEndpoints ?? [],
 							prefix,
 						),
@@ -464,13 +463,15 @@ export function aliasCompatClient<
 		...plugin,
 	};
 
-	const includeEndpoints = new Set([
-		...(options?.includeEndpoints || []),
-		...(aliasOptions?.includeEndpoints || []),
-		...Object.keys(aliasedPlugin.pathMethods || {}).filter((path) =>
-			path.startsWith(prefix),
-		),
-	]);
+	const includeEndpoints = [
+		...new Set([
+			...(options?.includeEndpoints || []),
+			...(aliasOptions?.includeEndpoints || []),
+			...Object.keys(aliasedPlugin.pathMethods || {}).filter((path) =>
+				path.startsWith(prefix),
+			),
+		]),
+	];
 
 	// Update atomListeners matchers
 	if (plugin.atomListeners) {
@@ -501,10 +502,51 @@ export function aliasCompatClient<
 
 	// Wrap getActions to prefix specific path-based action
 	if (plugin.getActions) {
+		compatPlugin.getActions = ($fetch, store, clientOptions) => {
+			const baseURL = getBaseURL(
+				clientOptions?.baseURL,
+				clientOptions?.basePath,
+				undefined,
+			);
+			return plugin.getActions!(
+				((url: string | URL, ...opts: any[]) => {
+					return $fetch(
+						resolveURL(
+							{
+								url,
+								baseURL,
+							},
+							includeEndpoints,
+							prefix,
+							"include",
+						),
+						...opts,
+					);
+				}) as any,
+				store,
+				clientOptions,
+			);
+		};
 	}
 
 	// Wrap getAtoms to prefix specific path-based action
 	if (plugin.getAtoms) {
+		compatPlugin.getAtoms = ($fetch, clientOptions) => {
+			const baseURL = getBaseURL(
+				clientOptions?.baseURL,
+				clientOptions?.basePath,
+				undefined,
+			);
+			return plugin.getAtoms!(
+				((url: string | URL, ...opts: any[]) => {
+					return $fetch(
+						resolveURL({ url, baseURL }, includeEndpoints, prefix, "include"),
+						...opts,
+					);
+				}) as any,
+				clientOptions,
+			);
+		};
 	}
 
 	// Update fetchPlugins hooks to prefix specific paths
@@ -527,38 +569,27 @@ const resolveURL = (
 		url: string | URL;
 		baseURL?: string;
 	},
-	excludeEndpoints: string[],
+	specialEndpoints: string[],
 	prefix?: string,
+	mode: "exclude" | "include" = "exclude",
 ) => {
-	let url: URL;
-	if (typeof context.url === "string") {
-		url = new URL(
-			`${context.baseURL?.endsWith("/") ? context.baseURL.slice(0, -1) : context.baseURL}${(context.url.toString().startsWith("/") ? "" : "/") + context.url.toString()}`,
-		);
-	} else {
-		url = new URL(context.url);
-	}
-	const base = new URL(context.baseURL || "");
-	if (!url.pathname.startsWith(base.pathname)) {
-		return url.toString();
-	}
-
-	const relativePath = url.pathname.slice(base.pathname.length);
-	const normalizedRelative = relativePath.startsWith("/")
-		? relativePath
-		: `/${relativePath}`;
-	const shouldExclude = excludeEndpoints.some(
-		(path) =>
-			normalizedRelative === path || normalizedRelative.startsWith(`${path}/`),
+	const { path, basePath } = resolvePath(
+		context.url.toString(),
+		context.baseURL,
 	);
-	if (shouldExclude) {
-		return url.toString();
+
+	const matches = specialEndpoints.some((ep) => {
+		const normalized = normalizePath(ep);
+		return path === normalized || path.startsWith(`${normalized}/`);
+	});
+	if ((mode === "exclude" && matches) || (mode === "include" && !matches)) {
+		return context.url.toString();
 	}
 
-	const fullPath = `${base.pathname.replace(/\/$/, "")}${prefix || ""}${normalizedRelative}`;
-	const finalUrl = new URL(fullPath, url.origin);
-	finalUrl.search = url.search;
-	finalUrl.hash = url.hash;
+	const relativePath = `${prefix || ""}${path}`;
+	if (typeof context.url !== "string") {
+		return new URL(`${basePath}${relativePath}`, context.url).toString();
+	}
 
-	return finalUrl.toString();
+	return relativePath;
 };
