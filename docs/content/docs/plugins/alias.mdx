@@ -14,15 +14,15 @@ The alias plugin allows you to prefix plugin endpoints with a custom path to avo
         Wrap your plugins with the `alias` function to prefix their endpoints:
 
         ```ts title="auth.ts" 
-        import { betterAuth } from "better-auth"
-        import { alias } from "better-auth/plugins" // [!code highlight]
+        import { betterAuth } from "better-auth";
+        import { alias } from "better-auth/plugins"; // [!code highlight]
 
         export const auth = betterAuth({
             plugins: [
                 // Wrap any plugin with alias to prefix its endpoints
                 alias("/prefix", somePlugin()), // [!code highlight]
-            ]
-        })
+            ],
+        });
         ```
     </Step>
     <Step>
@@ -31,15 +31,15 @@ The alias plugin allows you to prefix plugin endpoints with a custom path to avo
         Use `aliasClient` to wrap client plugins with the same prefix:
         
         ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/client"
-        import { aliasClient } from "better-auth/client/plugins" // [!code highlight]
+        import { createAuthClient } from "better-auth/client";
+        import { aliasClient } from "better-auth/client/plugins"; // [!code highlight]
         
         export const authClient = createAuthClient({
             plugins: [
                 // Wrap client plugin with same prefix
                 aliasClient("/prefix", someClientPlugin()), // [!code highlight]
-            ]
-        })
+            ],
+        });
         ```
     </Step>
 </Steps>
@@ -59,9 +59,9 @@ export const auth = betterAuth({
         // Without alias: both would try to use /api/auth/checkout - conflict!
         // With alias: each gets its own namespace
         alias("/stripe", stripePlugin()),
-        alias("/paypal", paypalPlugin())
-    ]
-})
+        alias("/paypal", paypalPlugin()),
+    ],
+});
 ```
 
 Now the endpoints are available at:
@@ -79,16 +79,16 @@ import { aliasClient } from "better-auth/client/plugins"
 const authClient = createAuthClient({
     plugins: [
         aliasClient("/stripe", stripeClient()),
-        aliasClient("/paypal", paypalClient())
-    ]
-})
+        aliasClient("/paypal", paypalClient()),
+    ],
+});
 ```
 
 ## Configuration
 
-The alias plugin accepts two parameters:
+The alias plugin accepts the following parameters:
 
-### prefix
+### `prefix`
 **Type**: `string`  
 **Required**: `true`
 
@@ -99,21 +99,115 @@ Examples:
 - `"polar"` → `/polar/endpoint`  
 - `"/polar/"` → `/polar/endpoint`
 
-### plugin
+### `plugin`
 **Type**: `BetterAuthPlugin` (server) or `BetterAuthClientPlugin` (client)  
 **Required**: `true`
 
 The plugin to wrap with the alias prefix.
 
+### `options?`
+<Tabs items={["server", "client"]} defaultValue="server">
+    <Tab value="server">
+    **Type**: `AliasOptions`  
+    **Required**: `false`
+
+    Options for configuring how the alias plugin modifies the wrapped plugin's behavior.
+
+    **Available options:**
+
+    - **excludeEndpoints?**: `string[]` — Endpoints that should not be prefixed with the alias.
+    - **prefixTypeInference?**: `boolean` — Modifies `$Infer` types to avoid naming collisions when using multiple aliased plugins.
+    Defaults to `false`.
+    - **prefixEndpointMethods?**: `boolean` — Derives a camelCase prefix for endpoint methods. Defaults to `false`.
+    </Tab>
+    <Tab value="client">
+    **Type**: `AliasClientOptions`  
+    **Required**: `false`
+
+    Options for configuring how the alias client modifies the wrapped plugin's behavior.
+
+    **Available options:**
+
+    - **excludeEndpoints?**: `LiteralString[]` — Endpoints that should not be prefixed with the alias.
+    - **prefixAtoms?**: `boolean` — Modifies atom keys to prevent collisions across aliased clients. Defaults to `false`.
+    - **prefixTypeInference?**: `boolean` — Modifies `$Infer` types to avoid naming collisions when using multiple aliased clients.
+    Defaults to `false`.
+    - **includeEndpoints?**: `LiteralString[]` — Additional endpoints that should be prefixed. Use this in conjunction with the compat
+    plugin to define endpoints that should be prefixed and are not present in the plugin's pathMethods.
+
+    </Tab>
+</Tabs>
+
 ## How it Works
 
 The alias plugin modifies the wrapped plugin by:
 
-1. **Prefixing all endpoint paths** - All endpoints get the specified prefix
-2. **Updating middleware paths** - Middlewares are adjusted to match new paths
-3. **Modifying hook matchers** - Hooks continue to work with prefixed paths
-4. **Adjusting rate limit rules** - Rate limiting works correctly with new paths
-5. **Preserving all functionality** - The wrapped plugin works exactly the same, just with different paths
+1. **Prefixing all endpoint paths** — All endpoints get the specified prefix
+2. **Updating middleware paths** — Middlewares are adjusted to match new paths
+3. **Modifying hook matchers** — Hooks continue to work with prefixed paths
+4. **Adjusting rate limit rules** — Rate limiting works correctly with new paths
+5. **Preserving all functionality** — The wrapped plugin works exactly the same, just with different paths
+
+## Compatibility Plugin
+
+The compat plugin wraps another client plugin to preserve interoperability
+with an aliased plugin by selectively rewriting requests and atom keys.
+It only rewrites endpoint paths and atoms that are explicitly included
+(or inferred from the aliased plugin), leaving all other behavior untouched.
+
+### Basic Usage
+
+To use the compat plugin
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { aliasClient, aliasCompatClient } from "better-auth/client/plugins";
+
+const aliasedPlugin = aliasClient("/v1", somePlugin()); // [!code highlight]
+
+export const authClient = createAuthClient({
+    plugins: [
+        aliasedPlugin,
+        // Always pass the compat plugin after the aliased plugin
+        aliasCompatClient(aliasedPlugin, otherPlugin()) // [!code highlight]
+        // or aliasedPlugin.compat(otherPlugin())
+    ],
+});
+```
+
+### Configuration
+
+### `aliasedPlugin` [!toc]
+**Type**: `BetterAuthClientPlugin`  
+**Required**: `true`
+
+The aliased plugin indicating which parts need to be rewritten.
+
+### `plugin` [!toc]
+**Type**: `BetterAuthClientPlugin`  
+**Required**: `true`
+
+The plugin to wrap with the compat plugin.
+
+### `options?` [!toc]
+**Type**: `AliasCompatClientOptions`  
+**Required**: `false`
+
+Options for configuring how the compat plugin modifies the wrapped plugin's behavior.
+
+**Available options**:
+
+- **includeEndpoints?**: `LiteralString[]` — Additional endpoints that should be prefixed.
+Use this to define endpoints that should be prefixed and are not present in the plugin's pathMethods.
+
+### How it Works
+
+The compat plugin modifies the wrapped plugin by:
+
+1. **Prefixing specific endpoint paths** - Only included endpoints are prefixed to match the aliased plugin
+2. **Modifying specific atoms** - Atom keys are adjusted to match aliased signals
+
+This ensures both plugins can interoperate smoothly, without affecting other endpoints or atoms.
 
 ## Examples
 
@@ -125,9 +219,9 @@ Use aliases to version your authentication API:
 export const auth = betterAuth({
     plugins: [
         alias("/v1", oldPlugin()),
-        alias("/v2", newPlugin())
-    ]
-})
+        alias("/v2", newPlugin()),
+    ],
+});
 ```
 
 ### Service Separation
@@ -138,17 +232,17 @@ Separate authentication for different services:
 export const auth = betterAuth({
     plugins: [
         alias("/admin", adminPlugin()),
-        alias("/customer", customerPlugin())
-    ]
-})
+        alias("/customer", customerPlugin()),
+    ],
+});
 ```
 
 ## Best Practices
 
-1. **Use consistent prefixes** - Always use the same prefix on both server and client
-2. **Keep prefixes short but descriptive** - e.g., `/stripe` not `/stripe-payment-provider`
-3. **Document your structure** - Keep track of aliased endpoints in your API docs
-4. **Avoid deep nesting** - While possible, deeply nested aliases can be confusing
+1. **Use consistent prefixes** — Always use the same prefix on both server and client
+2. **Keep prefixes short but descriptive** — e.g., `/stripe` not `/stripe-payment-provider`
+3. **Document your structure** — Keep track of aliased endpoints in your API docs
+4. **Avoid deep nesting** — While possible, deeply nested aliases can be confusing
 
 <Callout type="info">
 Remember to use the same prefix on both the server and client sides to ensure proper functionality.

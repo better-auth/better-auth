@@ -16,13 +16,13 @@ describe("Alias Plugin", async () => {
 	const { auth, customFetchImpl } = await getTestInstance({
 		plugins: [
 			alias("/polar", createMockPlugin("polar"), {
-				unstable_prefixEndpointMethods: true,
+				prefixEndpointMethods: true,
 			}),
 			alias("/stripe", createMockPlugin("payment"), {
-				unstable_prefixEndpointMethods: true,
+				prefixEndpointMethods: true,
 			}),
 			alias("/dodo", createMockPlugin("payment"), {
-				unstable_prefixEndpointMethods: true,
+				prefixEndpointMethods: true,
 			}),
 		],
 	});

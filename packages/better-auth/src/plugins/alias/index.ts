@@ -24,7 +24,7 @@ export type InferAliasedPlugin<
 > = Omit<T, "endpoints" | "$Infer"> & {
 	endpoints: {
 		[K in keyof T["endpoints"] &
-			string as O["unstable_prefixEndpointMethods"] extends true
+			string as O["prefixEndpointMethods"] extends true
 			? TransformEndpointKey<K, Prefix>
 			: K]: IsClient extends false
 			? T["endpoints"][K]
@@ -71,9 +71,10 @@ export type AliasOptions = {
 	 *
 	 * @default false
 	 */
-	unstable_prefixEndpointMethods?: boolean;
+	prefixEndpointMethods?: boolean;
 	/**
-	 * If `true`, adds a prefix `$Infer` types.
+	 * Modifies `$Infer` types to avoid naming collisions
+	 * when using multiple aliased plugins.
 	 *
 	 * @default false
 	 */
@@ -124,7 +125,7 @@ export function alias<
 			const newPath = options?.excludeEndpoints?.includes(originalPath)
 				? originalPath
 				: resolveNewPath(originalPath, cleanPrefix);
-			const newKey = !options?.unstable_prefixEndpointMethods
+			const newKey = !options?.prefixEndpointMethods
 				? key
 				: toCamelCase(newPath);
 

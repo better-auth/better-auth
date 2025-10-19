@@ -213,7 +213,7 @@ describe("aliasClient plugin", () => {
 		} satisfies BetterAuthClientPlugin;
 
 		const aliased = aliasClient("/app", plugin, {
-			unstable_prefixAtoms: true,
+			prefixAtoms: true,
 		});
 
 		// Call getAtoms manually to lazy load available signals
@@ -310,7 +310,7 @@ describe("aliasClient plugin", () => {
 			baseURL: "http://localhost:3000",
 			plugins: [
 				aliasClient("/polar", createMockClientPlugin("polar"), {
-					unstable_prefixAtoms: true,
+					prefixAtoms: true,
 				}),
 			],
 		});
@@ -362,7 +362,7 @@ describe("aliasCompatClient plugin", () => {
 		} satisfies BetterAuthClientPlugin;
 
 		const aliased = aliasClient("/app", plugin, {
-			unstable_prefixAtoms: true,
+			prefixAtoms: true,
 		});
 		aliased.getAtoms({} as any, {});
 		const compat = aliased.compat({
@@ -388,7 +388,7 @@ describe("aliasCompatClient plugin", () => {
 		});
 
 		const plugin = aliasClient("/test", createMockClientPlugin("payment"), {
-			unstable_prefixAtoms: true,
+			prefixAtoms: true,
 		});
 
 		const client = createSolidClient({

@@ -100,8 +100,7 @@ type ExtendGetAtoms<
 				fetch: F,
 				options: O,
 			) => {
-				[K in keyof Atoms &
-					string as Options["unstable_prefixAtoms"] extends true
+				[K in keyof Atoms & string as Options["prefixAtoms"] extends true
 					? `${K}${Capitalize<CamelCasePrefix<P>>}`
 					: K]: Atoms[K];
 			};
@@ -121,7 +120,7 @@ type ExtendEndpoints<
 				Prefix,
 				{
 					// make endpoints distinct
-					unstable_prefixEndpointMethods: true;
+					prefixEndpointMethods: true;
 				},
 				true
 			>
@@ -149,7 +148,7 @@ export type InferAliasCompatClientPlugin<
 	O extends AliasCompatClientOptions,
 > = Omit<T, "atomListeners"> & {
 	atomListeners?: () => ClientAtomListener[] | undefined;
-}; // TODO:
+};
 
 type InferAliasedClientPlugin_base<
 	Prefix extends LiteralString,
@@ -215,17 +214,18 @@ export type AliasClientOptions = {
 	 */
 	excludeEndpoints?: LiteralString[];
 	/**
-	 * If `true`, adds a prefix `$Infer` types.
+	 * Modifies `$Infer` types to avoid naming collisions
+	 * when using multiple aliased clients.
 	 *
 	 * @default false
 	 */
 	prefixTypeInference?: boolean;
 	/**
-	 * If `true`, adds an prefix to atoms.
+	 * Modifies atom keys to prevent collisions across aliased clients.
 	 *
 	 * @default false
 	 */
-	unstable_prefixAtoms?: boolean;
+	prefixAtoms?: boolean;
 };
 
 /**
@@ -289,7 +289,7 @@ export function aliasClient<
 				signal:
 					listener.signal !== "$sessionSignal" &&
 					lazySignals?.includes(`${listener.signal}`) &&
-					!!options?.unstable_prefixAtoms
+					!!options?.prefixAtoms
 						? `${listener.signal}${capitalizeFirstLetter(camelCasePrefix)}`
 						: listener.signal,
 				matcher: (path: string) => {
@@ -372,7 +372,7 @@ export function aliasClient<
 					(key) => key.charAt(0) === "$",
 				);
 			}
-			return options?.unstable_prefixAtoms
+			return options?.prefixAtoms
 				? Object.fromEntries(
 						Object.entries(originalAtoms).map(([key, value]) => {
 							return [`${key}${capitalizeFirstLetter(camelCasePrefix)}`, value];
@@ -485,7 +485,7 @@ export function aliasCompatClient<
 				signal:
 					listener.signal !== "$sessionSignal" &&
 					signals?.includes(`${listener.signal}`) &&
-					aliasOptions?.unstable_prefixAtoms
+					aliasOptions?.prefixAtoms
 						? `${listener.signal}${capitalizeFirstLetter(camelCasePrefix)}`
 						: listener.signal,
 				matcher: (path: string) => {
