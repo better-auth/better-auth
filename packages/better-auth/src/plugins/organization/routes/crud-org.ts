@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
@@ -708,7 +708,6 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				session.session.activeOrganizationId;
 			// return null if no organization is found to avoid erroring since this is a usual scenario
 			if (!organizationId) {
-				ctx.context.logger.info("No active organization found, returning null");
 				return ctx.json(null, {
 					status: 200,
 				});

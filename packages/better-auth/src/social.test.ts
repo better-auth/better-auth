@@ -11,6 +11,8 @@ import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
 import Database from "better-sqlite3";
 import { getMigrations } from "./db";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 let server = new OAuth2Server();
 let port = 8005;
@@ -758,9 +760,15 @@ describe("updateAccountOnSignIn", async () => {
 		const userAccounts = await ctx.internalAdapter.findAccounts(
 			session.data?.user.id!,
 		);
-		await ctx.internalAdapter.updateAccount(userAccounts[0]!.id, {
-			accessToken: "new-access-token",
-		});
+		await runWithEndpointContext(
+			{
+				context: ctx,
+			} as GenericEndpointContext,
+			() =>
+				ctx.internalAdapter.updateAccount(userAccounts[0]!.id, {
+					accessToken: "new-access-token",
+				}),
+		);
 
 		//re-sign in
 		const signInRes2 = await client.signIn.social({
