@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/stripe",
   "author": "Bereket Engida",
-  "version": "1.4.0-beta.11",
+  "version": "1.4.0-beta.12",
   "type": "module",
   "main": "dist/index.js",
   "license": "MIT",
@@ -50,13 +50,13 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "stripe": "^18"
+    "stripe": "^18 || ^19"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "stripe": "^18.5.0",
+    "stripe": "^19.1.0",
     "tsdown": "catalog:"
   }
 }
