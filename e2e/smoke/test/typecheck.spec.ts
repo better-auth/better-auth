@@ -2,18 +2,32 @@ import { test } from "node:test";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+import assert from "node:assert/strict";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
+
+// TODO: some tests are not working as expected
 [
-	"tsconfig-declaration",
-	"tsconfig-exact-optional-property-types",
-	"tsconfig-verbatim-module-syntax-node10",
-	"tsconfig-isolated-module-bundler",
-].forEach((dir) => {
-	test(`typecheck ${dir}`, () => {
-		spawnSync("pnpm", ["run", "typecheck"], {
+	{ dir: "tsconfig-declaration", todo: false },
+	{ dir: "tsconfig-exact-optional-property-types", todo: true },
+	{ dir: "tsconfig-verbatim-module-syntax-node10", todo: true },
+	{ dir: "tsconfig-isolated-module-bundler", todo: false },
+].forEach(({ dir, todo }) => {
+	test(`typecheck ${dir}`, { todo }, () => {
+		const cwd = resolve(fixturesDir, dir);
+		const output = spawnSync("pnpm", ["run", "typecheck"], {
 			stdio: "inherit",
-			cwd: resolve(fixturesDir, dir),
+			cwd,
 		});
+		assert.equal(
+			output.error,
+			undefined,
+			`Running typecheck in ${cwd} should not throw an error`,
+		);
+		assert.equal(
+			output.status,
+			0,
+			`Running typecheck in ${cwd} should exit with status 0`,
+		);
 	});
 });
