@@ -384,7 +384,7 @@ describe("aliasClient plugin", () => {
 				}),
 			],
 		});
-		
+
 		const res = client.useQueryAtomPolar();
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1);

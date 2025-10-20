@@ -112,7 +112,7 @@ type ExtendGetAtoms<
 type ExtendEndpoints<
 	T extends BetterAuthClientPlugin,
 	Prefix extends string,
-	O extends AliasClientOptions
+	O extends AliasClientOptions,
 > = {
 	$InferServerPlugin: T["$InferServerPlugin"] extends infer P extends
 		BetterAuthPlugin
@@ -296,13 +296,15 @@ export function aliasClient<
 						: listener.signal,
 				matcher: (path: string) => {
 					// Check if the path starts with the prefix, then strip it and check the original matcher
-					if (path.startsWith(cleanPrefix) && !options?.excludeEndpoints?.includes(path)) {
+					const excluded = options?.excludeEndpoints?.includes(path)
+					if (
+						path.startsWith(cleanPrefix) &&
+						!excluded
+					) {
 						const originalPath = path.slice(cleanPrefix.length);
 						return listener.matcher(originalPath);
-					} else {
-						if (options?.excludeEndpoints?.includes(path)) {
-							return listener.matcher(path);
-						}
+					} else if (excluded) {
+						return listener.matcher(path);
 					}
 					return false;
 				},
@@ -395,27 +397,27 @@ export function aliasClient<
 		}));
 	}
 
-	// // Wrap the $InferServerPlugin if it exists
-	// if (plugin.$InferServerPlugin) {
-	// 	const wrappedServerPlugin: BetterAuthPlugin = {
-	// 		...plugin.$InferServerPlugin,
-	// 	};
+	// Wrap the $InferServerPlugin if it exists
+	if (plugin.$InferServerPlugin) {
+		const wrappedServerPlugin: BetterAuthPlugin = {
+			...plugin.$InferServerPlugin,
+		};
 
-	// 	if (plugin.$InferServerPlugin.endpoints) {
-	// 		const prefixedEndpoints: Record<string, any> = {};
-	// 		for (const [key, endpoint] of Object.entries(
-	// 			plugin.$InferServerPlugin.endpoints,
-	// 		)) {
-	// 			const clonedEndpoint = { ...endpoint };
-	// 			const originalPath = (endpoint as any).path || `/${key}`;
-	// 			clonedEndpoint.path = `${cleanPrefix}${originalPath}`;
-	// 			prefixedEndpoints[key] = clonedEndpoint;
-	// 		}
-	// 		wrappedServerPlugin.endpoints = prefixedEndpoints;
-	// 	}
+		if (plugin.$InferServerPlugin.endpoints) {
+			const prefixedEndpoints: Record<string, any> = {};
+			for (const [key, endpoint] of Object.entries(
+				plugin.$InferServerPlugin.endpoints,
+			)) {
+				const clonedEndpoint = { ...endpoint };
+				const originalPath = (endpoint as any).path || `/${key}`;
+				clonedEndpoint.path = `${cleanPrefix}${originalPath}`;
+				prefixedEndpoints[key] = clonedEndpoint;
+			}
+			wrappedServerPlugin.endpoints = prefixedEndpoints;
+		}
 
-	// 	aliasedPlugin.$InferServerPlugin = wrappedServerPlugin;
-	// }
+		aliasedPlugin.$InferServerPlugin = wrappedServerPlugin;
+	}
 
 	Object.assign(aliasedPlugin, {
 		compat: aliasCompatClient.bind(
@@ -496,13 +498,15 @@ export function aliasCompatClient<
 						: listener.signal,
 				matcher: (path: string) => {
 					// Check if the path starts with the prefix, then strip it and check the original matcher
-					if (path.startsWith(prefix) && !aliasOptions?.excludeEndpoints?.includes(path)) {
+					const excluded = aliasOptions?.excludeEndpoints?.includes(path)
+					if (
+						path.startsWith(prefix) &&
+						!excluded
+					) {
 						const originalPath = path.slice(prefix.length);
 						return listener.matcher(originalPath);
-					} else {
-						if (aliasOptions?.excludeEndpoints?.includes(path)) {
-							return listener.matcher(path);
-						}
+					} else if (excluded) {
+						return listener.matcher(path);
 					}
 					return false;
 				},
