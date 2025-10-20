@@ -22,6 +22,7 @@ import type { BindingContext } from "samlify/types/src/entity";
 import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { setSessionCookie } from "better-auth/cookies";
+import { symmetricEncrypt, symmetricDecrypt } from "better-auth/crypto";
 import type { FlowResult } from "samlify/types/src/flow";
 import { XMLValidator } from "fast-xml-parser";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
@@ -252,6 +253,11 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	trustEmailVerified?: boolean;
+	/**
+	 * Enables encryption at rest for sensitive fields (e.g. OIDC clientSecret).
+	 * When true, values are encrypted with BETTER_AUTH_SECRET before storing.
+	 */
+	encryptionEnabled?: boolean;
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -800,6 +806,14 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 
+					const clientSecretToStore =
+						options?.encryptionEnabled && body.oidcConfig?.clientSecret
+							? await symmetricEncrypt({
+									key: ctx.context.secret,
+									data: body.oidcConfig.clientSecret,
+								})
+							: body.oidcConfig?.clientSecret;
+
 					const provider = await ctx.context.adapter.create<
 						Record<string, any>,
 						SSOProvider
@@ -812,7 +826,7 @@ export const sso = (options?: SSOOptions) => {
 								? JSON.stringify({
 										issuer: body.issuer,
 										clientId: body.oidcConfig.clientId,
-										clientSecret: body.oidcConfig.clientSecret,
+										clientSecret: clientSecretToStore,
 										authorizationEndpoint:
 											body.oidcConfig.authorizationEndpoint,
 										tokenEndpoint: body.oidcConfig.tokenEndpoint,
@@ -859,9 +873,18 @@ export const sso = (options?: SSOOptions) => {
 
 					return ctx.json({
 						...provider,
-						oidcConfig: JSON.parse(
-							provider.oidcConfig as unknown as string,
-						) as OIDCConfig,
+						oidcConfig: await (async () => {
+							const cfg = JSON.parse(
+								provider.oidcConfig as unknown as string,
+							) as OIDCConfig;
+							if (options?.encryptionEnabled && cfg?.clientSecret) {
+								cfg.clientSecret = await symmetricDecrypt({
+									key: ctx.context.secret,
+									data: cfg.clientSecret,
+								});
+							}
+							return cfg;
+						})(),
 						samlConfig: JSON.parse(
 							provider.samlConfig as unknown as string,
 						) as SAMLConfig,
@@ -1088,17 +1111,24 @@ export const sso = (options?: SSOOptions) => {
 									},
 								],
 							})
-							.then((res) => {
+							.then(async (res) => {
 								if (!res) {
 									return null;
 								}
+								const parsedOidc = res.oidcConfig
+									? safeJsonParse<OIDCConfig>(
+											res.oidcConfig as unknown as string,
+										) || undefined
+									: undefined;
+								if (options?.encryptionEnabled && parsedOidc?.clientSecret) {
+									parsedOidc.clientSecret = await symmetricDecrypt({
+										key: ctx.context.secret,
+										data: parsedOidc.clientSecret,
+									});
+								}
 								return {
 									...res,
-									oidcConfig: res.oidcConfig
-										? safeJsonParse<OIDCConfig>(
-												res.oidcConfig as unknown as string,
-											) || undefined
-										: undefined,
+									oidcConfig: parsedOidc,
 									samlConfig: res.samlConfig
 										? safeJsonParse<SAMLConfig>(
 												res.samlConfig as unknown as string,
@@ -1267,14 +1297,21 @@ export const sso = (options?: SSOOptions) => {
 									},
 								],
 							})
-							.then((res) => {
+							.then(async (res) => {
 								if (!res) {
 									return null;
 								}
+								const parsed =
+									safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined;
+								if (options?.encryptionEnabled && parsed?.clientSecret) {
+									parsed.clientSecret = await symmetricDecrypt({
+										key: ctx.context.secret,
+										data: parsed.clientSecret,
+									});
+								}
 								return {
 									...res,
-									oidcConfig:
-										safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined,
+									oidcConfig: parsed,
 								} as SSOProvider;
 							});
 					}
