@@ -837,7 +837,7 @@ importers:
         specifier: 4.33.2
         version: 4.33.2(@cloudflare/workers-types@4.20250903.0)
 
-  e2e/smoke/test/fixtures/tsconfig-decelration:
+  e2e/smoke/test/fixtures/tsconfig-declaration:
     dependencies:
       '@better-auth/sso':
         specifier: workspace:*
@@ -17538,7 +17538,9 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
