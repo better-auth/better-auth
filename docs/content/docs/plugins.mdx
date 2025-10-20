@@ -1,0 +1,236 @@
+---
+title: Plugins Overview
+description: Explore all available Better Auth plugins for authentication, authorization, and user management.
+---
+
+Better Auth comes with a rich collection of built-in plugins that extend the core authentication functionality. These plugins provide everything from passwordless authentication to advanced security features.
+
+## All Plugins
+
+Here's a complete list of all 26 built-in Better Auth plugins:
+
+| Plugin                                                     | Description                                                 | Category                 |
+|------------------------------------------------------------|-------------------------------------------------------------|--------------------------|
+| [Admin](/docs/plugins/admin)                               | Role-based access control and user management               | Security & Authorization |
+| [Anonymous](/docs/plugins/anonymous)                       | Anonymous user sessions                                     | Authentication           |
+| [API Key](/docs/plugins/api-key)                           | API key authentication and management                       | Security & Authorization |
+| [Bearer](/docs/plugins/bearer)                             | Bearer token authentication                                 | Session & Token          |
+| [CAPTCHA](/docs/plugins/captcha)                           | Bot protection (reCAPTCHA, Turnstile, hCaptcha, CaptchaFox) | Security & Authorization |
+| [Custom Session](/docs/plugins/custom-session)             | Custom session management                                   | Session & Token          |
+| [Device Authorization](/docs/plugins/device-authorization) | OAuth 2.0 Device Authorization Flow                         | OAuth & Identity         |
+| [Email OTP](/docs/plugins/email-otp)                       | Email-based one-time passwords                              | Authentication           |
+| [Generic OAuth](/docs/plugins/generic-oauth)               | Generic OAuth2 provider support                             | OAuth & Identity         |
+| [Have I Been Pwned](/docs/plugins/have-i-been-pwned)       | Password breach checking                                    | Security & Authorization |
+| [JWT](/docs/plugins/jwt)                                   | JWT token generation and management                         | Session & Token          |
+| [Last Login Method](/docs/plugins/last-login-method)       | Track user's last login method                              | Developer Tools          |
+| [Magic Link](/docs/plugins/magic-link)                     | Magic link passwordless authentication                      | Authentication           |
+| [Model Context Protocol](/docs/plugins/mcp)                | MCP support for AI-powered development                      | Developer Tools          |
+| [Multi Session](/docs/plugins/multi-session)               | Multiple concurrent sessions                                | Session & Token          |
+| [OAuth Proxy](/docs/plugins/oauth-proxy)                   | OAuth proxy functionality                                   | OAuth & Identity         |
+| [OIDC Provider](/docs/plugins/oidc-provider)               | OpenID Connect provider implementation                      | OAuth & Identity         |
+| [One Tap](/docs/plugins/one-tap)                           | Google One Tap authentication                               | Authentication           |
+| [One Time Token](/docs/plugins/one-time-token)             | Generic one-time token system                               | Session & Token          |
+| [OpenAPI](/docs/plugins/open-api)                          | OpenAPI documentation generation                            | Developer Tools          |
+| [Organization](/docs/plugins/organization)                 | Multi-tenant organizations and teams                        | Security & Authorization |
+| [Passkey](/docs/plugins/passkey)                           | WebAuthn/passkey passwordless authentication                | Authentication           |
+| [Phone Number](/docs/plugins/phone-number)                 | Phone number authentication support                         | Authentication           |
+| [Sign-In With Ethereum](/docs/plugins/siwe)                | Web3 authentication using Ethereum wallets                  | Authentication           |
+| [Two-Factor Authentication](/docs/plugins/2fa)             | TOTP, backup codes, and OTP-based 2FA                       | Security & Authorization |
+| [Username](/docs/plugins/username)                         | Username authentication                                     | Authentication           |
+
+## Plugin Categories
+
+### Authentication Methods
+
+Enhance your authentication with various methods beyond traditional email/password:
+
+<Cards>
+  <Card title="Passkey" href="/docs/plugins/passkey">
+    WebAuthn/FIDO2 passwordless authentication using biometrics and security keys
+  </Card>
+  <Card title="Magic Link" href="/docs/plugins/magic-link">
+    Email-based passwordless authentication with one-click login links
+  </Card>
+  <Card title="Email OTP" href="/docs/plugins/email-otp">
+    One-time password codes sent via email for secure authentication
+  </Card>
+  <Card title="Username" href="/docs/plugins/username">
+    Add username support for user authentication
+  </Card>
+  <Card title="Phone Number" href="/docs/plugins/phone-number">
+    Phone number-based authentication support
+  </Card>
+  <Card title="Anonymous" href="/docs/plugins/anonymous">
+    Allow anonymous user sessions before full registration
+  </Card>
+  <Card title="One Tap" href="/docs/plugins/one-tap">
+    Google One Tap integration for quick sign-in
+  </Card>
+  <Card title="Sign-In With Ethereum" href="/docs/plugins/siwe">
+    Web3 authentication using Ethereum wallets (SIWE)
+  </Card>
+</Cards>
+
+### Security & Authorization
+
+Add extra security layers and access control to your application:
+
+<Cards>
+  <Card title="Two-Factor Authentication" href="/docs/plugins/2fa">
+    TOTP, backup codes, and OTP-based two-factor authentication
+  </Card>
+  <Card title="Admin" href="/docs/plugins/admin">
+    Role-based access control and comprehensive user management
+  </Card>
+  <Card title="Organization" href="/docs/plugins/organization">
+    Multi-tenant organizations with teams, roles, and permissions
+  </Card>
+  <Card title="API Key" href="/docs/plugins/api-key">
+    API key generation and authentication for service-to-service communication
+  </Card>
+  <Card title="CAPTCHA" href="/docs/plugins/captcha">
+    Bot protection with Google reCAPTCHA, Cloudflare Turnstile, hCaptcha, and more
+  </Card>
+  <Card title="Have I Been Pwned" href="/docs/plugins/have-i-been-pwned">
+    Check passwords against known data breaches
+  </Card>
+</Cards>
+
+### OAuth & Identity Providers
+
+Extend OAuth capabilities and integrate with identity providers:
+
+<Cards>
+  <Card title="Generic OAuth" href="/docs/plugins/generic-oauth">
+    Connect to any OAuth2 provider with custom configuration
+  </Card>
+  <Card title="OIDC Provider" href="/docs/plugins/oidc-provider">
+    Turn your app into an OpenID Connect identity provider
+  </Card>
+  <Card title="OAuth Proxy" href="/docs/plugins/oauth-proxy">
+    Proxy OAuth requests for enhanced security and control
+  </Card>
+  <Card title="Device Authorization" href="/docs/plugins/device-authorization">
+    OAuth 2.0 Device Authorization Flow for limited-input devices
+  </Card>
+</Cards>
+
+### Session & Token Management
+
+Customize how sessions and tokens are handled:
+
+<Cards>
+  <Card title="Multi-Session" href="/docs/plugins/multi-session">
+    Support multiple concurrent sessions per user
+  </Card>
+  <Card title="Custom Session" href="/docs/plugins/custom-session">
+    Customize session storage and management behavior
+  </Card>
+  <Card title="JWT" href="/docs/plugins/jwt">
+    Generate and manage JSON Web Tokens
+  </Card>
+  <Card title="Bearer" href="/docs/plugins/bearer">
+    Bearer token authentication support
+  </Card>
+  <Card title="One-Time Token" href="/docs/plugins/one-time-token">
+    Generate and validate one-time use tokens
+  </Card>
+</Cards>
+
+### Developer Experience & Integration
+
+Tools and utilities to improve development workflow:
+
+<Cards>
+  <Card title="OpenAPI" href="/docs/plugins/open-api">
+    Automatic OpenAPI/Swagger documentation generation
+  </Card>
+  <Card title="Model Context Protocol" href="/docs/plugins/mcp">
+    MCP support for AI-powered development tools
+  </Card>
+  <Card title="Last Login Method" href="/docs/plugins/last-login-method">
+    Track and display the user's last authentication method
+  </Card>
+</Cards>
+
+## Using Plugins
+
+### Server-Side Setup
+
+Add plugins to your Better Auth configuration:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { admin, twoFactor, passkey } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    database: {
+        // your database config
+    },
+    plugins: [
+        admin(),
+        twoFactor(),
+        passkey({
+            rpName: "My App",
+            rpID: "example.com"
+        })
+    ]
+})
+```
+
+### Client-Side Setup
+
+Most plugins require both server and client configuration:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { adminClient, twoFactorClient, passkeyClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+    baseURL: "http://localhost:3000",
+    plugins: [
+        adminClient(),
+        twoFactorClient(),
+        passkeyClient()
+    ]
+})
+```
+
+## CLI Command
+
+List all available plugins using the CLI:
+
+```bash
+# List all plugins
+npx @better-auth/cli list
+
+# View detailed documentation for a specific plugin
+npx @better-auth/cli list passkey
+
+# Show verbose information for all plugins
+npx @better-auth/cli list --verbose
+```
+
+## Community Plugins
+
+In addition to built-in plugins, Better Auth supports community-created plugins:
+
+<Card title="Community Plugins" href="/docs/plugins/community-plugins">
+  Explore plugins created by the Better Auth community
+</Card>
+
+## Creating Custom Plugins
+
+Learn how to create your own plugins to extend Better Auth:
+
+<Card title="Plugin Development" href="/docs/concepts/plugins">
+  Guide to creating custom Better Auth plugins
+</Card>
+
+## Need Help?
+
+If you need assistance choosing the right plugins or have questions:
+
+- Check individual plugin documentation for detailed setup guides
+- Visit our [GitHub Discussions](https://github.com/better-auth/better-auth/discussions)
+- Join our [Discord community](https://discord.gg/better-auth)
