@@ -4,9 +4,9 @@ import type {
 	ClientAtomListener,
 } from "@better-auth/core";
 import type { LiteralString } from "../../types/helper";
-import type { InferAliasedPlugin } from ".";
 import type {
 	CamelCasePrefix,
+	InferAliasedPlugin_base,
 	MatchesExcluded,
 	NormalizePrefix,
 	TransformNormalizedPrefix,
@@ -18,6 +18,7 @@ import {
 	resolvePath,
 	SPECIAL_ENDPOINTS,
 	toCamelCase,
+	updateMatcher,
 	type SpecialEndpoints,
 } from "./utils";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -116,9 +117,9 @@ type ExtendEndpoints<
 > = {
 	$InferServerPlugin: T["$InferServerPlugin"] extends infer P extends
 		BetterAuthPlugin
-		? InferAliasedPlugin<
-				P,
+		? InferAliasedPlugin_base<
 				Prefix,
+				P,
 				{
 					// make endpoints distinct
 					prefixEndpointMethods: true;
@@ -294,17 +295,11 @@ export function aliasClient<
 					!!options?.prefixAtoms
 						? `${listener.signal}${capitalizeFirstLetter(camelCasePrefix)}`
 						: listener.signal,
-				matcher: (path: string) => {
-					// Check if the path starts with the prefix, then strip it and check the original matcher
-					const excluded = options?.excludeEndpoints?.includes(path);
-					if (path.startsWith(cleanPrefix) && !excluded) {
-						const originalPath = path.slice(cleanPrefix.length);
-						return listener.matcher(originalPath);
-					} else if (excluded) {
-						return listener.matcher(path);
-					}
-					return false;
-				},
+				matcher: updateMatcher({
+					matcher: listener.matcher,
+					prefix: cleanPrefix,
+					excludeEndpoints: options?.excludeEndpoints,
+				}),
 			}));
 		};
 	}
@@ -493,17 +488,11 @@ export function aliasCompatClient<
 					aliasOptions?.prefixAtoms
 						? `${listener.signal}${capitalizeFirstLetter(camelCasePrefix)}`
 						: listener.signal,
-				matcher: (path: string) => {
-					// Check if the path starts with the prefix, then strip it and check the original matcher
-					const excluded = aliasOptions?.excludeEndpoints?.includes(path);
-					if (path.startsWith(prefix) && !excluded) {
-						const originalPath = path.slice(prefix.length);
-						return listener.matcher(originalPath);
-					} else if (excluded) {
-						return listener.matcher(path);
-					}
-					return false;
-				},
+				matcher: updateMatcher({
+					matcher: listener.matcher,
+					prefix,
+					excludeEndpoints: aliasOptions?.excludeEndpoints,
+				}),
 			}));
 		};
 	}

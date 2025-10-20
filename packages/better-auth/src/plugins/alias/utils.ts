@@ -1,3 +1,5 @@
+import type { HookEndpointContext } from "@better-auth/core";
+
 export const SPECIAL_ENDPOINTS = ["/sign-in/", "/sign-up/"] as const;
 
 export type SpecialEndpoints = (typeof SPECIAL_ENDPOINTS)[number];
@@ -54,4 +56,30 @@ export function resolvePath(url: string, baseURL?: string) {
 	}
 
 	return { path: resolvedPath, basePath: basePath ?? "/api/auth" };
+}
+
+export function updateMatcher<
+	M extends
+		| ((ctx: string) => boolean)
+		| ((ctx: HookEndpointContext) => boolean),
+>(cfg: { prefix: string; excludeEndpoints?: string[]; matcher: M }) {
+	return ((input: string | HookEndpointContext) => {
+		const path = typeof input === "string" ? input : input.path;
+		const excluded = cfg.excludeEndpoints?.includes(path) ?? false;
+
+		let ctx: string | HookEndpointContext;
+		if (path.startsWith(cfg.prefix) && !excluded) {
+			const strippedPath = path.slice(cfg.prefix.length);
+			ctx =
+				typeof input === "string"
+					? strippedPath
+					: { ...input, path: strippedPath };
+		} else if (excluded) {
+			ctx = input;
+		} else {
+			return false;
+		}
+		// @ts-expect-error
+		return cfg.matcher(ctx);
+	}) as M;
 }

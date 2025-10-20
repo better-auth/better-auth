@@ -1,64 +1,21 @@
 import type { AuthEndpoint } from "../../api";
-import type { Endpoint } from "better-call";
 import type { LiteralString } from "../../types/helper";
 import type { BetterAuthPlugin } from "@better-auth/core";
-import type {
-	CamelCasePrefix,
-	MatchesExcluded,
-	NormalizePrefix,
-	TransformEndpointKey,
-} from "./types";
+import type { InferAliasedPlugin_base } from "./types";
 import {
 	SPECIAL_ENDPOINTS,
 	toCamelCase,
 	normalizePrefix,
-	type SpecialEndpoints,
 	normalizePath,
+	updateMatcher,
 } from "./utils";
+import { BetterAuthError } from "@better-auth/core/error";
 
 export type InferAliasedPlugin<
-	T extends BetterAuthPlugin,
 	Prefix extends string,
+	T extends BetterAuthPlugin,
 	O extends AliasOptions,
-	IsClient extends boolean = false,
-> = Omit<T, "endpoints" | "$Infer"> & {
-	endpoints: {
-		[K in keyof T["endpoints"] &
-			string as O["prefixEndpointMethods"] extends true
-			? TransformEndpointKey<K, Prefix>
-			: K]: IsClient extends false
-			? T["endpoints"][K]
-			: T["endpoints"][K] extends Endpoint<
-						infer OldPath,
-						infer Options,
-						infer Handler
-					>
-				? Handler extends (...args: infer Args) => infer Return
-					? ((...args: Args) => Return) & {
-							options: Options;
-							path: MatchesExcluded<OldPath, O["excludeEndpoints"]> extends true
-								? OldPath
-								: OldPath extends `${NormalizePrefix<SpecialEndpoints>}/${infer R}`
-									? OldPath extends `${infer S}/${R}`
-										? `${S}${NormalizePrefix<Prefix>}${NormalizePrefix<R>}`
-										: `${NormalizePrefix<Prefix>}${OldPath}`
-									: `${NormalizePrefix<Prefix>}${OldPath}`;
-						}
-					: T
-				: T["endpoints"][K];
-	};
-} & (T extends { $Infer: infer I extends Record<string, any> }
-		? {
-				$Infer: O["prefixTypeInference"] extends true
-					? {
-							[K in keyof I &
-								string as `${Capitalize<CamelCasePrefix<Prefix>>}${K}`]: I[K];
-						}
-					: I;
-			}
-		: {
-				$Infer: undefined;
-			});
+> = InferAliasedPlugin_base<Prefix, T, O> & {};
 
 export type AliasOptions = {
 	/**
@@ -84,6 +41,18 @@ export type AliasOptions = {
 	 */
 	excludeEndpoints?: string[];
 };
+
+type InferMeta<AliasedPlugin extends BetterAuthPlugin> = AliasedPlugin extends {
+	"~meta": {
+		prefix: infer P extends string;
+		options?: infer O extends AliasOptions;
+	};
+}
+	? {
+			prefix: P;
+			options: O;
+		}
+	: never;
 
 /**
  * Wraps a plugin and prefixes all its endpoints with a sub-path
@@ -147,24 +116,22 @@ export function alias<
 	}
 
 	if (plugin.hooks) {
-		const updateMatcher = (matcher: (context: any) => boolean) => {
-			return (context: any) => {
-				if (context.path && context.path.startsWith(cleanPrefix)) {
-					const originalPath = context.path.slice(cleanPrefix.length);
-					const modifiedContext = { ...context, path: originalPath };
-					return matcher(modifiedContext);
-				}
-				return false;
-			};
-		};
 		aliasedPlugin.hooks = {
 			before: plugin.hooks?.before?.map((hook) => ({
 				...hook,
-				matcher: updateMatcher(hook.matcher),
+				matcher: updateMatcher({
+					matcher: hook.matcher,
+					prefix: cleanPrefix,
+					excludeEndpoints: options?.excludeEndpoints,
+				}),
 			})),
 			after: plugin.hooks?.after?.map((hook) => ({
 				...hook,
-				matcher: updateMatcher(hook.matcher),
+				matcher: updateMatcher({
+					matcher: hook.matcher,
+					prefix: cleanPrefix,
+					excludeEndpoints: options?.excludeEndpoints,
+				}),
 			})),
 		};
 	}
@@ -172,17 +139,52 @@ export function alias<
 	if (plugin.rateLimit) {
 		aliasedPlugin.rateLimit = plugin.rateLimit.map((rule) => ({
 			...rule,
-			pathMatcher: (path: string) => {
-				if (path.startsWith(cleanPrefix)) {
-					const originalPath = path.slice(cleanPrefix.length);
-					return rule.pathMatcher(originalPath);
-				}
-				return false;
-			},
+			pathMatcher: updateMatcher({
+				matcher: rule.pathMatcher,
+				prefix: cleanPrefix,
+				excludeEndpoints: options?.excludeEndpoints,
+			}),
 		}));
 	}
 
-	return aliasedPlugin as InferAliasedPlugin<T, Prefix, O>;
+	Object.assign(aliasedPlugin, {
+		compat: aliasCompat.bind(null, aliasedPlugin),
+		"~meta": {
+			prefix: cleanPrefix,
+			options,
+		},
+	});
+
+	return aliasedPlugin as any as InferAliasedPlugin<Prefix, T, O>;
+}
+
+export type AliasCompatOptions = {
+	/**
+	 * Additional endpoints that should be prefixed.
+	 */
+	includeEndpoints?: string[];
+};
+
+export function aliasCompat<
+	AliasedPlugin extends BetterAuthPlugin,
+	T extends BetterAuthPlugin,
+	O extends AliasCompatOptions,
+>(aliasedPlugin: AliasedPlugin, plugin: T, options?: O) {
+	if (!("~meta" in aliasedPlugin)) {
+		throw new BetterAuthError(
+			"aliasedPlugin",
+			"Invalid aliasedPlugin provided.",
+		);
+	}
+	const { prefix, options: aliasOptions } = aliasedPlugin[
+		"~meta"
+	] as InferMeta<AliasedPlugin>;
+	const compatPlugin: BetterAuthPlugin = {
+		...plugin,
+	};
+
+	// TODO: Infer
+	return compatPlugin;
 }
 
 function cloneEndpoint<
