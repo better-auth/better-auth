@@ -68,11 +68,43 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
 ## Usage
 
+Note: To encrypt the OIDC clientSecret at rest, enable encryptionEnabled in the SSO plugin configuration. When enabled, the clientSecret is encrypted with BETTER_AUTH_SECRET before storing and decrypted on read.
+
+```ts title="server-setup.ts"
+import { sso } from "@better-auth/sso";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  plugins: [
+    sso({
+      encryptionEnabled: true,
+      // ...other SSO options
+    }),
+  ],
+});
+```
+
 ### Register an OIDC Provider
 
 To register an OIDC provider, use the `registerSSOProvider` endpoint and provide the necessary configuration details for the provider.
 
 A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
+
+Security note: When `encryptionEnabled` is set in the SSO plugin, the OIDC `clientSecret` is encrypted at rest using `BETTER_AUTH_SECRET` and decrypted on read. Ensure only trusted backends can call registration endpoints that return provider configuration. Do not enable this on databases that already contain plaintext client secrets without first migrating them to the encrypted format.
+
+Quick migration example (one-time):
+
+```ts
+import { symmetricEncrypt } from "better-auth/crypto";
+
+// Pseudocode: iterate ssoProvider rows, parse oidcConfig JSON,
+// encrypt the plaintext clientSecret, and save it back.
+const encrypted = await symmetricEncrypt({
+  key: process.env.BETTER_AUTH_SECRET!,
+  data: plainClientSecret,
+});
+// write `encrypted` to `oidcConfig.clientSecret` in your DB
+```
 
 #### Example
 
@@ -730,6 +762,8 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 **trustEmailVerified**: Trust the email verified flag from the provider.
 
+**encryptionEnabled**: Encrypt the OIDC clientSecret at rest using BETTER_AUTH_SECRET. When enabled, API responses include the decrypted clientSecret; restrict access to registration endpoints accordingly. This cannot be turned on if existing client secrets are stored in plaintext; perform a one-time migration first.
+
 <TypeTable
   type={{
     provisionUser: {
@@ -771,6 +805,11 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
         description: "Configure the maximum number of SSO providers a user can register. Set to 0 to disable SSO provider registration.",
         type: "number | function",
         default: 10,
+    },
+    encryptionEnabled: {
+        description: "Encrypt the OIDC clientSecret at rest using BETTER_AUTH_SECRET. API responses return decrypted clientSecret; restrict access to registration endpoints. This cannot be enabled if existing client secrets are stored in plaintext; migrate those records first.",
+        type: "boolean",
+        default: false,
     },
     defaultSSO: {
         description: "Configure a default SSO provider for testing and development. This provider will be used when no matching provider is found in the database.",
