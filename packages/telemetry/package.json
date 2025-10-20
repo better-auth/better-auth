@@ -7,6 +7,7 @@
   "module": "./dist/index.js",
   "exports": {
     ".": {
+      "better-auth-dev-source": "./src/index.ts",
       "import": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
