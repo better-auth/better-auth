@@ -5,7 +5,7 @@ import type {
 	BetterAuthClientOptions,
 	ClientAtomListener,
 } from "@better-auth/core";
-import { redirectPlugin } from "./fetch-plugins";
+import { redirectPlugin, userAgentPlugin } from "./fetch-plugins";
 import { getSessionAtom } from "./session-atom";
 import { parseJSON } from "./parser";
 
@@ -50,6 +50,7 @@ export const getClientConfig = (
 		...restOfFetchOptions,
 		plugins: [
 			lifeCyclePlugin,
+			userAgentPlugin,
 			...(restOfFetchOptions.plugins || []),
 			...(options?.disableDefaultFetchPlugins ? [] : [redirectPlugin]),
 			...pluginsFetchPlugins,
