@@ -99,12 +99,12 @@ export class RPSBenchmark {
 
 		describe("Cold Start", async () => {
 			coldStartBench.add("betterAuth initialization", async () => {
-				const a = betterAuth({
+				const auth = betterAuth({
 					emailAndPassword: { enabled: true },
 					rateLimit: { enabled: false },
 					baseURL: "http://localhost:3000",
 				});
-				await a.handler(new Request("http://localhost:3000/api/auth/ok"));
+				await auth.handler(new Request("http://localhost:3000/api/auth/ok"));
 			});
 		});
 
@@ -149,7 +149,7 @@ export class RPSBenchmark {
 				const cookieSetter = cS(headers);
 				const sessionSetter = sS(headers);
 
-				const f = async () =>
+				const fetchHandler = async () =>
 					client.$fetch(path, {
 						...(endpoint.payload && {
 							body: JSON.stringify(endpoint.payload),
@@ -162,7 +162,7 @@ export class RPSBenchmark {
 					});
 
 				if (debug !== true)
-					bench.add(name, f, {
+					bench.add(name, fetchHandler, {
 						...(setup && {
 							async beforeAll(this, ctx) {
 								const res = await setup({
@@ -230,7 +230,7 @@ export class RPSBenchmark {
 						if (typeof res2 === "object" && "headers" in res2 && res2.headers)
 							headers = res2.headers;
 
-						const res3 = await f();
+						const res3 = await fetchHandler();
 						console.log(name, res3);
 
 						await after?.({
