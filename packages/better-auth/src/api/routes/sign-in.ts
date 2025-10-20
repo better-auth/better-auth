@@ -1,12 +1,12 @@
-import { APIError } from "better-call";
-import * as z from "zod";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { setSessionCookie } from "../../cookies";
-import { createEmailVerificationToken } from "./email-verification";
-import { generateState } from "../../utils";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
+import { APIError } from "better-call";
+import * as z from "zod";
+import { setSessionCookie } from "../../cookies";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { generateState } from "../../utils";
+import { createEmailVerificationToken } from "./email-verification";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -145,6 +145,16 @@ export const signInSocial = createAuthEndpoint(
 				.meta({
 					description:
 						"The login hint to use for the authorization code request",
+				})
+				.optional(),
+			/**
+			 * Additional URL query arguments to add to the Authorization URL
+			 */
+			additionalParams: z
+				.record(z.string(), z.string())
+				.meta({
+					description:
+						"Additional URL query arguments to add to the Authorization URL",
 				})
 				.optional(),
 		}),
@@ -325,6 +335,7 @@ export const signInSocial = createAuthEndpoint(
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			scopes: c.body.scopes,
 			loginHint: c.body.loginHint,
+			additionalParams: c.body.additionalParams,
 		});
 
 		return c.json({
