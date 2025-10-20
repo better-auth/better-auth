@@ -251,7 +251,7 @@ export function normalizeCookieName(name: string) {
 	return name.replace(/:/g, "_");
 }
 
-function storageAdapter(storage: {
+export function storageAdapter(storage: {
 	getItem: (name: string) => string | null;
 	setItem: (name: string, value: string) => void;
 }) {
