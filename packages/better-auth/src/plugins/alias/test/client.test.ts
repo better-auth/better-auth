@@ -1,4 +1,4 @@
-// @vsitest-environment happy-dom
+// @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import type { BetterAuthClientPlugin } from "../../../client/types";
 import { aliasClient } from "../client";
