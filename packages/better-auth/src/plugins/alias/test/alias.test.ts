@@ -134,4 +134,23 @@ describe("alias compat plugin", () => {
 		expect(compatPlugin.middlewares).toBeDefined();
 		expect(compatPlugin.middlewares![0]?.path).toBe("/checkout");
 	});
+
+	it("should update hook matchers to work with prefixed paths", () => {
+		const plugin = createMockPlugin("payment");
+		const aliasedPlugin = alias("/paypal", plugin);
+		const compatPlugin = aliasedPlugin.compat(createMockPlugin("dodo"));
+
+		expect(compatPlugin.hooks).toBeDefined();
+		const beforeHook = compatPlugin.hooks!.before![0];
+		const afterHook = compatPlugin.hooks!.after![0];
+
+		// Test that hook matchers work with prefixed paths
+		expect(beforeHook?.matcher({ path: "/paypal/checkout" } as any)).toBe(true);
+		expect(beforeHook?.matcher({ path: "/checkout" } as any)).toBe(false);
+
+		expect(afterHook?.matcher({ path: "/paypal/customer/portal" } as any)).toBe(
+			true,
+		);
+		expect(afterHook?.matcher({ path: "/customer/portal" } as any)).toBe(false);
+	});
 });

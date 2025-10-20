@@ -62,10 +62,27 @@ export function updateMatcher<
 	M extends
 		| ((ctx: string) => boolean)
 		| ((ctx: HookEndpointContext) => boolean),
->(cfg: { prefix: string; excludeEndpoints?: string[]; matcher: M }) {
+>(
+	cfg: {
+		matcher: M;
+		prefix: string;
+	} & (
+		| {
+				excludeEndpoints?: string[];
+				includeEndpoints?: never;
+		  }
+		| {
+				includeEndpoints?: string[];
+				excludeEndpoints?: never;
+		  }
+	),
+) {
 	return ((input: string | HookEndpointContext) => {
 		const path = typeof input === "string" ? input : input.path;
 		const excluded = cfg.excludeEndpoints?.includes(path) ?? false;
+		const included = cfg.includeEndpoints
+			? cfg.includeEndpoints.includes(path)
+			: true;
 
 		let ctx: string | HookEndpointContext;
 		if (path.startsWith(cfg.prefix) && !excluded) {
@@ -74,7 +91,7 @@ export function updateMatcher<
 				typeof input === "string"
 					? strippedPath
 					: { ...input, path: strippedPath };
-		} else if (excluded) {
+		} else if (excluded || !included) {
 			ctx = input;
 		} else {
 			return false;
