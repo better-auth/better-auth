@@ -568,3 +568,138 @@ describe("provisioning", async (ctx) => {
 		expect(res.url).toContain("http://localhost:8080/authorize");
 	});
 });
+
+describe("SSO encryptionEnabled", async () => {
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			plugins: [sso({ encryptionEnabled: true }), organization()],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.issuer.on;
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		await server.stop().catch(() => {});
+	});
+
+	server.service.on("beforeUserinfo", (userInfoResponse, req) => {
+		userInfoResponse.body = {
+			email: "oauth2@test.com",
+			name: "OAuth2 Test",
+			sub: "oauth2",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
+		};
+		userInfoResponse.statusCode = 200;
+	});
+
+	server.service.on("beforeTokenSigning", (token, req) => {
+		token.payload.email = "sso-user@localhost:8000.com";
+		token.payload.email_verified = true;
+		token.payload.name = "Test User";
+		token.payload.picture = "https://test.com/picture.png";
+	});
+
+	async function simulateOAuthFlow(
+		authUrl: string,
+		headers: Headers,
+		fetchImpl?: (...args: any) => any,
+	) {
+		let location: string | null = null;
+		await betterFetch(authUrl, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) throw new Error("No redirect location found");
+		const newHeaders = new Headers();
+		let callbackURL = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl: fetchImpl || customFetchImpl,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+
+		return { callbackURL, headers: newHeaders };
+	}
+
+	it("should encrypt clientSecret at rest and decrypt on read", async () => {
+		const { headers } = await signInWithTestUser();
+
+		// Register provider with encryption enabled
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "enc.com",
+				providerId: "enc-provider",
+				oidcConfig: {
+					clientId: "enc-client",
+					clientSecret: "super-secret",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+			},
+			headers,
+		});
+
+		// API response should return decrypted secret (usable by admins/clients)
+		expect(provider.oidcConfig.clientSecret).toBe("super-secret");
+
+		// But storage should be encrypted at rest
+		const context = await auth.$context;
+		const stored = await context.adapter.findOne<{ oidcConfig: string }>({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: "enc-provider" }],
+		});
+		expect(stored).toBeTruthy();
+		const rawCfg = JSON.parse(stored!.oidcConfig);
+		expect(rawCfg.clientSecret).not.toBe("super-secret");
+		expect(typeof rawCfg.clientSecret).toBe("string");
+		expect(rawCfg.clientSecret.length).toBeGreaterThan(10);
+
+		// Sign-in flow should succeed using the decrypted secret internally
+		const hdrs = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "enc-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(hdrs),
+			},
+		});
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fenc-provider",
+		);
+
+		const { callbackURL } = await simulateOAuthFlow(res.url, hdrs);
+		expect(callbackURL).toContain("/dashboard");
+	});
+});
