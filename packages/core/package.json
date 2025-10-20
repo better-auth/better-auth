@@ -119,35 +119,38 @@
   },
   "typesVersions": {
     "*": {
-      "index": [
+      ".": [
         "dist/index.d.ts"
       ],
+      "api": [
+        "dist/api/index.d.ts"
+      ],
       "async_hooks": [
-        "dist/async_hooks.d.ts"
+        "dist/async_hooks/index.d.ts"
+      ],
+      "context": [
+        "dist/context/index.d.ts"
+      ],
+      "env": [
+        "dist/env/index.d.ts"
+      ],
+      "error": [
+        "dist/error/index.d.ts"
+      ],
+      "utils": [
+        "dist/utils/index.d.ts"
+      ],
+      "social-providers": [
+        "dist/social-providers/index.d.ts"
       ],
       "db": [
-        "dist/db.d.ts"
+        "dist/db/index.d.ts"
       ],
       "db/adapter": [
         "dist/db/adapter/index.d.ts"
       ],
-      "env": [
-        "dist/env.d.ts"
-      ],
-      "error": [
-        "dist/error.d.ts"
-      ],
-      "middleware": [
-        "dist/middleware.d.ts"
-      ],
       "oauth2": [
-        "dist/oauth2.d.ts"
-      ],
-      "social-providers": [
-        "dist/social-providers.d.ts"
-      ],
-      "utils": [
-        "dist/utils.d.ts"
+        "dist/oauth2/index.d.ts"
       ]
     }
   },
