@@ -18,7 +18,6 @@ import { Pre } from "fumadocs-ui/components/codeblock";
 import { Glow } from "../_components/default-changelog";
 import { XIcon } from "../_components/icons";
 import { StarField } from "../_components/stat-field";
-import Image from "next/image";
 import { BlogPage } from "../_components/blog-list";
 import { Callout } from "@/components/ui/callout";
 import { ArrowLeftIcon, ExternalLink } from "lucide-react";
