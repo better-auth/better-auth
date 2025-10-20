@@ -112,6 +112,7 @@ type ExtendGetAtoms<
 type ExtendEndpoints<
 	T extends BetterAuthClientPlugin,
 	Prefix extends string,
+	O extends AliasClientOptions
 > = {
 	$InferServerPlugin: T["$InferServerPlugin"] extends infer P extends
 		BetterAuthPlugin
@@ -121,6 +122,7 @@ type ExtendEndpoints<
 				{
 					// make endpoints distinct
 					prefixEndpointMethods: true;
+					excludeEndpoints: O["excludeEndpoints"];
 				},
 				true
 			>
@@ -167,7 +169,7 @@ type InferAliasedClientPlugin_base<
 } & ExtendPathMethods<T, NormalizePrefix<Prefix>, O> &
 	ExtendGetActions<T, NormalizePrefix<Prefix>, O> &
 	ExtendGetAtoms<T, NormalizePrefix<Prefix>, O> &
-	ExtendEndpoints<T, NormalizePrefix<Prefix>> & {
+	ExtendEndpoints<T, NormalizePrefix<Prefix>, O> & {
 		"~meta": {
 			prefix: NormalizePrefix<Prefix>;
 			options: O;
@@ -294,7 +296,7 @@ export function aliasClient<
 						: listener.signal,
 				matcher: (path: string) => {
 					// Check if the path starts with the prefix, then strip it and check the original matcher
-					if (path.startsWith(cleanPrefix)) {
+					if (path.startsWith(cleanPrefix) && !options?.excludeEndpoints?.includes(path)) {
 						const originalPath = path.slice(cleanPrefix.length);
 						return listener.matcher(originalPath);
 					} else {
@@ -494,7 +496,7 @@ export function aliasCompatClient<
 						: listener.signal,
 				matcher: (path: string) => {
 					// Check if the path starts with the prefix, then strip it and check the original matcher
-					if (path.startsWith(prefix)) {
+					if (path.startsWith(prefix) && !aliasOptions?.excludeEndpoints?.includes(path)) {
 						const originalPath = path.slice(prefix.length);
 						return listener.matcher(originalPath);
 					} else {

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { BetterAuthClientPlugin } from "../../../client/types";
 import { aliasClient } from "../client";
 import { createMockClientPlugin } from "./mock-plugin";
+import { createAuthClient } from "../../../client";
 import { createAuthClient as createSolidClient } from "../../../client/solid";
 import { atom } from "nanostores";
 
@@ -273,32 +274,17 @@ describe("aliasClient plugin", () => {
 				}),
 			);
 		});
-		const client = createSolidClient({
+		const client = createAuthClient({
 			fetchOptions: {
 				customFetchImpl: spyFetch,
 			},
 			baseURL: "http://localhost:3000",
 			plugins: [aliased],
 		});
-		const res = client.useQueryAtom();
-		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1);
-		expect(res()).toMatchObject({
-			data: { success: true },
-			error: null,
-			isPending: false,
-		});
-		expect(spyFetch).toHaveBeenCalledTimes(1);
-		let calledURL = spyFetch.mock.calls[0]?.[0];
-		expect(calledURL?.toString()).toEqual(
-			"http://localhost:3000/api/auth/checkout",
-		);
-
-		await spyFetch.mockClear();
 
 		await client.payment.triggerFetch("/checkout", "POST");
 		expect(spyFetch).toHaveBeenCalledTimes(1);
-		calledURL = spyFetch.mock.calls[0]?.[0];
+		const calledURL = spyFetch.mock.calls[0]?.[0];
 		expect(calledURL?.toString()).toEqual(
 			"http://localhost:3000/api/auth/checkout",
 		);
@@ -365,6 +351,57 @@ describe("aliasClient plugin", () => {
 		// recall
 		returnNull = true;
 		await client.polar.checkout({ amount: 3 });
+		await vi.advanceTimersByTimeAsync(10);
+		expect(res()).toMatchObject({
+			data: null,
+			error: null,
+			isPending: false,
+		});
+	});
+
+	it("should handle getAtom with excludedPaths", async () => {
+		let returnNull = false;
+		const spyFetch = vi.fn(async (req: Request | string | URL) => {
+			if (returnNull) {
+				return new Response(JSON.stringify(null));
+			}
+			return new Response(
+				JSON.stringify({
+					success: true,
+				}),
+			);
+		});
+
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: spyFetch,
+			},
+			baseURL: "http://localhost:3000",
+			plugins: [
+				aliasClient("/polar", createMockClientPlugin("polar"), {
+					prefixAtoms: true,
+					excludeEndpoints: ["/checkout"],
+				}),
+			],
+		});
+		
+		const res = client.useQueryAtomPolar();
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(res()).toMatchObject({
+			data: { success: true },
+			error: null,
+			isPending: false,
+		});
+		expect(spyFetch).toHaveBeenCalledTimes(1);
+		const calledURL = spyFetch.mock.calls[0]?.[0];
+		expect(calledURL?.toString()).toEqual(
+			"http://localhost:3000/api/auth/polar/customer/portal",
+		);
+
+		// recall
+		returnNull = true;
+		await client.checkout({ amount: 3 });
 		await vi.advanceTimersByTimeAsync(10);
 		expect(res()).toMatchObject({
 			data: null,
