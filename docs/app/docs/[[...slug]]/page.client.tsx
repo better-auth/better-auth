@@ -99,19 +99,22 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 	const markdownUrl = new URL(props.markdownUrl, "https://better-auth.com");
 	const q = `Read ${markdownUrl}, I want to ask questions about it.`;
 
-	const claude = `https://claude.ai/new?${new URLSearchParams({
-		q,
-	})}`;
-	const gpt = `https://chatgpt.com/?${new URLSearchParams({
-		hints: "search",
-		q,
-	})}`;
-	const t3 = `https://t3.chat/new?${new URLSearchParams({
-		q,
-	})}`;
-	const copilot = `https://copilot.microsoft.com/?${new URLSearchParams({
-		q,
-	})}`;
+	const claudeUrl = new URL("https://claude.ai/new");
+	claudeUrl.searchParams.set("q", q);
+	const claude = claudeUrl.toString();
+
+	const gptUrl = new URL("https://chatgpt.com/");
+	gptUrl.searchParams.set("hints", "search");
+	gptUrl.searchParams.set("q", q);
+	const gpt = gptUrl.toString();
+
+	const t3Url = new URL("https://t3.chat/new");
+	t3Url.searchParams.set("q", q);
+	const t3 = t3Url.toString();
+
+	const copilotUrl = new URL("https://copilot.microsoft.com/");
+	copilotUrl.searchParams.set("q", q);
+	const copilot = copilotUrl.toString();
 
 	return (
 		<Popover>
