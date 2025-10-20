@@ -390,26 +390,26 @@ export function aliasClient<
 	}
 
 	// // Wrap the $InferServerPlugin if it exists
-	if (plugin.$InferServerPlugin) {
-		const wrappedServerPlugin: BetterAuthPlugin = {
-			...plugin.$InferServerPlugin,
-		};
+	// if (plugin.$InferServerPlugin) {
+	// 	const wrappedServerPlugin: BetterAuthPlugin = {
+	// 		...plugin.$InferServerPlugin,
+	// 	};
 
-		if (plugin.$InferServerPlugin.endpoints) {
-			const prefixedEndpoints: Record<string, any> = {};
-			for (const [key, endpoint] of Object.entries(
-				plugin.$InferServerPlugin.endpoints,
-			)) {
-				const clonedEndpoint = { ...endpoint };
-				const originalPath = (endpoint as any).path || `/${key}`;
-				clonedEndpoint.path = `${cleanPrefix}${originalPath}`;
-				prefixedEndpoints[key] = clonedEndpoint;
-			}
-			wrappedServerPlugin.endpoints = prefixedEndpoints;
-		}
+	// 	if (plugin.$InferServerPlugin.endpoints) {
+	// 		const prefixedEndpoints: Record<string, any> = {};
+	// 		for (const [key, endpoint] of Object.entries(
+	// 			plugin.$InferServerPlugin.endpoints,
+	// 		)) {
+	// 			const clonedEndpoint = { ...endpoint };
+	// 			const originalPath = (endpoint as any).path || `/${key}`;
+	// 			clonedEndpoint.path = `${cleanPrefix}${originalPath}`;
+	// 			prefixedEndpoints[key] = clonedEndpoint;
+	// 		}
+	// 		wrappedServerPlugin.endpoints = prefixedEndpoints;
+	// 	}
 
-		aliasedPlugin.$InferServerPlugin = wrappedServerPlugin;
-	}
+	// 	aliasedPlugin.$InferServerPlugin = wrappedServerPlugin;
+	// }
 
 	Object.assign(aliasedPlugin, {
 		compat: aliasCompatClient.bind(
