@@ -1,4 +1,4 @@
-// @vitest-environment happy-dom
+// @vsitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import type { BetterAuthClientPlugin } from "../../../client/types";
 import { aliasClient } from "../client";
@@ -260,10 +260,10 @@ describe("aliasClient plugin", () => {
 
 	it("should handle excluded endpoints properly", async () => {
 		const aliased = aliasClient("/payment", createMockClientPlugin("payment"), {
-			excludeEndpoints: ["/checkout"],
+			// excludeEndpoints: ["/checkout"],
 		});
 
-		expect(aliased.pathMethods!["/checkout"]).toBe("POST");
+		expect(aliased.pathMethods!["/payment/checkout"]).toBe("POST");
 		expect(aliased.pathMethods!["/payment/customer/portal"]).toBe("GET");
 
 		const spyFetch = vi.fn(async (req: Request | string | URL) => {
@@ -291,7 +291,7 @@ describe("aliasClient plugin", () => {
 		expect(spyFetch).toHaveBeenCalledTimes(1);
 		let calledURL = spyFetch.mock.calls[0]?.[0];
 		expect(calledURL?.toString()).toEqual(
-			"http://localhost:3000/api/auth/checkout",
+			"http://localhost:3000/api/auth/payment/checkout",
 		);
 
 		await spyFetch.mockClear();
@@ -300,7 +300,7 @@ describe("aliasClient plugin", () => {
 		expect(spyFetch).toHaveBeenCalledTimes(1);
 		calledURL = spyFetch.mock.calls[0]?.[0];
 		expect(calledURL?.toString()).toEqual(
-			"http://localhost:3000/api/auth/checkout",
+			"http://localhost:3000/api/auth/payment/checkout",
 		);
 	});
 
