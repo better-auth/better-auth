@@ -7,114 +7,48 @@
   "module": "./dist/index.js",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./api": {
-      "import": {
-        "types": "./dist/api/index.d.ts",
-        "default": "./dist/api/index.js"
-      },
-      "require": {
-        "types": "./dist/api/index.d.cts",
-        "default": "./dist/api/index.cjs"
-      }
+      "types": "./dist/api/index.d.ts",
+      "default": "./dist/api/index.js"
     },
     "./async_hooks": {
-      "import": {
-        "types": "./dist/async_hooks/index.d.ts",
-        "default": "./dist/async_hooks/index.js"
-      },
-      "require": {
-        "types": "./dist/async_hooks/index.d.cts",
-        "default": "./dist/async_hooks/index.cjs"
-      }
+      "types": "./dist/async_hooks/index.d.ts",
+      "default": "./dist/async_hooks/index.js"
     },
     "./context": {
-      "import": {
-        "types": "./dist/context/index.d.ts",
-        "default": "./dist/context/index.js"
-      },
-      "require": {
-        "types": "./dist/context/index.d.cts",
-        "default": "./dist/context/index.cjs"
-      }
+      "types": "./dist/context/index.d.ts",
+      "default": "./dist/context/index.js"
     },
     "./env": {
-      "import": {
-        "types": "./dist/env/index.d.ts",
-        "default": "./dist/env/index.js"
-      },
-      "require": {
-        "types": "./dist/env/index.d.cts",
-        "default": "./dist/env/index.cjs"
-      }
+      "types": "./dist/env/index.d.ts",
+      "default": "./dist/env/index.js"
     },
     "./error": {
-      "import": {
-        "types": "./dist/error/index.d.ts",
-        "default": "./dist/error/index.js"
-      },
-      "require": {
-        "types": "./dist/error/index.d.cts",
-        "default": "./dist/error/index.cjs"
-      }
+      "types": "./dist/error/index.d.ts",
+      "default": "./dist/error/index.js"
     },
     "./utils": {
-      "import": {
-        "types": "./dist/utils/index.d.ts",
-        "default": "./dist/utils/index.js"
-      },
-      "require": {
-        "types": "./dist/utils/index.d.cts",
-        "default": "./dist/utils/index.cjs"
-      }
+      "types": "./dist/utils/index.d.ts",
+      "default": "./dist/utils/index.js"
     },
     "./social-providers": {
-      "import": {
-        "types": "./dist/social-providers/index.d.ts",
-        "default": "./dist/social-providers/index.js"
-      },
-      "require": {
-        "types": "./dist/social-providers/index.d.cts",
-        "default": "./dist/social-providers/index.cjs"
-      }
+      "types": "./dist/social-providers/index.d.ts",
+      "default": "./dist/social-providers/index.js"
     },
     "./db": {
-      "import": {
-        "types": "./dist/db/index.d.ts",
-        "default": "./dist/db/index.js"
-      },
-      "require": {
-        "types": "./dist/db/index.d.cts",
-        "default": "./dist/db/index.cjs"
-      }
+      "types": "./dist/db/index.d.ts",
+      "default": "./dist/db/index.js"
     },
     "./db/adapter": {
-      "import": {
-        "types": "./dist/db/adapter/index.d.ts",
-        "default": "./dist/db/adapter/index.js"
-      },
-      "require": {
-        "types": "./dist/db/adapter/index.d.cts",
-        "default": "./dist/db/adapter/index.cjs"
-      }
+      "types": "./dist/db/adapter/index.d.ts",
+      "default": "./dist/db/adapter/index.js"
     },
     "./oauth2": {
-      "import": {
-        "types": "./dist/oauth2/index.d.ts",
-        "default": "./dist/oauth2/index.js"
-      },
-      "require": {
-        "types": "./dist/oauth2/index.d.cts",
-        "default": "./dist/oauth2/index.cjs"
-      }
+      "types": "./dist/oauth2/index.d.ts",
+      "default": "./dist/oauth2/index.js"
     }
   },
   "typesVersions": {
