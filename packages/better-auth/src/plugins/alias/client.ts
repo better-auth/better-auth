@@ -296,11 +296,8 @@ export function aliasClient<
 						: listener.signal,
 				matcher: (path: string) => {
 					// Check if the path starts with the prefix, then strip it and check the original matcher
-					const excluded = options?.excludeEndpoints?.includes(path)
-					if (
-						path.startsWith(cleanPrefix) &&
-						!excluded
-					) {
+					const excluded = options?.excludeEndpoints?.includes(path);
+					if (path.startsWith(cleanPrefix) && !excluded) {
 						const originalPath = path.slice(cleanPrefix.length);
 						return listener.matcher(originalPath);
 					} else if (excluded) {
@@ -498,11 +495,8 @@ export function aliasCompatClient<
 						: listener.signal,
 				matcher: (path: string) => {
 					// Check if the path starts with the prefix, then strip it and check the original matcher
-					const excluded = aliasOptions?.excludeEndpoints?.includes(path)
-					if (
-						path.startsWith(prefix) &&
-						!excluded
-					) {
+					const excluded = aliasOptions?.excludeEndpoints?.includes(path);
+					if (path.startsWith(prefix) && !excluded) {
 						const originalPath = path.slice(prefix.length);
 						return listener.matcher(originalPath);
 					} else if (excluded) {
