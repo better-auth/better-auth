@@ -181,6 +181,60 @@ describe("forget password", async (it) => {
 		expect(res.error?.status).toBe(400);
 	});
 
+	it("should validate a valid reset password token", async () => {
+		// Request a new reset password token
+		await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+		expect(token.length).toBeGreaterThan(10);
+
+		// Validate the token using client method
+		const validation = await client.validateResetPasswordToken({
+			token,
+		});
+		expect(validation.data?.valid).toBe(true);
+		expect(validation.data?.message).toBe("Token is valid");
+	});
+
+	it("should reject an invalid reset password token", async () => {
+		const validation = await client.validateResetPasswordToken({
+			token: "invalid-token",
+		});
+		expect(validation.data?.valid).toBe(false);
+		expect(validation.data?.message).toBe("Invalid token");
+	});
+
+	it("should reject an expired reset password token", async () => {
+		const { client: tempClient, testUser: tempUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword({ token: _token }) {
+					token = _token;
+					await mockSendEmail();
+				},
+				resetPasswordTokenExpiresIn: 1, // 1 second
+			},
+		});
+
+		await tempClient.requestPasswordReset({
+			email: tempUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+
+		// Wait for token to expire
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(2000);
+
+		const validation = await tempClient.validateResetPasswordToken({
+			token,
+		});
+		expect(validation.data?.valid).toBe(false);
+		expect(validation.data?.message).toBe("Token has expired");
+
+		vi.useRealTimers();
+	});
+
 	it("should expire", async () => {
 		const { client, signInWithTestUser, testUser } = await getTestInstance({
 			emailAndPassword: {
