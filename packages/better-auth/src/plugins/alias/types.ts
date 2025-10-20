@@ -55,7 +55,9 @@ export type InferAliasedPlugin_base<
 			string as O["prefixEndpointMethods"] extends true
 			? TransformEndpointKey<K, Prefix>
 			: K]: IsClient extends false
-			? T["endpoints"][K]
+			? T["endpoints"][K] extends infer E extends Endpoint
+				? E
+				: never
 			: T["endpoints"][K] extends Endpoint<
 						infer OldPath,
 						infer Options,
@@ -73,7 +75,7 @@ export type InferAliasedPlugin_base<
 									: `${NormalizePrefix<Prefix>}${OldPath}`;
 						}
 					: T
-				: T["endpoints"][K];
+				: never;
 	};
 } & (T extends { $Infer: infer I extends Record<string, any> }
 		? {

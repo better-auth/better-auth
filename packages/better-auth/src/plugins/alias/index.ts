@@ -15,7 +15,25 @@ export type InferAliasedPlugin<
 	Prefix extends string,
 	T extends BetterAuthPlugin,
 	O extends AliasOptions,
-> = InferAliasedPlugin_base<Prefix, T, O> & {};
+> = InferAliasedPlugin_base<Prefix, T, O> & {
+	compat: <Plugin extends BetterAuthPlugin, Option extends AliasCompatOptions>(
+		plugin: Plugin,
+		options?: Option,
+	) => InferAliasCompatPlugin<
+		InferAliasedPlugin_base<Prefix, T, O>,
+		Plugin,
+		Option
+	>;
+};
+
+export type InferAliasCompatPlugin<
+	AliasedPlugin extends BetterAuthPlugin,
+	T extends BetterAuthPlugin,
+	O extends AliasCompatOptions,
+> = Omit<T, "middlwares"> & {
+	// TODO:
+	middlewares: T["middlewares"];
+};
 
 export type AliasOptions = {
 	/**
@@ -40,6 +58,12 @@ export type AliasOptions = {
 	 * Endpoints that should not be prefixed with the alias.
 	 */
 	excludeEndpoints?: string[];
+	/**
+	 * Additional endpoints that should be prefixed.
+	 *
+	 * Use this in conjunction with the compat plugin.
+	 */
+	includeEndpoints?: string[];
 };
 
 type InferMeta<AliasedPlugin extends BetterAuthPlugin> = AliasedPlugin extends {
@@ -155,7 +179,11 @@ export function alias<
 		},
 	});
 
-	return aliasedPlugin as any as InferAliasedPlugin<Prefix, T, O>;
+	return aliasedPlugin as InferAliasedPlugin<
+		Prefix,
+		T,
+		O
+	> satisfies BetterAuthPlugin;
 }
 
 export type AliasCompatOptions = {
@@ -183,8 +211,39 @@ export function aliasCompat<
 		...plugin,
 	};
 
-	// TODO: Infer
-	return compatPlugin;
+	const includeEndpoints = new Set([
+		...(options?.includeEndpoints || []),
+		...(aliasOptions?.includeEndpoints || []),
+		...Object.values(aliasedPlugin.endpoints || {})
+			.map((endpoint): string => {
+				// @ts-expect-error
+				return endpoint.originalPath || endpoint.path;
+			})
+			.filter((path) => {
+				return !aliasOptions?.excludeEndpoints?.includes(path) ? true : false;
+			}),
+	]);
+
+	if (plugin.middlewares) {
+		compatPlugin.middlewares = plugin.middlewares.map((middleware) => ({
+			...middleware,
+			path: includeEndpoints.has(middleware.path)
+				? `${prefix}${middleware.path}`
+				: middleware.path,
+		}));
+	}
+
+	if (plugin.hooks) {
+	}
+
+	if (plugin.rateLimit) {
+	}
+
+	return compatPlugin as InferAliasCompatPlugin<
+		AliasedPlugin,
+		T,
+		O
+	> satisfies BetterAuthPlugin;
 }
 
 function cloneEndpoint<

@@ -115,3 +115,23 @@ describe("alias plugin", () => {
 		expect(aliasedPlugin.hooks).toBeUndefined();
 	});
 });
+
+describe("alias compat plugin", () => {
+	it("should prefix middleware paths", () => {
+		const plugin = createMockPlugin("payment");
+		const aliasedPlugin = alias("/dodo", plugin);
+		const compatPlugin = aliasedPlugin.compat(createMockPlugin("polar"));
+		expect(compatPlugin.middlewares).toBeDefined();
+		expect(compatPlugin.middlewares![0]?.path).toBe("/dodo/checkout");
+	});
+
+	it("should not prefix excluded middleware paths", () => {
+		const plugin = createMockPlugin("payment");
+		const aliasedPlugin = alias("/dodo", plugin, {
+			excludeEndpoints: ["/checkout"],
+		});
+		const compatPlugin = aliasedPlugin.compat(createMockPlugin("polar"));
+		expect(compatPlugin.middlewares).toBeDefined();
+		expect(compatPlugin.middlewares![0]?.path).toBe("/checkout");
+	});
+});
