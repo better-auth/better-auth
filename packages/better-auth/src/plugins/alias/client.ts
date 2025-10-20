@@ -297,6 +297,10 @@ export function aliasClient<
 					if (path.startsWith(cleanPrefix)) {
 						const originalPath = path.slice(cleanPrefix.length);
 						return listener.matcher(originalPath);
+					} else {
+						if (options?.excludeEndpoints?.includes(path)) {
+							return listener.matcher(path);
+						}
 					}
 					return false;
 				},
@@ -493,6 +497,10 @@ export function aliasCompatClient<
 					if (path.startsWith(prefix)) {
 						const originalPath = path.slice(prefix.length);
 						return listener.matcher(originalPath);
+					} else {
+						if (aliasOptions?.excludeEndpoints?.includes(path)) {
+							return listener.matcher(path);
+						}
 					}
 					return false;
 				},
