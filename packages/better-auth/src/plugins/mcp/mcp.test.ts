@@ -29,6 +29,7 @@ describe("mcp", async () => {
 					loginPage: "/login",
 					oidcConfig: {
 						loginPage: "/login",
+						consentPage: "/oauth/consent",
 						requirePKCE: true,
 
 						getAdditionalUserInfoClaim(user, scopes, client) {
@@ -534,6 +535,154 @@ describe("mcp", async () => {
 		expect((tokenRequest.error as any).error_description).toContain(
 			"code verifier is missing",
 		);
+	});
+
+	it("should handle consent flow with prompt=consent", async ({ expect }) => {
+		// Register a client for consent flow testing
+		const consentClient = await serverClient.$fetch("/mcp/register", {
+			method: "POST",
+			body: {
+				client_name: "test-consent-client",
+				redirect_uris: [
+					"http://localhost:3000/api/auth/oauth2/callback/test-consent",
+				],
+				logo_uri: "",
+				token_endpoint_auth_method: "none",
+			},
+		});
+
+		const clientId = (consentClient.data as any).client_id;
+		const redirectUri = (consentClient.data as any).redirect_uris[0];
+
+		// Construct authorization URL with prompt=consent
+		const authURL = new URL(`${baseURL}/api/auth/mcp/authorize`);
+		authURL.searchParams.set("client_id", clientId);
+		authURL.searchParams.set("redirect_uri", redirectUri);
+		authURL.searchParams.set("response_type", "code");
+		authURL.searchParams.set("scope", "openid profile email");
+		authURL.searchParams.set("state", "test-state");
+		authURL.searchParams.set("prompt", "consent");
+		authURL.searchParams.set("code_challenge", "test-challenge");
+		authURL.searchParams.set("code_challenge_method", "S256");
+
+		// Make authorization request with authenticated session
+		let redirectLocation = "";
+		const consentHeaders = new Headers();
+		await serverClient.$fetch(authURL.toString(), {
+			method: "GET",
+			onError(context: any) {
+				redirectLocation = context.response.headers.get("Location") || "";
+				// Capture consent cookies (oidc_consent_prompt)
+				const setCookieHeaders =
+					context.response.headers.getSetCookie?.() || [];
+				for (const cookie of setCookieHeaders) {
+					if (cookie.includes("oidc_consent_prompt=")) {
+						const existingCookies = consentHeaders.get("Cookie") || "";
+						const cookieValue = cookie.split(";")[0]; // Extract just the name=value part
+						consentHeaders.set(
+							"Cookie",
+							existingCookies
+								? `${existingCookies}; ${cookieValue}`
+								: cookieValue,
+						);
+					}
+				}
+			},
+		});
+
+		// Verify redirect to consent page (not direct code callback)
+		expect(redirectLocation).toContain("/oauth/consent");
+		expect(redirectLocation).toContain("consent_code=");
+		expect(redirectLocation).toContain(`client_id=${clientId}`);
+		expect(redirectLocation).toContain("scope=");
+		expect(redirectLocation).not.toContain("?code="); // Should NOT have authorization code yet
+
+		// Extract consent_code from redirect URL
+		const consentURL = new URL(redirectLocation, baseURL);
+		const consentCode = consentURL.searchParams.get("consent_code");
+		expect(consentCode).toBeTruthy();
+
+		// Merge session headers with consent cookies
+		const authHeaders = new Headers(headers);
+		consentHeaders.forEach((value, key) => {
+			if (key.toLowerCase() === "cookie") {
+				const existing = authHeaders.get("Cookie") || "";
+				authHeaders.set("Cookie", existing ? `${existing}; ${value}` : value);
+			}
+		});
+
+		// Accept consent
+		let finalRedirect = "";
+		try {
+			const consentResponse = await serverClient.$fetch("/oauth2/consent", {
+				method: "POST",
+				headers: authHeaders,
+				body: {
+					accept: true,
+					consent_code: consentCode,
+				},
+			});
+
+			// The response should contain redirectURI
+			if (consentResponse.data) {
+				finalRedirect = (consentResponse.data as any).redirectURI;
+			}
+		} catch (error) {
+			// In case of error, log it for debugging
+			console.error("Consent request failed:", error);
+			throw error;
+		}
+
+		// Verify we get the final redirect with authorization code
+		expect(finalRedirect).toBeTruthy();
+		expect(finalRedirect).toContain(redirectUri);
+		expect(finalRedirect).toContain("code=");
+		expect(finalRedirect).toContain("state=test-state");
+	});
+
+	it("should skip consent flow when prompt is not consent", async ({
+		expect,
+	}) => {
+		// Register a client for non-consent flow testing
+		const noConsentClient = await serverClient.$fetch("/mcp/register", {
+			method: "POST",
+			body: {
+				client_name: "test-no-consent-client",
+				redirect_uris: [
+					"http://localhost:3000/api/auth/oauth2/callback/test-no-consent",
+				],
+				logo_uri: "",
+				token_endpoint_auth_method: "none",
+			},
+		});
+
+		const clientId = (noConsentClient.data as any).client_id;
+		const redirectUri = (noConsentClient.data as any).redirect_uris[0];
+
+		// Construct authorization URL WITHOUT prompt=consent
+		const authURL = new URL(`${baseURL}/api/auth/mcp/authorize`);
+		authURL.searchParams.set("client_id", clientId);
+		authURL.searchParams.set("redirect_uri", redirectUri);
+		authURL.searchParams.set("response_type", "code");
+		authURL.searchParams.set("scope", "openid profile email");
+		authURL.searchParams.set("state", "test-state-2");
+		authURL.searchParams.set("code_challenge", "test-challenge-2");
+		authURL.searchParams.set("code_challenge_method", "S256");
+
+		// Make authorization request with authenticated session
+		let redirectLocation = "";
+		await serverClient.$fetch(authURL.toString(), {
+			method: "GET",
+			onError(context: any) {
+				redirectLocation = context.response.headers.get("Location") || "";
+			},
+		});
+
+		// Verify redirect directly to callback with code (skip consent)
+		expect(redirectLocation).toContain(redirectUri);
+		expect(redirectLocation).toContain("code=");
+		expect(redirectLocation).toContain("state=test-state-2");
+		expect(redirectLocation).not.toContain("consent_code="); // Should NOT redirect to consent page
 	});
 
 	describe("withMCPAuth", () => {
