@@ -878,10 +878,17 @@ export const sso = (options?: SSOOptions) => {
 								provider.oidcConfig as unknown as string,
 							) as OIDCConfig;
 							if (options?.encryptionEnabled && cfg?.clientSecret) {
-								cfg.clientSecret = await symmetricDecrypt({
-									key: ctx.context.secret,
-									data: cfg.clientSecret,
-								});
+								try {
+									cfg.clientSecret = await symmetricDecrypt({
+										key: ctx.context.secret,
+										data: cfg.clientSecret,
+									});
+								} catch (e) {
+									throw new APIError("INTERNAL_SERVER_ERROR", {
+										message:
+											"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
+									});
+								}
 							}
 							return cfg;
 						})(),
@@ -1121,10 +1128,17 @@ export const sso = (options?: SSOOptions) => {
 										) || undefined
 									: undefined;
 								if (options?.encryptionEnabled && parsedOidc?.clientSecret) {
-									parsedOidc.clientSecret = await symmetricDecrypt({
-										key: ctx.context.secret,
-										data: parsedOidc.clientSecret,
-									});
+									try {
+										parsedOidc.clientSecret = await symmetricDecrypt({
+											key: ctx.context.secret,
+											data: parsedOidc.clientSecret,
+										});
+									} catch (e) {
+										throw new APIError("INTERNAL_SERVER_ERROR", {
+											message:
+												"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
+										});
+									}
 								}
 								return {
 									...res,
@@ -1304,10 +1318,17 @@ export const sso = (options?: SSOOptions) => {
 								const parsed =
 									safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined;
 								if (options?.encryptionEnabled && parsed?.clientSecret) {
-									parsed.clientSecret = await symmetricDecrypt({
-										key: ctx.context.secret,
-										data: parsed.clientSecret,
-									});
+									try {
+										parsed.clientSecret = await symmetricDecrypt({
+											key: ctx.context.secret,
+											data: parsed.clientSecret,
+										});
+									} catch (e) {
+										throw new APIError("INTERNAL_SERVER_ERROR", {
+											message:
+												"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
+										});
+									}
 								}
 								return {
 									...res,
