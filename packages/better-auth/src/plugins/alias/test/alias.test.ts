@@ -153,4 +153,20 @@ describe("alias compat plugin", () => {
 		);
 		expect(afterHook?.matcher({ path: "/customer/portal" } as any)).toBe(false);
 	});
+
+	it("should update rate limit path matchers", () => {
+		const plugin = createMockPlugin("payment");
+		const aliasedPlugin = alias("/stripe", plugin);
+		const compatPlugin = aliasedPlugin.compat(createMockPlugin("paypal"));
+
+		expect(compatPlugin.rateLimit).toBeDefined();
+		const rateLimitRule = compatPlugin.rateLimit![0];
+
+		console.dir(rateLimitRule?.pathMatcher("/stripe/checkout"));
+
+		// Test that the rate limit matcher works with prefixed paths
+		expect(rateLimitRule?.pathMatcher("/stripe/checkout")).toBe(true);
+		expect(rateLimitRule?.pathMatcher("/checkout")).toBe(false);
+		expect(rateLimitRule?.pathMatcher("/other/path")).toBe(false);
+	});
 });

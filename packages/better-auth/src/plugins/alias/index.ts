@@ -30,11 +30,9 @@ export type InferAliasCompatPlugin<
 	AliasedPlugin extends BetterAuthPlugin,
 	T extends BetterAuthPlugin,
 	O extends AliasCompatOptions,
-> = Omit<T, "middlwares" | "hooks"> & {
+> = Omit<T, "middlwares"> & {
 	// TODO:
 	middlewares: T["middlewares"];
-	// TODO:
-	hooks: T["hooks"];
 };
 
 export type AliasOptions = {
@@ -258,6 +256,14 @@ export function aliasCompat<
 	}
 
 	if (plugin.rateLimit) {
+		compatPlugin.rateLimit = plugin.rateLimit.map((rule) => ({
+			...rule,
+			pathMatcher: updateMatcher({
+				matcher: rule.pathMatcher,
+				prefix,
+				includeEndpoints: includeEndpointsArr,
+			}),
+		}));
 	}
 
 	return compatPlugin as InferAliasCompatPlugin<
