@@ -100,7 +100,7 @@ const getHTML = (
     ${JSON.stringify(apiReference)}
     </script>
 	 <script>
-      document.getElementById('api-reference').dataset.configuration = '${getScalarConfig(options)}'
+      document.getElementById('api-reference').dataset.configuration = '${getScalarConfig(options)}';
     </script>
 	  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
   </body>
@@ -391,7 +391,6 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
 						throw new APIError("NOT_FOUND");
 					}
 					const schema = await generator(ctx.context, ctx.context.options);
-					console.log(getHTML(schema, options));
 					return new Response(getHTML(schema, options), {
 						headers: {
 							"Content-Type": "text/html",
