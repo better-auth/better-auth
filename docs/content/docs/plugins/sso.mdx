@@ -107,7 +107,7 @@ export const auth = betterAuth({
           return myCustomEncryptor(secret);
         },
         decrypt: async (stored: string) => {
-          return myCustomDecryptor(secret);
+          return myCustomDecryptor(stored);
         },
       },
       // ...other SSO options
