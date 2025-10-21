@@ -737,7 +737,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(accessToken.payload.scope).toBe(newScopes.join(" "));
 	});
 
-	it("should not refresh token when removing offline_scope", async ({
+	it("should refresh token even when removing offline_scope", async ({
 		expect,
 	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
@@ -777,11 +777,9 @@ describe("oauth token - refresh_token", async () => {
 		});
 		expect(newTokens.data?.access_token).toBeDefined();
 		expect(newTokens.data?.id_token).toBeDefined();
-		expect(newTokens.data?.refresh_token).toBeUndefined();
-		expect(newTokens.data?.scope).toBe(newScopes.join(" "));
-
-		// Should not refresh token
+		expect(newTokens.data?.refresh_token).toBeDefined();
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
+		expect(newTokens.data?.scope).toBe(newScopes.join(" "));
 	});
 
 	it("should not refresh token with more scopes", async () => {
@@ -821,6 +819,87 @@ describe("oauth token - refresh_token", async () => {
 			headers: headers,
 		});
 		expect(newTokens.error?.status).toBeDefined();
+	});
+
+	it("should prevent replay attacks", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+
+		// Refresh tokens
+		const { body, headers } = createRefreshAccessTokenRequest({
+			refreshToken: tokens?.refresh_token!,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+		const newTokens = await client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			refresh_token?: string;
+			expires_in?: number;
+			expires_at?: number;
+			token_type?: string;
+			scope?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: body,
+			headers: headers,
+		});
+		expect(newTokens.data?.access_token).toBeDefined();
+		expect(newTokens.data?.id_token).toBeDefined();
+		expect(newTokens.data?.refresh_token).toBeDefined();
+		expect(newTokens.data?.scope).toBe(scopes.join(" "));
+
+		// Replay original tokens
+		const replayedTokens = await client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			refresh_token?: string;
+			expires_in?: number;
+			expires_at?: number;
+			token_type?: string;
+			scope?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: body,
+			headers: headers,
+		});
+		expect(replayedTokens.error?.status).toBeDefined();
+
+		// New tokens should not work either
+		const { body: newBody, headers: newHeaders } =
+			createRefreshAccessTokenRequest({
+				refreshToken: newTokens?.data?.refresh_token!,
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+		const newTokensRefresh = await client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			refresh_token?: string;
+			expires_in?: number;
+			expires_at?: number;
+			token_type?: string;
+			scope?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: newBody,
+			headers: newHeaders,
+		});
+		expect(newTokensRefresh.error?.status).toBeDefined();
 	});
 });
 

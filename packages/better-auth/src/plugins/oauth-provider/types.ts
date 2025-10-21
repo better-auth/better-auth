@@ -424,8 +424,7 @@ export interface OAuthOptions {
 	/**
 	 * Custom session token formatter. You can
 	 * choose to perform additional functionality such as
-	 * refresh token encryption or store the raw token
-	 * for session replay attacks.
+	 * refresh token encryption.
 	 *
 	 * If defined, you must provide the function
 	 * decodeRefreshToken.
@@ -760,6 +759,14 @@ export interface OAuthRefreshToken {
 	clientId?: string;
 	expiresAt: Date;
 	createdAt: Date;
+	/**
+	 * When token was used. If set, token is considered a replay attack.
+	 */
+	used?: Date;
+	/**
+	 * When token was used. If set, token is considered a replay attack.
+	 */
+	revoked?: Date;
 	/**
 	 * Scopes granted for this refresh token.
 	 *
