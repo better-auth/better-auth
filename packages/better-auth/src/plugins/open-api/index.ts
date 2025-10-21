@@ -100,7 +100,7 @@ const getHTML = (
     ${JSON.stringify(apiReference)}
     </script>
 	 <script>
-      document.getElementById('api-reference').dataset.configuration = '${getScalarConfig(options)}';
+      document.getElementById('api-reference').dataset.configuration = ${JSON.stringify(getScalarConfig(options))};
     </script>
 	  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
   </body>
@@ -289,7 +289,7 @@ interface OpenAPIScalarOptions {
 	 * @default "summary"
 	 * @see {@link https://guides.scalar.com/scalar/scalar-api-references/configuration#configuration__configuration-options__showoperationid__operationtitlesource}
 	 */
-	operationTitleSouce?: "summary" | "path";
+	operationTitleSource?: "summary" | "path";
 	/**
 	 * Whether to order required properties first in schema objects. When enabled, required properties will be displayed before optional properties in model definitions.
 	 *
