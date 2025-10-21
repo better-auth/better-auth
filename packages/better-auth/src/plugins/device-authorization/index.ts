@@ -112,8 +112,6 @@ export type DeviceAuthorizationOptions = z.infer<
 	typeof deviceAuthorizationOptionsSchema
 >;
 
-export { deviceAuthorizationClient } from "./client"; // TODO: Probably don't need to export here
-
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 /**
