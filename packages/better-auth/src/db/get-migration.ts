@@ -93,11 +93,13 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 			db,
 		);
 		if (result.rows[0]?.search_path) {
-			// search_path can be a comma-separated list like "$user, public"
+			// search_path can be a comma-separated list like "$user, public" or '"$user", public'
 			// We want the first non-variable schema
 			const schemas = result.rows[0].search_path
 				.split(",")
 				.map((s) => s.trim())
+				// Remove quotes and filter out variables like $user
+				.map((s) => s.replace(/^["']|["']$/g, ""))
 				.filter((s) => !s.startsWith("$"));
 			return schemas[0] || "public";
 		}

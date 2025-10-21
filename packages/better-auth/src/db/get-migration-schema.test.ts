@@ -105,10 +105,9 @@ describe.runIf(isPostgresAvailable)(
 			expect(publicTableCheck.rows.length).toBe(1);
 		});
 
-		it("should handle public schema correctly (default behavior)", async () => {
-			// First, create the user table in public schema with all required fields
+		it("should only inspect tables in public schema when using default connection", async () => {
+			await publicPool.query(`DROP TABLE IF EXISTS public.user CASCADE`);
 			await publicPool.query(`
-			DROP TABLE IF EXISTS public.user CASCADE;
 			CREATE TABLE public.user (
 				id TEXT PRIMARY KEY NOT NULL,
 				email TEXT NOT NULL,
@@ -120,7 +119,6 @@ describe.runIf(isPostgresAvailable)(
 			);
 		`);
 
-			// Use Pool directly instead of Kysely instance to avoid caching issues
 			const config: BetterAuthOptions = {
 				database: publicPool,
 				emailAndPassword: {
@@ -131,10 +129,14 @@ describe.runIf(isPostgresAvailable)(
 			const { toBeCreated, toBeAdded } = await getMigrations(config);
 
 			// Should detect existing user table in public schema
-			const userTableCreated = toBeCreated.find((t) => t.table === "user");
-			expect(userTableCreated).toBeUndefined();
+			const userTable = toBeCreated.find((t) => t.table === "user");
+			expect(userTable).toBeUndefined();
 
-			// Other tables should still need to be created
+			// Should not need to add fields if table structure matches
+			const userFieldsToAdd = toBeAdded.find((t) => t.table === "user");
+			expect(userFieldsToAdd).toBeUndefined();
+
+			// Session, account, verification tables should need to be created
 			const sessionTable = toBeCreated.find((t) => t.table === "session");
 			expect(sessionTable).toBeDefined();
 		});
