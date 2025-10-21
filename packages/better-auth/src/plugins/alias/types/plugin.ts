@@ -151,12 +151,11 @@ type InferIncludedEndpoints<
 			{ path: string }
 	  >
 			? {
-					[K in keyof E]: InferMeta<AliasedPlugin>["options"]["excludeEndpoints"] extends infer EE extends
-						string[]
-						? EE extends E[K]["path"]
-							? never
-							: E[K]["path"]
-						: never;
+					[K in keyof E]: NonNullable<
+						InferMeta<AliasedPlugin>["options"]["excludeEndpoints"]
+					>[number] extends E[K]["path"]
+						? never
+						: E[K]["path"];
 				}[keyof E]
 			: never)
 	| (InferMeta<AliasedPlugin>["options"]["includeEndpoints"] extends infer IE extends
