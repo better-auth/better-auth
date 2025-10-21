@@ -178,8 +178,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 			);
 
 			// Filter to only tables that exist in the target schema
-			tableMetadata = allTableMetadata.filter((table) =>
-				tableNamesInSchema.has(table.name),
+			tableMetadata = allTableMetadata.filter(
+				(table) =>
+					table.schema === currentSchema && tableNamesInSchema.has(table.name),
 			);
 
 			logger.debug(
