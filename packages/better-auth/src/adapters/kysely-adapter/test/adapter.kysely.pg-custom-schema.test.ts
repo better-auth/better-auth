@@ -55,7 +55,9 @@ const { execute } = await testAdapter({
 		}
 
 		// Run migrations - should create tables in the custom schema
-		const { runMigrations } = await getMigrations(options);
+		// Use the Pool connection directly for getMigrations
+		const opts = Object.assign(options, { database: pgDB });
+		const { runMigrations } = await getMigrations(opts);
 		await runMigrations();
 
 		// Verify tables were created in the custom schema, not in public
@@ -98,8 +100,9 @@ const { execute } = await testAdapter({
 	async onFinish() {
 		// Clean up
 		await cleanupDatabase();
-		await pgDB.end();
+		// Destroy Kysely instance first, then end pool
 		await kyselyDB.destroy();
+		await pgDB.end();
 	},
 });
 

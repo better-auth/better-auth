@@ -107,29 +107,6 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	return "public";
 }
 
-/**
- * Get the schema name for a table in PostgreSQL
- * Queries information_schema to find which schema contains the table
- */
-async function getTableSchema(
-	db: Kysely<unknown>,
-	tableName: string,
-	currentSchema: string,
-): Promise<string | null> {
-	try {
-		const result = await sql<{ table_schema: string }>`
-			SELECT table_schema 
-			FROM information_schema.tables 
-			WHERE table_name = ${tableName}
-			AND table_schema = ${currentSchema}
-		`.execute(db);
-
-		return result.rows[0]?.table_schema || null;
-	} catch (error) {
-		return null;
-	}
-}
-
 export async function getMigrations(config: BetterAuthOptions) {
 	const betterAuthSchema = getSchema(config);
 	const logger = createLogger(config.logger);
@@ -180,9 +157,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	const allTableMetadata = await db.introspection.getTables();
 
-	// For PostgreSQL with non-default schema, filter tables to only those in the target schema
+	// For PostgreSQL, filter tables to only those in the target schema
 	let tableMetadata = allTableMetadata;
-	if (dbType === "postgres" && currentSchema !== "public") {
+	if (dbType === "postgres") {
 		// Get tables with their schema information
 		try {
 			const tablesInSchema = await sql<{
@@ -428,7 +405,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 					},
 				);
 
-			const indices: Array<{ table: string; field: string }> = [];
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
 				dbT = dbT.addColumn(fieldName, type, (col) => {

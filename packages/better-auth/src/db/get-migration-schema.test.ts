@@ -61,10 +61,12 @@ describe.runIf(isPostgresAvailable)(
 			// Cleanup
 			await publicPool.query(`DROP SCHEMA IF EXISTS ${customSchema} CASCADE`);
 			await publicPool.query(`DROP TABLE IF EXISTS public.user CASCADE`);
-			await publicPool.end();
-			await customSchemaPool.end();
+			// Destroy Kysely instances first (they will close connections but not end the pool)
 			await publicDb.destroy();
 			await customSchemaDb.destroy();
+			// Then end the pools
+			await publicPool.end();
+			await customSchemaPool.end();
 		});
 
 		it("should detect custom schema from search_path", async () => {

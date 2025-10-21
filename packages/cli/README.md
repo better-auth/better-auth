@@ -27,6 +27,8 @@ The `migrate` command applies the Better Auth schema directly to your database. 
 npx @better-auth/cli@latest migrate
 ```
 
+**Note for PostgreSQL users:** The migrate command supports non-default schemas. It automatically detects your `search_path` configuration and creates tables in the correct schema.
+
 ### **Secret**
 
 The CLI also provides a way to generate a secret key for your Better Auth instance.
