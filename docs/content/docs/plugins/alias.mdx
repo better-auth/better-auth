@@ -115,10 +115,14 @@ The plugin to wrap with the alias prefix.
 
     **Available options:**
 
-    - **excludeEndpoints?**: `string[]` — Endpoints that should not be prefixed with the alias.
+    - **excludeEndpoints?**: `LiteralString[]` — Endpoints that should not be prefixed with the alias.
     - **prefixTypeInference?**: `boolean` — Modifies `$Infer` types to avoid naming collisions when using multiple aliased plugins.
     Defaults to `false`.
     - **prefixEndpointMethods?**: `boolean` — Derives a camelCase prefix for endpoint methods. Defaults to `false`.
+    - **includeEndpoints?**: `LiteralString[]` — Additional endpoints that should be prefixed. Use this in conjunction with the compat
+    plugin.
+    - **modifyId?**: `boolean` — Whether to prefix the plugin's id. Set this to true when aliasing the same plugin multiple times.
+    Defaults to `false`.
     </Tab>
     <Tab value="client">
     **Type**: `AliasClientOptions`  
@@ -150,62 +154,110 @@ The alias plugin modifies the wrapped plugin by:
 
 ## Compatibility Plugin
 
-The compat plugin wraps another client plugin to preserve interoperability
+The compat plugin wraps another plugin to preserve interoperability
 with an aliased plugin by selectively rewriting requests and atom keys.
 It only rewrites endpoint paths and atoms that are explicitly included
 (or inferred from the aliased plugin), leaving all other behavior untouched.
 
 ### Basic Usage
 
-To use the compat plugin
+<Steps>
 
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client";
-import { aliasClient, aliasCompatClient } from "better-auth/client/plugins";
+    <Step>
+    #### Add the plugin to your auth config [!toc]
 
-const aliasedPlugin = aliasClient("/v1", somePlugin()); // [!code highlight]
+    Wrap your plugins with the `aliasCompat` function to selectively prefix their endpoints:
 
-export const authClient = createAuthClient({
-    plugins: [
-        aliasedPlugin,
-        // Always pass the compat plugin after the aliased plugin
-        aliasCompatClient(aliasedPlugin, otherPlugin()) // [!code highlight]
-        // or aliasedPlugin.compat(otherPlugin())
-    ],
-});
-```
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { alias, aliasCompat } from "better-auth/plugins";
+
+    const aliasedPlugin = alias("/v1", somePlugin()); // [!code highlight]
+
+    export const auth = betterAuth({
+        plugins: [
+            aliasedPlugin,
+            aliasCompat(aliasedPlugin, otherPlugin()), // [!code highlight]
+            // or aliasedPlugin.compat(otherPlugin())
+        ],
+    });
+    ```
+    </Step>
+
+    <Step>
+    #### Add the client plugin to your auth client [!toc]
+
+    Use `aliasCompatClient` to wrap client plugins with the same aliasedPlugin:
+    
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client";
+    import { aliasClient, aliasCompatClient } from "better-auth/client/plugins";
+
+    const aliasedPlugin = aliasClient("/v1", somePluginClient()); // [!code highlight]
+
+    export const authClient = createAuthClient({
+        plugins: [
+            aliasedPlugin,
+            // Always pass the compat plugin after the aliased plugin
+            aliasCompatClient(aliasedPlugin, otherPluginClient()), // [!code highlight]
+            // or aliasedPlugin.compat(otherPluginClient())
+        ],
+    });
+    ```
+    </Step>
+
+</Steps>
 
 ### Configuration
 
 ### `aliasedPlugin` [!toc]
-**Type**: `BetterAuthClientPlugin`  
+**Type**: `BetterAuthPlugin` (server) or `BetterAuthClientPlugin` (client)  
 **Required**: `true`
 
 The aliased plugin indicating which parts need to be rewritten.
 
 ### `plugin` [!toc]
-**Type**: `BetterAuthClientPlugin`  
+**Type**: `BetterAuthPlugin` (server) or `BetterAuthClientPlugin` (client)  
 **Required**: `true`
 
 The plugin to wrap with the compat plugin.
 
 ### `options?` [!toc]
-**Type**: `AliasCompatClientOptions`  
-**Required**: `false`
 
-Options for configuring how the compat plugin modifies the wrapped plugin's behavior.
+<Tabs items={["server", "client"]} defaultValue="server">
+    <Tab value="server">
+    **Type**: `AliasCompatOptions`  
+    **Required**: `false`
 
-**Available options**:
+    Options for configuring how the compat plugin modifies the wrapped plugin's behavior.
 
-- **includeEndpoints?**: `LiteralString[]` — Additional endpoints that should be prefixed.
-Use this to define endpoints that should be prefixed and are not present in the plugin's pathMethods.
+    **Available options**:
+    
+    - **includeEndpoints?**: `LiteralString[]` — Additional endpoints that should be prefixed.
+    </Tab>
+
+    <Tab value="client">
+    **Type**: `AliasCompatClientOptions`  
+    **Required**: `false`
+    
+    Options for configuring how the compat plugin modifies the wrapped plugin's behavior.
+
+    **Available options**:
+
+    - **includeEndpoints?**: `LiteralString[]` — Additional endpoints that should be prefixed.
+    Use this to define endpoints that should be prefixed and are not present in the plugin's pathMethods.
+    </Tab>
+</Tabs>
 
 ### How it Works
 
 The compat plugin modifies the wrapped plugin by:
 
-1. **Prefixing specific endpoint paths** - Only included endpoints are prefixed to match the aliased plugin
-2. **Modifying specific atoms** - Atom keys are adjusted to match aliased signals
+1. **Prefixing endpoint paths** - Only included endpoints are prefixed to match the aliased plugin
+2. **Modifying atoms** - Only specific atom keys are adjusted to match aliased signals
+3. **Updating middleware paths** — Middlewares are adjusted to match aliased paths
+4. **Modifying hook matchers** — Hooks continue to work with prefixed paths
+5. **Adjusting rate limit rules** — Rate limiting works correctly with aliased paths
 
 This ensures both plugins can interoperate smoothly, without affecting other endpoints or atoms.
 
