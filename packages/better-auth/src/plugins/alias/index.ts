@@ -1,7 +1,7 @@
 import type { AuthEndpoint } from "../../api";
 import type { LiteralString } from "../../types/helper";
 import type { BetterAuthPlugin } from "@better-auth/core";
-import type { InferAliasedPlugin_base } from "./types";
+import type { InferAliasedPlugin_base, NormalizePrefix } from "./types";
 import {
 	SPECIAL_ENDPOINTS,
 	toCamelCase,
@@ -10,6 +10,7 @@ import {
 	updateMatcher,
 } from "./utils";
 import { BetterAuthError } from "@better-auth/core/error";
+import type { Middleware } from "better-call";
 
 export type InferAliasedPlugin<
 	Prefix extends string,
@@ -30,10 +31,44 @@ export type InferAliasCompatPlugin<
 	AliasedPlugin extends BetterAuthPlugin,
 	T extends BetterAuthPlugin,
 	O extends AliasCompatOptions,
-> = Omit<T, "middlwares"> & {
-	// TODO:
-	middlewares: T["middlewares"];
+> = Omit<T, "middlewares"> & {
+	middlewares: T["middlewares"] extends infer M extends {
+		path: string;
+		middleware: Middleware;
+	}[]
+		? {
+				[K in keyof M]: Omit<M[K], "path"> & {
+					path: M[K]["path"] extends InferIncludedEndpoints<AliasedPlugin, O>
+						? `${NormalizePrefix<InferMeta<AliasedPlugin>["prefix"]>}${M[K]["path"]}`
+						: M[K]["path"];
+				};
+			}
+		: never;
 };
+
+type InferIncludedEndpoints<
+	AliasedPlugin extends BetterAuthPlugin,
+	O extends AliasCompatOptions,
+> =
+	| (AliasedPlugin["endpoints"] extends infer E extends Record<
+			string,
+			{ path: string }
+	  >
+			? {
+					[K in keyof E]: NonNullable<
+						InferMeta<AliasedPlugin>["options"]["excludeEndpoints"]
+					>[number] extends E[K]["path"]
+						? never
+						: E[K]["path"];
+				}[keyof E]
+			: never)
+	| (InferMeta<AliasedPlugin>["options"]["includeEndpoints"] extends infer IE extends
+			string[]
+			? IE[number]
+			: never)
+	| (O["includeEndpoints"] extends infer IE extends string[]
+			? IE[number]
+			: never);
 
 export type AliasOptions = {
 	/**
@@ -57,13 +92,13 @@ export type AliasOptions = {
 	/**
 	 * Endpoints that should not be prefixed with the alias.
 	 */
-	excludeEndpoints?: string[];
+	excludeEndpoints?: LiteralString[];
 	/**
 	 * Additional endpoints that should be prefixed.
 	 *
 	 * Use this in conjunction with the compat plugin.
 	 */
-	includeEndpoints?: string[];
+	includeEndpoints?: LiteralString[];
 };
 
 type InferMeta<AliasedPlugin extends BetterAuthPlugin> = AliasedPlugin extends {
@@ -172,7 +207,18 @@ export function alias<
 	}
 
 	Object.assign(aliasedPlugin, {
-		compat: aliasCompat.bind(null, aliasedPlugin),
+		compat: <
+			Plugin extends BetterAuthPlugin,
+			Option extends AliasCompatOptions,
+		>(
+			plugin: Plugin,
+			options: Option,
+		) =>
+			aliasCompat(
+				aliasedPlugin as InferAliasedPlugin_base<Prefix, T, O>,
+				plugin,
+				options,
+			),
 		"~meta": {
 			prefix: cleanPrefix,
 			options,
@@ -190,11 +236,11 @@ export type AliasCompatOptions = {
 	/**
 	 * Additional endpoints that should be prefixed.
 	 */
-	includeEndpoints?: string[];
+	includeEndpoints?: LiteralString[];
 };
 
 export function aliasCompat<
-	AliasedPlugin extends BetterAuthPlugin,
+	const AliasedPlugin extends BetterAuthPlugin,
 	T extends BetterAuthPlugin,
 	O extends AliasCompatOptions,
 >(aliasedPlugin: AliasedPlugin, plugin: T, options?: O) {

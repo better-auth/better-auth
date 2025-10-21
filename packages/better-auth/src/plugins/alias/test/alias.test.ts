@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { alias } from "../index";
 import type { BetterAuthPlugin } from "../../../types";
 import { createAuthEndpoint } from "@better-auth/core/api";
@@ -32,6 +32,9 @@ describe("alias plugin", () => {
 
 		expect(aliasedPlugin.middlewares).toBeDefined();
 		expect(aliasedPlugin.middlewares![0]?.path).toBe("/dodo/checkout");
+		expectTypeOf(aliasedPlugin.middlewares![0]?.path).toEqualTypeOf(
+			"/dodo/checkout" as const,
+		);
 	});
 
 	it("should update rate limit path matchers", () => {
@@ -117,15 +120,18 @@ describe("alias plugin", () => {
 });
 
 describe("alias compat plugin", () => {
-	it("should prefix middleware paths", () => {
+	it("should prefix included middleware paths", () => {
 		const plugin = createMockPlugin("payment");
 		const aliasedPlugin = alias("/dodo", plugin);
 		const compatPlugin = aliasedPlugin.compat(createMockPlugin("polar"));
 		expect(compatPlugin.middlewares).toBeDefined();
 		expect(compatPlugin.middlewares![0]?.path).toBe("/dodo/checkout");
+		expectTypeOf(compatPlugin.middlewares![0]?.path).toEqualTypeOf(
+			"/dodo/checkout" as const,
+		);
 	});
 
-	it("should not prefix excluded middleware paths", () => {
+	it("should not prefix other middleware paths", () => {
 		const plugin = createMockPlugin("payment");
 		const aliasedPlugin = alias("/dodo", plugin, {
 			excludeEndpoints: ["/checkout"],
@@ -133,6 +139,9 @@ describe("alias compat plugin", () => {
 		const compatPlugin = aliasedPlugin.compat(createMockPlugin("polar"));
 		expect(compatPlugin.middlewares).toBeDefined();
 		expect(compatPlugin.middlewares![0]?.path).toBe("/checkout");
+		expectTypeOf(compatPlugin.middlewares![0]?.path).toEqualTypeOf(
+			"/checkout" as const,
+		);
 	});
 
 	it("should update hook matchers to work with prefixed paths", () => {

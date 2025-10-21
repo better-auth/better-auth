@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "packages/core/dist";
 import type { CamelCase } from "../../client/path-to-object";
 import type { AliasOptions } from ".";
-import type { Endpoint } from "better-call";
+import type { Endpoint, Middleware } from "better-call";
 import type { SpecialEndpoints } from "./utils";
 
 export type NormalizePrefix<S extends string> = S extends ""
@@ -49,7 +49,7 @@ export type InferAliasedPlugin_base<
 	T extends BetterAuthPlugin,
 	O extends AliasOptions,
 	IsClient extends boolean = false,
-> = Omit<T, "endpoints" | "$Infer"> & {
+> = Omit<T, "endpoints" | "middlewares" | "$Infer"> & {
 	endpoints: {
 		[K in keyof T["endpoints"] &
 			string as O["prefixEndpointMethods"] extends true
@@ -88,4 +88,36 @@ export type InferAliasedPlugin_base<
 			}
 		: {
 				$Infer: undefined;
-			});
+			}) & {
+		"~meta": {
+			prefix: NormalizePrefix<Prefix>;
+			options: O;
+		};
+		middlewares: IsClient extends false
+			? T["middlewares"] extends infer M extends {
+					path: string;
+					middleware: Middleware;
+				}[]
+				? {
+						[K in keyof M]: M[K] extends {
+							path: infer P extends string;
+						}
+							? Omit<M[K], "path"> & {
+									path: P extends Exclude<
+										O["excludeEndpoints"],
+										undefined
+									>[number]
+										? O["excludeEndpoints"] extends Array<
+												infer E extends string
+											>
+											? [P] extends [E]
+												? P
+												: `${NormalizePrefix<Prefix>}${P}`
+											: `${NormalizePrefix<Prefix>}${P}`
+										: `${NormalizePrefix<Prefix>}${P}`;
+								}
+							: never;
+					}
+				: never
+			: T["middlewares"];
+	};
