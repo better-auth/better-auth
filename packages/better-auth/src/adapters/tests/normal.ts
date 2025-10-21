@@ -273,11 +273,12 @@ export const getNormalTestSuiteTests = ({
 			const users: User[] = [];
 			const sessions: Session[] = [];
 			const accounts: Account[] = [];
-			const expectedResult: {
+			type ExpectedResult = {
 				user: User;
 				session: Session;
 				account: Account;
-			}[] = [];
+			};
+			const expectedResult: ExpectedResult[] = [];
 
 			for (let i = 0; i < 10; i++) {
 				const user = await adapter.create<User>({
@@ -324,7 +325,12 @@ export const getNormalTestSuiteTests = ({
 				},
 			});
 
-			expect(result).toEqual(expectedResult);
+			// sort both results since order in this case doesn't matter
+			// but the test requires the order to be consistent
+			const sort = (a: ExpectedResult, b: ExpectedResult) =>
+				a.user.id.localeCompare(b.user.id);
+
+			expect(result.sort(sort)).toEqual(expectedResult.sort(sort));
 		},
 		"findMany - should return an empty array when no models are found":
 			async () => {

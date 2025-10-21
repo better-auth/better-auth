@@ -369,10 +369,17 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (join) {
 						for (const [model, joinAttr] of Object.entries(join)) {
 							const joinModel = getSchema(model);
-							query = query.leftJoin(
-								joinModel,
-								eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
-							);
+							if (joinAttr.type === "inner") {
+								query = query.innerJoin(
+									joinModel,
+									eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
+								);
+							} else {
+								query = query.leftJoin(
+									joinModel,
+									eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
+								);
+							}
 						}
 					}
 					const res = await query;
