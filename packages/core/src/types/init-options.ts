@@ -1,4 +1,10 @@
-import type { Dialect, Kysely, MysqlPool, PostgresPool, SqliteDatabase } from "kysely";
+import type {
+	Dialect,
+	Kysely,
+	MysqlPool,
+	PostgresPool,
+	SqliteDatabase,
+} from "kysely";
 import type { CookieOptions } from "better-call";
 import type { LiteralUnion } from "./helper";
 import type {
