@@ -101,6 +101,12 @@ export const init = async (options: BetterAuthOptions) => {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
+		oauthConfig: {
+			storeStateStrategy:
+				options.advanced?.oauthConfig?.storeStateStrategy || "cookie",
+			skipStateCookieCheck:
+				!!options.advanced?.oauthConfig?.skipStateCookieCheck,
+		},
 		tables,
 		trustedOrigins: getTrustedOrigins(options),
 		baseURL: baseURL || "",
