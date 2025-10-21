@@ -99,6 +99,12 @@ export const deviceAuthorizationOptionsSchema = z.object({
 		.describe(
 			"Function to handle device authorization requests. If not provided, no additional actions will be taken.",
 		),
+	verificationUri: z
+		.string()
+		.optional()
+		.describe(
+			"The URI where users verify their device code. Can be an absolute URL (https://example.com/device) or relative path (/device). This will be returned as verification_uri in the device code response. If not provided, verification_uri will not be included in the response.",
+		),
 	schema: z.custom<InferOptionSchema<typeof schema>>(() => true),
 });
 
@@ -125,6 +131,43 @@ const defaultGenerateUserCode = (length: number) => {
 	return Array.from(crypto.getRandomValues(chars))
 		.map((byte) => defaultCharset[byte % defaultCharset.length])
 		.join("");
+};
+
+/**
+ * @internal
+ */
+const buildVerificationUris = (
+	verificationUri: string | undefined,
+	baseURL: string,
+	userCode: string,
+): {
+	verificationUri: string | null;
+	verificationUriComplete: string | null;
+} => {
+	if (!verificationUri) {
+		return {
+			verificationUri: null,
+			verificationUriComplete: null,
+		};
+	}
+
+	let verificationUrl: URL;
+	try {
+		verificationUrl = new URL(verificationUri);
+	} catch {
+		verificationUrl = new URL(verificationUri, baseURL);
+	}
+
+	const verificationUriCompleteUrl = new URL(verificationUrl);
+	verificationUriCompleteUrl.searchParams.set("user_code", userCode);
+
+	const verificationUriString = verificationUrl.toString();
+	const verificationUriCompleteString = verificationUriCompleteUrl.toString();
+
+	return {
+		verificationUri: verificationUriString,
+		verificationUriComplete: verificationUriCompleteString,
+	};
 };
 
 export const deviceAuthorization = (
@@ -195,11 +238,17 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 													},
 													verification_uri: {
 														type: "string",
-														description: "The URL for user verification",
+														format: "uri",
+														nullable: true,
+														description:
+															"The URL for user verification. null if verificationUri option is not configured.",
 													},
 													verification_uri_complete: {
 														type: "string",
-														description: "The complete URL with user code",
+														format: "uri",
+														nullable: true,
+														description:
+															"The complete URL with user code as query parameter. null if verificationUri option is not configured.",
 													},
 													expires_in: {
 														type: "number",
@@ -271,22 +320,19 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						},
 					});
 
-					const baseURL = new URL(ctx.context.baseURL);
-					const verification_uri = new URL("/device", baseURL);
-
-					const verification_uri_complete = new URL(verification_uri);
-					verification_uri_complete.searchParams.set(
-						"user_code",
-						// should we support custom formatting function here?
-						encodeURIComponent(userCode),
-					);
+					const { verificationUri, verificationUriComplete } =
+						buildVerificationUris(
+							opts.verificationUri,
+							ctx.context.baseURL,
+							userCode,
+						);
 
 					return ctx.json(
 						{
 							device_code: deviceCode,
 							user_code: userCode,
-							verification_uri: verification_uri.toString(),
-							verification_uri_complete: verification_uri_complete.toString(),
+							verification_uri: verificationUri,
+							verification_uri_complete: verificationUriComplete,
 							expires_in: Math.floor(expiresIn / 1000),
 							interval: Math.floor(ms(opts.interval) / 1000),
 						},
@@ -617,10 +663,11 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					}),
 					metadata: {
 						openapi: {
-							description: "Display device verification page",
+							description:
+								"Verify user code and get device authorization status",
 							responses: {
 								200: {
-									description: "Verification page HTML",
+									description: "Device authorization status",
 									content: {
 										"application/json": {
 											schema: {
