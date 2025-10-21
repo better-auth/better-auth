@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "packages/core/src/utils";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
 export const DEVICE_AUTHORIZATION_ERROR_CODES = defineErrorCodes({
 	INVALID_DEVICE_CODE: "Invalid device code",
