@@ -974,6 +974,13 @@ export const sso = (options?: SSOOptions) => {
 								description: "Scopes to request from the provider.",
 							})
 							.optional(),
+						loginHint: z
+							.string({})
+							.meta({
+								description:
+									"Login hint to send to the identity provider (e.g., email or identifier). If supported, will be sent as 'login_hint'.",
+							})
+							.optional(),
 						requestSignUp: z
 							.boolean({})
 							.meta({
@@ -1021,6 +1028,11 @@ export const sso = (options?: SSOOptions) => {
 													type: "string",
 													description:
 														"The URL to redirect to after login if the user is new",
+												},
+												loginHint: {
+													type: "string",
+													description:
+														"Login hint to send to the identity provider (e.g., email or identifier). If supported, sent as 'login_hint'.",
 												},
 											},
 											required: ["callbackURL"],
@@ -1222,6 +1234,7 @@ export const sso = (options?: SSOOptions) => {
 									"profile",
 									"offline_access",
 								],
+							loginHint: ctx.body.loginHint || email,
 							authorizationEndpoint: provider.oidcConfig.authorizationEndpoint!,
 						});
 						return ctx.json({
@@ -1964,7 +1977,7 @@ export const sso = (options?: SSOOptions) => {
 
 					// Create session and set cookie
 					let session: Session =
-						await ctx.context.internalAdapter.createSession(user.id, ctx);
+						await ctx.context.internalAdapter.createSession(user.id);
 					await setSessionCookie(ctx, { session, user });
 
 					// Redirect to callback URL
@@ -2323,7 +2336,7 @@ export const sso = (options?: SSOOptions) => {
 					}
 
 					let session: Session =
-						await ctx.context.internalAdapter.createSession(user.id, ctx);
+						await ctx.context.internalAdapter.createSession(user.id);
 					await setSessionCookie(ctx, { session, user });
 
 					const callbackUrl =

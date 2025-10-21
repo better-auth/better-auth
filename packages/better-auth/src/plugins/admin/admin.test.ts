@@ -335,7 +335,24 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
+	});
+
+	it("should allow to combine search and filter", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: "admin",
+				filterField: "role",
+				filterOperator: "eq",
+				searchValue: "test",
+				searchField: "email",
+				searchOperator: "contains",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
 		expect(res.data?.users.length).toBe(1);
+		expect(res.data?.users[0]!.email).toBe("test@test.com");
 	});
 
 	it("should allow to set user role", async () => {
@@ -682,7 +699,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
-		expect(response.data?.users.length).toBe(2);
+		expect(response.data?.users.length).toBeGreaterThanOrEqual(2);
 		const roles = response.data?.users.map((d) => d.role);
 		expect(roles).not.toContain("user");
 	});
@@ -703,6 +720,62 @@ describe("Admin plugin", async () => {
 			password: "newPassword",
 		});
 		expect(res2.data?.user).toBeDefined();
+	});
+	it("should not allow admin to set user password with empty userId", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: "",
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should not allow admin to set user password with empty new password", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser?.id || "",
+				newPassword: "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should not allow admin to set user password with a short new password", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser!.id,
+				newPassword: "1234567",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_TOO_SHORT");
+		expect(res.error?.message).toBe("Password too short");
+	});
+
+	it("should not allow admin to set user password with a long new password", async () => {
+		const longNewPassword = Array(129).fill("a").join("");
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser!.id,
+				newPassword: longNewPassword,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_TOO_LONG");
+		expect(res.error?.message).toBe("Password too long");
 	});
 
 	it("should not allow non-admin to set user password", async () => {

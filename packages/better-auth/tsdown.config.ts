@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-	dts: true,
+	dts: { build: true, incremental: true },
 	format: ["esm", "cjs"],
 	entry: [
 		"./src/index.ts",
@@ -53,7 +53,6 @@ export default defineConfig({
 		"./src/plugins/organization/access/index.ts",
 		"./src/plugins/passkey/index.ts",
 		"./src/plugins/phone-number/index.ts",
-		"./src/plugins/sso/index.ts",
 		"./src/plugins/two-factor/index.ts",
 		"./src/plugins/username/index.ts",
 		"./src/plugins/haveibeenpwned/index.ts",
