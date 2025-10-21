@@ -254,10 +254,17 @@ export interface SSOOptions {
 	 */
 	trustEmailVerified?: boolean;
 	/**
-	 * Enables encryption at rest for sensitive fields (e.g. OIDC clientSecret).
-	 * When true, values are encrypted with BETTER_AUTH_SECRET before storing.
+	 * How to store sensitive secrets such as the OIDC clientSecret.
+	 * You can choose "plain", "encrypted" (uses BETTER_AUTH_SECRET), or provide a custom encryptor.
+	 * @default "plain"
 	 */
-	encryptionEnabled?: boolean;
+	storeSecretAs?:
+		| "plain"
+		| "encrypted"
+		| {
+				encrypt: (value: string) => Promise<string>;
+				decrypt: (value: string) => Promise<string>;
+		  };
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -806,13 +813,19 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 
-					const clientSecretToStore =
-						options?.encryptionEnabled && body.oidcConfig?.clientSecret
-							? await symmetricEncrypt({
-									key: ctx.context.secret,
-									data: body.oidcConfig.clientSecret,
-								})
-							: body.oidcConfig?.clientSecret;
+					const clientSecretToStore = body.oidcConfig?.clientSecret
+						? typeof options?.storeSecretAs === "object" &&
+							"encrypt" in options.storeSecretAs
+							? await options.storeSecretAs.encrypt(
+									body.oidcConfig.clientSecret,
+								)
+							: options?.storeSecretAs === "encrypted"
+								? await symmetricEncrypt({
+										key: ctx.context.secret,
+										data: body.oidcConfig.clientSecret,
+									})
+								: body.oidcConfig.clientSecret
+						: undefined;
 
 					const provider = await ctx.context.adapter.create<
 						Record<string, any>,
@@ -877,17 +890,26 @@ export const sso = (options?: SSOOptions) => {
 							const cfg = JSON.parse(
 								provider.oidcConfig as unknown as string,
 							) as OIDCConfig;
-							if (options?.encryptionEnabled && cfg?.clientSecret) {
-								try {
-									cfg.clientSecret = await symmetricDecrypt({
-										key: ctx.context.secret,
-										data: cfg.clientSecret,
-									});
-								} catch (e) {
-									throw new APIError("INTERNAL_SERVER_ERROR", {
-										message:
-											"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
-									});
+							if (cfg?.clientSecret) {
+								if (
+									typeof options?.storeSecretAs === "object" &&
+									"decrypt" in options.storeSecretAs
+								) {
+									cfg.clientSecret = await options.storeSecretAs.decrypt(
+										cfg.clientSecret,
+									);
+								} else if (options?.storeSecretAs === "encrypted") {
+									try {
+										cfg.clientSecret = await symmetricDecrypt({
+											key: ctx.context.secret,
+											data: cfg.clientSecret,
+										});
+									} catch (e) {
+										throw new APIError("INTERNAL_SERVER_ERROR", {
+											message:
+												"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
+										});
+									}
 								}
 							}
 							return cfg;
@@ -1127,17 +1149,27 @@ export const sso = (options?: SSOOptions) => {
 											res.oidcConfig as unknown as string,
 										) || undefined
 									: undefined;
-								if (options?.encryptionEnabled && parsedOidc?.clientSecret) {
-									try {
-										parsedOidc.clientSecret = await symmetricDecrypt({
-											key: ctx.context.secret,
-											data: parsedOidc.clientSecret,
-										});
-									} catch (e) {
-										throw new APIError("INTERNAL_SERVER_ERROR", {
-											message:
-												"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
-										});
+								if (parsedOidc?.clientSecret) {
+									if (
+										typeof options?.storeSecretAs === "object" &&
+										"decrypt" in options.storeSecretAs
+									) {
+										parsedOidc.clientSecret =
+											await options.storeSecretAs.decrypt(
+												parsedOidc.clientSecret,
+											);
+									} else if (options?.storeSecretAs === "encrypted") {
+										try {
+											parsedOidc.clientSecret = await symmetricDecrypt({
+												key: ctx.context.secret,
+												data: parsedOidc.clientSecret,
+											});
+										} catch (e) {
+											throw new APIError("INTERNAL_SERVER_ERROR", {
+												message:
+													"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
+											});
+										}
 									}
 								}
 								return {
@@ -1317,17 +1349,26 @@ export const sso = (options?: SSOOptions) => {
 								}
 								const parsed =
 									safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined;
-								if (options?.encryptionEnabled && parsed?.clientSecret) {
-									try {
-										parsed.clientSecret = await symmetricDecrypt({
-											key: ctx.context.secret,
-											data: parsed.clientSecret,
-										});
-									} catch (e) {
-										throw new APIError("INTERNAL_SERVER_ERROR", {
-											message:
-												"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
-										});
+								if (parsed?.clientSecret) {
+									if (
+										typeof options?.storeSecretAs === "object" &&
+										"decrypt" in options.storeSecretAs
+									) {
+										parsed.clientSecret = await options.storeSecretAs.decrypt(
+											parsed.clientSecret,
+										);
+									} else if (options?.storeSecretAs === "encrypted") {
+										try {
+											parsed.clientSecret = await symmetricDecrypt({
+												key: ctx.context.secret,
+												data: parsed.clientSecret,
+											});
+										} catch (e) {
+											throw new APIError("INTERNAL_SERVER_ERROR", {
+												message:
+													"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
+											});
+										}
 									}
 								}
 								return {

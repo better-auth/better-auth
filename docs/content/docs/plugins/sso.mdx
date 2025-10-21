@@ -68,7 +68,7 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
 ## Usage
 
-Note: To encrypt the OIDC clientSecret at rest, enable encryptionEnabled in the SSO plugin configuration. When enabled, the clientSecret is encrypted with BETTER_AUTH_SECRET before storing and decrypted on read.
+Note: To control how the OIDC clientSecret is stored at rest, use the storeSecretAs option in the SSO plugin. Supported values are "plain" (default), "encrypted" (uses BETTER_AUTH_SECRET), or a custom { encrypt, decrypt } implementation.
 
 ```ts title="server-setup.ts"
 import { sso } from "@better-auth/sso";
@@ -77,7 +77,8 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
   plugins: [
     sso({
-      encryptionEnabled: true,
+      // Store OIDC clientSecret encrypted at rest (uses BETTER_AUTH_SECRET)
+      storeSecretAs: "encrypted",
       // ...other SSO options
     }),
   ],
@@ -90,7 +91,30 @@ To register an OIDC provider, use the `registerSSOProvider` endpoint and provide
 
 A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
 
-Security note: When `encryptionEnabled` is set in the SSO plugin, the OIDC `clientSecret` is encrypted at rest using `BETTER_AUTH_SECRET` and decrypted on read. Ensure only trusted backends can call registration endpoints that return provider configuration. Do not enable this on databases that already contain plaintext client secrets without first migrating them to the encrypted format.
+Security note: When storeSecretAs is set to "encrypted" in the SSO plugin, the OIDC clientSecret is encrypted at rest using BETTER_AUTH_SECRET and decrypted on read. Ensure only trusted backends can call registration endpoints that return provider configuration. Do not enable this on databases that already contain plaintext client secrets without first migrating them to the encrypted format.
+
+Custom encryptor example:
+
+```ts title="server-setup.ts (custom secret storage)"
+import { sso } from "@better-auth/sso";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  plugins: [
+    sso({
+      storeSecretAs: {
+        encrypt: async (secret: string) => {
+          return myCustomEncryptor(secret);
+        },
+        decrypt: async (stored: string) => {
+          return myCustomDecryptor(secret);
+        },
+      },
+      // ...other SSO options
+    }),
+  ],
+});
+```
 
 Quick migration example (one-time):
 
@@ -363,39 +387,39 @@ const res = await auth.api.signInSSO({
 ```ts
 type signInSSO = {
     /**
-     * The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided. 
+     * The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided.
      */
     email?: string = "john@example.com"
     /**
-     * The slug of the organization to sign in with. 
+     * The slug of the organization to sign in with.
      */
     organizationSlug?: string = "example-org"
     /**
-     * The ID of the provider to sign in with. This can be provided instead of email or issuer. 
+     * The ID of the provider to sign in with. This can be provided instead of email or issuer.
      */
     providerId?: string = "example-provider"
     /**
-     * The domain of the provider. 
+     * The domain of the provider.
      */
     domain?: string = "example.com"
     /**
-     * The URL to redirect to after login. 
+     * The URL to redirect to after login.
      */
     callbackURL: string = "https://example.com/callback"
     /**
-     * The URL to redirect to after login. 
+     * The URL to redirect to after login.
      */
     errorCallbackURL?: string = "https://example.com/callback"
     /**
-     * The URL to redirect to after login if the user is new. 
+     * The URL to redirect to after login if the user is new.
      */
     newUserCallbackURL?: string = "https://example.com/new-user"
     /**
-     * Scopes to request from the provider. 
+     * Scopes to request from the provider.
      */
     scopes?: string[] = ["openid", "email", "profile", "offline_access"]
     /**
-     * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
+     * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider.
      */
     requestSignUp?: boolean = true
 }
@@ -514,19 +538,19 @@ const auth = betterAuth({
                     // Assign roles based on SSO attributes
                     const department = userInfo.attributes?.department;
                     const jobTitle = userInfo.attributes?.jobTitle;
-                    
+
                     // Admins based on job title
-                    if (jobTitle?.toLowerCase().includes('manager') || 
+                    if (jobTitle?.toLowerCase().includes('manager') ||
                         jobTitle?.toLowerCase().includes('director') ||
                         jobTitle?.toLowerCase().includes('vp')) {
                         return "admin";
                     }
-                    
+
                     // Special roles for IT department
                     if (department?.toLowerCase() === 'it') {
                         return "admin";
                     }
-                    
+
                     // Default to member for everyone else
                     return "member";
                 },
@@ -609,7 +633,7 @@ provisionUser: async ({ user, userInfo }) => {
         await createUserResources(user.id);
         await markAsProvisioned(user.id);
     }
-    
+
     // Always update attributes (they might change)
     await updateUserAttributes(user.id, userInfo.attributes);
 },
@@ -762,7 +786,7 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 **trustEmailVerified**: Trust the email verified flag from the provider.
 
-**encryptionEnabled**: Encrypt the OIDC clientSecret at rest using BETTER_AUTH_SECRET. When enabled, API responses include the decrypted clientSecret; restrict access to registration endpoints accordingly. This cannot be turned on if existing client secrets are stored in plaintext; perform a one-time migration first.
+**storeSecretAs**: How to store sensitive secrets such as the OIDC clientSecret. Supported values: plain (default), encrypted (uses BETTER_AUTH_SECRET), or a custom { encrypt, decrypt } implementation.
 
 <TypeTable
   type={{
@@ -806,10 +830,10 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
         type: "number | function",
         default: 10,
     },
-    encryptionEnabled: {
-        description: "Encrypt the OIDC clientSecret at rest using BETTER_AUTH_SECRET. API responses return decrypted clientSecret; restrict access to registration endpoints. This cannot be enabled if existing client secrets are stored in plaintext; migrate those records first.",
-        type: "boolean",
-        default: false,
+    storeSecretAs: {
+        description: "How to store sensitive secrets such as the OIDC clientSecret. Supported values: plain (default), encrypted (uses BETTER_AUTH_SECRET), or a custom { encrypt, decrypt } implementation.",
+        type: "string | object",
+        default: "plain",
     },
     defaultSSO: {
         description: "Configure a default SSO provider for testing and development. This provider will be used when no matching provider is found in the database.",
