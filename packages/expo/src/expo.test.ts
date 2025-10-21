@@ -2,7 +2,7 @@ import { createAuthClient } from "better-auth/react";
 import Database from "better-sqlite3";
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
 import { expo } from ".";
-import { expoClient } from "./client";
+import { expoClient, storageAdapter } from "./client";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
 import { oAuthProxy } from "better-auth/plugins";
@@ -324,5 +324,20 @@ describe("expo with cookieCache", async () => {
 		expect(hasBetterAuthCookies(customCookieHeader, "my-app")).toBe(true);
 
 		expect(hasBetterAuthCookies(customCookieHeader, "better-auth")).toBe(false);
+	});
+
+	it("should normalize colons in secure storage name via storage adapter", async () => {
+		const map = new Map<string, string>();
+		const storage = storageAdapter({
+			getItem(name) {
+				return map.get(name) || null;
+			},
+			setItem(name, value) {
+				map.set(name, value);
+			},
+		});
+		storage.setItem("better-auth:session_token", "123");
+		expect(map.has("better-auth_session_token")).toBe(true);
+		expect(map.has("better-auth:session_token")).toBe(false);
 	});
 });
