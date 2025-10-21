@@ -145,8 +145,9 @@ export const getNormalTestSuiteTests = ({
 				data: { ...(await generate("session")), userId: user.id },
 				forceAllowId: true,
 			});
+			type ExpectedResult = { user: User; session: Session };
 
-			const result = await adapter.findOne<{ user: User; session: Session }>({
+			const result = await adapter.findOne<ExpectedResult>({
 				model: "user",
 				where: [{ field: "id", value: user.id }],
 				join: {
@@ -156,6 +157,7 @@ export const getNormalTestSuiteTests = ({
 				},
 			});
 
+			console.log(1, result);
 			expect(result).toEqual({ user, session });
 		},
 		"findOne - should find a model with modified field name": async () => {
