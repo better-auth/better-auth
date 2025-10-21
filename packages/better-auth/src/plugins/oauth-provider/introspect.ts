@@ -315,6 +315,11 @@ async function validateRefreshToken(
 			active: false,
 		};
 	}
+	if (refreshToken.used || refreshToken.revoked) {
+		return {
+			active: false,
+		};
+	}
 
 	let sessionId: string | undefined = refreshToken.sessionId ?? undefined;
 	if (sessionId) {
