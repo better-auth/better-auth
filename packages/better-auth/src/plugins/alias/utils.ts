@@ -1,4 +1,5 @@
 import type { HookEndpointContext } from "@better-auth/core";
+import type { AuthEndpoint } from "../../api";
 
 export const SPECIAL_ENDPOINTS = ["/sign-in/", "/sign-up/"] as const;
 
@@ -28,8 +29,11 @@ export function resolvePath(url: string, baseURL?: string) {
 	let basePath: string | null = null;
 
 	if (/^https?:\/\//.test(url)) {
+		// Absolute url, retrieving pathname
 		resolvedPath = new URL(url).pathname;
 	} else if (baseURL) {
+		// Combine the base URL and relative URL, normalize
+		// their paths, and get a consistent resolved path
 		base = new URL(baseURL);
 		basePath = normalizePath(base.pathname);
 		const relative = url.replace(/^\/+/, "");
@@ -41,6 +45,7 @@ export function resolvePath(url: string, baseURL?: string) {
 
 	resolvedPath = normalizePath(resolvedPath);
 
+	// Strip basePath prefix if present, keeping relative path only
 	if (baseURL) {
 		if (!base) {
 			base = new URL(baseURL);
@@ -79,12 +84,16 @@ export function updateMatcher<
 ) {
 	return ((input: string | HookEndpointContext) => {
 		const path = typeof input === "string" ? input : input.path;
+
+		// flags for endpoint filtering
 		const excluded = cfg.excludeEndpoints?.includes(path) ?? false;
 		const included = cfg.includeEndpoints
 			? cfg.includeEndpoints.includes(path)
 			: true;
 
 		let ctx: string | HookEndpointContext;
+
+		// Only strip prefix if path starts with it and is not explicitly excluded
 		if (path.startsWith(cfg.prefix) && !excluded) {
 			const strippedPath = path.slice(cfg.prefix.length);
 			ctx =
@@ -92,11 +101,62 @@ export function updateMatcher<
 					? strippedPath
 					: { ...input, path: strippedPath };
 		} else if (excluded || !included) {
+			// Keep original input for matcher if path is excluded or not included
 			ctx = input;
 		} else {
+			// Path doesn't match prefix and is not explicitly included/excluded -> matcher should not run
 			return false;
 		}
 		// @ts-expect-error
 		return cfg.matcher(ctx);
 	}) as M;
+}
+
+export function resolveURL(
+	context: {
+		url: string | URL;
+		baseURL?: string;
+	},
+	specialEndpoints: string[],
+	prefix?: string,
+	mode: "exclude" | "include" = "exclude",
+) {
+	const { path, basePath } = resolvePath(
+		context.url.toString(),
+		context.baseURL,
+	);
+
+	// Check if current path matches any special endpoint
+	const matches = specialEndpoints.some((ep) => {
+		const normalized = normalizePath(ep);
+		return path === normalized || path.startsWith(`${normalized}/`);
+	});
+	// skip transformation if path is in specialEndpoints based on mode
+	if ((mode === "exclude" && matches) || (mode === "include" && !matches)) {
+		return context.url.toString();
+	}
+
+	// Prepend prefix if provided
+	const relativePath = `${prefix || ""}${path}`;
+	if (typeof context.url !== "string") {
+		// Construct full URL from basePath and relativePath
+		const res = new URL(`${basePath}${relativePath}`, context.url).toString();
+		return res;
+	}
+
+	return relativePath;
+}
+
+export function cloneEndpoint<
+	T extends ((...args: any[]) => any) & Record<string, any>,
+>(endpoint: T, path: string): Omit<AuthEndpoint, "wrap"> {
+	const cloned = ((...args: Parameters<T>) => endpoint(...args)) as T &
+		Record<string, any>;
+
+	return Object.assign(cloned, {
+		path,
+		// Preserve original path
+		originalPath: endpoint.originalPath || endpoint.path,
+		options: endpoint.options,
+	});
 }

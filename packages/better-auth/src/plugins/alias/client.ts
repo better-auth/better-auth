@@ -1,207 +1,22 @@
 import type {
 	BetterAuthClientPlugin,
 	BetterAuthPlugin,
-	ClientAtomListener,
 } from "@better-auth/core";
 import type { LiteralString } from "../../types/helper";
-import type {
-	CamelCasePrefix,
-	InferAliasedPlugin_base,
-	MatchesExcluded,
-	NormalizePrefix,
-	TransformNormalizedPrefix,
-} from "./types";
 import { getBaseURL } from "../../utils/url";
 import {
-	normalizePath,
 	normalizePrefix,
-	resolvePath,
+	resolveURL,
 	SPECIAL_ENDPOINTS,
 	toCamelCase,
 	updateMatcher,
-	type SpecialEndpoints,
 } from "./utils";
-import { BetterAuthError } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "../../utils";
-
-type ExtendPathMethods<
-	T extends BetterAuthClientPlugin,
-	P extends string,
-	O extends AliasClientOptions,
-> = T extends {
-	pathMethods: infer U;
-}
-	? {
-			pathMethods: {
-				[K in keyof U as MatchesExcluded<
-					K & string,
-					O["excludeEndpoints"]
-				> extends true
-					? K & string
-					: `${P}${K & string}`]: U[K];
-			};
-		}
-	: {
-			pathMethods: undefined;
-		};
-
-type ExtendGetActions<
-	T extends BetterAuthClientPlugin,
-	P extends string,
-	Options extends AliasClientOptions,
-> = T extends {
-	getActions: (
-		fetch: infer F,
-		store: infer S,
-		options: infer O,
-	) => infer Actions;
-}
-	? {
-			getActions: (
-				fetch: F,
-				store: S,
-				options: O,
-			) => {
-				[T in P as CamelCasePrefix<P>]: {
-					[K in keyof Actions & string as K extends
-						| "$Infer"
-						| CamelCasePrefix<SpecialEndpoints>
-						? never
-						: K]: Actions[K];
-				};
-			} & {
-				[T in keyof Actions &
-					string as T extends CamelCasePrefix<SpecialEndpoints> ? T : never]: {
-					[I in CamelCasePrefix<P>]: Actions[T];
-				};
-			} & (Actions extends {
-					$Infer: infer I extends Record<string, any>;
-				}
-					? {
-							$Infer: Options["prefixTypeInference"] extends true
-								? {
-										[K in keyof I &
-											string as `${Capitalize<CamelCasePrefix<P>>}${K}`]: I[K];
-									}
-								: I;
-						}
-					: { $Infer: {} });
-		}
-	: { getActions: undefined };
-
-type ExtendGetAtoms<
-	T extends BetterAuthClientPlugin,
-	P extends string,
-	Options extends AliasClientOptions,
-> = T extends {
-	getAtoms: (fetch: infer F, options: infer O) => infer Atoms;
-}
-	? {
-			getAtoms: (
-				fetch: F,
-				options: O,
-			) => {
-				[K in keyof Atoms & string as Options["prefixAtoms"] extends true
-					? `${K}${Capitalize<CamelCasePrefix<P>>}`
-					: K]: Atoms[K];
-			};
-		}
-	: {
-			getAtoms: undefined;
-		};
-
-type ExtendEndpoints<
-	T extends BetterAuthClientPlugin,
-	Prefix extends string,
-	O extends AliasClientOptions,
-> = {
-	$InferServerPlugin: T["$InferServerPlugin"] extends infer P extends
-		BetterAuthPlugin
-		? InferAliasedPlugin_base<
-				Prefix,
-				P,
-				{
-					// make endpoints distinct
-					prefixEndpointMethods: true;
-					excludeEndpoints: O["excludeEndpoints"];
-				},
-				true
-			>
-		: never;
-};
-
-type InferMeta<AliasedPlugin extends BetterAuthClientPlugin> =
-	AliasedPlugin extends {
-		"~meta": {
-			prefix: infer P extends LiteralString;
-			options?: infer O extends AliasClientOptions;
-			signals: infer S extends LiteralString | null;
-		};
-	}
-		? {
-				prefix: P;
-				options: O;
-				signals: S;
-			}
-		: never;
-
-export type InferAliasCompatClientPlugin<
-	AliasedPlugin extends BetterAuthClientPlugin,
-	T extends BetterAuthClientPlugin,
-	O extends AliasCompatClientOptions,
-> = Omit<T, "atomListeners"> & {
-	atomListeners?: () => ClientAtomListener[] | undefined;
-};
-
-type InferAliasedClientPlugin_base<
-	Prefix extends LiteralString,
-	T extends BetterAuthClientPlugin,
-	O extends AliasClientOptions,
-> = Omit<
-	T,
-	| "id"
-	| "pathMethods"
-	| "getActions"
-	| "getAtoms"
-	| "atomListeners"
-	| "$InferServerPlugin"
-> & {
-	id: `${T["id"]}-${TransformNormalizedPrefix<NormalizePrefix<Prefix>>}`;
-} & ExtendPathMethods<T, NormalizePrefix<Prefix>, O> &
-	ExtendGetActions<T, NormalizePrefix<Prefix>, O> &
-	ExtendGetAtoms<T, NormalizePrefix<Prefix>, O> &
-	ExtendEndpoints<T, NormalizePrefix<Prefix>, O> & {
-		"~meta": {
-			prefix: NormalizePrefix<Prefix>;
-			options: O;
-			signals: T["getAtoms"] extends (...args: any[]) => infer R
-				?
-						| {
-								[K in keyof R & string]: K extends `$${string}` ? K : never;
-						  }[keyof R & string][]
-						| null
-				: null;
-		};
-		atomListeners?: () => ClientAtomListener[] | undefined;
-	};
-
-export type InferAliasedClientPlugin<
-	Prefix extends LiteralString,
-	T extends BetterAuthClientPlugin,
-	O extends AliasClientOptions,
-> = InferAliasedClientPlugin_base<Prefix, T, O> & {
-	compat: <
-		Plugin extends BetterAuthClientPlugin,
-		Option extends AliasCompatClientOptions,
-	>(
-		plugin: Plugin,
-		options?: Option,
-	) => InferAliasCompatClientPlugin<
-		InferAliasedClientPlugin_base<Prefix, T, O>,
-		Plugin,
-		Option
-	>;
-};
+import type {
+	InferAliasedClientPlugin,
+	InferAliasedClientPlugin_base,
+} from "./types/client";
+import { aliasCompatClient } from "./compat/client";
 
 export type AliasClientOptions = {
 	/**
@@ -237,6 +52,7 @@ export type AliasClientOptions = {
  *
  * @param prefix - The sub-path to prefix all plugin endpoints with (e.g., "/polar", "/dodo")
  * @param plugin - The client plugin to wrap
+ * @param options - Additional configuration
  * @returns A new client plugin with all endpoints prefixed
  *
  * @example
@@ -265,9 +81,12 @@ export function aliasClient<
 		...plugin,
 		id: `${plugin.id}-${cleanPrefix.replace(/\//g, "-")}`,
 	};
+	// Cached list of atom signal keys from getAtoms
+	// Used to selectively prefix only signals that belong to this plugin
+	// Populated lazily when getAtoms is first invoked
 	let lazySignals: string[] | null = null;
 
-	// Prefix pathMethods
+	// Prefix pathMethods unless explicitly excluded
 	if (plugin.pathMethods) {
 		const prefixedPathMethods: Record<string, "POST" | "GET"> = {};
 		for (const [path, method] of Object.entries(plugin.pathMethods)) {
@@ -281,7 +100,7 @@ export function aliasClient<
 		aliasedPlugin.pathMethods = prefixedPathMethods;
 	}
 
-	// Update atomListeners matchers
+	// Update atomListeners matchers to respect prefix and optional atom key prefixing
 	if (plugin.atomListeners) {
 		aliasedPlugin.atomListeners = () => {
 			const originalListeners =
@@ -289,6 +108,7 @@ export function aliasClient<
 					? plugin.atomListeners()
 					: plugin.atomListeners) || [];
 			return originalListeners.map((listener) => ({
+				// Prefix signal name if needed and name is not preserved
 				signal:
 					listener.signal !== "$sessionSignal" &&
 					lazySignals?.includes(`${listener.signal}`) &&
@@ -331,6 +151,7 @@ export function aliasClient<
 			);
 			const prefixedActions: Record<string, any> = {};
 
+			// Split actions into specialEndpoints and regular endpoints
 			for (const [key, action] of Object.entries(originalActions)) {
 				if (SPECIAL_ENDPOINTS.some((value) => toCamelCase(value) === key)) {
 					prefixedActions[key] ??= {};
@@ -345,7 +166,7 @@ export function aliasClient<
 		};
 	}
 
-	// Wrap getAtoms to prefix any path-based actions
+	// Wrap getAtoms to prefix any path-based actions and optionally atom keys
 	if (plugin.getAtoms) {
 		aliasedPlugin.getAtoms = ($fetch, clientOptions) => {
 			const baseURL = getBaseURL(
@@ -382,6 +203,7 @@ export function aliasClient<
 		};
 	}
 
+	// Ensure fetchPlugins have unique ids
 	if (plugin.fetchPlugins) {
 		aliasedPlugin.fetchPlugins = plugin.fetchPlugins.map((fetchPlugin) => ({
 			...fetchPlugin,
@@ -412,10 +234,12 @@ export function aliasClient<
 	}
 
 	Object.assign(aliasedPlugin, {
+		// Add compat helper to wrap other plugins for interop
 		compat: aliasCompatClient.bind(
 			null,
 			aliasedPlugin as InferAliasedClientPlugin_base<Prefix, T, O>,
 		),
+		// store data for internal usage
 		"~meta": {
 			prefix: cleanPrefix,
 			options,
@@ -432,183 +256,5 @@ export function aliasClient<
 	> satisfies BetterAuthClientPlugin;
 }
 
-export type AliasCompatClientOptions = {
-	/**
-	 * Additional endpoints that should be prefixed.
-	 *
-	 * Use this to define endpoints that should be prefixed
-	 * and are not present in the plugin's pathMethods.
-	 */
-	includeEndpoints?: LiteralString[];
-};
-
-export function aliasCompatClient<
-	AliasedPlugin extends BetterAuthClientPlugin,
-	T extends BetterAuthClientPlugin,
-	O extends AliasCompatClientOptions,
->(aliasedPlugin: AliasedPlugin, plugin: T, options?: O) {
-	if (!("~meta" in aliasedPlugin)) {
-		throw new BetterAuthError(
-			"aliasedPlugin",
-			"Invalid aliasedPlugin provided.",
-		);
-	}
-	const {
-		prefix,
-		options: aliasOptions,
-		signals,
-	} = aliasedPlugin["~meta"] as InferMeta<AliasedPlugin>;
-	const camelCasePrefix = toCamelCase(prefix);
-	const compatPlugin: BetterAuthClientPlugin = {
-		...plugin,
-	};
-
-	const includeEndpoints = [
-		...new Set([
-			...(options?.includeEndpoints || []),
-			...(aliasOptions?.includeEndpoints || []),
-			...Object.keys(aliasedPlugin.pathMethods || {})
-				.filter((path) => path.startsWith(prefix))
-				.map((path) => path.slice(prefix.length)),
-		]),
-	];
-
-	// Update atomListeners matchers
-	if (plugin.atomListeners) {
-		compatPlugin.atomListeners = () => {
-			const originalListeners =
-				(typeof plugin.atomListeners === "function"
-					? plugin.atomListeners()
-					: plugin.atomListeners) || [];
-
-			return originalListeners.map((listener) => ({
-				signal:
-					listener.signal !== "$sessionSignal" &&
-					signals?.includes(`${listener.signal}`) &&
-					aliasOptions?.prefixAtoms
-						? `${listener.signal}${capitalizeFirstLetter(camelCasePrefix)}`
-						: listener.signal,
-				matcher: updateMatcher({
-					matcher: listener.matcher,
-					prefix,
-					excludeEndpoints: aliasOptions?.excludeEndpoints,
-				}),
-			}));
-		};
-	}
-
-	// Wrap getActions to prefix specific path-based action
-	if (plugin.getActions) {
-		compatPlugin.getActions = ($fetch, store, clientOptions) => {
-			const baseURL = getBaseURL(
-				clientOptions?.baseURL,
-				clientOptions?.basePath,
-				undefined,
-			);
-			return plugin.getActions!(
-				((url: string | URL, ...opts: any[]) => {
-					return $fetch(
-						resolveURL(
-							{
-								url,
-								baseURL,
-							},
-							includeEndpoints,
-							prefix,
-							"include",
-						),
-						...opts,
-					);
-				}) as any,
-				store,
-				clientOptions,
-			);
-		};
-	}
-
-	// Wrap getAtoms to prefix specific path-based action
-	if (plugin.getAtoms) {
-		compatPlugin.getAtoms = ($fetch, clientOptions) => {
-			const baseURL = getBaseURL(
-				clientOptions?.baseURL,
-				clientOptions?.basePath,
-				undefined,
-			);
-			return plugin.getAtoms!(
-				((url: string | URL, ...opts: any[]) => {
-					return $fetch(
-						resolveURL({ url, baseURL }, includeEndpoints, prefix, "include"),
-						...opts,
-					);
-				}) as any,
-				clientOptions,
-			);
-		};
-	}
-
-	// Update fetchPlugins hooks to prefix specific paths
-	if (plugin.fetchPlugins) {
-		compatPlugin.fetchPlugins = plugin.fetchPlugins.map((fetchPlugin) => ({
-			...fetchPlugin,
-			init(url, options) {
-				const resolvedURL = resolveURL(
-					{
-						url,
-						baseURL: options?.baseURL,
-					},
-					includeEndpoints,
-					prefix,
-					"include",
-				);
-
-				return fetchPlugin.init
-					? fetchPlugin.init?.(resolvedURL, options)
-					: {
-							url: resolvedURL,
-							options,
-						};
-			},
-		}));
-	}
-
-	return compatPlugin as InferAliasCompatClientPlugin<
-		InferAliasedClientPlugin_base<
-			InferMeta<AliasedPlugin>["prefix"],
-			AliasedPlugin,
-			InferMeta<AliasedPlugin>["options"]
-		>,
-		T,
-		O
-	>;
-}
-
-const resolveURL = (
-	context: {
-		url: string | URL;
-		baseURL?: string;
-	},
-	specialEndpoints: string[],
-	prefix?: string,
-	mode: "exclude" | "include" = "exclude",
-) => {
-	const { path, basePath } = resolvePath(
-		context.url.toString(),
-		context.baseURL,
-	);
-
-	const matches = specialEndpoints.some((ep) => {
-		const normalized = normalizePath(ep);
-		return path === normalized || path.startsWith(`${normalized}/`);
-	});
-	if ((mode === "exclude" && matches) || (mode === "include" && !matches)) {
-		return context.url.toString();
-	}
-
-	const relativePath = `${prefix || ""}${path}`;
-	if (typeof context.url !== "string") {
-		const res = new URL(`${basePath}${relativePath}`, context.url).toString();
-		return res;
-	}
-
-	return relativePath;
-};
+export * from "./compat/client";
+export type * from "./types";

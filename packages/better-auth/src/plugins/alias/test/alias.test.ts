@@ -117,6 +117,21 @@ describe("alias plugin", () => {
 		expect(aliasedPlugin.rateLimit).toBeUndefined();
 		expect(aliasedPlugin.hooks).toBeUndefined();
 	});
+
+	it("should modify the plugins id when enabled", async () => {
+		const aliasedPlugin = alias(
+			"/prefix",
+			{
+				id: "mini",
+			},
+			{
+				modifyId: true,
+			},
+		);
+
+		expect(aliasedPlugin.id).toBe("mini--prefix");
+		expectTypeOf(aliasedPlugin.id).toEqualTypeOf("mini--prefix" as const);
+	});
 });
 
 describe("alias compat plugin", () => {
@@ -170,8 +185,6 @@ describe("alias compat plugin", () => {
 
 		expect(compatPlugin.rateLimit).toBeDefined();
 		const rateLimitRule = compatPlugin.rateLimit![0];
-
-		console.dir(rateLimitRule?.pathMatcher("/stripe/checkout"));
 
 		// Test that the rate limit matcher works with prefixed paths
 		expect(rateLimitRule?.pathMatcher("/stripe/checkout")).toBe(true);
