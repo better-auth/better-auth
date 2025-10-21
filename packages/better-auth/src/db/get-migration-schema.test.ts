@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import { getMigrations } from "./get-migration";
 import type { BetterAuthOptions } from "@better-auth/core";
@@ -33,14 +32,6 @@ describe.runIf(isPostgresAvailable)(
 			connectionString: `postgres://user:password@localhost:5433/better_auth?options=-c search_path=${customSchema}`,
 		});
 
-		const publicDb = new Kysely({
-			dialect: new PostgresDialect({ pool: publicPool }),
-		});
-
-		const customSchemaDb = new Kysely({
-			dialect: new PostgresDialect({ pool: customSchemaPool }),
-		});
-
 		beforeAll(async () => {
 			// Setup: Create custom schema and a table in public schema
 			await publicPool.query(`DROP SCHEMA IF EXISTS ${customSchema} CASCADE`);
@@ -61,17 +52,14 @@ describe.runIf(isPostgresAvailable)(
 			// Cleanup
 			await publicPool.query(`DROP SCHEMA IF EXISTS ${customSchema} CASCADE`);
 			await publicPool.query(`DROP TABLE IF EXISTS public.user CASCADE`);
-			// Destroy Kysely instances first (they will close connections but not end the pool)
-			await publicDb.destroy();
-			await customSchemaDb.destroy();
-			// Then end the pools
 			await publicPool.end();
 			await customSchemaPool.end();
 		});
 
 		it("should detect custom schema from search_path", async () => {
+			// Use Pool with search_path option
 			const config: BetterAuthOptions = {
-				database: { db: customSchemaDb, type: "postgres" },
+				database: customSchemaPool,
 				emailAndPassword: {
 					enabled: true,
 				},
@@ -97,7 +85,7 @@ describe.runIf(isPostgresAvailable)(
 			// Even though there's a 'user' table in public schema,
 			// when we use custom schema, migrations should create a new user table
 			const config: BetterAuthOptions = {
-				database: { db: customSchemaDb, type: "postgres" },
+				database: customSchemaPool,
 				emailAndPassword: {
 					enabled: true,
 				},
@@ -132,8 +120,9 @@ describe.runIf(isPostgresAvailable)(
 			);
 		`);
 
+			// Use Pool directly instead of Kysely instance to avoid caching issues
 			const config: BetterAuthOptions = {
-				database: { db: publicDb, type: "postgres" },
+				database: publicPool,
 				emailAndPassword: {
 					enabled: true,
 				},
@@ -158,7 +147,7 @@ describe.runIf(isPostgresAvailable)(
 			await customSchemaPool.query(`CREATE SCHEMA ${customSchema}`);
 
 			const config: BetterAuthOptions = {
-				database: { db: customSchemaDb, type: "postgres" },
+				database: customSchemaPool,
 				emailAndPassword: {
 					enabled: true,
 				},

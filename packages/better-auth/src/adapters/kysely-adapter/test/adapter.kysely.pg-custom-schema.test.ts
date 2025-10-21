@@ -100,9 +100,8 @@ const { execute } = await testAdapter({
 	async onFinish() {
 		// Clean up
 		await cleanupDatabase();
-		// Destroy Kysely instance first, then end pool
+		// Destroy Kysely instance
 		await kyselyDB.destroy();
-		await pgDB.end();
 	},
 });
 
