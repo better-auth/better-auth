@@ -1,6 +1,7 @@
 import type {
 	AlterTableColumnAlteringBuilder,
 	CreateTableBuilder,
+	Kysely,
 } from "kysely";
 import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
 import { sql } from "kysely";
@@ -82,6 +83,53 @@ export function matchType(
 	return expected.includes(normalize(columnDataType));
 }
 
+/**
+ * Get the current PostgreSQL schema (search_path) for the database connection
+ * Returns the first schema in the search_path, defaulting to 'public' if not found
+ */
+async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
+	try {
+		const result = await sql<{ search_path: string }>`SHOW search_path`.execute(
+			db,
+		);
+		if (result.rows[0]?.search_path) {
+			// search_path can be a comma-separated list like "$user, public"
+			// We want the first non-variable schema
+			const schemas = result.rows[0].search_path
+				.split(",")
+				.map((s) => s.trim())
+				.filter((s) => !s.startsWith("$"));
+			return schemas[0] || "public";
+		}
+	} catch (error) {
+		// If query fails, fall back to public schema
+	}
+	return "public";
+}
+
+/**
+ * Get the schema name for a table in PostgreSQL
+ * Queries information_schema to find which schema contains the table
+ */
+async function getTableSchema(
+	db: Kysely<unknown>,
+	tableName: string,
+	currentSchema: string,
+): Promise<string | null> {
+	try {
+		const result = await sql<{ table_schema: string }>`
+			SELECT table_schema 
+			FROM information_schema.tables 
+			WHERE table_name = ${tableName}
+			AND table_schema = ${currentSchema}
+		`.execute(db);
+
+		return result.rows[0]?.table_schema || null;
+	} catch (error) {
+		return null;
+	}
+}
+
 export async function getMigrations(config: BetterAuthOptions) {
 	const betterAuthSchema = getSchema(config);
 	const logger = createLogger(config.logger);
@@ -101,7 +149,70 @@ export async function getMigrations(config: BetterAuthOptions) {
 		);
 		process.exit(1);
 	}
-	const tableMetadata = await db.introspection.getTables();
+
+	// For PostgreSQL, detect and log the current schema being used
+	let currentSchema = "public";
+	if (dbType === "postgres") {
+		currentSchema = await getPostgresSchema(db);
+		logger.debug(
+			`PostgreSQL migration: Using schema '${currentSchema}' (from search_path)`,
+		);
+
+		// Verify the schema exists
+		try {
+			const schemaCheck = await sql<{ schema_name: string }>`
+				SELECT schema_name 
+				FROM information_schema.schemata 
+				WHERE schema_name = ${currentSchema}
+			`.execute(db);
+
+			if (!schemaCheck.rows[0]) {
+				logger.warn(
+					`Schema '${currentSchema}' does not exist. Tables will be inspected from available schemas. Consider creating the schema first or checking your database configuration.`,
+				);
+			}
+		} catch (error) {
+			logger.debug(
+				`Could not verify schema existence: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+	}
+
+	const allTableMetadata = await db.introspection.getTables();
+
+	// For PostgreSQL with non-default schema, filter tables to only those in the target schema
+	let tableMetadata = allTableMetadata;
+	if (dbType === "postgres" && currentSchema !== "public") {
+		// Get tables with their schema information
+		try {
+			const tablesInSchema = await sql<{
+				table_name: string;
+			}>`
+				SELECT table_name 
+				FROM information_schema.tables 
+				WHERE table_schema = ${currentSchema}
+				AND table_type = 'BASE TABLE'
+			`.execute(db);
+
+			const tableNamesInSchema = new Set(
+				tablesInSchema.rows.map((row) => row.table_name),
+			);
+
+			// Filter to only tables that exist in the target schema
+			tableMetadata = allTableMetadata.filter((table) =>
+				tableNamesInSchema.has(table.name),
+			);
+
+			logger.debug(
+				`Found ${tableMetadata.length} table(s) in schema '${currentSchema}': ${tableMetadata.map((t) => t.name).join(", ") || "(none)"}`,
+			);
+		} catch (error) {
+			logger.warn(
+				`Could not filter tables by schema. Using all discovered tables. Error: ${error instanceof Error ? error.message : String(error)}`,
+			);
+			// Fall back to using all tables if schema filtering fails
+		}
+	}
 	const toBeCreated: {
 		table: string;
 		fields: Record<string, DBFieldAttribute>;
