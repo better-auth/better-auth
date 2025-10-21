@@ -8,7 +8,7 @@ import { getSessionFromCtx } from "../../api/routes/session";
 import { ms, type StringValue as MSStringValue } from "ms";
 import { schema, type DeviceCode } from "./schema";
 import { mergeSchema } from "../../db";
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 
 const msStringValueSchema = z.custom<MSStringValue>(
 	(val) => {
@@ -25,7 +25,7 @@ const msStringValueSchema = z.custom<MSStringValue>(
 	},
 );
 
-export const $deviceAuthorizationOptionsSchema = z.object({
+export const deviceAuthorizationOptionsSchema = z.object({
 	expiresIn: msStringValueSchema
 		.default("30m")
 		.describe(
@@ -102,40 +102,11 @@ export const $deviceAuthorizationOptionsSchema = z.object({
 	schema: z.custom<InferOptionSchema<typeof schema>>(() => true),
 });
 
-/**
- * @see {$deviceAuthorizationOptionsSchema}
- */
-export type DeviceAuthorizationOptions = {
-	expiresIn: MSStringValue;
-	interval: MSStringValue;
-	deviceCodeLength: number;
-	userCodeLength: number;
-	generateDeviceCode?: () => string | Promise<string>;
-	generateUserCode?: () => string | Promise<string>;
-	validateClient?: (clientId: string) => boolean | Promise<boolean>;
-	onDeviceAuthRequest?: (
-		clientId: string,
-		scope: string | undefined,
-	) => void | Promise<void>;
-	schema?: InferOptionSchema<typeof schema>;
-};
+export type DeviceAuthorizationOptions = z.infer<
+	typeof deviceAuthorizationOptionsSchema
+>;
 
-export { deviceAuthorizationClient } from "./client";
-
-const DEVICE_AUTHORIZATION_ERROR_CODES = defineErrorCodes({
-	INVALID_DEVICE_CODE: "Invalid device code",
-	EXPIRED_DEVICE_CODE: "Device code has expired",
-	EXPIRED_USER_CODE: "User code has expired",
-	AUTHORIZATION_PENDING: "Authorization pending",
-	ACCESS_DENIED: "Access denied",
-	INVALID_USER_CODE: "Invalid user code",
-	DEVICE_CODE_ALREADY_PROCESSED: "Device code already processed",
-	POLLING_TOO_FREQUENTLY: "Polling too frequently",
-	USER_NOT_FOUND: "User not found",
-	FAILED_TO_CREATE_SESSION: "Failed to create session",
-	INVALID_DEVICE_CODE_STATUS: "Invalid device code status",
-	AUTHENTICATION_REQUIRED: "Authentication required",
-});
+export { deviceAuthorizationClient } from "./client"; // TODO: Probably don't need to export here
 
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -159,7 +130,7 @@ const defaultGenerateUserCode = (length: number) => {
 export const deviceAuthorization = (
 	options: Partial<DeviceAuthorizationOptions> = {},
 ) => {
-	const opts = $deviceAuthorizationOptionsSchema.parse(options);
+	const opts = deviceAuthorizationOptionsSchema.parse(options);
 	const generateDeviceCode = async () => {
 		if (opts.generateDeviceCode) {
 			return opts.generateDeviceCode();

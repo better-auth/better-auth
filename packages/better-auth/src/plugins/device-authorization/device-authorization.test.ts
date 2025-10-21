@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { $deviceAuthorizationOptionsSchema, deviceAuthorization } from ".";
+import { deviceAuthorizationOptionsSchema, deviceAuthorization } from ".";
 import { deviceAuthorizationClient } from "./client";
 import type { DeviceCode } from "./schema";
 
 describe("device authorization plugin input validation", () => {
 	it("basic validation", async () => {
-		const options = $deviceAuthorizationOptionsSchema.parse({});
+		const options = deviceAuthorizationOptionsSchema.parse({});
 		expect(options).toMatchInlineSnapshot(`
 			{
 			  "deviceCodeLength": 40,
@@ -18,7 +18,7 @@ describe("device authorization plugin input validation", () => {
 	});
 
 	it("should validate custom options", async () => {
-		const options = $deviceAuthorizationOptionsSchema.parse({
+		const options = deviceAuthorizationOptionsSchema.parse({
 			expiresIn: 60 * 1000,
 			interval: 2 * 1000,
 			deviceCodeLength: 50,
