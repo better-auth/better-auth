@@ -90,7 +90,7 @@ export async function generateState(
 export async function parseState(c: GenericEndpointContext) {
 	const state = c.query.state || c.body.state;
 	const storeStateStrategy =
-		c.context.oauthConfig?.storeStateStrategy || "cookie";
+		c.context.oauthConfig.storeStateStrategy || "cookie";
 
 	const stateDataSchema = z.object({
 		callbackURL: z.string(),
