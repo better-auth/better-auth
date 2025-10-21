@@ -230,6 +230,8 @@ The client credentials grant enables clients to obtain machines to obtain access
 
 The refresh token grant enables clients to update their access token without needing the user to login again.
 
+This implementation currently issues a new refresh token for every refresh request.
+
 
 ### Consent Endpoint
 
@@ -696,7 +698,7 @@ By default all secrets are `hashed` by default on the database. This helps prote
 
 You can choose to format your session tokens in a different string format using the `encodeRefreshToken` and `decodeRefreshToken` functions.
 
-These functions allow you to add additional functionality on the refresh token itself such as refresh token encryption or storage for session replay attacks.
+These functions allow you to add additional functionality on the refresh token itself such as refresh token encryption.
 
 If defined, both `encodeRefreshToken` and `decodeRefreshToken` functions. must be defined.
 
@@ -1192,9 +1194,21 @@ Table Name: `oauthRefreshToken`
       isRequired: true,
     },
     {
+      name: "used",
+      type: "Date",
+      description: "Timestamp when the token was used",
+      isOptional: true,
+    },
+    {
+      name: "revoked",
+      type: "Date",
+      description: "Timestamp when the token was revoked",
+      isOptional: true,
+    },
+    {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp when the access token was created",
+      description: "Timestamp when the token was created",
     },
     {
       name: "expiresAt",
@@ -1255,7 +1269,7 @@ Table Name: `oauthAccessToken`
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp when the access token was created" 
+      description: "Timestamp when the token was created" 
     },
     {
       name: "expiresAt",

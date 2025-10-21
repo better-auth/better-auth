@@ -273,6 +273,7 @@ async function createRefreshToken(
 	client: SchemaClient,
 	scopes: string[],
 	payload: JWTPayload,
+	originalRefresh?: OAuthRefreshToken & { id: string },
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -280,6 +281,23 @@ async function createRefreshToken(
 		? await opts.generateRefreshToken()
 		: generateRandomString(32, "A-Z", "a-z");
 	const sessionId = payload?.sid as string | undefined;
+	// Mark old refresh as stale
+	if (originalRefresh?.id) {
+		await ctx.context.adapter.update({
+			model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+			where: [
+				{
+					field: "id",
+					value: originalRefresh.id,
+				},
+			],
+			update: {
+				used: new Date(iat * 1000),
+			},
+		});
+	}
+
+	// Issue new refresh token
 	const refreshToken = await ctx.context.adapter.create({
 		model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
 		data: {
@@ -347,6 +365,9 @@ async function createUserTokens(
 	user: User,
 	sessionId?: string,
 	nonce?: string,
+	additional?: {
+		refreshToken?: OAuthRefreshToken & { id: string };
+	},
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
@@ -364,18 +385,28 @@ async function createUserTokens(
 
 	// Check requested audience if sent as the resource parameter
 	const audience = await checkResource(ctx, opts, scopes);
-	const isRefreshToken = scopes.includes("offline_access");
+	const isRefreshToken =
+		additional?.refreshToken?.scopes?.includes("offline_access") ||
+		scopes.includes("offline_access");
 	const isJwtAccessToken = audience && !opts.disableJwtPlugin;
 	const isIdToken = scopes.includes("openid");
 
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
 		isRefreshToken && !isJwtAccessToken
-			? await createRefreshToken(ctx, opts, user, client, scopes, {
-					iat,
-					exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
-					sid: sessionId,
-				})
+			? await createRefreshToken(
+					ctx,
+					opts,
+					user,
+					client,
+					scopes,
+					{
+						iat,
+						exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
+						sid: sessionId,
+					},
+					additional?.refreshToken,
+				)
 			: undefined;
 
 	// Sign jwt and refresh tokens in parallel
@@ -402,11 +433,19 @@ async function createUserTokens(
 		earlyRefreshToken
 			? earlyRefreshToken
 			: isRefreshToken
-				? createRefreshToken(ctx, opts, user, client, scopes, {
-						iat,
-						exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
-						sid: sessionId,
-					})
+				? createRefreshToken(
+						ctx,
+						opts,
+						user,
+						client,
+						scopes,
+						{
+							iat,
+							exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
+							sid: sessionId,
+						},
+						additional?.refreshToken,
+					)
 				: undefined,
 		isIdToken
 			? createIdToken(ctx, opts, user, client, scopes, nonce)
@@ -839,7 +878,7 @@ async function handleRefreshTokenGrant(
 	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);
 
 	const refreshToken = await ctx.context.adapter
-		.findOne<OAuthRefreshToken>({
+		.findOne<OAuthRefreshToken & { id: string }>({
 			model: "oauthRefreshToken",
 			where: [
 				{
@@ -858,10 +897,10 @@ async function handleRefreshTokenGrant(
 			return {
 				...res,
 				scopes: (res?.scopes as unknown as string)?.split(" "),
-			} as OAuthRefreshToken;
+			} as OAuthRefreshToken & { id: string };
 		});
 
-	// Check session
+	// Check refresh
 	if (!refreshToken) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "session not found",
@@ -876,7 +915,27 @@ async function handleRefreshTokenGrant(
 	}
 	if (refreshToken.expiresAt < new Date()) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "refresh token expired",
+			error_description: "invalid refresh token",
+			error: "invalid_request",
+		});
+	}
+	// Replay revoke (delete all tokens for that user-client)
+	if (refreshToken.used || refreshToken.revoked) {
+		await ctx.context.adapter.deleteMany({
+			model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+			where: [
+				{
+					field: "clientId",
+					value: client_id,
+				},
+				{
+					field: "userId",
+					value: refreshToken.userId,
+				},
+			],
+		});
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
 			error: "invalid_request",
 		});
 	}
@@ -921,5 +980,9 @@ async function handleRefreshTokenGrant(
 		requestedScopes ?? scopes,
 		user,
 		refreshToken.sessionId,
+		undefined,
+		{
+			refreshToken,
+		},
 	);
 }
