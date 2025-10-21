@@ -22,9 +22,24 @@ type ScalarTheme =
 	| "laserwave"
 	| "none";
 
+type ScalarHttpClientState = {
+	targetKey: string;
+	clientKey: string;
+}
+
+const configurationSerializer = (cfg?: OpenAPIOptions) => {
+	const { path: _, ...options } = cfg || {};
+	const configuration = {
+		favicon: `data:image/svg+xml;utf8,${encodeURIComponent(logo)}`,
+		...options,
+	};
+
+	return JSON.stringify(configuration);
+}
+
 const getHTML = (
 	apiReference: Record<string, any>,
-	theme?: ScalarTheme,
+	options?: OpenAPIOptions
 ) => `<!doctype html>
 <html>
   <head>
@@ -41,17 +56,7 @@ const getHTML = (
     ${JSON.stringify(apiReference)}
     </script>
 	 <script>
-      var configuration = {
-	  	favicon: "data:image/svg+xml;utf8,${encodeURIComponent(logo)}",
-	   	theme: "${theme || "default"}",
-        metaData: {
-			title: "Better Auth API",
-			description: "API Reference for your Better Auth Instance",
-		}
-      }
-
-      document.getElementById('api-reference').dataset.configuration =
-        JSON.stringify(configuration)
+      document.getElementById('api-reference').dataset.configuration = '${configurationSerializer(options)}'
     </script>
 	  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
   </body>
@@ -79,6 +84,56 @@ export interface OpenAPIOptions {
 	 * @default "default"
 	 */
 	theme?: ScalarTheme;
+	/**
+	 * You can pass custom CSS directly to the component.
+	 */
+	customCss?: string;
+	/**
+	 * Whether dark mode is on or off initially (light mode).
+	 * 
+	 * @default false
+	 */
+	darkMode?: boolean;
+	/**
+	 * @default
+	 * ```ts
+	 * {
+	 * 	targetKey: "shell",
+	 * 	clientKey: "curl",
+	 * }
+	 * ```
+	 */
+	defaultHttpClient?: ScalarHttpClientState;
+	/**
+	 * By default we only open the relevant tag based on the url,
+	 * however if you want all the tags open by default then set
+	 * this configuration option.
+	 * 
+	 * @default false
+	 */
+	defaultOpenAllTags?: boolean;
+	/**
+	 * Sets the file type of the document to download, set to 'none' to hide the download button.
+	 * 
+	 * @default "both"
+	 */
+	documentDownloadType: "json" | "yaml" | "both" | "direct" | "none";
+	/**
+	 * By default the models are all closed in the model section at the bottom, this flag will open them all by default.
+	 * 
+	 * @default false
+	 */
+	expandAllModelSections?: boolean;
+	/**
+	 * By default response sections are closed in the operations. This flag will open them by default.
+	 * 
+	 * @default false
+	 */
+	expandAllResponses?: boolean;
+	/**
+	 * Force dark mode to always be this state no matter what.
+	 */
+	forceDarkModeState?: "dark" | "light";
 }
 
 export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
@@ -109,7 +164,8 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
 						throw new APIError("NOT_FOUND");
 					}
 					const schema = await generator(ctx.context, ctx.context.options);
-					return new Response(getHTML(schema, options?.theme), {
+					console.log(getHTML(schema, options));
+					return new Response(getHTML(schema, options), {
 						headers: {
 							"Content-Type": "text/html",
 						},
