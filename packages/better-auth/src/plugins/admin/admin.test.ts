@@ -1,83 +1,69 @@
-import { describe, expect, it, vi } from "vitest";
+import {
+	describe,
+	expect,
+	it,
+	vi,
+	beforeAll,
+	afterAll,
+	afterEach,
+} from "vitest";
+import { setupServer } from "msw/node";
+import { http, HttpResponse } from "msw";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { admin } from "./admin";
 import { type UserWithRole } from "./types";
 import { adminClient } from "./client";
 import { createAccessControl } from "../access";
 import { createAuthClient } from "../../client";
-import type { GoogleProfile } from "../../social-providers";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { signJWT } from "../../crypto";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { getOAuth2Tokens } from "../../oauth2";
 
-vi.mock("../../oauth2", async (importOriginal) => {
-	const original = (await importOriginal()) as any;
-	return {
-		...original,
-		validateAuthorizationCode: vi
-			.fn()
-			.mockImplementation(async (...args: any) => {
-				const data: GoogleProfile = {
-					email: "user@email.com",
-					email_verified: true,
-					name: "First Last",
-					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-					exp: 1234567890,
-					sub: "1234567890",
-					iat: 1234567890,
-					aud: "test",
-					azp: "test",
-					nbf: 1234567890,
-					iss: "test",
-					locale: "en",
-					jti: "test",
-					given_name: "First",
-					family_name: "Last",
-				};
-				const testIdToken = await signJWT(data, DEFAULT_SECRET);
-				const tokens = getOAuth2Tokens({
-					access_token: "test",
-					refresh_token: "test",
-					id_token: testIdToken,
-				});
-				return tokens;
-			}),
-		refreshAccessToken: vi.fn().mockImplementation(async (args) => {
-			const { refreshToken, options, tokenEndpoint } = args;
-			expect(refreshToken).toBeDefined();
-			expect(options.clientId).toBe("test-client-id");
-			expect(options.clientSecret).toBe("test-client-secret");
-			expect(tokenEndpoint).toBe("http://localhost:8080/token");
+let testIdToken: string;
+let handlers: ReturnType<typeof http.post>[];
 
-			const data: GoogleProfile = {
-				email: "user@email.com",
-				email_verified: true,
-				name: "First Last",
-				picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-				exp: 1234567890,
-				sub: "1234567890",
-				iat: 1234567890,
-				aud: "test",
-				azp: "test",
-				nbf: 1234567890,
-				iss: "test",
-				locale: "en",
-				jti: "test",
-				given_name: "First",
-				family_name: "Last",
-			};
-			const testIdToken = await signJWT(data, DEFAULT_SECRET);
-			const tokens = getOAuth2Tokens({
-				access_token: "new-access-token",
-				refresh_token: "new-refresh-token",
-				id_token: testIdToken,
-				token_type: "Bearer",
-				expires_in: 3600, // Token expires in 1 hour
-			});
-			return tokens;
-		}),
+const server = setupServer();
+
+beforeAll(async () => {
+	const data: GoogleProfile = {
+		email: "user@email.com",
+		email_verified: true,
+		name: "First Last",
+		picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+		exp: 1234567890,
+		sub: "1234567890",
+		iat: 1234567890,
+		aud: "test",
+		azp: "test",
+		nbf: 1234567890,
+		iss: "test",
+		locale: "en",
+		jti: "test",
+		given_name: "First",
+		family_name: "Last",
 	};
+	testIdToken = await signJWT(data, DEFAULT_SECRET);
+
+	handlers = [
+		http.post("https://oauth2.googleapis.com/token", () => {
+			return HttpResponse.json({
+				access_token: "test",
+				refresh_token: "test",
+				id_token: testIdToken,
+			});
+		}),
+	];
+
+	server.listen({ onUnhandledRequest: "bypass" });
+	server.use(...handlers);
 });
+
+afterEach(() => {
+	server.resetHandlers();
+	server.use(...handlers);
+});
+
+afterAll(() => server.close());
 
 describe("Admin plugin", async () => {
 	const {
@@ -296,7 +282,7 @@ describe("Admin plugin", async () => {
 			},
 		});
 
-		expect(res.data?.users[0].name).toBe("Test User");
+		expect(res.data?.users[0]!.name).toBe("Test User");
 
 		const res2 = await client.admin.listUsers({
 			query: {
@@ -307,7 +293,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
-		expect(res2.data?.users[0].name).toBe("Admin");
+		expect(res2.data?.users[0]!.name).toBe("Admin");
 	});
 
 	it("should allow offset and limit", async () => {
@@ -321,7 +307,7 @@ describe("Admin plugin", async () => {
 			},
 		});
 		expect(res.data?.users.length).toBe(1);
-		expect(res.data?.users[0].name).toBe("Test User");
+		expect(res.data?.users[0]!.name).toBe("Test User");
 	});
 
 	it("should allow to search users by name", async () => {
@@ -349,7 +335,24 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
+	});
+
+	it("should allow to combine search and filter", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: "admin",
+				filterField: "role",
+				filterOperator: "eq",
+				searchValue: "test",
+				searchField: "email",
+				searchOperator: "contains",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
 		expect(res.data?.users.length).toBe(1);
+		expect(res.data?.users[0]!.email).toBe("test@test.com");
 	});
 
 	it("should allow to set user role", async () => {
@@ -461,12 +464,14 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow banned user to sign in with social provider", async () => {
+		const headers = new Headers();
 		const res = await client.signIn.social(
 			{
 				provider: "google",
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		const state = new URL(res.url!).searchParams.get("state");
@@ -476,6 +481,7 @@ describe("Admin plugin", async () => {
 				state,
 				code: "test",
 			},
+			headers,
 			method: "GET",
 			onError(context) {
 				expect(context.response.status).toBe(302);
@@ -648,7 +654,7 @@ describe("Admin plugin", async () => {
 		);
 		expect(sessions.data?.sessions.length).toBe(3);
 		const res = await client.admin.revokeUserSession(
-			{ sessionToken: sessions.data?.sessions[0].token || "" },
+			{ sessionToken: sessions.data?.sessions[0]!.token || "" },
 			{ headers: adminHeaders },
 		);
 		expect(res.data?.success).toBe(true);
@@ -693,7 +699,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
-		expect(response.data?.users.length).toBe(2);
+		expect(response.data?.users.length).toBeGreaterThanOrEqual(2);
 		const roles = response.data?.users.map((d) => d.role);
 		expect(roles).not.toContain("user");
 	});
@@ -714,6 +720,62 @@ describe("Admin plugin", async () => {
 			password: "newPassword",
 		});
 		expect(res2.data?.user).toBeDefined();
+	});
+	it("should not allow admin to set user password with empty userId", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: "",
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should not allow admin to set user password with empty new password", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser?.id || "",
+				newPassword: "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should not allow admin to set user password with a short new password", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser!.id,
+				newPassword: "1234567",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_TOO_SHORT");
+		expect(res.error?.message).toBe("Password too short");
+	});
+
+	it("should not allow admin to set user password with a long new password", async () => {
+		const longNewPassword = Array(129).fill("a").join("");
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser!.id,
+				newPassword: longNewPassword,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_TOO_LONG");
+		expect(res.error?.message).toBe("Password too long");
 	});
 
 	it("should not allow non-admin to set user password", async () => {

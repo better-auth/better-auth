@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { getSessionFromCtx } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -100,7 +100,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 * The organization ID to invite
 						 * the user to
 						 */
-						organizationId?: string;
+						organizationId?: string | undefined;
 						/**
 						 * Resend the invitation email, if
 						 * the user is already invited
@@ -148,6 +148,9 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											expiresAt: {
 												type: "string",
 											},
+											createdAt: {
+												type: "string",
+											},
 										},
 										required: [
 											"id",
@@ -157,6 +160,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											"inviterId",
 											"status",
 											"expiresAt",
+											"createdAt",
 										],
 									},
 								},
@@ -262,7 +266,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					where: [
 						{
 							field: "id",
-							value: existingInvitation.id,
+							value: existingInvitation!.id,
 						},
 					],
 					update: {
@@ -277,9 +281,9 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 				await ctx.context.orgOptions.sendInvitationEmail?.(
 					{
-						id: updatedInvitation.id,
-						role: updatedInvitation.role as string,
-						email: updatedInvitation.email.toLowerCase(),
+						id: updatedInvitation.id!,
+						role: updatedInvitation.role! as string,
+						email: updatedInvitation.email!.toLowerCase(),
 						organization: organization,
 						inviter: {
 							...member,
@@ -298,7 +302,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
 			) {
 				await adapter.updateInvitation({
-					invitationId: alreadyInvited[0].id,
+					invitationId: alreadyInvited[0]!.id,
 					status: "canceled",
 				});
 			}
@@ -597,7 +601,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				}
 
 				if (onlyOne) {
-					const teamId = teamIds[0];
+					const teamId = teamIds[0]!;
 					const updatedSession = await adapter.setActiveTeam(
 						session.session.token,
 						teamId,

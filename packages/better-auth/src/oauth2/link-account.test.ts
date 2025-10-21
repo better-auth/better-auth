@@ -1,49 +1,29 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, beforeAll, afterAll, afterEach } from "vitest";
+import { setupServer } from "msw/node";
+import { http, HttpResponse } from "msw";
 import { getTestInstance } from "../test-utils/test-instance";
-import { parseSetCookieHeader } from "../cookies";
-import type { GoogleProfile } from "../social-providers";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { DEFAULT_SECRET } from "../utils/constants";
-import { getOAuth2Tokens } from "../oauth2";
-import { signJWT } from "../crypto/jwt";
+import { signJWT } from "../crypto";
 import type { User } from "../types";
 
 let mockEmail = "";
 let mockEmailVerified = true;
 
-vi.mock("../oauth2", async (importOriginal) => {
-	const original = (await importOriginal()) as any;
-	return {
-		...original,
-		validateAuthorizationCode: vi.fn().mockImplementation(async () => {
-			const profile: GoogleProfile = {
-				email: mockEmail,
-				email_verified: mockEmailVerified,
-				name: "Test User",
-				picture: "https://example.com/photo.jpg",
-				exp: 1234567890,
-				sub: "google_oauth_sub_1234567890",
-				iat: 1234567890,
-				aud: "test",
-				azp: "test",
-				nbf: 1234567890,
-				iss: "test",
-				locale: "en",
-				jti: "test",
-				given_name: "Test",
-				family_name: "User",
-			};
-			const idToken = await signJWT(profile, DEFAULT_SECRET);
-			return getOAuth2Tokens({
-				access_token: "test_access_token",
-				refresh_token: "test_refresh_token",
-				id_token: idToken,
-			});
-		}),
-	};
+const server = setupServer();
+
+beforeAll(() => {
+	server.listen({ onUnhandledRequest: "bypass" });
 });
 
+afterEach(() => {
+	server.resetHandlers();
+});
+
+afterAll(() => server.close());
+
 describe("oauth2 - email verification on link", async () => {
-	const { auth, client } = await getTestInstance({
+	const { auth, client, cookieSetter } = await getTestInstance({
 		socialProviders: {
 			google: {
 				clientId: "test",
@@ -66,25 +46,47 @@ describe("oauth2 - email verification on link", async () => {
 	const ctx = await auth.$context;
 
 	async function linkGoogleAccount() {
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email: mockEmail,
+					email_verified: mockEmailVerified,
+					name: "Test User",
+					picture: "https://example.com/photo.jpg",
+					exp: 1234567890,
+					sub: "google_oauth_sub_1234567890",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Test",
+					family_name: "User",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
 		const signInRes = await client.signIn.social({
 			provider: "google",
 			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
 		});
-
 		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-		const headers = new Headers();
-		const cookies = parseSetCookieHeader(
-			(signInRes as any).headers?.["set-cookie"] || "",
-		);
-		headers.set(
-			"cookie",
-			`better-auth.state=${cookies.get("better-auth.state")?.value}`,
-		);
-
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test_code" },
 			method: "GET",
-			headers,
+			headers: oAuthHeaders,
 			onError(context) {
 				expect(context.response.status).toBe(302);
 			},

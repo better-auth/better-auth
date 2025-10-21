@@ -1,9 +1,12 @@
-export const ORGANIZATION_ERROR_CODES = {
+import { defineErrorCodes } from "@better-auth/core/utils";
+
+export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION:
 		"You are not allowed to create a new organization",
 	YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS:
 		"You have reached the maximum number of organizations",
 	ORGANIZATION_ALREADY_EXISTS: "Organization already exists",
+	ORGANIZATION_SLUG_ALREADY_TAKEN: "Organization slug already taken",
 	ORGANIZATION_NOT_FOUND: "Organization not found",
 	USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION:
 		"User is not a member of the organization",
@@ -85,4 +88,4 @@ export const ORGANIZATION_ERROR_CODES = {
 	INVALID_RESOURCE: "The provided permission includes an invalid resource",
 	ROLE_NAME_IS_ALREADY_TAKEN: "That role name is already taken",
 	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
-} as const;
+});

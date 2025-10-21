@@ -282,3 +282,26 @@ export const config = {
   matcher: ["/dashboard"], // Apply middleware to specific routes
 };
 ```
+
+## Next.js 16 Compatibility
+
+Better Auth is fully compatible with Next.js 16. You can refer to the [Next.js 16 beta](https://nextjs.org/blog/next-16-beta) for more details on the new features and changes.
+
+Here are some important changes to note when using Better Auth with Next.js 16:
+
+### Middleware File Rename
+
+In Next.js 16, the `middleware.ts` file convention has been deprecated in favor of `proxy.ts`. To migrate:
+
+1. Rename your `middleware.ts` file to `proxy.ts`
+2. All functionality remains the same - just the filename changes
+
+```bash
+# Rename your middleware file
+mv middleware.ts proxy.ts
+```
+
+<Callout type="info">
+The changes above are related to Next.js 16 updates.
+All Better Auth functionality remains the same.
+</Callout>

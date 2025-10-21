@@ -1,12 +1,13 @@
 import { APIError } from "../../api";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
-const ERROR_CODES = {
+const ERROR_CODES = defineErrorCodes({
 	PASSWORD_COMPROMISED:
 		"The password you entered has been compromised. Please choose a different password.",
-} as const;
+});
 
 async function checkPasswordCompromise(
 	password: string,
@@ -37,7 +38,7 @@ async function checkPasswordCompromise(
 		}
 		const lines = data.split("\n");
 		const found = lines.some(
-			(line) => line.split(":")[0].toUpperCase() === suffix.toUpperCase(),
+			(line) => line.split(":")[0]!.toUpperCase() === suffix.toUpperCase(),
 		);
 
 		if (found) {

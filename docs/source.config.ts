@@ -30,6 +30,8 @@ export const blogCollection = defineCollections({
 		date: z.date(),
 		author: z.object({
 			name: z.string(),
+			avatar: z.string(),
+			twitter: z.string().optional(),
 		}),
 		image: z.string(),
 		tags: z.array(z.string()),

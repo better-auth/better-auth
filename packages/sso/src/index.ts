@@ -38,6 +38,34 @@ const fastValidator = {
 
 saml.setSchemaValidator(fastValidator);
 
+/**
+ * Safely parses a value that might be a JSON string or already a parsed object
+ * This handles cases where ORMs like Drizzle might return already parsed objects
+ * instead of JSON strings from TEXT/JSON columns
+ */
+function safeJsonParse<T>(value: string | T | null | undefined): T | null {
+	if (!value) return null;
+
+	// If it's already an object (not a string), return it as-is
+	if (typeof value === "object") {
+		return value as T;
+	}
+
+	// If it's a string, try to parse it
+	if (typeof value === "string") {
+		try {
+			return JSON.parse(value) as T;
+		} catch (error) {
+			// If parsing fails, this might indicate the string is not valid JSON
+			throw new Error(
+				`Failed to parse JSON: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+		}
+	}
+
+	return null;
+}
+
 export interface OIDCMapping {
 	id?: string;
 	email?: string;
@@ -252,6 +280,7 @@ export const sso = (options?: SSOOptions) => {
 				},
 				async (ctx) => {
 					const provider = await ctx.context.adapter.findOne<{
+						id: string;
 						samlConfig: string;
 					}>({
 						model: "ssoProvider",
@@ -268,10 +297,36 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 
-					const parsedSamlConfig = JSON.parse(provider.samlConfig);
-					const sp = saml.ServiceProvider({
-						metadata: parsedSamlConfig.spMetadata.metadata,
-					});
+					const parsedSamlConfig = safeJsonParse<SAMLConfig>(
+						provider.samlConfig,
+					);
+					if (!parsedSamlConfig) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid SAML configuration",
+						});
+					}
+					const sp = parsedSamlConfig.spMetadata.metadata
+						? saml.ServiceProvider({
+								metadata: parsedSamlConfig.spMetadata.metadata,
+							})
+						: saml.SPMetadata({
+								entityID:
+									parsedSamlConfig.spMetadata?.entityID ||
+									parsedSamlConfig.issuer,
+								assertionConsumerService: [
+									{
+										Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+										Location:
+											parsedSamlConfig.callbackUrl ||
+											`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.id}`,
+									},
+								],
+								wantMessageSigned:
+									parsedSamlConfig.wantAssertionsSigned || false,
+								nameIDFormat: parsedSamlConfig.identifierFormat
+									? [parsedSamlConfig.identifierFormat]
+									: undefined,
+							});
 					return new Response(sp.getMetadata(), {
 						headers: {
 							"Content-Type": "application/xml",
@@ -725,6 +780,26 @@ export const sso = (options?: SSOOptions) => {
 							});
 						}
 					}
+
+					const existingProvider = await ctx.context.adapter.findOne({
+						model: "ssoProvider",
+						where: [
+							{
+								field: "providerId",
+								value: body.providerId,
+							},
+						],
+					});
+
+					if (existingProvider) {
+						ctx.context.logger.info(
+							`SSO provider creation attempt with existing providerId: ${body.providerId}`,
+						);
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: "SSO provider with this providerId already exists",
+						});
+					}
+
 					const provider = await ctx.context.adapter.create<
 						Record<string, any>,
 						SSOProvider
@@ -847,6 +922,13 @@ export const sso = (options?: SSOOptions) => {
 								description: "Scopes to request from the provider.",
 							})
 							.optional(),
+						loginHint: z
+							.string({})
+							.meta({
+								description:
+									"Login hint to send to the identity provider (e.g., email or identifier). If supported, will be sent as 'login_hint'.",
+							})
+							.optional(),
 						requestSignUp: z
 							.boolean({})
 							.meta({
@@ -894,6 +976,11 @@ export const sso = (options?: SSOOptions) => {
 													type: "string",
 													description:
 														"The URL to redirect to after login if the user is new",
+												},
+												loginHint: {
+													type: "string",
+													description:
+														"Login hint to send to the identity provider (e.g., email or identifier). If supported, sent as 'login_hint'.",
 												},
 											},
 											required: ["callbackURL"],
@@ -1020,10 +1107,14 @@ export const sso = (options?: SSOOptions) => {
 								return {
 									...res,
 									oidcConfig: res.oidcConfig
-										? JSON.parse(res.oidcConfig as unknown as string)
+										? safeJsonParse<OIDCConfig>(
+												res.oidcConfig as unknown as string,
+											) || undefined
 										: undefined,
 									samlConfig: res.samlConfig
-										? JSON.parse(res.samlConfig as unknown as string)
+										? safeJsonParse<SAMLConfig>(
+												res.samlConfig as unknown as string,
+											) || undefined
 										: undefined,
 								};
 							});
@@ -1060,12 +1151,14 @@ export const sso = (options?: SSOOptions) => {
 							codeVerifier: provider.oidcConfig.pkce
 								? state.codeVerifier
 								: undefined,
-							scopes: ctx.body.scopes || [
-								"openid",
-								"email",
-								"profile",
-								"offline_access",
-							],
+							scopes: ctx.body.scopes ||
+								provider.oidcConfig.scopes || [
+									"openid",
+									"email",
+									"profile",
+									"offline_access",
+								],
+							loginHint: ctx.body.loginHint || email,
 							authorizationEndpoint: provider.oidcConfig.authorizationEndpoint!,
 						});
 						return ctx.json({
@@ -1077,18 +1170,25 @@ export const sso = (options?: SSOOptions) => {
 						const parsedSamlConfig =
 							typeof provider.samlConfig === "object"
 								? provider.samlConfig
-								: JSON.parse(provider.samlConfig as unknown as string);
+								: safeJsonParse<SAMLConfig>(
+										provider.samlConfig as unknown as string,
+									);
+						if (!parsedSamlConfig) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid SAML configuration",
+							});
+						}
 						const sp = saml.ServiceProvider({
 							metadata: parsedSamlConfig.spMetadata.metadata,
 							allowCreate: true,
 						});
 
 						const idp = saml.IdentityProvider({
-							metadata: parsedSamlConfig.idpMetadata.metadata,
-							entityID: parsedSamlConfig.idpMetadata.entityID,
-							encryptCert: parsedSamlConfig.idpMetadata.cert,
+							metadata: parsedSamlConfig.idpMetadata?.metadata,
+							entityID: parsedSamlConfig.idpMetadata?.entityID,
+							encryptCert: parsedSamlConfig.idpMetadata?.cert,
 							singleSignOnService:
-								parsedSamlConfig.idpMetadata.singleSignOnService,
+								parsedSamlConfig.idpMetadata?.singleSignOnService,
 						});
 						const loginRequest = sp.createLoginRequest(
 							idp,
@@ -1186,7 +1286,8 @@ export const sso = (options?: SSOOptions) => {
 								}
 								return {
 									...res,
-									oidcConfig: JSON.parse(res.oidcConfig),
+									oidcConfig:
+										safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined,
 								} as SSOProvider;
 							});
 					}
@@ -1513,7 +1614,9 @@ export const sso = (options?: SSOOptions) => {
 								return {
 									...res,
 									samlConfig: res.samlConfig
-										? JSON.parse(res.samlConfig as unknown as string)
+										? safeJsonParse<SAMLConfig>(
+												res.samlConfig as unknown as string,
+											) || undefined
 										: undefined,
 								};
 							});
@@ -1524,28 +1627,33 @@ export const sso = (options?: SSOOptions) => {
 							message: "No provider found for the given providerId",
 						});
 					}
-					const parsedSamlConfig = JSON.parse(
+					const parsedSamlConfig = safeJsonParse<SAMLConfig>(
 						provider.samlConfig as unknown as string,
 					);
+					if (!parsedSamlConfig) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid SAML configuration",
+						});
+					}
 					const idpData = parsedSamlConfig.idpMetadata;
 					let idp: IdentityProvider | null = null;
 
 					// Construct IDP with fallback to manual configuration
 					if (!idpData?.metadata) {
 						idp = saml.IdentityProvider({
-							entityID: idpData.entityID || parsedSamlConfig.issuer,
+							entityID: idpData?.entityID || parsedSamlConfig.issuer,
 							singleSignOnService: [
 								{
 									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
 									Location: parsedSamlConfig.entryPoint,
 								},
 							],
-							signingCert: idpData.cert || parsedSamlConfig.cert,
+							signingCert: idpData?.cert || parsedSamlConfig.cert,
 							wantAuthnRequestsSigned:
 								parsedSamlConfig.wantAssertionsSigned || false,
-							isAssertionEncrypted: idpData.isAssertionEncrypted || false,
-							encPrivateKey: idpData.encPrivateKey,
-							encPrivateKeyPass: idpData.encPrivateKeyPass,
+							isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
+							encPrivateKey: idpData?.encPrivateKey,
+							encPrivateKeyPass: idpData?.encPrivateKeyPass,
 						});
 					} else {
 						idp = saml.IdentityProvider({
@@ -1577,6 +1685,9 @@ export const sso = (options?: SSOOptions) => {
 						encPrivateKey: spData?.encPrivateKey,
 						encPrivateKeyPass: spData?.encPrivateKeyPass,
 						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
+						nameIDFormat: parsedSamlConfig.identifierFormat
+							? [parsedSamlConfig.identifierFormat]
+							: undefined,
 					});
 
 					let parsedResponse: FlowResult;
@@ -1767,7 +1878,7 @@ export const sso = (options?: SSOOptions) => {
 
 					// Create session and set cookie
 					let session: Session =
-						await ctx.context.internalAdapter.createSession(user.id, ctx);
+						await ctx.context.internalAdapter.createSession(user.id);
 					await setSessionCookie(ctx, { session, user });
 
 					// Redirect to callback URL
@@ -1842,7 +1953,9 @@ export const sso = (options?: SSOOptions) => {
 								return {
 									...res,
 									samlConfig: res.samlConfig
-										? JSON.parse(res.samlConfig as unknown as string)
+										? safeJsonParse<SAMLConfig>(
+												res.samlConfig as unknown as string,
+											) || undefined
 										: undefined,
 								};
 							});
@@ -1864,7 +1977,7 @@ export const sso = (options?: SSOOptions) => {
 								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
 								Location:
 									parsedSamlConfig.callbackUrl ||
-									`${ctx.context.baseURL}/sso/saml2/sp/acs`,
+									`${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`,
 							},
 						],
 						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
@@ -1873,6 +1986,9 @@ export const sso = (options?: SSOOptions) => {
 							parsedSamlConfig.spMetadata?.privateKey ||
 							parsedSamlConfig.privateKey,
 						privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
+						nameIDFormat: parsedSamlConfig.identifierFormat
+							? [parsedSamlConfig.identifierFormat]
+							: undefined,
 					});
 
 					// Update where we construct the IdP
@@ -2121,7 +2237,7 @@ export const sso = (options?: SSOOptions) => {
 					}
 
 					let session: Session =
-						await ctx.context.internalAdapter.createSession(user.id, ctx);
+						await ctx.context.internalAdapter.createSession(user.id);
 					await setSessionCookie(ctx, { session, user });
 
 					const callbackUrl =

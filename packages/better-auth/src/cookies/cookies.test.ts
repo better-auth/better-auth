@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
 import { parseSetCookieHeader } from "./cookie-utils";
-import type { BetterAuthOptions } from "../types/options";
+import type { BetterAuthOptions } from "@better-auth/core";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
@@ -367,5 +367,329 @@ describe("getSessionCookie", async () => {
 			headers,
 		});
 		await expect(getCookieCache(request)).rejects.toThrow();
+	});
+
+	it("should log error and skip setting cookie when data exceeds size limit", async () => {
+		const loggerErrors: string[] = [];
+		const mockLogger = {
+			log: (level: string, message: string) => {
+				if (level === "error") {
+					loggerErrors.push(message);
+				}
+			},
+		};
+
+		const { auth } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					customField1: {
+						type: "string",
+						defaultValue: "",
+					},
+					customField2: {
+						type: "string",
+						defaultValue: "",
+					},
+					customField3: {
+						type: "string",
+						defaultValue: "",
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+			logger: mockLogger,
+		});
+
+		// Create a very large string that will exceed the cookie size limit when combined with session data
+		// The limit is 4093 bytes, so we create data that will definitely exceed it
+		const largeString = "x".repeat(2000);
+
+		// Sign up with large user data using the server API
+		const result = await auth.api.signUpEmail({
+			body: {
+				name: "Test User",
+				email: "large-data-test@example.com",
+				password: "password123",
+				customField1: largeString,
+				customField2: largeString,
+				customField3: largeString,
+			},
+		});
+
+		// Check that logger recorded an error about exceeding size limit
+		const sizeError = loggerErrors.find((msg) =>
+			msg.includes("Session data exceeds cookie size limit"),
+		);
+		expect(sizeError).toBeDefined();
+		expect(sizeError).toContain("4093 bytes");
+
+		// The sign up should still succeed
+		expect(result).toBeDefined();
+		expect(result?.user).toBeDefined();
+	});
+});
+
+describe("Cookie Cache Field Filtering", () => {
+	it("should exclude user fields with returned: false from cookie cache", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					internalNote: {
+						type: "string",
+						defaultValue: "",
+						returned: false,
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual(testUser.email);
+		expect(cache?.user?.internalNote).toBeUndefined();
+	});
+
+	it("should correctly filter multiple user fields based on returned config", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					publicBio: {
+						type: "string",
+						defaultValue: "default-bio",
+						returned: true,
+					},
+					internalNotes: {
+						type: "string",
+						defaultValue: "internal-notes",
+						returned: false,
+					},
+					preferences: {
+						type: "string",
+						defaultValue: "default-prefs",
+						returned: true,
+					},
+					adminFlags: {
+						type: "string",
+						defaultValue: "admin-flags",
+						returned: false,
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+
+		expect(cache).not.toBeNull();
+		// Fields with returned: true should be included
+		expect(cache?.user?.publicBio).toBeDefined();
+		expect(cache?.user?.preferences).toBeDefined();
+		// Fields with returned: false should be excluded
+		expect(cache?.user?.internalNotes).toBeUndefined();
+		expect(cache?.user?.adminFlags).toBeUndefined();
+	});
+
+	it("should reduce cookie size when large fields are excluded", async () => {
+		const largeString = "x".repeat(2000);
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					largeBio: {
+						type: "string",
+						defaultValue: largeString,
+						returned: false,
+					},
+					smallField: {
+						type: "string",
+						defaultValue: "small-value",
+						returned: true,
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		// Sign in with testUser
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+
+		// Cookie cache should exist (not exceed size limit)
+		expect(cache).not.toBeNull();
+		// Large field should be excluded
+		expect(cache?.user?.largeBio).toBeUndefined();
+		// Small field should be included
+		expect(cache?.user?.smallField).toBeDefined();
+	});
+
+	it("should maintain session field filtering (regression check)", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				additionalFields: {
+					internalSessionData: {
+						type: "string",
+						defaultValue: "internal-data",
+						returned: false,
+					},
+					publicSessionData: {
+						type: "string",
+						defaultValue: "public-data",
+						returned: true,
+					},
+				},
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		// Sign in with testUser
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+
+		expect(cache).not.toBeNull();
+		// Verify session field filtering still works correctly
+		// Session should have token
+		expect(cache?.session?.token).toEqual(expect.any(String));
+		// Session field with returned: false should be excluded
+		expect(cache?.session?.internalSessionData).toBeUndefined();
+	});
+
+	it("should include unknown user fields for backward compatibility", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					knownField: {
+						type: "string",
+						defaultValue: "known-value",
+						returned: false,
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+
+		expect(cache).not.toBeNull();
+		// Known field with returned: false should be excluded
+		expect(cache?.user?.knownField).toBeUndefined();
+		// Standard fields like email, name should be included (backward compatibility)
+		expect(cache?.user?.email).toEqual(testUser.email);
+		expect(cache?.user?.name).toBeDefined();
 	});
 });

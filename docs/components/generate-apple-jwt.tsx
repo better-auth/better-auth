@@ -72,6 +72,11 @@ export const GenerateAppleJwt = () => {
 				};
 
 				const issuedAtSeconds = Math.floor(Date.now() / 1000);
+				/**
+				 * Apple allows a maximum expiration of 6 months (180 days) for the client secret JWT.
+				 *
+				 * @see {@link https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret}
+				 */
 				const expirationSeconds = issuedAtSeconds + 180 * 24 * 60 * 60; // 180 days. Should we let the user choose this ? MAX is 6 months
 
 				const payload = {
