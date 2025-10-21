@@ -119,5 +119,5 @@ export type InferAliasedPlugin_base<
 							: never;
 					}
 				: never
-			: T["middlewares"];
+			: never;
 	};
