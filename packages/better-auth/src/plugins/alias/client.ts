@@ -224,7 +224,9 @@ export function aliasClient<
 			)) {
 				const clonedEndpoint = { ...endpoint };
 				const originalPath = (endpoint as any).path || `/${key}`;
-				clonedEndpoint.path = `${cleanPrefix}${originalPath}`;
+				if (!options?.excludeEndpoints?.includes(originalPath)) {
+					clonedEndpoint.path = `${cleanPrefix}${originalPath}`;
+				}
 				prefixedEndpoints[key] = clonedEndpoint;
 			}
 			wrappedServerPlugin.endpoints = prefixedEndpoints;
