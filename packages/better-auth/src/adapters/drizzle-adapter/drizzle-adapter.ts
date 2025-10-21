@@ -359,17 +359,27 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const returned = await withReturning(model, builder, values);
 					return returned;
 				},
-				async findOne({ model, where }) {
+				async findOne({ model, where, join }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const res = await db
+					let query = db
 						.select()
 						.from(schemaModel)
 						.where(...clause);
+					if (join) {
+						for (const [model, joinAttr] of Object.entries(join)) {
+							const joinModel = getSchema(model);
+							query = query.leftJoin(
+								joinModel,
+								eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
+							);
+						}
+					}
+					const res = await query;
 					if (!res.length) return null;
 					return res[0];
 				},
-				async findMany({ model, where, sortBy, limit, offset }) {
+				async findMany({ model, where, sortBy, limit, offset, join }) {
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
 
@@ -386,7 +396,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							),
 						);
 					}
-					return (await builder.where(...clause)) as any[];
+					let query = builder.where(...clause);
+					if (join) {
+						for (const [model, joinAttr] of Object.entries(join)) {
+							const joinModel = getSchema(model);
+							query = query.leftJoin(
+								joinModel,
+								eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
+							);
+						}
+					}
+					const res = await query;
+					return res;
 				},
 				async count({ model, where }) {
 					const schemaModel = getSchema(model);

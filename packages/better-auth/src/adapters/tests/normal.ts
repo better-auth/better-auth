@@ -1,6 +1,6 @@
 import { expect } from "vitest";
 import { createTestSuite } from "../create-test-suite";
-import type { User } from "../../types";
+import type { Account, Session, User } from "../../types";
 import type { BetterAuthPlugin } from "@better-auth/core";
 
 /**
@@ -138,6 +138,26 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(result).toEqual(user);
 		},
+		"findOne - should find a model with join": async () => {
+			const [user] = await insertRandom("user");
+			const session = await adapter.create<Session>({
+				model: "session",
+				data: { ...(await generate("session")), userId: user.id },
+				forceAllowId: true,
+			});
+
+			const result = await adapter.findOne<{ user: User; session: Session }>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				join: {
+					session: {
+						on: { from: "id", to: "userId" },
+					},
+				},
+			});
+
+			expect(result).toEqual({ user, session });
+		},
 		"findOne - should find a model with modified field name": async () => {
 			await modifyBetterAuthOptions(
 				{
@@ -248,6 +268,63 @@ export const getNormalTestSuiteTests = ({
 				model: "user",
 			});
 			expect(sortModels(result)).toEqual(sortModels(users));
+		},
+		"findMany - should find many models with join": async () => {
+			const users: User[] = [];
+			const sessions: Session[] = [];
+			const accounts: Account[] = [];
+			const expectedResult: {
+				user: User;
+				session: Session;
+				account: Account;
+			}[] = [];
+
+			for (let i = 0; i < 10; i++) {
+				const user = await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						...(i < 3 ? { name: `join-user-${i}` } : {}),
+					},
+					forceAllowId: true,
+				});
+				users.push(user);
+				const session = await adapter.create<Session>({
+					model: "session",
+					data: { ...(await generate("session")), userId: user.id },
+					forceAllowId: true,
+				});
+				sessions.push(session);
+				const account = await adapter.create<Account>({
+					model: "account",
+					data: { ...(await generate("account")), userId: user.id },
+					forceAllowId: true,
+				});
+				accounts.push(account);
+
+				if (i < 3) {
+					expectedResult.push({ user, session, account });
+				}
+			}
+
+			const result = await adapter.findMany<{
+				user: User;
+				session: Session;
+				account: Account;
+			}>({
+				model: "user",
+				where: [{ field: "name", value: "join-user", operator: "starts_with" }],
+				join: {
+					session: {
+						on: { from: "id", to: "userId" },
+					},
+					account: {
+						on: { from: "id", to: "userId" },
+					},
+				},
+			});
+
+			expect(result).toEqual(expectedResult);
 		},
 		"findMany - should return an empty array when no models are found":
 			async () => {

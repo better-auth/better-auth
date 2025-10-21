@@ -290,6 +290,41 @@ export type Where = {
 	connector?: "AND" | "OR";
 };
 
+/**
+ * Join configuration for relational queries.
+ *
+ * Allows you to join related tables/models in a single query operation.
+ * Each key represents the name of the joined table/model, and the value
+ * configures how the join should be performed.
+ */
+export type Join = {
+	[model: string]: {
+		/**
+		 * The Join type that will be performed
+		 *
+		 * * **left**: returns all rows from the left table, plus matching rows from the right (if none, NULL fills in).
+		 * * **inner**: returns rows where there’s a match in both tables.
+		 * * Not supported yet: ~~**right**: returns all rows from the right table, plus matching rows from the left (if none, NULL fills in).~~
+		 * * Not supported yet: ~~**full**: returns rows from both sides, filling in gaps with NULLs.~~
+		 *
+		 * @default "left"
+		 */
+		type?: "left" | "inner";
+		on: {
+			/**
+			 * Column name from the main table
+			 */
+			from: string;
+			/**
+			 * Column name from the joined table
+			 */
+			to: string;
+		};
+		// In the future we may support nested joins:
+		// with?: Join;
+	};
+};
+
 export type DBTransactionAdapter<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > = Omit<DBAdapter<Options>, "transaction">;
@@ -311,6 +346,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		model: string;
 		where: Where[];
 		select?: string[];
+		join?: Join;
 	}) => Promise<T | null>;
 	findMany: <T>(data: {
 		model: string;
@@ -321,6 +357,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 			direction: "asc" | "desc";
 		};
 		offset?: number;
+		join?: Join;
 	}) => Promise<T[]>;
 	count: (data: { model: string; where?: Where[] }) => Promise<number>;
 	/**
@@ -386,10 +423,12 @@ export interface CustomAdapter {
 		model,
 		where,
 		select,
+		join,
 	}: {
 		model: string;
 		where: CleanedWhere[];
 		select?: string[];
+		join?: Join;
 	}) => Promise<T | null>;
 	findMany: <T>({
 		model,
@@ -397,12 +436,14 @@ export interface CustomAdapter {
 		limit,
 		sortBy,
 		offset,
+		join,
 	}: {
 		model: string;
 		where?: CleanedWhere[];
 		limit: number;
 		sortBy?: { field: string; direction: "asc" | "desc" };
 		offset?: number;
+		join?: Join;
 	}) => Promise<T[]>;
 	delete: ({
 		model,
