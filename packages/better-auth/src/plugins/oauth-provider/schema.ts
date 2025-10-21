@@ -163,6 +163,14 @@ export const schema = {
 			createdAt: {
 				type: "date",
 			},
+			used: {
+				type: "date",
+				required: false,
+			},
+			revoked: {
+				type: "date",
+				required: false,
+			},
 			// Immutable
 			scopes: {
 				type: "string[]",

@@ -163,20 +163,48 @@ async function revokeRefreshToken(
 			error: "invalid_request",
 		});
 	}
+	if (refreshToken.used) {
+		await ctx.context.adapter.deleteMany({
+			model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+			where: [
+				{
+					field: "clientId",
+					value: clientId,
+				},
+				{
+					field: "userId",
+					value: refreshToken.userId,
+				},
+			],
+		});
+		throw new APIError("BAD_REQUEST", {
+			error_description: "refresh token used",
+			error: "invalid_request",
+		});
+	}
 	if (!refreshToken.clientId || refreshToken.clientId !== clientId) {
 		return null;
 	}
 
+	const iat = Math.floor(Date.now() / 1000);
 	await Promise.allSettled([
 		// Removes all access tokens associated with the refresh token
 		ctx.context.adapter.deleteMany({
 			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 			where: [{ field: "refreshId", value: refreshToken.id }],
 		}),
-		// Remove the refresh token
-		ctx.context.adapter.delete({
+		// Update the refresh token
+		ctx.context.adapter.update({
 			model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
-			where: [{ field: "id", value: refreshToken.id }],
+			where: [
+				{
+					field: "id",
+					value: refreshToken.id,
+				},
+			],
+			update: {
+				revoked: new Date(iat * 1000),
+			},
 		}),
 	]);
 }
