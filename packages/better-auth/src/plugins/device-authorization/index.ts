@@ -693,8 +693,6 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
-					// This endpoint would typically serve an HTML page for user verification
-					// For now, we'll return a simple JSON response
 					const { user_code } = ctx.query;
 					const cleanUserCode = user_code.replace(/-/g, "");
 
