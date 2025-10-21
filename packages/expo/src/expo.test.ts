@@ -60,6 +60,11 @@ function testUtils(extraOpts?: Parameters<typeof betterAuth>[0]) {
 				clientSecret: "test",
 			},
 		},
+		advanced: {
+			oauthConfig: {
+				storeStateStrategy: "database",
+			},
+		},
 		plugins: [expo(), oAuthProxy()],
 		trustedOrigins: ["better-auth://"],
 		...extraOpts,
