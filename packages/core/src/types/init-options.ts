@@ -1,5 +1,10 @@
-import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
-import type { Database } from "better-sqlite3";
+import type {
+	Dialect,
+	Kysely,
+	MysqlPool,
+	PostgresPool,
+	SqliteDatabase,
+} from "kysely";
 import type { CookieOptions } from "better-call";
 import type { LiteralUnion } from "./helper";
 import type {
@@ -295,7 +300,7 @@ export type BetterAuthOptions = {
 	database?:
 		| PostgresPool
 		| MysqlPool
-		| Database
+		| SqliteDatabase
 		| Dialect
 		| DBAdapterInstance
 		| BunDatabase
