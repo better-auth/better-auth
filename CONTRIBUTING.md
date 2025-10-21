@@ -104,7 +104,7 @@ pnpm lint:fix
 3. Add tests for your changes
 4. Run database containers (needed for testing database adapters)
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 5. Run the test suite:
    ```bash
