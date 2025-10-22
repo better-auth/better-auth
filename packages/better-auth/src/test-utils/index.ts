@@ -1,7 +1,7 @@
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
-import type { BetterAuthOptions, ClientOptions, Session, User } from "../types";
+import type { BetterAuthOptions, Session, User } from "../types";
 import { getMigrations } from "../db/get-migration";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
@@ -13,12 +13,13 @@ import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
+import type { BetterAuthClientOptions } from "@better-auth/core";
 
 export { getTestInstance } from "./test-instance";
 
 export async function getTestInstanceMemory<
 	O extends Partial<BetterAuthOptions>,
-	C extends ClientOptions,
+	C extends BetterAuthClientOptions,
 >(
 	options?: O,
 	config?: {

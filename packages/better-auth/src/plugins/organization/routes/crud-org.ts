@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
@@ -486,6 +486,20 @@ export const updateOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
 				});
 			}
+			// Check if slug is being updated and validate uniqueness
+			if (typeof ctx.body.data.slug === "string") {
+				const existingOrganization = await adapter.findOrganizationBySlug(
+					ctx.body.data.slug,
+				);
+				if (
+					existingOrganization &&
+					existingOrganization.id !== organizationId
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
+					});
+				}
+			}
 			if (options?.organizationHooks?.beforeUpdateOrganization) {
 				const response =
 					await options.organizationHooks.beforeUpdateOrganization({
@@ -694,7 +708,6 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				session.session.activeOrganizationId;
 			// return null if no organization is found to avoid erroring since this is a usual scenario
 			if (!organizationId) {
-				ctx.context.logger.info("No active organization found, returning null");
 				return ctx.json(null, {
 					status: 200,
 				});
