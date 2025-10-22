@@ -9,11 +9,13 @@ export async function selectedAccountEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
 ) {
-	const { name: cookieName } = ctx.context.createAuthCookie(
-		"oauth_select_account",
-	);
+	const { name: cookieName, attributes: cookieAttributes } =
+		ctx.context.createAuthCookie("oauth_select_account");
 	const storedCode = await ctx.getSignedCookie(cookieName, ctx.context.secret);
 	ctx.setCookie(cookieName, "", {
+		path: ctx.context.options.basePath,
+		sameSite: "lax",
+		...cookieAttributes,
 		maxAge: 0,
 	});
 	if (!storedCode) {
