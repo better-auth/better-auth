@@ -86,7 +86,7 @@
 	--scrollbar-track: transparent;
 }
 
-@theme {
+@theme inline {
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
@@ -124,11 +124,8 @@
 	--radius-lg: var(--radius);
 	--radius-xl: calc(var(--radius) + 4px);
 
-	--font-family-sans: var(--font-geist-sans);
-	--font-family-mono: var(--font-geist-mono);
-	--font-family-display:
-		ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-		"Segoe UI Symbol", "Noto Color Emoji";
+	--font-sans: var(--font-geist-sans);
+	--font-mono: var(--font-geist-mono);
 
 	--animate-accordion-down: accordion-down 0.2s ease-out;
 	--animate-accordion-up: accordion-up 0.2s ease-out;
@@ -273,39 +270,35 @@ html:not([data-anchor-scrolling]) {
 	background: transparent;
 }
 
-@layer utilities {
-	.no-scrollbar::-webkit-scrollbar {
+@utility no-scrollbar {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
 		display: none;
 	}
+}
 
-	.no-scrollbar {
-		-ms-overflow-style: none;
-		scrollbar-width: none;
-	}
+@utility bg-grid {
+	background-image:
+		linear-gradient(currentColor 1px, transparent 1px),
+		linear-gradient(90deg, currentColor 1px, transparent 1px);
+	background-size: 32px 32px;
+}
 
-	.bg-grid {
-		background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='%23e5e7eb'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e");
-	}
+@utility bg-grid-small {
+	background-image:
+		linear-gradient(currentColor 1px, transparent 1px),
+		linear-gradient(90deg, currentColor 1px, transparent 1px);
+	background-size: 8px 8px;
+}
 
-	.bg-grid-small {
-		background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='8' height='8' fill='none' stroke='%23e5e7eb'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e");
-	}
-
-	.bg-dot {
-		background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='16' height='16' fill='none'%3e%3ccircle fill='%23e5e7eb' id='pattern-circle' cx='10' cy='10' r='1.6257413380501518'%3e%3c/circle%3e%3c/svg%3e");
-	}
-
-	.dark .bg-grid {
-		background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='%23374151'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e");
-	}
-
-	.dark .bg-grid-small {
-		background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='8' height='8' fill='none' stroke='%23374151'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e");
-	}
-
-	.dark .bg-dot {
-		background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='16' height='16' fill='none'%3e%3ccircle fill='%23374151' id='pattern-circle' cx='10' cy='10' r='1.6257413380501518'%3e%3c/circle%3e%3c/svg%3e");
-	}
+@utility bg-dot {
+	background-image: radial-gradient(
+		circle at 50% 50%,
+		currentColor 1.6px,
+		transparent 1.6px
+	);
+	background-size: 16px 16px;
 }
 
 .markdown-content {
