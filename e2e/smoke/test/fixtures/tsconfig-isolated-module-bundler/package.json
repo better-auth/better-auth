@@ -1,0 +1,12 @@
+{
+  "name": "tsconfig-isolated-module-bundler",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "better-auth": "workspace:*",
+    "better-auth-harmony": "^1.2.5"
+  }
+}

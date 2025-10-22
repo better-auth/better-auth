@@ -1,17 +1,16 @@
-import type { BetterAuthPlugin } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import { getJwtToken, signJWT } from "./sign";
 import type { JSONWebKeySet, JWTPayload } from "jose";
+import { APIError, sessionMiddleware } from "../../api";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	sessionMiddleware,
-} from "../../api";
+} from "@better-auth/core/api";
 import { mergeSchema } from "../../db/schema";
 import * as z from "zod";
-import { BetterAuthError } from "../../error";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
 export type * from "./types";

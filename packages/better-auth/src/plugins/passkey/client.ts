@@ -8,10 +8,9 @@ import type {
 	PublicKeyCredentialCreationOptionsJSON,
 	PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
-import type { Session } from "inspector";
-import type { User } from "../../types";
+import type { User, Session } from "../../types";
 import type { passkey as passkeyPl, Passkey } from ".";
-import type { BetterAuthClientPlugin } from "../../client/types";
+import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import { useAuthQuery } from "../../client";
 import { atom } from "nanostores";
 
@@ -19,8 +18,10 @@ export const getPasskeyActions = (
 	$fetch: BetterFetch,
 	{
 		$listPasskeys,
+		$store,
 	}: {
 		$listPasskeys: ReturnType<typeof atom<any>>;
+		$store: ClientStore;
 	},
 ) => {
 	const signInPasskey = async (
@@ -34,6 +35,7 @@ export const getPasskeyActions = (
 			"/passkey/generate-authenticate-options",
 			{
 				method: "POST",
+				throw: false,
 			},
 		);
 		if (!response.data) {
@@ -54,7 +56,10 @@ export const getPasskeyActions = (
 				...opts?.fetchOptions,
 				...options,
 				method: "POST",
+				throw: false,
 			});
+			$listPasskeys.set(Math.random());
+			$store.notify("$sessionSignal");
 
 			return verified;
 		} catch (e) {
@@ -106,8 +111,10 @@ export const getPasskeyActions = (
 						name: opts.name,
 					}),
 				},
+				throw: false,
 			},
 		);
+
 		if (!options.data) {
 			return options;
 		}
@@ -126,7 +133,9 @@ export const getPasskeyActions = (
 					name: opts?.name,
 				},
 				method: "POST",
+				throw: false,
 			});
+
 			if (!verified.data) {
 				return verified;
 			}
@@ -204,9 +213,10 @@ export const passkeyClient = () => {
 	return {
 		id: "passkey",
 		$InferServerPlugin: {} as ReturnType<typeof passkeyPl>,
-		getActions: ($fetch) =>
+		getActions: ($fetch, $store) =>
 			getPasskeyActions($fetch, {
 				$listPasskeys,
+				$store,
 			}),
 		getAtoms($fetch) {
 			const listPasskeys = useAuthQuery<Passkey[]>(
@@ -232,10 +242,15 @@ export const passkeyClient = () => {
 					return (
 						path === "/passkey/verify-registration" ||
 						path === "/passkey/delete-passkey" ||
-						path === "/passkey/update-passkey"
+						path === "/passkey/update-passkey" ||
+						path === "/sign-out"
 					);
 				},
-				signal: "_listPasskeys",
+				signal: "$listPasskeys",
+			},
+			{
+				matcher: (path) => path === "/passkey/verify-authentication",
+				signal: "$sessionSignal",
 			},
 		],
 	} satisfies BetterAuthClientPlugin;

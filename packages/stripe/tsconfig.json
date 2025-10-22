@@ -1,9 +1,14 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "./src",
-    "outDir": "./dist",
     "lib": ["esnext", "dom", "dom.iterable"]
   },
-  "include": ["src"]
+  "references": [
+    {
+      "path": "../better-auth/tsconfig.json"
+    },
+    {
+      "path": "../core/tsconfig.json"
+    }
+  ]
 }

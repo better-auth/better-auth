@@ -1,10 +1,10 @@
-import type { Adapter, BetterAuthOptions } from "better-auth";
+import type { DBAdapter, BetterAuthOptions } from "better-auth";
 
 export interface SchemaGenerator {
-	(opts: {
+	<Options extends BetterAuthOptions>(opts: {
 		file?: string;
-		adapter: Adapter;
-		options: BetterAuthOptions;
+		adapter: DBAdapter;
+		options: Options;
 	}): Promise<{
 		code?: string;
 		fileName: string;

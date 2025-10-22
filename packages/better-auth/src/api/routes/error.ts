@@ -1,5 +1,5 @@
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { createAuthEndpoint } from "../call";
+import { createAuthEndpoint } from "@better-auth/core/api";
 
 function sanitize(input: string): string {
 	return input

@@ -1,13 +1,14 @@
 import * as z from "zod";
-import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
+import { APIError, getSessionFromCtx } from "../../../api";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { getDate } from "../../../utils/date";
 import { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { defaultKeyHasher } from "../";
+import type { AuthContext } from "@better-auth/core";
 
 export function createApiKey({
 	keyGenerator,

@@ -16,11 +16,12 @@ The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplew
 
         **Options**
 
-        `rpID`: A unique identifier for your website. 'localhost' is okay for local dev
+        `rpID`: A unique identifier for your website based on your auth server origin. 'localhost' is okay for local dev. RP ID can be formed by discarding zero or more labels from the left of its effective domain
+        until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.example.com` or `example.com`. But not `com`, because that's an eTLD.
 
         `rpName`: Human-readable title for your website
 
-        `origin`: The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do **NOT** include any trailing /
+        `origin`: The origin URL at which your better-auth server is hosted. `http://localhost` and `http://localhost:PORT` are also valid. Do **NOT** include any trailing /
 
         `authenticatorSelection`: Allows customization of WebAuthn authenticator selection criteria. Leave unspecified for default settings.
             - `authenticatorAttachment`: Specifies the type of authenticator
@@ -106,6 +107,10 @@ type addPasskey = {
 }
 ```
 </APIMethod>
+
+<Callout>
+ Setting `throw: true` in the fetch options has no effect for the register and sign-in passkey responses — they will always return a data object containing the error object.
+</Callout>
 
 
 ### Sign in with a passkey
@@ -308,11 +313,13 @@ Table Name: `passkey`
             name: "transports",
             type: "string",
             description: "The transports used to register the passkey",
+            isOptional: true
         },
         { 
             name: "createdAt", 
             type: "Date", 
             description: "The time when the passkey was created",
+            isOptional: true
         },
         {
                 name: "aaguid",
@@ -325,11 +332,13 @@ Table Name: `passkey`
 
 ## Options
 
-**rpID**: A unique identifier for your website. 'localhost' is okay for local dev.
+**rpID**: A unique identifier for your website based on your auth server origin.
+`'localhost'` is okay for local dev. RP ID can be formed by discarding zero or more labels from the left of its effective domain
+until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.example.com` or `example.com`. But not `com`, because that's an eTLD.
 
 **rpName**: Human-readable title for your website.
 
-**origin**: The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do NOT include any trailing /.
+**origin**: The origin URL at which your better-auth server is hosted. `http://localhost` and `http://localhost:PORT` are also valid. Do NOT include any trailing /.
 
 **authenticatorSelection**: Allows customization of WebAuthn authenticator selection criteria. When unspecified, both platform and cross-platform authenticators are allowed with `preferred` settings for `residentKey` and `userVerification`.
 

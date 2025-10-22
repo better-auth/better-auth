@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Key } from "lucide-react";
 import { client, signIn } from "@/lib/auth-client";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -212,6 +212,29 @@ export default function SignIn() {
 							{client.isLastUsedLoginMethod("microsoft") && (
 								<LastUsedIndicator />
 							)}
+						</Button>
+						<Button
+							variant="outline"
+							className={cn("w-full gap-2 flex items-center relative")}
+							onClick={async () => {
+								await signIn.passkey({
+									fetchOptions: {
+										onSuccess() {
+											toast.success("Successfully signed in");
+											router.push(getCallbackURL(params));
+										},
+										onError(context) {
+											toast.error(
+												"Authentication failed: " + context.error.message,
+											);
+										},
+									},
+								});
+							}}
+						>
+							<Key size={16} />
+							<span>Sign in with Passkey</span>
+							{client.isLastUsedLoginMethod("passkey") && <LastUsedIndicator />}
 						</Button>
 					</div>
 				</div>

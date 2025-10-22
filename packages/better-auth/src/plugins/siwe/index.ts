@@ -1,7 +1,9 @@
-import { APIError, createAuthEndpoint } from "../../api";
+import { APIError } from "../../api";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { setSessionCookie } from "../../cookies";
 import * as z from "zod";
-import type { BetterAuthPlugin, InferOptionSchema } from "../../types";
+import type { InferOptionSchema } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import type {
 	ENSLookupArgs,
 	ENSLookupResult,
@@ -270,7 +272,6 @@ export const siwe = (options: SIWEPluginOptions) =>
 
 						const session = await ctx.context.internalAdapter.createSession(
 							user.id,
-							ctx,
 						);
 
 						if (!session) {

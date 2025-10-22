@@ -33,7 +33,6 @@ const { execute } = await testAdapter({
 		performanceTestSuite(),
 	],
 	customIdGenerator: () => new ObjectId().toString(),
-	defaultRetryCount: 20,
 });
 
 execute();

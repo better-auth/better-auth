@@ -146,8 +146,8 @@ export const supportedPlugins = [
 		id: "sso",
 		name: "sso",
 		clientName: "ssoClient",
-		path: `better-auth/plugins/sso`,
-		clientPath: "better-auth/client/plugins",
+		path: `@better-auth/sso`,
+		clientPath: "@better-auth/sso/client",
 	},
 	{
 		id: "bearer",

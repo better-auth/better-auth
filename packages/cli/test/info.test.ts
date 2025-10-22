@@ -44,7 +44,7 @@ describe("info command", () => {
 			}),
 		);
 
-		const cliPath = path.join(process.cwd(), "dist", "index.mjs");
+		const cliPath = path.join(process.cwd(), "dist", "index.js");
 		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
 			cwd: tmpDir,
 		});
@@ -109,7 +109,7 @@ describe("info command", () => {
 			})`,
 		);
 
-		const cliPath = path.join(process.cwd(), "dist", "index.mjs");
+		const cliPath = path.join(process.cwd(), "dist", "index.js");
 		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
 			cwd: tmpDir,
 		});
@@ -161,7 +161,7 @@ describe("info command", () => {
 			}),
 		);
 
-		const cliPath = path.join(process.cwd(), "dist", "index.mjs");
+		const cliPath = path.join(process.cwd(), "dist", "index.js");
 		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
 			cwd: tmpDir,
 		});
@@ -206,7 +206,7 @@ describe("info command", () => {
 			}),
 		);
 
-		const cliPath = path.join(process.cwd(), "dist", "index.mjs");
+		const cliPath = path.join(process.cwd(), "dist", "index.js");
 		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
 			cwd: tmpDir,
 		});
@@ -263,7 +263,7 @@ describe("info command", () => {
 			})`,
 		);
 
-		const cliPath = path.join(process.cwd(), "dist", "index.mjs");
+		const cliPath = path.join(process.cwd(), "dist", "index.js");
 		const { stdout } = await execAsync(
 			`node ${cliPath} info --config config/auth.config.ts --json`,
 			{ cwd: tmpDir },
@@ -314,7 +314,7 @@ describe("info command", () => {
 			})`,
 		);
 
-		const cliPath = path.join(process.cwd(), "dist", "index.mjs");
+		const cliPath = path.join(process.cwd(), "dist", "index.js");
 		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
 			cwd: tmpDir,
 		});
@@ -338,7 +338,7 @@ describe("info command", () => {
 
 	it("should handle missing package.json gracefully", async () => {
 		// Don't create package.json
-		const cliPath = path.join(process.cwd(), "dist", "index.mjs");
+		const cliPath = path.join(process.cwd(), "dist", "index.js");
 		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
 			cwd: tmpDir,
 		});

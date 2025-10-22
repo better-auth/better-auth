@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "better-auth/types";
+import type { BetterAuthPlugin } from "better-auth";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -47,7 +47,7 @@ export const expo = (options?: ExpoOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return (
+						return !!(
 							context.path?.startsWith("/callback") ||
 							context.path?.startsWith("/oauth2/callback")
 						);

@@ -314,6 +314,16 @@ const res = await authClient.signIn.sso({
 });
 ```
 
+Optionally, you can pass a login hint (for example, an email address or another identifier) to prefill or direct the identity provider:
+
+```ts title="sign-in-with-login-hint.ts"
+const res = await authClient.signIn.sso({
+    providerId: "example-provider-id",
+    loginHint: "user@example.com",
+    callbackURL: "/dashboard",
+});
+```
+
 To use the server API you can use `signInSSO`
 
 ```ts title="sign-in-org.ts"
@@ -363,12 +373,18 @@ type signInSSO = {
      */
     scopes?: string[] = ["openid", "email", "profile", "offline_access"]
     /**
+     * Login hint to send to the identity provider (e.g., email or identifier). 
+     */
+    loginHint?: string = "user@example.com"
+    /**
      * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
      */
     requestSignUp?: boolean = true
 }
 ```
 </APIMethod>
+
+Note: If email is provided and loginHint is not specified, email will be sent as the login_hint to OIDC providers automatically. SAML flows do not support login_hint.
 
 When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
 

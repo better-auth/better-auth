@@ -1,10 +1,17 @@
 import { generateRandomString } from "../../crypto/random";
 import * as z from "zod";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
 import { sessionMiddleware } from "../../api";
 import { symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "../../types/plugins";
-import { backupCode2fa, generateBackupCodes } from "./backup-codes";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import {
+	backupCode2fa,
+	generateBackupCodes,
+	type BackupCodeOptions,
+} from "./backup-codes";
 import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
@@ -14,7 +21,7 @@ import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { schema } from "./schema";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
@@ -24,8 +31,12 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
 	};
+	const backupCodeOptions = {
+		storeBackupCodes: "encrypted",
+		...options?.backupCodeOptions,
+	} satisfies BackupCodeOptions;
 	const totp = totp2fa(options?.totpOptions);
-	const backupCode = backupCode2fa(options?.backupCodeOptions);
+	const backupCode = backupCode2fa(backupCodeOptions);
 	const otp = otp2fa(options?.otpOptions);
 
 	return {
@@ -117,7 +128,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					const backupCodes = await generateBackupCodes(
 						ctx.context.secret,
-						options?.backupCodeOptions,
+						backupCodeOptions,
 					);
 					if (options?.skipVerificationOnEnable) {
 						const updatedUser = await ctx.context.internalAdapter.updateUser(
@@ -125,11 +136,9 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							{
 								twoFactorEnabled: true,
 							},
-							ctx,
 						);
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
-							ctx,
 							false,
 							ctx.context.session.session,
 						);
@@ -239,7 +248,6 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						{
 							twoFactorEnabled: false,
 						},
-						ctx,
 					);
 					await ctx.context.adapter.delete({
 						model: opts.twoFactorTable,
@@ -252,7 +260,6 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					const newSession = await ctx.context.internalAdapter.createSession(
 						updatedUser.id,
-						ctx,
 						false,
 						ctx.context.session.session,
 					);
@@ -335,14 +342,11 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							},
 						);
 						const identifier = `2fa-${generateRandomString(20)}`;
-						await ctx.context.internalAdapter.createVerificationValue(
-							{
-								value: data.user.id,
-								identifier,
-								expiresAt: new Date(Date.now() + maxAge * 1000),
-							},
-							ctx,
-						);
+						await ctx.context.internalAdapter.createVerificationValue({
+							value: data.user.id,
+							identifier,
+							expiresAt: new Date(Date.now() + maxAge * 1000),
+						});
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
 							identifier,

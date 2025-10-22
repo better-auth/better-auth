@@ -3,7 +3,10 @@ import {
 	type BetterAuthPlugin,
 	logger,
 } from "better-auth";
-import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
 import Stripe from "stripe";
 import { type Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
@@ -27,8 +30,9 @@ import type {
 import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
 import { getSchema } from "./schema";
 import { defu } from "defu";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
-const STRIPE_ERROR_CODES = {
+const STRIPE_ERROR_CODES = defineErrorCodes({
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
 	SUBSCRIPTION_PLAN_NOT_FOUND: "Subscription plan not found",
 	ALREADY_SUBSCRIBED_PLAN: "You're already subscribed to this plan",
@@ -39,7 +43,7 @@ const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
 	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
 		"Subscription is not scheduled for cancellation",
-} as const;
+});
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
 	if (url.startsWith("http")) {
@@ -91,17 +95,24 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						"Reference id is not allowed. Read server logs for more details.",
 				});
 			}
-			const isAuthorized = ctx.body?.referenceId
-				? await options.subscription?.authorizeReference?.(
-						{
-							user: session.user,
-							session: session.session,
-							referenceId,
-							action,
-						},
-						ctx,
-					)
-				: true;
+			/**
+			 * if referenceId is the same as the active session user's id
+			 */
+			const sameReference =
+				ctx.query?.referenceId === session.user.id ||
+				ctx.body?.referenceId === session.user.id;
+			const isAuthorized =
+				ctx.body?.referenceId || ctx.query?.referenceId
+					? (await options.subscription?.authorizeReference?.(
+							{
+								user: session.user,
+								session: session.session,
+								referenceId,
+								action,
+							},
+							ctx,
+						)) || sameReference
+					: true;
 			if (!isAuthorized) {
 				throw new APIError("UNAUTHORIZED", {
 					message: "Unauthorized",
@@ -1244,11 +1255,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								message: "Stripe webhook secret not found",
 							});
 						}
-						event = await client.webhooks.constructEventAsync(
-							buf,
-							sig,
-							webhookSecret,
-						);
+						// Support both Stripe v18 (constructEvent) and v19+ (constructEventAsync)
+						if (typeof client.webhooks.constructEventAsync === "function") {
+							// Stripe v19+ - use async method
+							event = await client.webhooks.constructEventAsync(
+								buf,
+								sig,
+								webhookSecret,
+							);
+						} else {
+							// Stripe v18 - use sync method
+							event = client.webhooks.constructEvent(buf, sig, webhookSecret);
+						}
 					} catch (err: any) {
 						ctx.context.logger.error(`${err.message}`);
 						throw new APIError("BAD_REQUEST", {
@@ -1398,6 +1416,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			};
 		},
 		schema: getSchema(options),
+		$ERROR_CODES: STRIPE_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
 
