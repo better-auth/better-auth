@@ -19,7 +19,7 @@ import { resend } from "./email/resend";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
-import { passkey } from "better-auth/plugins/passkey";
+import { passkey } from "@better-auth/passkey";
 import { stripe } from "@better-auth/stripe";
 import { sso } from "@better-auth/sso";
 import { Stripe } from "stripe";

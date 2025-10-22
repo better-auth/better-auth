@@ -97,8 +97,8 @@ export const supportedPlugins = [
 		id: "passkey",
 		name: "passkey",
 		clientName: "passkeyClient",
-		path: `better-auth/plugins/passkey`,
-		clientPath: "better-auth/client/plugins",
+		path: `@better-auth/passkey`,
+		clientPath: "@better-auth/passkey/client",
 	},
 	{
 		id: "generic-oauth",
@@ -885,7 +885,7 @@ export async function initAction(opts: any) {
 								name: plugin.clientName!,
 								imports: [
 									{
-										path: "better-auth/client/plugins",
+										path: plugin.clientPath!,
 										variables: [{ name: plugin.clientName! }],
 									},
 								],

@@ -165,7 +165,17 @@ export async function generateAuthConfig({
 			config: string;
 		}): Promise<{ code: string; dependencies: string[]; envs: string[] }> => {
 			let importString = "";
+			const dependencies: string[] = [];
+
 			for (const import_ of opts.imports) {
+				// Collect dependencies for @better-auth/* packages
+				if (import_.path.startsWith('@better-auth/') && !import_.path.startsWith('@better-auth/core')) {
+					const packageName = import_.path.split('/')[0] + '/' + import_.path.split('/')[1];
+					if (!dependencies.includes(packageName)) {
+						dependencies.push(packageName);
+					}
+				}
+
 				if (Array.isArray(import_.variables)) {
 					importString += `import { ${import_.variables
 						.map(
@@ -185,7 +195,7 @@ export async function generateAuthConfig({
 			}
 			try {
 				let new_content = format(importString + opts.config);
-				return { code: await new_content, dependencies: [], envs: [] };
+				return { code: await new_content, dependencies, envs: [] };
 			} catch (error) {
 				console.error(error);
 				throw new Error(

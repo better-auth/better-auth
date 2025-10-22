@@ -34,6 +34,7 @@
   "exports": "./dist/index.js",
   "bin": "./dist/index.js",
   "devDependencies": {
+    "@better-auth/passkey": "workspace:*",
     "@types/semver": "^7.7.1",
     "tsdown": "catalog:",
     "tsx": "^4.20.6",
