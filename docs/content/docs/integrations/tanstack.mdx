@@ -30,20 +30,6 @@ export const Route = createFileRoute('/api/auth/$')({
 })
 ```
 
-If you haven't created your server route handler yet, you can do so by creating a file: `/src/server.ts`
-
-```ts title="src/server.ts"
-import {
-  createStartHandler,
-  defaultStreamHandler,
-} from '@tanstack/react-start/server'
-import { createRouter } from './router'
-
-export default createStartHandler({
-  createRouter,
-})(defaultStreamHandler)
-```
-
 ### Usage tips
 
 - We recommend using the client SDK or `authClient` to handle authentication, rather than server actions with `auth.api`.
