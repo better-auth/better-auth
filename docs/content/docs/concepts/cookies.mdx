@@ -94,3 +94,20 @@ export const auth = betterAuth({
     }
 })
 ```
+
+<Callout type="warn">
+The name of your cookie will automatically be prefixed with `__Secure-`. Even if you specify your own prefix. For example:
+</Callout>
+
+```ts title="cookie.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    advanced: {
+        cookiePrefix: 'make-believe',
+        useSecureCookies: true
+    }
+})
+
+// produces a cookie with this name: __Secure-make-believe.session_token
+```
