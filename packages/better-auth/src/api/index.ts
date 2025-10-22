@@ -36,6 +36,7 @@ import {
 	accountInfo,
 	requestPasswordReset,
 	requestPasswordResetCallback,
+	validatePasswordResetToken,
 } from "./routes";
 import { ok } from "./routes";
 import { signUpEmail } from "./routes";
@@ -224,6 +225,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		forgetPasswordCallback,
 		requestPasswordReset,
 		requestPasswordResetCallback,
+		validatePasswordResetToken,
 		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,
