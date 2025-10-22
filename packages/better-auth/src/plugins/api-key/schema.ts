@@ -9,7 +9,7 @@ export const apiKeySchema = ({
 	rateLimitMax: number;
 }) =>
 	({
-		apikey: {
+		apiKey: {
 			fields: {
 				/**
 				 * The name of the key.
