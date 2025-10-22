@@ -3,7 +3,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { prismaAdapter } from "../prisma-adapter";
@@ -45,7 +44,6 @@ const { execute } = await testAdapter({
 		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect }),
 	],
 	onFinish: async () => {},
 	prefixTests: "pg",

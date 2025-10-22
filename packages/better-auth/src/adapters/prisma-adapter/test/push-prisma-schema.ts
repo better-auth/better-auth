@@ -8,7 +8,7 @@ export async function pushPrismaSchema(
 	const node = process.execPath;
 	const cli = createRequire(import.meta.url).resolve("prisma");
 	execSync(`${node} ${cli} db push --schema ./schema-${dialect}.prisma`, {
-		stdio: "ignore", // use `inherit` if you want to see the output
+		stdio: "inherit", // use `inherit` if you want to see the output
 		cwd: join(import.meta.dirname),
 	});
 }

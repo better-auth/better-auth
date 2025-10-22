@@ -116,6 +116,11 @@ export type DBFieldAttributeConfig = {
 	 * It's useful to mark fields varchar instead of text.
 	 */
 	sortable?: boolean;
+	/**
+	 * If the field should be indexed.
+	 * @default false
+	 */
+	index?: boolean;
 };
 
 export type DBFieldAttribute<T extends DBFieldType = DBFieldType> = {

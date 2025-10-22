@@ -30,7 +30,7 @@ describe("migrate base auth instance", () => {
 		await migrateAction({
 			cwd: process.cwd(),
 			config: "test/auth.ts",
-			y: true,
+			yes: true,
 		});
 		const signUpRes = await auth.api.signUpEmail({
 			body: {
@@ -83,7 +83,7 @@ describe("migrate auth instance with plugins", () => {
 		await migrateAction({
 			cwd: process.cwd(),
 			config: "test/auth.ts",
-			y: true,
+			yes: true,
 		});
 		const res = db
 			.prepare("INSERT INTO plugin (id, test) VALUES (?, ?)")
