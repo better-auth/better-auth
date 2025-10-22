@@ -21,7 +21,7 @@ export default function Hero() {
 
 			{/* Background Grid */}
 			<div className="absolute inset-0 left-5 right-5 lg:left-16 lg:right-14 xl:left-16 xl:right-14">
-				<div className="absolute inset-0 bg-grid text-muted/50  dark:text-white/[0.02]" />
+				<div className="absolute inset-0 bg-grid text-muted/50 dark:text-white/[0.02]" />
 				<div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-background" />
 			</div>
 
