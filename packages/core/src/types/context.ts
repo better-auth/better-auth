@@ -166,11 +166,20 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		appName: string;
 		baseURL: string;
 		trustedOrigins: string[];
-		oauthConfig?: {
+		oauthConfig: {
 			/**
 			 * This is dangerous and should only be used in dev or staging environments.
 			 */
 			skipStateCookieCheck?: boolean;
+			/**
+			 * Strategy for storing OAuth state
+			 *
+			 * - "cookie": Store state in an encrypted cookie (stateless)
+			 * - "database": Store state in the database
+			 *
+			 * @default "cookie"
+			 */
+			storeStateStrategy: "database" | "cookie";
 		};
 		/**
 		 * New session that will be set after the request

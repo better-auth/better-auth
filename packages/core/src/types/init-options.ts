@@ -241,6 +241,15 @@ export type BetterAuthAdvancedOptions = {
 		 * @default false
 		 */
 		skipStateCookieCheck?: boolean;
+		/**
+		 * Strategy for storing OAuth state
+		 *
+		 * - "cookie": Store state in an encrypted cookie (stateless)
+		 * - "database": Store state in the database
+		 *
+		 * @default "cookie"
+		 */
+		storeStateStrategy?: "database" | "cookie";
 	};
 };
 

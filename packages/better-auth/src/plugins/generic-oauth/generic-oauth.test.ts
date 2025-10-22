@@ -892,4 +892,74 @@ describe("oauth2", async () => {
 			userId: session.data?.user.id,
 		});
 	});
+
+	it("should work with cookie-based state storage", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "oauth2-cookie-state@test.com",
+				name: "OAuth2 Cookie State",
+				sub: "oauth2-cookie-state",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-cookie",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+			advanced: {
+				oauthConfig: {
+					storeStateStrategy: "cookie",
+				},
+			},
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test-cookie",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe("oauth2-cookie-state@test.com");
+		expect(session.data?.user.name).toBe("OAuth2 Cookie State");
+	});
 });
