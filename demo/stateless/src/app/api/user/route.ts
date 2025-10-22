@@ -1,6 +1,20 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 
+export interface APIData {
+	message: string;
+	user: {
+		id: string;
+		email: string;
+		name: string | null | undefined;
+		image: string | null | undefined;
+	};
+	session: {
+		expiresAt: Date;
+		createdAt: Date;
+	};
+}
+
 export async function GET() {
 	const session = await auth.api.getSession({
 		headers: await headers(),
@@ -23,5 +37,5 @@ export async function GET() {
 			createdAt: session.session.createdAt,
 		},
 		note: "This data was retrieved from JWT on the server without any database queries.",
-	});
+	} satisfies APIData);
 }

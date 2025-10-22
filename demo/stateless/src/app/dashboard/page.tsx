@@ -3,11 +3,12 @@
 import { signOut, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import type { APIData } from "@/app/api/user/route";
 
 export default function Dashboard() {
 	const router = useRouter();
 	const { data: session, isPending } = useSession();
-	const [serverData, setServerData] = useState<any>(null);
+	const [serverData, setServerData] = useState<APIData | null | string>(null);
 	const [isPendingServer, startTransition] = useTransition();
 
 	useEffect(() => {
@@ -28,7 +29,7 @@ export default function Dashboard() {
 				const data = await response.json();
 				setServerData(data);
 			} catch (error) {
-				setServerData({ error: "Failed to fetch server data" });
+				setServerData("Failed to fetch server data");
 			}
 		});
 	};
