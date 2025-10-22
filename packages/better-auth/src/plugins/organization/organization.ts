@@ -1168,6 +1168,10 @@ export function organization<O extends OrganizationOptions>(options?: O): any {
 						type: "string",
 						required: false,
 						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
+						references: {
+							model: "organization",
+							field: "id",
+						}
 					},
 					...(teamSupport
 						? {
