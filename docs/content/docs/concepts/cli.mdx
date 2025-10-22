@@ -33,6 +33,12 @@ npx @better-auth/cli@latest migrate
 - `--config` - The path to your Better Auth config file. By default, the CLI will search for an auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under the `src` directory.
 - `--yes` - Skip the confirmation prompt and apply the schema directly.
 
+<Callout type="info">
+**Using PostgreSQL with a non-default schema?**
+
+The migrate command automatically detects your configured `search_path` and creates tables in the correct schema. See the [PostgreSQL adapter documentation](/docs/adapters/postgresql#use-a-non-default-schema) for configuration details.
+</Callout>
+
 ## Init
 
 The `init` command allows you to initialize Better Auth in your project.
