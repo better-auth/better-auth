@@ -103,7 +103,7 @@ export const init = async (options: BetterAuthOptions) => {
 		options,
 		oauthConfig: {
 			storeStateStrategy:
-				options.advanced?.oauthConfig?.storeStateStrategy || "cookie",
+				options.advanced?.oauthConfig?.storeStateStrategy || "database",
 			skipStateCookieCheck:
 				!!options.advanced?.oauthConfig?.skipStateCookieCheck,
 		},
