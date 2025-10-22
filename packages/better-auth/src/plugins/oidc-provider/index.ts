@@ -1,13 +1,11 @@
 import * as z from "zod";
 import { SignJWT } from "jose";
+import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSessionFromCtx,
-	sessionMiddleware,
-} from "../../api";
-import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+} from "@better-auth/core/api";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -29,6 +27,7 @@ import { getJwtToken } from "../jwt/sign";
 import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
 import { mergeSchema } from "../../db";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -262,7 +261,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							return;
 						}
 						ctx.query = JSON.parse(cookie);
-						ctx.query!.prompt = "consent";
+						// Don't force prompt to "consent" - let the authorize function
+						// determine if consent is needed based on OIDC spec requirements
 						ctx.context.session = session;
 						const response = await authorize(ctx, opts);
 						return response;
@@ -320,7 +320,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					method: "POST",
 					body: z.object({
 						accept: z.boolean(),
-						consent_code: z.string().optional(),
+						consent_code: z.string().optional().nullish(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -597,7 +597,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 						return ctx.json({
 							access_token: accessToken,
-							token_type: "bearer",
+							token_type: "Bearer",
 							expires_in: opts.accessTokenExpiresIn,
 							refresh_token: newRefreshToken,
 							scope: token.scopes,

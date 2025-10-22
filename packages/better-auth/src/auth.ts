@@ -1,19 +1,19 @@
 import { getEndpoints, router } from "./api";
 import { init } from "./init";
-import type { BetterAuthOptions } from "./types/options";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	InferPluginErrorCodes,
 	InferPluginTypes,
 	InferSession,
 	InferUser,
-	AuthContext,
 	InferAPI,
 } from "./types";
 import type { PrettifyDeep, Expand } from "./types/helper";
 import { getBaseURL, getOrigin } from "./utils/url";
-import { BASE_ERROR_CODES } from "./error/codes";
-import { BetterAuthError } from "./error";
-import { runWithAdapter } from "./context/transaction";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { BetterAuthError } from "@better-auth/core/error";
+import { runWithAdapter } from "@better-auth/core/context";
+import type { AuthContext } from "@better-auth/core";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
 
@@ -59,20 +59,14 @@ export const betterAuth = <Options extends BetterAuthOptions>(
 			const { handler } = router(ctx, options);
 			return runWithAdapter(ctx.adapter, () => handler(request));
 		},
-		api: api as never,
-		options: options as Options,
+		api,
+		options: options,
 		$context: authContext,
-		$Infer: {} as {
-			Session: {
-				session: PrettifyDeep<InferSession<Options>>;
-				user: PrettifyDeep<InferUser<Options>>;
-			};
-		} & InferPluginTypes<Options>,
 		$ERROR_CODES: {
 			...errorCodes,
 			...BASE_ERROR_CODES,
-		} as InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES,
-	};
+		},
+	} as any;
 };
 
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
@@ -84,10 +78,14 @@ export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	/**
 	 * Share types
 	 */
-	$Infer: {
-		Session: {
-			session: PrettifyDeep<InferSession<Options>>;
-			user: PrettifyDeep<InferUser<Options>>;
-		};
-	} & InferPluginTypes<Options>;
+	$Infer: InferPluginTypes<Options> extends {
+		Session: any;
+	}
+		? InferPluginTypes<Options>
+		: {
+				Session: {
+					session: PrettifyDeep<InferSession<Options>>;
+					user: PrettifyDeep<InferUser<Options>>;
+				};
+			} & InferPluginTypes<Options>;
 };

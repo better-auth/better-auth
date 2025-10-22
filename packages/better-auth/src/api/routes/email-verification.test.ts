@@ -235,6 +235,39 @@ describe("Email Verification", async () => {
 			},
 		);
 	});
+
+	it("should properly encode callbackURL with query parameters when sending verification email", async () => {
+		const mockSendEmailLocal = vi.fn();
+		let capturedUrl = "";
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token: _token }) {
+					capturedUrl = url;
+					mockSendEmailLocal(user.email, url);
+				},
+			},
+		});
+
+		const callbackURL =
+			"https://example.com/app?redirect=/dashboard&tab=settings";
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+				callbackURL,
+			},
+		});
+		expect(mockSendEmailLocal).toHaveBeenCalled();
+
+		const emailUrl = new URL(capturedUrl);
+		const callbackURLParam = emailUrl.searchParams.get("callbackURL");
+
+		expect(callbackURLParam).toBe(callbackURL);
+		expect(callbackURLParam).toContain("?redirect=/dashboard&tab=settings");
+	});
 });
 
 describe("Email Verification Secondary Storage", async () => {
@@ -300,8 +333,8 @@ describe("Email Verification Secondary Storage", async () => {
 	});
 
 	it("should change email", async () => {
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async (headers) => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async (headers) => {
 			await auth.api.changeEmail({
 				body: {
 					newEmail: "new@email.com",

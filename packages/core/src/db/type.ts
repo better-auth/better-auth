@@ -1,6 +1,19 @@
 import type { ZodType } from "zod";
 import type { LiteralString } from "../types";
 
+export type DBPreservedModels =
+	| "user"
+	| "account"
+	| "session"
+	| "verification"
+	| "rate-limit"
+	| "organization"
+	| "member"
+	| "invitation"
+	| "jwks"
+	| "passkey"
+	| "two-factor";
+
 export type DBFieldType =
 	| "string"
 	| "number"
@@ -131,3 +144,31 @@ export type BetterAuthDBSchema = Record<
 		order?: number;
 	}
 >;
+
+export interface SecondaryStorage {
+	/**
+	 *
+	 * @param key - Key to get
+	 * @returns - Value of the key
+	 */
+	get: (key: string) => Promise<unknown> | unknown;
+	set: (
+		/**
+		 * Key to store
+		 */
+		key: string,
+		/**
+		 * Value to store
+		 */
+		value: string,
+		/**
+		 * Time to live in seconds
+		 */
+		ttl?: number,
+	) => Promise<void | null | unknown> | void;
+	/**
+	 *
+	 * @param key - Key to delete
+	 */
+	delete: (key: string) => Promise<void | null | string> | void;
+}

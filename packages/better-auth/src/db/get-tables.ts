@@ -1,4 +1,4 @@
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	BetterAuthDBSchema,
 	DBFieldAttribute,
@@ -231,6 +231,7 @@ export const getAuthTables = (
 					onUpdate: () => new Date(),
 				},
 				...account?.fields,
+				...options.account?.additionalFields,
 			},
 			order: 3,
 		},

@@ -1,13 +1,14 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "../call";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
-import type { GenericEndpointContext, User } from "../../types";
+import type { User } from "../../types";
 import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
 import { signJWT } from "../../crypto/jwt";
 import { originCheck } from "../middlewares";
 import { JWTExpired } from "jose/errors";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -51,9 +52,10 @@ export async function sendVerificationEmailFn(
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
 	);
-	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
-		ctx.body.callbackURL || "/"
-	}`;
+	const callbackURL = ctx.body.callbackURL
+		? encodeURIComponent(ctx.body.callbackURL)
+		: encodeURIComponent("/");
+	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 	await ctx.context.options.emailVerification.sendVerificationEmail(
 		{
 			user: user,
@@ -350,7 +352,6 @@ export const verifyEmail = createAuthEndpoint(
 					email: parsed.updateTo,
 					emailVerified: false,
 				},
-				ctx,
 			);
 
 			const newToken = await createEmailVerificationToken(
@@ -359,14 +360,13 @@ export const verifyEmail = createAuthEndpoint(
 			);
 
 			//send verification email to the new email
+			const updateCallbackURL = ctx.query.callbackURL
+				? encodeURIComponent(ctx.query.callbackURL)
+				: encodeURIComponent("/");
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
 				{
 					user: updatedUser,
-					url: `${
-						ctx.context.baseURL
-					}/verify-email?token=${newToken}&callbackURL=${
-						ctx.query.callbackURL || "/"
-					}`,
+					url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
 					token: newToken,
 				},
 				ctx.request,
@@ -408,7 +408,6 @@ export const verifyEmail = createAuthEndpoint(
 			{
 				emailVerified: true,
 			},
-			ctx,
 		);
 		if (ctx.context.options.emailVerification?.afterEmailVerification) {
 			await ctx.context.options.emailVerification.afterEmailVerification(
@@ -421,7 +420,6 @@ export const verifyEmail = createAuthEndpoint(
 			if (!currentSession || currentSession.user.email !== parsed.email) {
 				const session = await ctx.context.internalAdapter.createSession(
 					user.user.id,
-					ctx,
 				);
 				if (!session) {
 					throw new APIError("INTERNAL_SERVER_ERROR", {

@@ -2,16 +2,12 @@ import * as z from "zod";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSession,
-} from "../../api";
-import type {
-	BetterAuthOptions,
-	BetterAuthPlugin,
-	GenericEndpointContext,
-	InferSession,
-	InferUser,
-} from "../../types";
+} from "@better-auth/core/api";
+import { getSession } from "../../api";
+import type { InferSession, InferUser } from "../../types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 const getSessionQuerySchema = z.optional(
 	z.object({
@@ -133,6 +129,9 @@ export const customSession = <
 					return ctx.json(fnResult);
 				},
 			),
+		},
+		$Infer: {
+			Session: {} as Awaited<ReturnType<typeof fn>>,
 		},
 	} satisfies BetterAuthPlugin;
 };

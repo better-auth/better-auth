@@ -4,8 +4,8 @@ import type {
 } from "kysely";
 import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
 import { sql } from "kysely";
-import { createLogger } from "../utils/logger";
-import type { BetterAuthOptions } from "../types";
+import { createLogger } from "@better-auth/core/env";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
@@ -53,7 +53,7 @@ const mssqlMap = {
 	string: ["varchar", "nvarchar"],
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
-	date: ["datetime", "date"],
+	date: ["datetime2", "date", "datetime"],
 	json: ["varchar", "nvarchar"],
 };
 
@@ -207,8 +207,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 			date: {
 				sqlite: "date",
 				postgres: "timestamptz",
-				mysql: "timestamp",
-				mssql: "datetime",
+				mysql: "timestamp(3)",
+				mssql: sql`datetime2(3)`,
 			},
 			json: {
 				sqlite: "text",
@@ -226,9 +226,22 @@ export async function getMigrations(config: BetterAuthOptions) {
 					: "varchar(36)",
 				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
 			},
+			foreignKeyId: {
+				postgres: config.advanced?.database?.useNumberId ? "integer" : "text",
+				mysql: config.advanced?.database?.useNumberId
+					? "integer"
+					: "varchar(36)",
+				mssql: config.advanced?.database?.useNumberId
+					? "integer"
+					: "varchar(36)",
+				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
+			},
 		} as const;
 		if (fieldName === "id" || field.references?.field === "id") {
-			return typeMap.id[dbType!];
+			if (fieldName === "id") {
+				return typeMap.id[dbType!];
+			}
+			return typeMap.foreignKeyId[dbType!];
 		}
 		if (dbType === "sqlite" && (type === "string[]" || type === "number[]")) {
 			return "text";
@@ -266,7 +279,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 								dbType === "mysql" ||
 								dbType === "mssql")
 						) {
-							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+							if (dbType === "mysql") {
+								col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
+							} else {
+								col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+							}
 						}
 						return col;
 					});
@@ -291,6 +308,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 						if (config.advanced?.database?.useNumberId) {
 							if (dbType === "postgres" || dbType === "sqlite") {
 								return col.primaryKey().notNull();
+							} else if (dbType === "mssql") {
+								return col.identity().primaryKey().notNull();
 							}
 							return col.autoIncrement().primaryKey().notNull();
 						}
@@ -308,6 +327,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 							.references(`${field.references.model}.${field.references.field}`)
 							.onDelete(field.references.onDelete || "cascade");
 					}
+
 					if (field.unique) {
 						col = col.unique();
 					}
@@ -316,7 +336,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 						typeof field.defaultValue === "function" &&
 						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
 					) {
-						col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+						if (dbType === "mysql") {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
+						} else {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+						}
 					}
 					return col;
 				});

@@ -1,6 +1,10 @@
-import type { GenericEndpointContext, InferOptionSchema } from "../../types";
+import type { InferOptionSchema } from "../../types";
 import type { Statements } from "../access";
 import type { apiKeySchema } from "./schema";
+import type {
+	GenericEndpointContext,
+	HookEndpointContext,
+} from "@better-auth/core";
 export interface ApiKeyOptions {
 	/**
 	 * The header name to check for API key
@@ -19,7 +23,7 @@ export interface ApiKeyOptions {
 	/**
 	 * The function to get the API key from the context
 	 */
-	customAPIKeyGetter?: (ctx: GenericEndpointContext) => string | null;
+	customAPIKeyGetter?: (ctx: HookEndpointContext) => string | null;
 	/**
 	 * A custom function to validate the API key
 	 */
@@ -175,9 +179,10 @@ export interface ApiKeyOptions {
 	/**
 	 * An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
 	 *
+	 * ⚠︎ This is not recommended for production use, as it can lead to security issues.
 	 * @default false
 	 */
-	disableSessionForAPIKeys?: boolean;
+	enableSessionForAPIKeys?: boolean;
 	/**
 	 * Permissions for the API key.
 	 */
@@ -221,9 +226,9 @@ export type ApiKey = {
 	 */
 	userId: string;
 	/**
-	 * The interval in which the `remaining` count is refilled by day
+	 * The interval in milliseconds between refills of the `remaining` count
 	 *
-	 * @example 1 // every day
+	 * @example 3600000 // refill every hour (3600000ms = 1h)
 	 */
 	refillInterval: number | null;
 	/**

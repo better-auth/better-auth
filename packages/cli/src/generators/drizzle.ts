@@ -69,13 +69,20 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				}
 				return `text('${name}')`;
 			}
-			const type = field.type as
-				| "string"
-				| "number"
-				| "boolean"
-				| "date"
-				| "json"
-				| `${"string" | "number"}[]`;
+			const type = field.type;
+			if (typeof type !== "string") {
+				if (Array.isArray(type) && type.every((x) => typeof x === "string")) {
+					return {
+						sqlite: `text({ enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
+						pg: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
+						mysql: `mysqlEnum([${type.map((x) => `'${x}'`).join(", ")}])`,
+					}[databaseType];
+				} else {
+					throw new TypeError(
+						`Invalid field type for field ${name} in model ${modelName}`,
+					);
+				}
+			}
 			const typeMap: Record<
 				typeof type,
 				Record<typeof databaseType, string>
@@ -104,9 +111,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						: `int('${name}')`,
 				},
 				date: {
-					sqlite: `integer('${name}', { mode: 'timestamp' })`,
+					sqlite: `integer('${name}', { mode: 'timestamp_ms' })`,
 					pg: `timestamp('${name}')`,
-					mysql: `timestamp('${name}')`,
+					mysql: `timestamp('${name}', { fsp: 3 })`,
 				},
 				"number[]": {
 					sqlite: `integer('${name}').array()`,
@@ -137,7 +144,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			if (databaseType === "pg") {
 				id = `serial("id").primaryKey()`;
 			} else if (databaseType === "sqlite") {
-				id = `int("id").primaryKey()`;
+				id = `integer("id", { mode: "number" }).primaryKey({ autoIncrement: true })`;
 			} else {
 				id = `int("id").autoincrement().primaryKey()`;
 			}
@@ -159,7 +166,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					${Object.keys(fields)
 						.map((field) => {
 							const attr = fields[field]!;
-							let type = getType(field, attr);
+							const fieldName = attr.fieldName || field;
+							let type = getType(fieldName, attr);
+
 							if (
 								attr.defaultValue !== null &&
 								typeof attr.defaultValue !== "undefined"
@@ -170,12 +179,14 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 										attr.defaultValue.toString().includes("new Date()")
 									) {
 										if (databaseType === "sqlite") {
-											type += `.default(sql\`(current_timestamp)\`)`;
+											type += `.default(sql\`(cast(unixepoch('subsecond') * 1000 as integer))\`)`;
 										} else {
 											type += `.defaultNow()`;
 										}
 									} else {
-										type += `.$defaultFn(${attr.defaultValue})`;
+										// we are intentionally not adding .$defaultFn(${attr.defaultValue})
+										// this is because if the defaultValue is a function, it could have
+										// custom logic within that function that might not work in drizzle's context.
 									}
 								} else if (typeof attr.defaultValue === "string") {
 									type += `.default("${attr.defaultValue}")`;
@@ -190,7 +201,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
-							return `${field}: ${type}${attr.required ? ".notNull()" : ""}${
+
+							return `${fieldName}: ${type}${attr.required ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
 								attr.references
@@ -198,7 +210,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 											tables[attr.references.model]?.modelName ||
 												attr.references.model,
 											adapter.options,
-										)}.${attr.references.field}, { onDelete: '${
+										)}.${fields[attr.references.field]?.fieldName || attr.references.field}, { onDelete: '${
 											attr.references.onDelete || "cascade"
 										}' })`
 									: ""
@@ -267,6 +279,17 @@ function generateImport({
 		const needsInt = !!useNumberId || hasNonBigintNumber;
 		if (needsInt) {
 			coreImports.push("int");
+		}
+		const hasEnum = Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) =>
+					typeof field.type !== "string" &&
+					Array.isArray(field.type) &&
+					field.type.every((x) => typeof x === "string"),
+			),
+		);
+		if (hasEnum) {
+			coreImports.push("mysqlEnum");
 		}
 	} else if (databaseType === "pg") {
 		// Only include integer for PG if actually needed

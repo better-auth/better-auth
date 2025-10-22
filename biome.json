@@ -1,6 +1,6 @@
 {
   "root": true,
-  "$schema": "https://biomejs.dev/schemas/2.2.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.2.6/schema.json",
   "formatter": {
     "enabled": true,
     "indentStyle": "tab"
@@ -66,7 +66,8 @@
       "!**/.cache",
       "!**/dev/cloudflare/drizzle",
       "!**/playwright-report",
-      "!**/.output"
+      "!**/.output",
+      "!**/.tmp"
     ]
   }
 }

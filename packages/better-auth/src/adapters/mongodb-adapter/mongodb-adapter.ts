@@ -1,11 +1,15 @@
 import { ClientSession, ObjectId, type Db, type MongoClient } from "mongodb";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	createAdapterFactory,
-	type AdapterDebugLogs,
 	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
 } from "../adapter-factory";
+import type {
+	DBAdapterDebugLogOption,
+	DBAdapter,
+	Where,
+} from "@better-auth/core/db/adapter";
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -18,7 +22,7 @@ export interface MongoDBAdapterConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 	/**
 	 * Use plural table names
 	 *
@@ -30,27 +34,17 @@ export interface MongoDBAdapterConfig {
 	 *
 	 * If the database doesn't support transactions,
 	 * set this to `false` and operations will be executed sequentially.
-	 * @default true
+	 * @default false
 	 */
 	transaction?: boolean;
 }
 
 export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null;
-	const getCustomIdGenerator = (options: BetterAuthOptions) => {
-		const generator =
-			options.advanced?.database?.generateId || options.advanced?.generateId;
-		if (typeof generator === "function") {
-			return generator;
-		}
-		return undefined;
-	};
 
 	const createCustomAdapter =
 		(db: Db, session?: ClientSession): AdapterFactoryCustomizeAdapterCreator =>
 		({ options, getFieldName, schema, getDefaultModelName }) => {
-			const customIdGen = getCustomIdGenerator(options);
-
 			function serializeID({
 				field,
 				value,
@@ -60,9 +54,6 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				value: any;
 				model: string;
 			}) {
-				if (customIdGen) {
-					return value;
-				}
 				model = getDefaultModelName(model);
 				if (
 					field === "id" ||
@@ -160,15 +151,22 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 						case "ne":
 							condition = { [field]: { $ne: value } };
 							break;
-
 						case "contains":
-							condition = { [field]: { $regex: `.*${value}.*` } };
+							condition = {
+								[field]: {
+									$regex: `.*${escapeForMongoRegex(value as string)}.*`,
+								},
+							};
 							break;
 						case "starts_with":
-							condition = { [field]: { $regex: `${value}.*` } };
+							condition = {
+								[field]: { $regex: `^${escapeForMongoRegex(value as string)}` },
+							};
 							break;
 						case "ends_with":
-							condition = { [field]: { $regex: `.*${value}` } };
+							condition = {
+								[field]: { $regex: `${escapeForMongoRegex(value as string)}$` },
+							};
 							break;
 						default:
 							throw new Error(`Unsupported operator: ${operator}`);
@@ -203,7 +201,14 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				},
 				async findOne({ model, where, select }) {
 					const clause = convertWhereClause({ where, model });
-					const res = await db.collection(model).findOne(clause, { session });
+					const projection = select
+						? Object.fromEntries(
+								select.map((field) => [getFieldName({ field, model }), 1]),
+							)
+						: undefined;
+					const res = await db
+						.collection(model)
+						.findOne(clause, { session, projection });
 					if (!res) return null;
 					return res as any;
 				},
@@ -220,10 +225,11 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					const res = await cursor.toArray();
 					return res as any;
 				},
-				async count({ model }) {
+				async count({ model, where }) {
+					const clause = where ? convertWhereClause({ where, model }) : {};
 					const res = await db
 						.collection(model)
-						.countDocuments(undefined, { session });
+						.countDocuments(clause, { session });
 					return res;
 				},
 				async update({ model, where, update: values }) {
@@ -266,7 +272,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 			};
 		};
 
-	let lazyAdapter: ((options: BetterAuthOptions) => Adapter) | null = null;
+	let lazyAdapter:
+		| ((options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>)
+		| null = null;
 	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
 		config: {
@@ -282,7 +290,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 			},
 			supportsNumericIds: false,
 			transaction:
-				config?.client && (config?.transaction ?? false)
+				config?.client && (config?.transaction ?? true)
 					? async (cb) => {
 							if (!config.client) {
 								return cb(lazyAdapter!(lazyOptions!));
@@ -319,17 +327,28 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				model,
 				options,
 			}) {
-				const customIdGen = getCustomIdGenerator(options);
-
 				if (field === "_id" || fieldAttributes.references?.field === "id") {
-					if (customIdGen) {
-						return data;
-					}
 					if (action === "update") {
+						if (typeof data === "string") {
+							try {
+								return new ObjectId(data);
+							} catch (error) {
+								return data;
+							}
+						}
 						return data;
 					}
 					if (Array.isArray(data)) {
-						return data.map((v) => new ObjectId());
+						return data.map((v) => {
+							if (typeof v === "string") {
+								try {
+									return new ObjectId(v);
+								} catch (error) {
+									return v;
+								}
+							}
+							return v;
+						});
 					}
 					if (typeof data === "string") {
 						try {
@@ -337,6 +356,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 						} catch (error) {
 							return new ObjectId();
 						}
+					}
+					if (data === null && fieldAttributes.references?.field === "id") {
+						return null;
 					}
 					return new ObjectId();
 				}
@@ -359,13 +381,33 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				}
 				return data;
 			},
+			customIdGenerator(props) {
+				return new ObjectId().toString();
+			},
 		},
 		adapter: createCustomAdapter(db),
 	};
 	lazyAdapter = createAdapterFactory(adapterOptions);
 
-	return (options: BetterAuthOptions): Adapter => {
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return lazyAdapter(options);
 	};
 };
+
+/**
+ * Safely escape user input for use in a MongoDB regex.
+ * This ensures the resulting pattern is treated as literal text,
+ * and not as a regex with special syntax.
+ *
+ * @param input - The input string to escape. Any type that isn't a string will be converted to an empty string.
+ * @param maxLength - The maximum length of the input string to escape. Defaults to 256. This is to prevent DOS attacks.
+ * @returns The escaped string.
+ */
+function escapeForMongoRegex(input: string, maxLength = 256): string {
+	if (typeof input !== "string") return "";
+
+	// Escape all PCRE special characters
+	// Source: PCRE docs — https://www.pcre.org/original/doc/html/pcrepattern.html
+	return input.slice(0, maxLength).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

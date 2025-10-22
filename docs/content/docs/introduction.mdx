@@ -27,6 +27,37 @@ Better Auth provides an MCP server so you can use it with any AI model that supp
 
 <AddToCursor />
 
+#### CLI Options
+
+Use the Better Auth CLI to easily add the MCP server to your preferred client:
+
+<Tabs items={["Cursor", "Claude Code", "Open Code", "Manual"]}>
+    <Tab value="Cursor">
+      ```bash title="terminal"
+      pnpm @better-auth/cli mcp --cursor
+      ```
+    </Tab>
+    <Tab value="Claude Code">
+      ```bash title="terminal"
+      pnpm @better-auth/cli mcp --claude-code
+      ```
+    </Tab>
+    <Tab value="Open Code">
+      ```bash title="terminal"
+      pnpm @better-auth/cli mcp --open-code
+      ```
+    </Tab>
+    <Tab value="Manual">
+      ```bash title="terminal"
+      pnpm @better-auth/cli mcp --manual
+      ```
+    </Tab>
+</Tabs>
+
+#### Manual Configuration
+
+Alternatively, you can manually configure the MCP server for each client:
+
 <Tabs items={["Claude Code", "Open Code", "Manual"]}>
     <Tab value="Claude Code">
       ```bash title="terminal"

@@ -2,8 +2,8 @@ import * as z from "zod";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-	type BetterAuthPlugin,
-} from "..";
+} from "@better-auth/core/api";
+import type { BetterAuthPlugin, BetterAuthOptions } from "@better-auth/core";
 import {
 	oidcProvider,
 	type Client,
@@ -18,13 +18,13 @@ import { generateRandomString } from "../../crypto";
 import { createHash } from "@better-auth/utils/hash";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { SignJWT } from "jose";
-import type { BetterAuthOptions, GenericEndpointContext } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
 import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
 import { getBaseURL } from "../../utils/url";
-import { isProduction } from "../../utils/env";
-import { logger } from "../../utils";
+import { isProduction } from "@better-auth/core/env";
+import { logger } from "@better-auth/core/env";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 interface MCPOptions {
 	loginPage: string;
@@ -172,6 +172,7 @@ export const mcp = (options: MCPOptions) => {
 			],
 		},
 		endpoints: {
+			oAuthConsent: provider.endpoints.oAuthConsent,
 			getMcpOAuthConfig: createAuthEndpoint(
 				"/.well-known/oauth-authorization-server",
 				{
