@@ -7,7 +7,7 @@ import { APIError, sessionMiddleware } from "../../api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import { mergeSchema } from "../../db/schema";
 import * as z from "zod";
 import { BetterAuthError } from "@better-auth/core/error";

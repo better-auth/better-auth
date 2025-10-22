@@ -6,7 +6,7 @@ import { getAdapter } from "./db/utils";
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { DEFAULT_SECRET } from "./utils/constants";
 import { createCookieGetter, getCookies } from "./cookies";
-import { createLogger } from "@better-auth/core/env";
+import { createLogger, isTest } from "@better-auth/core/env";
 import {
 	type SocialProviders,
 	socialProviders,
@@ -101,6 +101,12 @@ export const init = async (options: BetterAuthOptions) => {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
+		oauthConfig: {
+			storeStateStrategy:
+				options.advanced?.oauthConfig?.storeStateStrategy || "database",
+			skipStateCookieCheck:
+				!!options.advanced?.oauthConfig?.skipStateCookieCheck,
+		},
 		tables,
 		trustedOrigins: getTrustedOrigins(options),
 		baseURL: baseURL || "",
@@ -162,6 +168,13 @@ export const init = async (options: BetterAuthOptions) => {
 			await runMigrations();
 		},
 		publishTelemetry: publish,
+		skipCSRFCheck: !!options.advanced?.disableCSRFCheck,
+		skipOriginCheck:
+			options.advanced?.disableOriginCheck !== undefined
+				? options.advanced.disableOriginCheck
+				: isTest()
+					? true
+					: false,
 	};
 	const initOrPromise = runPluginInit(ctx);
 	let context: AuthContext;

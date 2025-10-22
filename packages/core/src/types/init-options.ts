@@ -1,12 +1,17 @@
-import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
-import type { Database } from "better-sqlite3";
+import type {
+	Dialect,
+	Kysely,
+	MysqlPool,
+	PostgresPool,
+	SqliteDatabase,
+} from "kysely";
 import type { CookieOptions } from "better-call";
 import type { LiteralUnion } from "./helper";
 import type {
 	DBFieldAttribute,
 	DBPreservedModels,
 	SecondaryStorage,
-} from "../db/type";
+} from "../db";
 import type { Account, RateLimit, Session, User, Verification } from "../db";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
@@ -14,11 +19,14 @@ import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Logger } from "../env";
 import type { AuthContext, GenericEndpointContext } from "./context";
-import type { AuthMiddleware } from "../middleware";
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { AuthMiddleware } from "../api";
+import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type OmitId<T extends { id: unknown }> = Omit<T, "id">;
+type Optional<T> = {
+	[P in keyof T]?: T[P] | undefined;
+};
 
 export type GenerateIdFn = (options: {
 	model: LiteralUnion<DBPreservedModels, string>;
@@ -137,9 +145,17 @@ export type BetterAuthAdvancedOptions = {
 	/**
 	 * Disable trusted origins check
 	 *
-	 * ⚠︎ This is a security risk and it may expose your application to CSRF attacks
+	 * ⚠︎ This is a security risk and it may expose your application to
+	 * CSRF attacks
 	 */
 	disableCSRFCheck?: boolean;
+	/**
+	 * Disable origin check
+	 *
+	 * ⚠︎ This may allow requests from any origin to be processed by
+	 * Better Auth. And could lead to security vulnerabilities.
+	 */
+	disableOriginCheck?: boolean;
 	/**
 	 * Configure cookies to be cross subdomains
 	 */
@@ -214,6 +230,27 @@ export type BetterAuthAdvancedOptions = {
 		 */
 		generateId?: GenerateIdFn | false;
 	};
+	/**
+	 * OAuth configuration
+	 */
+	oauthConfig?: {
+		/**
+		 * Skip state cookie check
+		 *
+		 * ⚠︎ this has security implications and should only be enabled if you know what you are doing.
+		 * @default false
+		 */
+		skipStateCookieCheck?: boolean;
+		/**
+		 * Strategy for storing OAuth state
+		 *
+		 * - "cookie": Store state in an encrypted cookie (stateless)
+		 * - "database": Store state in the database
+		 *
+		 * @default "cookie"
+		 */
+		storeStateStrategy?: "database" | "cookie";
+	};
 };
 
 export type BetterAuthOptions = {
@@ -272,7 +309,7 @@ export type BetterAuthOptions = {
 	database?:
 		| PostgresPool
 		| MysqlPool
-		| Database
+		| SqliteDatabase
 		| Dialect
 		| DBAdapterInstance
 		| BunDatabase
@@ -634,6 +671,10 @@ export type BetterAuthOptions = {
 			[key: string]: DBFieldAttribute;
 		};
 		/**
+		 * @default false
+		 */
+		storeSessionInJWT?: boolean;
+		/**
 		 * By default if secondary storage is provided
 		 * the session is stored in the secondary storage.
 		 *
@@ -820,7 +861,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<User> & Record<string, any>;
+							data: Optional<User> & Record<string, any>;
 					  }
 				>;
 				/**
@@ -844,7 +885,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<User & Record<string, any>>;
+							data: Optional<User & Record<string, any>>;
 					  }
 				>;
 				/**
@@ -890,7 +931,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<Session> & Record<string, any>;
+							data: Optional<Session> & Record<string, any>;
 					  }
 				>;
 				/**
@@ -917,7 +958,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<Session & Record<string, any>>;
+							data: Optional<Session & Record<string, any>>;
 					  }
 				>;
 				/**
@@ -963,7 +1004,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<Account> & Record<string, any>;
+							data: Optional<Account> & Record<string, any>;
 					  }
 				>;
 				/**
@@ -990,7 +1031,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<Account & Record<string, any>>;
+							data: Optional<Account & Record<string, any>>;
 					  }
 				>;
 				/**
@@ -1036,7 +1077,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<Verification> & Record<string, any>;
+							data: Optional<Verification> & Record<string, any>;
 					  }
 				>;
 				/**
@@ -1060,7 +1101,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Partial<Verification & Record<string, any>>;
+							data: Optional<Verification & Record<string, any>>;
 					  }
 				>;
 				/**
