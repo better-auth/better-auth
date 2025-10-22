@@ -294,6 +294,41 @@ Otherwise, you'll receive the API Key details, except for the `key` value itself
 
 ---
 
+### Regenerate an API key
+
+<Endpoint method="POST" path="/api-key/regenerate"/>
+
+<Tabs items={['Client', 'Server']}>
+    <Tab value="Client">
+      ```ts
+      const { data: apiKey, error } = await authClient.apiKey.regenerate({
+        keyId: "your_api_key_id_here",
+      });
+      ```
+    </Tab>
+    <Tab value="Server">
+      ```ts
+      const apiKey = await auth.api.regenerateApiKey({
+        body: {
+          keyId: "your_api_key_id_here",
+        },
+      });
+      ```
+    </Tab>
+</Tabs>
+
+#### Properties
+
+- `keyId`: The API Key id to regenerate.
+
+#### Result
+
+If fails, throws `APIError`.
+Otherwise, you'll receive the API Key details.
+
+---
+
+
 ### Delete an API Key
 
 <APIMethod

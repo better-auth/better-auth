@@ -1715,6 +1715,93 @@ describe("api-key", async () => {
 	});
 
 	// =========================================================================
+	// REGENERATE API KEY
+	// =========================================================================
+
+	it("should fail to regenerate API key without headers or userId", async () => {
+		const apiKey = await client.apiKey.regenerate({
+			keyId: firstApiKey.id,
+		});
+		expect(apiKey.data).toBeNull();
+		expect(apiKey.error).toBeDefined();
+		expect(apiKey.error?.status).toEqual(401);
+		expect(apiKey.error?.statusText).toEqual("UNAUTHORIZED");
+	});
+
+	it("should regenerate API key with headers on client", async () => {
+		const apiKey = await client.apiKey.regenerate(
+			{
+				keyId: firstApiKey.id,
+			},
+			{ headers },
+		);
+		expect(apiKey.data).toBeDefined();
+		expect(apiKey.data?.key).not.toEqual(firstApiKey.key);
+		expect(apiKey.data?.id).toEqual(firstApiKey.id);
+		expect(apiKey.error).toBeNull();
+	});
+
+	it("should fail to regenerate an API key by ID that doesn't exist", async () => {
+		const apiKey = await client.apiKey.regenerate(
+			{
+				keyId: "invalid",
+			},
+			{ headers },
+		);
+		expect(apiKey.data).toBeNull();
+		expect(apiKey.error).toBeDefined();
+		expect(apiKey.error?.status).toEqual(404);
+		expect(apiKey.error?.statusText).toEqual("NOT_FOUND");
+		expect(apiKey.error?.message).toEqual(ERROR_CODES.KEY_NOT_FOUND);
+	});
+
+	it("should regenerate API key with headers on server", async () => {
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+
+		try {
+			const apiKey = await auth.api.regenerateApiKey({
+				body: {
+					keyId: firstApiKey.id,
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.data).toBeDefined();
+		expect(result.data?.key).not.toEqual(firstApiKey.key);
+		expect(result.error).toBeNull();
+	});
+
+	it("should regenerate API key with prefix key", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				prefix: "test-prefix",
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.key).toContain("test-prefix");
+
+		const regeneratedApiKey = await auth.api.regenerateApiKey({
+			body: {
+				keyId: apiKey.id,
+			},
+			headers,
+		});
+
+		expect(regeneratedApiKey).not.toBeNull();
+		expect(regeneratedApiKey.key).toContain("test-prefix");
+		expect(regeneratedApiKey.key).not.toEqual(apiKey.key);
+	});
+
+	// =========================================================================
 	// DELETE API KEY
 	// =========================================================================
 
