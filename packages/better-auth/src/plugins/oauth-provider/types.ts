@@ -15,6 +15,16 @@ export interface OAuthOptions {
 	 */
 	schema?: InferOptionSchema<typeof schema>;
 	/**
+	 * List of valid audiences if there are multiple.
+	 *
+	 * @default baseURL
+	 * @example [
+	 * 	"https://api.example.com",
+	 * 	"https://api.example.com/mcp",
+	 * ]
+	 */
+	validAudiences?: string[];
+	/**
 	 * Trusted clients that are configured directly in the provider options.
 	 * These clients bypass database lookups and can optionally skip consent screens.
 	 */

@@ -106,12 +106,12 @@ describe("mcp - server-client flows", async () => {
 				jwt({
 					jwt: {
 						issuer: authServerUrl,
-						audience: mcpServerUrl,
 					},
 				}),
 				oauthProvider({
 					loginPage: "/sign-in",
 					consentPage: "/consent",
+					validAudiences: [apiServerBaseUrl, mcpServerUrl],
 					allowDynamicClientRegistration: true,
 					allowUnauthenticatedClientRegistration: true,
 					scopes,
@@ -211,7 +211,9 @@ describe("mcp - server-client flows", async () => {
 					req.url === "/.well-known/oauth-protected-resource" ||
 					req.url === "/.well-known/oauth-protected-resource/mcp"
 				) {
-					const config = await authClient.getProtectedResourceMetadata();
+					const config = await authClient.getProtectedResourceMetadata({
+						resource: mcpServerUrl,
+					});
 					res.setHeader("Content-Type", "application/json");
 					res.end(JSON.stringify(config));
 				} else if (req.url === "/mcp") {

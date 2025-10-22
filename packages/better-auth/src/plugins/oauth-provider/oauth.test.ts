@@ -1105,20 +1105,13 @@ describe("oauth - config", () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 						disableJwtPlugin: disableJwtPlugin,
+						validAudiences: resource ? [validAudience] : undefined,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
 						},
 					}),
-					...(disableJwtPlugin
-						? []
-						: [
-								jwt({
-									jwt: {
-										audience: resource ? validAudience : undefined,
-									},
-								}),
-							]),
+					...(disableJwtPlugin ? [] : [jwt()]),
 				],
 			});
 			const { headers, user } = await signInWithTestUser();

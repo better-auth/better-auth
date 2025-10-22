@@ -263,13 +263,13 @@ describe("oauth resource metadata", async () => {
 		plugins: [
 			jwt({
 				jwt: {
-					audience: validAudience,
 					issuer: authServerBaseUrl,
 				},
 			}),
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
+				validAudiences: [validAudience],
 				scopes: supportedScopes,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -288,7 +288,9 @@ describe("oauth resource metadata", async () => {
 	});
 
 	it("should provide resource discovery configuration", async () => {
-		const metadata = await authClient.getProtectedResourceMetadata();
+		const metadata = await authClient.getProtectedResourceMetadata({
+			resource: validAudience,
+		});
 		expect(metadata).toMatchObject({
 			resource: validAudience, // aud
 			authorization_servers: [authServerBaseUrl], // iss
@@ -311,6 +313,7 @@ describe("oauth resource metadata", async () => {
 	it("should not support 'openid' scope", async () => {
 		await expect(
 			authClient.getProtectedResourceMetadata({
+				resource: validAudience,
 				scopes_supported: ["openid"],
 			}),
 		).rejects.toThrowError(BetterAuthError);
@@ -318,6 +321,7 @@ describe("oauth resource metadata", async () => {
 
 	it("should pass with supported scopes", async () => {
 		const metadata = await authClient.getProtectedResourceMetadata({
+			resource: validAudience,
 			scopes_supported: ["read:posts"],
 		});
 		expect(metadata).toMatchObject({
@@ -330,6 +334,7 @@ describe("oauth resource metadata", async () => {
 	it("should fail unsupported scope", async () => {
 		await expect(
 			authClient.getProtectedResourceMetadata({
+				resource: validAudience,
 				scopes_supported: ["write:posts"],
 			}),
 		).rejects.toThrowError(BetterAuthError);
@@ -339,6 +344,7 @@ describe("oauth resource metadata", async () => {
 		const anotherAuthorizationServer = "https://auth.example.com";
 		const metadata = await authClient.getProtectedResourceMetadata(
 			{
+				resource: validAudience,
 				authorization_servers: [authServerBaseUrl, anotherAuthorizationServer],
 				scopes_supported: ["read:posts", "write:posts"],
 			},

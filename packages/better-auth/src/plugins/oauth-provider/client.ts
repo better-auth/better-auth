@@ -56,10 +56,7 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 						resourceMetadataMappings?: Record<string, string>;
 					},
 				): Promise<JWTPayload> => {
-					const audience =
-						opts?.verifyOptions?.audience ??
-						jwtPluginOptions?.jwt?.audience ??
-						authServerBaseUrl;
+					const audience = opts?.verifyOptions?.audience ?? authServerBaseUrl;
 					const issuer =
 						opts?.verifyOptions?.issuer ??
 						jwtPluginOptions?.jwt?.issuer ??
@@ -131,10 +128,7 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 						  }
 						| undefined,
 				): Promise<ResourceServerMetadata> => {
-					const resource =
-						overrides?.resource ??
-						jwtPluginOptions?.jwt?.audience ??
-						authServerBaseUrl;
+					const resource = overrides?.resource ?? authServerBaseUrl;
 					if (!resource) {
 						throw Error("missing required resource");
 					}
@@ -212,7 +206,7 @@ type VerifyAccessTokenOutput<T> = T extends Auth
 		) => Promise<JWTPayload>;
 type VerifyAccessTokenAuthOpts = {
 	verifyOptions?: JWTVerifyOptions &
-		Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
+		Required<Pick<JWTVerifyOptions, "audience">>;
 	scopes?: string[];
 	jwksUrl?: string;
 	remoteVerify?: VerifyAccessTokenRemote;

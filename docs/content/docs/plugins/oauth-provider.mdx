@@ -565,6 +565,19 @@ const auth = betterAuth({
 })
 ```
 
+### Valid Audiences
+
+A list of valid audiences (ie resources) for this oauth server. If not specified, the default audience is the baseUrl. It is recommended to specify an audience other than the baseUrl such as your API.
+
+```ts title="auth.ts"
+oauthProvider({
+  validAudiences: [
+    "https://api.example.com",
+    "https://api.example.com/mcp",
+  ]
+})
+```
+
 ### Scopes
 
 Scopes allow clients specific access to specific resources.
@@ -912,6 +925,8 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
   <Step>
     ### Handle MCP Errors for your API
 
+    Always verify against a specified `audience`, the default will compare against all `validAudiences` or `baseUrl`.
+
     - Using the client `verifyAccessToken` function
 
     ```ts title="api/[endpoint].ts"
@@ -946,9 +961,11 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
         ? authorization.replace("Bearer ", "")
         : authorization;
       const payload = await authClient.verifyAccessToken(
-        accessToken,
-        undefined,
-        auth,
+        accessToken, {
+          verifyOptions: {
+            audience: "https://api.example.com",
+          }
+        }
       );
       // ...continue
     }
@@ -1449,7 +1466,7 @@ The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
 - `/oauth2/token` (previously `/mcp/token`)
 - `/oauth2/register` (previously `/mcp/register`)
 - `/mcp/get-session` removed as not OAuth 2 compliant, use `/oauth2/introspect` instead
-- `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with the server `api.oAuth2introspectVerify` or the client `verifyAccessToken`)
+- `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with the server `api.oAuth2introspectVerify` or the resource client `verifyAccessToken`)
 
 
 ### From [API Key Plugin](/docs/plugins/api-key)

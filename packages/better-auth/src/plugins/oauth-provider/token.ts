@@ -326,19 +326,16 @@ async function checkResource(
 	opts: OAuthOptions,
 	scopes: string[],
 ) {
-	let _aud: string | string[] | undefined = ctx.body.resource;
-	const audience = typeof _aud === "string" ? [_aud] : _aud;
+	let resource: string | string[] | undefined = ctx.body.resource;
+	const audience = typeof resource === "string" ? [resource] : resource;
 	if (audience) {
 		// Adds /userinfo to audience
 		if (scopes.includes("openid")) {
 			audience.push(`${ctx.context.baseURL}/oauth2/userinfo`);
 		}
 		// Check valid audiences
-		const jwtPluginOptions = opts.disableJwtPlugin
-			? undefined
-			: getJwtPlugin(ctx.context).options;
 		const validAudiences = [
-			jwtPluginOptions?.jwt?.audience ?? ctx.context.baseURL,
+			...(opts.validAudiences ?? [ctx.context.baseURL]),
 			scopes?.includes("openid")
 				? `${ctx.context.baseURL}/oauth2/userinfo`
 				: undefined,
