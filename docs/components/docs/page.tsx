@@ -45,7 +45,7 @@ interface EditOnGitHubOptions
 	/**
 	 * Branch name.
 	 *
-	 * @defaultValue canary 
+	 * @defaultValue canary
 	 */
 	branch?: string;
 
