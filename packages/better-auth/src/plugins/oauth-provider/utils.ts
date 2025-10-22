@@ -335,14 +335,8 @@ export async function validateClientCredentials(
 		});
 	}
 
-	// If allowed scopes if set, must check against scopes
-	if (client.scopes) {
-		if (!scopes) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "must request a scope",
-				error: "invalid_scope",
-			});
-		}
+	// If scopes set, check against client allowed scopes
+	if (scopes && client.scopes) {
 		for (const sc of scopes) {
 			if (!client.scopes.includes(sc)) {
 				throw new APIError("BAD_REQUEST", {

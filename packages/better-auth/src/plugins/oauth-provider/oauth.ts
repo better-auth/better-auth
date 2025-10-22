@@ -15,17 +15,12 @@ import { tokenEndpoint } from "./token";
 import { userInfoEndpoint } from "./userinfo";
 import { mergeSchema } from "../../db";
 import { registerEndpoint } from "./register";
-import {
-	authServerMetadata,
-	oidcServerMetadata,
-	protectedResourceMetadata,
-} from "./metadata";
+import { authServerMetadata, oidcServerMetadata } from "./metadata";
 import { getJwtPlugin } from "./utils";
 import { introspectEndpoint } from "./introspect";
 import { revokeEndpoint } from "./revoke";
 import { BetterAuthError } from "@better-auth/core/error";
 import { logger } from "@better-auth/core/env";
-import type { ResourceServerMetadata } from "../../oauth-2.1/types";
 import * as oauthClientEndpoints from "./oauthClient";
 import { selectedAccountEndpoint } from "./selectedAccount";
 
@@ -205,8 +200,10 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						// Obtain original prompt
-						const { name: loginPromptCookieName } =
-							ctx.context.createAuthCookie("oauth_login_prompt");
+						const {
+							name: loginPromptCookieName,
+							attributes: cookieAttributes,
+						} = ctx.context.createAuthCookie("oauth_login_prompt");
 						const cookie = await ctx.getSignedCookie(
 							loginPromptCookieName,
 							ctx.context.secret,
@@ -233,6 +230,9 @@ export const oauthProvider = (options: OAuthOptions) => {
 							ctx.query!.prompt = undefined;
 						}
 						ctx.setCookie(loginPromptCookieName, "", {
+							path: ctx.context.options.basePath,
+							sameSite: "lax",
+							...cookieAttributes,
 							maxAge: 0,
 						});
 						return await authorizeEndpoint(ctx, opts);
@@ -249,7 +249,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 			 * (root if no issuer-path).
 			 */
 			getOAuthServerConfig: createAuthEndpoint(
-				"/.well-known/oauth-authorization-server/server",
+				"/.well-known/oauth-authorization-server",
 				{
 					method: "GET",
 					metadata: {
@@ -280,7 +280,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 			 * (root if no issuer-path).
 			 */
 			getOpenIdConfig: createAuthEndpoint(
-				"/.well-known/openid-configuration/server",
+				"/.well-known/openid-configuration",
 				{
 					method: "GET",
 					metadata: {
@@ -292,44 +292,6 @@ export const oauthProvider = (options: OAuthOptions) => {
 						throw new APIError("NOT_FOUND");
 					}
 					const metadata = oidcServerMetadata(ctx, opts);
-					return ctx.json(metadata);
-				},
-			),
-			/**
-			 * An authorization server does not typically publish
-			 * the `/.well-known/oauth-protected-resource` themselves.
-			 * Thus, we provide a server-only endpoint help set up
-			 * your protected resource metadata.
-			 *
-			 * If you have your APIs hosted on a different domain,
-			 * post the metadata yourself without the need of the full
-			 * better-auth library/configuration.
-			 *
-			 * @see https://datatracker.ietf.org/doc/html/rfc8414#section-2
-			 */
-			getOAuthProtectedResourceConfig: createAuthEndpoint(
-				"/.well-known/oauth-protected-resource/server",
-				{
-					method: "POST",
-					metadata: {
-						SERVER_ONLY: true,
-						$Infer: {
-							body: {} as
-								| {
-										overrides?: Partial<ResourceServerMetadata>;
-								  }
-								| undefined,
-						},
-					},
-					body: z
-						.object({
-							overrides: z.record(z.string(), z.any()),
-						})
-						.optional(),
-				},
-				async (ctx) => {
-					const overrides = ctx.body?.overrides;
-					const metadata = protectedResourceMetadata(ctx, opts, overrides);
 					return ctx.json(metadata);
 				},
 			),

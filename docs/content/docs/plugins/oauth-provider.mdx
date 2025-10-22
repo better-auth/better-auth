@@ -87,20 +87,6 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
   </Step>
 
   <Step>
-    ### Add the Client Plugin
-
-    Add the OIDC client plugin to your auth client config.
-
-    ```ts
-    import { createAuthClient } from "better-auth/client";
-    import { oauthProviderClient } from "better-auth/client/plugins"
-    const authClient = createAuthClient({
-      plugins: [oauthProviderClient()],
-    });
-    ```
-  </Step>
-
-  <Step>
     ### Add `./well-known` endpoints
 
     Please add all [Well-Known endpoints](#well-known) to your project. The locations are provided as warnings if you are unsure.
@@ -127,6 +113,36 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
     ```
   </Step>
 </Steps>
+
+
+## Clients
+
+There exists two clients. You may wish to add one or both depending on your setup.
+
+### OAuth Client
+
+The OAuth Client is the connecting `oauthClient` such a mobile or web application.
+
+```ts title="client.ts"
+import { createAuthClient } from "better-auth/client";
+import { oauthProviderClient } from "better-auth/client/plugins"
+const authClient = createAuthClient({
+  plugins: [oauthProviderClient()],
+});
+```
+
+### Resource Client
+
+The Resource Server is a client that operates on your API server to perform actions like token verification and provide metadata.
+
+```ts title="client.ts"
+import { auth } from "@/lib/auth"; // optional
+import { createAuthClient } from "better-auth/client";
+import { oauthProviderResourceClient } from "better-auth/client/plugins"
+const authClient = createAuthClient({
+  plugins: [oauthProviderResourceClient(auth)],
+});
+```
 
 
 ## Usage
@@ -336,6 +352,10 @@ import { auth } from "@/lib/auth";
 export const GET = oauthProviderOpenIdConfigMetadata(auth);
 ```
 
+<Callout type="info">
+If you get a CORS issue when testing locally such as with the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector), this is due to the frontend calling the endpoint instead of the backend. Add `Access-Control-Allow-Methods": "GET"` and `"Access-Control-Allow-Origin": "*"` for testing.
+</Callout>
+
 
 #### OAuth Authorization Server
 
@@ -351,6 +371,10 @@ import { auth } from "@/lib/auth";
 
 export const GET = oauthProviderAuthServerMetadata(auth);
 ```
+
+<Callout type="info">
+If you get a CORS issue when testing locally such as with the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector), this is due to the frontend calling the endpoint instead of the backend. Add `Access-Control-Allow-Methods": "GET"` and `"Access-Control-Allow-Origin": "*"` for testing.
+</Callout>
 
 
 ## API Server
@@ -538,6 +562,19 @@ const auth = betterAuth({
         },
       ]
   })]
+})
+```
+
+### Valid Audiences
+
+A list of valid audiences (ie resources) for this oauth server. If not specified, the default audience is the baseUrl. It is recommended to specify an audience other than the baseUrl such as your API.
+
+```ts title="auth.ts"
+oauthProvider({
+  validAudiences: [
+    "https://api.example.com",
+    "https://api.example.com/mcp",
+  ]
 })
 ```
 
@@ -829,34 +866,36 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
   </Step>
 
   <Step>
+    ### Add Resource Server Client
+
+    (Optional) If you have your auth configuration available locally, add the configuration as a parameter to the client to fill in these values and warn you about configuration errors. You can always override these values in the function call. If this is not supplied, typescript will guide you with the minimal configuration values needed.
+
+    ```ts title="client.ts"
+    import { auth } from "@/lib/auth"; // optional
+    import { createAuthClient } from "better-auth/client";
+    import { oauthProviderResourceClient } from "better-auth/client/plugins"
+    const authClient = createAuthClient({
+      plugins: [oauthProviderResourceClient(auth)],
+    });
+    ```
+  </Step>
+
+  <Step>
     ### Add OAuth Protected Resource Metadata to your API
 
-    NOTE: For resources with paths, OAuth 2.1 Authorization Server utilizes path insertion, thus any path should be appended after `/.well-known/oauth-protected-resource`.
-
-    - Automatic (if you have access to the better-auth configuration)
-
     ```ts title="/.well-known/oauth-protected-resource/[resource-path]/route.ts"
-    import { oauthProviderProtectedResourceMetadata } from "better-auth/plugins";
-    import { auth } from "@/lib/auth";
-
-    export const GET = oauthProviderProtectedResourceMetadata(auth);
-    ```
-
-    - Manual (without access to your better-auth configuration)
-
-    Type support is recommended and may be downloaded into your API as a dev package.
-
-    ```ts title="/.well-known/oauth-protected-resource/[resource-path]/route.ts"
-    import type { ResourceServerMetadata } from "better-auth";
+    import { authClient } from "@/lib/client";
 
     export const GET = async () => {
-      const metadata: ResourceServerMetadata = {
-        resource: "https://api.example.com", // must match the `aud` claim
-      };
-
+      const metadata = await authClient.getProtectedResourceMetadata({
+        resource: "https://api.example.com", // `aud` claim
+        authorization_servers: ["https://auth.example.com"],
+      })
       return new Response(JSON.stringify(metadata), {
         headers: {
           "Content-Type": "application/json",
+          "Cache-Control":
+            "public, max-age=15, stale-while-revalidate=15, stale-if-error=86400",
         },
       });
     };
@@ -885,6 +924,8 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
 
   <Step>
     ### Handle MCP Errors for your API
+
+    Always verify against a specified `audience`, the default will compare against all `validAudiences` or `baseUrl`.
 
     - Using the client `verifyAccessToken` function
 
@@ -920,9 +961,11 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
         ? authorization.replace("Bearer ", "")
         : authorization;
       const payload = await authClient.verifyAccessToken(
-        accessToken,
-        undefined,
-        auth,
+        accessToken, {
+          verifyOptions: {
+            audience: "https://api.example.com",
+          }
+        }
       );
       // ...continue
     }
@@ -1423,7 +1466,7 @@ The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
 - `/oauth2/token` (previously `/mcp/token`)
 - `/oauth2/register` (previously `/mcp/register`)
 - `/mcp/get-session` removed as not OAuth 2 compliant, use `/oauth2/introspect` instead
-- `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with the server `api.oAuth2introspectVerify` or the client `verifyAccessToken`)
+- `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with the server `api.oAuth2introspectVerify` or the resource client `verifyAccessToken`)
 
 
 ### From [API Key Plugin](/docs/plugins/api-key)
