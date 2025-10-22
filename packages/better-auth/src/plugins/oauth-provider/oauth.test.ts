@@ -4,7 +4,7 @@ import { oauthProvider } from "./oauth";
 import { genericOAuth, type GenericOAuthConfig } from "../generic-oauth";
 import type { OAuthClient } from "../../oauth-2.1/types";
 import { createAuthClient } from "../../client";
-import { oauthProviderClient } from "./client";
+import { oauthProviderClient, oauthProviderResourceClient } from "./client";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
 import { listen, type Listener } from "listhen";
@@ -1162,7 +1162,11 @@ describe("oauth - config", () => {
 			});
 
 			const client = createAuthClient({
-				plugins: [oauthProviderClient(), genericOAuthClient()],
+				plugins: [
+					oauthProviderClient(),
+					oauthProviderResourceClient(),
+					genericOAuthClient(),
+				],
 				baseURL: rpBaseUrl,
 				fetchOptions: {
 					customFetchImpl: customFetchImplRP,
