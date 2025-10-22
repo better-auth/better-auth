@@ -35,6 +35,8 @@ Here’s how you can get the app running locally:
 
    - Open `.env` and fill in the required details. These will include things like API URLs, client IDs, and secrets needed to connect to the Better Auth service.
 
+Make sure `TURSO_DATABASE_URL=your_turso_url` and `TURSO_AUTH_TOKEN=your_turso_token` is set or `USE_MYSQL=true` and `MYSQL_DATABASE_URL=your_mysql_url` is set.
+
 ### Start the Development Server
 
 Once everything is set up, start the development server with:

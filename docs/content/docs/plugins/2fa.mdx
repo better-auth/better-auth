@@ -438,6 +438,8 @@ twoFactor({
 
 The plugin requires 1 additional fields in the `user` table and 1 additional table to store the two factor authentication data.
 
+Table: `user`
+
 <DatabaseTable
     fields={[
         { name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user.", isOptional: true },

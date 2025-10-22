@@ -1,4 +1,4 @@
-import { createAuthClient } from "better-auth/client";
+import { createAuthClient } from "better-auth/react";
 import Database from "better-sqlite3";
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
 import { expo } from ".";
@@ -127,7 +127,7 @@ describe("expo", async () => {
 			provider: "google",
 			callbackURL: "/dashboard",
 		});
-		const stateId = res?.url?.split("state=")[1].split("&")[0];
+		const stateId = res?.url?.split("state=")[1]!.split("&")[0];
 		const ctx = await auth.$context;
 		if (!stateId) {
 			throw new Error("State ID not found");
@@ -154,6 +154,79 @@ describe("expo", async () => {
 		const map = (await import("./client")).parseSetCookieHeader(header);
 		expect(map.get("better-auth.session_token")?.value).toBe("abc");
 		expect(map.get("better-auth.session_data")?.value).toBe("xyz");
+	});
+
+	it("should not trigger infinite refetch with non-better-auth cookies", async () => {
+		const { hasBetterAuthCookies } = await import("./client");
+
+		const betterAuthOnlyHeader = "better-auth.session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(betterAuthOnlyHeader, "better-auth")).toBe(
+			true,
+		);
+
+		const sessionDataHeader = "better-auth.session_data=xyz; Path=/";
+		expect(hasBetterAuthCookies(sessionDataHeader, "better-auth")).toBe(true);
+
+		const secureBetterAuthHeader =
+			"__Secure-better-auth.session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(secureBetterAuthHeader, "better-auth")).toBe(
+			true,
+		);
+
+		const secureSessionDataHeader =
+			"__Secure-better-auth.session_data=xyz; Path=/";
+		expect(hasBetterAuthCookies(secureSessionDataHeader, "better-auth")).toBe(
+			true,
+		);
+
+		const nonBetterAuthHeader = "__cf_bm=abc123; Path=/; HttpOnly; Secure";
+		expect(hasBetterAuthCookies(nonBetterAuthHeader, "better-auth")).toBe(
+			false,
+		);
+
+		const mixedHeader =
+			"__cf_bm=abc123; Path=/; HttpOnly; Secure, better-auth.session_token=xyz; Path=/";
+		expect(hasBetterAuthCookies(mixedHeader, "better-auth")).toBe(true);
+
+		const customPrefixHeader = "my-app.session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(customPrefixHeader, "my-app")).toBe(true);
+		expect(hasBetterAuthCookies(customPrefixHeader, "better-auth")).toBe(false);
+
+		const customPrefixDataHeader = "my-app.session_data=abc; Path=/";
+		expect(hasBetterAuthCookies(customPrefixDataHeader, "my-app")).toBe(true);
+
+		const emptyPrefixHeader = "session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(emptyPrefixHeader, "")).toBe(true);
+
+		const customFullNameHeader = "my_custom_session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(customFullNameHeader, "")).toBe(true);
+
+		const customFullDataHeader = "my_custom_session_data=xyz; Path=/";
+		expect(hasBetterAuthCookies(customFullDataHeader, "")).toBe(true);
+
+		const multipleNonBetterAuthHeader =
+			"__cf_bm=abc123; Path=/, _ga=GA1.2.123456789.1234567890; Path=/";
+		expect(
+			hasBetterAuthCookies(multipleNonBetterAuthHeader, "better-auth"),
+		).toBe(false);
+
+		const nonSessionBetterAuthHeader = "better-auth.other_cookie=abc; Path=/";
+		expect(
+			hasBetterAuthCookies(nonSessionBetterAuthHeader, "better-auth"),
+		).toBe(false);
+	});
+
+	it("should preserve unchanged client store session properties on signout", async () => {
+		const before = client.$store.atoms.session!.get();
+		await client.signOut();
+		const after = client.$store.atoms.session!.get();
+
+		expect(after).toMatchObject({
+			...before,
+			data: null,
+			error: null,
+			isPending: false,
+		});
 	});
 });
 
@@ -241,5 +314,15 @@ describe("expo with cookieCache", async () => {
 		const ctx = await auth.$context;
 		expect(ctx.options.trustedOrigins).toContain("exp://");
 		expect(ctx.options.trustedOrigins).toContain("http://localhost:3000");
+	});
+
+	it("should allow independent cookiePrefix configuration", async () => {
+		const { hasBetterAuthCookies } = await import("./client");
+
+		const customCookieHeader = "my-app.session_token=abc; Path=/";
+
+		expect(hasBetterAuthCookies(customCookieHeader, "my-app")).toBe(true);
+
+		expect(hasBetterAuthCookies(customCookieHeader, "better-auth")).toBe(false);
 	});
 });

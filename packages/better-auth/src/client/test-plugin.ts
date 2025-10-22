@@ -1,8 +1,9 @@
 import { atom, computed } from "nanostores";
-import type { BetterAuthClientPlugin } from "./types";
-import type { BetterAuthPlugin } from "../types/plugins";
-import { createAuthEndpoint } from "../api/call";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { useAuthQuery } from "./query";
+import z from "zod";
 
 const serverPlugin = {
 	id: "test",
@@ -11,6 +12,11 @@ const serverPlugin = {
 			"/test",
 			{
 				method: "GET",
+				error: z.object({
+					code: z.number(),
+					message: z.string(),
+					test: z.boolean(),
+				}),
 			},
 			async (c) => {
 				return {

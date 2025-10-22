@@ -2,18 +2,18 @@ import type {
 	BetterFetchOption,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { InputContext, Endpoint } from "better-call";
+import type { InputContext, Endpoint, StandardSchemaV1 } from "better-call";
 import type {
 	HasRequiredKeys,
 	Prettify,
 	UnionToIntersection,
 } from "../types/helper";
 import type {
-	ClientOptions,
 	InferAdditionalFromClient,
 	InferSessionFromClient,
 	InferUserFromClient,
 } from "./types";
+import type { BetterAuthClientOptions } from "@better-auth/core";
 
 export type CamelCase<S extends string> =
 	S extends `${infer P1}-${infer P2}${infer P3}`
@@ -30,7 +30,7 @@ export type PathToObject<
 		: never;
 
 export type InferSignUpEmailCtx<
-	ClientOpts extends ClientOptions,
+	ClientOpts extends BetterAuthClientOptions,
 	FetchOptions extends BetterFetchOption,
 > = {
 	email: string;
@@ -42,7 +42,7 @@ export type InferSignUpEmailCtx<
 } & UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>;
 
 export type InferUserUpdateCtx<
-	ClientOpts extends ClientOptions,
+	ClientOpts extends BetterAuthClientOptions,
 	FetchOptions extends BetterFetchOption,
 > = {
 	image?: string | null;
@@ -75,10 +75,10 @@ export type InferCtx<
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
-export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
-	string,
-	infer T
->
+export type InferRoute<
+	API,
+	COpts extends BetterAuthClientOptions,
+> = API extends Record<string, infer T>
 	? T extends Endpoint
 		? T["options"]["metadata"] extends
 				| {
@@ -130,10 +130,15 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 														session: InferSessionFromClient<COpts>;
 													} | null
 												: NonNullable<Awaited<R>>,
-										{
-											code?: string;
-											message?: string;
-										},
+										T["options"]["error"] extends StandardSchemaV1
+											? // InferOutput
+												NonNullable<
+													T["options"]["error"]["~standard"]["types"]
+												>["output"]
+											: {
+													code?: string;
+													message?: string;
+												},
 										FetchOptions["throw"] extends true
 											? true
 											: COpts["fetchOptions"] extends { throw: true }
@@ -149,7 +154,7 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 
 export type InferRoutes<
 	API extends Record<string, Endpoint>,
-	ClientOpts extends ClientOptions,
+	ClientOpts extends BetterAuthClientOptions,
 > = MergeRoutes<InferRoute<API, ClientOpts>>;
 
 export type ProxyRequest = {

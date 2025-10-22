@@ -6,6 +6,7 @@ import { Logo } from "./logo";
 import LogoContextMenu from "./logo-context-menu";
 import DarkPng from "../public/branding/better-auth-logo-dark.png";
 import WhitePng from "../public/branding/better-auth-logo-light.png";
+import { MobileSearchIcon } from "@/components/mobile-search-icon";
 export const Navbar = () => {
 	const logoAssets = {
 		darkSvg: `
@@ -97,6 +98,7 @@ export const Navbar = () => {
 							</svg>
 						</NavLink>
 					</ul>
+					<MobileSearchIcon />
 					<ThemeToggle />
 					<NavbarMobileBtn />
 				</div>

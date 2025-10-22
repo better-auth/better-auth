@@ -1,7 +1,7 @@
 import { serializeSignedCookie } from "better-call";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { parseSetCookieHeader } from "../../cookies";
-import { createAuthMiddleware } from "../../api";
+import { createAuthMiddleware } from "@better-auth/core/middleware";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 interface BearerOptions {
@@ -56,8 +56,8 @@ export const bearer = (options?: BearerOptions) => {
 								"base64urlnopad",
 							).verify(
 								c.context.secret,
-								decodedToken.split(".")[0],
-								decodedToken.split(".")[1],
+								decodedToken.split(".")[0]!,
+								decodedToken.split(".")[1]!,
 							);
 							if (!isValid) {
 								return;

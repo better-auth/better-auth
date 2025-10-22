@@ -1,13 +1,14 @@
-import * as z from "zod/v4";
-import { createAuthEndpoint } from "../call";
+import * as z from "zod";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
-import type { GenericEndpointContext, User } from "../../types";
+import type { User } from "../../types";
 import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
 import { signJWT } from "../../crypto/jwt";
 import { originCheck } from "../middlewares";
 import { JWTExpired } from "jose/errors";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export async function createEmailVerificationToken(
 	secret: string,

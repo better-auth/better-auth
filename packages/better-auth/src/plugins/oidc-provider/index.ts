@@ -1,13 +1,11 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import { SignJWT } from "jose";
+import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSessionFromCtx,
-	sessionMiddleware,
-} from "../../api";
-import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+} from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -28,6 +26,8 @@ import { base64 } from "@better-auth/utils/base64";
 import { getJwtToken } from "../jwt/sign";
 import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
+import { mergeSchema } from "../../db";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -251,7 +251,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							maxAge: 0,
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-						const sessionToken = sessionCookie?.split(".")[0];
+						const sessionToken = sessionCookie?.split(".")[0]!;
 						if (!sessionToken) {
 							return;
 						}
@@ -261,7 +261,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							return;
 						}
 						ctx.query = JSON.parse(cookie);
-						ctx.query!.prompt = "consent";
+						// Don't force prompt to "consent" - let the authorize function
+						// determine if consent is needed based on OIDC spec requirements
 						ctx.context.session = session;
 						const response = await authorize(ctx, opts);
 						return response;
@@ -319,7 +320,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					method: "POST",
 					body: z.object({
 						accept: z.boolean(),
-						consent_code: z.string().optional(),
+						consent_code: z.string().optional().nullish(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -526,6 +527,16 @@ export const oidcProvider = (options: OIDCOptions) => {
 							});
 						}
 					}
+
+					const now = Date.now();
+					const iat = Math.floor(now / 1000);
+					const exp = iat + (opts.accessTokenExpiresIn ?? 3600);
+
+					const accessTokenExpiresAt = new Date(exp * 1000);
+					const refreshTokenExpiresAt = new Date(
+						(iat + (opts.refreshTokenExpiresIn ?? 604800)) * 1000,
+					);
+
 					const {
 						grant_type,
 						code,
@@ -569,12 +580,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 						const accessToken = generateRandomString(32, "a-z", "A-Z");
 						const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
-						const accessTokenExpiresAt = new Date(
-							Date.now() + opts.accessTokenExpiresIn * 1000,
-						);
-						const refreshTokenExpiresAt = new Date(
-							Date.now() + opts.refreshTokenExpiresIn * 1000,
-						);
+
 						await ctx.context.adapter.create({
 							model: modelName.oauthAccessToken,
 							data: {
@@ -585,8 +591,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 								clientId: client_id.toString(),
 								userId: token.userId,
 								scopes: token.scopes,
-								createdAt: new Date(),
-								updatedAt: new Date(),
+								createdAt: new Date(iat * 1000),
+								updatedAt: new Date(iat * 1000),
 							},
 						});
 						return ctx.json({
@@ -751,12 +757,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
-					const accessTokenExpiresAt = new Date(
-						Date.now() + opts.accessTokenExpiresIn * 1000,
-					);
-					const refreshTokenExpiresAt = new Date(
-						Date.now() + opts.refreshTokenExpiresIn * 1000,
-					);
 					await ctx.context.adapter.create({
 						model: modelName.oauthAccessToken,
 						data: {
@@ -767,8 +767,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							clientId: client_id.toString(),
 							userId: value.userId,
 							scopes: requestedScopes.join(" "),
-							createdAt: new Date(),
-							updatedAt: new Date(),
+							createdAt: new Date(iat * 1000),
+							updatedAt: new Date(iat * 1000),
 						},
 					});
 					const user = await ctx.context.internalAdapter.findUserById(
@@ -782,11 +782,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const profile = {
-						given_name: user.name.split(" ")[0],
-						family_name: user.name.split(" ")[1],
+						given_name: user.name.split(" ")[0]!,
+						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
-						updated_at: user.updatedAt.toISOString(),
+						updated_at: new Date(user.updatedAt).toISOString(),
 					};
 					const email = {
 						email: user.email,
@@ -842,12 +842,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 									session: {
 										session: {
 											id: generateRandomString(32, "a-z", "A-Z"),
-											createdAt: new Date(),
-											updatedAt: new Date(),
+											createdAt: new Date(iat * 1000),
+											updatedAt: new Date(iat * 1000),
 											userId: user.id,
-											expiresAt: new Date(
-												Date.now() + opts.accessTokenExpiresIn * 1000,
-											),
+											expiresAt: accessTokenExpiresAt,
 											token: accessToken,
 											ipAddress: ctx.request?.headers.get("x-forwarded-for"),
 										},
@@ -872,8 +870,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					} else {
 						idToken = await new SignJWT(payload)
 							.setProtectedHeader({ alg: "HS256" })
-							.setIssuedAt()
-							.setExpirationTime(expirationTime)
+							.setIssuedAt(iat)
+							.setExpirationTime(accessTokenExpiresAt)
 							.sign(new TextEncoder().encode(client.clientSecret));
 					}
 
@@ -1036,10 +1034,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 							? user.image
 							: undefined,
 						given_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[0]
+							? user.name.split(" ")[0]!
 							: undefined,
 						family_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[1]
+							? user.name.split(" ")[1]!
 							: undefined,
 						email_verified: requestedScopes.includes("email")
 							? user.emailVerified
@@ -1478,7 +1476,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				},
 			),
 		},
-		schema,
+		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };
 export type * from "./types";

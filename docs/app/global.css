@@ -1,13 +1,14 @@
 @import "tailwindcss";
+@import "fumadocs-ui/css/black.css";
+@import "fumadocs-ui/css/preset.css";
 @config "../tailwind.config.js";
 @plugin 'tailwindcss-animate';
 @custom-variant dark (&:is(.dark *));
-@import "fumadocs-ui/css/black.css";
-@import "fumadocs-ui/css/preset.css";
-@source '../../node_modules/fumadocs-ui/dist/**/*.js';
-@source '../node_modules/fumadocs-ui/dist/**/*.js';
+
 :root {
 	--fd-nav-height: 56px;
+	--fd-banner-height: 0px;
+	--fd-tocnav-height: 0px;
 
 	--background: oklch(1 0 0);
 
@@ -74,6 +75,11 @@
 	--sidebar-border: oklch(0.923 0.003 48.717);
 
 	--sidebar-ring: oklch(0.709 0.01 56.259);
+
+	/* Scrollbar theme (light) */
+	--scrollbar-thumb: var(--border);
+	--scrollbar-thumb-hover: var(--ring);
+	--scrollbar-track: transparent;
 }
 
 .dark {
@@ -140,6 +146,11 @@
 	--sidebar-border: oklch(0.268 0.007 34.298);
 
 	--sidebar-ring: oklch(0.553 0.013 58.071);
+
+	/* Scrollbar theme (dark) */
+	--scrollbar-thumb: var(--border);
+	--scrollbar-thumb-hover: var(--ring);
+	--scrollbar-track: transparent;
 }
 
 @theme inline {
@@ -241,12 +252,49 @@
 		@apply border-border outline-ring/50;
 	}
 	body {
-		@apply bg-background text-foreground overscroll-none;
+		@apply overscroll-none bg-background text-foreground selection:bg-foreground selection:text-background;
 	}
 }
 
 html {
+	scroll-behavior: auto;
+	scroll-padding-top: calc(
+		var(--fd-nav-height, 56px) +
+		var(--fd-banner-height, 0px) +
+		var(--fd-tocnav-height, 0px) +
+		24px
+	);
+}
+
+html:not([data-anchor-scrolling]) {
 	scroll-behavior: smooth;
+}
+
+/* Global, accessible custom scrollbars */
+* {
+	scrollbar-width: thin; /* Firefox */
+	scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* WebKit-based browsers */
+::-webkit-scrollbar {
+	width: 12px;
+	height: 12px;
+}
+::-webkit-scrollbar-track {
+	background: var(--scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+	background-color: var(--scrollbar-thumb);
+	border-radius: 9999px;
+	border: 3px solid transparent; /* creates a gap between thumb and track */
+	background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+	background-color: var(--scrollbar-thumb-hover);
+}
+::-webkit-scrollbar-corner {
+	background: transparent;
 }
 
 @layer utilities {
@@ -257,4 +305,77 @@ html {
 		-ms-overflow-style: none;
 		scrollbar-width: none;
 	}
+}
+
+.markdown-content {
+	@apply text-sm leading-relaxed;
+}
+
+.markdown-content pre {
+	@apply max-w-full overflow-x-auto;
+}
+
+.markdown-content pre code {
+	@apply whitespace-pre-wrap break-words;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+	@apply font-semibold text-foreground;
+}
+
+.markdown-content p {
+	@apply mb-2 last:mb-0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+	@apply space-y-2 list-disc;
+}
+
+.markdown-content li {
+	@apply text-sm;
+}
+
+.markdown-content code {
+	@apply bg-muted px-1.5 py-0.5 rounded text-xs font-mono;
+}
+
+.markdown-content pre {
+	@apply overflow-x-auto;
+}
+
+.markdown-content blockquote {
+	@apply border-l-4 border-muted-foreground/20 pl-4 my-2 italic;
+}
+
+.markdown-content table {
+	@apply w-full border-collapse;
+}
+
+.markdown-content th,
+.markdown-content td {
+	@apply border border-border px-2 py-1 text-xs;
+}
+
+.markdown-content th {
+	@apply bg-muted font-medium;
+}
+
+@keyframes stream-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.5;
+	}
+}
+
+.streaming-cursor {
+	animation: stream-pulse 1s ease-in-out infinite;
 }

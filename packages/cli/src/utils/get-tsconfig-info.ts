@@ -1,5 +1,5 @@
 import path from "path";
-import fs from "fs-extra";
+import fs from "fs";
 
 export function stripJsonComments(jsonString: string): string {
 	return jsonString

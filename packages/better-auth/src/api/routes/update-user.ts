@@ -1,14 +1,18 @@
-import * as z from "zod/v4";
-import { createAuthEndpoint } from "../call";
+import * as z from "zod";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import { getSessionFromCtx, sessionMiddleware } from "./session";
+import {
+	getSessionFromCtx,
+	sensitiveSessionMiddleware,
+	sessionMiddleware,
+} from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
-import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
-import { parseUserInput } from "../../db/schema";
+import type { AdditionalUserFieldsInput } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { generateRandomString } from "../../crypto";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { originCheck } from "../middlewares";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
@@ -95,17 +99,12 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					status: true,
 				});
 			}
-			const additionalFields = parseUserInput(
-				ctx.context.options,
-				rest,
-				"update",
-			);
 			const user = await ctx.context.internalAdapter.updateUser(
 				session.user.id,
 				{
 					name,
 					image,
-					...additionalFields,
+					...rest,
 				},
 				ctx,
 			);
@@ -150,7 +149,7 @@ export const changePassword = createAuthEndpoint(
 				})
 				.optional(),
 		}),
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 		metadata: {
 			openapi: {
 				description: "Change the password of the user",
@@ -318,7 +317,7 @@ export const setPassword = createAuthEndpoint(
 		metadata: {
 			SERVER_ONLY: true,
 		},
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 	},
 	async (ctx) => {
 		const { newPassword } = ctx.body;
@@ -371,7 +370,7 @@ export const deleteUser = createAuthEndpoint(
 	"/delete-user",
 	{
 		method: "POST",
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 		body: z.object({
 			/**
 			 * The callback URL to redirect to after the user is deleted
@@ -662,7 +661,7 @@ export const changeEmail = createAuthEndpoint(
 				})
 				.optional(),
 		}),
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 		metadata: {
 			openapi: {
 				responses: {
@@ -685,6 +684,21 @@ export const changeEmail = createAuthEndpoint(
 										},
 									},
 									required: ["status"],
+								},
+							},
+						},
+					},
+					"422": {
+						description: "Unprocessable Entity. Email already exists",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										message: {
+											type: "string",
+										},
+									},
 								},
 							},
 						},
@@ -725,7 +739,7 @@ export const changeEmail = createAuthEndpoint(
 				await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (existing) {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
+					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				});
 			}
 			await ctx.context.internalAdapter.updateUserByEmail(

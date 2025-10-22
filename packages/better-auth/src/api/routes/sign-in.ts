@@ -1,12 +1,12 @@
 import { APIError } from "better-call";
-import * as z from "zod/v4";
-import { createAuthEndpoint } from "../call";
+import * as z from "zod";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { setSessionCookie } from "../../cookies";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { SocialProviderListEnum } from "../../social-providers";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
