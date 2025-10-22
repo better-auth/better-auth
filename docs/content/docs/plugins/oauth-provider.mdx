@@ -352,6 +352,10 @@ import { auth } from "@/lib/auth";
 export const GET = oauthProviderOpenIdConfigMetadata(auth);
 ```
 
+<Callout type="info">
+If you get a CORS issue when testing locally such as with the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector), this is due to the frontend calling the endpoint instead of the backend. Add `Access-Control-Allow-Methods": "GET"` and `"Access-Control-Allow-Origin": "*"` for testing.
+</Callout>
+
 
 #### OAuth Authorization Server
 
@@ -367,6 +371,10 @@ import { auth } from "@/lib/auth";
 
 export const GET = oauthProviderAuthServerMetadata(auth);
 ```
+
+<Callout type="info">
+If you get a CORS issue when testing locally such as with the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector), this is due to the frontend calling the endpoint instead of the backend. Add `Access-Control-Allow-Methods": "GET"` and `"Access-Control-Allow-Origin": "*"` for testing.
+</Callout>
 
 
 ## API Server
@@ -873,6 +881,8 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
       return new Response(JSON.stringify(metadata), {
         headers: {
           "Content-Type": "application/json",
+          "Cache-Control":
+            "public, max-age=15, stale-while-revalidate=15, stale-if-error=86400",
         },
       });
     };
