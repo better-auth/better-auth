@@ -11,16 +11,16 @@ import type {
 	PublicKeyCredentialCreationOptionsJSON,
 } from "@simplewebauthn/server";
 import { APIError } from "better-call";
-import { generateRandomString } from "../../crypto/random";
+import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { sessionMiddleware } from "../../api";
-import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
-import type { InferOptionSchema } from "../../types/plugins";
+import { sessionMiddleware } from "better-auth/api";
+import { freshSessionMiddleware, getSessionFromCtx } from "better-auth/api";
+import type { InferOptionSchema } from "better-auth/types";
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { setSessionCookie } from "../../cookies";
-import { generateId } from "../../utils";
-import { mergeSchema } from "../../db/schema";
+import { setSessionCookie } from "better-auth/cookies";
+import { generateId } from "better-auth";
+import { mergeSchema } from "better-auth/db";
 import { base64 } from "@better-auth/utils/base64";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { defineErrorCodes } from "@better-auth/core/utils";
