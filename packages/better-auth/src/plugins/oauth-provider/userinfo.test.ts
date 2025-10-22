@@ -21,13 +21,13 @@ describe("oauth userinfo", async () => {
 		plugins: [
 			jwt({
 				jwt: {
-					audience: validAudience,
 					issuer: authServerBaseUrl,
 				},
 			}),
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
+				validAudiences: [validAudience],
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,

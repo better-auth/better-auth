@@ -57,7 +57,7 @@ async function validateJwtAccessToken(
 						return jwksRes?.response as JSONWebKeySet | undefined;
 					},
 			verifyOptions: {
-				audience: jwtPluginOptions?.jwt?.audience ?? ctx.context.baseURL,
+				audience: opts.validAudiences ?? ctx.context.baseURL,
 				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			},
 		});

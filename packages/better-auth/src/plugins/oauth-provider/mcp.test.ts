@@ -1,7 +1,7 @@
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { mcpHandler } from "./mcp";
 import { createAuthClient } from "../../client";
-import { oauthProviderClient } from "./client";
+import { oauthProviderClient, oauthProviderResourceClient } from "./client";
 import { APIError } from "better-call";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from "../jwt";
@@ -31,7 +31,7 @@ describe("mcp", async () => {
 	const apiServerBaseUrl = "http://localhost:5000";
 
 	const apiClient = createAuthClient({
-		plugins: [oauthProviderClient()],
+		plugins: [oauthProviderClient(), oauthProviderResourceClient()],
 		baseURL: apiServerBaseUrl,
 	});
 
@@ -106,12 +106,12 @@ describe("mcp - server-client flows", async () => {
 				jwt({
 					jwt: {
 						issuer: authServerUrl,
-						audience: mcpServerUrl,
 					},
 				}),
 				oauthProvider({
 					loginPage: "/sign-in",
 					consentPage: "/consent",
+					validAudiences: [apiServerBaseUrl, mcpServerUrl],
 					allowDynamicClientRegistration: true,
 					allowUnauthenticatedClientRegistration: true,
 					scopes,
@@ -125,7 +125,7 @@ describe("mcp - server-client flows", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const authClient = createAuthClient({
-		plugins: [oauthProviderClient()],
+		plugins: [oauthProviderClient(), oauthProviderResourceClient(auth)],
 		baseURL: authServerUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -144,6 +144,7 @@ describe("mcp - server-client flows", async () => {
 		{
 			title: "Greeting Resource", // Display name for UI
 			description: "Dynamic greeting generator",
+			securitySchemes: [{ type: "oauth2" }],
 		},
 		async (uri, extra) => {
 			const authInfo = extra.authInfo;
@@ -210,12 +211,13 @@ describe("mcp - server-client flows", async () => {
 					req.url === "/.well-known/oauth-protected-resource" ||
 					req.url === "/.well-known/oauth-protected-resource/mcp"
 				) {
-					const config = await auth.api.getOAuthProtectedResourceConfig();
+					const config = await authClient.getProtectedResourceMetadata({
+						resource: mcpServerUrl,
+					});
 					res.setHeader("Content-Type", "application/json");
 					res.end(JSON.stringify(config));
 				} else if (req.url === "/mcp") {
 					await verifyAccessToken(req, res);
-
 					const transport = new StreamableHTTPServerTransport({
 						sessionIdGenerator: undefined,
 						enableJsonResponse: true,

@@ -9,9 +9,13 @@ export async function consentEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
 ) {
-	const { name: cookieName } = ctx.context.createAuthCookie("oauth_consent");
+	const { name: cookieName, attributes: cookieAttributes } =
+		ctx.context.createAuthCookie("oauth_consent");
 	const storedCode = await ctx.getSignedCookie(cookieName, ctx.context.secret);
 	ctx.setCookie(cookieName, "", {
+		path: ctx.context.options.basePath,
+		sameSite: "lax",
+		...cookieAttributes,
 		maxAge: 0,
 	});
 	if (!storedCode) {
@@ -32,8 +36,10 @@ export async function consentEndpoint(
 				try {
 					parsedValue = JSON.parse(val.value);
 				} catch (err) {
+					console.log(err);
 					throw new APIError("UNAUTHORIZED", {
-						message: "invalid verification value",
+						error_description: "invalid code",
+						error: "invalid_request",
 					});
 				}
 			}

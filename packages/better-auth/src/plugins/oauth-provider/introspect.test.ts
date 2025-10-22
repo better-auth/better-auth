@@ -22,13 +22,13 @@ describe("oauth introspect", async () => {
 		plugins: [
 			jwt({
 				jwt: {
-					audience: validAudience,
 					issuer: authServerBaseUrl,
 				},
 			}),
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
+				validAudiences: [validAudience],
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -145,6 +145,7 @@ describe("oauth introspect", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},
 		});
@@ -407,6 +408,7 @@ describe("oauth introspect - config", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
+						validAudiences: [validAudience],
 						scopes,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
@@ -419,7 +421,6 @@ describe("oauth introspect - config", async () => {
 						: [
 								jwt({
 									jwt: {
-										audience: validAudience,
 										issuer: authServerBaseUrl,
 									},
 								}),
