@@ -10,6 +10,7 @@ import type {
 	DBAdapter,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createLogger } from "@better-auth/core/env";
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -55,6 +56,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 		(db: Db, session?: ClientSession): AdapterFactoryCustomizeAdapterCreator =>
 		({ options, getFieldName, schema, getDefaultModelName }) => {
 			const customIdGen = getCustomIdGenerator(options);
+			const logger = createLogger(options.logger);
 
 			function serializeID({
 				field,
@@ -214,14 +216,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return insertedData as any;
 				},
 				async findOne({ model, where, select }) {
-					let clause: any;
-					try {
-						clause = convertWhereClause({ where, model });
-					} catch (error) {
-						// an invalid `id` value was provided
-						// given this you couldn't possibly find a record
-						return null;
-					}
+					const clause = convertWhereClause({ where, model });
 					const projection = select
 						? Object.fromEntries(
 								select.map((field) => [getFieldName({ field, model }), 1]),
@@ -234,14 +229,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return res as any;
 				},
 				async findMany({ model, where, limit, offset, sortBy }) {
-					let clause: any;
-					try {
-						clause = where ? convertWhereClause({ where, model }) : {};
-					} catch (error) {
-						// an invalid `id` value was provided
-						// given this you couldn't possibly find any records
-						return [];
-					}
+					const clause = where ? convertWhereClause({ where, model }) : {};
 					const cursor = db.collection(model).find(clause, { session });
 					if (limit) cursor.limit(limit);
 					if (offset) cursor.skip(offset);
@@ -254,28 +242,14 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return res as any;
 				},
 				async count({ model, where }) {
-					let clause: any;
-					try {
-						clause = where ? convertWhereClause({ where, model }) : {};
-					} catch (error) {
-						// an invalid `id` value was provided
-						// given this you couldn't possibly count any records
-						return 0;
-					}
+					const clause = where ? convertWhereClause({ where, model }) : {};
 					const res = await db
 						.collection(model)
 						.countDocuments(clause, { session });
 					return res;
 				},
 				async update({ model, where, update: values }) {
-					let clause: any;
-					try {
-						clause = convertWhereClause({ where, model });
-					} catch (error) {
-						// an invalid `id` value was provided
-						// given this you couldn't possibly update any records
-						return null;
-					}
+					const clause = convertWhereClause({ where, model });
 
 					const res = await db.collection(model).findOneAndUpdate(
 						clause,
@@ -289,14 +263,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return res as any;
 				},
 				async updateMany({ model, where, update: values }) {
-					let clause: any;
-					try {
-						clause = convertWhereClause({ where, model });
-					} catch (error) {
-						// an invalid `id` value was provided
-						// given this you couldn't possibly update any records
-						return 0;
-					}
+					const clause = convertWhereClause({ where, model });
 
 					const res = await db.collection(model).updateMany(
 						clause,
@@ -308,25 +275,11 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return res.modifiedCount;
 				},
 				async delete({ model, where }) {
-					let clause: any;
-					try {
-						clause = convertWhereClause({ where, model });
-					} catch (error) {
-						// an invalid `id` value was provided
-						// given this you couldn't possibly delete any records
-						return;
-					}
+					const clause = convertWhereClause({ where, model });
 					await db.collection(model).deleteOne(clause, { session });
 				},
 				async deleteMany({ model, where }) {
-					let clause: any;
-					try {
-						clause = convertWhereClause({ where, model });
-					} catch (error) {
-						// an invalid `id` value was provided
-						// given this you couldn't possibly delete any records
-						return 0;
-					}
+					const clause = convertWhereClause({ where, model });
 					const res = await db
 						.collection(model)
 						.deleteMany(clause, { session });
