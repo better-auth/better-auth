@@ -43,11 +43,11 @@ interface EditOnGitHubOptions
 	repo: string;
 
 	/**
-	 * SHA or ref (branch or tag) name.
+	 * Branch name.
 	 *
-	 * @defaultValue main
+	 * @defaultValue canary 
 	 */
-	sha?: string;
+	branch?: string;
 
 	/**
 	 * File path in the repo
@@ -209,11 +209,11 @@ export function DocsPage({
 function EditOnGitHub({
 	owner,
 	repo,
-	sha,
+	branch = "canary",
 	path,
 	...props
 }: EditOnGitHubOptions) {
-	const href = `https://github.com/${owner}/${repo}/blob/${sha}/${path.startsWith("/") ? path.slice(1) : path}`;
+	const href = `https://github.com/${owner}/${repo}/blob/${branch}/${path.startsWith("/") ? path.slice(1) : path}`;
 
 	return (
 		<a
