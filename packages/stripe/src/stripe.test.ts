@@ -193,6 +193,7 @@ describe("stripe", async () => {
 			status: "incomplete",
 			periodStart: undefined,
 			cancelAtPeriodEnd: false,
+			cancelAt: undefined,
 			trialStart: undefined,
 			trialEnd: undefined,
 		});
@@ -581,6 +582,92 @@ describe("stripe", async () => {
 			});
 			expect(updatedSubscription?.status).toBe("canceled");
 		}
+	});
+
+	it("should handle subscription update with cancel_at", async () => {
+		// 1. Create a user and a subscription
+		const { id: testReferenceId } = await ctx.adapter.create({
+			model: "user",
+			data: { email: "cancel-at@email.com" },
+		});
+		const { id: testSubscriptionId } = await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: testReferenceId,
+				stripeCustomerId: "cus_cancel_at_123",
+				status: "active",
+				plan: "starter",
+				stripeSubscriptionId: "sub_cancel_at_123",
+			},
+		});
+		const mockCancelTimestamp = 1678886400; // An example timestamp
+		const mockUpdateEvent = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_cancel_at_123",
+					customer: "cus_cancel_at_123",
+					status: "active",
+					cancel_at: mockCancelTimestamp, // <-- YOUR NEW FIELD
+					items: {
+						data: [
+							{
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+					current_period_start: Math.floor(Date.now() / 1000),
+					current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+				},
+			},
+		};
+
+		// 2. Mock the Stripe client
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(mockUpdateEvent),
+			},
+		};
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		};
+		const testAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			emailAndPassword: { enabled: true },
+			database: memory,
+			plugins: [stripe(testOptions)],
+		});
+
+		// 3. Send the webhook
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: { "stripe-signature": "test_signature" },
+				body: JSON.stringify(mockUpdateEvent),
+			},
+		);
+
+		const response = await testAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		// 4. Assert the change
+		const updatedSubscription = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: testSubscriptionId }],
+		});
+
+		expect(updatedSubscription?.cancelAt).toBeDefined();
+		expect(updatedSubscription?.cancelAt).toEqual(
+			new Date(mockCancelTimestamp * 1000),
+		);
 	});
 
 	it("should execute subscription event handlers", async () => {

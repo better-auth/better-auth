@@ -154,6 +154,11 @@ export interface Subscription {
 	 */
 	cancelAtPeriodEnd?: boolean;
 	/**
+	 * * If the subscription is scheduled to be canceled,
+	 * * this is the time at which the cancellation will take effect.
+	 * */
+	cancelAt?: Date;
+	/**
 	 * A field to group subscriptions so you can have multiple subscriptions
 	 * for one reference id
 	 */

@@ -966,6 +966,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						model: "subscription",
 						update: {
 							cancelAtPeriodEnd: false,
+							cancelAt: null,
 							updatedAt: new Date(),
 						},
 						where: [

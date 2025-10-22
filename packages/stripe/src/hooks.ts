@@ -160,6 +160,9 @@ export async function onSubscriptionUpdated(
 					subscriptionUpdated.items.data[0]!.current_period_end * 1000,
 				),
 				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
+				cancelAt: subscriptionUpdated.cancel_at
+					? new Date(subscriptionUpdated.cancel_at * 1000)
+					: null,
 				seats,
 				stripeSubscriptionId: subscriptionUpdated.id,
 			},
