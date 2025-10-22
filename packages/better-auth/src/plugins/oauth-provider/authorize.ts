@@ -185,7 +185,11 @@ export async function authorizeEndpoint(
 			cookieName,
 			JSON.stringify(ctx.query),
 			ctx.context.secret,
-			cookieAttributes,
+			{
+				path: ctx.context.options.basePath,
+				sameSite: "lax",
+				...cookieAttributes,
+			},
 		);
 		const requestUrl = new URL(ctx.request.url);
 		return handleRedirect(ctx, `${opts.loginPage}${requestUrl.search}`);
@@ -365,12 +369,11 @@ async function redirectWithPromptCode(
 
 	const { name: cookieName, attributes: cookieAttributes } =
 		ctx.context.createAuthCookie(`oauth_${type}`);
-	await ctx.setSignedCookie(
-		cookieName,
-		code,
-		ctx.context.secret,
-		cookieAttributes,
-	);
+	await ctx.setSignedCookie(cookieName, code, ctx.context.secret, {
+		path: ctx.context.options.basePath,
+		sameSite: "lax",
+		...cookieAttributes,
+	});
 
 	const params = new URLSearchParams({
 		client_id: ctx.query.client_id,

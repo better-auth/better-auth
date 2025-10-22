@@ -200,8 +200,10 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						// Obtain original prompt
-						const { name: loginPromptCookieName } =
-							ctx.context.createAuthCookie("oauth_login_prompt");
+						const {
+							name: loginPromptCookieName,
+							attributes: cookieAttributes,
+						} = ctx.context.createAuthCookie("oauth_login_prompt");
 						const cookie = await ctx.getSignedCookie(
 							loginPromptCookieName,
 							ctx.context.secret,
@@ -228,6 +230,9 @@ export const oauthProvider = (options: OAuthOptions) => {
 							ctx.query!.prompt = undefined;
 						}
 						ctx.setCookie(loginPromptCookieName, "", {
+							path: ctx.context.options.basePath,
+							sameSite: "lax",
+							...cookieAttributes,
 							maxAge: 0,
 						});
 						return await authorizeEndpoint(ctx, opts);
