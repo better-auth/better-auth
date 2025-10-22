@@ -825,7 +825,7 @@ importers:
         version: 0.44.5(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(better-sqlite3@12.4.1)(bun-types@1.2.21(@types/react@19.1.12))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)
       hono:
         specifier: ^4.9.7
-        version: 4.9.7
+        version: 4.10.2
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.8.69
@@ -948,7 +948,7 @@ importers:
         version: 18.0.1
       hono:
         specifier: ^4.9.7
-        version: 4.9.7
+        version: 4.10.2
       listhen:
         specifier: ^1.9.0
         version: 1.9.0
@@ -8992,8 +8992,8 @@ packages:
   hoist-non-react-statics@3.3.2:
     resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
 
-  hono@4.9.7:
-    resolution: {integrity: sha512-t4Te6ERzIaC48W3x4hJmBwgNlLhmiEdEE5ViYb02ffw4ignHNHa5IBtPjmbKstmtKa8X6C35iWwK4HaqvrzG9w==}
+  hono@4.10.2:
+    resolution: {integrity: sha512-p6fyzl+mQo6uhESLxbF5WlBOAJMDh36PljwlKtP5V1v09NxlqGru3ShK+4wKhSuhuYf8qxMmrivHOa/M7q0sMg==}
     engines: {node: '>=16.9.0'}
 
   hookable@5.5.3:
@@ -23316,7 +23316,7 @@ snapshots:
     dependencies:
       react-is: 16.13.1
 
-  hono@4.9.7: {}
+  hono@4.10.2: {}
 
   hookable@5.5.3: {}
 
