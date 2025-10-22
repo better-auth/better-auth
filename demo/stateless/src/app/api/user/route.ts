@@ -13,6 +13,7 @@ export interface APIData {
 		expiresAt: Date;
 		createdAt: Date;
 	};
+	note: string;
 }
 
 export async function GET() {
