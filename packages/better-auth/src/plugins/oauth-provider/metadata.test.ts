@@ -2,12 +2,10 @@ import { describe, it, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt, type JwtOptions } from "../jwt";
 import { oauthProvider } from "./oauth";
-import { oauthProviderProtectedResourceMetadata } from "./metadata";
 import { BetterAuthError } from "@better-auth/core/error";
 import { createAuthClient } from "../../client";
 import type { OAuthOptions } from "./types";
-import type { ResourceServerMetadata } from "../../oauth-2.1/types";
-import { oauthProviderClient } from "./client";
+import { oauthProviderClient, oauthProviderResourceClient } from "./client";
 import { APIError } from "better-call";
 
 describe("oauth metadata", async () => {
@@ -250,7 +248,7 @@ describe("oauth metadata", async () => {
 	});
 });
 
-describe("metadata - resource discovery functions", async () => {
+describe("oauth resource metadata", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const validAudience = "https://myapi.example.com";
 	const supportedScopes = [
@@ -260,18 +258,18 @@ describe("metadata - resource discovery functions", async () => {
 		"offline_access",
 		"read:posts",
 	];
-	const { auth } = await getTestInstance({
+	const { auth, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
 			jwt({
 				jwt: {
-					audience: validAudience,
 					issuer: authServerBaseUrl,
 				},
 			}),
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
+				validAudiences: [validAudience],
 				scopes: supportedScopes,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -281,8 +279,18 @@ describe("metadata - resource discovery functions", async () => {
 		],
 	});
 
+	const authClient = createAuthClient({
+		plugins: [oauthProviderResourceClient(auth)],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
 	it("should provide resource discovery configuration", async () => {
-		const metadata = await auth.api.getOAuthProtectedResourceConfig();
+		const metadata = await authClient.getProtectedResourceMetadata({
+			resource: validAudience,
+		});
 		expect(metadata).toMatchObject({
 			resource: validAudience, // aud
 			authorization_servers: [authServerBaseUrl], // iss
@@ -292,13 +300,9 @@ describe("metadata - resource discovery functions", async () => {
 	it("should allow overwriting any field", async () => {
 		const anotherIssuer = "https://admin.example.com";
 		const anotherResource = "https://another-api.example.com";
-		const metadata = await auth.api.getOAuthProtectedResourceConfig({
-			body: {
-				overrides: {
-					resource: anotherResource,
-					authorization_servers: [anotherIssuer],
-				},
-			},
+		const metadata = await authClient.getProtectedResourceMetadata({
+			resource: anotherResource,
+			authorization_servers: [anotherIssuer],
 		});
 		expect(metadata).toMatchObject({
 			resource: anotherResource,
@@ -306,96 +310,51 @@ describe("metadata - resource discovery functions", async () => {
 		});
 	});
 
-	it("oauthProviderProtectedResourceMetadata - should pass without opts providing resource discovery configuration", async () => {
-		// @ts-expect-error Full auth not provided
-		const metadataEndpoint = oauthProviderProtectedResourceMetadata(auth);
-		const metadataRes = await metadataEndpoint(
-			new Request("http://localhost/.well-known/oauth-protected-resource", {
-				method: "GET",
+	it("should not support 'openid' scope", async () => {
+		await expect(
+			authClient.getProtectedResourceMetadata({
+				resource: validAudience,
+				scopes_supported: ["openid"],
 			}),
-		);
-		expect(metadataRes.ok).toBeTruthy();
-		const metadata: ResourceServerMetadata = await metadataRes.json();
-		expect(metadata).toMatchObject({
-			resource: validAudience, // aud
-			authorization_servers: [authServerBaseUrl], // iss
-		});
+		).rejects.toThrowError(BetterAuthError);
 	});
 
-	it("oauthProviderProtectedResourceMetadata - should not support 'openid' scope", async () => {
-		try {
-			// @ts-expect-error Full auth not provided
-			oauthProviderProtectedResourceMetadata(auth, {
-				overrides: {
-					scopes_supported: ["openid"],
-				},
-			});
-			expect.unreachable();
-		} catch (error) {
-			expect(error instanceof BetterAuthError).toBeTruthy();
-		}
-	});
-
-	it("oauthProviderProtectedResourceMetadata - should pass with supported scopes", async () => {
-		// @ts-expect-error Full auth not provided
-		const metadataEndpoint = oauthProviderProtectedResourceMetadata(auth, {
-			overrides: {
-				scopes_supported: ["read:posts"],
-			},
+	it("should pass with supported scopes", async () => {
+		const metadata = await authClient.getProtectedResourceMetadata({
+			resource: validAudience,
+			scopes_supported: ["read:posts"],
 		});
-		const metadataRes = await metadataEndpoint(
-			new Request("http://localhost/.well-known/oauth-protected-resource", {
-				method: "GET",
-			}),
-		);
-		expect(metadataRes.ok).toBeTruthy();
-		const metadata: ResourceServerMetadata = await metadataRes.json();
 		expect(metadata).toMatchObject({
-			resource: validAudience, // aud
-			authorization_servers: [authServerBaseUrl], // iss
+			resource: validAudience,
+			authorization_servers: [authServerBaseUrl],
 			scopes_supported: ["read:posts"],
 		});
 	});
 
-	it("oauthProviderProtectedResourceMetadata - should fail unsupported scope", async () => {
-		try {
-			// @ts-expect-error Full auth not provided
-			oauthProviderProtectedResourceMetadata(auth, {
-				overrides: {
-					scopes_supported: ["write:posts"],
-				},
-			});
-			expect.unreachable();
-		} catch (error) {
-			expect(error instanceof BetterAuthError).toBeTruthy();
-		}
+	it("should fail unsupported scope", async () => {
+		await expect(
+			authClient.getProtectedResourceMetadata({
+				resource: validAudience,
+				scopes_supported: ["write:posts"],
+			}),
+		).rejects.toThrowError(BetterAuthError);
 	});
 
-	it("oauthProviderProtectedResourceMetadata - should pass externally available scopes", async () => {
-		// @ts-expect-error Full auth not provided
-		const metadataEndpoint = oauthProviderProtectedResourceMetadata(auth, {
-			externalScopes: ["write:posts"],
-			overrides: {
-				authorization_servers: [
-					authServerBaseUrl,
-					"https://another.example.com",
-				],
+	it("should pass with externally available scopes", async () => {
+		const anotherAuthorizationServer = "https://auth.example.com";
+		const metadata = await authClient.getProtectedResourceMetadata(
+			{
+				resource: validAudience,
+				authorization_servers: [authServerBaseUrl, anotherAuthorizationServer],
 				scopes_supported: ["read:posts", "write:posts"],
 			},
-		});
-		const metadataRes = await metadataEndpoint(
-			new Request("http://localhost/.well-known/oauth-protected-resource", {
-				method: "GET",
-			}),
+			{
+				externalScopes: ["write:posts"],
+			},
 		);
-		expect(metadataRes.ok).toBeTruthy();
-		const metadata: ResourceServerMetadata = await metadataRes.json();
 		expect(metadata).toMatchObject({
-			resource: validAudience, // aud
-			authorization_servers: [
-				authServerBaseUrl, // iss
-				"https://another.example.com",
-			],
+			resource: validAudience,
+			authorization_servers: [authServerBaseUrl, anotherAuthorizationServer],
 			scopes_supported: ["read:posts", "write:posts"],
 		});
 	});

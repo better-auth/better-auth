@@ -28,13 +28,13 @@ describe("oauth token - authorization_code", async () => {
 			plugins: [
 				jwt({
 					jwt: {
-						audience: validAudience,
 						issuer: authServerBaseUrl,
 					},
 				}),
 				oauthProvider({
 					loginPage: "/login",
-					consentPage: "/oauth2/authorize",
+					consentPage: "/consent",
+					validAudiences: [validAudience],
 					silenceWarnings: {
 						oauthAuthServerConfig: true,
 						openidConfig: true,
@@ -373,13 +373,13 @@ describe("oauth token - refresh_token", async () => {
 		plugins: [
 			jwt({
 				jwt: {
-					audience: validAudience,
 					issuer: authServerBaseUrl,
 				},
 			}),
 			oauthProvider({
 				loginPage: "/login",
-				consentPage: "/oauth2/authorize",
+				consentPage: "/consent",
+				validAudiences: [validAudience],
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -912,13 +912,13 @@ describe("oauth token - client_credentials", async () => {
 		plugins: [
 			jwt({
 				jwt: {
-					audience: validAudience,
 					issuer: authServerBaseUrl,
 				},
 			}),
 			oauthProvider({
 				loginPage: "/login",
-				consentPage: "/oauth2/authorize",
+				consentPage: "/consent",
+				validAudiences: [validAudience],
 				allowDynamicClientRegistration: true,
 				scopes: ["openid", "profile", "email", "read:posts"],
 				silenceWarnings: {
@@ -1111,6 +1111,7 @@ describe("oauth token - config", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
+						validAudiences: [validAudience],
 						scopes,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
@@ -1123,7 +1124,6 @@ describe("oauth token - config", async () => {
 						: [
 								jwt({
 									jwt: {
-										audience: validAudience,
 										issuer: authServerBaseUrl,
 									},
 								}),
