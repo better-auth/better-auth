@@ -2,15 +2,12 @@ import type {
 	AuthServerMetadata,
 	GrantType,
 	OIDCMetadata,
-	ResourceServerMetadata,
 	TokenEndpointAuthMethod,
 } from "../../oauth-2.1/types";
-import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
-import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { getJwtPlugin } from "./utils";
 import type { OAuthOptions } from "./types";
 import type { JWSAlgorithms, JwtOptions } from "../jwt";
-import { BetterAuthError } from "@better-auth/core/error";
-import { logger } from "@better-auth/core/env";
 
 export function authServerMetadata(
 	ctx: GenericEndpointContext,
@@ -97,24 +94,6 @@ export function oidcServerMetadata(
 	return metadata;
 }
 
-export function protectedResourceMetadata(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
-	overrides?: Partial<ResourceServerMetadata>,
-) {
-	const baseURL = ctx.context.baseURL;
-	const jwtPluginOptions = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context).options;
-
-	return {
-		resource: jwtPluginOptions?.jwt?.audience ?? baseURL,
-		authorization_servers: [jwtPluginOptions?.jwt?.issuer ?? baseURL],
-		// Will allow all fields to be overwritten here since called via server endpoint (checking provided by oAuthProviderProtectedResourceMetadata)
-		...overrides,
-	} satisfies ResourceServerMetadata;
-}
-
 /**
  * Provides an exportable `/.well-known/oauth-authorization-server`.
  *
@@ -174,111 +153,6 @@ export const oauthProviderOpenIdConfigMetadata = <
 ) => {
 	return async (_request: Request) => {
 		const res = await auth.api.getOpenIdConfig();
-		return new Response(JSON.stringify(res), {
-			status: 200,
-			headers: {
-				// We should cache here because it is unlikely this will
-				// change frequently and if it does shouldn't be more than
-				// for 15 seconds in a change period
-				"Cache-Control":
-					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
-				...opts?.headers,
-				"Content-Type": "application/json",
-			},
-		});
-	};
-};
-
-/**
- * Provides an exportable `/.well-known/oauth-protected-resource`.
- *
- * Additionally checks scopes and configuration settings.
- *
- * @external
- */
-export const oauthProviderProtectedResourceMetadata = <
-	Auth extends AuthContext & {
-		api: {
-			getOAuthProtectedResourceConfig: (...args: any) => any;
-		};
-	},
->(
-	auth: Auth,
-	opts?: {
-		overrides?: Partial<ResourceServerMetadata>;
-		headers?: HeadersInit;
-		silenceWarnings?: {
-			oidcScopes?: boolean;
-		};
-		/** A list of scopes supported by other auth servers */
-		externalScopes?: string[];
-	},
-) => {
-	const oauthProviderPlugin = getOAuthProviderPlugin(auth);
-
-	// Resource server should not mention support for openid, only the AS should
-	if (opts?.overrides?.scopes_supported?.includes("openid")) {
-		throw new BetterAuthError(
-			"Only the Auth Server should utilize the openid scope",
-		);
-	}
-
-	// Provide scope warnings
-	if (opts?.overrides?.scopes_supported && !opts.silenceWarnings?.oidcScopes) {
-		for (const sc of opts?.overrides.scopes_supported) {
-			if (["profile", "email", "phone", "address"].includes(sc)) {
-				logger.warn(
-					`"${sc}" is typically restricted for the authorization server, a resource server shouldn't handle this scope`,
-				);
-			}
-		}
-	}
-
-	if (opts?.overrides?.authorization_servers?.length) {
-		const jwtPluginOptions = oauthProviderPlugin.options.disableJwtPlugin
-			? undefined
-			: getJwtPlugin(auth).options;
-		if (
-			!opts.overrides.authorization_servers.includes(
-				jwtPluginOptions?.jwt?.issuer ?? auth.baseURL,
-			)
-		) {
-			throw new BetterAuthError(
-				`authorization_servers list must at least contain ${jwtPluginOptions?.jwt?.issuer ?? auth.baseURL}`,
-			);
-		}
-	}
-
-	if (
-		opts?.externalScopes &&
-		(opts.overrides?.authorization_servers?.length ?? 0) <= 1
-	) {
-		throw new BetterAuthError(
-			"external scopes should not be provided with one authorization server",
-		);
-	}
-
-	// Check supported_scopes
-	const scopes = new Set([
-		...(opts?.externalScopes ?? []),
-		...(oauthProviderPlugin.options.scopes ?? []),
-	]);
-	if (opts?.overrides?.scopes_supported) {
-		for (const sc of opts.overrides.scopes_supported) {
-			if (!scopes?.has(sc)) {
-				throw new BetterAuthError(`${sc} is not supported by this auth server`);
-			}
-		}
-	}
-
-	return async (_request: Request) => {
-		const res = await auth.api.getOAuthProtectedResourceConfig({
-			body: opts?.overrides
-				? {
-						overrides: opts?.overrides,
-					}
-				: undefined,
-		});
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {

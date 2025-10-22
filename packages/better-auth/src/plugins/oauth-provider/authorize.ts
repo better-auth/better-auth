@@ -128,9 +128,9 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const requestScopes = query.scope?.split(" ").filter((s) => s) ?? [];
+	// Check for invalid scopes if requested from query
+	let requestScopes = query.scope?.split(" ").filter((s) => s) ?? [];
 	const invalidScopes = requestScopes.filter((scope) => {
-		// invalid in scopes list
 		return (
 			!(client.scopes ?? opts.scopes)?.includes(scope) ||
 			// offline access must be requested through PKCE
@@ -148,8 +148,10 @@ export async function authorizeEndpoint(
 			),
 		);
 	}
+	// Always set default scopes if not originally sent
 	if (!query.scope) {
-		query.scope = (client.scopes ?? opts.scopes)?.join(" ");
+		requestScopes = client.scopes ?? opts.scopes ?? [];
+		query.scope = requestScopes.join(" ");
 	}
 
 	if (!query.code_challenge || !query.code_challenge_method) {
@@ -185,7 +187,11 @@ export async function authorizeEndpoint(
 			cookieName,
 			JSON.stringify(ctx.query),
 			ctx.context.secret,
-			cookieAttributes,
+			{
+				path: ctx.context.options.basePath,
+				sameSite: "lax",
+				...cookieAttributes,
+			},
 		);
 		const requestUrl = new URL(ctx.request.url);
 		return handleRedirect(ctx, `${opts.loginPage}${requestUrl.search}`);
@@ -365,12 +371,11 @@ async function redirectWithPromptCode(
 
 	const { name: cookieName, attributes: cookieAttributes } =
 		ctx.context.createAuthCookie(`oauth_${type}`);
-	await ctx.setSignedCookie(
-		cookieName,
-		code,
-		ctx.context.secret,
-		cookieAttributes,
-	);
+	await ctx.setSignedCookie(cookieName, code, ctx.context.secret, {
+		path: ctx.context.options.basePath,
+		sameSite: "lax",
+		...cookieAttributes,
+	});
 
 	const params = new URLSearchParams({
 		client_id: ctx.query.client_id,
