@@ -4,7 +4,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	DBAdapterDebugLogOption,
 	CleanedWhere,
-	Join,
+	ResolvedJoin,
 } from "@better-auth/core/db/adapter";
 
 export interface MemoryDB {
@@ -78,10 +78,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 						comparison = 1;
 					}
 					// Handle string comparison
-					else if (
-						typeof aValue === "string" &&
-						typeof bValue === "string"
-					) {
+					else if (typeof aValue === "string" && typeof bValue === "string") {
 						comparison = aValue.localeCompare(bValue);
 					}
 					// Handle date comparison
@@ -89,17 +86,11 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 						comparison = aValue.getTime() - bValue.getTime();
 					}
 					// Handle numeric comparison
-					else if (
-						typeof aValue === "number" &&
-						typeof bValue === "number"
-					) {
+					else if (typeof aValue === "number" && typeof bValue === "number") {
 						comparison = aValue - bValue;
 					}
 					// Handle boolean comparison
-					else if (
-						typeof aValue === "boolean" &&
-						typeof bValue === "boolean"
-					) {
+					else if (typeof aValue === "boolean" && typeof bValue === "boolean") {
 						comparison = aValue === bValue ? 0 : aValue ? 1 : -1;
 					}
 					// Fallback to string comparison
@@ -114,8 +105,8 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 			function convertWhereClause(
 				where: CleanedWhere[],
 				model: string,
-				join?: Join,
-			): any[] | Record<string, any[]> {
+				join?: ResolvedJoin,
+			): any[] {
 				const execute = (where: CleanedWhere[], model: string) => {
 					const table = db[model];
 					if (!table) {
@@ -185,38 +176,57 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 				if (!join) return execute(where, model);
 
 				const baseRecords = execute(where, model);
-				const records: Record<string, any[]> = {};
-				records[getModelName(model)] = baseRecords;
+				const joinedModels = Object.keys(join);
 
-				for (const [joinModel, joinAttr] of Object.entries(join)) {
-					const joinModelName = getModelName(joinModel);
-					const joinTable = db[joinModelName];
-					if (!joinTable) {
-						logger.error(
-							`[MemoryAdapter] Join model ${joinModelName} not found in the DB`,
-							Object.keys(db),
-						);
-						throw new Error(`Join model ${joinModelName} not found`);
+				// Group results by base model and nest joined data as arrays
+				const grouped = new Map<string, any>();
+
+				for (const baseRecord of baseRecords) {
+					const baseId = String(baseRecord.id);
+
+					if (!grouped.has(baseId)) {
+						const nested: Record<string, any> = { ...baseRecord };
+
+						// Initialize joined arrays
+						for (const joinModel of joinedModels) {
+							nested[getModelName(joinModel)] = [];
+						}
+
+						grouped.set(baseId, nested);
 					}
 
-					records[joinModelName] = [];
-					for (const baseRecord of baseRecords) {
+					const nestedEntry = grouped.get(baseId)!;
+
+					// Add joined data to arrays
+					for (const [joinModel, joinAttr] of Object.entries(join)) {
+						const joinModelName = getModelName(joinModel);
+						const joinTable = db[joinModelName];
+						if (!joinTable) {
+							logger.error(
+								`[MemoryAdapter] Join model ${joinModelName} not found in the DB`,
+								Object.keys(db),
+							);
+							throw new Error(`Join model ${joinModelName} not found`);
+						}
+
 						const matchingRecords = joinTable.filter(
 							(joinRecord: any) =>
 								joinRecord[joinAttr.on.to] === baseRecord[joinAttr.on.from],
 						);
-						if (joinAttr.type === "inner" && !matchingRecords.length) {
-							// For inner join, exclude the base record if there's no match
-							records[getModelName(model)] = records[getModelName(model)]!.filter(
-								(r) => r !== baseRecord,
+
+						// Add matching records to the array, avoiding duplicates
+						for (const matchingRecord of matchingRecords) {
+							const exists = nestedEntry[joinModelName].some(
+								(item: any) => item.id === matchingRecord.id,
 							);
-						} else if (matchingRecords.length > 0) {
-							records[joinModelName]!.push(...matchingRecords);
+							if (!exists) {
+								nestedEntry[joinModelName].push(matchingRecord);
+							}
 						}
 					}
 				}
 
-				return records;
+				return Array.from(grouped.values());
 			}
 			return {
 				create: async ({ model, data }) => {
@@ -233,18 +243,13 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 				findOne: async ({ model, where, join }) => {
 					const res = convertWhereClause(where, model, join);
 					if (join) {
-						// When join is present, res is a Record<modelName, records[]>
-						const resObj = res as Record<string, any[]>;
-						const baseModelName = getModelName(model);
-						if (!resObj[baseModelName]?.length) {
+						// When join is present, res is an array of nested objects
+						const resArray = res as any[];
+						if (!resArray.length) {
 							return null;
 						}
-						// Build result object with joined models
-						const result: Record<string, any> = {};
-						for (const [modelName, records] of Object.entries(resObj)) {
-							result[modelName] = records[0] || null;
-						}
-						return result;
+						// Return the first nested object
+						return resArray[0];
 					}
 					// Without join, res is an array
 					const resArray = res as any[];
@@ -253,53 +258,30 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 				},
 				findMany: async ({ model, where, sortBy, limit, offset, join }) => {
 					let res = convertWhereClause(where || [], model, join);
-					
+
 					if (join) {
-						// When join is present, res is a Record<modelName, records[]>
-						const resObj = res as Record<string, any[]>;
-						const baseModelName = getModelName(model);
-						const baseRecords = resObj[baseModelName] || [];
-						
-						if (!baseRecords.length) {
+						// When join is present, res is an array of nested objects
+						const resArray = res as any[];
+
+						if (!resArray.length) {
 							return [];
 						}
 
-						// Apply sorting to base records
-						applySortToRecords(baseRecords, sortBy, model);
+						// Apply sorting to nested objects
+						applySortToRecords(resArray, sortBy, model);
 
-						// Apply offset and limit to base records
-						let paginatedBaseRecords = baseRecords;
+						// Apply offset and limit
+						let paginatedRecords = resArray;
 						if (offset !== undefined) {
-							paginatedBaseRecords = paginatedBaseRecords.slice(offset);
+							paginatedRecords = paginatedRecords.slice(offset);
 						}
 						if (limit !== undefined) {
-							paginatedBaseRecords = paginatedBaseRecords.slice(0, limit);
+							paginatedRecords = paginatedRecords.slice(0, limit);
 						}
 
-						// Map base records to result objects with joined data
-						return paginatedBaseRecords.map((baseRecord: any) => {
-							const result: Record<string, any> = {};
-							result[baseModelName] = baseRecord;
-							for (const [joinModelName, joinRecords] of Object.entries(resObj)) {
-								if (joinModelName !== baseModelName) {
-									// Find the joined record that matches this base record
-									// (In a one-to-one or one-to-many join, we need to find the matching record)
-									const matchingRecord = joinRecords.find((jr: any) => {
-										// Find the join condition from the original join config
-										for (const [jm, jAttr] of Object.entries(join)) {
-											if (getModelName(jm) === joinModelName) {
-												return jr[jAttr.on.to] === baseRecord[jAttr.on.from];
-											}
-										}
-										return false;
-									});
-									result[joinModelName] = matchingRecord || null;
-								}
-							}
-							return result;
-						});
+						return paginatedRecords;
 					}
-					
+
 					// Without join - original logic
 					const resArray = res as any[];
 					let table = applySortToRecords(resArray, sortBy, model);

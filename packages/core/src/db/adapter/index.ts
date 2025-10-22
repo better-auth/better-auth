@@ -264,6 +264,12 @@ export interface DBAdapterFactoryConfig<
 	 * @default false
 	 */
 	disableTransformInput?: boolean;
+	/**
+	 * Whether to disable the transform join.
+	 * Do not use this option unless you know what you are doing.
+	 * @default false
+	 */
+	disableTransformJoin?: boolean;
 }
 
 export type Where = {
@@ -298,6 +304,18 @@ export type Where = {
  * configures how the join should be performed.
  */
 export type Join = {
+	[model: string]: boolean;
+	//  {
+
+	// 	// In the future we may support nested joins:
+	// 	// with?: Join;
+	// };
+};
+
+/**
+ * Once `Join` has gone through the adapter factory, it will be transformed into a `ResolvedJoin`.
+ */
+export type ResolvedJoin = {
 	[model: string]: {
 		/**
 		 * The Join type that will be performed
@@ -307,7 +325,7 @@ export type Join = {
 		 * * Not supported yet: ~~**right**: returns all rows from the right table, plus matching rows from the left (if none, NULL fills in).~~
 		 * * Not supported yet: ~~**full**: returns rows from both sides, filling in gaps with NULLs.~~
 		 *
-		 * @default "left"
+		 * @default "inner"
 		 */
 		type?: "left" | "inner";
 		on: {
@@ -320,8 +338,6 @@ export type Join = {
 			 */
 			to: string;
 		};
-		// In the future we may support nested joins:
-		// with?: Join;
 	};
 };
 
@@ -428,7 +444,7 @@ export interface CustomAdapter {
 		model: string;
 		where: CleanedWhere[];
 		select?: string[];
-		join?: Join;
+		join?: ResolvedJoin;
 	}) => Promise<T | null>;
 	findMany: <T>({
 		model,
@@ -443,7 +459,7 @@ export interface CustomAdapter {
 		limit: number;
 		sortBy?: { field: string; direction: "asc" | "desc" };
 		offset?: number;
-		join?: Join;
+		join?: ResolvedJoin;
 	}) => Promise<T[]>;
 	delete: ({
 		model,

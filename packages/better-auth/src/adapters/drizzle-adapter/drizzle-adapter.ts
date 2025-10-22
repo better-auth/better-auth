@@ -75,7 +75,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldName, debugLog }) => {
+		({
+			getFieldName,
+			getFieldAttributes,
+			getModelName,
+			getDefaultModelName,
+		}) => {
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
 				if (!schema) {
@@ -333,6 +338,82 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				if (orGroup.length) clause.push(orClause!);
 				return clause;
 			}
+			function nestJoinedResults(
+				results: any[],
+				baseModel: string,
+				join: Record<string, any> | undefined,
+			): any[] {
+				// If no joins or no results, return as-is
+				if (!join || !results.length) {
+					return results;
+				}
+
+				const joinedModels = Object.keys(join);
+
+				// Group results by base model and nest joined data as arrays
+				const grouped = new Map<string, any>();
+
+				for (const row of results) {
+					const baseData = row[baseModel];
+					const baseId = String(baseData.id);
+
+					if (!grouped.has(baseId)) {
+						const nested: Record<string, any> = { ...baseData };
+
+						// Initialize joined arrays
+						for (const joinedModel of joinedModels) {
+							const fieldAttributes = getFieldAttributes({
+								model: joinedModel,
+								field: join[joinedModel].on.to,
+							});
+							nested[getDefaultModelName(joinedModel)] = fieldAttributes.unique
+								? null
+								: [];
+						}
+
+						grouped.set(baseId, nested);
+					}
+
+					const nestedEntry = grouped.get(baseId)!;
+
+					// Add joined data to arrays
+					for (const joinedModel of joinedModels) {
+						// The Better-Auth CLI generates Drizzle field names with underscores instead of camel case.
+						// The results from JOIN from Drizzle includes the field names not as the schema/variable field names,
+						// rather the names defined in the DB. (which is the names with underscores)
+						// we need to check both underscores as well as using `getModelName` to get the correct field name.
+						let joinedData = row[getModelName(joinedModel)];
+						if (!joinedData) {
+							const underscoreModelName = joinedModel
+								.replace(/([A-Z])/g, "_$1")
+								.toLowerCase()
+								.replace(/^_/, "");
+							joinedData = row[underscoreModelName];
+						}
+
+						if (joinedData) {
+							const defaultModelName = getDefaultModelName(joinedModel);
+							if (Array.isArray(nestedEntry[defaultModelName])) {
+								if (
+									!nestedEntry[defaultModelName].some(
+										(item) => item.id === joinedData.id,
+									)
+								) {
+									nestedEntry[defaultModelName].push(joinedData);
+								}
+							} else {
+								nestedEntry[defaultModelName] = joinedData;
+							}
+						}
+					}
+				}
+
+				const result = Array.from(grouped.values());
+
+				// For findOne, return single object; for findMany, return array
+				// The adapter factory will handle unwrapping based on schema's unique constraint
+				return result;
+			}
 			function checkMissingFields(
 				schema: Record<string, any>,
 				model: string,
@@ -384,7 +465,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 					const res = await query;
 					if (!res.length) return null;
-					return res[0];
+					const joinedResult = nestJoinedResults(res, model, join);
+					return joinedResult[0];
 				},
 				async findMany({ model, where, sortBy, limit, offset, join }) {
 					const schemaModel = getSchema(model);
@@ -403,18 +485,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							),
 						);
 					}
-					let query = builder.where(...clause);
-					if (join) {
-						for (const [model, joinAttr] of Object.entries(join)) {
-							const joinModel = getSchema(model);
-							query = query.leftJoin(
-								joinModel,
-								eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
-							);
-						}
-					}
-					const res = await query;
-					return res;
+					return (await builder.where(...clause)) as any[];
 				},
 				async count({ model, where }) {
 					const schemaModel = getSchema(model);

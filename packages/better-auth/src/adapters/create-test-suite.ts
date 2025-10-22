@@ -174,6 +174,7 @@ export const createTestSuite = <
 					adapterName: `Wrapped ${adapter.options?.adapterConfig.adapterName}`,
 					disableTransformOutput: true,
 					disableTransformInput: true,
+					disableTransformJoin: true,
 				};
 				const adapterCreator = (
 					options: BetterAuthOptions,
@@ -189,11 +190,10 @@ export const createTestSuite = <
 								count: adapter.count,
 								deleteMany: adapter.deleteMany,
 								delete: adapter.delete,
-								findOne: adapter.findOne,
-								findMany: adapter.findMany,
+								findOne: adapter.findOne as any,
+								findMany: adapter.findMany as any,
 								update: adapter.update as any,
 								updateMany: adapter.updateMany,
-
 								createSchema: adapter.createSchema as any,
 								async create({ data, model, select }) {
 									const defaultModelName = getDefaultModelName(model);

@@ -16,6 +16,7 @@ import type {
 	Where,
 	CleanedWhere,
 	Join,
+	ResolvedJoin,
 } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 export * from "./types";
@@ -52,6 +53,7 @@ export const createAdapterFactory =
 			transaction: cfg.transaction ?? false,
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
+			disableTransformJoin: cfg.disableTransformJoin ?? false,
 		} satisfies AdapterFactoryConfig;
 
 		if (
@@ -407,7 +409,8 @@ export const createAdapterFactory =
 			data: Record<string, any> | null,
 			unsafe_model: string,
 			select: string[] = [],
-			join: Join | undefined = undefined,
+			join: ResolvedJoin | undefined = undefined,
+			isSingle: boolean = false,
 		) => {
 			const transformSingleOutput = async (
 				data: Record<string, any> | null,
@@ -490,7 +493,8 @@ export const createAdapterFactory =
 
 			if (!join) return await transformSingleOutput(data, unsafe_model, select);
 
-			const transformedData: Record<string, any> = {};
+			let transformedData: Record<string, any> = {};
+			unsafe_model = getDefaultModelName(unsafe_model);
 			const requiredModels = [unsafe_model, ...Object.keys(join)].map(
 				(model) => ({
 					modelName: getModelName(model),
@@ -498,13 +502,61 @@ export const createAdapterFactory =
 				}),
 			);
 
+			if (!data) return null;
+			// Data is now the base model object directly (not wrapped under a key)
+			const baseModel: Record<string, any> = data;
 			for (const { modelName, defaultModelName } of requiredModels) {
-				const transformedModel = await transformSingleOutput(
-					data?.[modelName] ?? {},
-					modelName,
-					select,
-				);
-				transformedData[defaultModelName] = transformedModel;
+				if (defaultModelName === unsafe_model) {
+					// base model should be represent the entire record, and any joined models should be nested under it.
+					transformedData = await transformSingleOutput(
+						baseModel,
+						modelName,
+						select,
+					);
+				} else {
+					// joined models should be nested under the base model.
+					let joinedData = baseModel[modelName];
+
+					// Check if the foreign key field in the joined model has a unique constraint
+					// If unique, unwrap array to single object; otherwise keep as array
+					const joinedModelSchema = schema[defaultModelName]!.fields;
+					const foreignKeyField = Object.entries(joinedModelSchema).find(
+						([_, fieldAttributes]) =>
+							fieldAttributes.references?.model === unsafe_model,
+					)?.[0];
+
+					const isUnique = foreignKeyField
+						? joinedModelSchema[
+								getDefaultFieldName({
+									field: foreignKeyField,
+									model: defaultModelName,
+								})
+							]?.unique === true
+						: false;
+
+					if (isUnique && !Array.isArray(joinedData)) {
+						joinedData = [joinedData];
+					}
+
+					let td = [];
+
+					if (!Array.isArray(joinedData)) {
+						throw new BetterAuthError(
+							`Joined data for model ${defaultModelName} is not an array`,
+						);
+					}
+
+					for (const item of joinedData) {
+						td.push(await transformSingleOutput(item, modelName, select));
+					}
+
+					// If unique, return single object; otherwise return array
+					if (isUnique) {
+						transformedData[defaultModelName] = td.length > 0 ? td[0] : null;
+					} else {
+						transformedData[defaultModelName] = td;
+					}
+				}
 			}
 
 			return transformedData as any;
@@ -609,19 +661,54 @@ export const createAdapterFactory =
 		const transformJoinClause = (
 			baseModel: string,
 			unsanitizedJoin: Join | undefined,
-		): Join | undefined => {
+		): ResolvedJoin | undefined => {
 			if (!unsanitizedJoin) return undefined;
-			const transformedJoin: Join = {};
+			const transformedJoin: ResolvedJoin = {};
 			for (const [model, join] of Object.entries(unsanitizedJoin)) {
+				if (join !== true) continue; // for now only support "true" on joins, indicating a simple join
+				const defaultModelName = getDefaultModelName(model);
+				const foreignKeys = Object.entries(
+					schema[defaultModelName]!.fields,
+				).filter(
+					([field, fieldAttributes]) =>
+						fieldAttributes.references?.model === baseModel,
+				);
+
+				if (!foreignKeys.length) {
+					throw new BetterAuthError(
+						`No foreign key found for model ${model} and base model ${baseModel} while performing join operation.`,
+					);
+				} else if (foreignKeys.length > 1) {
+					throw new BetterAuthError(
+						`Multiple foreign keys found for model ${model} and base model ${baseModel} while performing join operation. Only one foreign key is supported.`,
+					);
+				}
+
+				const [foreignKey, foreignKeyAttributes] = foreignKeys[0]!;
+				if (!foreignKeyAttributes.references) {
+					// this should never happen, as we filter for references in the foreign keys.
+					// it's here for typescript to be happy.
+					throw new BetterAuthError(
+						`No references found for foreign key ${foreignKey} on model ${model} while performing join operation.`,
+					);
+				}
+
+				const from = getFieldName({
+					model: baseModel,
+					field: foreignKeyAttributes.references.field,
+				});
+
+				const to = getFieldName({
+					model,
+					field: foreignKey,
+				});
+
 				transformedJoin[getModelName(model)] = {
 					on: {
-						from: getFieldName({
-							model: baseModel,
-							field: join.on.from,
-						}),
-						to: getFieldName({ model, field: join.on.to }),
+						from,
+						to,
 					},
-					type: join.type || "left",
+					type: "inner", // for now only support inner joins
 				};
 			}
 			return transformedJoin;
@@ -866,13 +953,19 @@ export const createAdapterFactory =
 					where: unsafeWhere,
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
+				let join: ResolvedJoin | undefined;
+				if (!config.disableTransformJoin) {
+					join = transformJoinClause(unsafeModel, unsafeJoin);
+				} else {
+					// assume it's already transformed if transformation is disabled
+					join = unsafeJoin as never as ResolvedJoin;
+				}
 				debugLog(
 					{ method: "findOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
 					`${formatMethod("findOne")}:`,
-					{ model, where, select },
+					{ model, where, select, join },
 				);
-				const join = transformJoinClause(unsafeModel, unsafeJoin);
 				const res = await adapterInstance.findOne<T>({
 					model,
 					where,
@@ -892,6 +985,7 @@ export const createAdapterFactory =
 						unsafeModel,
 						select,
 						join,
+						true,
 					);
 				}
 				debugLog(
@@ -929,13 +1023,19 @@ export const createAdapterFactory =
 					where: unsafeWhere,
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
+				let join: ResolvedJoin | undefined;
+				if (!config.disableTransformJoin) {
+					join = transformJoinClause(unsafeModel, unsafeJoin);
+				} else {
+					// assume it's already transformed if transformation is disabled
+					join = unsafeJoin as never as ResolvedJoin;
+				}
 				debugLog(
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
 					`${formatMethod("findMany")}:`,
-					{ model, where, limit, sortBy, offset },
+					{ model, where, limit, sortBy, offset, join },
 				);
-				const join = transformJoinClause(unsafeModel, unsafeJoin);
 				const res = await adapterInstance.findMany<T>({
 					model,
 					where,
@@ -955,7 +1055,13 @@ export const createAdapterFactory =
 					transformed = await Promise.all(
 						res.map(
 							async (r) =>
-								await transformOutput(r as any, unsafeModel, undefined, join),
+								await transformOutput(
+									r as any,
+									unsafeModel,
+									undefined,
+									join,
+									false,
+								),
 						),
 					);
 				}
