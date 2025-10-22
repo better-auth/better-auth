@@ -9,6 +9,7 @@ import { OAuth2Server } from "oauth2-mock-server";
 import { parseSetCookieHeader } from "../../cookies";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import type { GenericEndpointContext } from "@better-auth/core";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 
 describe("oauth2", async () => {
 	const providerId = "test";
@@ -961,5 +962,43 @@ describe("oauth2", async () => {
 		expect(session.data).not.toBeNull();
 		expect(session.data?.user.email).toBe("oauth2-cookie-state@test.com");
 		expect(session.data?.user.name).toBe("OAuth2 Cookie State");
+	});
+
+	it("should await async mapProfileToUser", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-async",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							getUserInfo: async (_tokens) => ({
+								id: "test-user-id",
+								email: "test@example.com",
+								name: "Test User",
+								emailVerified: true,
+							}),
+							mapProfileToUser: async (
+								_profile,
+							): Promise<Record<string, any>> => {
+								return { customField: "async-custom-data" };
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		const context = await auth.$context;
+		const provider = context.socialProviders.find((p) => p.id === "test-async");
+
+		const result = await provider!.getUserInfo({
+			accessToken: "test-access-token",
+			idToken: undefined,
+			refreshToken: undefined,
+		});
+
+		expect(result?.user).toHaveProperty("customField", "async-custom-data");
 	});
 });
