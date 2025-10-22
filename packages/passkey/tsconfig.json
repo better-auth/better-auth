@@ -5,5 +5,10 @@
     "rootDir": "src"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist"],
+  "references": [
+    {
+      "path": "../better-auth/tsconfig.json"
+    }
+  ]
 }
