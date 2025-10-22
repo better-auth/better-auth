@@ -52,7 +52,7 @@
     "react-native-svg": "^15.12.1",
     "react-native-web": "~0.21.1",
     "react-native-worklets": "^0.5.1",
-    "tailwindcss": "^3.4.16"
+    "tailwindcss": "^4.1.15"
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",
