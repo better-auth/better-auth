@@ -167,9 +167,8 @@ async function runBeforeHooks(
 		handler: AuthMiddleware;
 	}[],
 ) {
-	let modifiedContext: {
-		headers?: Headers;
-	} = {};
+	let modifiedContext: Partial<InternalContext> = {};
+
 	for (const hook of hooks) {
 		if (hook.matcher(context)) {
 			const result = await hook
@@ -189,9 +188,8 @@ async function runBeforeHooks(
 				});
 			if (result && typeof result === "object") {
 				if ("context" in result && typeof result.context === "object") {
-					const { headers, ...rest } = result.context as {
-						headers: Headers;
-					};
+					const { headers, ...rest } =
+						result.context as Partial<InternalContext>;
 					if (headers instanceof Headers) {
 						if (modifiedContext.headers) {
 							headers.forEach((value, key) => {
