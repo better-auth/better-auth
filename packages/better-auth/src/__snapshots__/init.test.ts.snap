@@ -111,6 +111,10 @@ exports[`init > should match config 1`] = `
     "warn": [Function],
   },
   "newSession": null,
+  "oauthConfig": {
+    "skipStateCookieCheck": false,
+    "storeStateStrategy": "database",
+  },
   "options": {
     "basePath": "/api/auth",
     "baseURL": "http://localhost:3000",
