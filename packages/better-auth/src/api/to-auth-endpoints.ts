@@ -45,7 +45,7 @@ export function toAuthEndpoints<
 	> = {};
 
 	for (const [key, endpoint] of Object.entries(endpoints)) {
-		const handler = (endpoint as any)["handler"] as Function;
+		const handler = ((endpoint as any)["handler"] ?? endpoint) as Function;
 		api[key] = createEndpoint(
 			endpoint.path,
 			endpoint.options,
