@@ -93,17 +93,17 @@ export default async function Page({
 						CodeBlockTab: (props) => {
 							return <CodeBlockTab {...props} className="p-0 m-0 rounded-lg" />;
 						},
-						pre: (props) => {
-							return (
-								<CodeBlock className="rounded-xl bg-fd-muted" {...props}>
-									<div style={{ minWidth: "100%", display: "table" }}>
-										<Pre className="px-0 py-3 bg-fd-muted focus-visible:outline-none">
-											{props.children}
-										</Pre>
-									</div>
-								</CodeBlock>
-							);
-						},
+					pre: (props) => {
+						return (
+							<CodeBlock className="rounded-xl bg-fd-muted" allowCopy={true} {...props}>
+								<div style={{ minWidth: "100%", display: "table" }}>
+									<Pre className="px-0 py-3 bg-fd-muted focus-visible:outline-none">
+										{props.children}
+									</Pre>
+								</div>
+							</CodeBlock>
+						);
+					},
 						Link: ({
 							className,
 							...props
