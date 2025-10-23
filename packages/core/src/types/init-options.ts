@@ -709,12 +709,25 @@ export type BetterAuthOptions = {
 			/**
 			 * Strategy for encoding/decoding cookie cache
 			 *
-			 * - "base64-hmac": Uses base64url encoding with HMAC-SHA256 signature (legacy, less secure)
+			 * - "base64-hmac": Uses base64url encoding with HMAC-SHA256 signature
 			 * - "jwt": Uses JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation for secure encrypted tokens
 			 *
-			 * @default "jwt"
+			 * @default "base64-hmac"
 			 */
 			strategy?: "base64-hmac" | "jwt";
+			/**
+			 * Controls cache freshness and when to refresh from database.
+			 *
+			 * - `false`: Disable cache freshness checks. Cache is only invalidated when it reaches maxAge expiry.
+			 * - `true`: Use default freshness duration of 60 seconds.
+			 * - `number`: Custom freshness duration in seconds.
+			 *
+			 * When enabled, if the cached data is older than the freshness threshold,
+			 * it will be refreshed from the database to ensure data consistency.
+			 *
+			 * @default false
+			 */
+			freshCache?: boolean | number;
 		};
 		/**
 		 * The age of the session to consider it fresh.
