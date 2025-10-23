@@ -51,8 +51,7 @@ export const init = async (options: BetterAuthOptions) => {
 		baseURL: baseURL ? new URL(baseURL).origin : "",
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
-		trustedErrorRedirectOrigins:
-			options.trustedErrorRedirectOrigins ?? [],
+		trustedErrorRedirectOrigins: options.trustedErrorRedirectOrigins ?? [],
 	};
 
 	checkEndpointConflicts(options, logger);
