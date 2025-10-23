@@ -1,51 +1,71 @@
-import { describe, expect, it, vi } from "vitest";
+import {
+	describe,
+	expect,
+	it,
+	vi,
+	beforeAll,
+	afterAll,
+	afterEach,
+} from "vitest";
+import { setupServer } from "msw/node";
+import { http, HttpResponse } from "msw";
 import { anonymous } from ".";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { anonymousClient } from "./client";
-import type { GoogleProfile } from "../../social-providers";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { getOAuth2Tokens } from "../../oauth2";
-import { signJWT } from "../../crypto/jwt";
+import { signJWT } from "../../crypto";
 
-vi.mock("../../oauth2", async (importOriginal) => {
-	const original = (await importOriginal()) as any;
-	return {
-		...original,
-		validateAuthorizationCode: vi
-			.fn()
-			.mockImplementation(async (...args: any) => {
-				const data: GoogleProfile = {
-					email: "user@email.com",
-					email_verified: true,
-					name: "First Last",
-					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-					exp: 1234567890,
-					sub: "1234567890",
-					iat: 1234567890,
-					aud: "test",
-					azp: "test",
-					nbf: 1234567890,
-					iss: "test",
-					locale: "en",
-					jti: "test",
-					given_name: "First",
-					family_name: "Last",
-				};
-				const testIdToken = await signJWT(data, DEFAULT_SECRET);
-				const tokens = getOAuth2Tokens({
-					access_token: "test",
-					refresh_token: "test",
-					id_token: testIdToken,
-				});
-				return tokens;
-			}),
+let testIdToken: string;
+let handlers: ReturnType<typeof http.post>[];
+
+const server = setupServer();
+
+beforeAll(async () => {
+	const data: GoogleProfile = {
+		email: "user@email.com",
+		email_verified: true,
+		name: "First Last",
+		picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+		exp: 1234567890,
+		sub: "1234567890",
+		iat: 1234567890,
+		aud: "test",
+		azp: "test",
+		nbf: 1234567890,
+		iss: "test",
+		locale: "en",
+		jti: "test",
+		given_name: "First",
+		family_name: "Last",
 	};
+	testIdToken = await signJWT(data, DEFAULT_SECRET);
+
+	handlers = [
+		http.post("https://oauth2.googleapis.com/token", () => {
+			return HttpResponse.json({
+				access_token: "test",
+				refresh_token: "test",
+				id_token: testIdToken,
+			});
+		}),
+	];
+
+	server.listen({ onUnhandledRequest: "bypass" });
+	server.use(...handlers);
 });
+
+afterEach(() => {
+	server.resetHandlers();
+	server.use(...handlers);
+});
+
+afterAll(() => server.close());
 
 describe("anonymous", async () => {
 	const linkAccountFn = vi.fn();
-	const { customFetchImpl, auth, sessionSetter, testUser } =
+	const { customFetchImpl, auth, sessionSetter, testUser, cookieSetter } =
 		await getTestInstance({
 			plugins: [
 				anonymous({
@@ -114,9 +134,13 @@ describe("anonymous", async () => {
 				headers,
 			},
 		});
+
 		const singInRes = await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		const state = new URL(singInRes.data?.url || "").searchParams.get("state");
 		await client.$fetch("/callback/google", {

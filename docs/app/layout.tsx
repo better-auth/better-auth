@@ -1,5 +1,4 @@
 import { Navbar } from "@/components/nav-bar";
-import "./global.css";
 import { RootProvider } from "fumadocs-ui/provider";
 import type { ReactNode } from "react";
 import { NavbarProvider } from "@/components/nav-mobile";
@@ -10,13 +9,16 @@ import { Analytics } from "@vercel/analytics/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { CustomSearchDialog } from "@/components/search-dialog";
+import { AnchorScroll } from "@/components/anchor-scroll-fix";
+import "./global.css";
 
 export const metadata = createMetadata({
 	title: {
 		template: "%s | Better Auth",
 		default: "Better Auth",
 	},
-	description: "The most comprehensive authentication library for TypeScript.",
+	description:
+		"The most comprehensive authentication framework for TypeScript.",
 	metadataBase: baseUrl,
 });
 
@@ -58,6 +60,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 								: undefined,
 						}}
 					>
+						<AnchorScroll />
 						<NavbarProvider>
 							<Navbar />
 							{children}

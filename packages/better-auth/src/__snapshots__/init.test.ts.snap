@@ -16,6 +16,8 @@ exports[`init > should match config 1`] = `
         "adapterId": "kysely",
         "adapterName": "Kysely Adapter",
         "debugLogs": false,
+        "disableTransformInput": false,
+        "disableTransformOutput": false,
         "supportsBooleans": false,
         "supportsDates": false,
         "supportsJSON": false,
@@ -109,6 +111,10 @@ exports[`init > should match config 1`] = `
     "warn": [Function],
   },
   "newSession": null,
+  "oauthConfig": {
+    "skipStateCookieCheck": false,
+    "storeStateStrategy": "database",
+  },
   "options": {
     "basePath": "/api/auth",
     "baseURL": "http://localhost:3000",
@@ -148,6 +154,8 @@ exports[`init > should match config 1`] = `
     "updateAge": 86400,
   },
   "setNewSession": [Function],
+  "skipCSRFCheck": false,
+  "skipOriginCheck": true,
   "socialProviders": [],
   "tables": {
     "account": {

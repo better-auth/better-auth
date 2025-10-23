@@ -3,6 +3,8 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { memoryAdapter, type MemoryDB } from "../../adapters/memory-adapter";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =
@@ -64,12 +66,7 @@ describe("session", async () => {
 				password: testUser.password,
 			},
 			{
-				onSuccess(context) {
-					const header = context.response.headers.get("set-cookie");
-					const cookies = parseSetCookieHeader(header || "");
-					const signedCookie = cookies.get("better-auth.session_token")?.value;
-					headers.set("cookie", `better-auth.session_token=${signedCookie}`);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 
@@ -124,9 +121,9 @@ describe("session", async () => {
 				updateAge: 0,
 			},
 		});
-		const { runWithDefaultUser } = await signInWithTestUser();
+		const { runWithUser } = await signInWithTestUser();
 
-		await runWithDefaultUser(async () => {
+		await runWithUser(async () => {
 			const session = await client.getSession();
 
 			vi.useFakeTimers();
@@ -150,18 +147,7 @@ describe("session", async () => {
 				rememberMe: false,
 			},
 			{
-				onSuccess(context) {
-					const header = context.response.headers.get("set-cookie");
-					const cookies = parseSetCookieHeader(header || "");
-					const signedCookie = cookies.get("better-auth.session_token")?.value;
-					const dontRememberMe = cookies.get(
-						"better-auth.dont_remember",
-					)?.value;
-					headers.set(
-						"cookie",
-						`better-auth.session_token=${signedCookie};better-auth.dont_remember=${dontRememberMe}`,
-					);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		const data = await client.getSession({
@@ -210,12 +196,7 @@ describe("session", async () => {
 						httponly: true,
 						samesite: "lax",
 					});
-					headers.set(
-						"cookie",
-						`better-auth.session_token=${
-							cookies.get("better-auth.session_token")?.value
-						}`,
-					);
+					cookieSetter(headers)(context);
 				},
 			},
 		);
@@ -244,12 +225,7 @@ describe("session", async () => {
 				password: testUser.password,
 			},
 			{
-				onSuccess(context) {
-					const header = context.response.headers.get("set-cookie");
-					const cookies = parseSetCookieHeader(header || "");
-					const signedCookie = cookies.get("better-auth.session_token")?.value;
-					headers.set("cookie", `better-auth.session_token=${signedCookie}`);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		const data = await client.getSession({
@@ -338,48 +314,58 @@ describe("session", async () => {
 	});
 
 	it("should return session headers", async () => {
-		const signInRes = await auth.api.signInEmail({
-			body: {
-				email: testUser.email,
-				password: testUser.password,
+		const context = await auth.$context;
+		await runWithEndpointContext(
+			{
+				context,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				const signInRes = await auth.api.signInEmail({
+					body: {
+						email: testUser.email,
+						password: testUser.password,
+					},
+					returnHeaders: true,
+				});
+
+				const signInHeaders = new Headers();
+				signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+				const sessionResWithoutHeaders = await auth.api.getSession({
+					headers: signInHeaders,
+				});
+
+				const sessionResWithHeaders = await auth.api.getSession({
+					headers: signInHeaders,
+					returnHeaders: true,
+				});
+
+				expect(sessionResWithHeaders.headers).toBeDefined();
+				expect(sessionResWithHeaders.response?.user).toBeDefined();
+				expect(sessionResWithHeaders.response?.session).toBeDefined();
+				expectTypeOf({
+					headers: sessionResWithHeaders.headers,
+				}).toMatchObjectType<{
+					headers: Headers;
+				}>();
+
+				// @ts-expect-error: headers should not exist on sessionResWithoutHeaders
+				expect(sessionResWithoutHeaders.headers).toBeUndefined();
+
+				const sessionResWithHeadersAndAsResponse = await auth.api.getSession({
+					headers: signInHeaders,
+					returnHeaders: true,
+					asResponse: true,
+				});
+
+				expectTypeOf({
+					res: sessionResWithHeadersAndAsResponse,
+				}).toMatchObjectType<{ res: Response }>();
+
+				expect(sessionResWithHeadersAndAsResponse.ok).toBe(true);
+				expect(sessionResWithHeadersAndAsResponse.status).toBe(200);
 			},
-			returnHeaders: true,
-		});
-
-		const signInHeaders = new Headers();
-		signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]!);
-
-		const sessionResWithoutHeaders = await auth.api.getSession({
-			headers: signInHeaders,
-		});
-
-		const sessionResWithHeaders = await auth.api.getSession({
-			headers: signInHeaders,
-			returnHeaders: true,
-		});
-
-		expect(sessionResWithHeaders.headers).toBeDefined();
-		expect(sessionResWithHeaders.response?.user).toBeDefined();
-		expect(sessionResWithHeaders.response?.session).toBeDefined();
-		expectTypeOf({ headers: sessionResWithHeaders.headers }).toMatchObjectType<{
-			headers: Headers;
-		}>();
-
-		// @ts-expect-error: headers should not exist on sessionResWithoutHeaders
-		expect(sessionResWithoutHeaders.headers).toBeUndefined();
-
-		const sessionResWithHeadersAndAsResponse = await auth.api.getSession({
-			headers: signInHeaders,
-			returnHeaders: true,
-			asResponse: true,
-		});
-
-		expectTypeOf({
-			res: sessionResWithHeadersAndAsResponse,
-		}).toMatchObjectType<{ res: Response }>();
-
-		expect(sessionResWithHeadersAndAsResponse.ok).toBe(true);
-		expect(sessionResWithHeadersAndAsResponse.status).toBe(200);
+		);
 	});
 });
 
@@ -409,9 +395,9 @@ describe("session storage", async () => {
 	it("should store session in secondary storage", async () => {
 		//since the instance creates a session on init, we expect the store to have 2 item (1 for session and 1 for active sessions record for the user)
 		expect(store.size).toBe(0);
-		const { runWithDefaultUser } = await signInWithTestUser();
+		const { runWithUser } = await signInWithTestUser();
 		expect(store.size).toBe(2);
-		await runWithDefaultUser(async () => {
+		await runWithUser(async () => {
 			const session = await client.getSession();
 			expect(session.data).toMatchObject({
 				session: {
@@ -435,16 +421,16 @@ describe("session storage", async () => {
 	});
 
 	it("should list sessions", async () => {
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const response = await client.listSessions();
 			expect(response.data?.length).toBe(1);
 		});
 	});
 
 	it("revoke session and list sessions", async () => {
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const session = await client.getSession();
 			expect(session.data).not.toBeNull();
 			expect(session.data?.session?.token).toBeDefined();
@@ -462,8 +448,8 @@ describe("session storage", async () => {
 	});
 
 	it("should revoke session", async () => {
-		const { runWithDefaultUser } = await signInWithTestUser();
-		await runWithDefaultUser(async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const session = await client.getSession();
 			expect(session.data).not.toBeNull();
 			const res = await client.revokeSession({
@@ -496,6 +482,7 @@ describe("cookie cache", async () => {
 			},
 			cookieCache: {
 				enabled: true,
+				strategy: "base64-hmac", // Use legacy strategy for these tests
 			},
 		},
 	});
@@ -512,18 +499,7 @@ describe("cookie cache", async () => {
 				password: testUser.password,
 			},
 			{
-				onSuccess(context) {
-					const header = context.response.headers.get("set-cookie");
-					const cookies = parseSetCookieHeader(header || "");
-					headers.set(
-						"cookie",
-						`better-auth.session_token=${
-							cookies.get("better-auth.session_token")?.value
-						};better-auth.session_data=${
-							cookies.get("better-auth.session_data")?.value
-						}`,
-					);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		expect(fn).toHaveBeenCalledTimes(1);
@@ -546,9 +522,16 @@ describe("cookie cache", async () => {
 			},
 		});
 		expect(s.data?.user.emailVerified).toBe(false);
-		await ctx.internalAdapter.updateUser(s.data?.user.id || "", {
-			emailVerified: true,
-		});
+		await runWithEndpointContext(
+			{
+				context: ctx,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				await ctx.internalAdapter.updateUser(s.data?.user.id || "", {
+					emailVerified: true,
+				});
+			},
+		);
 		expect(fn).toHaveBeenCalledTimes(1);
 
 		const session = await client.getSession({
@@ -594,38 +577,141 @@ describe("cookie cache", async () => {
 	});
 });
 
-describe("getSession type tests", async () => {
-	const { auth } = await getTestInstance();
+describe("cookie cache with JWT strategy", async () => {
+	const { auth, client, testUser, cookieSetter } = await getTestInstance({
+		session: {
+			additionalFields: {
+				sensitiveData: {
+					type: "string",
+					returned: false,
+					defaultValue: "sensitive-data",
+				},
+			},
+			cookieCache: {
+				enabled: true,
+				strategy: "jwt", // Use JWT (JWE with A256CBC-HS512 + HKDF)
+			},
+		},
+	});
+	const ctx = await auth.$context;
 
-	it("has parameters", () => {
-		type Params = Parameters<typeof auth.api.getSession>[0]["headers"];
+	const fn = vi.spyOn(ctx.adapter, "findOne");
 
-		expectTypeOf<Params>().toEqualTypeOf<
-			[string, string][] | Record<string, string> | Headers
-		>();
+	const headers = new Headers();
+	it("should cache cookies with JWT strategy", async () => {
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		expect(fn).toHaveBeenCalledTimes(1);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.session).not.toHaveProperty("sensitiveData");
+		expect(session.data).not.toBeNull();
+		expect(fn).toHaveBeenCalledTimes(1); // Should still be 1 (cache hit)
 	});
 
-	it("can return a response", () => {
-		type Returns = Awaited<ReturnType<typeof auth.api.getSession<true, false>>>;
+	it("should disable cookie cache with JWT strategy", async () => {
+		const ctx = await auth.$context;
 
-		expectTypeOf<{ returns: Returns }>().toMatchObjectType<{
-			returns: Response;
-		}>();
+		const s = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(s.data?.user.emailVerified).toBe(false);
+		await runWithEndpointContext(
+			{
+				context: ctx,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				await ctx.internalAdapter.updateUser(s.data?.user.id || "", {
+					emailVerified: true,
+				});
+			},
+		);
+		expect(fn).toHaveBeenCalledTimes(1);
+
+		const session = await client.getSession({
+			query: {
+				disableCookieCache: true,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user.emailVerified).toBe(true);
+		expect(session.data).not.toBeNull();
+		expect(fn).toHaveBeenCalledTimes(3); // Database hit when cache disabled
 	});
 
-	it("can return headers", () => {
-		type Returns = Awaited<ReturnType<typeof auth.api.getSession<false, true>>>;
-
-		expectTypeOf<{ returns: Returns["headers"] }>().toMatchObjectType<{
-			returns: Headers;
-		}>();
+	it("should reset JWT cache when expires", async () => {
+		expect(fn).toHaveBeenCalledTimes(3);
+		await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 10); // 10 minutes
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+				},
+			},
+		});
+		expect(fn).toHaveBeenCalledTimes(5);
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+				},
+			},
+		});
+		expect(fn).toHaveBeenCalledTimes(5); // Should use refreshed cache
 	});
 
-	it("asResponse takes prescedence", () => {
-		type Returns = Awaited<ReturnType<typeof auth.api.getSession<true, true>>>;
+	it("should handle multiple concurrent requests with JWT cache", async () => {
+		vi.useRealTimers();
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
 
-		expectTypeOf<{ returns: Returns }>().toMatchObjectType<{
-			returns: Response;
-		}>();
+		// Make multiple concurrent requests
+		const promises = Array(5)
+			.fill(0)
+			.map(() =>
+				client.getSession({
+					fetchOptions: {
+						headers,
+					},
+				}),
+			);
+
+		const results = await Promise.all(promises);
+
+		// All should return valid sessions
+		results.forEach((result) => {
+			expect(result.data).not.toBeNull();
+			expect(result.data?.user.email).toBe(testUser.email);
+		});
 	});
 });

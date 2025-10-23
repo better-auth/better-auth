@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createAuthEndpoint, createAuthMiddleware } from "./call";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 import { init } from "../init";
 import * as z from "zod";

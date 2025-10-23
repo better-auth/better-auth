@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "../../plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import type { CaptchaOptions } from "./types";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
@@ -55,6 +55,13 @@ export const captcha = (options: CaptchaOptions) =>
 
 				if (options.provider === Providers.HCAPTCHA) {
 					return await verifyHandlers.hCaptcha({
+						...handlerParams,
+						siteKey: options.siteKey,
+					});
+				}
+
+				if (options.provider === Providers.CAPTCHAFOX) {
+					return await verifyHandlers.captchaFox({
 						...handlerParams,
 						siteKey: options.siteKey,
 					});

@@ -2,24 +2,26 @@ import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
 import * as z from "zod";
-import { createAuthEndpoint, sessionMiddleware } from "../../api";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { setSessionCookie } from "../../cookies";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
-	type OAuth2Tokens,
-	type OAuthProvider,
-	type OAuth2UserInfo,
-} from "../../oauth2";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { refreshAccessToken } from "../../oauth2/refresh-access-token";
-import { generateState, parseState } from "../../oauth2/state";
+} from "@better-auth/core/oauth2";
 import type {
-	BetterAuthPlugin,
-	GenericEndpointContext,
-	User,
-} from "../../types";
+	OAuth2Tokens,
+	OAuth2UserInfo,
+	OAuthProvider,
+} from "@better-auth/core/oauth2";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { refreshAccessToken } from "@better-auth/core/oauth2";
+import { generateState, parseState } from "../../oauth2/state";
+import type { User } from "../../types";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { sessionMiddleware } from "../../api";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -110,7 +112,9 @@ export interface GenericOAuthConfig {
 	 * Additional search-params to add to the tokenUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	tokenUrlParams?: Record<string, string>;
+	tokenUrlParams?:
+		| Record<string, string>
+		| ((ctx: GenericEndpointContext) => Record<string, string>);
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
@@ -203,13 +207,14 @@ async function getUserInfo(
 	};
 }
 
+const ERROR_CODES = defineErrorCodes({
+	INVALID_OAUTH_CONFIGURATION: "Invalid OAuth configuration",
+});
+
 /**
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
 export const genericOAuth = (options: GenericOAuthOptions) => {
-	const ERROR_CODES = {
-		INVALID_OAUTH_CONFIGURATION: "Invalid OAuth configuration",
-	} as const;
 	return {
 		id: "generic-oauth",
 		init: (ctx) => {
@@ -628,6 +633,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration.",
 							});
 						}
+						const additionalParams =
+							typeof provider.tokenUrlParams === "function"
+								? provider.tokenUrlParams(ctx)
+								: provider.tokenUrlParams;
 						tokens = await validateAuthorizationCode({
 							headers: provider.authorizationHeaders,
 							code,
@@ -640,7 +649,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: provider.authentication,
-							additionalParams: provider.tokenUrlParams,
+							additionalParams,
 						});
 					} catch (e) {
 						ctx.context.logger.error(

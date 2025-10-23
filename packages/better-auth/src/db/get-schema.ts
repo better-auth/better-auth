@@ -1,5 +1,5 @@
 import { getAuthTables } from ".";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 
 export function getSchema(config: BetterAuthOptions) {
@@ -21,6 +21,7 @@ export function getSchema(config: BetterAuthOptions) {
 				const refTable = tables[field.references.model];
 				if (refTable) {
 					actualFields[field.fieldName || key]!.references = {
+						...field.references,
 						model: refTable.modelName,
 						field: field.references.field,
 					};

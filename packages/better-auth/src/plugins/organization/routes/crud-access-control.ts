@@ -1,16 +1,19 @@
 import * as z from "zod";
-import { APIError, createAuthEndpoint } from "../../../api";
+import { APIError } from "../../../api";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OrganizationOptions } from "../types";
 import { orgSessionMiddleware } from "../call";
 import { hasPermission } from "../has-permission";
 import type { Member, OrganizationRole } from "../schema";
-import type { GenericEndpointContext, User, Where } from "../../../types";
+import type { User } from "../../../types";
+import type { Where } from "@better-auth/core/db/adapter";
 import type { AccessControl } from "../../access";
 import {
 	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 	? T extends {} // is assignable to {}
@@ -85,7 +88,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					body: {} as {
-						organizationId?: string;
+						organizationId?: string | undefined;
 						role: string;
 						permission: Record<string, string[]>;
 					} & (IsExactlyEmptyObject<AdditionalFields> extends true
@@ -289,12 +292,12 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				.and(
 					z.union([
 						z.object({
-							roleName: z.string().meta({
+							roleName: z.string().nonempty().meta({
 								description: "The name of the role to delete",
 							}),
 						}),
 						z.object({
-							roleId: z.string().meta({
+							roleId: z.string().nonempty().meta({
 								description: "The id of the role to delete",
 							}),
 						}),
@@ -304,14 +307,11 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 			use: [orgSessionMiddleware],
 			metadata: {
 				$Infer: {
-					body: {} as (
-						| {
-								roleName: string;
-						  }
-						| {
-								roleId: string;
-						  }
-					) & { organizationId?: string },
+					body: {} as {
+						roleName?: string | undefined;
+						roleId?: string | undefined;
+						organizationId?: string | undefined;
+					},
 				},
 			},
 		},
@@ -389,7 +389,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			if ("roleName" in ctx.body) {
+			if (ctx.body.roleName) {
 				const roleName = ctx.body.roleName;
 				const defaultRoles = options.roles
 					? Object.keys(options.roles)
@@ -410,20 +410,29 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			let condition: Where;
-			if ("roleName" in ctx.body) {
+			if (ctx.body.roleName) {
 				condition = {
 					field: "role",
 					value: ctx.body.roleName,
 					operator: "eq",
 					connector: "AND",
 				};
-			} else {
+			} else if (ctx.body.roleId) {
 				condition = {
 					field: "id",
 					value: ctx.body.roleId,
 					operator: "eq",
 					connector: "AND",
 				};
+			} else {
+				// shouldn't be able to reach here given the schema validation.
+				// But just in case, throw an error.
+				ctx.context.logger.error(
+					`[Dynamic Access Control] The role name/id is not provided in the request body.`,
+				);
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				});
 			}
 			const existingRoleInDB =
 				await ctx.context.adapter.findOne<OrganizationRole>({
@@ -607,12 +616,12 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				.and(
 					z.union([
 						z.object({
-							roleName: z.string().meta({
+							roleName: z.string().nonempty().meta({
 								description: "The name of the role to read",
 							}),
 						}),
 						z.object({
-							roleId: z.string().meta({
+							roleId: z.string().nonempty().meta({
 								description: "The id of the role to read",
 							}),
 						}),
@@ -622,8 +631,10 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					query: {} as {
-						organizationId?: string;
-					} & ({ roleName: string } | { roleId: string }),
+						organizationId?: string | undefined;
+						roleName?: string | undefined;
+						roleId?: string | undefined;
+					},
 				},
 			},
 		},
@@ -698,20 +709,29 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			let condition: Where;
-			if ("roleName" in ctx.query) {
+			if (ctx.query.roleName) {
 				condition = {
 					field: "role",
 					value: ctx.query.roleName,
 					operator: "eq",
 					connector: "AND",
 				};
-			} else {
+			} else if (ctx.query.roleId) {
 				condition = {
 					field: "id",
 					value: ctx.query.roleId,
 					operator: "eq",
 					connector: "AND",
 				};
+			} else {
+				// shouldn't be able to reach here given the schema validation.
+				// But just in case, throw an error.
+				ctx.context.logger.error(
+					`[Dynamic Access Control] The role name/id is not provided in the request query.`,
+				);
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				});
 			}
 			let role = await ctx.context.adapter.findOne<OrganizationRole>({
 				model: "organizationRole",
@@ -779,12 +799,12 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				.and(
 					z.union([
 						z.object({
-							roleName: z.string().meta({
+							roleName: z.string().nonempty().meta({
 								description: "The name of the role to update",
 							}),
 						}),
 						z.object({
-							roleId: z.string().meta({
+							roleId: z.string().nonempty().meta({
 								description: "The id of the role to update",
 							}),
 						}),
@@ -793,12 +813,14 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					body: {} as {
-						organizationId?: string;
+						organizationId?: string | undefined;
 						data: {
-							permission?: Record<string, string[]>;
-							roleName?: string;
+							permission?: Record<string, string[]> | undefined;
+							roleName?: string | undefined;
 						} & AdditionalFields;
-					} & ({ roleName: string } | { roleId: string }),
+						roleName?: string | undefined;
+						roleId?: string | undefined;
+					},
 				},
 			},
 			use: [orgSessionMiddleware],
@@ -881,20 +903,29 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			let condition: Where;
-			if ("roleName" in ctx.body) {
+			if (ctx.body.roleName) {
 				condition = {
 					field: "role",
 					value: ctx.body.roleName,
 					operator: "eq",
 					connector: "AND",
 				};
-			} else {
+			} else if (ctx.body.roleId) {
 				condition = {
 					field: "id",
 					value: ctx.body.roleId,
 					operator: "eq",
 					connector: "AND",
 				};
+			} else {
+				// shouldn't be able to reach here given the schema validation.
+				// But just in case, throw an error.
+				ctx.context.logger.error(
+					`[Dynamic Access Control] The role name/id is not provided in the request body.`,
+				);
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				});
 			}
 			let role = await ctx.context.adapter.findOne<OrganizationRole>({
 				model: "organizationRole",
