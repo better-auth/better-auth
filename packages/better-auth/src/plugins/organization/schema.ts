@@ -3,15 +3,12 @@ import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./types";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import type { Prettify } from "better-call";
-import type {
-	BetterAuthPluginDBSchema,
-	BetterAuthPluginDBSchemaFields,
-} from "@better-auth/core/db";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 type InferSchema<
 	Schema extends BetterAuthPluginDBSchema,
 	TableName extends string,
-	DefaultFields extends BetterAuthPluginDBSchemaFields,
+	DefaultFields,
 > = {
 	modelName: Schema[TableName] extends { modelName: infer M }
 		? M extends string
@@ -23,7 +20,7 @@ type InferSchema<
 	} & (Schema[TableName] extends { additionalFields: infer F } ? F : {});
 };
 
-interface OrganizationRoleDefaultFields extends BetterAuthPluginDBSchemaFields {
+interface OrganizationRoleDefaultFields {
 	organizationId: {
 		type: "string";
 		required: true;
@@ -51,7 +48,7 @@ interface OrganizationRoleDefaultFields extends BetterAuthPluginDBSchemaFields {
 	};
 }
 
-interface TeamDefaultFields extends BetterAuthPluginDBSchemaFields {
+interface TeamDefaultFields {
 	name: {
 		type: "string";
 		required: true;
@@ -74,7 +71,7 @@ interface TeamDefaultFields extends BetterAuthPluginDBSchemaFields {
 	};
 }
 
-interface TeamMemberDefaultFields extends BetterAuthPluginDBSchemaFields {
+interface TeamMemberDefaultFields {
 	teamId: {
 		type: "string";
 		required: true;
@@ -97,7 +94,7 @@ interface TeamMemberDefaultFields extends BetterAuthPluginDBSchemaFields {
 	};
 }
 
-interface OrganizationDefaultFields extends BetterAuthPluginDBSchemaFields {
+interface OrganizationDefaultFields {
 	name: {
 		type: "string";
 		required: true;
@@ -123,7 +120,7 @@ interface OrganizationDefaultFields extends BetterAuthPluginDBSchemaFields {
 	};
 }
 
-interface MemberDefaultFields extends BetterAuthPluginDBSchemaFields {
+interface MemberDefaultFields {
 	organizationId: {
 		type: "string";
 		required: true;
@@ -151,7 +148,7 @@ interface MemberDefaultFields extends BetterAuthPluginDBSchemaFields {
 	};
 }
 
-interface InvitationDefaultFields extends BetterAuthPluginDBSchemaFields {
+interface InvitationDefaultFields {
 	organizationId: {
 		type: "string";
 		required: true;
@@ -195,7 +192,7 @@ interface InvitationDefaultFields extends BetterAuthPluginDBSchemaFields {
 	};
 }
 
-interface SessionDefaultFields extends BetterAuthPluginDBSchemaFields {
+interface SessionDefaultFields {
 	activeOrganizationId: {
 		type: "string";
 		required: false;
