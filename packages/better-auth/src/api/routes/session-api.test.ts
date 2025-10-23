@@ -66,12 +66,7 @@ describe("session", async () => {
 				password: testUser.password,
 			},
 			{
-				onSuccess(context) {
-					const header = context.response.headers.get("set-cookie");
-					const cookies = parseSetCookieHeader(header || "");
-					const signedCookie = cookies.get("better-auth.session_token")?.value;
-					headers.set("cookie", `better-auth.session_token=${signedCookie}`);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 
@@ -152,18 +147,7 @@ describe("session", async () => {
 				rememberMe: false,
 			},
 			{
-				onSuccess(context) {
-					const header = context.response.headers.get("set-cookie");
-					const cookies = parseSetCookieHeader(header || "");
-					const signedCookie = cookies.get("better-auth.session_token")?.value;
-					const dontRememberMe = cookies.get(
-						"better-auth.dont_remember",
-					)?.value;
-					headers.set(
-						"cookie",
-						`better-auth.session_token=${signedCookie};better-auth.dont_remember=${dontRememberMe}`,
-					);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		const data = await client.getSession({
@@ -212,12 +196,7 @@ describe("session", async () => {
 						httponly: true,
 						samesite: "lax",
 					});
-					headers.set(
-						"cookie",
-						`better-auth.session_token=${
-							cookies.get("better-auth.session_token")?.value
-						}`,
-					);
+					cookieSetter(headers)(context);
 				},
 			},
 		);
@@ -246,12 +225,7 @@ describe("session", async () => {
 				password: testUser.password,
 			},
 			{
-				onSuccess(context) {
-					const header = context.response.headers.get("set-cookie");
-					const cookies = parseSetCookieHeader(header || "");
-					const signedCookie = cookies.get("better-auth.session_token")?.value;
-					headers.set("cookie", `better-auth.session_token=${signedCookie}`);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		const data = await client.getSession({
@@ -525,18 +499,7 @@ describe("cookie cache", async () => {
 				password: testUser.password,
 			},
 			{
-				onSuccess(context) {
-					const header = context.response.headers.get("set-cookie");
-					const cookies = parseSetCookieHeader(header || "");
-					headers.set(
-						"cookie",
-						`better-auth.session_token=${
-							cookies.get("better-auth.session_token")?.value
-						};better-auth.session_data=${
-							cookies.get("better-auth.session_data")?.value
-						}`,
-					);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		expect(fn).toHaveBeenCalledTimes(1);
@@ -632,7 +595,6 @@ describe("cookie cache with JWT strategy", async () => {
 	});
 	const ctx = await auth.$context;
 
-	it("should cache cookies with JWT strategy", async () => {});
 	const fn = vi.spyOn(ctx.adapter, "findOne");
 
 	const headers = new Headers();
@@ -643,18 +605,7 @@ describe("cookie cache with JWT strategy", async () => {
 				password: testUser.password,
 			},
 			{
-				onSuccess(context) {
-					const header = context.response.headers.get("set-cookie");
-					const cookies = parseSetCookieHeader(header || "");
-					headers.set(
-						"cookie",
-						`better-auth.session_token=${
-							cookies.get("better-auth.session_token")?.value
-						};better-auth.session_data=${
-							cookies.get("better-auth.session_data")?.value
-						}`,
-					);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		expect(fn).toHaveBeenCalledTimes(1);
@@ -740,18 +691,7 @@ describe("cookie cache with JWT strategy", async () => {
 				password: testUser.password,
 			},
 			{
-				onSuccess(context) {
-					const header = context.response.headers.get("set-cookie");
-					const cookies = parseSetCookieHeader(header || "");
-					headers.set(
-						"cookie",
-						`better-auth.session_token=${
-							cookies.get("better-auth.session_token")?.value
-						};better-auth.session_data=${
-							cookies.get("better-auth.session_data")?.value
-						}`,
-					);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 
