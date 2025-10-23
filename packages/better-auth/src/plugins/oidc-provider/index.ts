@@ -4,7 +4,7 @@ import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	generateRandomString,
@@ -597,7 +597,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 						return ctx.json({
 							access_token: accessToken,
-							token_type: "bearer",
+							token_type: "Bearer",
 							expires_in: opts.accessTokenExpiresIn,
 							refresh_token: newRefreshToken,
 							scope: token.scopes,

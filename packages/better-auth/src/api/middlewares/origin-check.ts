@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import { createAuthMiddleware } from "@better-auth/core/middleware";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { wildcardMatch } from "../../utils/wildcard";
 import { getHost, getOrigin, getProtocol } from "../../utils/url";
 import type { GenericEndpointContext } from "@better-auth/core";
@@ -12,20 +12,30 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	if (ctx.request?.method !== "POST" || !ctx.request) {
 		return;
 	}
+	const headers = ctx.request?.headers;
+	const request = ctx.request;
 	const { body, query, context } = ctx;
-	const originHeader =
-		ctx.headers?.get("origin") || ctx.headers?.get("referer") || "";
+	/**
+	 * We only allow requests with the x-auth-request header set to
+	 * true or application/json content type. This is to prevent
+	 * simple requests from being processed
+	 */
+	if (isSimpleRequest(headers) && !ctx.context.skipCSRFCheck) {
+		throw new APIError("FORBIDDEN", { message: "Invalid request" });
+	}
+	const originHeader = headers?.get("origin") || headers?.get("referer") || "";
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
 	const errorCallbackURL = body?.errorCallbackURL;
 	const newUserCallbackURL = body?.newUserCallbackURL;
+
 	const trustedOrigins: string[] = Array.isArray(context.options.trustedOrigins)
 		? context.trustedOrigins
 		: [
 				...context.trustedOrigins,
-				...((await context.options.trustedOrigins?.(ctx.request)) || []),
+				...((await context.options.trustedOrigins?.(request)) || []),
 			];
-	const usesCookies = ctx.headers?.has("cookie");
+	const useCookies = headers?.has("cookie");
 
 	const matchesPattern = (url: string, pattern: string): boolean => {
 		if (url.startsWith("/")) {
@@ -65,7 +75,14 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 		}
 	};
-	if (usesCookies && !ctx.context.options.advanced?.disableCSRFCheck) {
+	if (
+		useCookies &&
+		!ctx.context.skipCSRFCheck &&
+		!ctx.context.skipOriginCheck
+	) {
+		if (!originHeader || originHeader === "null") {
+			throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
+		}
 		validateURL(originHeader, "origin");
 	}
 	callbackURL && validateURL(callbackURL, "callbackURL");
@@ -137,3 +154,31 @@ export const originCheck = (
 			validateURL(url, "callbackURL");
 		}
 	});
+
+export function isSimpleRequest(headers: Headers) {
+	const SIMPLE_HEADERS = [
+		"accept",
+		"accept-language",
+		"content-language",
+		"content-type",
+	];
+	const SIMPLE_CONTENT_TYPES = [
+		"application/x-www-form-urlencoded",
+		"multipart/form-data",
+		"text/plain",
+	];
+	for (const [key, value] of headers.entries()) {
+		if (!SIMPLE_HEADERS.includes(key.toLowerCase())) {
+			return false; // has non-simple header
+		}
+		if (
+			key.toLowerCase() === "content-type" &&
+			!SIMPLE_CONTENT_TYPES.includes(
+				value?.split(";")[0]?.trim()?.toLowerCase() || "",
+			)
+		) {
+			return false;
+		}
+	}
+	return true;
+}

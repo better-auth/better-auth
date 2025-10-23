@@ -1872,14 +1872,9 @@ Get all teams in an organization:
 ```ts
 type listOrganizationTeams = {
     /**
-    * Query parameters for filtering or scoping the list of teams.
+    * The organization ID which the teams are under to list. Defaults to the user's active organization. 
     */
-    query?: {
-      /**
-      * The organization ID which the teams are under to list. Defaults to the user's active organization. 
-      */
-      organizationId?: string = "organization-id"
-    }
+    organizationId?: string = "organization-id"
 }
 ```
 </APIMethod>
@@ -1973,7 +1968,7 @@ List all teams that the current user is a part of.
 
 List the members of the given team.
 
-<APIMethod path="/organization/list-team-members" method="POST">
+<APIMethod path="/organization/list-team-members" method="POST" forceAsQuery>
 ```ts
 type listTeamMembers = {
     /**

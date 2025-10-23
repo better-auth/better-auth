@@ -6,11 +6,9 @@ import {
 } from "better-call";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { UnionToIntersection } from "../types/helper";
-import { originCheckMiddleware } from "./middlewares/origin-check";
+import { originCheckMiddleware } from "./middlewares";
 import {
 	callbackOAuth,
-	forgetPassword,
-	forgetPasswordCallback,
 	getSession,
 	listSessions,
 	resetPassword,
@@ -37,9 +35,9 @@ import {
 	requestPasswordReset,
 	requestPasswordResetCallback,
 } from "./routes";
-import { ok } from "./routes/ok";
-import { signUpEmail } from "./routes/sign-up";
-import { error } from "./routes/error";
+import { ok } from "./routes";
+import { signUpEmail } from "./routes";
+import { error } from "./routes";
 import { type InternalLogger, logger } from "@better-auth/core/env";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { onRequestRateLimit } from "./rate-limiter";
@@ -212,7 +210,6 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		signOut,
 		signUpEmail: signUpEmail<Option>(),
 		signInEmail,
-		forgetPassword,
 		resetPassword,
 		verifyEmail,
 		sendVerificationEmail,
@@ -221,7 +218,6 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		setPassword,
 		updateUser: updateUser<Option>(),
 		deleteUser,
-		forgetPasswordCallback,
 		requestPasswordReset,
 		requestPasswordResetCallback,
 		listSessions: listSessions<Option>(),
@@ -359,4 +355,4 @@ export {
 	optionsMiddleware,
 	type AuthEndpoint,
 	type AuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";

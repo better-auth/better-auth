@@ -29,7 +29,6 @@ export function createAuthorizationCodeRequest({
 	const requestHeaders: Record<string, any> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
-		"user-agent": "better-auth",
 		...headers,
 	};
 	body.set("grant_type", "authorization_code");
@@ -139,7 +138,6 @@ export async function validateToken(token: string, jwksEndpoint: string) {
 		method: "GET",
 		headers: {
 			accept: "application/json",
-			"user-agent": "better-auth",
 		},
 	});
 	if (error) {

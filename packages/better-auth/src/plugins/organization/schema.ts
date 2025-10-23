@@ -4,6 +4,516 @@ import type { OrganizationOptions } from "./types";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import type { Prettify } from "better-call";
 
+// TODO: we need a better way to define plugin schema and endpoints
+export type OrganizationSchema<O extends OrganizationOptions> =
+	O["dynamicAccessControl"] extends { enabled: true }
+		? {
+				organizationRole: {
+					modelName: O["schema"] extends {
+						organizationRole: { modelName: infer M };
+					}
+						? M extends string
+							? M
+							: string
+						: string;
+					fields: {
+						organizationId: {
+							type: "string";
+							required: true;
+							references: {
+								model: "organization";
+								field: "id";
+							};
+							fieldName?: O["schema"] extends {
+								organizationRole: {
+									fields: { organizationId: infer F };
+								};
+							}
+								? F extends string
+									? F
+									: string
+								: string;
+						};
+						role: {
+							type: "string";
+							required: true;
+							fieldName?: O["schema"] extends {
+								organizationRole: {
+									fields: { role: infer F };
+								};
+							}
+								? F extends string
+									? F
+									: string
+								: string;
+						};
+						permission: {
+							type: "string";
+							required: true;
+							fieldName?: O["schema"] extends {
+								organizationRole: {
+									fields: { permission: infer F };
+								};
+							}
+								? F extends string
+									? F
+									: string
+								: string;
+						};
+						createdAt: {
+							type: "date";
+							required: true;
+							defaultValue: Date;
+							fieldName?: O["schema"] extends {
+								organizationRole: {
+									fields: { createdAt: infer F };
+								};
+							}
+								? F extends string
+									? F
+									: string
+								: string;
+						};
+						updatedAt: {
+							type: "date";
+							required: false;
+							fieldName?: O["schema"] extends {
+								organizationRole: {
+									fields: { updatedAt: infer F };
+								};
+							}
+								? F extends string
+									? F
+									: string
+								: string;
+						};
+					} & (O["schema"] extends {
+						organizationRole: { additionalFields: infer F };
+					}
+						? F
+						: {});
+				};
+			}
+		: {} & (O["teams"] extends { enabled: true }
+				? {
+						team: {
+							modelName: O["schema"] extends { team: { modelName: infer M } }
+								? M extends string
+									? M
+									: string
+								: string;
+							fields: {
+								name: {
+									type: "string";
+									required: true;
+									fieldName?: O["schema"] extends {
+										team: { fields: { name: infer F } };
+									}
+										? F extends string
+											? F
+											: string
+										: string;
+								};
+								organizationId: {
+									type: "string";
+									required: true;
+									references: {
+										model: "organization";
+										field: "id";
+									};
+									fieldName?: O["schema"] extends {
+										team: { fields: { organizationId: infer F } };
+									}
+										? F extends string
+											? F
+											: string
+										: string;
+								};
+								createdAt: {
+									type: "date";
+									required: true;
+									fieldName?: O["schema"] extends {
+										team: { fields: { createdAt: infer F } };
+									}
+										? F extends string
+											? F
+											: string
+										: string;
+								};
+								updatedAt: {
+									type: "date";
+									required: false;
+									fieldName?: O["schema"] extends {
+										team: { fields: { updatedAt: infer F } };
+									}
+										? F extends string
+											? F
+											: string
+										: string;
+								};
+							} & (O["schema"] extends { team: { additionalFields: infer F } }
+								? F
+								: {});
+						};
+						teamMember: {
+							modelName: O["schema"] extends {
+								teamMember: { modelName: infer M };
+							}
+								? M extends string
+									? M
+									: string
+								: string;
+							fields: {
+								teamId: {
+									type: "string";
+									required: true;
+									references: {
+										model: "team";
+										field: "id";
+									};
+									fieldName?: O["schema"] extends {
+										teamMember: { fields: { teamId: infer F } };
+									}
+										? F extends string
+											? F
+											: string
+										: string;
+								};
+								userId: {
+									type: "string";
+									required: true;
+									references: {
+										model: "user";
+										field: "id";
+									};
+									fieldName?: O["schema"] extends {
+										teamMember: { fields: { userId: infer F } };
+									}
+										? F extends string
+											? F
+											: string
+										: string;
+								};
+								createdAt: {
+									type: "date";
+									required: false;
+									fieldName?: O["schema"] extends {
+										teamMember: { fields: { createdAt: infer F } };
+									}
+										? F extends string
+											? F
+											: string
+										: string;
+								};
+							};
+						};
+					}
+				: {}) & {
+					organization: {
+						modelName: O["schema"] extends {
+							organization: { modelName: infer M };
+						}
+							? M extends string
+								? M
+								: string
+							: string;
+						fields: {
+							name: {
+								type: "string";
+								required: true;
+								sortable: true;
+								fieldName?: O["schema"] extends {
+									organization: { fields: { name: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+							slug: {
+								type: "string";
+								required: true;
+								unique: true;
+								sortable: true;
+								fieldName?: O["schema"] extends {
+									organization: { fields: { slug: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+							logo: {
+								type: "string";
+								required: false;
+								fieldName?: O["schema"] extends {
+									organization: { fields: { logo: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+							createdAt: {
+								type: "date";
+								required: true;
+								fieldName?: O["schema"] extends {
+									organization: { fields: { createdAt: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+							updatedAt: {
+								type: "date";
+								required: false;
+								fieldName?: O["schema"] extends {
+									organization: { fields: { updatedAt: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+						};
+					};
+					member: {
+						modelName: O["schema"] extends { member: { modelName: infer M } }
+							? M extends string
+								? M
+								: string
+							: string;
+						fields: {
+							organizationId: {
+								type: "string";
+								required: true;
+								references: {
+									model: "organization";
+									field: "id";
+								};
+								fieldName?: O["schema"] extends {
+									member: { fields: { organizationId: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+							userId: {
+								type: "string";
+								required: true;
+								references: {
+									model: "user";
+									field: "id";
+								};
+								fieldName?: O["schema"] extends {
+									member: { fields: { userId: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+							role: {
+								type: "string";
+								required: true;
+								fieldName?: O["schema"] extends {
+									member: { fields: { role: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+								defaultValue: "member";
+							};
+							createdAt: {
+								type: "date";
+								required: true;
+								fieldName?: O["schema"] extends {
+									member: { fields: { createdAt: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+						} & (O["schema"] extends { member: { additionalFields: infer F } }
+							? F
+							: {});
+					};
+					invitation: {
+						modelName: O["schema"] extends {
+							invitation: { modelName: infer M };
+						}
+							? M
+							: string;
+						fields: {
+							organizationId: {
+								type: "string";
+								required: true;
+								references: {
+									model: "organization";
+									field: "id";
+								};
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { organizationId: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+							email: {
+								type: "string";
+								required: true;
+								sortable: true;
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { email: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+							role: {
+								type: "string";
+								required: true;
+								sortable: true;
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { role: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+							status: {
+								type: "string";
+								required: true;
+								sortable: true;
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { status: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+								defaultValue: "pending";
+							};
+							expiresAt: {
+								type: "date";
+								required: false;
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { expiresAt: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+							createdAt: {
+								type: "date";
+								required: true;
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { createdAt: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+								defaultValue: Date;
+							};
+							inviterId: {
+								type: "string";
+								required: true;
+								references: {
+									model: "user";
+									field: "id";
+								};
+								fieldName?: O["schema"] extends {
+									invitation: { fields: { inviterId: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+						} & (O["schema"] extends {
+							invitation: { additionalFields: infer F };
+						}
+							? F
+							: {}) &
+							O extends { teams: { enabled: true } }
+							? {
+									teamId: {
+										type: "string";
+										required: false;
+										sortable: true;
+										fieldName?: O["schema"] extends {
+											invitation: { fields: { teamId: infer F } };
+										}
+											? F extends string
+												? F
+												: string
+											: string;
+									};
+								}
+							: {};
+					};
+					session: {
+						fields: {
+							activeOrganizationId: {
+								type: "string";
+								required: false;
+								fieldName?: O["schema"] extends {
+									session: { fields: { activeOrganizationId: infer F } };
+								}
+									? F extends string
+										? F
+										: string
+									: string;
+							};
+						} & O["teams"] extends { enabled: true }
+							? {
+									activeTeamId: {
+										type: "string";
+										required: false;
+									};
+									activeOrganizationId: {
+										type: "string";
+										required: false;
+										fieldName?: O["schema"] extends {
+											session: { fields: { activeOrganizationId: infer F } };
+										}
+											? F extends string
+												? F
+												: string
+											: string;
+									};
+								}
+							: {
+									activeOrganizationId: {
+										type: "string";
+										required: false;
+										fieldName?: O["schema"] extends {
+											session: { fields: { activeOrganizationId: infer F } };
+										}
+											? F extends string
+												? F
+												: string
+											: string;
+									};
+								} & (O["schema"] extends {
+									session: { additionalFields: infer F };
+								}
+									? F extends string
+										? F
+										: string
+									: {});
+					};
+				};
+
 export const role = z.string();
 export const invitationStatus = z
 	.enum(["pending", "accepted", "rejected", "canceled"])
