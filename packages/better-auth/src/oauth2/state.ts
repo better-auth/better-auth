@@ -185,7 +185,8 @@ export async function parseState(c: GenericEndpointContext) {
 	}
 
 	if (!parsedData.errorURL) {
-		parsedData.errorURL = `${c.context.baseURL}/error`;
+		parsedData.errorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 	}
 
 	// Check expiration
