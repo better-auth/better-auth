@@ -108,7 +108,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 				if (sessionDataCookie) {
 					const strategy =
-						ctx.context.options.session?.cookieCache?.strategy || "jwt";
+						ctx.context.options.session?.cookieCache?.strategy || "base64-hmac";
 
 					if (strategy === "jwt") {
 						// Decode JWT (JWE with A256CBC-HS512 + HKDF)

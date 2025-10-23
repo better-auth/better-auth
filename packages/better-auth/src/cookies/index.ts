@@ -138,7 +138,7 @@ export async function setCookieCache(
 
 		const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
 		const strategy =
-			ctx.context.options.session?.cookieCache?.strategy || "jwt";
+			ctx.context.options.session?.cookieCache?.strategy || "base64-hmac";
 
 		let data: string;
 
@@ -351,7 +351,7 @@ export const getCookieCache = async <
 			);
 		}
 
-		const strategy = config?.strategy || "jwt";
+		const strategy = config?.strategy || "base64-hmac";
 
 		if (strategy === "jwt") {
 			// Use JWT strategy with JWE (A256CBC-HS512 + HKDF)

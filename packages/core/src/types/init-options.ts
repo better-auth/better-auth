@@ -709,10 +709,10 @@ export type BetterAuthOptions = {
 			/**
 			 * Strategy for encoding/decoding cookie cache
 			 *
-			 * - "base64-hmac": Uses base64url encoding with HMAC-SHA256 signature (legacy, less secure)
+			 * - "base64-hmac": Uses base64url encoding with HMAC-SHA256 signature
 			 * - "jwt": Uses JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation for secure encrypted tokens
 			 *
-			 * @default "jwt"
+			 * @default "base64-hmac"
 			 */
 			strategy?: "base64-hmac" | "jwt";
 			/**
@@ -725,7 +725,7 @@ export type BetterAuthOptions = {
 			 * When enabled, if the cached data is older than the freshness threshold,
 			 * it will be refreshed from the database to ensure data consistency.
 			 *
-			 * @default 60 seconds
+			 * @default false
 			 */
 			freshCache?: boolean | number;
 		};
