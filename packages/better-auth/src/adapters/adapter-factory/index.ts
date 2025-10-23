@@ -19,6 +19,10 @@ import type {
 	ResolvedJoin,
 } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
+import { initGetDefaultModelName } from "./get-default-model-name";
+import { initGetDefaultFieldName } from "./get-default-field-name";
+import { initGetModelName } from "./get-model-name";
+import { initGetFieldName } from "./get-field-name";
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
@@ -67,131 +71,6 @@ export const createAdapterFactory =
 
 		// End-user's Better-Auth instance's schema
 		const schema = getAuthTables(options);
-
-		/**
-		 * This function helps us get the default field name from the schema defined by devs.
-		 * Often times, the user will be using the `fieldName` which could had been customized by the users.
-		 * This function helps us get the actual field name useful to match against the schema. (eg: schema[model].fields[field])
-		 *
-		 * If it's still unclear what this does:
-		 *
-		 * 1. User can define a custom fieldName.
-		 * 2. When using a custom fieldName, doing something like `schema[model].fields[field]` will not work.
-		 */
-		const getDefaultFieldName = ({
-			field,
-			model: unsafe_model,
-		}: {
-			model: string;
-			field: string;
-		}) => {
-			// Plugin `schema`s can't define their own `id`. Better-auth auto provides `id` to every schema model.
-			// Given this, we can't just check if the `field` (that being `id`) is within the schema's fields, since it is never defined.
-			// So we check if the `field` is `id` and if so, we return `id` itself. Otherwise, we return the `field` from the schema.
-			if (field === "id" || field === "_id") {
-				return "id";
-			}
-			const model = getDefaultModelName(unsafe_model); // Just to make sure the model name is correct.
-
-			let f = schema[model]?.fields[field];
-			if (!f) {
-				const result = Object.entries(schema[model]!.fields!).find(
-					([_, f]) => f.fieldName === field,
-				);
-				if (result) {
-					f = result[1];
-					field = result[0];
-				}
-			}
-			if (!f) {
-				debugLog(`Field ${field} not found in model ${model}`);
-				debugLog(`Schema:`, schema);
-				throw new BetterAuthError(`Field ${field} not found in model ${model}`);
-			}
-			return field;
-		};
-
-		/**
-		 * This function helps us get the default model name from the schema defined by devs.
-		 * Often times, the user will be using the `modelName` which could had been customized by the users.
-		 * This function helps us get the actual model name useful to match against the schema. (eg: schema[model])
-		 *
-		 * If it's still unclear what this does:
-		 *
-		 * 1. User can define a custom modelName.
-		 * 2. When using a custom modelName, doing something like `schema[model]` will not work.
-		 * 3. Using this function helps us get the actual model name based on the user's defined custom modelName.
-		 */
-		const getDefaultModelName = (model: string) => {
-			// It's possible this `model` could had applied `usePlural`.
-			// Thus we'll try the search but without the trailing `s`.
-			if (config.usePlural && model.charAt(model.length - 1) === "s") {
-				let pluralessModel = model.slice(0, -1);
-				let m = schema[pluralessModel] ? pluralessModel : undefined;
-				if (!m) {
-					m = Object.entries(schema).find(
-						([_, f]) => f.modelName === pluralessModel,
-					)?.[0];
-				}
-
-				if (m) {
-					return m;
-				}
-			}
-
-			let m = schema[model] ? model : undefined;
-			if (!m) {
-				m = Object.entries(schema).find(([_, f]) => f.modelName === model)?.[0];
-			}
-
-			if (!m) {
-				debugLog(`Model "${model}" not found in schema`);
-				debugLog(`Schema:`, schema);
-				throw new BetterAuthError(`Model "${model}" not found in schema`);
-			}
-			return m;
-		};
-
-		/**
-		 * Users can overwrite the default model of some tables. This function helps find the correct model name.
-		 * Furthermore, if the user passes `usePlural` as true in their adapter config,
-		 * then we should return the model name ending with an `s`.
-		 */
-		const getModelName = (model: string) => {
-			const defaultModelKey = getDefaultModelName(model);
-			const usePlural = config && config.usePlural;
-			const useCustomModelName =
-				schema &&
-				schema[defaultModelKey] &&
-				schema[defaultModelKey].modelName !== model;
-
-			if (useCustomModelName) {
-				return usePlural
-					? `${schema[defaultModelKey]!.modelName}s`
-					: schema[defaultModelKey]!.modelName;
-			}
-
-			return usePlural ? `${model}s` : model;
-		};
-		/**
-		 * Get the field name which is expected to be saved in the database based on the user's schema.
-		 *
-		 * This function is useful if you need to save the field name to the database.
-		 *
-		 * For example, if the user has defined a custom field name for the `user` model, then you can use this function to get the actual field name from the schema.
-		 */
-		function getFieldName({
-			model: model_name,
-			field: field_name,
-		}: {
-			model: string;
-			field: string;
-		}) {
-			const model = getDefaultModelName(model_name);
-			const field = getDefaultFieldName({ model, field: field_name });
-
-			return schema[model]?.fields[field]?.fieldName || field;
-		}
 
 		const debugLog = (...args: any[]) => {
 			if (config.debugLogs === true || typeof config.debugLogs === "object") {
@@ -249,6 +128,29 @@ export const createAdapterFactory =
 				}
 			}
 		};
+
+		const getDefaultModelName = initGetDefaultModelName({
+			usePlural: config.usePlural,
+			schema,
+			debugLog,
+		});
+
+		const getDefaultFieldName = initGetDefaultFieldName({
+			usePlural: config.usePlural,
+			schema,
+			debugLog,
+		});
+
+		const getModelName = initGetModelName({
+			usePlural: config.usePlural,
+			schema,
+			debugLog,
+		});
+		const getFieldName = initGetFieldName({
+			schema,
+			debugLog,
+			usePlural: config.usePlural,
+		});
 
 		const idField = ({
 			customModelName,
@@ -410,7 +312,6 @@ export const createAdapterFactory =
 			unsafe_model: string,
 			select: string[] = [],
 			join: ResolvedJoin | undefined = undefined,
-			isSingle: boolean = false,
 		) => {
 			const transformSingleOutput = async (
 				data: Record<string, any> | null,
@@ -420,7 +321,7 @@ export const createAdapterFactory =
 				if (!data) return null;
 				const newMappedKeys = config.mapKeysTransformOutput ?? {};
 				const transformedData: Record<string, any> = {};
-				const tableSchema = schema[unsafe_model]!.fields;
+				const tableSchema = schema[getDefaultModelName(unsafe_model)]!.fields;
 				const idKey = Object.entries(newMappedKeys).find(
 					([_, v]) => v === "id",
 				)?.[0];
@@ -985,7 +886,6 @@ export const createAdapterFactory =
 						unsafeModel,
 						select,
 						join,
-						true,
 					);
 				}
 				debugLog(
@@ -1055,13 +955,7 @@ export const createAdapterFactory =
 					transformed = await Promise.all(
 						res.map(
 							async (r) =>
-								await transformOutput(
-									r as any,
-									unsafeModel,
-									undefined,
-									join,
-									false,
-								),
+								await transformOutput(r, unsafeModel, undefined, join),
 						),
 					);
 				}

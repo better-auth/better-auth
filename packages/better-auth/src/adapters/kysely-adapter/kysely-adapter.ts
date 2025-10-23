@@ -16,6 +16,7 @@ import type {
 	DBAdapterDebugLogOption,
 	DBAdapter,
 	Where,
+	ResolvedJoin,
 } from "@better-auth/core/db/adapter";
 
 interface KyselyAdapterConfig {
@@ -58,6 +59,8 @@ export const kyselyAdapter = (
 			schema,
 			getDefaultFieldName,
 			getDefaultModelName,
+			getFieldAttributes,
+			getModelName,
 		}) => {
 			const withReturning = async (
 				values: Record<string, any>,
@@ -199,8 +202,8 @@ export const kyselyAdapter = (
 			function processJoinedResults(
 				rows: any[],
 				baseModel: string,
-				joinConfig: Record<string, any> | undefined,
-				allSelectsStr: string[],
+				joinConfig: ResolvedJoin | undefined,
+				allSelectsStr: { joinModel: string; fieldName: string }[],
 			) {
 				if (!joinConfig || !rows.length) {
 					return rows;
@@ -216,7 +219,7 @@ export const kyselyAdapter = (
 
 					// Initialize joined model fields map
 					for (const [joinModel] of Object.entries(joinConfig)) {
-						joinedModelFields[joinModel] = {};
+						joinedModelFields[getModelName(joinModel)] = {};
 					}
 
 					// Distribute all columns - collect complete objects per model
@@ -225,17 +228,14 @@ export const kyselyAdapter = (
 						let assigned = false;
 
 						// Check if this is a joined column
-						for (const selectStr of allSelectsStr) {
-							if (keyStr === selectStr) {
-								// Extract joinModel and fieldName from the key
-								// Format: joined_<joinModel>_<fieldName>
-								const parts = keyStr.substring(8).split("_"); // Remove "_joined_" prefix
-								const joinModel = parts[0]!;
-								const fieldName = parts.slice(1).join("_");
-
-								if (joinedModelFields[joinModel]) {
-									joinedModelFields[joinModel][fieldName] = value;
-								}
+						for (const { joinModel, fieldName } of allSelectsStr) {
+							if (keyStr === `_joined_${joinModel}_${fieldName}`) {
+								joinedModelFields[getModelName(joinModel)]![
+									getFieldName({
+										model: joinModel,
+										field: fieldName,
+									})
+								] = value;
 								assigned = true;
 								break;
 							}
@@ -258,9 +258,12 @@ export const kyselyAdapter = (
 							const defaultModelName = getDefaultModelName(joinModel);
 							const fields = schema[defaultModelName]?.fields;
 							if (!fields) continue;
-							const joinFieldAttr = fields[joinAttr.on.to];
+							const joinFieldAttr = getFieldAttributes({
+								model: defaultModelName,
+								field: joinAttr.on.to,
+							});
 							const isUnique = joinFieldAttr?.unique ?? false;
-							entry[defaultModelName] = isUnique ? null : [];
+							entry[getModelName(joinModel)] = isUnique ? null : [];
 						}
 
 						groupedByMainId.set(mainId, entry);
@@ -271,23 +274,27 @@ export const kyselyAdapter = (
 					// Add joined records to the entry
 					for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
 						const defaultModelName = getDefaultModelName(joinModel);
-						const fields = schema[defaultModelName]?.fields;
-						const joinFieldAttr = fields?.[joinAttr.on.to];
+						const joinFieldAttr = getFieldAttributes({
+							model: defaultModelName,
+							field: joinAttr.on.to,
+						});
 						const isUnique = joinFieldAttr?.unique ?? false;
 
-						const joinedObj = joinedModelFields[joinModel];
-
+						const joinedObj = joinedModelFields[getModelName(joinModel)];
 						if (isUnique) {
-							entry[defaultModelName] = joinedObj;
+							entry[getModelName(joinModel)] = joinedObj;
 						} else {
 							// For arrays, append if not already there (deduplicate by id)
-							if (Array.isArray(entry[defaultModelName]) && joinedObj?.id) {
+							if (
+								Array.isArray(entry[getModelName(defaultModelName)]) &&
+								joinedObj?.id
+							) {
 								if (
-									!entry[defaultModelName].some(
+									!entry[getModelName(defaultModelName)].some(
 										(item: any) => item.id === joinedObj.id,
 									)
 								) {
-									entry[defaultModelName].push(joinedObj);
+									entry[getModelName(defaultModelName)].push(joinedObj);
 								}
 							}
 						}
@@ -339,7 +346,7 @@ export const kyselyAdapter = (
 
 					// Use selectAll which will handle column naming appropriately
 					const allSelects: RawBuilder<unknown>[] = [];
-					const allSelectsStr: string[] = [];
+					const allSelectsStr: { joinModel: string; fieldName: string }[] = [];
 					if (join) {
 						for (const [joinModel, _] of Object.entries(join)) {
 							const fields = schema[getDefaultModelName(joinModel)]?.fields;
@@ -349,9 +356,10 @@ export const kyselyAdapter = (
 								allSelects.push(
 									sql`${sql.ref(joinModel)}.${sql.ref(fieldAttr.fieldName || field)} as ${sql.ref(`_joined_${joinModel}_${fieldAttr.fieldName || field}`)}`,
 								);
-								allSelectsStr.push(
-									`_joined_${joinModel}_${fieldAttr.fieldName || field}`,
-								);
+								allSelectsStr.push({
+									joinModel,
+									fieldName: fieldAttr.fieldName || field,
+								});
 							}
 						}
 						query = query.select(allSelects);
@@ -451,7 +459,7 @@ export const kyselyAdapter = (
 
 					// Use selectAll which will handle column naming appropriately
 					const allSelects: RawBuilder<unknown>[] = [];
-					const allSelectsStr: string[] = [];
+					const allSelectsStr: { joinModel: string; fieldName: string }[] = [];
 					if (join) {
 						for (const [joinModel, _] of Object.entries(join)) {
 							const fields = schema[getDefaultModelName(joinModel)]?.fields;
@@ -461,9 +469,10 @@ export const kyselyAdapter = (
 								allSelects.push(
 									sql`${sql.ref(joinModel)}.${sql.ref(fieldAttr.fieldName || field)} as ${sql.ref(`_joined_${joinModel}_${fieldAttr.fieldName || field}`)}`,
 								);
-								allSelectsStr.push(
-									`_joined_${joinModel}_${fieldAttr.fieldName || field}`,
-								);
+								allSelectsStr.push({
+									joinModel,
+									fieldName: fieldAttr.fieldName || field,
+								});
 							}
 						}
 						query = query.select(allSelects);

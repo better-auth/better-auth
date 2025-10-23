@@ -194,6 +194,93 @@ export const getNormalTestSuiteTests = ({
 				account: accounts.sort((a, b) => a.id.localeCompare(b.id)),
 			});
 		},
+		"findOne - should find a model with modified field name": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						fields: {
+							email: "email_address",
+						},
+					},
+				},
+				true,
+			);
+			const [user] = await insertRandom("user");
+			const result = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: user.email }],
+			});
+			expect(result).toEqual(user);
+			expect(result?.email).toEqual(user.email);
+			expect(true).toEqual(true);
+		},
+		"findOne - should find a model with modified model name": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						modelName: "user_custom",
+					},
+				},
+				true,
+			);
+			const [user] = await insertRandom("user");
+			expect(user).toBeDefined();
+			expect(user).toHaveProperty("id");
+			expect(user).toHaveProperty("name");
+			const result = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: user.email }],
+			});
+			expect(result).toEqual(user);
+			expect(result?.email).toEqual(user.email);
+			expect(true).toEqual(true);
+		},
+		"findOne - should find a model with additional fields": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							customField: {
+								type: "string",
+								input: false,
+								required: true,
+								defaultValue: "default-value",
+							},
+						},
+					},
+				},
+				true,
+			);
+			const [user_] = await insertRandom("user");
+			const user = user_ as User & { customField: string };
+			expect(user).toHaveProperty("customField");
+			expect(user.customField).toBe("default-value");
+			const result = await adapter.findOne<User & { customField: string }>({
+				model: "user",
+				where: [{ field: "customField", value: user.customField }],
+			});
+			expect(result).toEqual(user);
+			expect(result?.customField).toEqual("default-value");
+		},
+		"findOne - should select fields": async () => {
+			const [user] = await insertRandom("user");
+			const result = await adapter.findOne<Pick<User, "email" | "name">>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				select: ["email", "name"],
+			});
+			expect(result).toEqual({ email: user.email, name: user.name });
+		},
+		"findOne - should find model with date field": async () => {
+			const [user] = await insertRandom("user");
+			const result = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "createdAt", value: user.createdAt, operator: "eq" }],
+			});
+			expect(result).toEqual(user);
+			expect(result?.createdAt).toBeInstanceOf(Date);
+			expect(result?.createdAt).toEqual(user.createdAt);
+		},
 		"findOne - should return an object for one-to-one joins": async () => {
 			await modifyBetterAuthOptions(
 				{
@@ -343,7 +430,7 @@ export const getNormalTestSuiteTests = ({
 				});
 				expect(result).toBeNull();
 			},
-		"findOne - should find a model with modified field name": async () => {
+		"findOne - should join a model with modified field name": async () => {
 			await modifyBetterAuthOptions(
 				{
 					user: {
@@ -351,84 +438,58 @@ export const getNormalTestSuiteTests = ({
 							email: "email_address",
 						},
 					},
-				},
-				true,
-			);
-			const [user] = await insertRandom("user");
-			const result = await adapter.findOne<User>({
-				model: "user",
-				where: [{ field: "email", value: user.email }],
-			});
-			expect(result).toEqual(user);
-			expect(result?.email).toEqual(user.email);
-			expect(true).toEqual(true);
-		},
-		"findOne - should find a model with modified model name": async () => {
-			await modifyBetterAuthOptions(
-				{
-					user: {
-						modelName: "user_custom",
-					},
-				},
-				true,
-			);
-			const [user] = await insertRandom("user");
-			expect(user).toBeDefined();
-			expect(user).toHaveProperty("id");
-			expect(user).toHaveProperty("name");
-			const result = await adapter.findOne<User>({
-				model: "user",
-				where: [{ field: "email", value: user.email }],
-			});
-			expect(result).toEqual(user);
-			expect(result?.email).toEqual(user.email);
-			expect(true).toEqual(true);
-		},
-		"findOne - should find a model with additional fields": async () => {
-			await modifyBetterAuthOptions(
-				{
-					user: {
-						additionalFields: {
-							customField: {
-								type: "string",
-								input: false,
-								required: true,
-								defaultValue: "default-value",
+					plugins: [
+						{
+							id: "one-to-one-test",
+							schema: {
+								oneToOneTable: {
+									modelName: "one_to_one_table",
+									fields: {
+										oneToOne: {
+											type: "string",
+											required: true,
+											references: { field: "email", model: "user" },
+											unique: true,
+											fieldName: "one_to_one",
+										},
+									},
+								},
 							},
-						},
-					},
+						} satisfies BetterAuthPlugin,
+					],
 				},
 				true,
 			);
-			const [user_] = await insertRandom("user");
-			const user = user_ as User & { customField: string };
-			expect(user).toHaveProperty("customField");
-			expect(user.customField).toBe("default-value");
-			const result = await adapter.findOne<User & { customField: string }>({
+
+			type OneToOneTable = { oneToOne: string; id: string };
+			console.log(`creating user...`);
+			const user = await adapter.create<User>({
 				model: "user",
-				where: [{ field: "customField", value: user.customField }],
+				data: {
+					...(await generate("user")),
+				},
+				forceAllowId: true,
 			});
-			expect(result).toEqual(user);
-			expect(result?.customField).toEqual("default-value");
-		},
-		"findOne - should select fields": async () => {
-			const [user] = await insertRandom("user");
-			const result = await adapter.findOne<Pick<User, "email" | "name">>({
+
+			const oneToOne = await adapter.create<OneToOneTable>({
+				model: "oneToOneTable",
+				data: {
+					oneToOne: user.email,
+				},
+			});
+
+			const result = await adapter.findOne<
+				User & { oneToOneTable: OneToOneTable }
+			>({
 				model: "user",
-				where: [{ field: "id", value: user.id }],
-				select: ["email", "name"],
+				where: [{ field: "email", value: user.email }],
+				join: { oneToOneTable: true },
 			});
-			expect(result).toEqual({ email: user.email, name: user.name });
-		},
-		"findOne - should find model with date field": async () => {
-			const [user] = await insertRandom("user");
-			const result = await adapter.findOne<User>({
-				model: "user",
-				where: [{ field: "createdAt", value: user.createdAt, operator: "eq" }],
+			console.log(`result...`, result);
+			expect(result).toEqual({
+				...user,
+				oneToOneTable: oneToOne,
 			});
-			expect(result).toEqual(user);
-			expect(result?.createdAt).toBeInstanceOf(Date);
-			expect(result?.createdAt).toEqual(user.createdAt);
 		},
 		"findMany - should find many models with date fields": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
