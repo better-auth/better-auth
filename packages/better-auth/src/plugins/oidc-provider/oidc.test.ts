@@ -601,6 +601,209 @@ describe("oidc storage", async () => {
 	});
 });
 
+describe("oidc token response format", async () => {
+	async function setupOAuthFlowAndGetCode(scopes: string[]) {
+		const {
+			auth: authorizationServer,
+			signInWithTestUser,
+			customFetchImpl,
+		} = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: false,
+				}),
+				jwt(),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const serverClient = createAuthClient({
+			plugins: [oidcClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		const server = await listen(toNodeHandler(authorizationServer.handler), {
+			port: 3000,
+		});
+
+		const createdClient = await serverClient.oauth2.register({
+			client_name: "test-app",
+			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			logo_uri: "",
+		});
+
+		const application = {
+			clientId: createdClient.data!.client_id,
+			clientSecret: createdClient.data!.client_secret,
+		};
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test",
+								clientId: application.clientId,
+								clientSecret: application.clientSecret,
+								authorizationUrl:
+									"http://localhost:3000/api/auth/oauth2/authorize",
+								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+								scopes,
+								pkce: false,
+							},
+						],
+					}),
+				],
+			});
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:5000",
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+		const oAuthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId: "test",
+				callbackURL: "/dashboard",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		);
+
+		let redirectURI = "";
+		const consentHeaders = new Headers();
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context) {
+				redirectURI = context.response.headers.get("Location") || "";
+				cookieSetter(consentHeaders)(context);
+			},
+		});
+
+		redirectURI = await handleConsentFlow(
+			redirectURI,
+			serverClient,
+			headers,
+			consentHeaders,
+		);
+
+		const url = new URL(redirectURI);
+		const code = url.searchParams.get("code")!;
+
+		return {
+			server,
+			customFetchImpl,
+			application,
+			code,
+		};
+	}
+
+	it("should return Bearer token_type in authorization_code token response", async ({
+		expect,
+	}) => {
+		const { server, customFetchImpl, application, code } =
+			await setupOAuthFlowAndGetCode(["openid", "profile", "email"]);
+
+		const tokenResponse = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					grant_type: "authorization_code",
+					code,
+					redirect_uri: "http://localhost:3000/api/auth/oauth2/callback/test",
+					client_id: application.clientId,
+					client_secret: application.clientSecret,
+				}),
+			},
+		);
+
+		const tokenData = await tokenResponse.json();
+
+		expect(tokenData.token_type).toBe("Bearer");
+		expect(tokenData.access_token).toBeDefined();
+		expect(tokenData.expires_in).toBeDefined();
+		expect(tokenData.id_token).toBeDefined();
+		expect(tokenData.scope).toBeDefined();
+
+		await server.close();
+	});
+
+	it("should return Bearer token_type in refresh_token grant response", async ({
+		expect,
+	}) => {
+		const { server, customFetchImpl, application, code } =
+			await setupOAuthFlowAndGetCode([
+				"openid",
+				"profile",
+				"email",
+				"offline_access",
+			]);
+
+		const initialTokenResponse = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					grant_type: "authorization_code",
+					code,
+					redirect_uri: "http://localhost:3000/api/auth/oauth2/callback/test",
+					client_id: application.clientId,
+					client_secret: application.clientSecret,
+				}),
+			},
+		);
+
+		const initialTokenData = await initialTokenResponse.json();
+		expect(initialTokenData.refresh_token).toBeDefined();
+		expect(initialTokenData.token_type).toBe("Bearer");
+
+		const refreshTokenResponse = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					grant_type: "refresh_token",
+					refresh_token: initialTokenData.refresh_token,
+					client_id: application.clientId,
+					client_secret: application.clientSecret,
+				}),
+			},
+		);
+
+		const refreshTokenData = await refreshTokenResponse.json();
+
+		expect(refreshTokenData.token_type).toBe("Bearer");
+		expect(refreshTokenData.access_token).toBeDefined();
+		expect(refreshTokenData.expires_in).toBeDefined();
+		expect(refreshTokenData.refresh_token).toBeDefined();
+		expect(refreshTokenData.scope).toBeDefined();
+
+		await server.close();
+	});
+});
+
 describe("oidc-jwt", async () => {
 	let server: Listener | null = null;
 

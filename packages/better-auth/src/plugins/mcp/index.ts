@@ -2,7 +2,7 @@ import * as z from "zod";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
 import type { BetterAuthPlugin, BetterAuthOptions } from "@better-auth/core";
 import {
 	oidcProvider,
@@ -172,6 +172,7 @@ export const mcp = (options: MCPOptions) => {
 			],
 		},
 		endpoints: {
+			oAuthConsent: provider.endpoints.oAuthConsent,
 			getMcpOAuthConfig: createAuthEndpoint(
 				"/.well-known/oauth-authorization-server",
 				{

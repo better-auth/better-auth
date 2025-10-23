@@ -3,7 +3,10 @@ import {
 	type BetterAuthPlugin,
 	logger,
 } from "better-auth";
-import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
 import Stripe from "stripe";
 import { type Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
@@ -23,12 +26,14 @@ import type {
 	StripeOptions,
 	StripePlan,
 	Subscription,
+	SubscriptionOptions,
 } from "./types";
 import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
 import { getSchema } from "./schema";
 import { defu } from "defu";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
-const STRIPE_ERROR_CODES = {
+const STRIPE_ERROR_CODES = defineErrorCodes({
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
 	SUBSCRIPTION_PLAN_NOT_FOUND: "Subscription plan not found",
 	ALREADY_SUBSCRIBED_PLAN: "You're already subscribed to this plan",
@@ -39,7 +44,7 @@ const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
 	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
 		"Subscription is not scheduled for cancellation",
-} as const;
+});
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
 	if (url.startsWith("http")) {
@@ -65,6 +70,7 @@ async function resolvePriceIdFromLookupKey(
 
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
+	const subscriptionOptions = options.subscription as SubscriptionOptions;
 
 	const referenceMiddleware = (
 		action:
@@ -82,7 +88,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			const referenceId =
 				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
 
-			if (ctx.body?.referenceId && !options.subscription?.authorizeReference) {
+			if (ctx.body?.referenceId && !subscriptionOptions.authorizeReference) {
 				logger.error(
 					`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
 				);
@@ -91,17 +97,24 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						"Reference id is not allowed. Read server logs for more details.",
 				});
 			}
-			const isAuthorized = ctx.body?.referenceId
-				? await options.subscription?.authorizeReference?.(
-						{
-							user: session.user,
-							session: session.session,
-							referenceId,
-							action,
-						},
-						ctx,
-					)
-				: true;
+			/**
+			 * if referenceId is the same as the active session user's id
+			 */
+			const sameReference =
+				ctx.query?.referenceId === session.user.id ||
+				ctx.body?.referenceId === session.user.id;
+			const isAuthorized =
+				ctx.body?.referenceId || ctx.query?.referenceId
+					? (await subscriptionOptions.authorizeReference?.(
+							{
+								user: session.user,
+								session: session.session,
+								referenceId,
+								action,
+							},
+							ctx,
+						)) || sameReference
+					: true;
 			if (!isAuthorized) {
 				throw new APIError("UNAUTHORIZED", {
 					message: "Unauthorized",
@@ -237,7 +250,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const { user, session } = ctx.context.session;
 				if (
 					!user.emailVerified &&
-					options.subscription?.requireEmailVerification
+					subscriptionOptions.requireEmailVerification
 				) {
 					throw new APIError("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
@@ -520,7 +533,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					throw new APIError("INTERNAL_SERVER_ERROR");
 				}
 
-				const params = await options.subscription?.getCheckoutSessionParams?.(
+				const params = await subscriptionOptions.getCheckoutSessionParams?.(
 					{
 						user,
 						session,
@@ -680,7 +693,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									},
 								],
 							});
-							await options.subscription?.onSubscriptionCancel?.({
+							await subscriptionOptions.onSubscriptionCancel?.({
 								subscription,
 								cancellationDetails: currentSubscription.cancellation_details,
 								stripeSubscription: currentSubscription,
@@ -1019,7 +1032,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				if (!subscriptions.length) {
 					return [];
 				}
-				const plans = await getPlans(options);
+				const plans = await getPlans(options.subscription);
 				if (!plans) {
 					return [];
 				}
@@ -1244,11 +1257,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								message: "Stripe webhook secret not found",
 							});
 						}
-						event = await client.webhooks.constructEventAsync(
-							buf,
-							sig,
-							webhookSecret,
-						);
+						// Support both Stripe v18 (constructEvent) and v19+ (constructEventAsync)
+						if (typeof client.webhooks.constructEventAsync === "function") {
+							// Stripe v19+ - use async method
+							event = await client.webhooks.constructEventAsync(
+								buf,
+								sig,
+								webhookSecret,
+							);
+						} else {
+							// Stripe v18 - use sync method
+							event = client.webhooks.constructEvent(buf, sig, webhookSecret);
+						}
 					} catch (err: any) {
 						ctx.context.logger.error(`${err.message}`);
 						throw new APIError("BAD_REQUEST", {
@@ -1292,7 +1312,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			...((options.subscription?.enabled
 				? subscriptionEndpoints
 				: {}) as O["subscription"] extends {
-				enabled: boolean;
+				enabled: true;
 			}
 				? typeof subscriptionEndpoints
 				: {}),
@@ -1398,7 +1418,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			};
 		},
 		schema: getSchema(options),
+		$ERROR_CODES: STRIPE_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+export type StripePlugin<O extends StripeOptions> = ReturnType<
+	typeof stripe<O>
+>;
 
 export type { Subscription, StripePlan };

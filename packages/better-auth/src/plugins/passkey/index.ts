@@ -13,7 +13,7 @@ import type {
 import { APIError } from "better-call";
 import { generateRandomString } from "../../crypto/random";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { sessionMiddleware } from "../../api";
 import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
 import type { InferOptionSchema } from "../../types/plugins";
@@ -23,6 +23,7 @@ import { generateId } from "../../utils";
 import { mergeSchema } from "../../db/schema";
 import { base64 } from "@better-auth/utils/base64";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import { defineErrorCodes } from "@better-auth/core/utils";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
@@ -30,6 +31,17 @@ interface WebAuthnChallengeValue {
 		id: string;
 	};
 }
+
+const ERROR_CODES = defineErrorCodes({
+	CHALLENGE_NOT_FOUND: "Challenge not found",
+	YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY:
+		"You are not allowed to register this passkey",
+	FAILED_TO_VERIFY_REGISTRATION: "Failed to verify registration",
+	PASSKEY_NOT_FOUND: "Passkey not found",
+	AUTHENTICATION_FAILED: "Authentication failed",
+	UNABLE_TO_CREATE_SESSION: "Unable to create session",
+	FAILED_TO_UPDATE_PASSKEY: "Failed to update passkey",
+});
 
 function getRpID(options: PasskeyOptions, baseURL?: string) {
 	return (
@@ -108,16 +120,6 @@ export const passkey = (options?: PasskeyOptions) => {
 		(expirationTime.getTime() - currentTime.getTime()) / 1000,
 	);
 
-	const ERROR_CODES = {
-		CHALLENGE_NOT_FOUND: "Challenge not found",
-		YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY:
-			"You are not allowed to register this passkey",
-		FAILED_TO_VERIFY_REGISTRATION: "Failed to verify registration",
-		PASSKEY_NOT_FOUND: "Passkey not found",
-		AUTHENTICATION_FAILED: "Authentication failed",
-		UNABLE_TO_CREATE_SESSION: "Unable to create session",
-		FAILED_TO_UPDATE_PASSKEY: "Failed to update passkey",
-	} as const;
 	return {
 		id: "passkey",
 		endpoints: {
@@ -308,19 +310,16 @@ export const passkey = (options?: PasskeyOptions) => {
 							maxAge: maxAgeInSeconds,
 						},
 					);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							identifier: id,
-							value: JSON.stringify({
-								expectedChallenge: options.challenge,
-								userData: {
-									id: session.user.id,
-								},
-							}),
-							expiresAt: expirationTime,
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: id,
+						value: JSON.stringify({
+							expectedChallenge: options.challenge,
+							userData: {
+								id: session.user.id,
+							},
+						}),
+						expiresAt: expirationTime,
+					});
 					return ctx.json(options, {
 						status: 200,
 					});
@@ -468,14 +467,11 @@ export const passkey = (options?: PasskeyOptions) => {
 							maxAge: maxAgeInSeconds,
 						},
 					);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							identifier: id,
-							value: JSON.stringify(data),
-							expiresAt: expirationTime,
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: id,
+						value: JSON.stringify(data),
+						expiresAt: expirationTime,
+					});
 					return ctx.json(options, {
 						status: 200,
 					});
@@ -732,7 +728,6 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 						const s = await ctx.context.internalAdapter.createSession(
 							passkey.userId,
-							ctx,
 						);
 						if (!s) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {

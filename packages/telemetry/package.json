@@ -1,12 +1,13 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.4.0-beta.9",
+  "version": "1.4.0-beta.13",
   "description": "Telemetry package for Better Auth",
   "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "exports": {
     ".": {
+      "better-auth-dev-source": "./src/index.ts",
       "import": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
@@ -26,11 +27,12 @@
   },
   "scripts": {
     "build": "tsdown",
+    "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "tsdown": "^0.15.6",
+    "tsdown": "catalog:",
     "type-fest": "^4.31.0"
   },
   "dependencies": {
