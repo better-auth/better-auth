@@ -165,9 +165,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 
 					// transform join keys to use Prisma expected field names
-					let include: Record<string, boolean> = {};
+					let include: Record<string, boolean> | undefined = undefined;
 					let map = new Map<string, string>();
 					if (join) {
+						include = {};
 						for (const [model, value] of Object.entries(join)) {
 							const key = `${model.toLowerCase()}s`;
 							include[key] = value;
@@ -177,7 +178,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					let result = await db[model]!.findFirst({
 						where: whereClause,
-						select: convertSelect(select, model),
+						select: include ? undefined : convertSelect(select, model), // Can't use `include` and `select` together
 						include,
 					});
 
@@ -203,9 +204,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 
 					// transform join keys to use Prisma expected field names
-					let include: Record<string, boolean> = {};
+					let include: Record<string, boolean> | undefined = undefined;
 					let map = new Map<string, string>();
 					if (join) {
+						include = {};
 						for (const [model, value] of Object.entries(join)) {
 							const key = `${model.toLowerCase()}s`;
 							include[key] = value;
