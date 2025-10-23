@@ -58,7 +58,7 @@ export default function Hero() {
 								</p>
 							</div>
 
-							<div className="relative flex items-center gap-2 w-full sm:w-9/10 border border-white/10">
+							<div className="relative flex items-center gap-2 w-full sm:w-[90%] border border-white/10">
 								<GradientBG className="w-full flex items-center justify-between">
 									<div className="w-full flex items-center gap-2">
 										<p className="relative inline tracking-tight opacity-90 text-sm dark:text-white font-mono text-black">
