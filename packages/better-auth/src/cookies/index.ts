@@ -314,7 +314,7 @@ export const getCookieCache = async <
 	S extends {
 		session: Session & Record<string, any>;
 		user: User & Record<string, any>;
-		updatedAt?: number;
+		updatedAt: number;
 	},
 >(
 	request: Request | Headers,
