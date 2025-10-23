@@ -816,7 +816,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 		removeTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			await adapter.delete({
+			// use `deleteMany` instead of `delete` since Prisma requires 1 unique field for normal `delete` operations
+			// FKs do not count thus breaking the operation. As a solution, we'll use `deleteMany` instead.
+			await adapter.deleteMany({
 				model: "teamMember",
 				where: [
 					{
