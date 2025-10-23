@@ -33,6 +33,18 @@ services:
       - "5433:5432"
     volumes:
       - postgres-kysely_data:/var/lib/postgresql
+  
+  postgres-kysely2:
+    image: postgres:latest
+    container_name: postgres-kysely2
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: better_auth
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-kysely2_data:/var/lib/postgresql
 
   postgres-prisma:
     image: postgres:latest
@@ -108,3 +120,4 @@ volumes:
   mssql_data:
   mysql-kysely_data:
   mysql-prisma_data: 
+  postgres-kysely2_data:
