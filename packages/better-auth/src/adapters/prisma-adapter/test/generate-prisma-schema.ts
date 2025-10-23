@@ -1,6 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
 import type { BetterAuthOptions } from "@better-auth/core";
-import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { prismaAdapter } from "../prisma-adapter";
 import { join } from "path";
 import fs from "fs/promises";
@@ -11,20 +10,7 @@ export async function generatePrismaSchema(
 	iteration: number,
 	dialect: "sqlite" | "postgresql" | "mysql",
 ) {
-	const i = async (x: string) => await import(x);
-	const { generateSchema } = (await i(
-		"./../../../../../cli/src/generators/index",
-	)) as {
-		generateSchema: (opts: {
-			adapter: DBAdapter<BetterAuthOptions>;
-			file?: string;
-			options: BetterAuthOptions;
-		}) => Promise<{
-			code: string | undefined;
-			fileName: string;
-			overwrite: boolean | undefined;
-		}>;
-	};
+	const { generateSchema } = await import("@better-auth/cli/generator");
 
 	const prismaDB = prismaAdapter(db, { provider: dialect });
 	let { fileName, code } = await generateSchema({

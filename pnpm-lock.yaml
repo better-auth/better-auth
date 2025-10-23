@@ -1083,6 +1083,12 @@ importers:
         specifier: ^3.5.18
         version: 3.5.19(typescript@5.9.3)
 
+  packages/better-auth/src/adapters/prisma-adapter/test:
+    dependencies:
+      '@better-auth/cli':
+        specifier: workspace:*
+        version: link:../../../../../cli
+
   packages/cli:
     dependencies:
       '@babel/core':
