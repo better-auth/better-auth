@@ -77,7 +77,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				},
 			},
 		},
-		async (ctx) => {
+		async (
+			ctx,
+		): Promise<{
+			session: InferSession<Option>;
+			user: InferUser<Option>;
+		} | null> => {
 			try {
 				const sessionCookieToken = await ctx.getSignedCookie(
 					ctx.context.authCookies.sessionToken.name,
