@@ -151,17 +151,7 @@ export function toAuthEndpoints<
 						throw result.response;
 					}
 
-					const response = context?.asResponse
-						? toResponse(result.response, {
-								headers: result.headers,
-							})
-						: context?.returnHeaders
-							? {
-									headers: result.headers,
-									response: result.response,
-								}
-							: result.response;
-					return response;
+					return result.response;
 				});
 			},
 		);
