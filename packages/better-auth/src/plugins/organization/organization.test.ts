@@ -623,22 +623,29 @@ describe("organization", async (it) => {
 
 	it("should apply beforeLeaveOrganization hook", async () => {
 		const beforeLeaveOrganization = vi.fn();
-		const hookData = { member: null, user: null, organization: null };
+		const hookData: any = { member: null, user: null, organization: null };
 
-		const { auth, client, cookieSetter } = await getTestInstance({
-			plugins: [
-				organization({
-					organizationHooks: {
-						beforeLeaveOrganization: async (data) => {
-							beforeLeaveOrganization();
-							hookData.member = data.member;
-							hookData.user = data.user;
-							hookData.organization = data.organization;
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						organizationHooks: {
+							beforeLeaveOrganization: async (data) => {
+								beforeLeaveOrganization();
+								hookData.member = data.member;
+								hookData.user = data.user;
+								hookData.organization = data.organization;
+							},
 						},
-					},
-				}),
-			],
-		});
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
 
 		const ownerHeaders = new Headers();
 		const owner = await client.signUp.email(
@@ -712,19 +719,26 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow beforeLeaveOrganization to abort by throwing", async () => {
-		const { auth, client, cookieSetter } = await getTestInstance({
-			plugins: [
-				organization({
-					organizationHooks: {
-						beforeLeaveOrganization: async () => {
-							throw new APIError("BAD_REQUEST", {
-								message: "Cannot leave: pending tasks",
-							});
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						organizationHooks: {
+							beforeLeaveOrganization: async () => {
+								throw new APIError("BAD_REQUEST", {
+									message: "Cannot leave: pending tasks",
+								});
+							},
 						},
-					},
-				}),
-			],
-		});
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
 
 		const ownerHeaders = new Headers();
 		await client.signUp.email(
@@ -784,6 +798,7 @@ describe("organization", async (it) => {
 			query: {
 				organizationId: org.data?.id!,
 			},
+			headers: ownerHeaders,
 		});
 		expect(
 			members?.members.some((m) => m.userId === memberUser.data?.user.id),
@@ -792,22 +807,29 @@ describe("organization", async (it) => {
 
 	it("should apply afterLeaveOrganization hook", async () => {
 		const afterLeaveOrganization = vi.fn();
-		const hookData = { member: null, user: null, organization: null };
+		const hookData: any = { member: null, user: null, organization: null };
 
-		const { auth, client, cookieSetter } = await getTestInstance({
-			plugins: [
-				organization({
-					organizationHooks: {
-						afterLeaveOrganization: async (data) => {
-							afterLeaveOrganization();
-							hookData.member = data.member;
-							hookData.user = data.user;
-							hookData.organization = data.organization;
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						organizationHooks: {
+							afterLeaveOrganization: async (data) => {
+								afterLeaveOrganization();
+								hookData.member = data.member;
+								hookData.user = data.user;
+								hookData.organization = data.organization;
+							},
 						},
-					},
-				}),
-			],
-		});
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
 
 		const ownerHeaders = new Headers();
 		await client.signUp.email(
@@ -883,6 +905,7 @@ describe("organization", async (it) => {
 			query: {
 				organizationId: org.data?.id!,
 			},
+			headers: ownerHeaders,
 		});
 		expect(
 			members?.members.some((m) => m.userId === memberUser.data?.user.id),
@@ -893,20 +916,27 @@ describe("organization", async (it) => {
 		const beforeLeaveOrganization = vi.fn();
 		const afterLeaveOrganization = vi.fn();
 
-		const { auth, client, cookieSetter } = await getTestInstance({
-			plugins: [
-				organization({
-					organizationHooks: {
-						beforeLeaveOrganization: async () => {
-							beforeLeaveOrganization();
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						organizationHooks: {
+							beforeLeaveOrganization: async () => {
+								beforeLeaveOrganization();
+							},
+							afterLeaveOrganization: async () => {
+								afterLeaveOrganization();
+							},
 						},
-						afterLeaveOrganization: async () => {
-							afterLeaveOrganization();
-						},
-					},
-				}),
-			],
-		});
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
 
 		const headers = new Headers();
 		await client.signUp.email(
@@ -944,24 +974,31 @@ describe("organization", async (it) => {
 		let beforeTimestamp = 0;
 		let afterTimestamp = 0;
 
-		const { auth, client, cookieSetter } = await getTestInstance({
-			plugins: [
-				organization({
-					organizationHooks: {
-						beforeLeaveOrganization: async (data) => {
-							beforeTimestamp = Date.now();
-							beforeCalled();
-							// Simulate cleanup
-							await new Promise((resolve) => setTimeout(resolve, 10));
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						organizationHooks: {
+							beforeLeaveOrganization: async (data) => {
+								beforeTimestamp = Date.now();
+								beforeCalled();
+								// Simulate cleanup
+								await new Promise((resolve) => setTimeout(resolve, 10));
+							},
+							afterLeaveOrganization: async (data) => {
+								afterTimestamp = Date.now();
+								afterCalled();
+							},
 						},
-						afterLeaveOrganization: async (data) => {
-							afterTimestamp = Date.now();
-							afterCalled();
-						},
-					},
-				}),
-			],
-		});
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
 
 		const ownerHeaders = new Headers();
 		await client.signUp.email(
@@ -1024,6 +1061,7 @@ describe("organization", async (it) => {
 			query: {
 				organizationId: org.data?.id!,
 			},
+			headers: ownerHeaders,
 		});
 		expect(
 			members?.members.some((m) => m.userId === memberUser.data?.user.id),
