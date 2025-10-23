@@ -42,7 +42,7 @@ export const createAuthEndpoint = <
 	options: Opts,
 	handler: (ctx: EndpointContext<Path, Opts, AuthContext>) => Promise<R>,
 ) => {
-	return createEndpoint(
+	const endpoint = createEndpoint(
 		path,
 		{
 			...options,
@@ -51,6 +51,12 @@ export const createAuthEndpoint = <
 		// todo: prettify the code, we want to call `runWithEndpointContext` to top level
 		async (ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
 	);
+	Object.defineProperty(endpoint, "handler", {
+		get() {
+			return handler;
+		},
+	});
+	return endpoint;
 };
 
 export type AuthEndpoint = ReturnType<typeof createAuthEndpoint>;
