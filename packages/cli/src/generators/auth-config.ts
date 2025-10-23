@@ -169,8 +169,12 @@ export async function generateAuthConfig({
 
 			for (const import_ of opts.imports) {
 				// Collect dependencies for @better-auth/* packages
-				if (import_.path.startsWith('@better-auth/') && !import_.path.startsWith('@better-auth/core')) {
-					const packageName = import_.path.split('/')[0] + '/' + import_.path.split('/')[1];
+				if (
+					import_.path.startsWith("@better-auth/") &&
+					!import_.path.startsWith("@better-auth/core")
+				) {
+					const packageName =
+						import_.path.split("/")[0] + "/" + import_.path.split("/")[1];
 					if (!dependencies.includes(packageName)) {
 						dependencies.push(packageName);
 					}
