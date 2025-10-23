@@ -792,10 +792,45 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 			}
+			const organization = await adapter.findOrganizationById(
+				ctx.body.organizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			const user = await ctx.context.internalAdapter.findUserById(
+				session.user.id,
+			);
+			if (!user) {
+				throw new APIError("BAD_REQUEST", {
+					message: "User not found",
+				});
+			}
+
+			if (options?.organizationHooks?.beforeLeaveOrganization) {
+				await options?.organizationHooks.beforeLeaveOrganization({
+					member,
+					user,
+					organization,
+				});
+			}
+
 			await adapter.deleteMember(member.id);
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
+
+			if (options?.organizationHooks?.afterLeaveOrganization) {
+				await options?.organizationHooks.afterLeaveOrganization({
+					member,
+					user,
+					organization,
+				});
+			}
+
 			return ctx.json(member);
 		},
 	);
