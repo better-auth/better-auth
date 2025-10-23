@@ -121,7 +121,7 @@ export default function Hero() {
 							<div className="flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
 								<Link
 									href="/docs"
-									className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-none border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8 dark:shadow-none"
+									className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8"
 								>
 									Get Started
 								</Link>
