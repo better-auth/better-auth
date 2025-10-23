@@ -229,7 +229,7 @@ export const kyselyAdapter = (
 							if (keyStr === selectStr) {
 								// Extract joinModel and fieldName from the key
 								// Format: joined_<joinModel>_<fieldName>
-								const parts = keyStr.substring(7).split("_"); // Remove "joined_" prefix
+								const parts = keyStr.substring(8).split("_"); // Remove "_joined_" prefix
 								const joinModel = parts[0]!;
 								const fieldName = parts.slice(1).join("_");
 
@@ -347,10 +347,10 @@ export const kyselyAdapter = (
 							fields.id = { type: "string" }; // make sure there is at least an id field
 							for (const [field, fieldAttr] of Object.entries(fields)) {
 								allSelects.push(
-									sql`${sql.ref(joinModel)}.${sql.ref(fieldAttr.fieldName || field)} as ${sql.ref(`joined_${joinModel}_${fieldAttr.fieldName || field}`)}`,
+									sql`${sql.ref(joinModel)}.${sql.ref(fieldAttr.fieldName || field)} as ${sql.ref(`_joined_${joinModel}_${fieldAttr.fieldName || field}`)}`,
 								);
 								allSelectsStr.push(
-									`joined_${joinModel}_${fieldAttr.fieldName || field}`,
+									`_joined_${joinModel}_${fieldAttr.fieldName || field}`,
 								);
 							}
 						}
@@ -459,10 +459,10 @@ export const kyselyAdapter = (
 							fields.id = { type: "string" }; // make sure there is at least an id field
 							for (const [field, fieldAttr] of Object.entries(fields)) {
 								allSelects.push(
-									sql`${sql.ref(joinModel)}.${sql.ref(fieldAttr.fieldName || field)} as ${sql.ref(`joined_${joinModel}_${fieldAttr.fieldName || field}`)}`,
+									sql`${sql.ref(joinModel)}.${sql.ref(fieldAttr.fieldName || field)} as ${sql.ref(`_joined_${joinModel}_${fieldAttr.fieldName || field}`)}`,
 								);
 								allSelectsStr.push(
-									`joined_${joinModel}_${fieldAttr.fieldName || field}`,
+									`_joined_${joinModel}_${fieldAttr.fieldName || field}`,
 								);
 							}
 						}
