@@ -1,11 +1,11 @@
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
-import { createAuthClient } from "../client/vanilla";
+import { createAuthClient } from "../client";
 import type { BetterAuthOptions, Session, User } from "../types";
-import { getMigrations } from "../db/get-migration";
+import { getMigrations } from "../db";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
-import { getAdapter } from "../db/utils";
+import { getAdapter } from "../db";
 import { getBaseURL } from "../utils/url";
 import { Kysely, MysqlDialect, PostgresDialect, sql } from "kysely";
 import { Pool } from "pg";

@@ -15,6 +15,4 @@ export function InferAuth<O extends { options: BetterAuthOptions }>() {
 	return {} as O["options"];
 }
 
-// @ts-expect-error
-export type * from "nanostores";
-export type * from "@better-fetch/fetch";
+export { atom, type Atom } from "nanostores";
