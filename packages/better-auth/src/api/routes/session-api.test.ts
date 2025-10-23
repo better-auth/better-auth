@@ -508,6 +508,7 @@ describe("cookie cache", async () => {
 			},
 			cookieCache: {
 				enabled: true,
+				strategy: "base64-hmac", // Use legacy strategy for these tests
 			},
 		},
 	});
@@ -610,5 +611,167 @@ describe("cookie cache", async () => {
 			},
 		});
 		expect(fn).toHaveBeenCalledTimes(5);
+	});
+});
+
+describe("cookie cache with JWT strategy", async () => {
+	const { auth, client, testUser, cookieSetter } = await getTestInstance({
+		session: {
+			additionalFields: {
+				sensitiveData: {
+					type: "string",
+					returned: false,
+					defaultValue: "sensitive-data",
+				},
+			},
+			cookieCache: {
+				enabled: true,
+				strategy: "jwt", // Use JWT (JWE with A256CBC-HS512 + HKDF)
+			},
+		},
+	});
+	const ctx = await auth.$context;
+
+	it("should cache cookies with JWT strategy", async () => {});
+	const fn = vi.spyOn(ctx.adapter, "findOne");
+
+	const headers = new Headers();
+	it("should cache cookies with JWT strategy", async () => {
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess(context) {
+					const header = context.response.headers.get("set-cookie");
+					const cookies = parseSetCookieHeader(header || "");
+					headers.set(
+						"cookie",
+						`better-auth.session_token=${
+							cookies.get("better-auth.session_token")?.value
+						};better-auth.session_data=${
+							cookies.get("better-auth.session_data")?.value
+						}`,
+					);
+				},
+			},
+		);
+		expect(fn).toHaveBeenCalledTimes(1);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.session).not.toHaveProperty("sensitiveData");
+		expect(session.data).not.toBeNull();
+		expect(fn).toHaveBeenCalledTimes(1); // Should still be 1 (cache hit)
+	});
+
+	it("should disable cookie cache with JWT strategy", async () => {
+		const ctx = await auth.$context;
+
+		const s = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(s.data?.user.emailVerified).toBe(false);
+		await runWithEndpointContext(
+			{
+				context: ctx,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				await ctx.internalAdapter.updateUser(s.data?.user.id || "", {
+					emailVerified: true,
+				});
+			},
+		);
+		expect(fn).toHaveBeenCalledTimes(1);
+
+		const session = await client.getSession({
+			query: {
+				disableCookieCache: true,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user.emailVerified).toBe(true);
+		expect(session.data).not.toBeNull();
+		expect(fn).toHaveBeenCalledTimes(3); // Database hit when cache disabled
+	});
+
+	it("should reset JWT cache when expires", async () => {
+		expect(fn).toHaveBeenCalledTimes(3);
+		await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 10); // 10 minutes
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+				},
+			},
+		});
+		expect(fn).toHaveBeenCalledTimes(5);
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+				},
+			},
+		});
+		expect(fn).toHaveBeenCalledTimes(5); // Should use refreshed cache
+	});
+
+	it("should handle multiple concurrent requests with JWT cache", async () => {
+		vi.useRealTimers();
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess(context) {
+					const header = context.response.headers.get("set-cookie");
+					const cookies = parseSetCookieHeader(header || "");
+					headers.set(
+						"cookie",
+						`better-auth.session_token=${
+							cookies.get("better-auth.session_token")?.value
+						};better-auth.session_data=${
+							cookies.get("better-auth.session_data")?.value
+						}`,
+					);
+				},
+			},
+		);
+
+		// Make multiple concurrent requests
+		const promises = Array(5)
+			.fill(0)
+			.map(() =>
+				client.getSession({
+					fetchOptions: {
+						headers,
+					},
+				}),
+			);
+
+		const results = await Promise.all(promises);
+
+		// All should return valid sessions
+		results.forEach((result) => {
+			expect(result.data).not.toBeNull();
+			expect(result.data?.user.email).toBe(testUser.email);
+		});
 	});
 });
