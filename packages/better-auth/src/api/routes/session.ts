@@ -230,7 +230,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						await setSessionCookie(ctx, sessionDataPayload.session, false, {
 							maxAge,
 						});
-						return ctx.json(sessionDataPayload.session);
+						return ctx.json(
+							sessionDataPayload.session as {
+								session: InferSession<Option>;
+								user: InferUser<Option>;
+							},
+						);
 					}
 					deleteSessionCookie(ctx);
 					if (session) {
