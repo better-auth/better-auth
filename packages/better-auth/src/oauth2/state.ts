@@ -172,30 +172,19 @@ export async function parseState(c: GenericEndpointContext) {
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)
 		) {
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=state_mismatch`);
+			const finalErrorURL = computeFinalErrorURL(parsedData.errorURL);
+			throw c.redirect(`${finalErrorURL}?error=state_mismatch`);
 		}
 		c.setCookie(stateCookie.name, "", {
 			maxAge: 0,
 		});
-
-		// Delete verification value after retrieval
-		await c.context.internalAdapter.deleteVerificationValue(data.id);
+		if (parsedData.expiresAt < Date.now()) {
+			await c.context.internalAdapter.deleteVerificationValue(data.id);
+			const finalErrorURL = computeFinalErrorURL(parsedData.errorURL);
+			throw c.redirect(`${finalErrorURL}?error=please_restart_the_process`);
+		}
 	}
 
-	// Ensure there's always a fallback value on the parsed data (used later)
-	if (!parsedData.errorURL) {
-		parsedData.errorURL = `${c.context.baseURL}/error`;
-	}
-
-<<<<<<< Updated upstream
-	// Check expiration
-	if (parsedData.expiresAt < Date.now()) {
-		const errorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
-=======
 	// Helper to decide which error URL to use safely.
 	function computeFinalErrorURL(parsedErrorURL?: string) {
 		const defaultErrorURL =
@@ -214,11 +203,9 @@ export async function parseState(c: GenericEndpointContext) {
 		}
 
 		try {
-			// Resolve relative URLs safely against baseURL.
 			const parsed = new URL(parsedErrorURL, c.context.baseURL);
 			const parsedOrigin = parsed.origin;
 
-			// Compare against trusted origins (normalized to origin).
 			for (const origin of trustedOrigins) {
 				try {
 					if (new URL(origin).origin === parsedOrigin) {
@@ -234,32 +221,9 @@ export async function parseState(c: GenericEndpointContext) {
 		return defaultErrorURL;
 	}
 
-	const stateCookie = c.context.createAuthCookie("state");
-	const stateCookieValue = await c.getSignedCookie(
-		stateCookie.name,
-		c.context.secret,
-	);
-	/**
-	 * This is generally cause security issue and should only be used in
-	 * dev or staging environments. It's currently used by the oauth-proxy
-	 * plugin
-	 */
-	const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
-	if (
-		!skipStateCookieCheck &&
-		(!stateCookieValue || stateCookieValue !== state)
-	) {
-		const finalErrorURL = computeFinalErrorURL(parsedData.errorURL);
-		throw c.redirect(`${finalErrorURL}?error=state_mismatch`);
-	}
-	c.setCookie(stateCookie.name, "", {
-		maxAge: 0,
-	});
-	if (parsedData.expiresAt < Date.now()) {
-		await c.context.internalAdapter.deleteVerificationValue(data.id);
-		const finalErrorURL = computeFinalErrorURL(parsedData.errorURL);
-		throw c.redirect(`${finalErrorURL}?error=please_restart_the_process`);
->>>>>>> Stashed changes
+	// Ensure there's always a fallback value on the parsed data (used later)
+	if (!parsedData.errorURL) {
+		parsedData.errorURL = `${c.context.baseURL}/error`;
 	}
 
 	return parsedData;
