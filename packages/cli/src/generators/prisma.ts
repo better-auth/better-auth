@@ -5,6 +5,7 @@ import path from "path";
 import fs from "fs/promises";
 import { capitalizeFirstLetter } from "better-auth";
 import type { SchemaGenerator } from "./types";
+import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 
 export const generatePrismaSchema: SchemaGenerator = async ({
 	adapter,
@@ -185,8 +186,19 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					// custom logic within that function that might not work in prisma's context.
 				}
 
+				const getModelName = initGetModelName({
+					schema: getAuthTables(options),
+					usePlural: false,
+				});
+				const getFieldName = initGetFieldName({
+					schema: getAuthTables(options),
+					usePlural: false,
+				});
+
 				if (attr.references) {
-					const referencedOriginalModelName = attr.references.model;
+					const referencedOriginalModelName = getModelName(
+						attr.references.model,
+					);
 					const referencedCustomModelName =
 						tables[referencedOriginalModelName]?.modelName ||
 						referencedOriginalModelName;
@@ -195,7 +207,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					else if (attr.references.onDelete === "set null") action = "SetNull";
 					else if (attr.references.onDelete === "set default")
 						action = "SetDefault";
-					else if (attr.references.onDelete === "restrict") action = "Restrict";
+
+					if (attr.references?.onDelete === "restrict") action = "Restrict";
 					builder
 						.model(modelName)
 						.field(
@@ -205,7 +218,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							}`,
 						)
 						.attribute(
-							`relation(fields: [${fieldName}], references: [${attr.references.field}], onDelete: ${action})`,
+							`relation(fields: [${getFieldName({ model: modelName.toLowerCase(), field: fieldName })}], references: [${getFieldName({ model: attr.references.model, field: attr.references.field })}], onDelete: ${action})`,
 						);
 				}
 				if (

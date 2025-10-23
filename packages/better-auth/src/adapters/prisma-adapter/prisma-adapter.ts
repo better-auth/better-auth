@@ -170,9 +170,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					if (join) {
 						include = {};
 						for (const [model, value] of Object.entries(join)) {
-							const key = `${model.toLowerCase()}s`;
+							const key = `${getModelName(model).toLowerCase()}s`;
 							include[key] = value;
-							map.set(key, model);
+							map.set(key, getModelName(model));
 						}
 					}
 
@@ -209,9 +209,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					if (join) {
 						include = {};
 						for (const [model, value] of Object.entries(join)) {
-							const key = `${model.toLowerCase()}s`;
+							const key = `${getModelName(model).toLowerCase()}s`;
 							include[key] = value;
-							map.set(key, model);
+							map.set(key, getModelName(model));
 						}
 					}
 

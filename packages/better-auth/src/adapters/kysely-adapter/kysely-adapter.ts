@@ -372,18 +372,6 @@ export const kyselyAdapter = (
 					const row = res[0];
 
 					if (join) {
-						const result: Record<string, any> = {};
-
-						// Initialize structure for joined models
-						for (const [joinModel, joinAttr] of Object.entries(join)) {
-							const fields = schema[getDefaultModelName(joinModel)]?.fields;
-							if (!fields) continue;
-							const joinFieldAttr = fields[joinAttr.on.to];
-							const isUnique = joinFieldAttr?.unique ?? false;
-							result[getDefaultModelName(joinModel)] = isUnique ? null : [];
-						}
-
-						// Process ALL rows and collect joined records
 						const processedRows = processJoinedResults(
 							res,
 							model,
@@ -482,17 +470,10 @@ export const kyselyAdapter = (
 					if (!res) return [];
 
 					if (join) {
-						// Process results and restructure them
-						const processedRows = processJoinedResults(
-							res,
-							model,
-							join,
-							allSelectsStr,
-						);
-						return processedRows;
+						return processJoinedResults(res, model, join, allSelectsStr);
 					}
 
-					return res as any;
+					return res;
 				},
 				async update({ model, where, update: values }) {
 					const { and, or } = convertWhereClause(model, where);

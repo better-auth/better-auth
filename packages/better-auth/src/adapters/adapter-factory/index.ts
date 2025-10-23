@@ -23,7 +23,12 @@ import { initGetDefaultModelName } from "./get-default-model-name";
 import { initGetDefaultFieldName } from "./get-default-field-name";
 import { initGetModelName } from "./get-model-name";
 import { initGetFieldName } from "./get-field-name";
+
 export * from "./types";
+export * from "./get-default-model-name";
+export * from "./get-default-field-name";
+export * from "./get-model-name";
+export * from "./get-field-name";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
