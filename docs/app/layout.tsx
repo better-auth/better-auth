@@ -1,5 +1,4 @@
 import { Navbar } from "@/components/nav-bar";
-import "./global.css";
 import { RootProvider } from "fumadocs-ui/provider";
 import type { ReactNode } from "react";
 import { NavbarProvider } from "@/components/nav-mobile";
@@ -11,6 +10,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { CustomSearchDialog } from "@/components/search-dialog";
 import { AnchorScroll } from "@/components/anchor-scroll-fix";
+import "./global.css";
 
 export const metadata = createMetadata({
 	title: {
