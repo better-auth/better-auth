@@ -1,5 +1,10 @@
-import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
-import type { Database } from "better-sqlite3";
+import type {
+	Dialect,
+	Kysely,
+	MysqlPool,
+	PostgresPool,
+	SqliteDatabase,
+} from "kysely";
 import type { CookieOptions } from "better-call";
 import type { LiteralUnion } from "./helper";
 import type {
@@ -236,6 +241,15 @@ export type BetterAuthAdvancedOptions = {
 		 * @default false
 		 */
 		skipStateCookieCheck?: boolean;
+		/**
+		 * Strategy for storing OAuth state
+		 *
+		 * - "cookie": Store state in an encrypted cookie (stateless)
+		 * - "database": Store state in the database
+		 *
+		 * @default "cookie"
+		 */
+		storeStateStrategy?: "database" | "cookie";
 	};
 };
 
@@ -295,7 +309,7 @@ export type BetterAuthOptions = {
 	database?:
 		| PostgresPool
 		| MysqlPool
-		| Database
+		| SqliteDatabase
 		| Dialect
 		| DBAdapterInstance
 		| BunDatabase
@@ -657,10 +671,6 @@ export type BetterAuthOptions = {
 			[key: string]: DBFieldAttribute;
 		};
 		/**
-		 * @default false
-		 */
-		storeSessionInJWT?: boolean;
-		/**
 		 * By default if secondary storage is provided
 		 * the session is stored in the secondary storage.
 		 *
@@ -696,6 +706,15 @@ export type BetterAuthOptions = {
 			 * @default false
 			 */
 			enabled?: boolean;
+			/**
+			 * Strategy for encoding/decoding cookie cache
+			 *
+			 * - "base64-hmac": Uses base64url encoding with HMAC-SHA256 signature (legacy, less secure)
+			 * - "jwt": Uses JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation for secure encrypted tokens
+			 *
+			 * @default "jwt"
+			 */
+			strategy?: "base64-hmac" | "jwt";
 		};
 		/**
 		 * The age of the session to consider it fresh.

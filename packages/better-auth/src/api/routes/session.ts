@@ -13,12 +13,13 @@ import * as z from "zod";
 import type { InferSession, InferUser, Session, User } from "../../types";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { Prettify } from "../../types/helper";
-import { safeJSONParse } from "../../utils/json";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { symmetricDecodeJWT } from "../../crypto/jwt";
+import { safeJSONParse } from "../../utils/json";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 export const getSessionQuerySchema = z.optional(
 	z.object({
@@ -86,35 +87,72 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (!sessionCookieToken) {
 					return null;
 				}
+
 				const sessionDataCookie = ctx.getCookie(
 					ctx.context.authCookies.sessionData.name,
 				);
-				const sessionDataPayload = sessionDataCookie
-					? safeJSONParse<{
+
+				let sessionDataPayload: {
+					session: {
+						session: Session;
+						user: User;
+					};
+					expiresAt: number;
+				} | null = null;
+
+				if (sessionDataCookie) {
+					const strategy =
+						ctx.context.options.session?.cookieCache?.strategy || "jwt";
+
+					if (strategy === "jwt") {
+						// Decode JWT (JWE with A256CBC-HS512 + HKDF)
+						const payload = await symmetricDecodeJWT<{
+							session: Session;
+							user: User;
+							exp?: number;
+						}>(sessionDataCookie, ctx.context.secret, "better-auth-session");
+
+						if (payload && payload.session && payload.user) {
+							sessionDataPayload = {
+								session: {
+									session: payload.session,
+									user: payload.user,
+								},
+								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
+							};
+						}
+					} else {
+						// Decode base64-hmac (legacy)
+						const parsed = safeJSONParse<{
 							session: {
 								session: Session;
 								user: User;
 							};
 							signature: string;
 							expiresAt: number;
-						}>(binary.decode(base64Url.decode(sessionDataCookie)))
-					: null;
+						}>(binary.decode(base64Url.decode(sessionDataCookie)));
 
-				if (sessionDataPayload) {
-					const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
-						ctx.context.secret,
-						JSON.stringify({
-							...sessionDataPayload.session,
-							expiresAt: sessionDataPayload.expiresAt,
-						}),
-						sessionDataPayload.signature,
-					);
-					if (!isValid) {
-						const dataCookie = ctx.context.authCookies.sessionData.name;
-						ctx.setCookie(dataCookie, "", {
-							maxAge: 0,
-						});
-						return ctx.json(null);
+						if (parsed) {
+							const isValid = await createHMAC(
+								"SHA-256",
+								"base64urlnopad",
+							).verify(
+								ctx.context.secret,
+								JSON.stringify({
+									...parsed.session,
+									expiresAt: parsed.expiresAt,
+								}),
+								parsed.signature,
+							);
+							if (isValid) {
+								sessionDataPayload = parsed;
+							} else {
+								const dataCookie = ctx.context.authCookies.sessionData.name;
+								ctx.setCookie(dataCookie, "", {
+									maxAge: 0,
+								});
+							}
+						}
 					}
 				}
 
@@ -122,6 +160,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.authCookies.dontRememberToken.name,
 					ctx.context.secret,
 				);
+
 				/**
 				 * If session data is present in the cookie, return it
 				 */
