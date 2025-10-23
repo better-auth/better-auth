@@ -864,12 +864,20 @@ describe("Admin plugin", async () => {
 
 describe("access control", async (it) => {
 	const ac = createAccessControl({
-		user: ["create", "read", "update", "delete", "list", "bulk-delete"],
+		user: [
+			"create",
+			"read",
+			"update",
+			"delete",
+			"list",
+			"bulk-delete",
+			"set-role",
+		],
 		order: ["create", "read", "update", "delete", "update-many"],
 	});
 
 	const adminAc = ac.newRole({
-		user: ["create", "read", "update", "delete", "list"],
+		user: ["create", "read", "update", "delete", "list", "set-role"],
 		order: ["create", "read", "update", "delete"],
 	});
 	const userAc = ac.newRole({
@@ -1185,5 +1193,67 @@ describe("access control", async (it) => {
 			},
 		});
 		expect(userRes.error?.status).toBe(403);
+	});
+
+	it("should not allow to set multiple non existent user role", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: ["user"],
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("user");
+		const res = await client.admin.setRole(
+			{
+				userId: createdUser.data?.user.id || "",
+				role: ["user", "non-user"] as any[],
+			},
+			{ headers: headers },
+		);
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+		);
+		await client.admin.removeUser(
+			{ userId: createdUser.data?.user.id || "" },
+			{ headers: headers },
+		);
+	});
+
+	it("should not allow to set non existent user role", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("user");
+		const res = await client.admin.setRole(
+			{
+				userId: createdUser.data?.user.id || "",
+				role: "non-user" as any,
+			},
+			{ headers: headers },
+		);
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+		);
+		await client.admin.removeUser(
+			{ userId: createdUser.data?.user.id || "" },
+			{ headers: headers },
+		);
 	});
 });
