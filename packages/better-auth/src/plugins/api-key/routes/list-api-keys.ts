@@ -189,11 +189,7 @@ export function listApiKeys({
 				});
 			}
 
-			if (
-				session &&
-				ctx.query?.userId &&
-				session?.user.id !== ctx.query.userId
-			) {
+			if (session && ctx.query?.userId) {
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.UNAUTHORIZED_SESSION,
 				});
