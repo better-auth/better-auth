@@ -6,8 +6,8 @@ import {
 	EncryptJWT,
 	jwtDecrypt,
 } from "jose";
-import { hkdf } from "@noble/hashes/hkdf";
-import { sha256 } from "@noble/hashes/sha2";
+import { hkdf } from "@noble/hashes/hkdf.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 
 export async function signJWT(
 	payload: any,
