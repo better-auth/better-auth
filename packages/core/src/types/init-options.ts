@@ -1,5 +1,10 @@
-import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
-import type { Database } from "better-sqlite3";
+import type {
+	Dialect,
+	Kysely,
+	MysqlPool,
+	PostgresPool,
+	SqliteDatabase,
+} from "kysely";
 import type { CookieOptions } from "better-call";
 import type { LiteralUnion } from "./helper";
 import type {
@@ -236,6 +241,15 @@ export type BetterAuthAdvancedOptions = {
 		 * @default false
 		 */
 		skipStateCookieCheck?: boolean;
+		/**
+		 * Strategy for storing OAuth state
+		 *
+		 * - "cookie": Store state in an encrypted cookie (stateless)
+		 * - "database": Store state in the database
+		 *
+		 * @default "cookie"
+		 */
+		storeStateStrategy?: "database" | "cookie";
 	};
 };
 
@@ -295,7 +309,7 @@ export type BetterAuthOptions = {
 	database?:
 		| PostgresPool
 		| MysqlPool
-		| Database
+		| SqliteDatabase
 		| Dialect
 		| DBAdapterInstance
 		| BunDatabase
@@ -656,10 +670,6 @@ export type BetterAuthOptions = {
 		additionalFields?: {
 			[key: string]: DBFieldAttribute;
 		};
-		/**
-		 * @default false
-		 */
-		storeSessionInJWT?: boolean;
 		/**
 		 * By default if secondary storage is provided
 		 * the session is stored in the secondary storage.
