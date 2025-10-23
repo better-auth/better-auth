@@ -81,6 +81,54 @@ export const auth = betterAuth({
     ],
 })
 ```
+### Cross-Domain Cookies (Different Domains)
+
+<Callout type="error">
+Cross-domain cookies (between completely different domains) are **not supported** and will not work reliably in modern browsers. This is a fundamental browser security limitation, not a framework limitation.
+</Callout>
+
+#### Why Cross-Domain Cookies Don't Work
+
+**1. Modern browsers block third-party cookies by default**
+- Most browsers (Safari, Firefox, Chrome) block third-party cookies to protect user privacy
+- Even with the `Partitioned` flag, support is inconsistent across browsers
+
+**2. Server-side rendering breaks**
+- Even if a cookie is set from one domain for another, the server on the second domain cannot read it
+- This makes SSR fail, breaking fullstack applications
+- Only works partially for pure SPAs, but even then unreliably
+
+**3. Browser security model**
+- Cookies are designed to be domain-specific for security reasons
+- Cross-site request forgery (CSRF) and other attacks are prevented by this model
+
+#### Recommended Alternatives
+
+Instead of trying to use cross-domain cookies, consider these reliable approaches:
+
+**1. Use a reverse proxy or rewrites**
+- Configure your framework's rewrites to proxy API calls
+- This makes both frontend and backend appear to be on the same domain
+- Example: Frontend on `app.com` proxies API calls to `/api/*` which forwards to your backend
+
+**2. Deploy under a shared domain**
+- Use subdomains under the same parent domain (e.g., `app.example.com` and `api.example.com`)
+- Configure cross-subdomain cookies as shown in the section above
+- Deploy through platforms that support custom domains or use DNS providers
+
+**3. Token-based authentication (SPA only)**
+- Store tokens in localStorage or sessionStorage
+- Send tokens in request headers instead of cookies
+- Note: This disables SSR and only works for client-side applications
+
+**4. Use authentication providers**
+- Consider using authentication services that handle cross-domain scenarios
+- These typically use OAuth flows or similar mechanisms designed for cross-domain authentication
+
+<Callout type="info">
+Remember: Cross-site cookies are fundamentally incompatible with modern browser security models. Always design your architecture with same-origin or subdomain strategies in mind.
+</Callout>
+
 ### Secure Cookies
 
 By default, cookies are secure only when the server is running in production mode. You can force cookies to be always secure by setting `useSecureCookies` to `true` in the `advanced` object in the auth options.
