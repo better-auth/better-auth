@@ -48,9 +48,9 @@ export function Intro() {
 				<span className="">available here.</span>
 			</h1>
 			<p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
-				Better Auth is comprehensive authentication framework for TypeScript that
-				provides a wide range of features to make authentication easier and more
-				secure.
+				Better Auth is the most comprehensive authentication framework for
+				TypeScript that provides a wide range of features to make authentication
+				easier and more secure.
 			</p>
 			<hr className="h-px bg-gray-300 mt-5" />
 			<div className="mt-8 flex flex-wrap text-gray-600 dark:text-gray-300  justify-center gap-x-1 gap-y-3 sm:gap-x-2 lg:justify-start">

@@ -79,9 +79,9 @@ const ChangelogPage = async () => {
 						<span className="">available here.</span>
 					</h1>
 					<p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
-						Better Auth is comprehensive authentication framework for TypeScript
-						that provides a wide range of features to make authentication easier
-						and more secure.
+						Better Auth is the most comprehensive authentication framework for
+						TypeScript that provides a wide range of features to make
+						authentication easier and more secure.
 					</p>
 					<hr className="mt-5 h-px bg-gray-300" />
 					<div className="flex flex-wrap gap-x-1 gap-y-3 mt-8 text-gray-600 dark:text-gray-300 sm:gap-x-2">
