@@ -79,6 +79,7 @@ export function getTelemetryAuthConfig(
 			cookieCache: {
 				enabled: options.session?.cookieCache?.enabled,
 				maxAge: options.session?.cookieCache?.maxAge,
+				strategy: options.session?.cookieCache?.strategy,
 			},
 			disableSessionRefresh: options.session?.disableSessionRefresh,
 			expiresIn: options.session?.expiresIn,
