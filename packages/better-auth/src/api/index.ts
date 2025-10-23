@@ -9,8 +9,6 @@ import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares";
 import {
 	callbackOAuth,
-	forgetPassword,
-	forgetPasswordCallback,
 	getSession,
 	listSessions,
 	resetPassword,
@@ -212,7 +210,6 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		signOut,
 		signUpEmail: signUpEmail<Option>(),
 		signInEmail,
-		forgetPassword,
 		resetPassword,
 		verifyEmail,
 		sendVerificationEmail,
@@ -221,7 +218,6 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		setPassword,
 		updateUser: updateUser<Option>(),
 		deleteUser,
-		forgetPasswordCallback,
 		requestPasswordReset,
 		requestPasswordResetCallback,
 		listSessions: listSessions<Option>(),

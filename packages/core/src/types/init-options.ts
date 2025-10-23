@@ -671,10 +671,6 @@ export type BetterAuthOptions = {
 			[key: string]: DBFieldAttribute;
 		};
 		/**
-		 * @default false
-		 */
-		storeSessionInJWT?: boolean;
-		/**
 		 * By default if secondary storage is provided
 		 * the session is stored in the secondary storage.
 		 *
@@ -710,6 +706,15 @@ export type BetterAuthOptions = {
 			 * @default false
 			 */
 			enabled?: boolean;
+			/**
+			 * Strategy for encoding/decoding cookie cache
+			 *
+			 * - "base64-hmac": Uses base64url encoding with HMAC-SHA256 signature (legacy, less secure)
+			 * - "jwt": Uses JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation for secure encrypted tokens
+			 *
+			 * @default "jwt"
+			 */
+			strategy?: "base64-hmac" | "jwt";
 		};
 		/**
 		 * The age of the session to consider it fresh.
