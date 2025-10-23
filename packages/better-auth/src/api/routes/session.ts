@@ -123,6 +123,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								},
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
+						} else {
+							const dataCookie = ctx.context.authCookies.sessionData.name;
+							ctx.setCookie(dataCookie, "", {
+								maxAge: 0,
+							});
+							return ctx.json(null);
 						}
 					} else {
 						// Decode base64-hmac (legacy)
