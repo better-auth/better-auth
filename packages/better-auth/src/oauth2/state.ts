@@ -184,15 +184,82 @@ export async function parseState(c: GenericEndpointContext) {
 		await c.context.internalAdapter.deleteVerificationValue(data.id);
 	}
 
+	// Ensure there's always a fallback value on the parsed data (used later)
 	if (!parsedData.errorURL) {
 		parsedData.errorURL = `${c.context.baseURL}/error`;
 	}
 
+<<<<<<< Updated upstream
 	// Check expiration
 	if (parsedData.expiresAt < Date.now()) {
 		const errorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+=======
+	// Helper to decide which error URL to use safely.
+	function computeFinalErrorURL(parsedErrorURL?: string) {
+		const defaultErrorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+
+		// If no per-flow URL provided, return default.
+		if (!parsedErrorURL) return defaultErrorURL;
+
+		// Read whitelist from config (opt-in). This prevents open redirects.
+		const trustedOrigins: string[] =
+			(c.context.options as any).trustedErrorRedirectOrigins ?? [];
+
+		// If no whitelist configured, do NOT use parsedErrorURL for security.
+		if (!Array.isArray(trustedOrigins) || trustedOrigins.length === 0) {
+			return defaultErrorURL;
+		}
+
+		try {
+			// Resolve relative URLs safely against baseURL.
+			const parsed = new URL(parsedErrorURL, c.context.baseURL);
+			const parsedOrigin = parsed.origin;
+
+			// Compare against trusted origins (normalized to origin).
+			for (const origin of trustedOrigins) {
+				try {
+					if (new URL(origin).origin === parsedOrigin) {
+						return parsed.toString();
+					}
+				} catch {
+					// ignore invalid whitelist entry
+				}
+			}
+		} catch {
+			// invalid parsedErrorURL -> fallback
+		}
+		return defaultErrorURL;
+	}
+
+	const stateCookie = c.context.createAuthCookie("state");
+	const stateCookieValue = await c.getSignedCookie(
+		stateCookie.name,
+		c.context.secret,
+	);
+	/**
+	 * This is generally cause security issue and should only be used in
+	 * dev or staging environments. It's currently used by the oauth-proxy
+	 * plugin
+	 */
+	const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
+	if (
+		!skipStateCookieCheck &&
+		(!stateCookieValue || stateCookieValue !== state)
+	) {
+		const finalErrorURL = computeFinalErrorURL(parsedData.errorURL);
+		throw c.redirect(`${finalErrorURL}?error=state_mismatch`);
+	}
+	c.setCookie(stateCookie.name, "", {
+		maxAge: 0,
+	});
+	if (parsedData.expiresAt < Date.now()) {
+		await c.context.internalAdapter.deleteVerificationValue(data.id);
+		const finalErrorURL = computeFinalErrorURL(parsedData.errorURL);
+		throw c.redirect(`${finalErrorURL}?error=please_restart_the_process`);
+>>>>>>> Stashed changes
 	}
 
 	return parsedData;

@@ -44,12 +44,15 @@ export const init = async (options: BetterAuthOptions) => {
 		}
 	}
 
+	// ✅ Step 2: Merge default value for trustedErrorRedirectOrigins
 	options = {
 		...options,
 		secret,
 		baseURL: baseURL ? new URL(baseURL).origin : "",
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
+		trustedErrorRedirectOrigins:
+			options.trustedErrorRedirectOrigins ?? [],
 	};
 
 	checkEndpointConflicts(options, logger);

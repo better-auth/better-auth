@@ -1045,7 +1045,7 @@ export type BetterAuthOptions = {
 			delete?: {
 				/**
 				 * Hook that is called before an account is deleted.
-				 * if the hook returns false, the account will not be deleted.
+				 * if this returns false, the account will not be deleted.
 				 */
 				before?: (
 					account: Account & Record<string, unknown>,
@@ -1158,6 +1158,14 @@ export type BetterAuthOptions = {
 		 */
 		errorURL?: string;
 	};
+
+	/**
+	 * Optional whitelist of origins that are allowed as per-flow error redirect targets.
+	 * Example: ["https://app.example.com", "myapp://host"]
+	 * If omitted or empty, parsed per-flow errorCallbackURL will NOT be used on state-mismatch.
+	 */
+	trustedErrorRedirectOrigins?: string[];
+
 	/**
 	 * Hooks
 	 */
