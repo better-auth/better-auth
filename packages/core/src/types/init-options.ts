@@ -715,6 +715,19 @@ export type BetterAuthOptions = {
 			 * @default "jwt"
 			 */
 			strategy?: "base64-hmac" | "jwt";
+			/**
+			 * Controls cache freshness and when to refresh from database.
+			 *
+			 * - `false`: Disable cache freshness checks. Cache is only invalidated when it reaches maxAge expiry.
+			 * - `true`: Use default freshness duration of 60 seconds.
+			 * - `number`: Custom freshness duration in seconds.
+			 *
+			 * When enabled, if the cached data is older than the freshness threshold,
+			 * it will be refreshed from the database to ensure data consistency.
+			 *
+			 * @default 60 seconds
+			 */
+			freshCache?: boolean | number;
 		};
 		/**
 		 * The age of the session to consider it fresh.

@@ -123,7 +123,11 @@ export async function setCookieCache(
 
 		// Apply field filtering to user data
 		const filteredUser = parseUserOutput(ctx.context.options, session.user);
-		const sessionData = { session: filteredSession, user: filteredUser };
+		const sessionData = {
+			session: filteredSession,
+			user: filteredUser,
+			updatedAt: Date.now(),
+		};
 
 		const options = {
 			...ctx.context.authCookies.sessionData.options,
@@ -310,6 +314,7 @@ export const getCookieCache = async <
 	S extends {
 		session: Session & Record<string, any>;
 		user: User & Record<string, any>;
+		updatedAt?: number;
 	},
 >(
 	request: Request | Headers,

@@ -120,6 +120,16 @@ export const init = async (options: BetterAuthOptions) => {
 				options.session?.freshAge === undefined
 					? 60 * 60 * 24 // 24 hours
 					: options.session.freshAge,
+			cookieFreshCache: (() => {
+				const freshCache = options.session?.cookieCache?.freshCache;
+				if (freshCache === false) {
+					return false;
+				}
+				if (freshCache === true || freshCache === undefined) {
+					return 60; // Default 60 seconds
+				}
+				return freshCache; // Custom number
+			})(),
 		},
 		secret,
 		rateLimit: {
