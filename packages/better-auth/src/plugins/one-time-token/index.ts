@@ -1,6 +1,7 @@
 import * as z from "zod";
 import { defaultKeyHasher } from "..";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";
 import { sessionMiddleware } from "../../api";
 import { generateRandomString } from "../../crypto";
 import type { BetterAuthPlugin } from "@better-auth/core";

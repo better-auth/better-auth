@@ -35,7 +35,7 @@ export const betterAuth = <Options extends BetterAuthOptions>(
 	}, {});
 	return {
 		handler: async (request: Request) => {
-			const ctx = await authContext;
+			const { context: ctx } = await authContext;
 			const basePath = ctx.options.basePath || "/api/auth";
 			if (!ctx.options.baseURL) {
 				const baseURL = getBaseURL(undefined, basePath, request);
@@ -74,7 +74,12 @@ export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	api: InferAPI<ReturnType<typeof router<Options>>["endpoints"]>;
 	options: Options;
 	$ERROR_CODES: InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES;
-	$context: Promise<AuthContext>;
+	/**
+	 * Accessing the context directly from `$context` is deprecated. Please use the `$context.context` property instead.
+	 */
+	$context: Promise<
+		AuthContext
+	>;
 	/**
 	 * Share types
 	 */

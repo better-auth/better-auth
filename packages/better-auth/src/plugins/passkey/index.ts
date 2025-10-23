@@ -13,7 +13,8 @@ import type {
 import { APIError } from "better-call";
 import { generateRandomString } from "../../crypto/random";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";
 import { sessionMiddleware } from "../../api";
 import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
 import type { InferOptionSchema } from "../../types/plugins";

@@ -1,6 +1,7 @@
 import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";
 import { setSessionCookie } from "../../cookies";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState } from "../../utils";

@@ -1,5 +1,6 @@
 import { sessionMiddleware } from "../../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";

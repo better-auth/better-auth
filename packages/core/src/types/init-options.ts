@@ -244,13 +244,6 @@ export type BetterAuthOptions = {
 	 */
 	basePath?: string;
 	/**
-	 * Used to pass config between plugins
-	 * Exact copy of AuthContext.pluginConfig
-	 */
-	pluginConfig?: {
-		components?: ComponentPluginConfig;
-	};
-	/**
 	 * The secret to use for encryption,
 	 * signing and hashing.
 	 *

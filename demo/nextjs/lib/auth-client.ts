@@ -1,4 +1,4 @@
-import { createAuthClient } from "better-auth/react";
+import { createAuthClient } from "@better-auth/react/client";
 import {
 	organizationClient,
 	passkeyClient,
@@ -10,7 +10,8 @@ import {
 	genericOAuthClient,
 	deviceAuthorizationClient,
 	lastLoginMethodClient,
-} from "better-auth/client/plugins";
+	componentClient,
+} from "@better-auth/client/plugins"; 
 import { toast } from "sonner";
 import { stripeClient } from "@better-auth/stripe/client";
 
@@ -38,6 +39,7 @@ export const client = createAuthClient({
 		}),
 		deviceAuthorizationClient(),
 		lastLoginMethodClient(),
+		componentClient()
 	],
 	fetchOptions: {
 		onError(e) {

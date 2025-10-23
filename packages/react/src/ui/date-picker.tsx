@@ -16,45 +16,46 @@ type Options = {
 	props: {
 		button?: React.ComponentProps<typeof Button>;
 		content?: React.ComponentProps<typeof PopoverContent>;
-		calender?: React.ComponentProps<typeof Calendar>
+		calender?: React.ComponentProps<typeof Calendar>;
 	};
 	buttonText?: string;
-	onValueChange?: (date: Date) => void;
+	onValueChange?: (date: Date | undefined) => void;
+	value?: Date | undefined;
 };
 
-export function DatePicker({styles, buttonText}: Options) {
+export function DatePicker({
+	styles,
+	buttonText,
+	onValueChange,
+	value,
+}: Options) {
 	const [open, setOpen] = React.useState(false);
-	const [date, setDate] = React.useState<Date | undefined>(undefined);
-  const {
-			button: buttonStyle = "w-48 justify-between font-normal",
-			content: contentStyle = "w-auto overflow-hidden p-0",
-			calender: calenderStyle = "w-auto overflow-hidden p-0",
-		} = styles ?? {};
+	const {
+		button: buttonStyle = "w-48 justify-between font-normal",
+		content: contentStyle = "w-auto overflow-hidden p-0",
+		calender: calenderStyle = "w-auto overflow-hidden p-0",
+	} = styles ?? {};
 
 	return (
-			<Popover open={open} onOpenChange={setOpen}>
-				<PopoverTrigger asChild>
-					<Button
-						variant="outline"
-						id="date"
-						className={buttonStyle}
-					>
-						{buttonText ?? (date ? date.toLocaleDateString() : "Select date")}
-						<ChevronDownIcon />
-					</Button>
-				</PopoverTrigger>
-				<PopoverContent className={contentStyle} align="start">
-					<Calendar
-						mode="single"
-						selected={date}
-						captionLayout="dropdown"
-						onSelect={(date) => {
-							setDate(date);
-							setOpen(false);
-						}}
-            className={calenderStyle}
-					/>
-				</PopoverContent>
-			</Popover>
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button variant="outline" id="date" className={buttonStyle}>
+					{buttonText ?? (value ? value.toLocaleDateString() : "Select date")}
+					<ChevronDownIcon />
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent className={contentStyle} align="start">
+				<Calendar
+					mode="single"
+					selected={value}
+					captionLayout="dropdown"
+					onSelect={(date) => {
+						onValueChange?.(date);
+						setOpen(false);
+					}}
+					className={calenderStyle}
+				/>
+			</PopoverContent>
+		</Popover>
 	);
 }

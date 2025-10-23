@@ -3,8 +3,8 @@
 import * as React from "react";
 import { DayPicker } from "react-day-picker";
 
-import { cn } from "@/lib/utils";
-import { buttonVariants } from "@/components/ui/button";
+import { cn } from "../lib/utils";
+import { buttonVariants } from "./button";
 
 function Calendar({
 	className,

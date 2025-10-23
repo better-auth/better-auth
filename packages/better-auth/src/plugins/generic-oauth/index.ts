@@ -2,7 +2,8 @@ import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import {

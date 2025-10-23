@@ -158,7 +158,7 @@ To resolve this, you can:
 }
 
 export function getEndpoints<Option extends BetterAuthOptions>(
-	ctx: Promise<AuthContext> | AuthContext,
+	ctx: Promise<{ context: AuthContext }> | { context: AuthContext },
 	options: Option,
 ) {
 	const pluginEndpoints =

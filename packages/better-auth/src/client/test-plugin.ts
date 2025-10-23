@@ -1,7 +1,8 @@
 import { atom, computed } from "nanostores";
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";
 import { useAuthQuery } from "./query";
 import z from "zod";
 

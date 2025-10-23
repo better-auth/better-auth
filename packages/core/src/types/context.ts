@@ -17,7 +17,7 @@ import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 } from "./init-options";
-import type { ComponentPluginConfig } from "../plugins";
+import type { SignInConfig } from "../../../better-auth/src/plugins/components/config";
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
@@ -268,7 +268,4 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			anonymousId?: string;
 			payload: Record<string, any>;
 		}) => Promise<void>;
-		pluginConfig: {
-			components?: ComponentPluginConfig;
-		};
 	};

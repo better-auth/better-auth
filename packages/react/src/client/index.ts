@@ -1,23 +1,49 @@
-import { getClientConfig } from "../config";
+import { useStore } from "./react-store";
+import type {
+	BetterFetchError,
+	BetterFetchResponse,
+} from "@better-fetch/fetch";
+
+// import { getClientConfig } from "better-auth/client/config";
+// import type {
+// 	InferActions,
+// 	InferClientAPI,
+// 	InferErrorCodes,
+// 	IsSignal,
+// 	SessionQueryParams,
+// } from "better-auth/client/types";
+// import type {
+// 	BetterAuthClientPlugin,
+// 	BetterAuthClientOptions,
+// } from "@better-auth/core";
+// import { createDynamicPathProxy } from "better-auth/client/proxy";
+// import type {
+// 	PrettifyDeep,
+// 	UnionToIntersection,
+// } from "better-auth/types/helper";
+// import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+// import type { BasePlugin, AllPlugins } from "@better-auth/components/types"
+
+import type { BasePlugin, AllPlugins } from "../../../components/src/types";
+import type { BASE_ERROR_CODES } from "../../../core/src/error";
+import { getClientConfig } from "../../../better-auth/src/client/config";
 import type {
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
-} from "../types";
+	SessionQueryParams,
+} from "../../../better-auth/src/client/types";
 import type {
 	BetterAuthClientPlugin,
 	BetterAuthClientOptions,
-} from "@better-auth/core";
-import { createDynamicPathProxy } from "../proxy";
-import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
+} from "../../../core/src";
+import { createDynamicPathProxy } from "../../../better-auth/src/client/proxy";
 import type {
-	BetterFetchError,
-	BetterFetchResponse,
-} from "@better-fetch/fetch";
-import { useStore } from "./react-store";
-import type { BASE_ERROR_CODES } from "@better-auth/core/error";
-import type { SessionQueryParams } from "../types";
+	PrettifyDeep,
+	UnionToIntersection,
+} from "../../../better-auth/src/types/helper";
+import type { Methods, SignInMethod, SignInMethodConfig } from "@better-auth/better-auth/src/plugins/components/config";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -27,7 +53,7 @@ export function capitalizeFirstLetter(str: string) {
 	return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-type InferResolvedHooks<O extends BetterAuthClientOptions> =
+export type InferResolvedHooks<O extends BetterAuthClientOptions> =
 	O["plugins"] extends Array<infer Plugin>
 		? Plugin extends BetterAuthClientPlugin
 			? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
@@ -54,6 +80,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		$fetch,
 		$store,
 		atomListeners,
+		components
 	} = getClientConfig(options);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
@@ -73,6 +100,8 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		pluginsAtoms,
 		atomListeners,
 	);
+	// @ts-expect-error
+	proxy.components = components
 
 	type ClientAPI = InferClientAPI<Option>;
 	type Session = ClientAPI extends {
@@ -100,6 +129,12 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 			$ERROR_CODES: PrettifyDeep<
 				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
 			>;
+			$components: {
+				components: {
+					signIn: SignInMethod<Methods>[];
+				};
+				plugins: BasePlugin<AllPlugins>[];
+			};
 		};
 }
 

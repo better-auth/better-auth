@@ -5,6 +5,8 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import { Wrapper, WrapperWithQuery } from "@/components/wrapper";
 import { createMetadata } from "@/lib/metadata";
+import { BetterAuthContext } from "../../../packages/react/src/context";
+import { client } from "@/lib/auth-client";
 
 export const metadata = createMetadata({
 	title: {
@@ -26,12 +28,14 @@ export default function RootLayout({
 				<link rel="icon" href="/favicon/favicon.ico" sizes="any" />
 			</head>
 			<body className={`${GeistSans.variable} ${GeistMono.variable} font-sans`}>
+				<BetterAuthContext options={client}>
 				<ThemeProvider attribute="class" defaultTheme="dark">
 					<Wrapper>
 						<WrapperWithQuery>{children}</WrapperWithQuery>
 					</Wrapper>
 					<Toaster richColors closeButton />
 				</ThemeProvider>
+				</BetterAuthContext>
 			</body>
 		</html>
 	);

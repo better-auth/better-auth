@@ -4,8 +4,8 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import type { LiteralString } from "../../types/helper";
 
 import { APIError } from "../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";
 type ScalarTheme =
 	| "alternate"
 	| "default"

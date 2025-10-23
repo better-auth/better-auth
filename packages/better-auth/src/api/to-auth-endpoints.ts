@@ -32,7 +32,7 @@ const defuReplaceArrays = createDefu((obj, key, value) => {
 
 export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 	endpoints: E,
-	ctx: AuthContext | Promise<AuthContext>,
+	ctx: { context: AuthContext } | Promise<{ context: AuthContext }>,
 ) {
 	const api: Record<
 		string,
@@ -46,7 +46,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 
 	for (const [key, endpoint] of Object.entries(endpoints)) {
 		api[key] = async (context) => {
-			const authContext = await ctx;
+			const { context: authContext } = await ctx;
 			let internalContext: InternalContext = {
 				...context,
 				context: {

@@ -13,7 +13,21 @@
     "exactOptionalPropertyTypes": false,
     "incremental": true,
     "noErrorTruncation": true,
-    "types": ["node", "bun"]
+    "types": ["node", "bun"],
+    "paths": {
+      "@better-auth/*": ["./packages/*"],
+      "better-auth": ["./packages/better-auth/src"]
+    }
   },
-  "exclude": ["**/dist/**", "**/node_modules/**"]
+  "exclude": ["**/dist/**", "**/node_modules/**"],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/components" },
+    { "path": "./packages/react" },
+    { "path": "./packages/expo" },
+    { "path": "./packages/sso" },
+    { "path": "./packages/stripe" },
+    { "path": "./packages/telemetry" },
+    { "path": "./packages/better-auth" }
+  ]
 }

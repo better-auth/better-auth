@@ -7,6 +7,8 @@ import type {
 import type { LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
 import type { WritableAtom, Atom } from "nanostores";
+import type { Methods, SignInConfig, SignInMethod, SignInMethodConfig } from "@better-auth/better-auth/src/plugins/components/config";
+import type { DeepPartial } from "@better-auth/better-auth/src/types/helper";
 
 export interface ClientStore {
 	notify: (signal: string) => void;
@@ -66,4 +68,8 @@ export interface BetterAuthClientPlugin {
 	 * plugin or any plugin the user might have added.
 	 */
 	atomListeners?: ClientAtomListener[];
+
+	components?: {
+		signIn?: SignInConfig[];
+	};
 }

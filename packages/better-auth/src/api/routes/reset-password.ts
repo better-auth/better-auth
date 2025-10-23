@@ -1,5 +1,6 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";
 import { APIError } from "better-call";
 import { getDate } from "../../utils/date";
 import { generateId } from "../../utils";

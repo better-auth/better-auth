@@ -1,6 +1,6 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { APIError } from "better-call";
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";import { APIError } from "better-call";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import {
 	freshSessionMiddleware,

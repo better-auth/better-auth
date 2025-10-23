@@ -1,6 +1,6 @@
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";
 function sanitize(input: string): string {
 	return input
 		.replace(/&/g, "&amp;")

@@ -1,6 +1,7 @@
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";
 import type { BetterAuthPlugin, User } from "../../types";
 import {
 	createAuthorizationURL,

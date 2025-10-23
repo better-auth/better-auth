@@ -22,8 +22,11 @@ import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
 import { isPromise } from "./utils/is-promise";
 import type { AuthContext } from "@better-auth/core";
+import { isDevelopment } from "packages/core/src/env";
 
-export const init = async (options: BetterAuthOptions) => {
+export const init = async (
+	options: BetterAuthOptions,
+): Promise<AuthContext> => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);

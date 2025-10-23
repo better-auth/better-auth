@@ -5,9 +5,11 @@ import type {
 	BetterAuthClientOptions,
 	ClientAtomListener,
 } from "@better-auth/core";
+// import type { BetterAuthClientOptions, ClientAtomListener } from "../../../core/src";
 import { redirectPlugin } from "./fetch-plugins";
 import { getSessionAtom } from "./session-atom";
 import { parseJSON } from "./parser";
+import type { Methods, SignInMethodConfig } from "../plugins/components/config";
 
 export const getClientConfig = (
 	options?: BetterAuthClientOptions,
@@ -84,6 +86,12 @@ export const getClientConfig = (
 		},
 	];
 
+	const components: {
+		signIn: SignInMethodConfig<Methods>[]
+	} = {
+		signIn: [],
+	};
+
 	for (const plugin of plugins) {
 		if (plugin.getAtoms) {
 			Object.assign(pluginsAtoms, plugin.getAtoms?.($fetch));
@@ -93,6 +101,15 @@ export const getClientConfig = (
 		}
 		if (plugin.atomListeners) {
 			atomListeners.push(...plugin.atomListeners);
+		}
+		if (plugin.components) {
+			Object.entries(plugin.components).forEach(([key, value]) => {
+				// @ts-expect-error
+				components[key] = components[key]
+					//@ts-expect-error
+					? [...components[key], ...value]
+					: [value];
+			})
 		}
 	}
 
@@ -129,5 +146,6 @@ export const getClientConfig = (
 		atomListeners,
 		$fetch,
 		$store,
+		components,
 	};
 };

@@ -1,25 +1,30 @@
-import type { AuthContext } from "../../core/src";
 import React, { createContext, useContext } from "react";
+import { errors } from "@better-auth/components";
+import type { createAuthClient } from "./client";
 
-const ComponentContext = createContext<AuthContext>(
-	undefined as unknown as AuthContext,
-);
+type Context = ReturnType<typeof createAuthClient>;
+
+const ComponentContext = createContext<Context | undefined>(undefined);
 
 export function useOptions() {
-	return useContext(ComponentContext);
+	const ctx = useContext(ComponentContext);
+	if (!ctx) {
+		throw new errors.BetterAuthComponentMissingConfigError("No context found");
+	}
+	return ctx;
 }
 
 export function BetterAuthContext({
 	options,
 	children,
 }: {
-	options: AuthContext;
+	options: ReturnType<typeof createAuthClient>
 	children: React.ReactNode;
 }) {
 	return React.createElement(
 		ComponentContext.Provider,
 		{
-			value: options,
+			value: options
 		},
 		children,
 	);

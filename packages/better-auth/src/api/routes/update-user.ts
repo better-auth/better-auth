@@ -1,6 +1,6 @@
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import {
 	getSessionFromCtx,

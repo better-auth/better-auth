@@ -1,6 +1,7 @@
 import * as z from "zod";
 import { APIError } from "../../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
+// import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { createAuthEndpoint } from "../../../../core/src/middleware";
 import type { OrganizationOptions } from "../types";
 import { orgSessionMiddleware } from "../call";
 import { hasPermission } from "../has-permission";

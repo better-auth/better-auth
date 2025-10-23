@@ -16,8 +16,10 @@ import type { Atom } from "nanostores";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
+	Methods,
 } from "@better-fetch/fetch";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { SignInConfig, SignInMethod } from "../plugins/components/config";
 
 type InferResolvedHooks<O extends BetterAuthClientOptions> =
 	O["plugins"] extends Array<infer Plugin>
@@ -90,5 +92,11 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 			$ERROR_CODES: PrettifyDeep<
 				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
 			>;
+			$components: {
+				components: {
+					signIn: SignInConfig[];
+				};
+				plugins: BasePlugin<AllPlugins>[];
+			};
 		};
 }
