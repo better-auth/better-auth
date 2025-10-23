@@ -14,8 +14,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 					}
 						? M extends string
 							? M
-							: string | undefined
-						: string | undefined;
+							: string
+						: string;
 					fields: {
 						organizationId: {
 							type: "string";
@@ -31,8 +31,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 							}
 								? F extends string
 									? F
-									: string | undefined
-								: string | undefined;
+									: string
+								: string;
 						};
 						role: {
 							type: "string";
@@ -44,8 +44,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 							}
 								? F extends string
 									? F
-									: string | undefined
-								: string | undefined;
+									: string
+								: string;
 						};
 						permission: {
 							type: "string";
@@ -57,8 +57,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 							}
 								? F extends string
 									? F
-									: string | undefined
-								: string | undefined;
+									: string
+								: string;
 						};
 						createdAt: {
 							type: "date";
@@ -71,8 +71,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 							}
 								? F extends string
 									? F
-									: string | undefined
-								: string | undefined;
+									: string
+								: string;
 						};
 						updatedAt: {
 							type: "date";
@@ -84,8 +84,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 							}
 								? F extends string
 									? F
-									: string | undefined
-								: string | undefined;
+									: string
+								: string;
 						};
 					} & (O["schema"] extends {
 						organizationRole: { additionalFields: infer F };
@@ -100,8 +100,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 							modelName: O["schema"] extends { team: { modelName: infer M } }
 								? M extends string
 									? M
-									: string | undefined
-								: string | undefined;
+									: string
+								: string;
 							fields: {
 								name: {
 									type: "string";
@@ -111,8 +111,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 									}
 										? F extends string
 											? F
-											: string | undefined
-										: string | undefined;
+											: string
+										: string;
 								};
 								organizationId: {
 									type: "string";
@@ -126,8 +126,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 									}
 										? F extends string
 											? F
-											: string | undefined
-										: string | undefined;
+											: string
+										: string;
 								};
 								createdAt: {
 									type: "date";
@@ -137,8 +137,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 									}
 										? F extends string
 											? F
-											: string | undefined
-										: string | undefined;
+											: string
+										: string;
 								};
 								updatedAt: {
 									type: "date";
@@ -148,8 +148,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 									}
 										? F extends string
 											? F
-											: string | undefined
-										: string | undefined;
+											: string
+										: string;
 								};
 							} & (O["schema"] extends { team: { additionalFields: infer F } }
 								? F
@@ -161,8 +161,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 							}
 								? M extends string
 									? M
-									: string | undefined
-								: string | undefined;
+									: string
+								: string;
 							fields: {
 								teamId: {
 									type: "string";
@@ -176,8 +176,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 									}
 										? F extends string
 											? F
-											: string | undefined
-										: string | undefined;
+											: string
+										: string;
 								};
 								userId: {
 									type: "string";
@@ -191,8 +191,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 									}
 										? F extends string
 											? F
-											: string | undefined
-										: string | undefined;
+											: string
+										: string;
 								};
 								createdAt: {
 									type: "date";
@@ -202,8 +202,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 									}
 										? F extends string
 											? F
-											: string | undefined
-										: string | undefined;
+											: string
+										: string;
 								};
 							};
 						};
@@ -215,8 +215,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 						}
 							? M extends string
 								? M
-								: string | undefined
-							: string | undefined;
+								: string
+							: string;
 						fields: {
 							name: {
 								type: "string";
@@ -227,8 +227,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 							slug: {
 								type: "string";
@@ -240,8 +240,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 							logo: {
 								type: "string";
@@ -251,8 +251,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 							createdAt: {
 								type: "date";
@@ -262,8 +262,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 							updatedAt: {
 								type: "date";
@@ -273,8 +273,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 						};
 					};
@@ -282,8 +282,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 						modelName: O["schema"] extends { member: { modelName: infer M } }
 							? M extends string
 								? M
-								: string | undefined
-							: string | undefined;
+								: string
+							: string;
 						fields: {
 							organizationId: {
 								type: "string";
@@ -297,8 +297,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 							userId: {
 								type: "string";
@@ -312,8 +312,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 							role: {
 								type: "string";
@@ -323,8 +323,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 								defaultValue: "member";
 							};
 							createdAt: {
@@ -335,8 +335,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 						} & (O["schema"] extends { member: { additionalFields: infer F } }
 							? F
@@ -347,7 +347,7 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 							invitation: { modelName: infer M };
 						}
 							? M
-							: string | undefined;
+							: string;
 						fields: {
 							organizationId: {
 								type: "string";
@@ -361,8 +361,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 							email: {
 								type: "string";
@@ -373,8 +373,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 							role: {
 								type: "string";
@@ -385,8 +385,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 							status: {
 								type: "string";
@@ -397,8 +397,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 								defaultValue: "pending";
 							};
 							expiresAt: {
@@ -409,8 +409,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 							createdAt: {
 								type: "date";
@@ -420,8 +420,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 								defaultValue: Date;
 							};
 							inviterId: {
@@ -436,8 +436,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 						} & (O["schema"] extends {
 							invitation: { additionalFields: infer F };
@@ -455,8 +455,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 										}
 											? F extends string
 												? F
-												: string | undefined
-											: string | undefined;
+												: string
+											: string;
 									};
 								}
 							: {};
@@ -471,8 +471,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								}
 									? F extends string
 										? F
-										: string | undefined
-									: string | undefined;
+										: string
+									: string;
 							};
 						} & O["teams"] extends { enabled: true }
 							? {
@@ -488,8 +488,8 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 										}
 											? F extends string
 												? F
-												: string | undefined
-											: string | undefined;
+												: string
+											: string;
 									};
 								}
 							: {
@@ -501,15 +501,15 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 										}
 											? F extends string
 												? F
-												: string | undefined
-											: string | undefined;
+												: string
+											: string;
 									};
 								} & (O["schema"] extends {
 									session: { additionalFields: infer F };
 								}
 									? F extends string
 										? F
-										: string | undefined
+										: string
 									: {});
 					};
 				};
