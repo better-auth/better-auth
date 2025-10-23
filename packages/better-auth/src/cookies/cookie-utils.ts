@@ -105,3 +105,20 @@ export function setCookieToHeader(headers: Headers) {
 		headers.set("cookie", updatedCookies);
 	};
 }
+
+export function excludeFields<T extends Record<string, any>>(
+	obj: T,
+	fieldsToExclude: string[],
+	mandatoryFields: string[] = [],
+): Partial<T> {
+	if (!fieldsToExclude.length) return obj;
+
+	const result: Record<string, any> = {};
+	for (const [key, value] of Object.entries(obj)) {
+		if (!fieldsToExclude.includes(key) || mandatoryFields.includes(key)) {
+			result[key] = value;
+		}
+	}
+
+	return result as Partial<T>;
+}

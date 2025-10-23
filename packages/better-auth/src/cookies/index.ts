@@ -15,6 +15,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { parseUserOutput } from "../db/schema";
+import { excludeFields } from "./cookie-utils";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -121,7 +122,11 @@ export async function setCookieCache(
 		);
 
 		// Apply field filtering to user data
-		const filteredUser = parseUserOutput(ctx.context.options, session.user);
+		const filteredUser = excludeFields(
+			parseUserOutput(ctx.context.options, session.user),
+			ctx.context.options.session?.cookieCache?.excludeUserFields ?? [],
+			["id"],
+		);
 		const sessionData = { session: filteredSession, user: filteredUser };
 
 		const options = {

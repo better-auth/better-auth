@@ -706,6 +706,11 @@ export type BetterAuthOptions = {
 			 * @default false
 			 */
 			enabled?: boolean;
+			/**
+			 * Fields to exclude from the cookie cache
+			 * @default []
+			 */
+			excludeUserFields?: string[];
 		};
 		/**
 		 * The age of the session to consider it fresh.
