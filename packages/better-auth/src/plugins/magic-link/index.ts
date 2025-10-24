@@ -16,6 +16,12 @@ interface MagicLinkopts {
 	 */
 	expiresIn?: number;
 	/**
+	 * Allowed attempts for verifying the magic link token.
+	 * Note: Passing Infinity will allow unlimited attempts.
+	 * @default 1
+	 */
+	allowedAttempts?: number;
+	/**
 	 * Send magic link implementation.
 	 */
 	sendMagicLink: (
@@ -64,6 +70,7 @@ interface MagicLinkopts {
 export const magicLink = (options: MagicLinkopts) => {
 	const opts = {
 		storeToken: "plain",
+		allowedAttempts: 1,
 		...options,
 	} satisfies MagicLinkopts;
 
@@ -181,7 +188,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					const storedToken = await storeToken(ctx, verificationToken);
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: storedToken,
-						value: JSON.stringify({ email, name: ctx.body.name }),
+						value: JSON.stringify({ email, name: ctx.body.name, attempt: 0 }),
 						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
 					});
 					const realBaseURL = new URL(ctx.context.baseURL);
@@ -327,11 +334,7 @@ export const magicLink = (options: MagicLinkopts) => {
 							: callbackURL,
 						ctx.context.baseURL,
 					).toString();
-					const toRedirectTo = callbackURL?.startsWith("http")
-						? callbackURL
-						: callbackURL
-							? `${ctx.context.options.baseURL}${callbackURL}`
-							: ctx.context.options.baseURL;
+
 					const storedToken = await storeToken(ctx, token);
 					const tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(
@@ -346,13 +349,33 @@ export const magicLink = (options: MagicLinkopts) => {
 						);
 						throw ctx.redirect(`${errorCallbackURL}?error=EXPIRED_TOKEN`);
 					}
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						tokenValue.id,
-					);
-					const { email, name } = JSON.parse(tokenValue.value) as {
+					const {
+						email,
+						name,
+						attempt = 0,
+					} = JSON.parse(tokenValue.value) as {
 						email: string;
 						name?: string;
+						attempt: number;
 					};
+					if (attempt && attempt >= opts.allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							tokenValue.id,
+						);
+
+						throw ctx.redirect(`${errorCallbackURL}?error=INVALID_TOKEN`);
+					}
+					await ctx.context.internalAdapter.updateVerificationValue(
+						tokenValue.id,
+						{
+							value: JSON.stringify({
+								email,
+								name,
+								attempt: attempt + 1,
+							}),
+						},
+					);
+
 					let isNewUser = false;
 					let user = await ctx.context.internalAdapter
 						.findUserByEmail(email)
