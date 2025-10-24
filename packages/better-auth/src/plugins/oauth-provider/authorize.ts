@@ -128,9 +128,9 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const requestScopes = query.scope?.split(" ").filter((s) => s) ?? [];
+	// Check for invalid scopes if requested from query
+	let requestScopes = query.scope?.split(" ").filter((s) => s) ?? [];
 	const invalidScopes = requestScopes.filter((scope) => {
-		// invalid in scopes list
 		return (
 			!(client.scopes ?? opts.scopes)?.includes(scope) ||
 			// offline access must be requested through PKCE
@@ -148,8 +148,10 @@ export async function authorizeEndpoint(
 			),
 		);
 	}
+	// Always set default scopes if not originally sent
 	if (!query.scope) {
-		query.scope = (client.scopes ?? opts.scopes)?.join(" ");
+		requestScopes = client.scopes ?? opts.scopes ?? [];
+		query.scope = requestScopes.join(" ");
 	}
 
 	if (!query.code_challenge || !query.code_challenge_method) {

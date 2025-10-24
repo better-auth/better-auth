@@ -145,6 +145,7 @@ describe("oauth introspect", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},
 		});

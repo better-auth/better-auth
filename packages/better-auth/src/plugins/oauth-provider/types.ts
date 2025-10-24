@@ -505,7 +505,7 @@ export interface OAuthAuthorizationQuery {
 	/**
 	 * The scope of the request. Must be a space-separated list of case sensitive strings.
 	 *
-	 * - "openid" is required for all requests
+	 * - "openid" is required for most requests to obtain user id (ie sub)
 	 * - "profile" is required for requests that require user profile information.
 	 * - "email" is required for requests that require user email information.
 	 * - "offline_access" is required for requests that require a refresh token.
@@ -774,7 +774,7 @@ export interface OAuthRefreshToken {
 	 */
 	used?: Date;
 	/**
-	 * When token was used. If set, token is considered a replay attack.
+	 * When token was revoked. If set, token is considered a replay attack.
 	 */
 	revoked?: Date;
 	/**
@@ -782,7 +782,7 @@ export interface OAuthRefreshToken {
 	 *
 	 * Considered Immutable once granted.
 	 */
-	scopes?: string[];
+	scopes: string[];
 }
 
 /**

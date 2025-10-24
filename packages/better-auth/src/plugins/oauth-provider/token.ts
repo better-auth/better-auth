@@ -609,6 +609,12 @@ async function handleAuthorizationCodeGrant(
 		redirect_uri,
 	);
 	const scopes = verificationValue.query.scope?.split(" ");
+	if (!scopes) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error_description: "verification scope unset",
+			error: "invalid_scope",
+		});
+	}
 
 	/** Verify Client */
 	const client = await validateClientCredentials(
@@ -938,11 +944,11 @@ async function handleRefreshTokenGrant(
 	}
 
 	// Check session scopes
-	const scopes = refreshToken?.scopes ?? [];
+	const scopes = refreshToken?.scopes;
 	const requestedScopes = scope?.split(" ");
 	if (requestedScopes) {
 		for (const requestedScope of requestedScopes) {
-			if (!scopes?.includes(requestedScope)) {
+			if (!scopes.includes(requestedScope)) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: `unable to issue scope ${requestedScope}`,
 					error: "invalid_scope",
