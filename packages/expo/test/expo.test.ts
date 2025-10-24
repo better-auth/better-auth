@@ -5,7 +5,7 @@ import { expo } from "../src";
 import { expoClient, storageAdapter } from "../src/client";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
-import { oAuthProxy } from "better-auth/plugins";
+import { createAuthMiddleware, oAuthProxy } from "better-auth/plugins";
 
 vi.mock("expo-web-browser", async () => {
 	return {
@@ -228,6 +228,65 @@ describe("expo", async () => {
 			isPending: false,
 		});
 	});
+
+	it("should modify origin header to expo origin if origin is not set", async () => {
+		let originalOrigin = null;
+		let origin = null;
+		const { auth, client } = testUtils({
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					origin = ctx.request?.headers.get("origin");
+				}),
+			},
+			plugins: [
+				{
+					id: "test",
+					async onRequest(request, ctx) {
+						const origin = request.headers.get("origin");
+						originalOrigin = origin;
+					},
+				},
+				expo(),
+			],
+		});
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+		await client.signIn.email({
+			email: "test@test.com",
+			password: "password",
+			callbackURL: "http://localhost:3000/callback",
+		});
+		expect(origin).toBe("better-auth://");
+		expect(originalOrigin).toBeNull();
+	});
+
+	it("should not modify origin header if origin is set", async () => {
+		let originalOrigin = "test.com";
+		let origin = null;
+		const { auth, client } = testUtils({
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					origin = ctx.request?.headers.get("origin");
+				}),
+			},
+			plugins: [expo()],
+		});
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+		await client.signIn.email(
+			{
+				email: "test@test.com",
+				password: "password",
+				callbackURL: "http://localhost:3000/callback",
+			},
+			{
+				headers: {
+					origin: originalOrigin,
+				},
+			},
+		);
+		expect(origin).toBe(originalOrigin);
+	});
 });
 
 describe("expo with cookieCache", async () => {
@@ -339,16 +398,5 @@ describe("expo with cookieCache", async () => {
 		storage.setItem("better-auth:session_token", "123");
 		expect(map.has("better-auth_session_token")).toBe(true);
 		expect(map.has("better-auth:session_token")).toBe(false);
-	});
-
-	it("should modify origin header to expo origin", async () => {
-		const { data } = await client.signIn.email({
-			email: "test@test.com",
-			password: "password",
-		});
-		expect(data).toMatchObject({
-			session: expect.any(Object),
-			user: expect.any(Object),
-		});
 	});
 });
