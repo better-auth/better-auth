@@ -352,12 +352,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 	const getModelName = initGetModelName({
 		schema: getAuthTables(config),
 		usePlural: false,
-		debugLog: logger.debug,
 	});
 	const getFieldName = initGetFieldName({
 		schema: getAuthTables(config),
 		usePlural: false,
-		debugLog: logger.debug,
 	});
 
 	if (toBeAdded.length) {
