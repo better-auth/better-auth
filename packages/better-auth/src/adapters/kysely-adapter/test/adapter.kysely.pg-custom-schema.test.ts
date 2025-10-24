@@ -20,7 +20,7 @@ const CUSTOM_SCHEMA = "auth";
 
 // Connection string with custom schema in search_path
 const pgDB = new Pool({
-	connectionString: `postgres://user:password@localhost:5433/better_auth?options=-c search_path=${CUSTOM_SCHEMA}`,
+	connectionString: `postgres://user:password@localhost:5435/better_auth?options=-c search_path=${CUSTOM_SCHEMA}`,
 });
 
 let kyselyDB = new Kysely({
