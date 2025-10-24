@@ -41,12 +41,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 	const getModelName = initGetModelName({
 		schema: tables,
-		usePlural: adapter.options?.adapterConfig.usePlural,
+		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
 
 	const getFieldName = initGetFieldName({
 		schema: tables,
-		usePlural: adapter.options?.adapterConfig.usePlural,
+		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
 
 	for (const tableKey in tables) {
