@@ -1123,7 +1123,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 
 			const organizationId =
-				ctx.body.organizationId || session.session.activeOrganizationId;
+				ctx.body.organizationId ?? session.session.activeOrganizationId;
 
 			if (!organizationId) {
 				throw new APIError("BAD_REQUEST", {
