@@ -194,16 +194,71 @@ await authClient.verifyEmail({
 
 #### 2. Via OTP (When `includeOTP` is enabled)
 
-Users can enter the OTP code they received:
+When users receive the email with an OTP code, they can enter it on a verification page. Here's a complete example:
 
-```ts title="verify.ts"
-await authClient.verifyEmail.otp({
-    email: user.email,
-    otp: userInputCode  // e.g., "123456"
-});
+```tsx title="verify-email-otp.tsx"
+"use client";
+
+import { useState } from "react";
+import { authClient } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
+
+export default function VerifyEmailWithOTP() {
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [error, setError] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const router = useRouter();
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsVerifying(true);
+    setError("");
+
+    const { data, error: verifyError } = await authClient.verifyEmail.otp({
+      email,
+      otp,
+    });
+
+    if (verifyError) {
+      setError(verifyError.message || "Invalid OTP");
+      setIsVerifying(false);
+    } else {
+      // Email verified successfully! Session is automatically updated.
+      router.push("/dashboard");
+    }
+  };
+
+  return (
+    <form onSubmit={handleVerify}>
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required
+      />
+      <input
+        type="text"
+        placeholder="Enter 6-digit code"
+        value={otp}
+        onChange={(e) => setOtp(e.target.value)}
+        maxLength={6}
+        required
+      />
+      <button type="submit" disabled={isVerifying}>
+        {isVerifying ? "Verifying..." : "Verify Email"}
+      </button>
+      {error && <p>{error}</p>}
+    </form>
+  );
+}
 ```
 
-The client automatically calls the `/verify-email/otp` endpoint and updates the session.
+After successful verification:
+- The user's `emailVerified` status is updated to `true`
+- If `autoSignInAfterVerification` is enabled, the user is automatically signed in
+- The session is automatically updated on the client
 
 ### Auto Sign In After Verification
 
