@@ -1,21 +1,21 @@
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
 import {
+	afterAll,
+	afterEach,
+	beforeAll,
 	describe,
 	expect,
 	it,
 	vi,
-	beforeAll,
-	afterAll,
-	afterEach,
 } from "vitest";
-import { setupServer } from "msw/node";
-import { http, HttpResponse } from "msw";
-import { anonymous } from ".";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
-import { anonymousClient } from "./client";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { DEFAULT_SECRET } from "../../utils/constants";
 import { signJWT } from "../../crypto";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { DEFAULT_SECRET } from "../../utils/constants";
+import { anonymous } from ".";
+import { anonymousClient } from "./client";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];
