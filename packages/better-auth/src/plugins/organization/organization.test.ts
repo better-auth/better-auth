@@ -1,48 +1,34 @@
 // ==
-import { describe, expect, expectTypeOf, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { organization } from "./organization";
-import {
-	type BetterFetchError,
-	createAuthClient,
-	type PreinitializedWritableAtom,
-} from "../../client";
-import { inferOrgAdditionalFields, organizationClient } from "./client";
+
 // ==
 // ==
 import { APIError, type Prettify } from "better-call";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { memoryAdapter } from "../../adapters/memory-adapter";
-import { createAuthClient } from "../../client";
+import {
+	type BetterFetchError,
+	createAuthClient,
+	type PreinitializedWritableAtom,
+} from "../../client";
+import { parseSetCookieHeader } from "../../cookies";
 import { nextCookies } from "../../integrations/next-js";
 import { getTestInstance } from "../../test-utils/test-instance";
-import type { PrettifyDeep } from "../../types/helper";
-// ==
-import type {
-	InferInvitation,
-	InferMember,
-	InferOrganization,
-	InferTeam,
-	InvitationStatus,
-} from "./schema";
 import type { User } from "../../types";
-import { parseSetCookieHeader } from "../../cookies";
-import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import { createAccessControl } from "../access";
-import { admin } from "../admin";
-import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
-import { nextCookies } from "../../integrations/next-js";
-import { getFullOrganization } from "./routes/crud-org";
-// ===
+import type { PrettifyDeep } from "../../types/helper";
 import { createAccessControl } from "../access";
 import { admin } from "../admin";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { organization } from "./organization";
-import type { InvitationStatus } from "./schema";
-import type { OrganizationOptions } from "./types";
 // ==
+import type {
+	InferInvitation,
+	InferMember,
+	InferTeam,
+	InvitationStatus,
+} from "./schema";
+import type { OrganizationOptions } from "./types";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =

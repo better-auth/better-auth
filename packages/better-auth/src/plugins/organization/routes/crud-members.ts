@@ -1,11 +1,4 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
-import type {
-	InferMember,
-	InferOrganizationRolesFromOption,
-	Member,
-} from "../schema";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import * as z from "zod";
@@ -18,7 +11,11 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { parseRoles } from "../organization";
-import type { InferOrganizationRolesFromOption, Member } from "../schema";
+import type {
+	InferMember,
+	InferOrganizationRolesFromOption,
+	Member,
+} from "../schema";
 import type { OrganizationOptions } from "../types";
 
 export const addMember = <O extends OrganizationOptions>(option: O) => {

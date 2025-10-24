@@ -7,6 +7,7 @@ import {
 	type InferAdditionalFieldsFromPluginOptions,
 	toZodSchema,
 } from "../../../db";
+import type { PrettifyDeep } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -19,12 +20,6 @@ import type {
 	Member,
 	TeamMember,
 } from "../schema";
-import { hasPermission } from "../has-permission";
-import {
-	toZodSchema,
-	type InferAdditionalFieldsFromPluginOptions,
-} from "../../../db";
-import type { PrettifyDeep } from "../../../types/helper";
 import type { OrganizationOptions } from "../types";
 
 export const createOrganization = <O extends OrganizationOptions>(
