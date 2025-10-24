@@ -1,7 +1,3 @@
-// ==
-
-// ==
-// ==
 import { APIError, type Prettify } from "better-call";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { memoryAdapter } from "../../adapters/memory-adapter";
@@ -21,7 +17,6 @@ import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { organization } from "./organization";
-// ==
 import type {
 	InferInvitation,
 	InferMember,
