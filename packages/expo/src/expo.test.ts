@@ -5,7 +5,7 @@ import { expo } from ".";
 import { expoClient } from "./client";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
-import { oAuthProxy } from "better-auth/plugins";
+import { createAuthMiddleware, oAuthProxy } from "better-auth/plugins";
 
 vi.mock("expo-web-browser", async () => {
 	return {
@@ -227,6 +227,85 @@ describe("expo", async () => {
 			error: null,
 			isPending: false,
 		});
+	});
+
+	it("should modify origin header to expo origin if origin is not set", async () => {
+		let originalOrigin = null;
+		let origin = null;
+		const { auth, client } = testUtils({
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					origin = ctx.request?.headers.get("origin");
+				}),
+			},
+			plugins: [
+				{
+					id: "test",
+					async onRequest(request, ctx) {
+						const origin = request.headers.get("origin");
+						originalOrigin = origin;
+					},
+				},
+				expo(),
+			],
+		});
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+		await client.signIn.email({
+			email: "test@test.com",
+			password: "password",
+			callbackURL: "http://localhost:3000/callback",
+		});
+		expect(origin).toBe("better-auth://");
+		expect(originalOrigin).toBeNull();
+	});
+
+	it("should not modify origin header if origin is set", async () => {
+		let originalOrigin = "test.com";
+		let origin = null;
+		const { auth, client } = testUtils({
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					origin = ctx.request?.headers.get("origin");
+				}),
+			},
+			plugins: [expo()],
+		});
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+		await client.signIn.email(
+			{
+				email: "test@test.com",
+				password: "password",
+				callbackURL: "http://localhost:3000/callback",
+			},
+			{
+				headers: {
+					origin: originalOrigin,
+				},
+			},
+		);
+		expect(origin).toBe(originalOrigin);
+	});
+
+	it("should not modify origin header if disableOriginOverride is set", async () => {
+		let origin = null;
+		const { auth, client } = testUtils({
+			plugins: [expo({ disableOriginOverride: true })],
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					origin = ctx.request?.headers.get("origin");
+				}),
+			},
+		});
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+		await client.signIn.email({
+			email: "test@test.com",
+			password: "password",
+			callbackURL: "http://localhost:3000/callback",
+		});
+		expect(origin).toBe(null);
 	});
 });
 
