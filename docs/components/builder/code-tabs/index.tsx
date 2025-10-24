@@ -102,7 +102,7 @@ ${
 		initialFiles.push({
 			id: "4",
 			name: "sign-up.tsx",
-			content: signUpString,
+			content: signUpString(options),
 		});
 	}
 
