@@ -1,4 +1,3 @@
-import * as z from "zod";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -7,16 +6,20 @@ import type {
 	InferOrganizationRolesFromOption,
 	Member,
 } from "../schema";
-import { APIError } from "better-call";
-import { parseRoles } from "../organization";
-import { getSessionFromCtx, sessionMiddleware } from "../../../api";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { hasPermission } from "../has-permission";
-import type { OrganizationOptions } from "../types";
-import { toZodSchema } from "../../../db/to-zod";
+import { APIError } from "better-call";
+import * as z from "zod";
+import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db/to-zod";
 import type { LiteralString } from "../../../types/helper";
+import { getOrgAdapter } from "../adapter";
+import { orgMiddleware, orgSessionMiddleware } from "../call";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import { hasPermission } from "../has-permission";
+import { parseRoles } from "../organization";
+import type { InferOrganizationRolesFromOption, Member } from "../schema";
+import type { OrganizationOptions } from "../types";
 
 export const addMember = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({

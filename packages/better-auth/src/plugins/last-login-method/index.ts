@@ -1,6 +1,8 @@
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 /**
  * Configuration for tracking different authentication methods

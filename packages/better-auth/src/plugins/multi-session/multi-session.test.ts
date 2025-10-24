@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { multiSession } from ".";
 import { multiSessionClient } from "./client";
-import { parseSetCookieHeader } from "../../cookies";
 
 describe("multi-session", async () => {
 	const { client, testUser, cookieSetter } = await getTestInstance(

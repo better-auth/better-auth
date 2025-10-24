@@ -1,21 +1,23 @@
-import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../api";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { BetterAuthPlugin } from "@better-auth/core";
+import { defineErrorCodes } from "@better-auth/core/utils";
+import * as z from "zod";
+import { APIError, getSessionFromCtx } from "../../api";
+import { setCookieCache, setSessionCookie } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
 import { getDate } from "../../utils/date";
-import { setCookieCache, setSessionCookie } from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
-import type { GenericEndpointContext } from "@better-auth/core";
-import { defineErrorCodes } from "@better-auth/core/utils";
 
 export interface EmailOTPOptions {
 	/**

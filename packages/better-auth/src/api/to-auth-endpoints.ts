@@ -1,3 +1,7 @@
+import type { AuthContext, HookEndpointContext } from "@better-auth/core";
+import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import { shouldPublishLog } from "@better-auth/core/env";
 import {
 	APIError,
 	type EndpointContext,
@@ -5,11 +9,7 @@ import {
 	type InputContext,
 	toResponse,
 } from "better-call";
-import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
 import { createDefu } from "defu";
-import { shouldPublishLog } from "@better-auth/core/env";
-import type { AuthContext, HookEndpointContext } from "@better-auth/core";
-import { runWithEndpointContext } from "@better-auth/core/context";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
