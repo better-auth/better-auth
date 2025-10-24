@@ -340,4 +340,15 @@ describe("expo with cookieCache", async () => {
 		expect(map.has("better-auth_session_token")).toBe(true);
 		expect(map.has("better-auth:session_token")).toBe(false);
 	});
+
+	it("should modify origin header to expo origin", async () => {
+		const { data } = await client.signIn.email({
+			email: "test@test.com",
+			password: "password",
+		});
+		expect(data).toMatchObject({
+			session: expect.any(Object),
+			user: expect.any(Object),
+		});
+	});
 });
