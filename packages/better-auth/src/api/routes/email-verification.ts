@@ -9,6 +9,7 @@ import { signJWT } from "../../crypto/jwt";
 import { originCheck } from "../middlewares";
 import { JWTExpired } from "jose/errors";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { generateRandomString } from "../../crypto";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -56,11 +57,28 @@ export async function sendVerificationEmailFn(
 		? encodeURIComponent(ctx.body.callbackURL)
 		: encodeURIComponent("/");
 	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+
+	let otp: string | undefined;
+	// Generate and store OTP if includeOTP is enabled
+	if (ctx.context.options.emailVerification?.includeOTP) {
+		const otpLength = ctx.context.options.emailVerification?.otpLength || 6;
+		otp = generateRandomString(otpLength, "0-9");
+
+		// Store OTP in verification values table
+		const expiresIn = ctx.context.options.emailVerification?.expiresIn || 3600;
+		await ctx.context.internalAdapter.createVerificationValue({
+			identifier: `email-verification-otp-${user.email}`,
+			value: otp,
+			expiresAt: new Date(Date.now() + expiresIn * 1000),
+		});
+	}
+
 	await ctx.context.options.emailVerification.sendVerificationEmail(
 		{
 			user: user,
 			url,
 			token,
+			otp,
 		},
 		ctx.request,
 	);
@@ -450,6 +468,194 @@ export const verifyEmail = createAuthEndpoint(
 		return ctx.json({
 			status: true,
 			user: null,
+		});
+	},
+);
+
+export const verifyEmailWithOTP = createAuthEndpoint(
+	"/verify-email/otp",
+	{
+		method: "POST",
+		body: z.object({
+			email: z.string().email().meta({
+				description: "The email address to verify",
+			}),
+			otp: z.string().meta({
+				description: "The OTP code",
+			}),
+		}),
+		metadata: {
+			openapi: {
+				description: "Verify email using OTP code",
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									email: {
+										type: "string",
+										description: "The email address to verify",
+										example: "user@example.com",
+									},
+									otp: {
+										type: "string",
+										description: "The OTP code",
+										example: "123456",
+									},
+								},
+								required: ["email", "otp"],
+							},
+						},
+					},
+				},
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+											description:
+												"Indicates if the email was verified successfully",
+											example: true,
+										},
+									},
+								},
+							},
+						},
+					},
+					"400": {
+						description: "Bad Request",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										message: {
+											type: "string",
+											description: "Error message",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		const { email, otp } = ctx.body;
+
+		// Check if OTP feature is enabled
+		if (!ctx.context.options.emailVerification?.includeOTP) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Email verification with OTP is not enabled",
+			});
+		}
+
+		// Retrieve OTP from database
+		const verificationValue =
+			await ctx.context.internalAdapter.findVerificationValue(
+				`email-verification-otp-${email}`,
+			);
+
+		if (!verificationValue) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Invalid OTP or OTP has expired",
+			});
+		}
+
+		// Check if OTP has expired
+		if (verificationValue.expiresAt < new Date()) {
+			await ctx.context.internalAdapter.deleteVerificationValue(
+				verificationValue.id,
+			);
+			throw new APIError("BAD_REQUEST", {
+				message: "OTP has expired",
+			});
+		}
+
+		// Verify OTP
+		if (verificationValue.value !== otp) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Invalid OTP",
+			});
+		}
+
+		// Delete used OTP
+		await ctx.context.internalAdapter.deleteVerificationValue(
+			verificationValue.id,
+		);
+
+		// Find user
+		const user = await ctx.context.internalAdapter.findUserByEmail(email);
+		if (!user) {
+			throw new APIError("BAD_REQUEST", {
+				message: "User not found",
+			});
+		}
+
+		// Call onEmailVerification hook
+		if (ctx.context.options.emailVerification?.onEmailVerification) {
+			await ctx.context.options.emailVerification.onEmailVerification(
+				user.user,
+				ctx.request,
+			);
+		}
+
+		// Update user email verification status
+		const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
+			email,
+			{
+				emailVerified: true,
+			},
+		);
+
+		// Call afterEmailVerification hook
+		if (ctx.context.options.emailVerification?.afterEmailVerification) {
+			await ctx.context.options.emailVerification.afterEmailVerification(
+				updatedUser,
+				ctx.request,
+			);
+		}
+
+		// Auto sign in if enabled
+		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
+			const currentSession = await getSessionFromCtx(ctx);
+			if (!currentSession || currentSession.user.email !== email) {
+				const session = await ctx.context.internalAdapter.createSession(
+					user.user.id,
+				);
+				if (!session) {
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message: "Failed to create session",
+					});
+				}
+				await setSessionCookie(ctx, {
+					session,
+					user: {
+						...user.user,
+						emailVerified: true,
+					},
+				});
+			} else {
+				await setSessionCookie(ctx, {
+					session: currentSession.session,
+					user: {
+						...currentSession.user,
+						emailVerified: true,
+					},
+				});
+			}
+		}
+
+		return ctx.json({
+			status: true,
 		});
 	},
 );

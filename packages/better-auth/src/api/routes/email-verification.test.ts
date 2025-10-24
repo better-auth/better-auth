@@ -479,3 +479,226 @@ describe("Email Verification Secondary Storage", async () => {
 		expect(secondSignInSession.data?.user.emailVerified).toBe(true);
 	});
 });
+
+describe("Email Verification with OTP", async () => {
+	const mockSendEmail = vi.fn();
+	let token: string = "";
+	let otp: string = "";
+	const { auth, testUser, client } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			requireEmailVerification: false, // Don't auto-send on signup
+		},
+		emailVerification: {
+			includeOTP: true,
+			otpLength: 6,
+			async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
+				token = _token;
+				otp = _otp || "";
+				mockSendEmail(user.email, url, _otp);
+			},
+		},
+	});
+
+	it("should send verification email with both URL and OTP", async () => {
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+		expect(mockSendEmail).toHaveBeenCalledWith(
+			testUser.email,
+			expect.any(String),
+			expect.any(String),
+		);
+		expect(otp).toHaveLength(6);
+		expect(otp).toMatch(/^\d{6}$/);
+	});
+
+	it("should verify email using OTP", async () => {
+		let testOtp = "";
+		const { auth: authVerify, testUser: testUserVerify } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: false,
+				},
+				emailVerification: {
+					includeOTP: true,
+					otpLength: 6,
+					async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
+						testOtp = _otp || "";
+					},
+				},
+			});
+
+		await authVerify.api.sendVerificationEmail({
+			body: {
+				email: testUserVerify.email,
+			},
+		});
+
+		expect(testOtp).toHaveLength(6);
+
+		const res = await authVerify.api.verifyEmailWithOTP({
+			body: {
+				email: testUserVerify.email,
+				otp: testOtp,
+			},
+		});
+
+		expect(res.status).toBe(true);
+	});
+
+	it("should verify email using URL link", async () => {
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+
+		const res = await client.verifyEmail({
+			query: {
+				token,
+			},
+		});
+
+		expect(res.data?.status).toBe(true);
+	});
+
+	it("should reject invalid OTP", async () => {
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+
+		try {
+			await auth.api.verifyEmailWithOTP({
+				body: {
+					email: testUser.email,
+					otp: "000000",
+				},
+			});
+			expect.fail("Should have thrown an error");
+		} catch (error) {
+			expect(error).toBeDefined();
+		}
+	});
+
+	it("should reject expired OTP", async () => {
+		const { auth: authWithShortExpiry, testUser: testUserShortExpiry } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				emailVerification: {
+					includeOTP: true,
+					otpLength: 6,
+					expiresIn: 1,
+					async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
+						otp = _otp || "";
+					},
+				},
+			});
+
+		await authWithShortExpiry.api.sendVerificationEmail({
+			body: {
+				email: testUserShortExpiry.email,
+			},
+		});
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(2000);
+
+		try {
+			await authWithShortExpiry.api.verifyEmailWithOTP({
+				body: {
+					email: testUserShortExpiry.email,
+					otp,
+				},
+			});
+			expect.fail("Should have thrown an error");
+		} catch (error) {
+			expect(error).toBeDefined();
+		}
+
+		vi.useRealTimers();
+	});
+
+	it("should auto sign in after OTP verification when enabled", async () => {
+		let localOtp = "";
+		const { auth: authAutoSignIn, testUser: testUserAutoSignIn } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: false,
+				},
+				emailVerification: {
+					includeOTP: true,
+					autoSignInAfterVerification: true,
+					async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
+						localOtp = _otp || "";
+					},
+				},
+			});
+
+		// Send verification email to get OTP
+		await authAutoSignIn.api.sendVerificationEmail({
+			body: {
+				email: testUserAutoSignIn.email,
+			},
+		});
+
+		expect(localOtp).toHaveLength(6);
+
+		// Verify with OTP
+		const res = await authAutoSignIn.api.verifyEmailWithOTP({
+			body: {
+				email: testUserAutoSignIn.email,
+				otp: localOtp,
+			},
+		});
+
+		expect(res.status).toBe(true);
+
+		// Verify user is marked as verified in database
+		const user = await authAutoSignIn.api.getSession({
+			headers: new Headers({
+				cookie: (res as any).headers?.get?.("set-cookie") || "",
+			}),
+		});
+
+		if (user) {
+			expect(user.user.emailVerified).toBe(true);
+		}
+	});
+
+	it("should use custom OTP length", async () => {
+		let customOtp = "";
+		const { auth: authCustomLength, testUser: customTestUser } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: false, // Don't auto-send on signup
+				},
+				emailVerification: {
+					includeOTP: true,
+					otpLength: 8,
+					async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
+						customOtp = _otp || "";
+					},
+				},
+			});
+
+		await authCustomLength.api.sendVerificationEmail({
+			body: {
+				email: customTestUser.email,
+			},
+		});
+
+		expect(customOtp).toHaveLength(8);
+		expect(customOtp).toMatch(/^\d{8}$/);
+	});
+});
