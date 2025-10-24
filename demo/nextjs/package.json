@@ -86,7 +86,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",
     "@types/canvas-confetti": "^1.9.0",
-    "@types/react": "^19.2.2",
+    "@types/react": "^19.1.10",
     "@types/react-dom": "^19.2.2",
     "@types/ua-parser-js": "^0.7.39",
     "postcss": "^8.5.6",
