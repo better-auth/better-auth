@@ -503,7 +503,13 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				teams,
 			};
 		},
-		listOrganizations: async (userId: string) => {
+		listOrganizations: async (
+			userId: string,
+			options?: {
+				limit?: number;
+				offset?: number;
+			},
+		) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const members = await adapter.findMany<InferMember<O>>({
 				model: "member",
@@ -530,6 +536,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						operator: "in",
 					},
 				],
+				limit: options?.limit,
+				offset: options?.offset,
 			});
 			return organizations;
 		},
