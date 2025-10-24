@@ -380,6 +380,8 @@ describe("updateUser", async () => {
 				headers,
 			},
 		);
+		expect(res.error).toBeDefined();
+		expect(res.error?.message).toBe("newField is not allowed to be set");
 	});
 });
 
