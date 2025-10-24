@@ -1,15 +1,15 @@
-import { APIError } from "better-call";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
+import { generateRandomString } from "../../crypto";
+import type { Verification } from "../../db";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
 	OAuthOptions,
 	VerificationValue,
 } from "./types";
-import { generateRandomString } from "../../crypto";
 import { getClient, storeToken } from "./utils";
-import type { Verification } from "../../db";
 
 /**
  * Formats an error url
@@ -28,7 +28,7 @@ export function formatErrorURL(
 	return `${url}${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
 }
 
-const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
+export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
 	const acceptJson = ctx.headers?.get("accept")?.includes("application/json");
 	if (acceptJson) {
 		return ctx.json({
@@ -197,8 +197,8 @@ export async function authorizeEndpoint(
 		return handleRedirect(ctx, `${opts.loginPage}${requestUrl.search}`);
 	}
 
-	// Force account selection (eg. organization)
-	if (query.prompt === "select_account") {
+	// Force account selection (eg. multi-session)
+	if (ctx.context.authorize_only && query.prompt === "select_account") {
 		return redirectWithPromptCode(ctx, opts, "select_account", {
 			query,
 			userId: session.user.id,
@@ -207,21 +207,33 @@ export async function authorizeEndpoint(
 	}
 
 	if (
-		// Check if account needs selection
-		opts.selectedAccount &&
-		// User-only scopes do not need to pass through selectedAccount function
-		!requestScopes.every((val) =>
-			["openid", "profile", "email", "offline_access"].includes(val),
-		)
+		// Check if account needs selection (only for authorize endpoint)
+		ctx.context.authorize_only &&
+		opts.selectedAccount
 	) {
 		const selectedAccount = await opts.selectedAccount({
-			client,
+			headers: ctx.request.headers,
 			user: session.user,
 			session: session.session,
 			scopes: requestScopes,
 		});
 		if (!selectedAccount) {
 			return redirectWithPromptCode(ctx, opts, "select_account", {
+				query,
+				userId: session.user.id,
+				sessionId: session.session.id,
+			});
+		}
+	}
+
+	if (!ctx.context.post_login && opts.postLogin) {
+		const postLogin = await opts.postLogin({
+			user: session.user,
+			session: session.session,
+			scopes: requestScopes,
+		});
+		if (!postLogin) {
+			return redirectWithPromptCode(ctx, opts, "post_login", {
 				query,
 				userId: session.user.id,
 				sessionId: session.session.id,
@@ -247,6 +259,11 @@ export async function authorizeEndpoint(
 			sessionId: session.session.id,
 		});
 	}
+	const referenceId = await opts.postLoginConsentReferenceId?.({
+		user: session.user,
+		session: session.session,
+		scopes: requestScopes,
+	});
 	const consent = await ctx.context.adapter
 		.findOne<OAuthConsent>({
 			model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
@@ -259,6 +276,14 @@ export async function authorizeEndpoint(
 					field: "userId",
 					value: session.user.id,
 				},
+				...(referenceId
+					? [
+							{
+								field: "referenceId",
+								value: referenceId,
+							},
+						]
+					: []),
 			],
 		})
 		.then((res) => {
@@ -334,7 +359,7 @@ async function redirectWithAuthorizationCode(
 async function redirectWithPromptCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
-	type: "consent" | "select_account",
+	type: "consent" | "select_account" | "post_login",
 	verificationValue: {
 		query: OAuthAuthorizationQuery;
 		userId: string;
@@ -344,6 +369,26 @@ async function redirectWithPromptCode(
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.codeExpiresIn ?? 600);
+
+	if (type === "select_account") {
+		const { name: cookieName, attributes: cookieAttributes } =
+			ctx.context.createAuthCookie("oauth_login_prompt");
+		await ctx.setSignedCookie(
+			cookieName,
+			JSON.stringify(ctx.query),
+			ctx.context.secret,
+			{
+				path: ctx.context.options.basePath,
+				sameSite: "lax",
+				...cookieAttributes,
+			},
+		);
+		const params = new URLSearchParams(ctx.query);
+		return handleRedirect(
+			ctx,
+			`${opts.selectAccountPage ?? opts.loginPage}?${params.toString()}`,
+		);
+	}
 
 	if (!ctx.query.scope) {
 		ctx.query.scope = opts.scopes?.join(" ");
@@ -377,15 +422,9 @@ async function redirectWithPromptCode(
 		...cookieAttributes,
 	});
 
-	const params = new URLSearchParams({
-		client_id: ctx.query.client_id,
-		scope: ctx.query.scope,
-		state: verificationValue.query.state,
-	});
+	const params = new URLSearchParams(ctx.query);
 	const consentUri = `${
-		type === "select_account" && opts.selectAccountPage
-			? opts.selectAccountPage
-			: opts.consentPage
+		type === "post_login" ? opts.postLoginPage : opts.consentPage
 	}?${params.toString()}`;
 
 	return handleRedirect(ctx, consentUri);

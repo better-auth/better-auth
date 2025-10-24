@@ -1,7 +1,8 @@
-import type { GenericEndpointContext } from "packages/core/dist";
-import type { OAuthOptions } from "../types";
+import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "../../../api";
-import { getClient, storeClientSecret } from "../utils";
+import { generateRandomString } from "../../../crypto";
+import type { OAuthClient } from "../../../oauth-2.1/types";
+import type { DatabaseClient } from "../register";
 import {
 	checkOAuthClient,
 	databaseToSchema,
@@ -9,9 +10,8 @@ import {
 	schemaToDatabase,
 	schemaToOAuth,
 } from "../register";
-import type { DatabaseClient } from "../register";
-import type { OAuthClient } from "../../../oauth-2.1/types";
-import { generateRandomString } from "../../../crypto";
+import type { OAuthOptions } from "../types";
+import { getClient, storeClientSecret } from "../utils";
 
 export async function getClientEndpoint(
 	ctx: GenericEndpointContext & { params: { id: string } },

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { oauthProvider } from "../oauth";
+import type { OAuthClient } from "../../../../src/oauth-2.1/types";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { jwt } from "../../jwt";
-import type { OAuthClient } from "packages/better-auth/src/oauth-2.1/types";
+import { oauthProvider } from "../oauth";
 
 describe("oauthClient", async () => {
 	const providerId = "test";

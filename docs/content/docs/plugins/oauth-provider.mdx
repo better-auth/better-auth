@@ -138,7 +138,7 @@ The Resource Server is a client that operates on your API server to perform acti
 ```ts title="client.ts"
 import { auth } from "@/lib/auth"; // optional
 import { createAuthClient } from "better-auth/client";
-import { oauthProviderResourceClient } from "better-auth/client/plugins"
+import { oauthProviderResourceClient } from "better-auth/server/plugins"
 const authClient = createAuthClient({
   plugins: [oauthProviderResourceClient(auth)],
 });
@@ -268,19 +268,21 @@ type oauth2Consent = {
 ```
 </APIMethod>
 
-### Select Account Endpoint
+### Continue Endpoint
 
 Account selection must [configured](#select-account-screen) to perform account selection.
 
-Note that the user-based scopes: ["openid", "profile", "email", "offline_access"] automatically skip account selection. You can add more to this list by returning true for your scope list.
-
-<APIMethod path="/oauth2/consent" method="POST">
+<APIMethod path="/oauth2/continue" method="POST">
 ```ts
-type oauth2SelectedAccount = {
+type oauth2Continue = {
   /**
-   * Confirm an account was selected.
+   * Confirms an account was selected.
    */
-  confirm: boolean,
+  selected: boolean,
+  /**
+   * Confirms completion of post login activity
+   */
+  postLogin: boolean,
 }
 ```
 </APIMethod>
@@ -507,22 +509,67 @@ const res = await client.oauth2.consent({
 
 When a user is redirected to the select account page during authentication, they may be prompted to select an account before consenting. To enable account selection, you must add the following configuration to your settings.
 
+The following example uses the multi-session plugin and automatically redirects to the select-account page if more than one session is logged in
+
 ```ts title="auth.ts"
 oauthProvider({
-  scopes: [ "phone_number", "read:post", "write:post" ],
   selectAccountPage: "/select-account", // [!code highlight]
-  selectedAccount: ({ scopes, session }) => { // [!code highlight]
-    if (scopes.includes("phone_number")) return true;
-    return !!session.activeOrganizationId;
+  selectedAccount: async ({ headers }) => { // [!code highlight]
+		const allSessions = await auth.api.listDeviceSessions({
+			headers,
+		})
+		return allSessions?.length >= 1;
   },
 })
 ```
 
-The plugin will redirect the user to the `selectAccountPage`. This page should prompt for selection and upon completion of selection, should call `oauth2SelectedAccount`. Note the select_account code is automatically stored in a signed cookie.
+The plugin will redirect the user to the `selectAccountPage`. This page should prompt for account selection and upon completion of selection, should call `oauth2Continue`. Note the `oauth_login_prompt` is automatically stored in a signed cookie.
 
-```ts title="select-account-page.ts"
-const res = await client.oauth2.oauth2SelectedAccount({
+```ts title="select-account.ts"
+const res = await client.oauth2.oauth2Continue({
   confirm: true,
+})
+```
+
+### Post Login Screen
+
+If a requested scope requires an organization. You would need to provide all of the following options to tie the `reference_id` (ie organization id, team id) to the login flow. This step occurs post login and prior to consent.
+
+The following example uses the organization plugin to automatically redirect to the select-organization page for organization specific scopes.
+
+```ts title="auth.ts"
+oauthProvider({
+  scopes: ["openid", "profile", "email", "read:organization"]
+  postLoginPage: "/select-organization", // [!code highlight]
+  postLogin: async ({ session }) => { // [!code highlight]
+    const userOnlyScopes = ["openid", "profile", "email", "offline_access"];
+    if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
+      return true;
+    }
+		return !!context.session?.activeOrganizationId;
+  },
+  postLoginConsentReferenceId: ({ session, scopes }) => {
+    if (scopes.includes("read:organization")) {
+      const activeOrganizationId = (context.session?.activeOrganizationId ?? undefined) as string | undefined;
+      if (!activeOrganizationId) {
+        throw new APIError("BAD_REQUEST", {
+          error: "set_organization",
+          error_description: "must set organization for these scopes",
+        })
+      }
+      return activeOrganizationId;
+    } else {
+      return undefined;
+    }
+  },
+})
+```
+
+The plugin will redirect the user to the `postLoginPage`. This page should prompt for account selection and upon completion of selection, should call `oauth2Continue`. Note the `oauth_login_prompt` is automatically stored in a signed cookie.
+
+```ts title="select-organization.ts"
+const res = await client.oauth2.oauth2Continue({
+  postLogin: true,
 })
 ```
 
@@ -714,8 +761,8 @@ OAuth Clients are tied to either a user or `reference_id` at registration and is
 
 ```ts title="auth.ts"
 oauthProvider({
-  clientRegistrationReference({ session }: {session: Session & { activeOrganizationId?: string }}) {
-    return session?.activeOrganizationId ?? undefined
+  clientRegistrationReference: ({ session }) => {
+    return (session?.activeOrganizationId as string | undefined) ?? undefined;
   },
 })
 ```
@@ -873,7 +920,7 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
     ```ts title="client.ts"
     import { auth } from "@/lib/auth"; // optional
     import { createAuthClient } from "better-auth/client";
-    import { oauthProviderResourceClient } from "better-auth/client/plugins"
+    import { oauthProviderResourceClient } from "better-auth/server/plugins"
     const authClient = createAuthClient({
       plugins: [oauthProviderResourceClient(auth)],
     });

@@ -1,15 +1,18 @@
-import { APIError } from "../../api";
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { jwt } from "../jwt";
-import type { oauthProvider } from "../oauth-provider";
 import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import type { OAuthOptions, StoreTokenType } from "./types";
-import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import { databaseToSchema, type DatabaseClient } from "./register";
-import Crypto from "crypto";
+import { APIError } from "../../api";
 import type { Auth } from "../../auth";
+import {
+	symmetricDecrypt,
+	symmetricEncrypt,
+	timingSafeEqual,
+} from "../../crypto";
+import type { jwt } from "../jwt";
+import type { oauthProvider } from "../oauth-provider";
+import { type DatabaseClient, databaseToSchema } from "./register";
+import type { OAuthOptions, StoreTokenType } from "./types";
 
 /**
  * Gets the oAuth Provider Plugin
@@ -123,21 +126,13 @@ async function verifyStoredClientSecret(
 		}
 	}
 
-	function sideChannelEqual(valueA: string, valueB: string) {
-		// Use timing-safe comparison to avoid side-channel leaks
-		const a = Buffer.from(valueA, "utf8");
-		const b = Buffer.from(valueB, "utf8");
-		// Inputs must be the same length for timingSafeEqual
-		return a.length === b.length && Crypto.timingSafeEqual(a, b);
-	}
-
 	if (storageMethod === "hashed") {
 		const hashedClientSecret = clientSecret
 			? await defaultHasher(clientSecret)
 			: undefined;
 		return (
 			!!hashedClientSecret &&
-			sideChannelEqual(hashedClientSecret, storedClientSecret)
+			timingSafeEqual(hashedClientSecret, storedClientSecret)
 		);
 	} else if (typeof storageMethod === "object" && "hash" in storageMethod) {
 		if (storageMethod.verify) {
@@ -148,7 +143,7 @@ async function verifyStoredClientSecret(
 				: undefined;
 			return (
 				!!hashedClientSecret &&
-				sideChannelEqual(hashedClientSecret, storedClientSecret)
+				timingSafeEqual(hashedClientSecret, storedClientSecret)
 			);
 		}
 	} else if (
@@ -161,7 +156,7 @@ async function verifyStoredClientSecret(
 			storedClientSecret,
 		);
 		return (
-			!!clientSecret && sideChannelEqual(decryptedClientSecret, clientSecret)
+			!!clientSecret && timingSafeEqual(decryptedClientSecret, clientSecret)
 		);
 	}
 
