@@ -1150,6 +1150,22 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						},
 						true,
 					);
+
+					// Call the hook if it exists
+					if (opts.onImpersonationStart) {
+						try {
+							await opts.onImpersonationStart({
+								adminUserId: ctx.context.session.user.id,
+								impersonatedUserId: targetUser.id,
+							});
+						} catch (error) {
+							ctx.context.logger.error(
+								"Error in onImpersonationStart hook:",
+								error,
+							);
+							// Don't throw - continue with impersonation even if hook fails
+						}
+					}
 					return ctx.json({
 						session: session,
 						user: targetUser,
@@ -1226,6 +1242,21 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						session.session.token,
 					);
 					await setSessionCookie(ctx, adminSession, !!dontRememberMeCookie);
+
+					// Call the hook if it exists
+					if (opts.onImpersonationStop) {
+						try {
+							await opts.onImpersonationStop({
+								adminUserId: user.id, // The admin user
+								impersonatedUserId: session.user.id, // The user that was being impersonated
+							});
+						} catch (error) {
+							ctx.context.logger.error(
+								"Error in onImpersonationStop hook:",
+								error,
+							);
+						}
+					}
 					return ctx.json(adminSession);
 				},
 			),

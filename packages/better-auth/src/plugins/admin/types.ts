@@ -75,6 +75,20 @@ export interface AdminOptions {
 	 * By default, the message is "You have been banned from this application"
 	 */
 	bannedUserMessage?: string;
+	/**
+	 * Callback hook executed after an impersonation session is successfully started
+	 */
+	onImpersonationStart?: (data: {
+		adminUserId: string;
+		impersonatedUserId: string;
+	}) => void | Promise<void>;
+	/**
+	 * Callback hook executed after an impersonation session is successfully stopped
+	 */
+	onImpersonationStop?: (data: {
+		adminUserId: string;
+		impersonatedUserId: string;
+	}) => void | Promise<void>;
 }
 
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
