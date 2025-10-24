@@ -1,5 +1,5 @@
 import { logger } from "@better-auth/core/env";
-import type { BetterAuthDBSchema } from "../../db";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import { initGetDefaultModelName } from "./get-default-model-name";
 import { BetterAuthError } from "@better-auth/core/error";
 
