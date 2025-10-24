@@ -1222,6 +1222,9 @@ importers:
       '@better-auth/utils':
         specifier: 0.3.0
         version: 0.3.0
+      '@better-fetch/fetch':
+        specifier: 'catalog:'
+        version: 1.1.18
       '@simplewebauthn/browser':
         specifier: ^13.1.2
         version: 13.1.2
@@ -17577,9 +17580,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}

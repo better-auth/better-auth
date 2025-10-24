@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "@better-auth/utils": "0.3.0",
+    "@better-fetch/fetch": "catalog:",
     "@simplewebauthn/browser": "^13.1.2",
     "@simplewebauthn/server": "^13.1.2",
     "defu": "^6.1.4",
