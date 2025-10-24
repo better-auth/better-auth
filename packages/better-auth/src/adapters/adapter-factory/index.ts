@@ -425,19 +425,45 @@ export const createAdapterFactory =
 					// Check if the foreign key field in the joined model has a unique constraint
 					// If unique, unwrap array to single object; otherwise keep as array
 					const joinedModelSchema = schema[defaultModelName]!.fields;
-					const foreignKeyField = Object.entries(joinedModelSchema).find(
+					joinedModelSchema.id = { type: "string", unique: true };
+
+					let isUnique = false;
+
+					// Check forward join: joined model has FK to base model
+					const forwardForeignKeyField = Object.entries(joinedModelSchema).find(
 						([_, fieldAttributes]) =>
 							fieldAttributes.references?.model === unsafe_model,
 					)?.[0];
 
-					const isUnique = foreignKeyField
-						? joinedModelSchema[
+					if (forwardForeignKeyField) {
+						const fieldDef =
+							joinedModelSchema[
 								getDefaultFieldName({
-									field: foreignKeyField,
+									field: forwardForeignKeyField,
 									model: defaultModelName,
 								})
-							]?.unique === true
-						: false;
+							];
+						isUnique = fieldDef?.unique === true;
+					} else {
+						// Check backward join: base model has FK to joined model
+						const baseModelSchema = schema[unsafe_model]!.fields;
+						const backwardForeignKeyField = Object.entries(
+							baseModelSchema,
+						).find(
+							([_, fieldAttributes]) =>
+								fieldAttributes.references?.model === defaultModelName,
+						)?.[0];
+
+						if (backwardForeignKeyField) {
+							const fieldDef = baseModelSchema[backwardForeignKeyField];
+							if (!fieldDef?.references) return;
+							const baseModelFieldDef =
+								schema[getDefaultModelName(fieldDef.references.model)]?.fields[
+									fieldDef.references.field
+								];
+							isUnique = baseModelFieldDef?.unique === true;
+						}
+					}
 
 					if (isUnique && !Array.isArray(joinedData)) {
 						joinedData = [joinedData];
@@ -572,12 +598,28 @@ export const createAdapterFactory =
 			for (const [model, join] of Object.entries(unsanitizedJoin)) {
 				if (join !== true) continue; // for now only support "true" on joins, indicating a simple join
 				const defaultModelName = getDefaultModelName(model);
-				const foreignKeys = Object.entries(
+				const defaultBaseModelName = getDefaultModelName(baseModel);
+
+				// First, check if the joined model has FKs to the base model (forward join)
+				let foreignKeys = Object.entries(
 					schema[defaultModelName]!.fields,
 				).filter(
 					([field, fieldAttributes]) =>
-						fieldAttributes.references?.model === baseModel,
+						fieldAttributes.references?.model === defaultBaseModelName,
 				);
+
+				let isForwardJoin = true;
+
+				// If no forward join found, check backwards: does the base model have FKs to the joined model?
+				if (!foreignKeys.length) {
+					foreignKeys = Object.entries(
+						schema[defaultBaseModelName]!.fields,
+					).filter(
+						([field, fieldAttributes]) =>
+							fieldAttributes.references?.model === defaultModelName,
+					);
+					isForwardJoin = false;
+				}
 
 				if (!foreignKeys.length) {
 					throw new BetterAuthError(
@@ -598,15 +640,32 @@ export const createAdapterFactory =
 					);
 				}
 
-				const from = getFieldName({
-					model: baseModel,
-					field: foreignKeyAttributes.references.field,
-				});
+				let from: string;
+				let to: string;
 
-				const to = getFieldName({
-					model,
-					field: foreignKey,
-				});
+				if (isForwardJoin) {
+					// joined model has FK to base model
+					from = getFieldName({
+						model: baseModel,
+						field: foreignKeyAttributes.references.field,
+					});
+
+					to = getFieldName({
+						model,
+						field: foreignKey,
+					});
+				} else {
+					// base model has FK to joined model
+					from = getFieldName({
+						model: baseModel,
+						field: foreignKey,
+					});
+
+					to = getFieldName({
+						model,
+						field: foreignKeyAttributes.references.field,
+					});
+				}
 
 				transformedJoin[getModelName(model)] = {
 					on: {

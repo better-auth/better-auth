@@ -281,6 +281,27 @@ export const getNormalTestSuiteTests = ({
 			expect(result?.createdAt).toBeInstanceOf(Date);
 			expect(result?.createdAt).toEqual(user.createdAt);
 		},
+		"findOne - should perform backwards joins": async () => {
+			const user = await adapter.create<User>({
+				model: "user",
+				data: { ...(await generate("user")) },
+				forceAllowId: true,
+			});
+			const session = await adapter.create<Session>({
+				model: "session",
+				data: { ...(await generate("session")), userId: user.id },
+				forceAllowId: true,
+			});
+			const result = await adapter.findOne<Session & { user: User }>({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+				join: { user: true },
+			});
+			expect(result).toEqual({
+				...session,
+				user: user
+			});
+		},
 		"findOne - should return an object for one-to-one joins": async () => {
 			await modifyBetterAuthOptions(
 				{
