@@ -1,13 +1,13 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import type {
 	AuthServerMetadata,
 	GrantType,
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
 } from "../../oauth-2.1/types";
-import type { GenericEndpointContext } from "@better-auth/core";
-import { getJwtPlugin } from "./utils";
-import type { OAuthOptions } from "./types";
 import type { JWSAlgorithms, JwtOptions } from "../jwt";
+import type { OAuthOptions } from "./types";
+import { getJwtPlugin } from "./utils";
 
 export function authServerMetadata(
 	ctx: GenericEndpointContext,

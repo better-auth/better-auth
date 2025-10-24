@@ -1,12 +1,12 @@
-import { beforeAll, describe, it, expect } from "vitest";
-import { oauthProvider } from "./oauth";
-import type { OAuthClient } from "../../oauth-2.1/types";
+import { beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
+import { generateRandomString } from "../../crypto";
+import type { OAuthClient } from "../../oauth-2.1/types";
+import { createAuthorizationURL } from "../../oauth2";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from "../jwt";
 import { oauthProviderClient } from "./client";
-import { createAuthorizationURL } from "../../oauth2";
-import { generateRandomString } from "../../crypto";
+import { oauthProvider } from "./oauth";
 
 describe("oauth authorize - unauthenticated", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
