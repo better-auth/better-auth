@@ -438,9 +438,6 @@ export const deleteUser = createAuthEndpoint(
 		if (!ctx.context.options.user?.deleteUser?.enabled) {
 			ctx.context.logger.error(
 				"Delete user is disabled. Enable it in the options",
-				{
-					session: ctx.context.session,
-				},
 			);
 			throw new APIError("NOT_FOUND");
 		}
