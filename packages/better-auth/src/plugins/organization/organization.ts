@@ -1001,8 +1001,6 @@ export function organization<O extends OrganizationOptions>(options?: O): any {
 		: {};
 
 	const schema = {
-		...organizationRoleSchema,
-		...teamSchema,
 		...({
 			organization: {
 				modelName: options?.schema?.organization?.modelName,
@@ -1038,6 +1036,10 @@ export function organization<O extends OrganizationOptions>(options?: O): any {
 					...(options?.schema?.organization?.additionalFields || {}),
 				},
 			},
+		} satisfies BetterAuthPluginDBSchema),
+		...organizationRoleSchema,
+		...teamSchema,
+		...({
 			member: {
 				modelName: options?.schema?.member?.modelName,
 				fields: {
