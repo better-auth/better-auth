@@ -203,9 +203,6 @@ importers:
       '@better-auth/stripe':
         specifier: workspace:*
         version: link:../../packages/stripe
-      '@better-fetch/fetch':
-        specifier: 'catalog:'
-        version: 1.1.18
       '@hookform/resolvers':
         specifier: ^5.2.1
         version: 5.2.1(react-hook-form@7.62.0(react@19.2.0))
@@ -320,9 +317,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
-      better-call:
-        specifier: 'catalog:'
-        version: 1.0.24
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.4.1
@@ -338,9 +332,6 @@ importers:
       cmdk:
         specifier: 1.1.1
         version: 1.1.1(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      consola:
-        specifier: ^3.4.2
-        version: 3.4.2
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
@@ -401,9 +392,6 @@ importers:
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
-      shiki:
-        specifier: ^3.12.2
-        version: 3.13.0
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
