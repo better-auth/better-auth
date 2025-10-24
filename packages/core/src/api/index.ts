@@ -4,8 +4,8 @@ import {
 	type EndpointContext,
 	type EndpointOptions,
 } from "better-call";
-import type { AuthContext } from "../types";
 import { runWithEndpointContext } from "../context";
+import type { AuthContext } from "../types";
 
 export const optionsMiddleware = createMiddleware(async () => {
 	/**

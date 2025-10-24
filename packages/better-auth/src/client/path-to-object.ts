@@ -1,8 +1,9 @@
+import type { BetterAuthClientOptions } from "@better-auth/core";
 import type {
 	BetterFetchOption,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { InputContext, Endpoint, StandardSchemaV1 } from "better-call";
+import type { Endpoint, InputContext, StandardSchemaV1 } from "better-call";
 import type {
 	HasRequiredKeys,
 	Prettify,
@@ -13,7 +14,6 @@ import type {
 	InferSessionFromClient,
 	InferUserFromClient,
 } from "./types";
-import type { BetterAuthClientOptions } from "@better-auth/core";
 
 export type CamelCase<S extends string> =
 	S extends `${infer P1}-${infer P2}${infer P3}`

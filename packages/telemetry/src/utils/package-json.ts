@@ -1,4 +1,5 @@
 import type { PackageJson } from "type-fest";
+
 let packageJSONCache: PackageJson | undefined;
 
 async function readRootPackageJson() {
