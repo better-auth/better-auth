@@ -5,6 +5,7 @@ import path from "path";
 import fs from "fs/promises";
 import { capitalizeFirstLetter } from "better-auth";
 import type { SchemaGenerator } from "./types";
+import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 
 export const generatePrismaSchema: SchemaGenerator = async ({
 	adapter,
@@ -185,8 +186,19 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					// custom logic within that function that might not work in prisma's context.
 				}
 
+				const getModelName = initGetModelName({
+					schema: getAuthTables(options),
+					usePlural: adapter.options?.adapterConfig?.usePlural,
+				});
+				const getFieldName = initGetFieldName({
+					schema: getAuthTables(options),
+					usePlural: false,
+				});
+
 				if (attr.references) {
-					const referencedOriginalModelName = attr.references.model;
+					const referencedOriginalModelName = getModelName(
+						attr.references.model,
+					);
 					const referencedCustomModelName =
 						tables[referencedOriginalModelName]?.modelName ||
 						referencedOriginalModelName;
@@ -195,17 +207,18 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					else if (attr.references.onDelete === "set null") action = "SetNull";
 					else if (attr.references.onDelete === "set default")
 						action = "SetDefault";
-					else if (attr.references.onDelete === "restrict") action = "Restrict";
+
+					if (attr.references?.onDelete === "restrict") action = "Restrict";
 					builder
 						.model(modelName)
 						.field(
-							`${referencedCustomModelName.toLowerCase()}`,
+							`${referencedCustomModelName}`,
 							`${capitalizeFirstLetter(referencedCustomModelName)}${
 								!attr.required ? "?" : ""
 							}`,
 						)
 						.attribute(
-							`relation(fields: [${fieldName}], references: [${attr.references.field}], onDelete: ${action})`,
+							`relation(fields: [${getFieldName({ model: customModelName, field: fieldName })}], references: [${getFieldName({ model: attr.references.model, field: attr.references.field })}], onDelete: ${action})`,
 						);
 				}
 				if (
@@ -221,7 +234,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			// Add many-to-many fields
 			if (manyToManyRelations.has(modelName)) {
 				for (const relatedModel of manyToManyRelations.get(modelName)) {
-					const fieldName = `${relatedModel.toLowerCase()}s`;
+					const fieldName = `${relatedModel}s`;
 					const existingField = builder.findByType("field", {
 						name: fieldName,
 						within: prismaModel?.properties,

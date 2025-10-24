@@ -19,9 +19,9 @@ model User {
   twoFactorEnabled Boolean?    @default(false)
   username         String?
   displayUsername  String?
-  sessions         Session[]
-  accounts         Account[]
-  twofactors       TwoFactor[]
+  Sessions         Session[]
+  Accounts         Account[]
+  TwoFactors       TwoFactor[]
 
   @@unique([email])
   @@unique([username])

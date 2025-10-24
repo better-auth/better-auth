@@ -19,11 +19,11 @@ model User {
   twoFactorEnabled     Boolean?              @default(false)
   username             String?
   displayUsername      String?               @db.Text
-  sessions             Session[]
-  accounts             Account[]
-  twofactors           TwoFactor[]
-  members              Member[]
-  workspaceinvitations WorkspaceInvitation[]
+  Sessions             Session[]
+  Accounts             Account[]
+  TwoFactors           TwoFactor[]
+  Members              Member[]
+  WorkspaceInvitations WorkspaceInvitation[]
 
   @@unique([email])
   @@unique([username])
@@ -93,8 +93,8 @@ model Workspace {
   logo                 String?               @db.Text
   createdAt            DateTime
   metadata             String?               @db.Text
-  members              Member[]
-  workspaceinvitations WorkspaceInvitation[]
+  Members              Member[]
+  WorkspaceInvitations WorkspaceInvitation[]
 
   @@unique([slug])
   @@map("workspace")

@@ -8,6 +8,7 @@ import type { Logger } from "./test-adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { betterAuth } from "../auth";
 import { deepmerge } from "./utils";
+import { getAuthTables } from "../db/get-tables";
 
 type GenerateFn = <M extends "user" | "session" | "verification" | "account">(
 	Model: M,
@@ -174,6 +175,7 @@ export const createTestSuite = <
 					adapterName: `Wrapped ${adapter.options?.adapterConfig.adapterName}`,
 					disableTransformOutput: true,
 					disableTransformInput: true,
+					disableTransformJoin: true,
 				};
 				const adapterCreator = (
 					options: BetterAuthOptions,
@@ -189,11 +191,10 @@ export const createTestSuite = <
 								count: adapter.count,
 								deleteMany: adapter.deleteMany,
 								delete: adapter.delete,
-								findOne: adapter.findOne,
-								findMany: adapter.findMany,
+								findOne: adapter.findOne as any,
+								findMany: adapter.findMany as any,
 								update: adapter.update as any,
 								updateMany: adapter.updateMany,
-
 								createSchema: adapter.createSchema as any,
 								async create({ data, model, select }) {
 									const defaultModelName = getDefaultModelName(model);
@@ -229,6 +230,8 @@ export const createTestSuite = <
 				adapter = await helpers.adapter();
 				for (const model of Object.keys(createdRows)) {
 					for (const row of createdRows[model]!) {
+						const schema = getAuthTables(helpers.getBetterAuthOptions());
+						if (!schema[model]) continue; // model doesn't exist in the schema anymore, so we skip it
 						try {
 							await adapter.delete({
 								model,
