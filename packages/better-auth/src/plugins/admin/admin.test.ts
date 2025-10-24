@@ -862,6 +862,64 @@ describe("Admin plugin", async () => {
 	});
 });
 
+describe("signInTracking", async () => {
+	const { auth, signInWithTestUser, customFetchImpl, db } =
+		await getTestInstance(
+			{
+				plugins: [
+					admin({
+						signInTracking: true,
+					}),
+				],
+			},
+			{ testUser: { name: "Admin" } },
+		);
+	const client = createAuthClient({
+		fetchOptions: {
+			customFetchImpl,
+		},
+		plugins: [
+			adminClient({
+				signInTracking: true,
+			}),
+		],
+		baseURL: "http://localhost:3000",
+	});
+
+	it("should set latestSignInAt on first sign in", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const res = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(res.data?.user.latestSignInAt).toBeDefined();
+		expect(
+			new Date(res.data?.user.latestSignInAt!).getTime(),
+		).toBeLessThanOrEqual(Date.now());
+	});
+
+	it("should update latestSignInAt on subsequent sign in", async () => {
+		let headers = (await signInWithTestUser()).headers;
+		let user = (await client.getSession({ fetchOptions: { headers } })).data
+			?.user;
+		expect(user?.latestSignInAt).toBeDefined();
+		const originalTime = new Date(user?.latestSignInAt!).getTime();
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+
+		headers = (await signInWithTestUser()).headers;
+		user = (await client.getSession({ fetchOptions: { headers } })).data?.user;
+		expect(user?.latestSignInAt).toBeDefined();
+		const newTime = new Date(user?.latestSignInAt!).getTime();
+
+		expect(newTime).toBeGreaterThan(originalTime);
+
+		vi.useRealTimers();
+	});
+});
+
 describe("access control", async (it) => {
 	const ac = createAccessControl({
 		user: [
