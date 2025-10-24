@@ -554,6 +554,24 @@ export interface OrganizationOptions {
 		}) => Promise<void>;
 
 		/**
+		 * A callback that runs before a member leaves an organization
+		 */
+		beforeLeaveOrganization?: (data: {
+			member: Member & Record<string, any>;
+			user: User & Record<string, any>;
+			organization: Organization & Record<string, any>;
+		}) => Promise<void>;
+
+		/**
+		 * A callback that runs after a member leaves an organization
+		 */
+		afterLeaveOrganization?: (data: {
+			member: Member & Record<string, any>;
+			user: User & Record<string, any>;
+			organization: Organization & Record<string, any>;
+		}) => Promise<void>;
+
+		/**
 		 * A callback that runs before a member's role is updated
 		 *
 		 * You can return a `data` object to override the default data.

@@ -250,6 +250,31 @@ export const auth = betterAuth({
           await logMemberRemoval(user.id, organization.id);
         },
 
+        // Before a member leaves an organization (self-removal)
+        beforeLeaveOrganization: async ({ member, user, organization }) => {
+          // Validate if member can leave (e.g., check for pending tasks)
+          const pendingTasks = await getPendingTasks(user.id, organization.id);
+          if (pendingTasks.length > 0) {
+            throw new Error("Cannot leave: you have pending tasks");
+          }
+
+          // Cleanup user's resources before leaving
+          await cleanupUserData(user.id, organization.id);
+        },
+
+        // After a member leaves an organization
+        afterLeaveOrganization: async ({ member, user, organization }) => {
+          // Send departure notification
+          await sendEmail(user.email, `You left ${organization.name}`);
+
+          // Log for analytics
+          await auditLog.create({
+            action: "member.left",
+            userId: user.id,
+            organizationId: organization.id,
+          });
+        },
+
         // Before updating a member's role
         beforeUpdateMemberRole: async ({
           member,
