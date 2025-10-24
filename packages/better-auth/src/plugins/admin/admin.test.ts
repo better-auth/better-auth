@@ -4,6 +4,7 @@ import {
 	it,
 	vi,
 	beforeAll,
+	beforeEach,
 	afterAll,
 	afterEach,
 } from "vitest";
@@ -66,6 +67,9 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("Admin plugin", async () => {
+	const onImpersonationStartMock = vi.fn();
+	const onImpersonationStopMock = vi.fn();
+
 	const {
 		auth,
 		signInWithTestUser,
@@ -77,6 +81,8 @@ describe("Admin plugin", async () => {
 			plugins: [
 				admin({
 					bannedUserMessage: "Custom banned user message",
+					onImpersonationStart: onImpersonationStartMock,
+					onImpersonationStop: onImpersonationStopMock,
 				}),
 			],
 			databaseHooks: {
@@ -110,7 +116,7 @@ describe("Admin plugin", async () => {
 		baseURL: "http://localhost:3000",
 	});
 
-	const { headers: adminHeaders } = await signInWithTestUser();
+	const { headers: adminHeaders, user: adminUser } = await signInWithTestUser(); // Capture adminUser
 	let newUser: UserWithRole | undefined;
 	const testNonAdminUser = {
 		id: "123",
@@ -125,6 +131,11 @@ describe("Admin plugin", async () => {
 		testNonAdminUser.email,
 		testNonAdminUser.password,
 	);
+
+	beforeEach(() => {
+		onImpersonationStartMock.mockClear();
+		onImpersonationStopMock.mockClear();
+	});
 
 	it("should allow admin to get user", async () => {
 		const res = await client.admin.getUser(
@@ -568,8 +579,8 @@ describe("Admin plugin", async () => {
 		name: "Impersonate User",
 	};
 
-	const impersonateHeaders = new Headers();
 	it("should allow admins to impersonate user", async () => {
+		const impersonateHeaders = new Headers();
 		const userToImpersonate = await client.signUp.email(data);
 		const session = await client.getSession({
 			fetchOptions: {
@@ -578,6 +589,7 @@ describe("Admin plugin", async () => {
 				}),
 			},
 		});
+		const impersonatedUserId = session.data?.user.id || "";
 		const res = await client.admin.impersonateUser(
 			{
 				userId: session.data?.user.id || "",
@@ -591,12 +603,23 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.data?.session).toBeDefined();
 		expect(res.data?.user?.id).toBe(session.data?.user.id);
+
+		// Check if the hook was called
+		expect(onImpersonationStartMock).toHaveBeenCalledOnce();
+		expect(onImpersonationStartMock).toHaveBeenCalledWith({
+			adminUserId: adminUser.id,
+			impersonatedUserId: impersonatedUserId,
+		});
 	});
 
 	it("should not allow non-admin to impersonate user", async () => {
+		const userToImpersonate = await client.signUp.email({
+			...data,
+			email: "nonadmin-imp@mail.com",
+		});
 		const res = await client.admin.impersonateUser(
 			{
-				userId: newUser?.id || "",
+				userId: userToImpersonate.data?.user.id || "",
 			},
 			{
 				headers: userHeaders,
@@ -616,6 +639,25 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should allow admin to stop impersonating", async () => {
+		// 1. Create a user to impersonate
+		const userToImpersonate = await client.signUp.email({
+			...data,
+			email: "stop-imp@mail.com",
+		});
+		const impersonatedUserId = userToImpersonate.data!.user.id;
+		const impersonateHeaders = new Headers();
+
+		// 2. Start impersonation to get the session cookie
+		await client.admin.impersonateUser(
+			{ userId: impersonatedUserId },
+			{
+				headers: adminHeaders,
+				onSuccess: (ctx) => {
+					// Capture the cookie
+					cookieSetter(impersonateHeaders)(ctx);
+				},
+			},
+		);
 		const res = await client.admin.stopImpersonating(
 			{},
 			{
@@ -638,6 +680,13 @@ describe("Admin plugin", async () => {
 			},
 		});
 		expect(afterStopImpersonationRes.data?.users.length).toBeGreaterThan(1);
+
+		// Check if the hook was called
+		expect(onImpersonationStopMock).toHaveBeenCalledOnce();
+		expect(onImpersonationStopMock).toHaveBeenCalledWith({
+			adminUserId: adminUser.id,
+			impersonatedUserId: impersonatedUserId,
+		});
 	});
 
 	it("should allow admin to revoke user session", async () => {
