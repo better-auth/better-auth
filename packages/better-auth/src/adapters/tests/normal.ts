@@ -25,6 +25,8 @@ export const getNormalTestSuiteTests = ({
 	sortModels,
 	customIdGenerator,
 	getBetterAuthOptions,
+	transformGeneratedModel,
+	transformIdOutput,
 }: Parameters<Parameters<typeof createTestSuite>[2]>[0]) => {
 	return {
 		"create - should create a model": async () => {
@@ -41,7 +43,11 @@ export const getNormalTestSuiteTests = ({
 			} else {
 				expect(typeof result.id).toEqual("string");
 			}
-			expect(result).toEqual(user);
+			const transformed = transformGeneratedModel(user);
+			// console.log(`pre-transformed:`, user);
+			// console.log(`transformed:`, transformed);
+			// console.log(`result:`, result);
+			expect(result).toEqual(transformed);
 		},
 		"create - should always return an id": async () => {
 			const { id: _, ...user } = await generate("user");
@@ -69,7 +75,7 @@ export const getNormalTestSuiteTests = ({
 				model: "user",
 				data: user,
 			});
-			expect(res.id).toEqual(ID);
+			expect(res.id).toEqual(transformIdOutput ? transformIdOutput(ID) : ID);
 			const findResult = await adapter.findOne<User>({
 				model: "user",
 				where: [{ field: "id", value: res.id }],

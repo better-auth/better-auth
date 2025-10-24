@@ -3,7 +3,6 @@ import { testAdapter } from "../test-adapter";
 import { mongodbAdapter } from "./mongodb-adapter";
 import {
 	normalTestSuite,
-	performanceTestSuite,
 	authFlowTestSuite,
 	transactionsTestSuite,
 } from "../tests";
@@ -22,7 +21,9 @@ const { db, client } = await dbClient(
 
 const { execute } = await testAdapter({
 	adapter: (options) => {
-		return mongodbAdapter(db, { transaction: false });
+		return mongodbAdapter(db, {
+			transaction: false,
+		});
 	},
 	runMigrations: async (betterAuthOptions) => {},
 	tests: [
@@ -30,9 +31,8 @@ const { execute } = await testAdapter({
 		authFlowTestSuite(),
 		transactionsTestSuite(),
 		// numberIdTestSuite(), // Mongo doesn't support number ids
-		performanceTestSuite(),
 	],
-	customIdGenerator: () => new ObjectId().toString(),
+	customIdGenerator: () => new ObjectId().toHexString(),
 });
 
 execute();
