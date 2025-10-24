@@ -1,6 +1,6 @@
 {
-  "name": "better-auth",
-  "version": "1.4.0-beta.8",
+  "name": "@rekkeh/better-auth",
+  "version": "4.0.0",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -705,15 +705,15 @@
     }
   },
   "dependencies": {
-    "@better-auth/core": "workspace:*",
-    "@better-auth/telemetry": "workspace:*",
+    "@better-auth/core": "1.3.29",
+    "@better-auth/telemetry": "1.3.29",
     "@better-auth/utils": "0.3.0",
-    "@better-fetch/fetch": "catalog:",
+    "@better-fetch/fetch": "1.1.18",
     "@noble/ciphers": "^2.0.0",
     "@noble/hashes": "^2.0.0",
     "@simplewebauthn/browser": "^13.1.2",
     "@simplewebauthn/server": "^13.1.2",
-    "better-call": "catalog:",
+    "better-call": "1.0.22",
     "defu": "^6.1.4",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
@@ -790,8 +790,8 @@
     "tarn": "^3.0.2",
     "tedious": "^18.6.1",
     "type-fest": "^4.41.0",
-    "typescript": "catalog:",
-    "unbuild": "catalog:",
+      "typescript": "^5.9.2",
+  "unbuild": "3.6.1",
     "vue": "^3.5.18"
   },
   "files": [
