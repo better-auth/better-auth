@@ -236,16 +236,17 @@ export const createInternalAdapter = (
 					undefined,
 				);
 			}
-
-			await (await getCurrentAdapter(adapter)).deleteMany({
-				model: "account",
-				where: [
+			await deleteManyWithHooks(
+				[
 					{
 						field: "userId",
 						value: userId,
 					},
 				],
-			});
+				"account",
+				undefined,
+			);
+
 			await deleteWithHooks(
 				[
 					{
