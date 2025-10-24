@@ -1,3 +1,9 @@
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import type {
+	DBFieldAttribute,
+	DBFieldAttributeConfig,
+	DBFieldType,
+} from "@better-auth/core/db";
 import type {
 	Endpoint,
 	EndpointOptions,
@@ -7,13 +13,6 @@ import type {
 import * as z from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
-import type { BetterAuthOptions } from "@better-auth/core";
-import type {
-	DBFieldAttribute,
-	DBFieldAttributeConfig,
-	DBFieldType,
-} from "@better-auth/core/db";
-import type { AuthContext } from "@better-auth/core";
 
 export interface Path {
 	get?: {

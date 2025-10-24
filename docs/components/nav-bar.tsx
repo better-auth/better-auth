@@ -1,12 +1,12 @@
 import Link from "next/link";
+import { MobileSearchIcon } from "@/components/mobile-search-icon";
 import { ThemeToggle } from "@/components/theme-toggler";
-import { NavbarMobile, NavbarMobileBtn } from "./nav-mobile";
-import { NavLink } from "./nav-link";
-import { Logo } from "./logo";
-import LogoContextMenu from "./logo-context-menu";
 import DarkPng from "../public/branding/better-auth-logo-dark.png";
 import WhitePng from "../public/branding/better-auth-logo-light.png";
-import { MobileSearchIcon } from "@/components/mobile-search-icon";
+import { Logo } from "./logo";
+import LogoContextMenu from "./logo-context-menu";
+import { NavLink } from "./nav-link";
+import { NavbarMobile, NavbarMobileBtn } from "./nav-mobile";
 export const Navbar = () => {
 	const logoAssets = {
 		darkSvg: `

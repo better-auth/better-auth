@@ -1,27 +1,28 @@
 /**
  * @see {@link https://nodejs.org/api/sqlite.html} - Node.js SQLite API documentation
  */
+
+import type { DatabaseSync } from "node:sqlite";
 import {
-	Kysely,
 	CompiledQuery,
+	type DatabaseConnection,
+	type DatabaseIntrospector,
+	type DatabaseMetadata,
+	type DatabaseMetadataOptions,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
-	sql,
-	type DatabaseConnection,
-	type QueryResult,
-	type DatabaseIntrospector,
-	type SchemaMetadata,
-	type DatabaseMetadataOptions,
-	type TableMetadata,
-	type DatabaseMetadata,
-	type Driver,
+	DefaultQueryCompiler,
 	type Dialect,
-	type QueryCompiler,
 	type DialectAdapter,
+	DialectAdapterBase,
+	type Driver,
+	Kysely,
+	type QueryCompiler,
+	type QueryResult,
+	type SchemaMetadata,
+	sql,
+	type TableMetadata,
 } from "kysely";
-import { DefaultQueryCompiler } from "kysely";
-import { DialectAdapterBase } from "kysely";
-import type { DatabaseSync } from "node:sqlite";
 
 export class NodeSqliteAdapter implements DialectAdapterBase {
 	get supportsCreateIfNotExists(): boolean {

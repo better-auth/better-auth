@@ -3,8 +3,8 @@ import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
 import {
 	bytesToHex,
 	hexToBytes,
-	utf8ToBytes,
 	managedNonce,
+	utf8ToBytes,
 } from "@noble/ciphers/utils.js";
 
 export type SymmetricEncryptOptions = {

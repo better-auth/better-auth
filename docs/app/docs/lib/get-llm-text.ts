@@ -1,12 +1,12 @@
+import { readFile } from "fs/promises";
+import { remarkNpm } from "fumadocs-core/mdx-plugins";
+import { fileGenerator, remarkDocGen } from "fumadocs-docgen";
+import { remarkInclude } from "fumadocs-mdx/config";
+import { remarkAutoTypeTable } from "fumadocs-typescript";
 import { remark } from "remark";
 import remarkGfm from "remark-gfm";
-import { fileGenerator, remarkDocGen } from "fumadocs-docgen";
-import { remarkNpm } from "fumadocs-core/mdx-plugins";
-import remarkStringify from "remark-stringify";
 import remarkMdx from "remark-mdx";
-import { remarkAutoTypeTable } from "fumadocs-typescript";
-import { remarkInclude } from "fumadocs-mdx/config";
-import { readFile } from "fs/promises";
+import remarkStringify from "remark-stringify";
 
 function extractAPIMethods(rawContent: string): string {
 	const apiMethodRegex = /<APIMethod\s+([^>]+)>([\s\S]*?)<\/APIMethod>/g;

@@ -1,12 +1,12 @@
 import { MongoClient, ObjectId } from "mongodb";
 import { testAdapter } from "../test-adapter";
-import { mongodbAdapter } from "./mongodb-adapter";
 import {
+	authFlowTestSuite,
 	normalTestSuite,
 	performanceTestSuite,
-	authFlowTestSuite,
 	transactionsTestSuite,
 } from "../tests";
+import { mongodbAdapter } from "./mongodb-adapter";
 
 const dbClient = async (connectionString: string, dbName: string) => {
 	const client = new MongoClient(connectionString);

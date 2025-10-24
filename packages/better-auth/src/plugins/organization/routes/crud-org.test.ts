@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../../test-utils/test-instance";
-import { organization } from "../organization";
 import { createAuthClient } from "../../../client";
+import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import { organization } from "../organization";
 
 describe("get-full-organization", async () => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({

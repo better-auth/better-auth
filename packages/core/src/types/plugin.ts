@@ -1,15 +1,15 @@
-import type { Migration } from "kysely";
-import type { AuthContext } from "./context";
 import type {
 	Endpoint,
 	EndpointContext,
 	InputContext,
 	Middleware,
 } from "better-call";
+import type { Migration } from "kysely";
+import type { AuthMiddleware } from "../api";
 import type { BetterAuthPluginDBSchema } from "../db";
+import type { AuthContext } from "./context";
 import type { LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
-import type { AuthMiddleware } from "../api";
 
 type Awaitable<T> = T | Promise<T>;
 type DeepPartial<T> = T extends Function

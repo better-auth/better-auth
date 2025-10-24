@@ -1,14 +1,13 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { genericOAuth } from ".";
-import { createAuthClient } from "../../client";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { genericOAuthClient } from "./client";
-
+import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
 import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
-import { runWithEndpointContext } from "@better-auth/core/context";
-import type { GenericEndpointContext } from "@better-auth/core";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { genericOAuth } from ".";
+import { genericOAuthClient } from "./client";
 
 describe("oauth2", async () => {
 	const providerId = "test";

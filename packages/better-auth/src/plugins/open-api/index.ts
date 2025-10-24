@@ -1,12 +1,11 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "../../api";
+import type { LiteralString } from "../../types/helper";
 import { generator } from "./generator";
 import { logo } from "./logo";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import type { LiteralString } from "../../types/helper";
 
-import { APIError } from "../../api";
-import { createAuthEndpoint } from "@better-auth/core/api";
-
-export type { FieldSchema, Path, OpenAPIModelSchema } from "./generator";
+export type { FieldSchema, OpenAPIModelSchema, Path } from "./generator";
 
 type ScalarTheme =
 	| "alternate"

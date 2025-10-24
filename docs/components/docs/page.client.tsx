@@ -1,5 +1,22 @@
 "use client";
 
+import { cva } from "class-variance-authority";
+import {
+	type BreadcrumbOptions,
+	getBreadcrumbItemsFromPath,
+} from "fumadocs-core/breadcrumb";
+import type { PageTree } from "fumadocs-core/server";
+import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
+import {
+	useI18n,
+	usePageStyles,
+	useSidebar,
+	useTreeContext,
+	useTreePath,
+} from "fumadocs-ui/provider";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
 	Fragment,
 	type HTMLAttributes,
@@ -8,24 +25,10 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import Link from "next/link";
-import { cva } from "class-variance-authority";
-import { cn } from "../../lib/utils";
-import { useI18n } from "fumadocs-ui/provider";
-import { useTreeContext, useTreePath } from "fumadocs-ui/provider";
-import { useSidebar } from "fumadocs-ui/provider";
-import type { PageTree } from "fumadocs-core/server";
-import { usePathname } from "next/navigation";
-import { useNav } from "./layout/nav";
-import {
-	type BreadcrumbOptions,
-	getBreadcrumbItemsFromPath,
-} from "fumadocs-core/breadcrumb";
-import { usePageStyles } from "fumadocs-ui/provider";
 import { isActive } from "../../lib/is-active";
+import { cn } from "../../lib/utils";
+import { useNav } from "./layout/nav";
 import { TocPopover } from "./layout/toc";
-import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
 
 export function TocPopoverHeader(props: HTMLAttributes<HTMLDivElement>) {
 	const ref = useRef<HTMLElement>(null);

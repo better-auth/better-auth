@@ -1,6 +1,6 @@
-import * as z from "zod";
-import type { ZodType } from "zod";
 import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { ZodType } from "zod";
+import * as z from "zod";
 
 export function toZodSchema<
 	Fields extends Record<string, DBFieldAttribute | never>,

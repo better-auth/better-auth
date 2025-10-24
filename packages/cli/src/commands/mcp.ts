@@ -1,10 +1,10 @@
-import { Command } from "commander";
-import { execSync } from "child_process";
-import * as os from "os";
-import * as fs from "fs";
-import * as path from "path";
-import chalk from "chalk";
 import { base64 } from "@better-auth/utils/base64";
+import chalk from "chalk";
+import { execSync } from "child_process";
+import { Command } from "commander";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
 interface MCPOptions {
 	cursor?: boolean;

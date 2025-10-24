@@ -1,21 +1,21 @@
-import { APIError, getSessionFromCtx } from "../../api";
+import type {
+	AuthContext,
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type {
-	BetterAuthPlugin,
-	GenericEndpointContext,
-} from "@better-auth/core";
-import type { InferOptionSchema, Session, User } from "../../types";
-import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
-import { getOrigin } from "../../utils/url";
-import { mergeSchema } from "../../db/schema";
-import type { EndpointContext } from "better-call";
-import { generateId } from "../../utils/id";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import type { AuthContext } from "@better-auth/core";
 import { defineErrorCodes } from "@better-auth/core/utils";
+import type { EndpointContext } from "better-call";
+import { APIError, getSessionFromCtx } from "../../api";
+import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
+import { mergeSchema } from "../../db/schema";
+import type { InferOptionSchema, Session, User } from "../../types";
+import { generateId } from "../../utils/id";
+import { getOrigin } from "../../utils/url";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;

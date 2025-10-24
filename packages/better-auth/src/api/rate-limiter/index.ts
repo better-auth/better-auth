@@ -1,8 +1,8 @@
-import type { RateLimit } from "../../types";
-import { safeJSONParse } from "../../utils/json";
-import { getIp } from "../../utils/get-request-ip";
-import { wildcardMatch } from "../../utils/wildcard";
 import type { AuthContext } from "@better-auth/core";
+import type { RateLimit } from "../../types";
+import { getIp } from "../../utils/get-request-ip";
+import { safeJSONParse } from "../../utils/json";
+import { wildcardMatch } from "../../utils/wildcard";
 
 function shouldRateLimit(
 	max: number,

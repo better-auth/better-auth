@@ -1,12 +1,12 @@
 import type { Store, StoreValue } from "nanostores";
 import {
+	type DeepReadonly,
 	getCurrentInstance,
 	getCurrentScope,
 	onScopeDispose,
 	readonly,
-	shallowRef,
-	type DeepReadonly,
 	type ShallowRef,
+	shallowRef,
 	type UnwrapNestedRefs,
 } from "vue";
 

@@ -1,16 +1,16 @@
 "use client";
 import { ChevronRight, Menu } from "lucide-react";
 import Link from "next/link";
-import { Fragment, createContext, useContext, useState } from "react";
+import { usePathname } from "next/navigation";
+import { createContext, Fragment, useContext, useState } from "react";
 import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
-import { contents, examples } from "./sidebar-content";
-import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { contents, examples } from "./sidebar-content";
 
 interface NavbarMobileContextProps {
 	isOpen: boolean;

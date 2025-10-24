@@ -1,4 +1,4 @@
-import type { DBAdapter, BetterAuthOptions } from "better-auth";
+import type { BetterAuthOptions, DBAdapter } from "better-auth";
 
 export interface SchemaGenerator {
 	<Options extends BetterAuthOptions>(opts: {

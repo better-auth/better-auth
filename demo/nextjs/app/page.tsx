@@ -1,5 +1,5 @@
-import { SignInButton, SignInFallback } from "@/components/sign-in-btn";
 import { Suspense } from "react";
+import { SignInButton, SignInFallback } from "@/components/sign-in-btn";
 
 const features = [
 	{

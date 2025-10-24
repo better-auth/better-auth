@@ -1,5 +1,5 @@
-import { createAuthEndpoint } from "@better-auth/core/api";
 import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 
 export function deleteAllExpiredApiKeysEndpoint({
 	deleteAllExpiredApiKeys,

@@ -1,5 +1,8 @@
 "use client";
 
+import { CheckIcon, XIcon } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -9,9 +12,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { CheckIcon, XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { client, organization } from "@/lib/auth-client";
 import { InvitationError } from "./invitation-error";

@@ -1,6 +1,6 @@
-import { constantTimeEqual } from "./buffer";
-import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
+import { constantTimeEqual } from "./buffer";
 
 export async function hashToBase64(
 	data: string | ArrayBuffer,

@@ -1,4 +1,15 @@
+import { useAtom } from "jotai";
 import { Moon, PlusIcon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+import {
+	Card,
+	CardContent,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from "../ui/card";
 import {
 	Dialog,
 	DialogContent,
@@ -7,27 +18,17 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "../ui/dialog";
-import {
-	Card,
-	CardContent,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from "../ui/card";
+import { Label } from "../ui/label";
+import { ScrollArea } from "../ui/scroll-area";
+import { Separator } from "../ui/separator";
+import { Switch } from "../ui/switch";
+import CodeTabs from "./code-tabs";
 import SignIn from "./sign-in";
 import { SignUp } from "./sign-up";
-import { AuthTabs } from "./tabs";
-import { Label } from "../ui/label";
-import { Switch } from "../ui/switch";
-import { Separator } from "../ui/separator";
-import { useState } from "react";
-import CodeTabs from "./code-tabs";
-import { cn } from "@/lib/utils";
 import { socialProviders } from "./social-provider";
-import { useAtom } from "jotai";
 import { optionsAtom } from "./store";
-import { useTheme } from "next-themes";
-import { ScrollArea } from "../ui/scroll-area";
+import { AuthTabs } from "./tabs";
+
 const frameworks = [
 	{
 		title: "Next.js",

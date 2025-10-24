@@ -1,19 +1,19 @@
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { createOTP } from "@better-auth/utils/otp";
 import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/api";
 import { sessionMiddleware } from "../../../api";
+import { setSessionCookie } from "../../../cookies";
 import { symmetricDecrypt } from "../../../crypto";
 import type { BackupCodeOptions } from "../backup-codes";
-import { verifyTwoFactor } from "../verify-two-factor";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { setSessionCookie } from "../../../cookies";
-import { TWO_FACTOR_ERROR_CODES } from "../error-code";
-import { createOTP } from "@better-auth/utils/otp";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { verifyTwoFactor } from "../verify-two-factor";
 
 export type TOTPOptions = {
 	/**

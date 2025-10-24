@@ -1,17 +1,17 @@
 "use client";
 
+import { ArrowRight, Clock, Sparkles } from "lucide-react";
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Sparkles, Clock, ArrowRight } from "lucide-react";
 
 export default function PromoCard() {
 	const [isHovered, setIsHovered] = useState(false);

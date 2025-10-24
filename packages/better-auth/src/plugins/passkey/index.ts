@@ -1,29 +1,29 @@
-import {
-	generateAuthenticationOptions,
-	generateRegistrationOptions,
-	verifyAuthenticationResponse,
-	verifyRegistrationResponse,
-} from "@simplewebauthn/server";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import { defineErrorCodes } from "@better-auth/core/utils";
+import { base64 } from "@better-auth/utils/base64";
 import type {
 	AuthenticationResponseJSON,
 	AuthenticatorTransportFuture,
 	CredentialDeviceType,
 	PublicKeyCredentialCreationOptionsJSON,
 } from "@simplewebauthn/server";
+import {
+	generateAuthenticationOptions,
+	generateRegistrationOptions,
+	verifyAuthenticationResponse,
+	verifyRegistrationResponse,
+} from "@simplewebauthn/server";
 import { APIError } from "better-call";
-import { generateRandomString } from "../../crypto/random";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/api";
 import { sessionMiddleware } from "../../api";
 import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
-import type { InferOptionSchema } from "../../types/plugins";
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { setSessionCookie } from "../../cookies";
-import { generateId } from "../../utils";
+import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
-import { base64 } from "@better-auth/utils/base64";
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { defineErrorCodes } from "@better-auth/core/utils";
+import type { InferOptionSchema } from "../../types/plugins";
+import { generateId } from "../../utils";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;

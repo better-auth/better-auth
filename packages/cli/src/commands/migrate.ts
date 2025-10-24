@@ -1,12 +1,12 @@
+import { createTelemetry, getTelemetryAuthConfig, logger } from "better-auth";
+import { getAdapter, getMigrations } from "better-auth/db";
+import chalk from "chalk";
 import { Command } from "commander";
-import * as z from "zod/v4";
 import { existsSync } from "fs";
 import path from "path";
-import yoctoSpinner from "yocto-spinner";
-import chalk from "chalk";
 import prompts from "prompts";
-import { logger, createTelemetry, getTelemetryAuthConfig } from "better-auth";
-import { getAdapter, getMigrations } from "better-auth/db";
+import yoctoSpinner from "yocto-spinner";
+import * as z from "zod/v4";
 import { getConfig } from "../utils/get-config";
 
 export async function migrateAction(opts: any) {

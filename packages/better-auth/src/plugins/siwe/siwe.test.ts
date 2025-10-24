@@ -1,7 +1,7 @@
 import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { siwe } from "./index";
 import { siweClient } from "./client";
+import { siwe } from "./index";
 
 describe("siwe", async (it) => {
 	const walletAddress = "0x000000000000000000000000000000000000dEaD";

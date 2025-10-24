@@ -1,13 +1,16 @@
-import * as z from "zod";
+import type {
+	BetterAuthOptions,
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import * as z from "zod";
 import { getSession } from "../../api";
 import type { InferSession, InferUser } from "../../types";
-import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 const getSessionQuerySchema = z.optional(
 	z.object({

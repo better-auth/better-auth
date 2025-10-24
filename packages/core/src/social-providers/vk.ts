@@ -1,9 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { type OAuthProvider, type ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
-	validateAuthorizationCode,
+	type OAuthProvider,
+	type ProviderOptions,
 	refreshAccessToken,
+	validateAuthorizationCode,
 } from "../oauth2";
 
 export interface VkProfile {

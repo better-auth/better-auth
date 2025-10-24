@@ -1,17 +1,17 @@
-import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../api";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { defineErrorCodes } from "@better-auth/core/utils";
+import * as z from "zod";
+import { APIError, sessionMiddleware } from "../../api";
 import {
 	deleteSessionCookie,
 	parseCookies,
 	parseSetCookieHeader,
 	setSessionCookie,
 } from "../../cookies";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { defineErrorCodes } from "@better-auth/core/utils";
 
 interface MultiSessionConfig {
 	/**

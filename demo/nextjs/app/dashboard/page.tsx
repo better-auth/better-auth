@@ -1,9 +1,9 @@
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import UserCard from "./user-card";
-import { OrganizationCard } from "./organization-card";
 import AccountSwitcher from "@/components/account-switch";
+import { auth } from "@/lib/auth";
+import { OrganizationCard } from "./organization-card";
+import UserCard from "./user-card";
 
 export default async function DashboardPage() {
 	const [session, activeSessions, deviceSessions, organization, subscriptions] =

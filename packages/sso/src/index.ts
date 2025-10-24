@@ -1,12 +1,14 @@
+import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import {
-	generateState,
 	type Account,
 	type BetterAuthPlugin,
+	generateState,
 	type OAuth2Tokens,
 	type Session,
 	type User,
 } from "better-auth";
 import { APIError, sessionMiddleware } from "better-auth/api";
+import { setSessionCookie } from "better-auth/cookies";
 import {
 	createAuthorizationURL,
 	handleOAuthUserInfo,
@@ -14,17 +16,14 @@ import {
 	validateAuthorizationCode,
 	validateToken,
 } from "better-auth/oauth2";
-
 import { createAuthEndpoint } from "better-auth/plugins";
-import * as z from "zod/v4";
+import { XMLValidator } from "fast-xml-parser";
+import { decodeJwt } from "jose";
 import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
-import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
-import { decodeJwt } from "jose";
-import { setSessionCookie } from "better-auth/cookies";
-import type { FlowResult } from "samlify/types/src/flow";
-import { XMLValidator } from "fast-xml-parser";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
+import type { FlowResult } from "samlify/types/src/flow";
+import * as z from "zod/v4";
 
 const fastValidator = {
 	async validate(xml: string) {

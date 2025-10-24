@@ -1,8 +1,10 @@
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthPluginDBSchema,
+	DBFieldAttribute,
+} from "@better-auth/core/db";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
-import type { DBFieldAttribute } from "@better-auth/core/db";
 
 // Cache for parsed schemas to avoid reparsing on every request
 const cache = new WeakMap<

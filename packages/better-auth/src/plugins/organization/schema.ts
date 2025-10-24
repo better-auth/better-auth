@@ -1,9 +1,9 @@
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import type { Prettify } from "better-call";
 import * as z from "zod";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./types";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
-import type { Prettify } from "better-call";
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 type InferSchema<
 	Schema extends BetterAuthPluginDBSchema,

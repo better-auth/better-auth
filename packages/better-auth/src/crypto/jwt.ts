@@ -1,13 +1,13 @@
+import { hkdf } from "@noble/hashes/hkdf.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import {
-	SignJWT,
-	jwtVerify,
 	base64url,
 	calculateJwkThumbprint,
 	EncryptJWT,
 	jwtDecrypt,
+	jwtVerify,
+	SignJWT,
 } from "jose";
-import { hkdf } from "@noble/hashes/hkdf.js";
-import { sha256 } from "@noble/hashes/sha2.js";
 
 export async function signJWT(
 	payload: any,

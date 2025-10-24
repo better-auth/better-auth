@@ -1,8 +1,8 @@
 import { describe, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { organization } from "./organization";
 import { createAuthClient } from "../../client";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { organizationClient } from "./client";
+import { organization } from "./organization";
 
 describe("team", async (it) => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({

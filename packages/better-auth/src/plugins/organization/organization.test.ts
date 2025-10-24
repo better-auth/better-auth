@@ -1,18 +1,18 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { organization } from "./organization";
-import { createAuthClient } from "../../client";
-import { inferOrgAdditionalFields, organizationClient } from "./client";
-import { createAccessControl } from "../access";
-import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { APIError, type Prettify } from "better-call";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { memoryAdapter } from "../../adapters/memory-adapter";
-import type { OrganizationOptions } from "./types";
+import { createAuthClient } from "../../client";
+import { nextCookies } from "../../integrations/next-js";
+import { getTestInstance } from "../../test-utils/test-instance";
 import type { PrettifyDeep } from "../../types/helper";
-import type { InvitationStatus } from "./schema";
+import { createAccessControl } from "../access";
 import { admin } from "../admin";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
-import { nextCookies } from "../../integrations/next-js";
+import { inferOrgAdditionalFields, organizationClient } from "./client";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
+import { organization } from "./organization";
+import type { InvitationStatus } from "./schema";
+import type { OrganizationOptions } from "./types";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =

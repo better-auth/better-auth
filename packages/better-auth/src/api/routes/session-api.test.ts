@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { parseSetCookieHeader } from "../../cookies";
-import { getDate } from "../../utils/date";
-import { memoryAdapter, type MemoryDB } from "../../adapters/memory-adapter";
-import { runWithEndpointContext } from "@better-auth/core/context";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { type MemoryDB, memoryAdapter } from "../../adapters/memory-adapter";
+import { parseSetCookieHeader } from "../../cookies";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { getDate } from "../../utils/date";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =

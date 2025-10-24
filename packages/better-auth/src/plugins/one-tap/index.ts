@@ -1,9 +1,9 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import * as z from "zod";
 import { APIError } from "../../api";
-import { createAuthEndpoint } from "@better-auth/core/api";
 import { setSessionCookie } from "../../cookies";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { jwtVerify, createRemoteJWKSet } from "jose";
 import { toBoolean } from "../../utils/boolean";
 
 interface OneTapOptions {

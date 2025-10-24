@@ -1,11 +1,11 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
-import { joseSecs } from "../../utils/time";
-import type { JwtOptions, Jwk } from "./types";
-import { generateKeyPair, exportJWK } from "jose";
+import { exportJWK, generateKeyPair } from "jose";
 import { symmetricEncrypt } from "../../crypto";
+import { joseSecs } from "../../utils/time";
 import { getJwksAdapter } from "./adapter";
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { Jwk, JwtOptions } from "./types";
 
 /**
  * Converts an expirationTime to ISO seconds expiration time (the format of JWT exp)

@@ -1,14 +1,14 @@
 import Ionicons from "@expo/vector-icons/AntDesign";
+import { useStore } from "@nanostores/react";
+import { router, useNavigationContainerRef } from "expo-router";
+import { useEffect, useState } from "react";
+import { Image, View } from "react-native";
 import { Button } from "@/components/ui/button";
 import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { Text } from "@/components/ui/text";
 import { authClient } from "@/lib/auth-client";
-import { Image, View } from "react-native";
-import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
-import { useEffect, useState } from "react";
-import { router, useNavigationContainerRef } from "expo-router";
-import { useStore } from "@nanostores/react";
 
 export default function Index() {
 	const { data: isAuthenticated } = useStore(authClient.useSession);

@@ -1,11 +1,11 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/api";
-import { APIError } from "better-call";
-import { getDate } from "../../utils/date";
-import { generateId } from "../../utils";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { originCheck } from "../middlewares";
 import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "better-call";
+import * as z from "zod";
+import { generateId } from "../../utils";
+import { getDate } from "../../utils/date";
+import { originCheck } from "../middlewares";
 
 function redirectError(
 	ctx: AuthContext,

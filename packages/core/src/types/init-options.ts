@@ -1,3 +1,6 @@
+import type { Database as BunDatabase } from "bun:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import type { CookieOptions } from "better-call";
 import type {
 	Dialect,
 	Kysely,
@@ -5,21 +8,22 @@ import type {
 	PostgresPool,
 	SqliteDatabase,
 } from "kysely";
-import type { CookieOptions } from "better-call";
-import type { LiteralUnion } from "./helper";
+import type { AuthMiddleware } from "../api";
 import type {
+	Account,
 	DBFieldAttribute,
 	DBPreservedModels,
+	RateLimit,
 	SecondaryStorage,
+	Session,
+	User,
+	Verification,
 } from "../db";
-import type { Account, RateLimit, Session, User, Verification } from "../db";
-import type { Database as BunDatabase } from "bun:sqlite";
-import type { DatabaseSync } from "node:sqlite";
 import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
-import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Logger } from "../env";
+import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
-import type { AuthMiddleware } from "../api";
+import type { LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";

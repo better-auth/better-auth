@@ -1,11 +1,11 @@
-import { describe, expect, it, beforeAll, afterAll, afterEach } from "vitest";
-import { setupServer } from "msw/node";
-import { http, HttpResponse } from "msw";
-import { getTestInstance } from "../test-utils/test-instance";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { DEFAULT_SECRET } from "../utils/constants";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { signJWT } from "../crypto";
+import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
+import { DEFAULT_SECRET } from "../utils/constants";
 
 let mockEmail = "";
 let mockEmailVerified = true;

@@ -1,15 +1,15 @@
-import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterAuthOptions } from "@better-auth/core";
-import {
-	createAdapterFactory,
-	type AdapterFactoryOptions,
-	type AdapterFactoryCustomizeAdapterCreator,
-} from "../adapter-factory";
 import type {
-	DBAdapterDebugLogOption,
 	DBAdapter,
+	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { BetterAuthError } from "@better-auth/core/error";
+import {
+	type AdapterFactoryCustomizeAdapterCreator,
+	type AdapterFactoryOptions,
+	createAdapterFactory,
+} from "../adapter-factory";
 
 export interface PrismaConfig {
 	/**

@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
-import { init } from "./init";
 import Database from "better-sqlite3";
+import { describe, expect, it, vi } from "vitest";
 import { betterAuth } from "./auth";
 import { createAuthClient } from "./client";
+import { init } from "./init";
 import { getTestInstance } from "./test-utils/test-instance";
 
 describe("init", async () => {

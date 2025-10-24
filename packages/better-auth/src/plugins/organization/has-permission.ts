@@ -1,14 +1,14 @@
-import { defaultRoles } from "./access";
-import type { Role } from "../access";
+import type { GenericEndpointContext } from "@better-auth/core";
 import * as z from "zod";
 import { APIError } from "../../api";
-import type { OrganizationRole } from "./schema";
+import type { Role } from "../access";
+import { defaultRoles } from "./access";
 import {
 	cacheAllRoles,
-	hasPermissionFn,
 	type HasPermissionBaseInput,
+	hasPermissionFn,
 } from "./permission";
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { OrganizationRole } from "./schema";
 
 export const hasPermission = async (
 	input: {

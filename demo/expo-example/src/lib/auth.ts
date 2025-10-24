@@ -1,5 +1,5 @@
-import { betterAuth } from "better-auth";
 import { expo } from "@better-auth/expo";
+import { betterAuth } from "better-auth";
 import { Pool } from "pg";
 
 export const auth = betterAuth({

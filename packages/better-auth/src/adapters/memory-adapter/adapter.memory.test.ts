@@ -1,13 +1,14 @@
 import { getAuthTables } from "../../db";
 import { testAdapter } from "../test-adapter";
-import { memoryAdapter } from "./memory-adapter";
 import {
-	performanceTestSuite,
-	normalTestSuite,
-	transactionsTestSuite,
 	authFlowTestSuite,
+	normalTestSuite,
 	numberIdTestSuite,
+	performanceTestSuite,
+	transactionsTestSuite,
 } from "../tests";
+import { memoryAdapter } from "./memory-adapter";
+
 let db: Record<string, any[]> = {};
 
 const { execute } = await testAdapter({

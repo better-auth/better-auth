@@ -1,8 +1,8 @@
+import { type BetterAuthPlugin, betterAuth } from "better-auth";
+import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { migrateAction } from "../src/commands/migrate";
 import * as config from "../src/utils/get-config";
-import { betterAuth, type BetterAuthPlugin } from "better-auth";
-import Database from "better-sqlite3";
 
 describe("migrate base auth instance", () => {
 	const db = new Database(":memory:");

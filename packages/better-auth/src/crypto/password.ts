@@ -1,8 +1,8 @@
-import { constantTimeEqual } from "./buffer";
-import { scryptAsync } from "@noble/hashes/scrypt.js";
-import { hex } from "@better-auth/utils/hex";
-import { hexToBytes } from "@noble/hashes/utils.js";
 import { BetterAuthError } from "@better-auth/core/error";
+import { hex } from "@better-auth/utils/hex";
+import { scryptAsync } from "@noble/hashes/scrypt.js";
+import { hexToBytes } from "@noble/hashes/utils.js";
+import { constantTimeEqual } from "./buffer";
 
 const config = {
 	N: 16384,
