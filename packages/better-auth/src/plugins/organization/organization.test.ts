@@ -54,6 +54,25 @@ describe("organization", async (it) => {
 		},
 	});
 
+	it("should have correct schema order when dynamicAccessControl is enabled", () => {
+		const orgPlugin = organization({
+			dynamicAccessControl: {
+				enabled: true,
+			},
+		});
+
+		const schema = orgPlugin.schema;
+
+		// Check that organization table is defined before organizationRole table
+		const organizationIndex = Object.keys(schema).indexOf("organization");
+		const organizationRoleIndex =
+			Object.keys(schema).indexOf("organizationRole");
+
+		expect(organizationIndex).toBeLessThan(organizationRoleIndex);
+		expect(organizationIndex).not.toBe(-1);
+		expect(organizationRoleIndex).not.toBe(-1);
+	});
+
 	let organizationId: string;
 	let organization2Id: string;
 	it("create organization", async () => {
