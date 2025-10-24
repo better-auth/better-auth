@@ -218,6 +218,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			updateAge: number;
 			expiresIn: number;
 			freshAge: number;
+			cookieFreshCache: number | false;
 		};
 		generateId: (options: {
 			model: LiteralUnion<DBPreservedModels, string>;

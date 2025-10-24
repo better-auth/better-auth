@@ -3,9 +3,13 @@
   "compilerOptions": {
     "lib": ["esnext", "dom", "dom.iterable"]
   },
+  "include": ["./src"],
   "references": [
     {
-      "path": "../better-auth/tsconfig.json"
+      "path": "../core/tsconfig.json"
+    },
+    {
+      "path": "./tsconfig.test.json"
     }
   ]
 }

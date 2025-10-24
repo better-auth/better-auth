@@ -26,6 +26,7 @@ import type {
 	StripeOptions,
 	StripePlan,
 	Subscription,
+	SubscriptionOptions,
 } from "./types";
 import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
 import { getSchema } from "./schema";
@@ -69,6 +70,7 @@ async function resolvePriceIdFromLookupKey(
 
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
+	const subscriptionOptions = options.subscription as SubscriptionOptions;
 
 	const referenceMiddleware = (
 		action:
@@ -86,7 +88,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			const referenceId =
 				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
 
-			if (ctx.body?.referenceId && !options.subscription?.authorizeReference) {
+			if (ctx.body?.referenceId && !subscriptionOptions.authorizeReference) {
 				logger.error(
 					`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
 				);
@@ -103,7 +105,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				ctx.body?.referenceId === session.user.id;
 			const isAuthorized =
 				ctx.body?.referenceId || ctx.query?.referenceId
-					? (await options.subscription?.authorizeReference?.(
+					? (await subscriptionOptions.authorizeReference?.(
 							{
 								user: session.user,
 								session: session.session,
@@ -248,7 +250,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const { user, session } = ctx.context.session;
 				if (
 					!user.emailVerified &&
-					options.subscription?.requireEmailVerification
+					subscriptionOptions.requireEmailVerification
 				) {
 					throw new APIError("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
@@ -531,7 +533,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					throw new APIError("INTERNAL_SERVER_ERROR");
 				}
 
-				const params = await options.subscription?.getCheckoutSessionParams?.(
+				const params = await subscriptionOptions.getCheckoutSessionParams?.(
 					{
 						user,
 						session,
@@ -691,7 +693,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									},
 								],
 							});
-							await options.subscription?.onSubscriptionCancel?.({
+							await subscriptionOptions.onSubscriptionCancel?.({
 								subscription,
 								cancellationDetails: currentSubscription.cancellation_details,
 								stripeSubscription: currentSubscription,
@@ -1030,7 +1032,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				if (!subscriptions.length) {
 					return [];
 				}
-				const plans = await getPlans(options);
+				const plans = await getPlans(options.subscription);
 				if (!plans) {
 					return [];
 				}
@@ -1310,7 +1312,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			...((options.subscription?.enabled
 				? subscriptionEndpoints
 				: {}) as O["subscription"] extends {
-				enabled: boolean;
+				enabled: true;
 			}
 				? typeof subscriptionEndpoints
 				: {}),
@@ -1419,5 +1421,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		$ERROR_CODES: STRIPE_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+export type StripePlugin<O extends StripeOptions> = ReturnType<
+	typeof stripe<O>
+>;
 
 export type { Subscription, StripePlan };

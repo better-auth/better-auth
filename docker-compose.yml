@@ -20,7 +20,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
 
   postgres-kysely:
     image: postgres:latest
@@ -32,7 +32,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - postgres-kysely_data:/var/lib/postgresql/data
+      - postgres-kysely_data:/var/lib/postgresql
 
   postgres-prisma:
     image: postgres:latest
@@ -44,7 +44,7 @@ services:
     ports:
       - "5434:5432"
     volumes:
-      - postgres-prisma_data:/var/lib/postgresql/data
+      - postgres-prisma_data:/var/lib/postgresql
 
   # Drizzle tests
   mysql:
