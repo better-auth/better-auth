@@ -1583,3 +1583,15 @@ export const getNormalTestSuiteTests = ({
 			},
 	};
 };
+
+const getTestKeys = () => Object.keys(getNormalTestSuiteTests({} as any));
+type TestKeys = Partial<
+	Record<keyof ReturnType<typeof getNormalTestSuiteTests>, boolean>
+>;
+
+export const enableJoinTests = getTestKeys().reduce((acc, test) => {
+	if (test.includes("join")) {
+		acc[test as keyof TestKeys] = false;
+	}
+	return acc;
+}, {} as TestKeys);

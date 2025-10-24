@@ -269,8 +269,6 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 						.aggregate(pipeline, { session })
 						.toArray();
 
-					console.log(res[0]);
-
 					if (!res || res.length === 0) return null;
 					return res[0] as any;
 				},

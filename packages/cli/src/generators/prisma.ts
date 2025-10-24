@@ -188,7 +188,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 				const getModelName = initGetModelName({
 					schema: getAuthTables(options),
-					usePlural: false,
+					usePlural: adapter.options?.adapterConfig.usePlural,
 				});
 				const getFieldName = initGetFieldName({
 					schema: getAuthTables(options),

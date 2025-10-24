@@ -366,7 +366,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								model: joinedModel,
 								field: join[joinedModel].on.to,
 							});
-							nested[getDefaultModelName(joinedModel)] = fieldAttributes.unique
+							nested[getModelName(joinedModel)] = fieldAttributes.unique
 								? null
 								: [];
 						}
@@ -392,17 +392,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 
 						if (joinedData) {
-							const defaultModelName = getDefaultModelName(joinedModel);
-							if (Array.isArray(nestedEntry[defaultModelName])) {
-								if (
-									!nestedEntry[defaultModelName].some(
-										(item) => item.id === joinedData.id,
-									)
-								) {
-									nestedEntry[defaultModelName].push(joinedData);
+							const m = getModelName(joinedModel);
+							if (Array.isArray(nestedEntry[m])) {
+								if (!nestedEntry[m].some((item) => item.id === joinedData.id)) {
+									nestedEntry[m].push(joinedData);
 								}
 							} else {
-								nestedEntry[defaultModelName] = joinedData;
+								nestedEntry[m] = joinedData;
 							}
 						}
 					}
@@ -473,7 +469,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = where ? convertWhereClause(where, model) : [];
 
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
-					const builder = db
+					let builder = db
 						.select()
 						.from(schemaModel)
 						.limit(limit || 100)
@@ -485,7 +481,25 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							),
 						);
 					}
-					return (await builder.where(...clause)) as any[];
+					if (join) {
+						for (const [model, joinAttr] of Object.entries(join)) {
+							const joinModel = getSchema(model);
+							if (joinAttr.type === "inner") {
+								builder = builder.innerJoin(
+									joinModel,
+									eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
+								);
+							} else {
+								builder = builder.leftJoin(
+									joinModel,
+									eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
+								);
+							}
+						}
+					}
+					const res = await builder.where(...clause);
+					const joinedResult = nestJoinedResults(res, model, join);
+					return joinedResult;
 				},
 				async count({ model, where }) {
 					const schemaModel = getSchema(model);
