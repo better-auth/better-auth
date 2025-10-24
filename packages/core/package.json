@@ -1,6 +1,6 @@
 {
   "name": "@rekkeh/core",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "main": "./dist/index.cjs",

@@ -1,7 +1,7 @@
 {
   "name": "@rekkeh/stripe",
   "author": "Bereket Engida",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "main": "dist/index.cjs",
   "license": "MIT",
   "keywords": [
