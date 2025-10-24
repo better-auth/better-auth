@@ -377,11 +377,7 @@ async function redirectWithPromptCode(
 		...cookieAttributes,
 	});
 
-	const params = new URLSearchParams({
-		client_id: ctx.query.client_id,
-		scope: ctx.query.scope,
-		state: verificationValue.query.state,
-	});
+	const params = new URLSearchParams(ctx.query);
 	const consentUri = `${
 		type === "select_account" && opts.selectAccountPage
 			? opts.selectAccountPage
