@@ -607,8 +607,8 @@ describe("Email Verification with OTP", async () => {
 		await vi.advanceTimersByTimeAsync(2000);
 
 		// Use client SDK with nested path
-		const res = await clientWithShortExpiry.verifyEmail.otp({
-			email: testUserShortExpiry.email,
+		const res = await client.verifyEmail.otp({
+			email: testUser.email,
 			otp,
 		});
 
