@@ -287,6 +287,26 @@ describe("expo", async () => {
 		);
 		expect(origin).toBe(originalOrigin);
 	});
+
+	it("should not modify origin header if disableOriginOverride is set", async () => {
+		let origin = null;
+		const { auth, client } = testUtils({
+			plugins: [expo({ disableOriginOverride: true })],
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					origin = ctx.request?.headers.get("origin");
+				}),
+			},
+		});
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+		await client.signIn.email({
+			email: "test@test.com",
+			password: "password",
+			callbackURL: "http://localhost:3000/callback",
+		});
+		expect(origin).toBe(null);
+	});
 });
 
 describe("expo with cookieCache", async () => {
