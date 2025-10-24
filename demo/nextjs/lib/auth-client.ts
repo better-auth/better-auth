@@ -1,7 +1,6 @@
 import { createAuthClient } from "better-auth/react";
 import {
 	organizationClient,
-	passkeyClient,
 	twoFactorClient,
 	adminClient,
 	multiSessionClient,
@@ -11,6 +10,7 @@ import {
 	deviceAuthorizationClient,
 	lastLoginMethodClient,
 } from "better-auth/client/plugins";
+import { passkeyClient } from "@better-auth/passkey/client";
 import { toast } from "sonner";
 import { stripeClient } from "@better-auth/stripe/client";
 

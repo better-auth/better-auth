@@ -11,6 +11,13 @@ The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplew
 
 <Steps>
     <Step>
+        ### Install the package
+
+        ```bash package-install
+        @better-auth/passkey
+        ```
+    </Step>
+    <Step>
         ### Add the plugin to your auth config
         To add the passkey plugin to your auth config, you need to import the plugin and pass it to the `plugins` option of the auth instance.
 
@@ -38,11 +45,11 @@ The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplew
                 - `preferred`: Verification encouraged but not mandatory
                 - `discouraged`: No verification required (fastest experience)
                 - Default: `preferred`
-            
-           
+
+
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { passkey } from "better-auth/plugins/passkey" // [!code highlight]
+        import { passkey } from "@better-auth/passkey" // [!code highlight]
 
         export const auth = betterAuth({
             plugins: [ // [!code highlight]
@@ -75,7 +82,7 @@ The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplew
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { passkeyClient } from "better-auth/client/plugins"
+        import { passkeyClient } from "@better-auth/passkey/client" // [!code highlight]
 
         export const authClient = createAuthClient({
             plugins: [ // [!code highlight]

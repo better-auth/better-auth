@@ -12,7 +12,7 @@ import type { ReadableAtom } from "nanostores";
 import type { Session, SessionQueryParams } from "../types";
 import { BetterFetchError } from "@better-fetch/fetch";
 import { twoFactorClient } from "../plugins";
-import { organizationClient, passkeyClient } from "./plugins";
+import { organizationClient } from "./plugins";
 import { isProxy } from "node:util/types";
 
 describe("run time proxy", async () => {
@@ -277,7 +277,7 @@ describe("type", () => {
 
 	it("should infer session react", () => {
 		const client = createReactClient({
-			plugins: [organizationClient(), twoFactorClient(), passkeyClient()],
+			plugins: [organizationClient(), twoFactorClient()],
 		});
 		const $infer = client.$Infer.Session;
 		expectTypeOf<typeof $infer.user>().toEqualTypeOf<{

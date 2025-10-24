@@ -8,11 +8,10 @@ import type {
 	PublicKeyCredentialCreationOptionsJSON,
 	PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
-import type { User, Session } from "../../types";
+import type { User, Session } from "better-auth/types";
 import type { passkey as passkeyPl, Passkey } from ".";
 import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
-import { useAuthQuery } from "../../client";
-import { atom } from "nanostores";
+import { useAuthQuery, atom } from "better-auth/client";
 
 export const getPasskeyActions = (
 	$fetch: BetterFetch,

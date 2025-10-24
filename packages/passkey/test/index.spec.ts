@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { type Passkey, passkey } from ".";
-import { createAuthClient } from "../../client";
-import { passkeyClient } from "./client";
+import { getTestInstanceMemory } from "better-auth/test";
+import { type Passkey, passkey } from "../src";
+import { createAuthClient } from "better-auth/client";
+import { passkeyClient } from "../src/client";
 
 describe("passkey", async () => {
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		plugins: [passkey()],
-	});
+	const { auth, signInWithTestUser, customFetchImpl } =
+		await getTestInstanceMemory({
+			plugins: [passkey()],
+		});
 
 	it("should generate register options", async () => {
 		const { headers } = await signInWithTestUser();

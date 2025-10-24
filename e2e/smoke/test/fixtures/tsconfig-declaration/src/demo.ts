@@ -13,7 +13,7 @@ import {
 	lastLoginMethod,
 } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
-import { passkey } from "better-auth/plugins/passkey";
+import { passkey } from "@better-auth/passkey";
 import { stripe } from "@better-auth/stripe";
 import { sso } from "@better-auth/sso";
 import { Stripe } from "stripe";

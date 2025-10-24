@@ -1,6 +1,5 @@
 export * from "../../plugins/organization/client";
 export * from "../../plugins/username/client";
-export * from "../../plugins/passkey/client";
 export * from "../../plugins/two-factor/client";
 export * from "../../plugins/magic-link/client";
 export * from "../../plugins/phone-number/client";
@@ -19,5 +18,4 @@ export * from "../../plugins/api-key/client";
 export * from "../../plugins/one-time-token/client";
 export * from "../../plugins/siwe/client";
 export * from "../../plugins/device-authorization/client";
-export type * from "@simplewebauthn/server";
 export * from "../../plugins/last-login-method/client";

@@ -526,17 +526,6 @@
         "default": "./dist/plugins/one-time-token/index.cjs"
       }
     },
-    "./plugins/passkey": {
-      "better-auth-dev-source": "./src/plugins/passkey/index.ts",
-      "import": {
-        "types": "./dist/plugins/passkey/index.d.ts",
-        "default": "./dist/plugins/passkey/index.js"
-      },
-      "require": {
-        "types": "./dist/plugins/passkey/index.d.cts",
-        "default": "./dist/plugins/passkey/index.cjs"
-      }
-    },
     "./plugins/phone-number": {
       "better-auth-dev-source": "./src/plugins/phone-number/index.ts",
       "import": {
@@ -721,9 +710,6 @@
       "plugins/organization/access": [
         "./dist/plugins/organization/access/index.d.ts"
       ],
-      "plugins/passkey": [
-        "./dist/plugins/passkey/index.d.ts"
-      ],
       "plugins/phone-number": [
         "./dist/plugins/phone-number/index.d.ts"
       ],
@@ -748,8 +734,6 @@
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.0.0",
     "@noble/hashes": "^2.0.0",
-    "@simplewebauthn/browser": "^13.1.2",
-    "@simplewebauthn/server": "^13.1.2",
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^6.1.0",
