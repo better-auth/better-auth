@@ -457,3 +457,263 @@ describe("magic link storeToken", async () => {
 		expect(response2.status).toBe(true);
 	});
 });
+
+describe("magic link allowedAttempts", async () => {
+	it("should reject second verification attempt with default allowedAttempts (1)", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		const token =
+			new URL(verificationEmail.url).searchParams.get("token") || "";
+
+		// First attempt should succeed
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: {
+				token,
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		expect(response.data?.token).toBeDefined();
+		const betterAuthCookie = headers.get("set-cookie");
+		expect(betterAuthCookie).toBeDefined();
+
+		// Second attempt should be rejected with INVALID_TOKEN
+		await client.magicLink.verify(
+			{
+				query: {
+					token,
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("?error=INVALID_TOKEN");
+				},
+				onSuccess() {
+					throw new Error("Should not succeed");
+				},
+			},
+		);
+	});
+
+	it("should respect allowedAttempts value of 3", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+			plugins: [
+				magicLink({
+					allowedAttempts: 3,
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		const token =
+			new URL(verificationEmail.url).searchParams.get("token") || "";
+
+		// 3 attempts should succeed
+		for (let i = 0; i < 3; i++) {
+			const headers = new Headers();
+			const response = await client.magicLink.verify({
+				query: {
+					token,
+				},
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+			expect(response.data?.token).toBeDefined();
+			const betterAuthCookie = headers.get("set-cookie");
+			expect(betterAuthCookie).toBeDefined();
+		}
+
+		// Fourth attempt should be rejected with INVALID_TOKEN
+		await client.magicLink.verify(
+			{
+				query: {
+					token,
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("?error=INVALID_TOKEN");
+				},
+				onSuccess() {
+					throw new Error("Should not succeed");
+				},
+			},
+		);
+	});
+
+	it("shouldn't verify magic link with an expired token on second attempt", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+			plugins: [
+				magicLink({
+					allowedAttempts: 3,
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		const token =
+			new URL(verificationEmail.url).searchParams.get("token") || "";
+
+		// 2 attempts should succeed
+		for (let i = 0; i < 2; i++) {
+			const headers = new Headers();
+			const response = await client.magicLink.verify({
+				query: {
+					token,
+				},
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+			expect(response.data?.token).toBeDefined();
+			const betterAuthCookie = headers.get("set-cookie");
+			expect(betterAuthCookie).toBeDefined();
+		}
+
+		// Third attempt after expiration should be rejected with EXPIRED_TOKEN
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 5 + 1);
+		const response = await client.magicLink.verify(
+			{
+				query: {
+					token,
+					callbackURL: "/callback",
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("?error=EXPIRED_TOKEN");
+				},
+				onSuccess() {
+					throw new Error("Should not succeed");
+				},
+			},
+		);
+	});
+
+	it("should respect allowedAttempts value of Infinity", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+			plugins: [
+				magicLink({
+					allowedAttempts: Infinity,
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		const token =
+			new URL(verificationEmail.url).searchParams.get("token") || "";
+
+		// verify that at least 10 attempts succeed
+		for (let i = 0; i < 10; i++) {
+			const headers = new Headers();
+			const response = await client.magicLink.verify({
+				query: {
+					token,
+				},
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+			expect(response.data?.token).toBeDefined();
+			const betterAuthCookie = headers.get("set-cookie");
+			expect(betterAuthCookie).toBeDefined();
+		}
+	});
+});

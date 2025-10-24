@@ -134,6 +134,8 @@ and a `ctx` context object as the second parameter.
 
 **expiresIn**: specifies the time in seconds after which the magic link will expire. The default value is `300` seconds (5 minutes).
 
+**allowedAttempts**: Specifies the number of allowed attempts for verifying the magic link. The default value is `1`.
+
 **disableSignUp**: If set to `true`, the user will not be able to sign up using the magic link. The default value is `false`.
 
 **generateToken**: The `generateToken` function is called to generate a token which is used to uniquely identify the user. The default value is a random string. There is one parameter:
