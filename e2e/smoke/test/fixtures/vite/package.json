@@ -8,6 +8,6 @@
     "better-auth": "workspace:*"
   },
   "devDependencies": {
-    "vite": "^7.1.5"
+    "vite": "^7.1.12"
   }
 }

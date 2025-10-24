@@ -31,7 +31,15 @@
     "typescript",
     "better-auth"
   ],
-  "exports": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./generator": {
+      "default": "./src/generators/index.ts"
+    }
+  },
   "bin": "./dist/index.js",
   "devDependencies": {
     "@types/semver": "^7.7.1",
