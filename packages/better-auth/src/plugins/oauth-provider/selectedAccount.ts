@@ -1,8 +1,8 @@
-import { APIError } from "../../api";
-import type { OAuthOptions, VerificationValue } from "./types";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { APIError } from "../../api";
 import type { Verification } from "../../types";
 import { authorizeEndpoint, formatErrorURL } from "./authorize";
+import type { OAuthOptions, VerificationValue } from "./types";
 import { storeToken } from "./utils";
 
 export async function selectedAccountEndpoint(

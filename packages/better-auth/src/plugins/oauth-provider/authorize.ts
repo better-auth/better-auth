@@ -1,15 +1,15 @@
-import { APIError } from "better-call";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
+import { generateRandomString } from "../../crypto";
+import type { Verification } from "../../db";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
 	OAuthOptions,
 	VerificationValue,
 } from "./types";
-import { generateRandomString } from "../../crypto";
 import { getClient, storeToken } from "./utils";
-import type { Verification } from "../../db";
 
 /**
  * Formats an error url

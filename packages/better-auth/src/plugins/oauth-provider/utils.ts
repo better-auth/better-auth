@@ -1,15 +1,15 @@
-import { APIError } from "../../api";
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { jwt } from "../jwt";
-import type { oauthProvider } from "../oauth-provider";
 import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import type { OAuthOptions, StoreTokenType } from "./types";
-import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import { databaseToSchema, type DatabaseClient } from "./register";
 import Crypto from "crypto";
+import { APIError } from "../../api";
 import type { Auth } from "../../auth";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import type { jwt } from "../jwt";
+import type { oauthProvider } from "../oauth-provider";
+import { type DatabaseClient, databaseToSchema } from "./register";
+import type { OAuthOptions, StoreTokenType } from "./types";
 
 /**
  * Gets the oAuth Provider Plugin

@@ -1,14 +1,14 @@
-import type { oauthProvider } from "./oauth";
-import type { BetterAuthClientPlugin } from "../../types";
-import { verifyAccessToken } from "./verify";
-import type { JWTPayload, JWTVerifyOptions } from "jose";
-import { handleMcpErrors } from "./mcp";
-import type { Auth } from "../../auth";
-import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
-import { APIError } from "../../api";
-import type { ResourceServerMetadata } from "../../oauth-2.1/types";
-import { BetterAuthError } from "@better-auth/core/error";
 import { logger } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { JWTPayload, JWTVerifyOptions } from "jose";
+import { APIError } from "../../api";
+import type { Auth } from "../../auth";
+import type { ResourceServerMetadata } from "../../oauth-2.1/types";
+import type { BetterAuthClientPlugin } from "../../types";
+import { handleMcpErrors } from "./mcp";
+import type { oauthProvider } from "./oauth";
+import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
+import { verifyAccessToken } from "./verify";
 
 export const oauthProviderClient = () => {
 	return {

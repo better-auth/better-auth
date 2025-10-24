@@ -1,3 +1,5 @@
+import { logger } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
 import { z } from "zod";
 import {
 	APIError,
@@ -5,24 +7,22 @@ import {
 	createAuthMiddleware,
 	sessionMiddleware,
 } from "../../api";
-import type { BetterAuthPlugin } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
-import { schema } from "./schema";
-import type { OAuthOptions } from "./types";
+import { mergeSchema } from "../../db";
+import type { BetterAuthPlugin } from "../../types";
 import { authorizeEndpoint } from "./authorize";
 import { consentEndpoint } from "./consent";
-import { tokenEndpoint } from "./token";
-import { userInfoEndpoint } from "./userinfo";
-import { mergeSchema } from "../../db";
-import { registerEndpoint } from "./register";
-import { authServerMetadata, oidcServerMetadata } from "./metadata";
-import { getJwtPlugin } from "./utils";
 import { introspectEndpoint } from "./introspect";
-import { revokeEndpoint } from "./revoke";
-import { BetterAuthError } from "@better-auth/core/error";
-import { logger } from "@better-auth/core/env";
+import { authServerMetadata, oidcServerMetadata } from "./metadata";
 import * as oauthClientEndpoints from "./oauthClient";
+import { registerEndpoint } from "./register";
+import { revokeEndpoint } from "./revoke";
+import { schema } from "./schema";
 import { selectedAccountEndpoint } from "./selectedAccount";
+import { tokenEndpoint } from "./token";
+import type { OAuthOptions } from "./types";
+import { userInfoEndpoint } from "./userinfo";
+import { getJwtPlugin } from "./utils";
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.

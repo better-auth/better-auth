@@ -1,15 +1,15 @@
-import { beforeAll, afterAll, afterEach, describe, it, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { oauthProvider } from "./oauth";
-import { genericOAuth, type GenericOAuthConfig } from "../generic-oauth";
-import type { OAuthClient } from "../../oauth-2.1/types";
+import { createLocalJWKSet, jwtVerify } from "jose";
+import { type Listener, listen } from "listhen";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
-import { oauthProviderClient, oauthProviderResourceClient } from "./client";
+import { toNodeHandler } from "../../integrations/node";
+import type { OAuthClient } from "../../oauth-2.1/types";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { type GenericOAuthConfig, genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
-import { listen, type Listener } from "listhen";
-import { toNodeHandler } from "../../integrations/node";
-import { createLocalJWKSet, jwtVerify } from "jose";
+import { oauthProviderClient, oauthProviderResourceClient } from "./client";
+import { oauthProvider } from "./oauth";
 
 describe("oauth - init", () => {
 	it("should fail without the jwt plugin", async () => {
