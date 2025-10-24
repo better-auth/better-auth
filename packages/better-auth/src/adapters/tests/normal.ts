@@ -462,7 +462,6 @@ export const getNormalTestSuiteTests = ({
 			);
 
 			type OneToOneTable = { oneToOne: string; id: string };
-			console.log(`creating user...`);
 			const user = await adapter.create<User>({
 				model: "user",
 				data: {
@@ -485,7 +484,6 @@ export const getNormalTestSuiteTests = ({
 				where: [{ field: "email", value: user.email }],
 				join: { oneToOneTable: true },
 			});
-			console.log(`result...`, result);
 			expect(result).toEqual({
 				...user,
 				oneToOneTable: oneToOne,

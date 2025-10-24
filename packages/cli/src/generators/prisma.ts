@@ -212,13 +212,13 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					builder
 						.model(modelName)
 						.field(
-							`${referencedCustomModelName.toLowerCase()}`,
+							`${referencedCustomModelName}`,
 							`${capitalizeFirstLetter(referencedCustomModelName)}${
 								!attr.required ? "?" : ""
 							}`,
 						)
 						.attribute(
-							`relation(fields: [${getFieldName({ model: modelName.toLowerCase(), field: fieldName })}], references: [${getFieldName({ model: attr.references.model, field: attr.references.field })}], onDelete: ${action})`,
+							`relation(fields: [${getFieldName({ model: customModelName, field: fieldName })}], references: [${getFieldName({ model: attr.references.model, field: attr.references.field })}], onDelete: ${action})`,
 						);
 				}
 				if (
@@ -234,7 +234,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			// Add many-to-many fields
 			if (manyToManyRelations.has(modelName)) {
 				for (const relatedModel of manyToManyRelations.get(modelName)) {
-					const fieldName = `${relatedModel.toLowerCase()}s`;
+					const fieldName = `${relatedModel}s`;
 					const existingField = builder.findByType("field", {
 						name: fieldName,
 						within: prismaModel?.properties,

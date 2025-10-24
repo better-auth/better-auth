@@ -1,20 +1,16 @@
-import { createLogger } from "@better-auth/core/env";
 import type { BetterAuthDBSchema } from "../../db";
 import { initGetDefaultModelName } from "./get-default-model-name";
 
 export const initGetModelName = ({
 	usePlural,
 	schema,
-	debugLog = createLogger({}).debug,
 }: {
 	usePlural: boolean | undefined;
 	schema: BetterAuthDBSchema;
-	debugLog?: (...args: any[]) => void;
 }) => {
 	const getDefaultModelName = initGetDefaultModelName({
 		schema,
 		usePlural,
-		debugLog,
 	});
 	/**
 	 * Users can overwrite the default model of some tables. This function helps find the correct model name.

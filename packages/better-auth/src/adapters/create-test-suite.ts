@@ -8,6 +8,7 @@ import type { Logger } from "./test-adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { betterAuth } from "../auth";
 import { deepmerge } from "./utils";
+import { getAuthTables } from "../db/get-tables";
 
 type GenerateFn = <M extends "user" | "session" | "verification" | "account">(
 	Model: M,
@@ -229,6 +230,8 @@ export const createTestSuite = <
 				adapter = await helpers.adapter();
 				for (const model of Object.keys(createdRows)) {
 					for (const row of createdRows[model]!) {
+						const schema = getAuthTables(helpers.getBetterAuthOptions());
+						if (!schema[model]) continue; // model doesn't exist in the schema anymore, so we skip it
 						try {
 							await adapter.delete({
 								model,

@@ -1,21 +1,18 @@
-import { createLogger } from "@better-auth/core/env";
+import { logger } from "@better-auth/core/env";
 import type { BetterAuthDBSchema } from "../../db";
 import { initGetDefaultModelName } from "./get-default-model-name";
 import { BetterAuthError } from "@better-auth/core/error";
 
 export const initGetDefaultFieldName = ({
 	schema,
-	debugLog = createLogger({}).debug,
 	usePlural,
 }: {
 	schema: BetterAuthDBSchema;
-	debugLog?: (...args: any[]) => void;
 	usePlural: boolean | undefined;
 }) => {
 	const getDefaultModelName = initGetDefaultModelName({
 		schema,
 		usePlural,
-		debugLog,
 	});
 
 	/**
@@ -54,8 +51,9 @@ export const initGetDefaultFieldName = ({
 			}
 		}
 		if (!f) {
-			debugLog(`Field ${field} not found in model ${model}`);
-			debugLog(`Schema:`, schema);
+			logger.error(`Field "${field}" not found in schema`);
+			logger.error(`Schema:`, schema);
+			logger.error(`Error stack:`, new Error().stack?.replace("Error:", ""));
 			throw new BetterAuthError(`Field ${field} not found in model ${model}`);
 		}
 		return field;

@@ -12,6 +12,8 @@ import type {
 	Join,
 } from "@better-auth/core/db/adapter";
 
+const uppercaseFirstLetter = (str: string) =>
+	str.charAt(0).toUpperCase() + str.slice(1);
 export interface PrismaConfig {
 	/**
 	 * Database provider.
@@ -170,7 +172,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					if (join) {
 						include = {};
 						for (const [model, value] of Object.entries(join)) {
-							const key = `${getModelName(model).toLowerCase()}s`;
+							const key = `${uppercaseFirstLetter(getModelName(model))}s`;
 							include[key] = value;
 							map.set(key, getModelName(model));
 						}
@@ -209,7 +211,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					if (join) {
 						include = {};
 						for (const [model, value] of Object.entries(join)) {
-							const key = `${getModelName(model).toLowerCase()}s`;
+							const key = `${uppercaseFirstLetter(getModelName(model))}s`;
 							include[key] = value;
 							map.set(key, getModelName(model));
 						}

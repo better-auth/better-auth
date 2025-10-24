@@ -137,23 +137,19 @@ export const createAdapterFactory =
 		const getDefaultModelName = initGetDefaultModelName({
 			usePlural: config.usePlural,
 			schema,
-			debugLog,
 		});
 
 		const getDefaultFieldName = initGetDefaultFieldName({
 			usePlural: config.usePlural,
 			schema,
-			debugLog,
 		});
 
 		const getModelName = initGetModelName({
 			usePlural: config.usePlural,
 			schema,
-			debugLog,
 		});
 		const getFieldName = initGetFieldName({
 			schema,
-			debugLog,
 			usePlural: config.usePlural,
 		});
 

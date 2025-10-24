@@ -27,6 +27,7 @@ export async function generatePrismaSchema(
 	};
 
 	const prismaDB = prismaAdapter(db, { provider: dialect });
+	console.log(`ba options:`, betterAuthOptions);
 	let { fileName, code } = await generateSchema({
 		file: join(import.meta.dirname, `schema-${dialect}.prisma`),
 		adapter: prismaDB({}),

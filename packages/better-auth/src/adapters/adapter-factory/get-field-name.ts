@@ -1,27 +1,22 @@
-import { createLogger } from "@better-auth/core/env";
 import { initGetDefaultModelName } from "./get-default-model-name";
 import type { BetterAuthDBSchema } from "../../db";
 import { initGetDefaultFieldName } from "./get-default-field-name";
 
 export const initGetFieldName = ({
 	schema,
-	debugLog = createLogger({}).debug,
 	usePlural,
 }: {
 	schema: BetterAuthDBSchema;
-	debugLog?: (...args: any[]) => void;
 	usePlural: boolean | undefined;
 }) => {
 	const getDefaultModelName = initGetDefaultModelName({
 		schema,
 		usePlural,
-		debugLog,
 	});
 
 	const getDefaultFieldName = initGetDefaultFieldName({
 		schema,
 		usePlural,
-		debugLog,
 	});
 
 	/**
