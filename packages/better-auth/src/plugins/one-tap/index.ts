@@ -67,7 +67,18 @@ interface OneTapOptions {
 }
 
 /**
- * Generate a self-issued ID Token for FedCM
+ * Generate a self-issued ID Token for FedCM assertion endpoint
+ *
+ * This function creates a JWT token that mimics Google's ID token format
+ * but is signed with the application's secret instead of Google's keys.
+ *
+ * @param user - User information to include in the token
+ * @param clientId - Google OAuth client ID
+ * @param secret - Application secret for signing
+ * @param issuer - Token issuer (usually the application's baseURL)
+ * @returns A signed JWT token string
+ *
+ * @internal
  */
 async function generateFedCMIdToken(
 	user: {
@@ -105,7 +116,15 @@ async function generateFedCMIdToken(
 }
 
 /**
- * Get current session from cookie header
+ * Extract and validate session from cookie header
+ *
+ * Parses the cookie header, extracts the session token, and retrieves
+ * the corresponding session from the database. Used by FedCM accounts endpoint.
+ *
+ * @param ctx - Endpoint context containing request headers
+ * @returns Session object if found and valid, null otherwise
+ *
+ * @internal
  */
 async function getSessionFromCookie(ctx: any) {
 	try {
@@ -135,7 +154,17 @@ async function getSessionFromCookie(ctx: any) {
 }
 
 /**
- * Create CORS headers for FedCM endpoints
+ * Create CORS headers for FedCM endpoints according to spec
+ *
+ * FedCM requires specific CORS headers for different endpoints:
+ * - Well-known and config: Allow all origins (*)
+ * - Accounts and assertion: Allow specific origin with credentials
+ *
+ * @param origin - Request origin (null for wildcard)
+ * @param allowCredentials - Whether to allow credentials
+ * @returns Object containing CORS headers
+ *
+ * @internal
  */
 function createFedCMHeaders(
 	origin?: string | null,
@@ -158,6 +187,47 @@ function createFedCMHeaders(
 	return headers;
 }
 
+/**
+ * Google One Tap Plugin
+ *
+ * Provides Google One Tap authentication with optional FedCM support.
+ *
+ * **Features:**
+ * - Traditional Google One Tap (iframe-based)
+ * - Modern FedCM support (browser-native, no third-party cookies)
+ * - Automatic fallback between modes
+ * - Account linking support
+ * - Customizable branding (FedCM mode)
+ *
+ * **Basic Usage:**
+ * ```typescript
+ * betterAuth({
+ *   plugins: [oneTap()]
+ * })
+ * ```
+ *
+ * **With FedCM:**
+ * ```typescript
+ * betterAuth({
+ *   plugins: [
+ *     oneTap({
+ *       enableFedCM: true,
+ *       fedcm: {
+ *         privacyPolicyUrl: "/privacy",
+ *         termsOfServiceUrl: "/terms"
+ *       }
+ *     })
+ *   ]
+ * })
+ * ```
+ *
+ * @param options - Plugin configuration options
+ * @returns BetterAuthPlugin
+ *
+ * @see https://better-auth.com/docs/plugins/one-tap
+ * @see https://developers.google.com/identity/gsi/web
+ * @see https://w3c-fedid.github.io/FedCM/ (FedCM spec)
+ */
 export const oneTap = (options?: OneTapOptions) => {
 	const coreEndpoints = {
 		oneTapCallback: createAuthEndpoint(
