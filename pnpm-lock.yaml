@@ -425,6 +425,12 @@ importers:
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.3.1
+      tailwindcss-animate:
+        specifier: ^1.0.7
+        version: 1.0.7(tailwindcss@3.4.17)
+      three:
+        specifier: ^0.180.0
+        version: 0.180.0
       ua-parser-js:
         specifier: ^2.0.4
         version: 2.0.4
@@ -435,9 +441,6 @@ importers:
         specifier: ^4.1.5
         version: 4.1.5
     devDependencies:
-      '@tailwindcss/postcss':
-        specifier: ^4.1.13
-        version: 4.1.13
       '@types/canvas-confetti':
         specifier: ^1.9.0
         version: 1.9.0
@@ -10980,6 +10983,10 @@ packages:
     engines: {node: '>=12.0'}
     peerDependencies:
       postcss: ^8.2.14
+
+  postcss-selector-parser@6.1.2:
+    resolution: {integrity: sha512-Q8qQfPiZ+THO/3ZrOrO0cJJKfpYCagtMUkXbnEfmgUjwXg6z/WBeOyS9APBBPCTSiDV+s4SwQGu8yFsiMRIudg==}
+    engines: {node: '>=4'}
 
   postcss-selector-parser@6.1.2:
     resolution: {integrity: sha512-Q8qQfPiZ+THO/3ZrOrO0cJJKfpYCagtMUkXbnEfmgUjwXg6z/WBeOyS9APBBPCTSiDV+s4SwQGu8yFsiMRIudg==}
@@ -25826,6 +25833,10 @@ snapshots:
     dependencies:
       pify: 2.3.0
 
+  read-cache@1.0.0:
+    dependencies:
+      pify: 2.3.0
+
   read-package-up@11.0.0:
     dependencies:
       find-up-simple: 1.0.1
@@ -26840,6 +26851,10 @@ snapshots:
   system-architecture@0.1.0: {}
 
   tailwind-merge@3.3.1: {}
+
+  tailwindcss-animate@1.0.7(tailwindcss@3.4.17):
+    dependencies:
+      tailwindcss: 3.4.17
 
   tailwindcss-animate@1.0.7(tailwindcss@4.1.13):
     dependencies:
