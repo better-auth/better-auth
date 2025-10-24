@@ -1185,7 +1185,7 @@ describe("oneTap - Helper Functions", async () => {
 		expect(payload.email_verified).toBe(true);
 		expect(payload.name).toBe("JWT Test User");
 		expect(payload.picture).toBe("https://example.com/avatar.jpg");
-		expect(payload.sub).toBe(user.user.id);
+		expect(payload.sub).toBe("google-jwt-123");
 		expect(payload.aud).toBe("test-client-id");
 		expect(payload.iss).toBe("http://localhost:3000/api/auth");
 		expect(payload.iat).toBeDefined();

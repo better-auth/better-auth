@@ -76,6 +76,7 @@ interface OneTapOptions {
  * @param clientId - Google OAuth client ID
  * @param secret - Application secret for signing
  * @param issuer - Token issuer (usually the application's baseURL)
+ * @param googleAccountId - Google account ID (sub) to maintain compatibility
  * @returns A signed JWT token string
  *
  * @internal
@@ -91,12 +92,13 @@ async function generateFedCMIdToken(
 	clientId: string,
 	secret: string,
 	issuer: string,
+	googleAccountId: string,
 ): Promise<string> {
 	const now = Math.floor(Date.now() / 1000);
 
 	const payload = {
 		iss: issuer,
-		sub: user.id,
+		sub: googleAccountId, // Use Google account ID for compatibility
 		aud: clientId,
 		exp: now + 3600,
 		iat: now,
@@ -593,12 +595,26 @@ export const oneTap = (options?: OneTapOptions) => {
 							});
 						}
 
-						// Generate self-issued ID Token
+						// Find user's Google account to get the accountId (Google's sub)
+						const accounts =
+							await ctx.context.internalAdapter.findAccounts(account_id);
+						const googleAccount = accounts.find(
+							(acc) => acc.providerId === "google",
+						);
+
+						if (!googleAccount) {
+							throw new APIError("NOT_FOUND", {
+								message: "Google account not linked to this user",
+							});
+						}
+
+						// Generate self-issued ID Token with Google account ID as sub
 						const idToken = await generateFedCMIdToken(
 							userData,
 							client_id,
 							ctx.context.secret,
 							ctx.context.baseURL,
+							googleAccount.accountId, // Use Google's account ID as sub
 						);
 
 						return new Response(JSON.stringify({ token: idToken }), {
