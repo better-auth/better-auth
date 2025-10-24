@@ -1,10 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type { SchemaClient, OAuthOptions } from "./types";
-import type { OAuthClient } from "../../oauth-2.1/types";
 import { APIError, getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
-import { storeClientSecret } from "./utils";
+import type { OAuthClient } from "../../oauth-2.1/types";
 import { toExpJWT } from "../jwt/utils";
+import type { OAuthOptions, SchemaClient } from "./types";
+import { storeClientSecret } from "./utils";
 
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,

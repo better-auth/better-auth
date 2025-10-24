@@ -1,27 +1,27 @@
-import { APIError } from "../../api";
 import type { GenericEndpointContext } from "@better-auth/core";
-import type { Session, User } from "../../types";
-import type {
-	SchemaClient,
-	OAuthOptions,
-	VerificationValue,
-	OAuthRefreshToken,
-} from "./types";
+import { type JWTPayload, SignJWT } from "jose";
+import { APIError } from "../../api";
 import { generateRandomString } from "../../crypto";
+import type { GrantType } from "../../oauth-2.1/types";
+import { generateCodeChallenge } from "../../oauth2";
+import type { Session, User } from "../../types";
+import { signJWT } from "../jwt/sign";
+import { toExpJWT } from "../jwt/utils";
+import type {
+	OAuthOptions,
+	OAuthRefreshToken,
+	SchemaClient,
+	VerificationValue,
+} from "./types";
+import { userNormalClaims } from "./userinfo";
 import {
 	basicToClientCredentials,
 	decryptStoredClientSecret,
-	getStoredToken,
 	getJwtPlugin,
+	getStoredToken,
 	storeToken,
 	validateClientCredentials,
 } from "./utils";
-import { userNormalClaims } from "./userinfo";
-import type { GrantType } from "../../oauth-2.1/types";
-import { SignJWT, type JWTPayload } from "jose";
-import { signJWT } from "../jwt/sign";
-import { toExpJWT } from "../jwt/utils";
-import { generateCodeChallenge } from "../../oauth2";
 
 /**
  * Handles the /oauth2/token endpoint by delegating
@@ -95,7 +95,7 @@ async function createJwtAccessToken(
 		options: jwtPluginOptions,
 		payload: {
 			...customClaims,
-			sub: user.id.toString(),
+			sub: user.id,
 			aud:
 				typeof audience === "string"
 					? audience

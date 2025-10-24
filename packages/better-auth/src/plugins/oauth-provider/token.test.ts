@@ -1,22 +1,22 @@
-import { beforeAll, describe, it, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { oauthProvider } from "./oauth";
-import type { OAuthOptions } from "./types";
-import type { OAuthClient } from "../../oauth-2.1/types";
+import { createClientCredentialsTokenRequest } from "@better-auth/core/oauth2";
+import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
+import { beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
-import { oauthProviderClient } from "./client";
-import { jwt } from "../jwt";
+import { generateRandomString } from "../../crypto";
+import type { OAuthClient } from "../../oauth-2.1/types";
+import type { ProviderOptions } from "../../oauth2";
 import {
 	createAuthorizationCodeRequest,
 	createAuthorizationURL,
 	createRefreshAccessTokenRequest,
 } from "../../oauth2";
-import type { ProviderOptions } from "../../oauth2";
-import { generateRandomString } from "../../crypto";
+import { getTestInstance } from "../../test-utils/test-instance";
 import type { MakeRequired } from "../../types/helper";
-import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
-import { createClientCredentialsTokenRequest } from "@better-auth/core/oauth2";
+import { jwt } from "../jwt";
 import { jwtClient } from "../jwt/client";
+import { oauthProviderClient } from "./client";
+import { oauthProvider } from "./oauth";
+import type { OAuthOptions } from "./types";
 
 describe("oauth token - authorization_code", async () => {
 	const authServerBaseUrl = "http://localhost:3000";

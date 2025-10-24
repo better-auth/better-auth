@@ -1,15 +1,21 @@
-import { beforeAll, afterAll, afterEach, describe, it, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { oauthProvider } from "./oauth";
-import { genericOAuth, type GenericOAuthConfig } from "../generic-oauth";
-import type { OAuthClient } from "../../oauth-2.1/types";
+import { APIError } from "better-call";
+import { createLocalJWKSet, jwtVerify } from "jose";
+import { type Listener, listen } from "listhen";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
-import { oauthProviderClient, oauthProviderResourceClient } from "./client";
+import { toNodeHandler } from "../../integrations/node";
+import type { OAuthClient } from "../../oauth-2.1/types";
+import { getTestInstance } from "../../test-utils/test-instance";
+import type { Session } from "../../types";
+import { type GenericOAuthConfig, genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
-import { listen, type Listener } from "listhen";
-import { toNodeHandler } from "../../integrations/node";
-import { createLocalJWKSet, jwtVerify } from "jose";
+import { multiSession } from "../multi-session";
+import { type Organization, organization } from "../organization";
+import { organizationClient } from "../organization/client";
+import { oauthProviderClient } from "./client";
+import { oauthProviderResourceClient } from "./client-server";
+import { oauthProvider } from "./oauth";
 
 describe("oauth - init", () => {
 	it("should fail without the jwt plugin", async () => {
@@ -335,7 +341,8 @@ describe("oauth - prompt", async () => {
 	const authServerBaseUrl = `http://localhost:${port}`;
 	const rpBaseUrl = "http://localhost:5000";
 	const scopes = ["openid", "profile", "email", "offline_access", "read:posts"];
-	let accountSelected = false;
+	let enableSelectAccount = false;
+	let enablePostLogin = false;
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
@@ -345,6 +352,8 @@ describe("oauth - prompt", async () => {
 		baseURL: authServerBaseUrl,
 		plugins: [
 			jwt(),
+			multiSession(),
+			organization(),
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
@@ -354,16 +363,38 @@ describe("oauth - prompt", async () => {
 				},
 				scopes,
 				selectAccountPage: "/select-account",
-				selectedAccount: () => {
-					return accountSelected;
+				selectedAccount: selectAccount,
+				postLoginPage: "/select-organization",
+				postLogin(context: { session: Session & Record<string, unknown> }) {
+					if (!enablePostLogin) return true;
+					return !!context.session?.activeOrganizationId;
+				},
+				postLoginConsentReferenceId(context) {
+					if (!enablePostLogin) return undefined;
+					const activeOrganizationId = (context.session?.activeOrganizationId ??
+						undefined) as string | undefined;
+					if (!activeOrganizationId)
+						throw new APIError("BAD_REQUEST", {
+							error: "set_organization",
+							error_description: "must set organization for these scopes",
+						});
+					return activeOrganizationId;
 				},
 			}),
 		],
 	});
 
-	const { headers } = await signInWithTestUser();
+	async function selectAccount(context: { headers: Headers }) {
+		if (!enableSelectAccount) return true;
+		const allSessions = await authorizationServer.api.listDeviceSessions({
+			headers: context.headers,
+		});
+		return allSessions?.length >= 1;
+	}
+
+	const { headers, user } = await signInWithTestUser();
 	const serverClient = createAuthClient({
-		plugins: [oauthProviderClient()],
+		plugins: [oauthProviderClient(), organizationClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -373,6 +404,7 @@ describe("oauth - prompt", async () => {
 
 	let server: Listener;
 	let oauthClient: OAuthClient | null;
+	let org: Organization;
 
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
@@ -407,6 +439,16 @@ describe("oauth - prompt", async () => {
 		expect(response?.client_secret).toBeDefined();
 		expect(response?.redirect_uris).toEqual([redirectUri]);
 		oauthClient = response;
+
+		const _org = await authorizationServer.api.createOrganization({
+			body: {
+				name: "my-org",
+				slug: "my-org",
+				userId: user.id,
+			},
+		});
+		expect(_org).toBeDefined();
+		org = _org!;
 	});
 
 	afterAll(async () => {
@@ -709,11 +751,9 @@ describe("oauth - prompt", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
-
+		enableSelectAccount = true;
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
-			await createTestInstance({
-				scopes: ["openid", "profile", "email", "read:posts"],
-			});
+			await createTestInstance();
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
@@ -747,9 +787,6 @@ describe("oauth - prompt", async () => {
 			onError(context) {
 				selectAccountRedirectUri =
 					context.response.headers.get("Location") || "";
-				expect(context.response.headers.get("set-cookie")).toContain(
-					"better-auth.oauth_select_account=",
-				);
 				cookieSetter(newHeaders)(context);
 				newHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
@@ -761,19 +798,92 @@ describe("oauth - prompt", async () => {
 		expect(selectAccountRedirectUri).toContain(`scope=`);
 		expect(selectAccountRedirectUri).toContain(`state=`);
 
-		// Select account and redirect to /consent
-		accountSelected = true;
-		const selectedAccountRes = await serverClient.oauth2.selectedAccount(
+		// Account selected, continue auth flow
+		const selectedAccountRes = await serverClient.oauth2.continue(
 			{
-				confirm: true,
+				selected: true,
 			},
 			{
 				headers: newHeaders,
 				throw: true,
 				onResponse(context) {
-					expect(context.response.headers.get("set-cookie")).toContain(
-						"better-auth.oauth_select_account=; Max-Age=0",
-					);
+					cookieSetter(newHeaders)(context);
+				},
+			},
+		);
+		expect(selectedAccountRes.redirect_uri).toContain(redirectUri);
+		expect(selectedAccountRes.redirect_uri).toContain(`code=`);
+
+		enableSelectAccount = false;
+	});
+
+	it("select_organization - shall allow user to select an organization/team post login and consent", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		enablePostLogin = true;
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance();
+		const client = createAuthClient({
+			plugins: [genericOAuthClient(), organization()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		// Generate authorize url
+		const oauthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(oauthHeaders),
+			},
+		);
+		expect(data.url).toContain(
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
+		);
+		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
+
+		// Check for redirection to /select-account
+		let selectAccountRedirectUri = "";
+		const newHeaders = new Headers();
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context) {
+				selectAccountRedirectUri =
+					context.response.headers.get("Location") || "";
+				expect(context.response.headers.get("set-cookie")).toContain(
+					"better-auth.oauth_post_login=",
+				);
+				cookieSetter(newHeaders)(context);
+				newHeaders.append("Cookie", headers.get("Cookie") || "");
+			},
+		});
+		expect(selectAccountRedirectUri).toContain(`/select-organization`);
+		expect(selectAccountRedirectUri).toContain(
+			`client_id=${oauthClient.client_id}`,
+		);
+		expect(selectAccountRedirectUri).toContain(`scope=`);
+		expect(selectAccountRedirectUri).toContain(`state=`);
+
+		// Select Account and continue auth flow
+		await serverClient.organization.setActive({
+			organizationId: org.id,
+			organizationSlug: org.slug,
+		});
+		const selectedAccountRes = await serverClient.oauth2.continue(
+			{
+				postLogin: true,
+			},
+			{
+				headers: newHeaders,
+				throw: true,
+				onResponse(context) {
 					expect(context.response.headers.get("set-cookie")).toContain(
 						"better-auth.oauth_consent=",
 					);
@@ -781,19 +891,16 @@ describe("oauth - prompt", async () => {
 				},
 			},
 		);
-		expect(selectedAccountRes.redirect_uri).toContain(`/consent`);
-		expect(selectedAccountRes.redirect_uri).toContain(
-			`client_id=${oauthClient.client_id}`,
-		);
-		expect(selectedAccountRes.redirect_uri).toContain(`scope=`);
-		expect(selectedAccountRes.redirect_uri).toContain(`state=`);
+		const consentRedirectUri = selectedAccountRes?.redirect_uri;
+		expect(consentRedirectUri).toContain(`/consent`);
+		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
+		expect(consentRedirectUri).toContain(`scope=`);
+		expect(consentRedirectUri).toContain(`state=`);
 
 		// Give consent and obtain redirect callback
-		const acceptedScopes = ["openid", "read:posts"];
 		const consentRes = await serverClient.oauth2.consent(
 			{
 				accept: true,
-				scope: acceptedScopes.join(" "),
 			},
 			{
 				headers: newHeaders,
@@ -807,6 +914,8 @@ describe("oauth - prompt", async () => {
 		);
 		expect(consentRes.redirect_uri).toContain(redirectUri);
 		expect(consentRes.redirect_uri).toContain(`code=`);
+
+		enablePostLogin = false;
 	});
 });
 

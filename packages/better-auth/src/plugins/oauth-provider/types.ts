@@ -190,23 +190,55 @@ export interface OAuthOptions {
 	loginPage: string;
 	/**
 	 * A URL to the account selection page where the user will be redirected if
-	 * the user must select an account (eg. organization, team, account).
+	 * the user must select an account (eg. multi-session).
 	 *
-	 * After a user logs in, a user may wish to select set an account active.
-	 *
-	 * one the user selects an account, you need to call the `/oauth2/selected-account`
+	 * Once the user selects an account, you need to call the `/oauth2/continue`
 	 * to continue the login flow.
+	 *
+	 * @default loginPage
 	 */
 	selectAccountPage?: string;
 	/**
-	 * Checks to see if an account is selected for the `/oauth2/authorize`.
+	 * Checks to see if an account needs selection
+	 * for the `/oauth2/authorize` endpoint.
 	 *
-	 * Return values:
-	 * - true: intended user or account selected
-	 * - false: account is not selected and needs selection
+	 * @returns
+	 * - `true`: intended user or account selected
+	 * - `false`: account is not selected and needs selection
 	 */
 	selectedAccount?: (context: {
-		client: SchemaClient;
+		headers: Headers;
+		user: User & Record<string, unknown>;
+		session: Session & Record<string, unknown>;
+		scopes: string[];
+	}) => Awaitable<boolean>;
+	/**
+	 * The page `postLogin` should redirect to.
+	 */
+	postLoginPage?: string;
+	/**
+	 * A value to tie to the consent reference_id.
+	 *
+	 * Note that YOU must fail in this function if the requested
+	 * scope doesn't have a reference id and it should.
+	 */
+	postLoginConsentReferenceId?: (context: {
+		user: User & Record<string, unknown>;
+		session: Session & Record<string, unknown>;
+		scopes: string[];
+	}) => Awaitable<string | undefined>;
+	/**
+	 * After login and before consent, request the user to
+	 * select an additional choice for `/oauth2/authorize`.
+	 * For example, allow selection of an organization or team.
+	 *
+	 * Upon selection of a specific account, use `/oauth2/continue`.
+	 *
+	 * @returns
+	 * - `true`: intended user or account selected
+	 * - `false`: account is not selected and needs selection
+	 */
+	postLogin?: (context: {
 		user: User & Record<string, unknown>;
 		session: Session & Record<string, unknown>;
 		scopes: string[];
@@ -609,7 +641,7 @@ export interface OAuthAuthorizationQuery {
  * direct searches by field on the db
  */
 export interface VerificationValue {
-	type: "authorization_code" | "consent" | "select_account";
+	type: "authorization_code" | "consent" | "post_login";
 	query: OAuthAuthorizationQuery;
 	sessionId: string;
 	userId: string;
@@ -788,11 +820,12 @@ export interface OAuthRefreshToken {
 /**
  * Consent Database Schema
  */
-export interface OAuthConsent {
+export type OAuthConsent = {
 	clientId: string;
 	userId: string;
+	referenceId?: string;
 	scopes: string[];
 	consentGiven: boolean;
 	createdAt: Date;
 	updatedAt: Date;
-}
+};

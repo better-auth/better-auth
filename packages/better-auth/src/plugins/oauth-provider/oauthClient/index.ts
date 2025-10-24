@@ -1,14 +1,14 @@
 import { z } from "zod";
-import type { OAuthOptions } from "../types";
 import { createAuthEndpoint } from "../../../api";
-import {
-	getClientEndpoint,
-	updateClientEndpoint,
-	rotateClientSecretEndpoint,
-	deleteClientEndpoint,
-	getClientsEndpoint,
-} from "./endpoints";
 import { createOAuthClientEndpoint } from "../register";
+import type { OAuthOptions } from "../types";
+import {
+	deleteClientEndpoint,
+	getClientEndpoint,
+	getClientsEndpoint,
+	rotateClientSecretEndpoint,
+	updateClientEndpoint,
+} from "./endpoints";
 
 export const createOAuthClient = (opts: OAuthOptions) =>
 	createAuthEndpoint(

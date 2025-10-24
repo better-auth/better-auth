@@ -46,6 +46,7 @@ export default defineConfig({
 		"./src/plugins/jwt/index.ts",
 		"./src/plugins/magic-link/index.ts",
 		"./src/plugins/multi-session/index.ts",
+		"./src/plugins/oauth-provider/index.ts",
 		"./src/plugins/one-tap/index.ts",
 		"./src/plugins/open-api/index.ts",
 		"./src/plugins/oidc-provider/index.ts",

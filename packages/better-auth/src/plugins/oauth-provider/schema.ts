@@ -258,10 +258,15 @@ export const schema = {
 			},
 			userId: {
 				type: "string",
+				required: false,
 				references: {
 					model: "user",
 					field: "id",
 				},
+			},
+			referenceId: {
+				type: "string",
+				required: false,
 			},
 			scopes: {
 				type: "string",

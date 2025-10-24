@@ -1,3 +1,5 @@
+import { logger } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
 import { z } from "zod";
 import {
 	APIError,
@@ -5,24 +7,22 @@ import {
 	createAuthMiddleware,
 	sessionMiddleware,
 } from "../../api";
-import type { BetterAuthPlugin } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
-import { schema } from "./schema";
-import type { OAuthOptions } from "./types";
+import { mergeSchema } from "../../db";
+import type { BetterAuthPlugin } from "../../types";
 import { authorizeEndpoint } from "./authorize";
 import { consentEndpoint } from "./consent";
-import { tokenEndpoint } from "./token";
-import { userInfoEndpoint } from "./userinfo";
-import { mergeSchema } from "../../db";
-import { registerEndpoint } from "./register";
-import { authServerMetadata, oidcServerMetadata } from "./metadata";
-import { getJwtPlugin } from "./utils";
+import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
-import { revokeEndpoint } from "./revoke";
-import { BetterAuthError } from "@better-auth/core/error";
-import { logger } from "@better-auth/core/env";
+import { authServerMetadata, oidcServerMetadata } from "./metadata";
 import * as oauthClientEndpoints from "./oauthClient";
-import { selectedAccountEndpoint } from "./selectedAccount";
+import { registerEndpoint } from "./register";
+import { revokeEndpoint } from "./revoke";
+import { schema } from "./schema";
+import { tokenEndpoint } from "./token";
+import type { OAuthOptions } from "./types";
+import { userInfoEndpoint } from "./userinfo";
+import { getJwtPlugin } from "./utils";
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -110,13 +110,20 @@ export const oauthProvider = (options: OAuthOptions) => {
 		);
 	}
 
-	// Both selectAccountPage and selectedAccount must be defined to process prompt="select_account"
+	// All postLogin options must be defined or undefined
+	const postLoginOpts = [
+		opts.postLoginPage,
+		opts.postLogin,
+		opts.postLoginConsentReferenceId,
+	];
 	if (
-		(opts.selectAccountPage && !opts.selectedAccount) ||
-		(!opts.selectAccountPage && opts.selectedAccount)
+		!(
+			postLoginOpts.every((v) => v === undefined) ||
+			postLoginOpts.every((v) => v !== undefined)
+		)
 	) {
 		throw new BetterAuthError(
-			"selectAccountPage and selectedAccount should both be defined",
+			"postLoginPage and postLogin should both be defined",
 		);
 	}
 
@@ -409,6 +416,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 				},
 				async (ctx) => {
+					(ctx.context as { authorize_only?: boolean }).authorize_only = true;
 					return authorizeEndpoint(ctx, opts);
 				},
 			),
@@ -457,20 +465,23 @@ export const oauthProvider = (options: OAuthOptions) => {
 					return consentEndpoint(ctx, opts);
 				},
 			),
-			oauth2SelectedAccount: createAuthEndpoint(
-				"/oauth2/selected-account",
+			oauth2Continue: createAuthEndpoint(
+				"/oauth2/continue",
 				{
 					method: "POST",
 					body: z.object({
-						confirm: z.boolean().meta({
+						selected: z.boolean().optional().meta({
 							description:
 								"Confirms an account has been selected and authorization can proceed.",
+						}),
+						postLogin: z.boolean().optional().meta({
+							description: "Confirms organization and/or team selection.",
 						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
-							description: "Handle OAuth2 account selection",
+							description: "Continues OAuth2 authorization flow",
 							responses: {
 								"200": {
 									description: "Consent processed successfully",
@@ -496,7 +507,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 				},
 				async (ctx) => {
-					return selectedAccountEndpoint(ctx, opts);
+					return continueEndpoint(ctx, opts);
 				},
 			),
 			oauth2Token: createAuthEndpoint(
