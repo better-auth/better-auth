@@ -1,8 +1,10 @@
-import type { DBPreservedModels } from "@better-auth/core/db";
 import type { BetterAuthOptions } from "@better-auth/core";
+import {
+	getCurrentAdapter,
+	getCurrentAuthContext,
+} from "@better-auth/core/context";
+import type { DBPreservedModels } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
-import { getCurrentAdapter } from "@better-auth/core/context";
-import { getCurrentAuthContext } from "@better-auth/core/context";
 
 export function getWithHooks(
 	adapter: DBAdapter<BetterAuthOptions>,

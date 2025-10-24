@@ -1,5 +1,11 @@
 "use client";
 
+import { useAtom } from "jotai";
+import { Loader2, X } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { optionsAtom } from "@/components/builder/store";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -11,12 +17,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
-import Image from "next/image";
-import { Loader2, X } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useAtom } from "jotai";
-import { optionsAtom } from "@/components/builder/store";
 
 export function SignUp() {
 	const [firstName, setFirstName] = useState("");

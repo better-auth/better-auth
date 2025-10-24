@@ -1,11 +1,11 @@
-import { createAuthClient } from "better-auth/react";
-import Database from "better-sqlite3";
-import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
-import { expo } from "../src";
-import { expoClient, storageAdapter } from "../src/client";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
 import { createAuthMiddleware, oAuthProxy } from "better-auth/plugins";
+import { createAuthClient } from "better-auth/react";
+import Database from "better-sqlite3";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { expo } from "../src";
+import { expoClient, storageAdapter } from "../src/client";
 
 vi.mock("expo-web-browser", async () => {
 	return {

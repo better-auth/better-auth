@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Check, Loader2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { client, useSession } from "@/lib/auth-client";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useState, useTransition } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Check, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { client, useSession } from "@/lib/auth-client";
 
 export default function DeviceApprovalPage() {
 	const router = useRouter();
