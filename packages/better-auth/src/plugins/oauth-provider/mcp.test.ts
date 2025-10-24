@@ -1,30 +1,30 @@
-import { beforeAll, afterAll, describe, it, expect } from "vitest";
-import { mcpHandler } from "./mcp";
-import { createAuthClient } from "../../client";
-import { oauthProviderClient, oauthProviderResourceClient } from "./client";
-import { APIError } from "better-call";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { jwt } from "../jwt";
-import { oauthProvider } from "./oauth";
-import type { OAuthClient } from "../../oauth-2.1/types";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { generateRandomString } from "../../crypto";
+import { logger } from "@better-auth/core/env";
+import {
+	type OAuthClientProvider,
+	UnauthorizedError,
+} from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { listen, type Listener } from "listhen";
-import { toNodeHandler } from "../../integrations/node";
-import type { Implementation } from "@modelcontextprotocol/sdk/types.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import type { IncomingMessage, ServerResponse } from "http";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
-import {
-	UnauthorizedError,
-	type OAuthClientProvider,
-} from "@modelcontextprotocol/sdk/client/auth.js";
-import { handleMcpErrors } from "./mcp";
+import type { Implementation } from "@modelcontextprotocol/sdk/types.js";
+import { APIError } from "better-call";
+import type { IncomingMessage, ServerResponse } from "http";
 import { decodeJwt, type JWTPayload } from "jose";
-import { logger } from "@better-auth/core/env";
+import { type Listener, listen } from "listhen";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createAuthClient } from "../../client";
+import { generateRandomString } from "../../crypto";
+import { toNodeHandler } from "../../integrations/node";
+import type { OAuthClient } from "../../oauth-2.1/types";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { jwt } from "../jwt";
+import { oauthProviderClient } from "./client";
+import { oauthProviderResourceClient } from "./client-server";
+import { handleMcpErrors, mcpHandler } from "./mcp";
+import { oauthProvider } from "./oauth";
 
 describe("mcp", async () => {
 	const authServerUrl = `http://localhost:3000`;

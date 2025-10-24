@@ -1,20 +1,20 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { logger } from "@better-auth/core/env";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
-import type { GenericEndpointContext } from "@better-auth/core";
-import {
-	basicToClientCredentials,
-	getStoredToken,
-	validateClientCredentials,
-} from "./utils";
+import { decodeRefreshToken } from "./token";
 import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
 	OAuthRefreshToken,
 } from "./types";
-import { getJwtPlugin } from "./utils";
-import { decodeRefreshToken } from "./token";
+import {
+	basicToClientCredentials,
+	getJwtPlugin,
+	getStoredToken,
+	validateClientCredentials,
+} from "./utils";
 import { verifyJwsAccessToken } from "./verify";
-import { logger } from "@better-auth/core/env";
 
 /**
  * IMPORTANT NOTES:

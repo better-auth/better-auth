@@ -1,16 +1,16 @@
-import { beforeAll, describe, it, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { jwt } from "../jwt";
-import { oauthProvider } from "./oauth";
+import { beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
+import { generateRandomString } from "../../crypto";
 import type { OAuthClient } from "../../oauth-2.1/types";
-import { oauthProviderClient } from "./client";
 import {
 	createAuthorizationCodeRequest,
 	createAuthorizationURL,
 } from "../../oauth2";
-import { generateRandomString } from "../../crypto";
+import { getTestInstance } from "../../test-utils/test-instance";
 import type { MakeRequired } from "../../types/helper";
+import { jwt } from "../jwt";
+import { oauthProviderClient } from "./client";
+import { oauthProvider } from "./oauth";
 
 describe("oauth userinfo", async () => {
 	const authServerBaseUrl = "http://localhost:3000";

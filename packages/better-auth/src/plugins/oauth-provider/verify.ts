@@ -1,16 +1,16 @@
-import {
-	createLocalJWKSet,
-	decodeProtectedHeader,
-	jwtVerify,
-	UnsecuredJWT,
-	type JSONWebKeySet,
-	type JWTPayload,
-	type JWTVerifyOptions,
-	type ProtectedHeaderParameters,
-} from "jose";
 import { logger } from "@better-auth/core/env";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
+import {
+	createLocalJWKSet,
+	decodeProtectedHeader,
+	type JSONWebKeySet,
+	type JWTPayload,
+	type JWTVerifyOptions,
+	jwtVerify,
+	type ProtectedHeaderParameters,
+	UnsecuredJWT,
+} from "jose";
 
 /** Last fetched jwks */
 // Never export (used locally in ONLY verifyJwsAccessToken)

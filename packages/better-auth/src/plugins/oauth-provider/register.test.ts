@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { oauthProvider } from "./oauth";
-import type { OAuthClient } from "../../oauth-2.1/types";
 import { createAuthClient } from "../../client";
+import type { OAuthClient } from "../../oauth-2.1/types";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from "../jwt";
-import { oauthProviderClient } from "./client";
+import { type Organization, organization } from "../organization";
 import { organizationClient } from "../organization/client";
-import { organization, type Organization } from "../organization";
+import { oauthProviderClient } from "./client";
+import { oauthProvider } from "./oauth";
 
 describe("oauth register", async () => {
 	const baseUrl = "http://localhost:3000";
