@@ -11,6 +11,8 @@ import { JWTExpired } from "jose/errors";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { generateRandomString } from "../../crypto";
 
+const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
 export async function createEmailVerificationToken(
 	secret: string,
 	email: string,
@@ -550,6 +552,13 @@ export const verifyEmailWithOTP = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const { email, otp } = ctx.body;
+
+		// Validate email format
+		if (!emailRegex.test(email)) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Invalid email",
+			});
+		}
 
 		// Check if OTP feature is enabled
 		if (!ctx.context.options.emailVerification?.includeOTP) {
