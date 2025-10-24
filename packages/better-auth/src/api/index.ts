@@ -204,12 +204,12 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 			.flat() || [];
 
 	const baseEndpoints = {
-		signInSocial,
+		signInSocial: signInSocial<Option>(),
 		callbackOAuth,
 		getSession: getSession<Option>(),
 		signOut,
 		signUpEmail: signUpEmail<Option>(),
-		signInEmail,
+		signInEmail: signInEmail<Option>(),
 		resetPassword,
 		verifyEmail,
 		sendVerificationEmail,

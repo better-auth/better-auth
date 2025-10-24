@@ -7,8 +7,9 @@ import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
+import type { BetterAuthOptions, InferUser } from "../../types";
 
-export const signInSocial = createAuthEndpoint(
+export const signInSocial = <Option extends BetterAuthOptions>() => createAuthEndpoint(
 	"/sign-in/social",
 	{
 		method: "POST",
@@ -175,38 +176,8 @@ export const signInSocial = createAuthEndpoint(
 												nullable: true,
 											},
 											user: {
-												type: "object",
-												properties: {
-													id: { type: "string" },
-													email: { type: "string" },
-													name: {
-														type: "string",
-														nullable: true,
-													},
-													image: {
-														type: "string",
-														nullable: true,
-													},
-													emailVerified: {
-														type: "boolean",
-													},
-													createdAt: {
-														type: "string",
-														format: "date-time",
-													},
-													updatedAt: {
-														type: "string",
-														format: "date-time",
-													},
-												},
-												required: [
-													"id",
-													"email",
-													"emailVerified",
-													"createdAt",
-													"updatedAt",
-												],
-											},
+												$ref: "#/components/schemas/User",
+											}
 										},
 									},
 									required: ["redirect", "token", "user"],
@@ -306,15 +277,7 @@ export const signInSocial = createAuthEndpoint(
 				redirect: false,
 				token: data.data!.session.token,
 				url: undefined,
-				user: {
-					id: data.data!.user.id,
-					email: data.data!.user.email,
-					name: data.data!.user.name,
-					image: data.data!.user.image,
-					emailVerified: data.data!.user.emailVerified,
-					createdAt: data.data!.user.createdAt,
-					updatedAt: data.data!.user.updatedAt,
-				},
+				user: data.data!.user as InferUser<Option>,
 			});
 		}
 
@@ -334,7 +297,7 @@ export const signInSocial = createAuthEndpoint(
 	},
 );
 
-export const signInEmail = createAuthEndpoint(
+export const signInEmail = <Option extends BetterAuthOptions>() => createAuthEndpoint(
 	"/sign-in/email",
 	{
 		method: "POST",
@@ -402,37 +365,7 @@ export const signInEmail = createAuthEndpoint(
 											nullable: true,
 										},
 										user: {
-											type: "object",
-											properties: {
-												id: { type: "string" },
-												email: { type: "string" },
-												name: {
-													type: "string",
-													nullable: true,
-												},
-												image: {
-													type: "string",
-													nullable: true,
-												},
-												emailVerified: {
-													type: "boolean",
-												},
-												createdAt: {
-													type: "string",
-													format: "date-time",
-												},
-												updatedAt: {
-													type: "string",
-													format: "date-time",
-												},
-											},
-											required: [
-												"id",
-												"email",
-												"emailVerified",
-												"createdAt",
-												"updatedAt",
-											],
+											$ref: "#/components/schemas/User",
 										},
 									},
 									required: ["redirect", "token", "user"],
@@ -561,15 +494,7 @@ export const signInEmail = createAuthEndpoint(
 			redirect: !!ctx.body.callbackURL,
 			token: session.token,
 			url: ctx.body.callbackURL,
-			user: {
-				id: user.user.id,
-				email: user.user.email,
-				name: user.user.name,
-				image: user.user.image,
-				emailVerified: user.user.emailVerified,
-				createdAt: user.user.createdAt,
-				updatedAt: user.user.updatedAt,
-			},
+			user: user.user as InferUser<Option>,
 		});
 	},
 );
