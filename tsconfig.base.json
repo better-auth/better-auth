@@ -5,7 +5,6 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "downlevelIteration": true,
-    "baseUrl": ".",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
