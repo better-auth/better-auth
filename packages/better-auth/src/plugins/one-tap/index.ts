@@ -288,8 +288,6 @@ export const oneTap = (options?: OneTapOptions) => {
 					});
 					payload = verifiedPayload;
 				} catch (error) {
-					// If Google verification fails and FedCM is enabled,
-					// try verifying as a self-issued token (from FedCM)
 					if (options?.enableFedCM) {
 						try {
 							const { payload: selfIssuedPayload } = await jwtVerify(
@@ -569,7 +567,19 @@ export const oneTap = (options?: OneTapOptions) => {
 					async (ctx) => {
 						const { client_id, account_id } = ctx.body;
 
-						// Validate client_id
+						const currentSession = await getSessionFromCookie(ctx);
+						if (!currentSession) {
+							throw new APIError("UNAUTHORIZED", {
+								message: "Not authenticated",
+							});
+						}
+
+						if (currentSession.userId !== account_id) {
+							throw new APIError("FORBIDDEN", {
+								message: "Cannot generate token for another user",
+							});
+						}
+
 						const expectedClientId =
 							options?.clientId ||
 							ctx.context.options.socialProviders?.google?.clientId;
@@ -586,7 +596,6 @@ export const oneTap = (options?: OneTapOptions) => {
 							});
 						}
 
-						// Get user
 						const userData =
 							await ctx.context.internalAdapter.findUserById(account_id);
 						if (!userData) {
@@ -595,7 +604,6 @@ export const oneTap = (options?: OneTapOptions) => {
 							});
 						}
 
-						// Find user's Google account to get the accountId (Google's sub)
 						const accounts =
 							await ctx.context.internalAdapter.findAccounts(account_id);
 						const googleAccount = accounts.find(
@@ -608,13 +616,12 @@ export const oneTap = (options?: OneTapOptions) => {
 							});
 						}
 
-						// Generate self-issued ID Token with Google account ID as sub
 						const idToken = await generateFedCMIdToken(
 							userData,
 							client_id,
 							ctx.context.secret,
 							ctx.context.baseURL,
-							googleAccount.accountId, // Use Google's account ID as sub
+							googleAccount.accountId,
 						);
 
 						return new Response(JSON.stringify({ token: idToken }), {
