@@ -1,8 +1,8 @@
 import { defu } from "defu";
-import { hashPassword, verifyPassword } from "./crypto/password";
+import { hashPassword, verifyPassword } from "./crypto";
 import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
 import type { Entries } from "type-fest";
-import { getAdapter } from "./db/utils";
+import { getAdapter } from "./db";
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { DEFAULT_SECRET } from "./utils/constants";
 import { createCookieGetter, getCookies } from "./cookies";
