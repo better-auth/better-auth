@@ -517,32 +517,31 @@ describe("Email Verification with OTP", async () => {
 
 	it("should verify email using OTP", async () => {
 		let testOtp = "";
-		const { auth: authVerify, client: clientVerify, testUser: testUserVerify } =
-			await getTestInstance({
-				emailAndPassword: {
-					enabled: true,
-					requireEmailVerification: false,
+		const { auth, client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: false,
+			},
+			emailVerification: {
+				includeOTP: true,
+				otpLength: 6,
+				async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
+					testOtp = _otp || "";
 				},
-				emailVerification: {
-					includeOTP: true,
-					otpLength: 6,
-					async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
-						testOtp = _otp || "";
-					},
-				},
-			});
+			},
+		});
 
-		await authVerify.api.sendVerificationEmail({
+		await auth.api.sendVerificationEmail({
 			body: {
-				email: testUserVerify.email,
+				email: testUser.email,
 			},
 		});
 
 		expect(testOtp).toHaveLength(6);
 
 		// Use client SDK with nested path
-		const res = await clientVerify.verifyEmail.otp({
-			email: testUserVerify.email,
+		const res = await client.verifyEmail.otp({
+			email: testUser.email,
 			otp: testOtp,
 		});
 
@@ -583,25 +582,24 @@ describe("Email Verification with OTP", async () => {
 	});
 
 	it("should reject expired OTP", async () => {
-		const { client: clientWithShortExpiry, auth: authWithShortExpiry, testUser: testUserShortExpiry } =
-			await getTestInstance({
-				emailAndPassword: {
-					enabled: true,
-					requireEmailVerification: true,
+		const { client, auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				includeOTP: true,
+				otpLength: 6,
+				expiresIn: 1,
+				async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
+					otp = _otp || "";
 				},
-				emailVerification: {
-					includeOTP: true,
-					otpLength: 6,
-					expiresIn: 1,
-					async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
-						otp = _otp || "";
-					},
-				},
-			});
+			},
+		});
 
-		await authWithShortExpiry.api.sendVerificationEmail({
+		await auth.api.sendVerificationEmail({
 			body: {
-				email: testUserShortExpiry.email,
+				email: testUser.email,
 			},
 		});
 
@@ -622,32 +620,31 @@ describe("Email Verification with OTP", async () => {
 
 	it("should verify email and update user status", async () => {
 		let localOtp = "";
-		const { client: clientVerifyStatus, testUser: testUserVerifyStatus, auth: authVerifyStatus } =
-			await getTestInstance({
-				emailAndPassword: {
-					enabled: true,
-					requireEmailVerification: false,
+		const { client, testUser, auth } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: false,
+			},
+			emailVerification: {
+				includeOTP: true,
+				async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
+					localOtp = _otp || "";
 				},
-				emailVerification: {
-					includeOTP: true,
-					async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
-						localOtp = _otp || "";
-					},
-				},
-			});
+			},
+		});
 
 		// Send verification email to get OTP
-		await authVerifyStatus.api.sendVerificationEmail({
+		await auth.api.sendVerificationEmail({
 			body: {
-				email: testUserVerifyStatus.email,
+				email: testUser.email,
 			},
 		});
 
 		expect(localOtp).toHaveLength(6);
 
 		// Verify with OTP using client SDK with nested path
-		const res = await clientVerifyStatus.verifyEmail.otp({
-			email: testUserVerifyStatus.email,
+		const res = await client.verifyEmail.otp({
+			email: testUser.email,
 			otp: localOtp,
 		});
 
@@ -656,24 +653,23 @@ describe("Email Verification with OTP", async () => {
 
 	it("should use custom OTP length", async () => {
 		let customOtp = "";
-		const { auth: authCustomLength, testUser: customTestUser } =
-			await getTestInstance({
-				emailAndPassword: {
-					enabled: true,
-					requireEmailVerification: false, // Don't auto-send on signup
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: false, // Don't auto-send on signup
+			},
+			emailVerification: {
+				includeOTP: true,
+				otpLength: 8,
+				async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
+					customOtp = _otp || "";
 				},
-				emailVerification: {
-					includeOTP: true,
-					otpLength: 8,
-					async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
-						customOtp = _otp || "";
-					},
-				},
-			});
+			},
+		});
 
-		await authCustomLength.api.sendVerificationEmail({
+		await auth.api.sendVerificationEmail({
 			body: {
-				email: customTestUser.email,
+				email: testUser.email,
 			},
 		});
 
