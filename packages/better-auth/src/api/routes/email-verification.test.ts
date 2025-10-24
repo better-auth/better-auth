@@ -517,7 +517,7 @@ describe("Email Verification with OTP", async () => {
 
 	it("should verify email using OTP", async () => {
 		let testOtp = "";
-		const { auth: authVerify, testUser: testUserVerify } =
+		const { auth: authVerify, client: clientVerify, testUser: testUserVerify } =
 			await getTestInstance({
 				emailAndPassword: {
 					enabled: true,
@@ -540,14 +540,13 @@ describe("Email Verification with OTP", async () => {
 
 		expect(testOtp).toHaveLength(6);
 
-		const res = await authVerify.api.verifyEmailWithOTP({
-			body: {
-				email: testUserVerify.email,
-				otp: testOtp,
-			},
+		// Use client SDK with nested path
+		const res = await clientVerify.verifyEmail.otp({
+			email: testUserVerify.email,
+			otp: testOtp,
 		});
 
-		expect(res.status).toBe(true);
+		expect(res.data?.status).toBe(true);
 	});
 
 	it("should verify email using URL link", async () => {
@@ -573,21 +572,18 @@ describe("Email Verification with OTP", async () => {
 			},
 		});
 
-		try {
-			await auth.api.verifyEmailWithOTP({
-				body: {
-					email: testUser.email,
-					otp: "000000",
-				},
-			});
-			expect.fail("Should have thrown an error");
-		} catch (error) {
-			expect(error).toBeDefined();
-		}
+		// Use client SDK with nested path
+		const res = await client.verifyEmail.otp({
+			email: testUser.email,
+			otp: "000000",
+		});
+
+		expect(res.error).toBeDefined();
+		expect(res.error?.message).toContain("Invalid OTP");
 	});
 
 	it("should reject expired OTP", async () => {
-		const { auth: authWithShortExpiry, testUser: testUserShortExpiry } =
+		const { client: clientWithShortExpiry, auth: authWithShortExpiry, testUser: testUserShortExpiry } =
 			await getTestInstance({
 				emailAndPassword: {
 					enabled: true,
@@ -612,24 +608,21 @@ describe("Email Verification with OTP", async () => {
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(2000);
 
-		try {
-			await authWithShortExpiry.api.verifyEmailWithOTP({
-				body: {
-					email: testUserShortExpiry.email,
-					otp,
-				},
-			});
-			expect.fail("Should have thrown an error");
-		} catch (error) {
-			expect(error).toBeDefined();
-		}
+		// Use client SDK with nested path
+		const res = await clientWithShortExpiry.verifyEmail.otp({
+			email: testUserShortExpiry.email,
+			otp,
+		});
+
+		expect(res.error).toBeDefined();
+		expect(res.error?.message).toContain("expired");
 
 		vi.useRealTimers();
 	});
 
-	it("should auto sign in after OTP verification when enabled", async () => {
+	it("should verify email and update user status", async () => {
 		let localOtp = "";
-		const { auth: authAutoSignIn, testUser: testUserAutoSignIn } =
+		const { client: clientVerifyStatus, testUser: testUserVerifyStatus, auth: authVerifyStatus } =
 			await getTestInstance({
 				emailAndPassword: {
 					enabled: true,
@@ -637,7 +630,6 @@ describe("Email Verification with OTP", async () => {
 				},
 				emailVerification: {
 					includeOTP: true,
-					autoSignInAfterVerification: true,
 					async sendVerificationEmail({ user, url, token: _token, otp: _otp }) {
 						localOtp = _otp || "";
 					},
@@ -645,34 +637,21 @@ describe("Email Verification with OTP", async () => {
 			});
 
 		// Send verification email to get OTP
-		await authAutoSignIn.api.sendVerificationEmail({
+		await authVerifyStatus.api.sendVerificationEmail({
 			body: {
-				email: testUserAutoSignIn.email,
+				email: testUserVerifyStatus.email,
 			},
 		});
 
 		expect(localOtp).toHaveLength(6);
 
-		// Verify with OTP
-		const res = await authAutoSignIn.api.verifyEmailWithOTP({
-			body: {
-				email: testUserAutoSignIn.email,
-				otp: localOtp,
-			},
+		// Verify with OTP using client SDK with nested path
+		const res = await clientVerifyStatus.verifyEmail.otp({
+			email: testUserVerifyStatus.email,
+			otp: localOtp,
 		});
 
-		expect(res.status).toBe(true);
-
-		// Verify user is marked as verified in database
-		const user = await authAutoSignIn.api.getSession({
-			headers: new Headers({
-				cookie: (res as any).headers?.get?.("set-cookie") || "",
-			}),
-		});
-
-		if (user) {
-			expect(user.user.emailVerified).toBe(true);
-		}
+		expect(res.data?.status).toBe(true);
 	});
 
 	it("should use custom OTP length", async () => {

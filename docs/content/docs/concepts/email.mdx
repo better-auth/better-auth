@@ -8,8 +8,11 @@ Email is a key part of Better Auth, required for all users regardless of their a
 
 ## Email Verification
 
-Email verification is a security feature that ensures users provide a valid email address. It helps prevent spam and abuse by confirming that the email address belongs to the user. In this guide, you'll get a walk through of how to implement token based email verification in your app.
-To use otp based email verification, check out the [OTP Verification](/docs/plugins/email-otp) guide.
+Email verification is a security feature that ensures users provide a valid email address. It helps prevent spam and abuse by confirming that the email address belongs to the user. Better Auth supports multiple email verification methods:
+
+- **Link-based verification**: Users click a link in their email (token-based)
+- **OTP-based verification**: Users enter a one-time code (see [Email OTP Plugin](/docs/plugins/email-otp))
+- **Link + OTP verification**: Send both a link and OTP in the same email for flexible user experience
 
 ### Adding Email Verification to Your App
 
@@ -19,8 +22,11 @@ To enable email verification, you need to pass a function that sends a verificat
   - `user`: The user object containing the email address.
   - `url`: The verification URL the user must click to verify their email.
   - `token`: The verification token used to complete the email verification to be used when implementing a custom verification URL.
+  - `otp` (optional): A one-time password code when `includeOTP` is enabled.
 
 and a `request` object as the second parameter.
+
+#### Link-only Verification (Default)
 
 ```ts title="auth.ts"
 import { betterAuth } from 'better-auth';
@@ -37,6 +43,56 @@ export const auth = betterAuth({
         }
     }
 })
+```
+
+#### Link + OTP Verification
+
+You can enable OTP alongside the verification link to provide users with two verification methods in the same email. Simply set `includeOTP: true`:
+
+```ts title="auth.ts"
+import { betterAuth } from 'better-auth';
+import { sendEmail } from './email'; // your email sending function
+
+export const auth = betterAuth({
+    emailVerification: {
+        includeOTP: true,  // 👈 That's it!
+        sendVerificationEmail: async ({ user, url, otp }) => {
+            await sendEmail({
+                to: user.email,
+                subject: 'Verify your email address',
+                html: `
+                    <h1>Verify Your Email</h1>
+                    <p>Click the button to verify instantly:</p>
+                    <a href="${url}" style="padding: 12px 24px; background: #0070f3; color: white;">
+                        Verify Email
+                    </a>
+                    
+                    <p>Or enter this code: <strong>${otp}</strong></p>
+                `
+            })
+        }
+    }
+})
+```
+
+That's it! Now your users can choose:
+- **Click the link** (instant verification)
+- **Enter the code** `${otp}` (6-digit code by default)
+
+Both methods work until expiration (1 hour by default).
+
+<Callout type="info">
+This is different from the [Email OTP Plugin](/docs/plugins/email-otp) which provides **OTP-only** authentication. Use `includeOTP` when you want to provide **both** link and OTP in the same email for better user experience.
+</Callout>
+
+**Optional Configuration:**
+
+```ts
+emailVerification: {
+    includeOTP: true,
+    otpLength: 8,      // Custom OTP length (default: 6)
+    expiresIn: 7200,   // 2 hours (default: 3600)
+}
 ```
 
 ### Triggering Email Verification
@@ -120,6 +176,10 @@ await authClient.sendVerificationEmail({
 
 ### Verifying the Email
 
+Better Auth supports multiple verification methods:
+
+#### 1. Via Link (Default)
+
 If the user clicks the provided verification URL, their email is automatically verified, and they are redirected to the `callbackURL`.
 
 For manual verification, you can send the user a custom link with the `token` and call the `verifyEmail` function.
@@ -131,6 +191,19 @@ await authClient.verifyEmail({
     }
 })
 ```
+
+#### 2. Via OTP (When `includeOTP` is enabled)
+
+Users can enter the OTP code they received:
+
+```ts title="verify.ts"
+await authClient.verifyEmail.otp({
+    email: user.email,
+    otp: userInputCode  // e.g., "123456"
+});
+```
+
+The client automatically calls the `/verify-email/otp` endpoint and updates the session.
 
 ### Auto Sign In After Verification
 
