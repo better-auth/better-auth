@@ -5,7 +5,7 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../../cookies";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
+import { getSessionFromCtx } from "../../../api";
 import type { OrganizationOptions } from "../types";
 import type {
 	InferInvitation,
@@ -344,7 +344,7 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 					description: 'The organization slug to check. Eg: "my-org"',
 				}),
 			}),
-			use: [requestOnlySessionMiddleware, orgMiddleware],
+			use: [orgMiddleware],
 		},
 		async (ctx) => {
 			const orgAdapter = getOrgAdapter<O>(ctx.context, options);
