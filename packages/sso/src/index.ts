@@ -22,6 +22,7 @@ import type { BindingContext } from "samlify/types/src/entity";
 import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { setSessionCookie } from "better-auth/cookies";
+import { symmetricEncrypt, symmetricDecrypt } from "better-auth/crypto";
 import type { FlowResult } from "samlify/types/src/flow";
 import { XMLValidator } from "fast-xml-parser";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
@@ -252,6 +253,18 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	trustEmailVerified?: boolean;
+	/**
+	 * How to store sensitive secrets such as the OIDC clientSecret.
+	 * You can choose "plain", "encrypted" (uses BETTER_AUTH_SECRET), or provide a custom encryptor.
+	 * @default "plain"
+	 */
+	storeSecretAs?:
+		| "plain"
+		| "encrypted"
+		| {
+				encrypt: (value: string) => Promise<string>;
+				decrypt: (value: string) => Promise<string>;
+		  };
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -800,6 +813,20 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 
+					const clientSecretToStore = body.oidcConfig?.clientSecret
+						? typeof options?.storeSecretAs === "object" &&
+							"encrypt" in options.storeSecretAs
+							? await options.storeSecretAs.encrypt(
+									body.oidcConfig.clientSecret,
+								)
+							: options?.storeSecretAs === "encrypted"
+								? await symmetricEncrypt({
+										key: ctx.context.secret,
+										data: body.oidcConfig.clientSecret,
+									})
+								: body.oidcConfig.clientSecret
+						: undefined;
+
 					const provider = await ctx.context.adapter.create<
 						Record<string, any>,
 						SSOProvider
@@ -812,7 +839,7 @@ export const sso = (options?: SSOOptions) => {
 								? JSON.stringify({
 										issuer: body.issuer,
 										clientId: body.oidcConfig.clientId,
-										clientSecret: body.oidcConfig.clientSecret,
+										clientSecret: clientSecretToStore,
 										authorizationEndpoint:
 											body.oidcConfig.authorizationEndpoint,
 										tokenEndpoint: body.oidcConfig.tokenEndpoint,
@@ -859,9 +886,34 @@ export const sso = (options?: SSOOptions) => {
 
 					return ctx.json({
 						...provider,
-						oidcConfig: JSON.parse(
-							provider.oidcConfig as unknown as string,
-						) as OIDCConfig,
+						oidcConfig: await (async () => {
+							const cfg = JSON.parse(
+								provider.oidcConfig as unknown as string,
+							) as OIDCConfig;
+							if (cfg?.clientSecret) {
+								if (
+									typeof options?.storeSecretAs === "object" &&
+									"decrypt" in options.storeSecretAs
+								) {
+									cfg.clientSecret = await options.storeSecretAs.decrypt(
+										cfg.clientSecret,
+									);
+								} else if (options?.storeSecretAs === "encrypted") {
+									try {
+										cfg.clientSecret = await symmetricDecrypt({
+											key: ctx.context.secret,
+											data: cfg.clientSecret,
+										});
+									} catch (e) {
+										throw new APIError("INTERNAL_SERVER_ERROR", {
+											message:
+												"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
+										});
+									}
+								}
+							}
+							return cfg;
+						})(),
 						samlConfig: JSON.parse(
 							provider.samlConfig as unknown as string,
 						) as SAMLConfig,
@@ -1100,17 +1152,41 @@ export const sso = (options?: SSOOptions) => {
 									},
 								],
 							})
-							.then((res) => {
+							.then(async (res) => {
 								if (!res) {
 									return null;
 								}
+								const parsedOidc = res.oidcConfig
+									? safeJsonParse<OIDCConfig>(
+											res.oidcConfig as unknown as string,
+										) || undefined
+									: undefined;
+								if (parsedOidc?.clientSecret) {
+									if (
+										typeof options?.storeSecretAs === "object" &&
+										"decrypt" in options.storeSecretAs
+									) {
+										parsedOidc.clientSecret =
+											await options.storeSecretAs.decrypt(
+												parsedOidc.clientSecret,
+											);
+									} else if (options?.storeSecretAs === "encrypted") {
+										try {
+											parsedOidc.clientSecret = await symmetricDecrypt({
+												key: ctx.context.secret,
+												data: parsedOidc.clientSecret,
+											});
+										} catch (e) {
+											throw new APIError("INTERNAL_SERVER_ERROR", {
+												message:
+													"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
+											});
+										}
+									}
+								}
 								return {
 									...res,
-									oidcConfig: res.oidcConfig
-										? safeJsonParse<OIDCConfig>(
-												res.oidcConfig as unknown as string,
-											) || undefined
-										: undefined,
+									oidcConfig: parsedOidc,
 									samlConfig: res.samlConfig
 										? safeJsonParse<SAMLConfig>(
 												res.samlConfig as unknown as string,
@@ -1280,14 +1356,37 @@ export const sso = (options?: SSOOptions) => {
 									},
 								],
 							})
-							.then((res) => {
+							.then(async (res) => {
 								if (!res) {
 									return null;
 								}
+								const parsed =
+									safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined;
+								if (parsed?.clientSecret) {
+									if (
+										typeof options?.storeSecretAs === "object" &&
+										"decrypt" in options.storeSecretAs
+									) {
+										parsed.clientSecret = await options.storeSecretAs.decrypt(
+											parsed.clientSecret,
+										);
+									} else if (options?.storeSecretAs === "encrypted") {
+										try {
+											parsed.clientSecret = await symmetricDecrypt({
+												key: ctx.context.secret,
+												data: parsed.clientSecret,
+											});
+										} catch (e) {
+											throw new APIError("INTERNAL_SERVER_ERROR", {
+												message:
+													"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
+											});
+										}
+									}
+								}
 								return {
 									...res,
-									oidcConfig:
-										safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined,
+									oidcConfig: parsed,
 								} as SSOProvider;
 							});
 					}
