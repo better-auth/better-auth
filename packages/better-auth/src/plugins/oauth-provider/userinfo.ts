@@ -1,5 +1,5 @@
-import { APIError } from "../../api";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { APIError } from "../../api";
 import type { User } from "../../types";
 import { validateAccessToken } from "./introspect";
 import type { OAuthOptions } from "./types";

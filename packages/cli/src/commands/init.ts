@@ -171,11 +171,11 @@ export const supportedPlugins = [
 		clientPath: "better-auth/client/plugins",
 	},
 	{
-		id: "oauth-provider-resource",
+		id: "oauth-provider-resource-client",
 		name: "oauthProviderResource",
 		clientName: "oauthProviderResourceClient",
-		path: `better-auth/plugins`,
-		clientPath: "better-auth/client/plugins",
+		path: `better-auth/server-plugins`,
+		clientPath: "better-auth/server/plugins",
 	},
 	{
 		id: "oauth-proxy",

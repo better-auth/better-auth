@@ -1,12 +1,13 @@
-import { describe, it, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { jwt, type JwtOptions } from "../jwt";
-import { oauthProvider } from "./oauth";
 import { BetterAuthError } from "@better-auth/core/error";
-import { createAuthClient } from "../../client";
-import type { OAuthOptions } from "./types";
-import { oauthProviderClient, oauthProviderResourceClient } from "./client";
 import { APIError } from "better-call";
+import { describe, expect, it } from "vitest";
+import { createAuthClient } from "../../client";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { type JwtOptions, jwt } from "../jwt";
+import { oauthProviderClient } from "./client";
+import { oauthProviderResourceClient } from "./client-server";
+import { oauthProvider } from "./oauth";
+import type { OAuthOptions } from "./types";
 
 describe("oauth metadata", async () => {
 	const authServerBaseUrl = "http://localhost:3000";

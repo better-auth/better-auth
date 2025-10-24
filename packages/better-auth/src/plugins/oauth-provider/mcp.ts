@@ -1,6 +1,6 @@
-import type { Awaitable } from "../../types/helper";
-import { type JWTPayload } from "jose";
 import { APIError } from "better-call";
+import { type JWTPayload } from "jose";
+import type { Awaitable } from "../../types/helper";
 import { verifyAccessToken } from "./verify";
 
 /**

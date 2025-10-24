@@ -1,16 +1,52 @@
-import { APIError } from "../../api";
-import type { OAuthOptions, VerificationValue } from "./types";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { APIError } from "../../api";
 import type { Verification } from "../../types";
-import { authorizeEndpoint, formatErrorURL } from "./authorize";
+import { authorizeEndpoint } from "./authorize";
+import type { OAuthOptions, VerificationValue } from "./types";
 import { storeToken } from "./utils";
 
-export async function selectedAccountEndpoint(
+export async function continueEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
 ) {
+	// Continue login flow (ensure it's strictly boolean true)
+	if (ctx.body.selected === true) {
+		return await selected(ctx, opts);
+	} else if (ctx.body.postLogin === true) {
+		return await postLogin(ctx, opts);
+	} else {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "Missing parameters",
+			error: "invalid_request",
+		});
+	}
+}
+
+async function selected(ctx: GenericEndpointContext, opts: OAuthOptions) {
 	const { name: cookieName, attributes: cookieAttributes } =
-		ctx.context.createAuthCookie("oauth_select_account");
+		ctx.context.createAuthCookie("oauth_login_prompt");
+	const cookie = await ctx.getSignedCookie(cookieName, ctx.context.secret);
+	if (!cookie) {
+		throw new APIError("UNAUTHORIZED", {
+			error_description: "No login_prompt cookie found",
+			error: "invalid_request",
+		});
+	}
+
+	ctx.query = JSON.parse(cookie);
+	ctx.headers?.set("accept", "application/json");
+	if (ctx.query.prompt === "select_account") {
+		ctx.query.prompt = undefined;
+	}
+	const { url } = await authorizeEndpoint(ctx, opts);
+	return {
+		redirect_uri: url,
+	};
+}
+
+async function postLogin(ctx: GenericEndpointContext, opts: OAuthOptions) {
+	const { name: cookieName, attributes: cookieAttributes } =
+		ctx.context.createAuthCookie("oauth_post_login");
 	const storedCode = await ctx.getSignedCookie(cookieName, ctx.context.secret);
 	ctx.setCookie(cookieName, "", {
 		path: ctx.context.options.basePath,
@@ -20,7 +56,7 @@ export async function selectedAccountEndpoint(
 	});
 	if (!storedCode) {
 		throw new APIError("UNAUTHORIZED", {
-			error_description: "No select_account code found",
+			error_description: "No consent code found",
 			error: "invalid_request",
 		});
 	}
@@ -37,7 +73,8 @@ export async function selectedAccountEndpoint(
 					parsedValue = JSON.parse(val.value);
 				} catch (err) {
 					throw new APIError("UNAUTHORIZED", {
-						message: "invalid verification value",
+						error_description: "invalid code",
+						error: "invalid_request",
 					});
 				}
 			}
@@ -69,7 +106,7 @@ export async function selectedAccountEndpoint(
 			error: "invalid_verification",
 		});
 	}
-	if (verificationValue.type !== "select_account") {
+	if (verificationValue.type !== "post_login") {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "incorrect token type",
 			error: "invalid_request",
@@ -82,27 +119,14 @@ export async function selectedAccountEndpoint(
 		});
 	}
 
-	// Consent not accepted (ensure it's strictly boolean true)
-	const confirmed = ctx.body.confirm === true;
-	if (!confirmed) {
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
-		return ctx.json({
-			redirect_uri: formatErrorURL(
-				verificationValue.query.redirect_uri,
-				"access_denied",
-				"User denied access",
-				verificationValue.query?.state,
-			),
-		});
-	}
-
-	// Continue authorization
+	// Return authorization code
 	const query = verificationValue.query;
-	ctx.headers?.set("accept", "application/json");
-	if (query.prompt === "select_account") {
+	ctx?.headers?.set("accept", "application/json");
+	if (query.prompt === "consent") {
 		query.prompt = undefined;
 	}
 	ctx.context.verification_id = verification.id;
+	ctx.context.post_login = true;
 	ctx.query = query;
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {

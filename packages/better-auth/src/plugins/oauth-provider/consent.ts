@@ -1,8 +1,8 @@
-import { APIError } from "../../api";
-import type { OAuthConsent, OAuthOptions, VerificationValue } from "./types";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { APIError, getSessionFromCtx } from "../../api";
 import type { Verification } from "../../types";
 import { authorizeEndpoint, formatErrorURL } from "./authorize";
+import type { OAuthConsent, OAuthOptions, VerificationValue } from "./types";
 import { storeToken } from "./utils";
 
 export async function consentEndpoint(
@@ -36,7 +36,6 @@ export async function consentEndpoint(
 				try {
 					parsedValue = JSON.parse(val.value);
 				} catch (err) {
-					console.log(err);
 					throw new APIError("UNAUTHORIZED", {
 						error_description: "invalid code",
 						error: "invalid_request",
@@ -117,6 +116,12 @@ export async function consentEndpoint(
 	}
 
 	// Consent accepted
+	const session = await getSessionFromCtx(ctx);
+	const referenceId = await opts.postLoginConsentReferenceId?.({
+		user: session?.user!,
+		session: session?.session!,
+		scopes: requestedScopes ?? verificationValue.query.scope.split(" "),
+	});
 	const foundConsent = await ctx.context.adapter
 		.findOne<OAuthConsent>({
 			model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
@@ -129,6 +134,14 @@ export async function consentEndpoint(
 					field: "userId",
 					value: verificationValue.userId,
 				},
+				...(referenceId
+					? [
+							{
+								field: "referenceId",
+								value: referenceId,
+							},
+						]
+					: []),
 			],
 		})
 		.then((res) => {
@@ -146,6 +159,7 @@ export async function consentEndpoint(
 		consentGiven: true,
 		createdAt: new Date(iat * 1000),
 		updatedAt: new Date(iat * 1000),
+		referenceId,
 	};
 	foundConsent?.id
 		? await ctx.context.adapter.update({
@@ -179,6 +193,7 @@ export async function consentEndpoint(
 		query.prompt = undefined;
 	}
 	ctx.context.verification_id = verification.id;
+	ctx.context.post_login = true;
 	ctx.query = query;
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
