@@ -130,6 +130,7 @@ exports[`init > should match config 1`] = `
   },
   "password": {
     "checkPassword": [Function],
+    "checkPasswordLength": [Function],
     "config": {
       "maxPasswordLength": 128,
       "minPasswordLength": 8,
