@@ -265,8 +265,8 @@ For security-critical applications, consider using `freshCache` with a short int
 
 ### Examples
 
-<Accordion title="Serverless/Stateless Setup" type="single">
-<AccordionItem value="stateless">
+<Accordions>
+<Accordion title="Serverless/Stateless Setup">
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -282,11 +282,9 @@ export const auth = betterAuth({
 });
 ```
 
-</AccordionItem>
 </Accordion>
 
-<Accordion title="High-Security Setup" type="single">
-<AccordionItem value="high-security">
+<Accordion title="High-Security Setup">
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -303,11 +301,9 @@ export const auth = betterAuth({
 });
 ```
 
-</AccordionItem>
 </Accordion>
 
-<Accordion title="Balanced Setup" type="single">
-<AccordionItem value="balanced">
+<Accordion title="Balanced Setup">
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -323,8 +319,8 @@ export const auth = betterAuth({
 });
 ```
 
-</AccordionItem>
 </Accordion>
+</Accordions>
 
 ## Customizing Session Response
 
