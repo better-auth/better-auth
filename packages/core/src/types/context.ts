@@ -231,6 +231,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			config: {
 				minPasswordLength: number;
 				maxPasswordLength: number;
+				pattern: RegExp | null;
 			};
 			checkPassword: CheckPasswordFn<Options>;
 		};
