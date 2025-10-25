@@ -1,18 +1,18 @@
-import * as z from "zod";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { APIError } from "better-call";
 import type { Account, User } from "@better-auth/core/db";
-import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { getSchema, type UsernameSchema } from "./schema";
-import { mergeSchema } from "../../db";
-import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
+import { APIError } from "better-call";
+import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
+import { setSessionCookie } from "../../cookies";
+import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
+import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
+import { getSchema, type UsernameSchema } from "./schema";
 
 export { USERNAME_ERROR_CODES } from "./error-codes";
 

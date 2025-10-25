@@ -1,12 +1,12 @@
-import { getAuthTables } from ".";
-import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterAuthOptions } from "@better-auth/core";
-import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
-import { kyselyAdapter } from "../adapters/kysely-adapter";
-import { memoryAdapter, type MemoryDB } from "../adapters/memory-adapter";
-import { logger } from "@better-auth/core/env";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
+import { kyselyAdapter } from "../adapters/kysely-adapter";
+import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
+import { type MemoryDB, memoryAdapter } from "../adapters/memory-adapter";
+import { getAuthTables } from ".";
 
 export async function getAdapter(
 	options: BetterAuthOptions,

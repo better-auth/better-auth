@@ -1,12 +1,11 @@
+import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../../api";
-import { ERROR_CODES } from "..";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { API_KEY_TABLE_NAME } from "..";
-import type { AuthContext } from "@better-auth/core";
-import { createAuthEndpoint } from "@better-auth/core/api";
 export function deleteApiKey({
 	opts,
 	schema,
