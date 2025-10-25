@@ -4,6 +4,7 @@ export {
 	env,
 	nodeENV,
 	isTest,
+	isCI,
 	getBooleanEnvVar,
 	isDevelopment,
 	type EnvObject,

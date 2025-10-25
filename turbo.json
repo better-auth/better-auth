@@ -29,6 +29,10 @@
       "dependsOn": ["build"],
       "outputs": []
     },
+    "bench": {
+      "dependsOn": ["build"],
+      "outputs": ["logs/**"]
+    },
     "e2e:smoke": {
       "dependsOn": ["^build"],
       "outputs": []

@@ -16,6 +16,7 @@
     "release:canary": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
     "bump": "bumpp",
     "test": "turbo --filter \"./packages/*\" test",
+    "bench": "turbo --filter \"./packages/*\" bench",
     "e2e:smoke": "turbo --filter \"./e2e/*\" e2e:smoke",
     "e2e:integration": "turbo --filter \"./e2e/*\" e2e:integration",
     "typecheck": "turbo --filter \"./packages/*\" typecheck"
