@@ -71,6 +71,7 @@
     "jotai": "^2.13.1",
     "js-beautify": "^1.15.4",
     "jsrsasign": "^11.1.0",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.542.0",
     "motion": "^12.23.12",
     "next": "16.0.0",
