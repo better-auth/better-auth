@@ -16,7 +16,9 @@
     "@simplewebauthn/server": "^13.1.2",
     "better-auth": "workspace:^",
     "better-call": "catalog:",
-    "nanostores": "^1.0.1",
+    "nanostores": "^1.0.1"
+  },
+  "devDependencies": {
     "tsdown": "catalog:"
   }
 }
