@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import type { GenericEndpointContext } from "@better-auth/core";
-import { BASE_ERROR_CODES } from "packages/core/src/error";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 
 export async function validatePassword(
 	ctx: GenericEndpointContext,
@@ -53,7 +53,7 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
  * @param ctx
  */
 export function checkPasswordLength(
-	password: string = '',
+	password: string = "",
 	ctx: GenericEndpointContext,
 ) {
 	const { minPasswordLength, maxPasswordLength } = ctx.context.password.config;
