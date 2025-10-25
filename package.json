@@ -32,6 +32,7 @@
   },
   "resolutions": {
     "zod": "^4.1.5",
+    "@modelcontextprotocol/sdk>zod": "^3.23.8",
     "miniflare>zod": "^3.25.1",
     "vinxi>zod": "^3.24.3"
   }
