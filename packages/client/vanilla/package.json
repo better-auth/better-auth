@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/js",
+  "name": "@better-auth/vanilla",
   "version": "1.4.0-beta.13",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",

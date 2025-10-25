@@ -5,7 +5,7 @@ import { createAuthClient } from "better-auth/react";
 import Database from "better-sqlite3";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { expo } from "../src";
-import { expoClient, storageAdapter } from "../src/client";
+import { expoClient, storageAdapter } from "../src/plugin";
 
 vi.mock("expo-web-browser", async () => {
 	return {
@@ -151,13 +151,13 @@ describe("expo", async () => {
 	it("should correctly parse multiple Set-Cookie headers with Expires commas", async () => {
 		const header =
 			"better-auth.session_token=abc; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, better-auth.session_data=xyz; Expires=Thu, 22 Oct 2015 07:28:00 GMT; Path=/";
-		const map = (await import("../src/client")).parseSetCookieHeader(header);
+		const map = (await import("../src/plugin")).parseSetCookieHeader(header);
 		expect(map.get("better-auth.session_token")?.value).toBe("abc");
 		expect(map.get("better-auth.session_data")?.value).toBe("xyz");
 	});
 
 	it("should not trigger infinite refetch with non-better-auth cookies", async () => {
-		const { hasBetterAuthCookies } = await import("../src/client");
+		const { hasBetterAuthCookies } = await import("../src/plugin");
 
 		const betterAuthOnlyHeader = "better-auth.session_token=abc; Path=/";
 		expect(hasBetterAuthCookies(betterAuthOnlyHeader, "better-auth")).toBe(
@@ -396,7 +396,7 @@ describe("expo with cookieCache", async () => {
 	});
 
 	it("should allow independent cookiePrefix configuration", async () => {
-		const { hasBetterAuthCookies } = await import("../src/client");
+		const { hasBetterAuthCookies } = await import("../src/plugin");
 
 		const customCookieHeader = "my-app.session_token=abc; Path=/";
 
