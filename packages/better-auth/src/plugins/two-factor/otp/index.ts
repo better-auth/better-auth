@@ -1,18 +1,18 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/api";
-import { verifyTwoFactor } from "../verify-two-factor";
-import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
-import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { setSessionCookie } from "../../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../../crypto";
-import { setSessionCookie } from "../../../cookies";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 import { defaultKeyHasher } from "../utils";
-import type { GenericEndpointContext } from "@better-auth/core";
+import { verifyTwoFactor } from "../verify-two-factor";
 
 export interface OTPOptions {
 	/**

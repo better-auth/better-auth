@@ -1,8 +1,8 @@
 import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
+import type { BetterFetchOption } from "@better-fetch/fetch";
+import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
-import Constants from "expo-constants";
-import type { BetterFetchOption } from "@better-fetch/fetch";
 
 interface CookieAttributes {
 	value: string;
