@@ -177,12 +177,12 @@
     "better-call": "catalog:",
     "better-sqlite3": "^12.4.1",
     "jose": "^6.1.0",
-    "kysely": "^0.28.5",
+    "kysely": "^0.28.8",
     "nanostores": "^1.0.1",
     "tsdown": "catalog:"
   },
   "dependencies": {
-    "zod": "^4.1.5"
+    "zod": "^4.1.12"
   },
   "peerDependencies": {
     "@better-auth/utils": "0.3.0",
