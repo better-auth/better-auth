@@ -461,20 +461,15 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							});
 						}
 					}
+
+					ctx.context.password.checkMinPassword(ctx.body.password, ctx);
+
 					const existUser = await ctx.context.internalAdapter.findUserByEmail(
 						ctx.body.email,
 					);
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {
 							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
-						});
-					}
-					const minPasswordLength =
-						ctx.context.password.config.minPasswordLength;
-					if (ctx.body.password.length < minPasswordLength) {
-						ctx.context.logger.error("Password is too short");
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
 						});
 					}
 					const maxPasswordLength =

@@ -1,5 +1,6 @@
 import { APIError } from "better-call";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { BASE_ERROR_CODES } from "packages/core/src/error";
 
 export async function validatePassword(
 	ctx: GenericEndpointContext,
@@ -44,4 +45,16 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
 		});
 	}
 	return true;
+}
+export function checkMinPassword(
+	password: string,
+	ctx: GenericEndpointContext,
+) {
+	const minPasswordLength = ctx.context.password.config.minPasswordLength;
+	if (password.length < minPasswordLength) {
+		ctx.context.logger.error("Password is too short");
+		throw new APIError("BAD_REQUEST", {
+			message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+		});
+	}
 }
