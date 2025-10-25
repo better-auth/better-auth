@@ -662,6 +662,12 @@ Table Name: `subscription`
       defaultValue: false,
       isOptional: true
     },
+    {
+        name: "cancelAt",
+        type: "Date",
+        description: "If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect.",
+        isOptional: true
+    },
     { 
       name: "seats", 
       type: "number", 
