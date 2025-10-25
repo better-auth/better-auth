@@ -135,11 +135,12 @@ Next.js 16 replaces "middleware" with "proxy". You can use the Node.js runtime f
 
 ```ts title="proxy.ts"
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 
 export async function proxy(request: NextRequest) {
     const session = await auth.api.getSession({
-        headers: request.headers
+        headers: await headers()
     })
 
     // THIS IS NOT SECURE!
@@ -192,11 +193,12 @@ From Next.js 15.2.0, you can use the Node.js runtime in middleware for full sess
 
 ```ts title="middleware.ts"
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 
 export async function middleware(request: NextRequest) {
     const session = await auth.api.getSession({
-        headers: request.headers
+        headers: await headers()
     })
 
     // THIS IS NOT SECURE!
@@ -273,11 +275,12 @@ From Next.js 15.2.0, you can use the Node.js runtime in middleware for full sess
 
 ```ts title="middleware.ts"
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 
 export async function middleware(request: NextRequest) {
     const session = await auth.api.getSession({
-        headers: request.headers
+        headers: await headers()
     })
 
     if(!session) {
