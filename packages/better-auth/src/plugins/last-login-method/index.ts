@@ -52,11 +52,17 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		"/passkey/verify-authentication",
 	];
 
+	const pathToMethod: Record<string, string> = {
+		"/sign-in/email": "email",
+		"/sign-up/email": "email",
+		"/passkey/verify-authentication": "passkey",
+	};
+
 	const defaultResolveMethod = (ctx: GenericEndpointContext) => {
+		if (pathToMethod[ctx.path]) {
+			return pathToMethod[ctx.path];
+		}
 		if (paths.includes(ctx.path)) {
-			if (ctx.path === "/passkey/verify-authentication") {
-				return "passkey";
-			}
 			return ctx.params?.id ? ctx.params.id : ctx.path.split("/").pop();
 		}
 		return null;
