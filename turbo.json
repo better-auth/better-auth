@@ -41,10 +41,6 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "typecheck": {
-      "outputs": [".tsbuildinfo", "dist/**"],
-      "cache": true
-    },
     "deploy": {
       "cache": false
     },
