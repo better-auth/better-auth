@@ -11,14 +11,17 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "@lynx-js/react": "^0.114.0"
   },
   "dependencies": {
-    "@better-auth/client": "0.0.2-alpha.3",
+    "@better-auth/client": "workspace:^",
     "@better-auth/core": "workspace:^",
     "@better-fetch/fetch": "catalog:",
-    "@lynx-js/react": "^0.114.0",
     "better-auth": "workspace:^",
     "nanostores": "^1.0.1"
+  },
+  "peerDependencies": {
+    "@lynx-js/react": "^0.114.0"
   }
 }

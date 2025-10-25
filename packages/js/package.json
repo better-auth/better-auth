@@ -12,11 +12,12 @@
   },
   "dependencies": {
     "@better-auth/core": "workspace:^",
+    "@better-auth/client": "workspace:^",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:^",
     "nanostores": "^1.0.1"
   },
-  "devDependancies": {
+  "devDependencies": {
     "tsdown": "catalog:"
   }
 }

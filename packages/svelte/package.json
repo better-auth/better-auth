@@ -11,10 +11,16 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "svelte": "^4.0.0 || ^5.0.0",
+     "@sveltejs/kit": "^2.0.0"
+  },
+  "peerDependencies": {
+    "svelte": "^4.0.0 || ^5.0.0",
+    "@sveltejs/kit": "^2.0.0"
   },
   "dependencies": {
-    "@better-auth/client": "0.0.2-alpha.3",
+    "@better-auth/client": "workspace:^",
     "@better-auth/core": "workspace:^",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:^",
