@@ -45,27 +45,53 @@ interface OrganizationClientOptions {
 		enabled: boolean;
 	};
 	schema?: {
+		session?: {
+			fields?: {
+				activeOrganizationId?: string;
+				activeTeamId?: string;
+			};
+		};
 		organization?: {
+			modelName?: string;
+			fields?: {
+				[key: string]: string;
+			};
 			additionalFields?: {
 				[key: string]: DBFieldAttribute;
 			};
 		};
 		member?: {
+			modelName?: string;
+			fields?: {
+				[key: string]: string;
+			};
 			additionalFields?: {
 				[key: string]: DBFieldAttribute;
 			};
 		};
 		invitation?: {
+			modelName?: string;
+			fields?: {
+				[key: string]: string;
+			};
 			additionalFields?: {
 				[key: string]: DBFieldAttribute;
 			};
 		};
 		team?: {
+			modelName?: string;
+			fields?: {
+				[key: string]: string;
+			};
 			additionalFields?: {
 				[key: string]: DBFieldAttribute;
 			};
 		};
 		organizationRole?: {
+			modelName?: string;
+			fields?: {
+				[key: string]: string;
+			};
 			additionalFields?: {
 				[key: string]: DBFieldAttribute;
 			};
