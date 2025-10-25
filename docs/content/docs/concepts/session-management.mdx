@@ -199,7 +199,7 @@ await auth.api.getSession({
 
 #### Strategy
 
-By default cookie cache uses `base64-hmac` encoding with HMAC-SHA256 signature. You can also use `jwt` strategy which uses JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation.
+By default, cookie cache uses `base64-hmac` encoding with an HMAC-SHA256 signature. Alternatively, you can use the `jwt` strategy, which employs JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
