@@ -42,6 +42,10 @@ export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
 	region: string;
 	userPoolId: string;
 	requireClientSecret?: boolean;
+	/**
+	 * Additional URL query arguments to add to the Authorization URL
+	 */
+	additionalParams?: Record<string, string>;
 }
 
 export const cognito = (options: CognitoOptions) => {
@@ -60,7 +64,13 @@ export const cognito = (options: CognitoOptions) => {
 	return {
 		id: "cognito",
 		name: "Cognito",
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!options.clientId) {
 				logger.error(
 					"ClientId is required for Amazon Cognito. Make sure to provide them in the options.",
@@ -80,6 +90,11 @@ export const cognito = (options: CognitoOptions) => {
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
 
+			const _additionalParams =
+				options.additionalParams || additionalParams
+					? { ...(options.additionalParams ?? {}), ...(additionalParams ?? {}) }
+					: undefined;
+
 			const url = await createAuthorizationURL({
 				id: "cognito",
 				options: {
@@ -91,6 +106,7 @@ export const cognito = (options: CognitoOptions) => {
 				codeVerifier,
 				redirectURI,
 				prompt: options.prompt,
+				additionalParams: _additionalParams,
 			});
 			return url;
 		},
