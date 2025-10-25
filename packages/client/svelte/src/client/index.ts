@@ -8,7 +8,10 @@ import type {
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import type { Atom } from "nanostores";
-import type { PrettifyDeep, UnionToIntersection } from "better-auth/types/helper";
+import type {
+	PrettifyDeep,
+	UnionToIntersection,
+} from "better-auth/types/helper";
 import { capitalizeFirstLetter } from "better-auth/utils/misc";
 import { getClientConfig } from "@better-auth/client/config";
 import { createDynamicPathProxy } from "@better-auth/client/proxy";

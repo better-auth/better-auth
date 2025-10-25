@@ -7,7 +7,10 @@ import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { PrettifyDeep, UnionToIntersection } from "better-auth/types/helper";
+import type {
+	PrettifyDeep,
+	UnionToIntersection,
+} from "better-auth/types/helper";
 import { getClientConfig } from "@better-auth/client/config";
 import { createDynamicPathProxy } from "@better-auth/client/proxy";
 import type {

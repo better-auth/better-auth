@@ -13,7 +13,7 @@
   "devDependencies": {
     "tsdown": "catalog:",
     "svelte": "^4.0.0 || ^5.0.0",
-     "@sveltejs/kit": "^2.0.0"
+    "@sveltejs/kit": "^2.0.0"
   },
   "peerDependencies": {
     "svelte": "^4.0.0 || ^5.0.0",
