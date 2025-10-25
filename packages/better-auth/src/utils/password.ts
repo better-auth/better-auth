@@ -53,7 +53,7 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
  * @param ctx
  */
 export function checkPasswordLength(
-	password: string,
+	password: string = '',
 	ctx: GenericEndpointContext,
 ) {
 	const { minPasswordLength, maxPasswordLength } = ctx.context.password.config;
