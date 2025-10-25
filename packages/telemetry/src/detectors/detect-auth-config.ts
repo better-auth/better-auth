@@ -1,5 +1,5 @@
-import type { TelemetryContext } from "../types";
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { TelemetryContext } from "../types";
 
 export function getTelemetryAuthConfig(
 	options: BetterAuthOptions,
@@ -79,6 +79,7 @@ export function getTelemetryAuthConfig(
 			cookieCache: {
 				enabled: options.session?.cookieCache?.enabled,
 				maxAge: options.session?.cookieCache?.maxAge,
+				strategy: options.session?.cookieCache?.strategy,
 			},
 			disableSessionRefresh: options.session?.disableSessionRefresh,
 			expiresIn: options.session?.expiresIn,

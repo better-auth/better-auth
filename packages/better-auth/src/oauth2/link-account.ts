@@ -1,10 +1,8 @@
-import { APIError, createEmailVerificationToken } from "../api";
-import type { Account } from "../types";
-import type { User } from "../types";
-import { logger } from "@better-auth/core/env";
-import { isDevelopment } from "@better-auth/core/env";
-import { setTokenUtil } from "./utils";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { isDevelopment, logger } from "@better-auth/core/env";
+import { APIError, createEmailVerificationToken } from "../api";
+import type { Account, User } from "../types";
+import { setTokenUtil } from "./utils";
 
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
@@ -56,7 +54,7 @@ export async function handleOAuthUserInfo(
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
-				if (isDevelopment) {
+				if (isDevelopment()) {
 					logger.warn(
 						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
 					);

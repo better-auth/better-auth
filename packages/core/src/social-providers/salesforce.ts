@@ -1,9 +1,12 @@
 import { betterFetch } from "@better-fetch/fetch";
+import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
-import { logger } from "../env";
-import { refreshAccessToken } from "../oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export interface SalesforceProfile {
 	sub: string;

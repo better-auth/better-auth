@@ -1,16 +1,55 @@
-import { betterAuth, type User } from "better-auth";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import { type Auth, betterAuth, type User } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import Stripe from "stripe";
-import { vi } from "vitest";
-import { stripe } from ".";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { type StripePlugin, stripe } from ".";
 import { stripeClient } from "./client";
 import type { StripeOptions, Subscription } from "./types";
-import { expect, describe, it, beforeEach } from "vitest";
-import { runWithEndpointContext } from "@better-auth/core/context";
-import type { GenericEndpointContext } from "@better-auth/core";
+
+describe("stripe type", () => {
+	it("should api endpoint exists", () => {
+		type Plugins = [
+			StripePlugin<{
+				stripeClient: Stripe;
+				stripeWebhookSecret: string;
+				subscription: {
+					enabled: false;
+				};
+			}>,
+		];
+		type MyAuth = Auth<{
+			plugins: Plugins;
+		}>;
+		expectTypeOf<MyAuth["api"]["stripeWebhook"]>().toBeFunction();
+	});
+
+	it("should have subscription endpoints", () => {
+		type Plugins = [
+			StripePlugin<{
+				stripeClient: Stripe;
+				stripeWebhookSecret: string;
+				subscription: {
+					enabled: true;
+					plans: [];
+				};
+			}>,
+		];
+		type MyAuth = Auth<{
+			plugins: Plugins;
+		}>;
+		expectTypeOf<MyAuth["api"]["stripeWebhook"]>().toBeFunction();
+		expectTypeOf<MyAuth["api"]["subscriptionSuccess"]>().toBeFunction();
+		expectTypeOf<MyAuth["api"]["listActiveSubscriptions"]>().toBeFunction();
+		expectTypeOf<MyAuth["api"]["cancelSubscriptionCallback"]>().toBeFunction();
+		expectTypeOf<MyAuth["api"]["cancelSubscription"]>().toBeFunction();
+		expectTypeOf<MyAuth["api"]["restoreSubscription"]>().toBeFunction();
+	});
+});
 
 describe("stripe", async () => {
 	const mockStripe = {
@@ -1782,7 +1821,9 @@ describe("stripe", async () => {
 				"http://localhost:3000/api/auth/stripe/webhook",
 				{
 					method: "POST",
-					headers: {},
+					headers: {
+						"content-type": "application/json",
+					},
 					body: JSON.stringify({ type: "test.event" }),
 				},
 			);
