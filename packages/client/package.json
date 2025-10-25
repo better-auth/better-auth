@@ -1,0 +1,22 @@
+{
+  "name": "@better-auth/client",
+  "version": "1.4.0-beta.13",
+  "description": "The most comprehensive authentication framework for TypeScript.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@better-auth/core": "workspace:^",
+    "@better-fetch/fetch": "catalog:",
+    "@simplewebauthn/server": "^13.1.2",
+    "better-auth": "workspace:^",
+    "better-call": "catalog:",
+    "nanostores": "^1.0.1",
+    "tsdown": "catalog:"
+  }
+}

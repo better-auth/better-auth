@@ -1,0 +1,23 @@
+{
+  "name": "@better-auth/svelte",
+  "version": "1.4.0-beta.13",
+  "description": "The most comprehensive authentication framework for TypeScript.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "devDependencies": {
+    "tsdown": "catalog:"
+  },
+  "dependencies": {
+    "@better-auth/client": "0.0.2-alpha.3",
+    "@better-auth/core": "workspace:^",
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:^",
+    "nanostores": "^1.0.1"
+  }
+}
