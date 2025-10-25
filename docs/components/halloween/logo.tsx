@@ -28,7 +28,7 @@ const HalloweenLogo = () => {
 	return (
 		<div onMouseEnter={handleMouseEnter}>
 			<Lottie
-				loop={1}
+				loop={false}
 				autoplay={true}
 				lottieRef={lottieRef}
 				animationData={animationData}
