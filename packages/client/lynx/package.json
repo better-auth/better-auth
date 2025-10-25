@@ -1,0 +1,27 @@
+{
+  "name": "@better-auth/lynx",
+  "version": "1.4.0-beta.13",
+  "description": "The most comprehensive authentication framework for TypeScript.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "devDependencies": {
+    "tsdown": "catalog:",
+    "@lynx-js/react": "^0.114.0"
+  },
+  "dependencies": {
+    "@better-auth/client": "workspace:^",
+    "@better-auth/core": "workspace:^",
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:^",
+    "nanostores": "^1.0.1"
+  },
+  "peerDependencies": {
+    "@lynx-js/react": "^0.114.0"
+  }
+}
