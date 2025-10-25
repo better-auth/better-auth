@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.3.30",
+  "version": "1.3.31",
   "description": "Telemetry package for Better Auth",
   "type": "module",
   "main": "./dist/index.cjs",
