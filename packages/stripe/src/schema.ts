@@ -66,17 +66,16 @@ export const user = {
 } satisfies BetterAuthPluginDBSchema;
 
 export const getSchema = (options: StripeOptions) => {
-	let baseSchema = {};
+	const baseSchema: AuthPluginSchema = Object.assign(
+		{},
+		user,
+	)
 
 	if (options.subscription?.enabled) {
-		baseSchema = {
-			...subscriptions,
-			...user,
-		};
-	} else {
-		baseSchema = {
-			...user,
-		};
+		Object.assign(
+			baseSchema,
+			subscriptions,
+		)
 	}
 
 	if (
