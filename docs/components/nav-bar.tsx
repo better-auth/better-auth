@@ -3,10 +3,10 @@ import { MobileSearchIcon } from "@/components/mobile-search-icon";
 import { ThemeToggle } from "@/components/theme-toggler";
 import DarkPng from "../public/branding/better-auth-logo-dark.png";
 import WhitePng from "../public/branding/better-auth-logo-light.png";
+import HalloweenLogo from "./halloween/logo";
 import LogoContextMenu from "./logo-context-menu";
 import { NavLink } from "./nav-link";
 import { NavbarMobile, NavbarMobileBtn } from "./nav-mobile";
-import HalloweenLogo from "./halloween/logo";
 
 export const navMenu = [
 	{

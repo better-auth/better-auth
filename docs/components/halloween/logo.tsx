@@ -1,10 +1,10 @@
 "use client";
 
+import Lottie, { type LottieRefCurrentProps } from "lottie-react";
 import { useTheme } from "next-themes";
+import { useRef, useState } from "react";
 import halloweenLogoDark from "./halloween-logo-dark.json";
 import halloweenLogoLight from "./halloween-logo-light.json";
-import Lottie, { type LottieRefCurrentProps } from "lottie-react";
-import { useRef, useState } from "react";
 
 const HalloweenLogo = () => {
 	const { resolvedTheme } = useTheme();
