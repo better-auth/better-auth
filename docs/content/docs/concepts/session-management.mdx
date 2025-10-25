@@ -190,11 +190,141 @@ or on the server
 await auth.api.getSession({
     query: {
         disableCookieCache: true,
-    }, 
+    },
     headers: req.headers, // pass the headers
 });
 ```
 
+### Cookie Cache Configuration
+
+#### Strategy
+
+By default cookie cache uses `base64-hmac` encoding with HMAC-SHA256 signature. You can also use `jwt` strategy which uses JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 5 * 60, // 5 minutes
+            strategy: "jwt" // or "base64-hmac" (default)
+        }
+    }
+});
+```
+
+#### Fresh Cache
+
+By default, the cookie cache is used until it reaches `maxAge` expiry without checking the database. You can enable periodic refreshes by setting `freshCache` to `true` (refreshes every 60 seconds) or a custom number of seconds.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 5 * 60, // 5 minutes
+            freshCache: 60 // Refresh every 60 seconds
+        }
+    }
+});
+```
+
+## Stateless Session Management
+
+You can run your application without database queries for session validation by enabling cookie cache with `freshCache` disabled. This is useful for serverless deployments or high-traffic applications.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 5 * 60, // 5 minutes
+            freshCache: false // no database checks
+        }
+    }
+});
+```
+
+With this setup, the session data is stored in a signed cookie and the server can validate sessions without hitting the database.
+
+### Limitations
+
+When using stateless sessions, keep in mind:
+
+- Session revocation only takes effect after the cookie expires (up to `maxAge`)
+- Session listing requires database queries and won't show cookie-only sessions
+- User data changes only reflect after the cookie expires
+
+For security-critical applications, consider using `freshCache` with a short interval to balance performance and security.
+
+### Examples
+
+<Accordion title="Serverless/Stateless Setup" type="single">
+<AccordionItem value="stateless">
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 5 * 60,
+            freshCache: false
+        }
+    }
+});
+```
+
+</AccordionItem>
+</Accordion>
+
+<Accordion title="High-Security Setup" type="single">
+<AccordionItem value="high-security">
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 2 * 60,
+            freshCache: 30,
+            strategy: "jwt"
+        }
+    }
+});
+```
+
+</AccordionItem>
+</Accordion>
+
+<Accordion title="Balanced Setup" type="single">
+<AccordionItem value="balanced">
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 5 * 60,
+            freshCache: 60
+        }
+    }
+});
+```
+
+</AccordionItem>
+</Accordion>
 
 ## Customizing Session Response
 
