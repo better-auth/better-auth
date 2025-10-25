@@ -1,5 +1,5 @@
-import { logEventToAnalytics } from "@/lib/inkeep-analytics";
 import { NextRequest, NextResponse } from "next/server";
+import { logEventToAnalytics } from "@/lib/inkeep-analytics";
 
 export const runtime = "edge";
 

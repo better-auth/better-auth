@@ -1,11 +1,11 @@
-import { createAuthClient } from "better-auth/react";
-import Database from "better-sqlite3";
-import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
-import { expo } from ".";
-import { expoClient } from "./client";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
-import { oAuthProxy } from "better-auth/plugins";
+import { createAuthMiddleware, oAuthProxy } from "better-auth/plugins";
+import { createAuthClient } from "better-auth/react";
+import Database from "better-sqlite3";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { expo } from "../src";
+import { expoClient, storageAdapter } from "../src/client";
 
 vi.mock("expo-web-browser", async () => {
 	return {
@@ -151,13 +151,13 @@ describe("expo", async () => {
 	it("should correctly parse multiple Set-Cookie headers with Expires commas", async () => {
 		const header =
 			"better-auth.session_token=abc; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, better-auth.session_data=xyz; Expires=Thu, 22 Oct 2015 07:28:00 GMT; Path=/";
-		const map = (await import("./client")).parseSetCookieHeader(header);
+		const map = (await import("../src/client")).parseSetCookieHeader(header);
 		expect(map.get("better-auth.session_token")?.value).toBe("abc");
 		expect(map.get("better-auth.session_data")?.value).toBe("xyz");
 	});
 
 	it("should not trigger infinite refetch with non-better-auth cookies", async () => {
-		const { hasBetterAuthCookies } = await import("./client");
+		const { hasBetterAuthCookies } = await import("../src/client");
 
 		const betterAuthOnlyHeader = "better-auth.session_token=abc; Path=/";
 		expect(hasBetterAuthCookies(betterAuthOnlyHeader, "better-auth")).toBe(
@@ -227,6 +227,85 @@ describe("expo", async () => {
 			error: null,
 			isPending: false,
 		});
+	});
+
+	it("should modify origin header to expo origin if origin is not set", async () => {
+		let originalOrigin = null;
+		let origin = null;
+		const { auth, client } = testUtils({
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					origin = ctx.request?.headers.get("origin");
+				}),
+			},
+			plugins: [
+				{
+					id: "test",
+					async onRequest(request, ctx) {
+						const origin = request.headers.get("origin");
+						originalOrigin = origin;
+					},
+				},
+				expo(),
+			],
+		});
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+		await client.signIn.email({
+			email: "test@test.com",
+			password: "password",
+			callbackURL: "http://localhost:3000/callback",
+		});
+		expect(origin).toBe("better-auth://");
+		expect(originalOrigin).toBeNull();
+	});
+
+	it("should not modify origin header if origin is set", async () => {
+		let originalOrigin = "test.com";
+		let origin = null;
+		const { auth, client } = testUtils({
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					origin = ctx.request?.headers.get("origin");
+				}),
+			},
+			plugins: [expo()],
+		});
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+		await client.signIn.email(
+			{
+				email: "test@test.com",
+				password: "password",
+				callbackURL: "http://localhost:3000/callback",
+			},
+			{
+				headers: {
+					origin: originalOrigin,
+				},
+			},
+		);
+		expect(origin).toBe(originalOrigin);
+	});
+
+	it("should not modify origin header if disableOriginOverride is set", async () => {
+		let origin = null;
+		const { auth, client } = testUtils({
+			plugins: [expo({ disableOriginOverride: true })],
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					origin = ctx.request?.headers.get("origin");
+				}),
+			},
+		});
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+		await client.signIn.email({
+			email: "test@test.com",
+			password: "password",
+			callbackURL: "http://localhost:3000/callback",
+		});
+		expect(origin).toBe(null);
 	});
 });
 
@@ -317,12 +396,27 @@ describe("expo with cookieCache", async () => {
 	});
 
 	it("should allow independent cookiePrefix configuration", async () => {
-		const { hasBetterAuthCookies } = await import("./client");
+		const { hasBetterAuthCookies } = await import("../src/client");
 
 		const customCookieHeader = "my-app.session_token=abc; Path=/";
 
 		expect(hasBetterAuthCookies(customCookieHeader, "my-app")).toBe(true);
 
 		expect(hasBetterAuthCookies(customCookieHeader, "better-auth")).toBe(false);
+	});
+
+	it("should normalize colons in secure storage name via storage adapter", async () => {
+		const map = new Map<string, string>();
+		const storage = storageAdapter({
+			getItem(name) {
+				return map.get(name) || null;
+			},
+			setItem(name, value) {
+				map.set(name, value);
+			},
+		});
+		storage.setItem("better-auth:session_token", "123");
+		expect(map.has("better-auth_session_token")).toBe(true);
+		expect(map.has("better-auth:session_token")).toBe(false);
 	});
 });
