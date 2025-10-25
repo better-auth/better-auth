@@ -1,25 +1,27 @@
-import { APIError } from "better-call";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { getDate } from "../../utils/date";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { base64Url } from "@better-auth/utils/base64";
+import { binary } from "@better-auth/utils/binary";
+import { createHMAC } from "@better-auth/utils/hmac";
+import { APIError } from "better-call";
+import * as z from "zod";
 import {
 	deleteSessionCookie,
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
-import * as z from "zod";
-import type { InferSession, InferUser, Session, User } from "../../types";
-import type { BetterAuthOptions } from "@better-auth/core";
-import type { Prettify } from "../../types/helper";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import type { GenericEndpointContext } from "@better-auth/core";
 import { symmetricDecodeJWT } from "../../crypto/jwt";
+import type { InferSession, InferUser, Session, User } from "../../types";
+import type { Prettify } from "../../types/helper";
+import { getDate } from "../../utils/date";
 import { safeJSONParse } from "../../utils/json";
-import { createHMAC } from "@better-auth/utils/hmac";
-import { base64Url } from "@better-auth/utils/base64";
-import { binary } from "@better-auth/utils/binary";
 
 export const getSessionQuerySchema = z.optional(
 	z.object({

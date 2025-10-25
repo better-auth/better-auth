@@ -1,29 +1,28 @@
+import { sso } from "@better-auth/sso";
+import { stripe } from "@better-auth/stripe";
+import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { betterAuth } from "better-auth";
+import { nextCookies } from "better-auth/next-js";
 import {
-	bearer,
 	admin,
-	multiSession,
-	organization,
-	twoFactor,
-	oneTap,
-	oAuthProxy,
-	openAPI,
+	bearer,
 	customSession,
 	deviceAuthorization,
 	lastLoginMethod,
+	multiSession,
+	oAuthProxy,
+	oneTap,
+	openAPI,
+	organization,
+	twoFactor,
 } from "better-auth/plugins";
-import { reactInvitationEmail } from "./email/invitation";
-import { LibsqlDialect } from "@libsql/kysely-libsql";
-import { reactResetPasswordEmail } from "./email/reset-password";
-import { resend } from "./email/resend";
-import { MysqlDialect, SqliteDialect } from "kysely";
-import { createPool } from "mysql2/promise";
-import { nextCookies } from "better-auth/next-js";
 import { passkey } from "better-auth/plugins/passkey";
-import { stripe } from "@better-auth/stripe";
-import { sso } from "@better-auth/sso";
+import { MysqlDialect } from "kysely";
+import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
-import Database from "better-sqlite3";
+import { reactInvitationEmail } from "./email/invitation";
+import { resend } from "./email/resend";
+import { reactResetPasswordEmail } from "./email/reset-password";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -36,20 +35,20 @@ const dialect = (() => {
 			);
 		}
 		return new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""));
+	} else {
+		if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
+			return new LibsqlDialect({
+				url: process.env.TURSO_DATABASE_URL,
+				authToken: process.env.TURSO_AUTH_TOKEN,
+			});
+		}
 	}
-
-	if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
-		return new LibsqlDialect({
-			url: process.env.TURSO_DATABASE_URL,
-			authToken: process.env.TURSO_AUTH_TOKEN,
-		});
-	}
-
-	// Fallback to better-sqlite3 for local development/builds
-	return new SqliteDialect({
-		database: new Database("./sqlite.db"),
-	});
+	return null;
 })();
+
+if (!dialect) {
+	throw new Error("No dialect found");
+}
 
 const baseURL: string | undefined =
 	process.env.VERCEL === "1"

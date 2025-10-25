@@ -1,48 +1,50 @@
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	BetterAuthPlugin,
+} from "@better-auth/core";
+import { type InternalLogger, logger } from "@better-auth/core/env";
 import {
 	APIError,
-	type Middleware,
 	createRouter,
 	type Endpoint,
+	type Middleware,
 } from "better-call";
-import type { BetterAuthOptions } from "@better-auth/core";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares";
+import { onRequestRateLimit } from "./rate-limiter";
 import {
+	accountInfo,
 	callbackOAuth,
+	changeEmail,
+	changePassword,
+	deleteUser,
+	deleteUserCallback,
+	error,
+	getAccessToken,
 	getSession,
+	linkSocialAccount,
 	listSessions,
+	listUserAccounts,
+	ok,
+	refreshToken,
+	requestPasswordReset,
+	requestPasswordResetCallback,
 	resetPassword,
+	revokeOtherSessions,
 	revokeSession,
 	revokeSessions,
 	sendVerificationEmail,
-	changeEmail,
+	setPassword,
 	signInEmail,
 	signInSocial,
 	signOut,
-	verifyEmail,
-	linkSocialAccount,
-	revokeOtherSessions,
-	listUserAccounts,
-	changePassword,
-	deleteUser,
-	setPassword,
-	updateUser,
-	deleteUserCallback,
+	signUpEmail,
 	unlinkAccount,
-	refreshToken,
-	getAccessToken,
-	accountInfo,
-	requestPasswordReset,
-	requestPasswordResetCallback,
+	updateUser,
+	verifyEmail,
 } from "./routes";
-import { ok } from "./routes";
-import { signUpEmail } from "./routes";
-import { error } from "./routes";
-import { type InternalLogger, logger } from "@better-auth/core/env";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
-import type { AuthContext } from "@better-auth/core";
 
 export function checkEndpointConflicts(
 	options: BetterAuthOptions,
@@ -356,13 +358,13 @@ export const router = <Option extends BetterAuthOptions>(
 	});
 };
 
-export * from "./routes";
-export * from "./middlewares";
-export { APIError } from "better-call";
 export {
+	type AuthEndpoint,
+	type AuthMiddleware,
 	createAuthEndpoint,
 	createAuthMiddleware,
 	optionsMiddleware,
-	type AuthEndpoint,
-	type AuthMiddleware,
 } from "@better-auth/core/api";
+export { APIError } from "better-call";
+export * from "./middlewares";
+export * from "./routes";

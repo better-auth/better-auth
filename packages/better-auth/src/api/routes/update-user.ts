@@ -1,19 +1,18 @@
-import * as z from "zod";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "better-call";
+import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto";
+import type { AdditionalUserFieldsInput } from "../../types";
+import { originCheck } from "../middlewares";
+import { createEmailVerificationToken } from "./email-verification";
 import {
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
 	sessionMiddleware,
 } from "./session";
-import { APIError } from "better-call";
-import { createEmailVerificationToken } from "./email-verification";
-import type { AdditionalUserFieldsInput } from "../../types";
-import type { BetterAuthOptions } from "@better-auth/core";
-import { generateRandomString } from "../../crypto";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { originCheck } from "../middlewares";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -526,7 +525,6 @@ export const deleteUser = createAuthEndpoint(
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
-		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		deleteSessionCookie(ctx);
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
 		if (afterDelete) {

@@ -3,8 +3,8 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { z } from "zod";
 import { APIError } from "better-call";
+import { z } from "zod";
 
 export interface ExpoOptions {
 	/**

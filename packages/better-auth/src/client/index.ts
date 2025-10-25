@@ -1,8 +1,12 @@
-import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
-import type { BetterAuthClientPlugin } from "@better-auth/core";
-export * from "./vanilla";
+import type {
+	BetterAuthClientPlugin,
+	BetterAuthOptions,
+	BetterAuthPlugin,
+} from "@better-auth/core";
+
 export * from "./query";
 export * from "./types";
+export * from "./vanilla";
 
 export const InferPlugin = <T extends BetterAuthPlugin>() => {
 	return {
@@ -15,6 +19,6 @@ export function InferAuth<O extends { options: BetterAuthOptions }>() {
 	return {} as O["options"];
 }
 
+export type * from "@better-fetch/fetch";
 // @ts-expect-error
 export type * from "nanostores";
-export type * from "@better-fetch/fetch";
