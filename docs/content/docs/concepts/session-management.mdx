@@ -235,7 +235,7 @@ export const auth = betterAuth({
 
 ## Stateless Session Management
 
-You can run your application without database queries for session validation by enabling cookie cache with `freshCache` disabled. This is useful for serverless deployments or high-traffic applications.
+You can run your application without database queries for session validation by setting `freshCache` to `false`. This keeps sessions in signed cookies and avoids database lookups. Useful for serverless deployments or high-traffic applications.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -244,14 +244,14 @@ export const auth = betterAuth({
     session: {
         cookieCache: {
             enabled: true,
-            maxAge: 5 * 60, // 5 minutes
-            freshCache: false // no database checks
+            maxAge: 60 * 60 * 24, // 1 day
+            freshCache: false // use cookie until expiry, no database checks
         }
     }
 });
 ```
 
-With this setup, the session data is stored in a signed cookie and the server can validate sessions without hitting the database.
+With this setup, the session data is stored in a signed cookie and the server validates sessions without hitting the database.
 
 ### Limitations
 
@@ -275,8 +275,8 @@ export const auth = betterAuth({
     session: {
         cookieCache: {
             enabled: true,
-            maxAge: 5 * 60,
-            freshCache: false
+            maxAge: 60 * 60 * 24, // 1 day
+            freshCache: false // no database queries
         }
     }
 });
@@ -284,7 +284,7 @@ export const auth = betterAuth({
 
 </Accordion>
 
-<Accordion title="High-Security Setup">
+<Accordion title="Database with Periodic Refresh">
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -293,9 +293,8 @@ export const auth = betterAuth({
     session: {
         cookieCache: {
             enabled: true,
-            maxAge: 2 * 60,
-            freshCache: 30,
-            strategy: "jwt"
+            maxAge: 60 * 60 * 24, // 1 day
+            freshCache: 60 // check database every 60 seconds
         }
     }
 });
@@ -303,7 +302,7 @@ export const auth = betterAuth({
 
 </Accordion>
 
-<Accordion title="Balanced Setup">
+<Accordion title="Database with Fast Refresh">
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -312,8 +311,8 @@ export const auth = betterAuth({
     session: {
         cookieCache: {
             enabled: true,
-            maxAge: 5 * 60,
-            freshCache: 60
+            maxAge: 60 * 60 * 24, // 1 day
+            freshCache: true // check database every 60 seconds (default)
         }
     }
 });
