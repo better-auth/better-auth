@@ -12,21 +12,14 @@ import { getSchema, type UsernameSchema } from "./schema";
 import { mergeSchema } from "../../db/schema";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import { createEmailVerificationToken } from "../../api";
+import { isPromise } from "../../utils/is-promise";
 export * from "./error-codes";
 export type UsernameOptions = {
 	schema?: InferOptionSchema<UsernameSchema>;
 	/**
-	 * The minimum length of the username
-	 *
-	 * @default 3
+	 * A standard schema for validating the username
 	 */
-	minUsernameLength?: number;
-	/**
-	 * The maximum length of the username
-	 *
-	 * @default 30
-	 */
-	maxUsernameLength?: number;
+	usernameSchema?: StandardSchemaV1;
 	/**
 	 * A function to validate the username
 	 *
@@ -77,6 +70,8 @@ export type UsernameOptions = {
 function defaultUsernameValidator(username: string) {
 	return /^[a-zA-Z0-9_.]+$/.test(username);
 }
+
+const defaultUsernameSchema = z.string().min(3).max(30)
 
 export const username = (options?: UsernameOptions) => {
 	const normalizer = (username: string) => {
@@ -236,25 +231,21 @@ export const username = (options?: UsernameOptions) => {
 							? normalizer(ctx.body.username)
 							: ctx.body.username;
 
-					const minUsernameLength = options?.minUsernameLength || 3;
-					const maxUsernameLength = options?.maxUsernameLength || 30;
+					const usernameSchema = options?.usernameSchema || defaultUsernameSchema;
+					let validatorReturn = usernameSchema["~standard"].validate(username)
 
-					if (username.length < minUsernameLength) {
-						ctx.context.logger.error("Username too short", {
-							username,
-						});
-						throw new APIError("UNPROCESSABLE_ENTITY", {
-							message: ERROR_CODES.USERNAME_TOO_SHORT,
-						});
+					if (isPromise(validatorReturn)) {
+						validatorReturn = await validatorReturn;
 					}
 
-					if (username.length > maxUsernameLength) {
-						ctx.context.logger.error("Username too long", {
+					if (!((validatorReturn?.issues || []).length > 0)) {
+						ctx.context.logger.error("Username validation failed", {
 							username,
 						});
 						throw new APIError("UNPROCESSABLE_ENTITY", {
-							message: ERROR_CODES.USERNAME_TOO_LONG,
-						});
+							message: ERROR_CODES.USERNAME_SCHEMA_VALIDATION_FAILED,
+							cause: validatorReturn.issues
+						})
 					}
 
 					const validator =
@@ -482,20 +473,17 @@ export const username = (options?: UsernameOptions) => {
 								? normalizer(ctx.body.username)
 								: ctx.body.username;
 
-						if (username !== undefined && typeof username === "string") {
-							const minUsernameLength = options?.minUsernameLength || 3;
-							const maxUsernameLength = options?.maxUsernameLength || 30;
-							if (username.length < minUsernameLength) {
-								throw new APIError("BAD_REQUEST", {
-									message: ERROR_CODES.USERNAME_TOO_SHORT,
-								});
-							}
+						let usernameValidator = ctx.context.password.validator["~standard"].validate(username);
+						if (isPromise(usernameValidator)) {
+							usernameValidator = await usernameValidator;
+						}
 
-							if (username.length > maxUsernameLength) {
-								throw new APIError("BAD_REQUEST", {
-									message: ERROR_CODES.USERNAME_TOO_LONG,
-								});
-							}
+						if (!((usernameValidator?.issues || []).length > 0)) {
+							throw new APIError("BAD_REQUEST", {
+								message: BASE_ERROR_CODES.INVALID_EMAIL,
+								cause: usernameValidator.issues,
+							});
+						}							
 
 							const validator =
 								options?.usernameValidator || defaultUsernameValidator;
@@ -527,7 +515,7 @@ export const username = (options?: UsernameOptions) => {
 									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								});
 							}
-						}
+						
 
 						const displayUsername =
 							typeof ctx.body.displayUsername === "string" &&

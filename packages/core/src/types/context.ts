@@ -17,6 +17,7 @@ import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 } from "./init-options";
+import type { StandardSchemaV1 } from "./standard-schema";
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
@@ -254,10 +255,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		password: {
 			hash: (password: string) => Promise<string>;
 			verify: (data: { password: string; hash: string }) => Promise<boolean>;
-			config: {
-				minPasswordLength: number;
-				maxPasswordLength: number;
-			};
+			validator: StandardSchemaV1;
 			checkPassword: CheckPasswordFn<Options>;
 		};
 		tables: BetterAuthDBSchema;

@@ -9,6 +9,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { isDevelopment } from "@better-auth/core/env";
 import { runWithTransaction } from "../../context/transaction";
 import { parseUserInput } from "../../db";
+import { isPromise } from "../../utils/is-promise";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -178,29 +179,20 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					rememberMe,
 					...rest
 				} = body;
-				const isValidEmail = z.email().safeParse(email);
+				let isValidPassword =
+					ctx.context.password.validator["~standard"].validate(email);
 
-				if (!isValidEmail.success) {
+				if (isPromise(isValidPassword)) {
+					isValidPassword = await isValidPassword;
+				}
+
+				if (!((isValidPassword?.issues || []).length > 0)) {
 					throw new APIError("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.INVALID_EMAIL,
+						cause: isValidPassword.issues,
 					});
 				}
 
-				const minPasswordLength = ctx.context.password.config.minPasswordLength;
-				if (password.length < minPasswordLength) {
-					ctx.context.logger.error("Password is too short");
-					throw new APIError("BAD_REQUEST", {
-						message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-					});
-				}
-
-				const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-				if (password.length > maxPasswordLength) {
-					ctx.context.logger.error("Password is too long");
-					throw new APIError("BAD_REQUEST", {
-						message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-					});
-				}
 				const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
 				if (dbUser?.user) {
 					ctx.context.logger.info(

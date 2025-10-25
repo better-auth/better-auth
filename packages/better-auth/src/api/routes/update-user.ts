@@ -14,6 +14,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { originCheck } from "../middlewares";
+import { isPromise } from "../../utils/is-promise";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -226,20 +227,20 @@ export const changePassword = createAuthEndpoint(
 	async (ctx) => {
 		const { newPassword, currentPassword, revokeOtherSessions } = ctx.body;
 		const session = ctx.context.session;
-		const minPasswordLength = ctx.context.password.config.minPasswordLength;
-		if (newPassword.length < minPasswordLength) {
-			ctx.context.logger.error("Password is too short");
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-			});
+		const passwordSchema = ctx.context.password?.validator;
+		let validatorReturn = passwordSchema["~standard"].validate(newPassword);
+
+		if (isPromise(validatorReturn)) {
+			validatorReturn = await validatorReturn;
 		}
 
-		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-
-		if (newPassword.length > maxPasswordLength) {
-			ctx.context.logger.error("Password is too long");
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+		if (!((validatorReturn?.issues || []).length > 0)) {
+			ctx.context.logger.error("Password validation failed", {
+				newPassword,
+			});
+			throw new APIError("UNPROCESSABLE_ENTITY", {
+				message: BASE_ERROR_CODES.VALIDATION_FAILED,
+				cause: validatorReturn.issues,
 			});
 		}
 
@@ -322,20 +323,20 @@ export const setPassword = createAuthEndpoint(
 	async (ctx) => {
 		const { newPassword } = ctx.body;
 		const session = ctx.context.session;
-		const minPasswordLength = ctx.context.password.config.minPasswordLength;
-		if (newPassword.length < minPasswordLength) {
-			ctx.context.logger.error("Password is too short");
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-			});
+		const passwordSchema = ctx.context.password?.validator;
+		let validatorReturn = passwordSchema["~standard"].validate(newPassword);
+
+		if (isPromise(validatorReturn)) {
+			validatorReturn = await validatorReturn;
 		}
 
-		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-
-		if (newPassword.length > maxPasswordLength) {
-			ctx.context.logger.error("Password is too long");
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+		if (!((validatorReturn?.issues || []).length > 0)) {
+			ctx.context.logger.error("Password validation failed", {
+				newPassword,
+			});
+			throw new APIError("UNPROCESSABLE_ENTITY", {
+				message: BASE_ERROR_CODES.VALIDATION_FAILED,
+				cause: validatorReturn.issues,
 			});
 		}
 

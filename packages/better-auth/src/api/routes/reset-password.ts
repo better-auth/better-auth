@@ -6,6 +6,8 @@ import { generateId } from "../../utils";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { originCheck } from "../middlewares";
 import type { AuthContext } from "@better-auth/core";
+import { isPromise } from "../../utils/is-promise";
+import { ERROR_CODES } from "../../plugins";
 
 function redirectError(
 	ctx: AuthContext,
@@ -360,16 +362,20 @@ export const resetPassword = createAuthEndpoint(
 
 		const { newPassword } = ctx.body;
 
-		const minLength = ctx.context.password?.config.minPasswordLength;
-		const maxLength = ctx.context.password?.config.maxPasswordLength;
-		if (newPassword.length < minLength) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-			});
+		const usernameSchema = ctx.context.password?.validator;
+		let validatorReturn = usernameSchema["~standard"].validate(newPassword);
+
+		if (isPromise(validatorReturn)) {
+			validatorReturn = await validatorReturn;
 		}
-		if (newPassword.length > maxLength) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+
+		if (!((validatorReturn?.issues || []).length > 0)) {
+			ctx.context.logger.error("Password validation failed", {
+				newPassword,
+			});
+			throw new APIError("UNPROCESSABLE_ENTITY", {
+				message: ERROR_CODES.VALIDATION_FAILED,
+				cause: validatorReturn.issues,
 			});
 		}
 

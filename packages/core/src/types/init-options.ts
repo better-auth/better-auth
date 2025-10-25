@@ -16,6 +16,7 @@ import type { Logger } from "../env";
 import type { AuthContext, GenericEndpointContext } from "./context";
 import type { AuthMiddleware } from "../middleware";
 import type { BetterAuthPlugin } from "..";
+import type { StandardSchemaV1 } from "./standard-schema";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type OmitId<T extends { id: unknown }> = Omit<T, "id">;
@@ -424,17 +425,11 @@ export type BetterAuthOptions = {
 		 */
 		requireEmailVerification?: boolean;
 		/**
-		 * The maximum length of the password.
+		 * A standard schema for the password
 		 *
-		 * @default 128
+		 * @default z.string().min(8).max(128)
 		 */
-		maxPasswordLength?: number;
-		/**
-		 * The minimum length of the password.
-		 *
-		 * @default 8
-		 */
-		minPasswordLength?: number;
+		validator?: StandardSchemaV1;
 		/**
 		 * send reset password
 		 */

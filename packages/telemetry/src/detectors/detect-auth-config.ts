@@ -24,8 +24,7 @@ export function getTelemetryAuthConfig(
 			disableSignUp: !!options.emailAndPassword?.disableSignUp,
 			requireEmailVerification:
 				!!options.emailAndPassword?.requireEmailVerification,
-			maxPasswordLength: options.emailAndPassword?.maxPasswordLength,
-			minPasswordLength: options.emailAndPassword?.minPasswordLength,
+			emailSchema: options.emailAndPassword?.emailSchema,
 			sendResetPassword: !!options.emailAndPassword?.sendResetPassword,
 			resetPasswordTokenExpiresIn:
 				options.emailAndPassword?.resetPasswordTokenExpiresIn,

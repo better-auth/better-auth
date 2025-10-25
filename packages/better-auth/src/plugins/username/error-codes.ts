@@ -5,8 +5,7 @@ export const USERNAME_ERROR_CODES = defineErrorCodes({
 	EMAIL_NOT_VERIFIED: "Email not verified",
 	UNEXPECTED_ERROR: "Unexpected error",
 	USERNAME_IS_ALREADY_TAKEN: "Username is already taken. Please try another.",
-	USERNAME_TOO_SHORT: "Username is too short",
-	USERNAME_TOO_LONG: "Username is too long",
+	USERNAME_SCHEMA_VALIDATION_FAILED: "Username schema validation failed",
 	INVALID_USERNAME: "Username is invalid",
 	INVALID_DISPLAY_USERNAME: "Display username is invalid",
 });

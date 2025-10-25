@@ -22,6 +22,7 @@ import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
 import { isPromise } from "./utils/is-promise";
 import type { AuthContext } from "@better-auth/core";
+import z from "zod";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -133,10 +134,7 @@ export const init = async (options: BetterAuthOptions) => {
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
 			verify: options.emailAndPassword?.password?.verify || verifyPassword,
-			config: {
-				minPasswordLength: options.emailAndPassword?.minPasswordLength || 8,
-				maxPasswordLength: options.emailAndPassword?.maxPasswordLength || 128,
-			},
+			validator: options.emailAndPassword?.validator || z.string().min(8).max(128),
 			checkPassword,
 		},
 		setNewSession(session) {
