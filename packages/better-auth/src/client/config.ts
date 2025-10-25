@@ -68,6 +68,7 @@ export const getClientConfig = (
 		"/revoke-sessions": "POST",
 		"/revoke-other-sessions": "POST",
 		"/delete-user": "POST",
+		"/verify-email/otp": "POST",
 	};
 	const atomListeners: ClientAtomListener[] = [
 		{
@@ -79,7 +80,7 @@ export const getClientConfig = (
 					path.startsWith("/sign-in") ||
 					path.startsWith("/sign-up") ||
 					path === "/delete-user" ||
-					path === "/verify-email"
+					path.startsWith("/verify-email")
 				);
 			},
 		},
