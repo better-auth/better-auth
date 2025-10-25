@@ -337,5 +337,14 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
+		rateLimit: [
+			{
+				pathMatcher(path) {
+					return path === "/api-key/verify";
+				},
+				window: 0,
+				max: Infinity,
+			},
+		],
 	} satisfies BetterAuthPlugin;
 };
