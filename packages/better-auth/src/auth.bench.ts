@@ -10,8 +10,8 @@ import type { SuccessContext } from "./client";
 import {
 	type Adapter,
 	type Auth,
-	betterAuth,
 	type BetterAuthOptions,
+	betterAuth,
 	type ClientOptions,
 	type Session,
 	type User,
