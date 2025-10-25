@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
+import { inferAdditionalFields } from "../../client/plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
 
@@ -345,6 +347,39 @@ describe("updateUser", async () => {
 		});
 
 		expect(firstSession?.user.name).toBe("updatedName");
+	});
+
+	it("should not allow updating user with additional fields that are input: false", async () => {
+		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						newField: {
+							type: "string",
+							defaultValue: "default",
+							input: false,
+						},
+					},
+				},
+			},
+		);
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+			plugins: [inferAdditionalFields<typeof auth>()],
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await client.updateUser(
+			{
+				//@ts-expect-error - newField is not available in the user input
+				newField: "new",
+			},
+			{
+				headers,
+			},
+		);
 	});
 });
 

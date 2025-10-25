@@ -96,10 +96,12 @@ export function parseInputData<T extends Record<string, any>>(
 		if (key in data) {
 			if (fields[key]!.input === false) {
 				if (fields[key]!.defaultValue !== undefined) {
-					parsedData[key] = fields[key]!.defaultValue;
-					continue;
+					if (action !== "update") {
+						parsedData[key] = fields[key]!.defaultValue;
+						continue;
+					}
 				}
-				if (parsedData[key]) {
+				if (data[key]) {
 					throw new APIError("BAD_REQUEST", {
 						message: `${key} is not allowed to be set`,
 					});
