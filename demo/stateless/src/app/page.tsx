@@ -1,8 +1,8 @@
 "use client";
 
-import { signIn, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { signIn, useSession } from "@/lib/auth-client";
 
 export default function Home() {
 	const router = useRouter();
