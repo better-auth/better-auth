@@ -869,4 +869,32 @@ describe("getConfig", async () => {
 			trustedOrigins: ["http://localhost:3000"],
 		});
 	});
+	it("should load configs importing cloudflare workers", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.json"),
+			`{
+				"compilerOptions": {}
+			}`,
+		);
+
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+			 import { env } from "cloudflare:workers";
+
+			 export const auth = betterAuth({
+					emailAndPassword: {
+						enabled: !!env.FLAG,
+					},
+			 });`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "auth.ts",
+		});
+
+		expect(config).not.toBe(null);
+		expect(config?.emailAndPassword?.enabled).toBe(true);
+	});
 });
