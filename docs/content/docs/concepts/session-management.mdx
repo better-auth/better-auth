@@ -217,7 +217,7 @@ export const auth = betterAuth({
 
 #### Fresh Cache
 
-By default, the cookie cache is used until it reaches `maxAge` expiry without checking the database. You can enable periodic refreshes by setting `freshCache` to `true` (refreshes every 60 seconds) or a custom number of seconds.
+By default, the cookie cache is used until it reaches `maxAge` without checking the database. You can enable periodic refreshes by setting `freshCache` to `true` (refreshes every 60 seconds) or a custom number of seconds.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
