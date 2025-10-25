@@ -20,4 +20,5 @@ export * from "../../plugins/phone-number/client";
 export * from "../../plugins/siwe/client";
 export * from "../../plugins/two-factor/client";
 export * from "../../plugins/username/client";
+export * from "../../plugins/alias/client";
 export * from "./infer-plugin";

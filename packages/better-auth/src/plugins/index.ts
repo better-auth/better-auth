@@ -35,3 +35,4 @@ export * from "./phone-number";
 export * from "./siwe";
 export * from "./two-factor";
 export * from "./username";
+export * from "./alias";

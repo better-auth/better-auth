@@ -58,7 +58,8 @@ export function toAuthEndpoints<
 					responseHeaders: undefined,
 					session: null,
 				},
-				path: endpoint.path,
+				// @ts-expect-error - Preserve originalPath if it exists
+				path: endpoint.originalPath || endpoint.path,
 				headers: context?.headers ? new Headers(context?.headers) : undefined,
 			};
 			return runWithEndpointContext(internalContext, async () => {
