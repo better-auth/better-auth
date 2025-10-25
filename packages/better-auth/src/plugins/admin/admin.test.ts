@@ -1,23 +1,23 @@
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
 import {
+	afterAll,
+	afterEach,
+	beforeAll,
 	describe,
 	expect,
 	it,
 	vi,
-	beforeAll,
-	afterAll,
-	afterEach,
 } from "vitest";
-import { setupServer } from "msw/node";
-import { http, HttpResponse } from "msw";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { admin } from "./admin";
-import { type UserWithRole } from "./types";
-import { adminClient } from "./client";
-import { createAccessControl } from "../access";
 import { createAuthClient } from "../../client";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { signJWT } from "../../crypto";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { createAccessControl } from "../access";
+import { admin } from "./admin";
+import { adminClient } from "./client";
+import { type UserWithRole } from "./types";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];

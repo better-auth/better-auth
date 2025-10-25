@@ -1,21 +1,21 @@
-import type { CookieOptions } from "better-call";
-import { BetterAuthError } from "@better-auth/core/error";
-import type { Session, User } from "../types";
-import type { BetterAuthOptions } from "@better-auth/core";
-import { getDate } from "../utils/date";
-import { env, isProduction } from "@better-auth/core/env";
-import { base64Url } from "@better-auth/utils/base64";
-import { ms } from "ms";
-import { createHMAC } from "@better-auth/utils/hmac";
-import { safeJSONParse } from "../utils/json";
-import { getBaseURL } from "../utils/url";
-import { binary } from "@better-auth/utils/binary";
 import type {
 	BetterAuthCookies,
+	BetterAuthOptions,
 	GenericEndpointContext,
 } from "@better-auth/core";
+import { env, isProduction } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
+import { base64Url } from "@better-auth/utils/base64";
+import { binary } from "@better-auth/utils/binary";
+import { createHMAC } from "@better-auth/utils/hmac";
+import type { CookieOptions } from "better-call";
+import { ms } from "ms";
+import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto/jwt";
 import { parseUserOutput } from "../db/schema";
-import { symmetricEncodeJWT, symmetricDecodeJWT } from "../crypto/jwt";
+import type { Session, User } from "../types";
+import { getDate } from "../utils/date";
+import { safeJSONParse } from "../utils/json";
+import { getBaseURL } from "../utils/url";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -123,7 +123,11 @@ export async function setCookieCache(
 
 		// Apply field filtering to user data
 		const filteredUser = parseUserOutput(ctx.context.options, session.user);
-		const sessionData = { session: filteredSession, user: filteredUser };
+		const sessionData = {
+			session: filteredSession,
+			user: filteredUser,
+			updatedAt: Date.now(),
+		};
 
 		const options = {
 			...ctx.context.authCookies.sessionData.options,
@@ -134,7 +138,7 @@ export async function setCookieCache(
 
 		const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
 		const strategy =
-			ctx.context.options.session?.cookieCache?.strategy || "jwt";
+			ctx.context.options.session?.cookieCache?.strategy || "base64-hmac";
 
 		let data: string;
 
@@ -310,6 +314,7 @@ export const getCookieCache = async <
 	S extends {
 		session: Session & Record<string, any>;
 		user: User & Record<string, any>;
+		updatedAt: number;
 	},
 >(
 	request: Request | Headers,
@@ -346,7 +351,7 @@ export const getCookieCache = async <
 			);
 		}
 
-		const strategy = config?.strategy || "jwt";
+		const strategy = config?.strategy || "base64-hmac";
 
 		if (strategy === "jwt") {
 			// Use JWT strategy with JWE (A256CBC-HS512 + HKDF)

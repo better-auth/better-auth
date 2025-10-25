@@ -1,9 +1,8 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type { Session, User } from "@better-auth/core/db";
 import type { Auth } from "../auth";
 import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../db";
 import type { StripEmptyObjects, UnionToIntersection } from "./helper";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import type { User, Session } from "@better-auth/core/db";
 
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
 	InferFieldsFromPlugins<Options, "user", "input"> &
@@ -61,9 +60,9 @@ export interface SessionWithSoftDelete extends Session {
 }
 
 export type {
-	User,
 	Account,
-	Session,
-	Verification,
 	RateLimit,
+	Session,
+	User,
+	Verification,
 } from "@better-auth/core/db";

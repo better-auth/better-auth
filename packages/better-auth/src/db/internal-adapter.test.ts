@@ -1,4 +1,11 @@
-import { beforeAll, expect, it, describe, vi, afterEach } from "vitest";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import Database from "better-sqlite3";
+import { Kysely, SqliteDialect } from "kysely";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { betterAuth } from "../auth";
+import { init } from "../init";
+import { getTestInstance } from "../test-utils/test-instance";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
@@ -6,15 +13,8 @@ import type {
 	SessionWithSoftDelete,
 	User,
 } from "../types";
-import Database from "better-sqlite3";
-import { init } from "../init";
-import { betterAuth } from "../auth";
-import { getMigrations } from "./get-migration";
-import { Kysely, SqliteDialect } from "kysely";
-import { getTestInstance } from "../test-utils/test-instance";
 import { safeJSONParse } from "../utils/json";
-import { runWithEndpointContext } from "@better-auth/core/context";
-import type { GenericEndpointContext } from "@better-auth/core";
+import { getMigrations } from "./get-migration";
 
 describe("adapter test", async () => {
 	const sqliteDialect = new SqliteDialect({
