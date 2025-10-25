@@ -85,4 +85,29 @@ describe("open-api", async (it) => {
 		expect(schema_properties.idToken.required).not.toContain("accessToken");
 		expect(schema_properties.idToken.required).not.toContain("refreshToken");
 	});
+
+	it("should use custom baseUrl when provided", async () => {
+		const customBaseUrl = "https://api.example.com";
+		const { auth: customAuth } = await getTestInstance({
+			plugins: [
+				openAPI({
+					baseUrl: customBaseUrl,
+				}),
+			],
+		});
+
+		const schema = await customAuth.api.generateOpenAPISchema();
+		expect(schema.servers).toEqual([
+			{
+				url: customBaseUrl,
+			},
+		]);
+	});
+
+	it("should fall back to ctx.baseURL when custom baseUrl is not provided", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		expect(schema.servers).toBeDefined();
+		expect(schema.servers[0]).toBeDefined();
+		expect(schema.servers[0]!.url).toBeDefined();
+	});
 });

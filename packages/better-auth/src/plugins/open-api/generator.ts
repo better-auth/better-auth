@@ -334,7 +334,13 @@ function toOpenApiPath(path: string) {
 		.join("/");
 }
 
-export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
+export async function generator(
+	ctx: AuthContext,
+	options: BetterAuthOptions,
+	openApiOptions?: {
+		baseUrl?: string;
+	},
+) {
 	const baseEndpoints = getEndpoints(ctx, {
 		...options,
 		plugins: [],
@@ -524,7 +530,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		],
 		servers: [
 			{
-				url: ctx.baseURL,
+				url: openApiOptions?.baseUrl || ctx.baseURL,
 			},
 		],
 		tags: [
