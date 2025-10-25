@@ -1,5 +1,5 @@
-import type { ZodType } from "zod";
 import type { LiteralString } from "../types";
+import type { StandardSchemaV1 } from "../types/standard-schema";
 
 export type DBPreservedModels =
 	| "user"
@@ -102,8 +102,8 @@ export type DBFieldAttributeConfig = {
 	 * A zod schema to validate the value.
 	 */
 	validator?: {
-		input?: ZodType;
-		output?: ZodType;
+		input?: StandardSchemaV1;
+		output?: StandardSchemaV1;
 	};
 	/**
 	 * The name of the field on the database.
