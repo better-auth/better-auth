@@ -46,15 +46,29 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
 	}
 	return true;
 }
-export function checkMinPassword(
+
+/**
+ * Function to check password length (min and max)
+ * @param password
+ * @param ctx
+ */
+export function checkPasswordLength(
 	password: string,
 	ctx: GenericEndpointContext,
 ) {
-	const minPasswordLength = ctx.context.password.config.minPasswordLength;
+	const { minPasswordLength, maxPasswordLength } = ctx.context.password.config;
+
 	if (password.length < minPasswordLength) {
 		ctx.context.logger.error("Password is too short");
 		throw new APIError("BAD_REQUEST", {
 			message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+		});
+	}
+
+	if (password.length > maxPasswordLength) {
+		ctx.context.logger.error("Password is too long");
+		throw new APIError("BAD_REQUEST", {
+			message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 		});
 	}
 }

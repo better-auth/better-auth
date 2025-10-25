@@ -160,6 +160,10 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 	ctx: GenericEndpointContext<Options>,
 ) => Promise<boolean>;
 
+type CheckPasswordLengthFn<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> = (password: string, ctx: GenericEndpointContext<Options>) => void;
+
 export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 	{
 		options: Options;
@@ -232,6 +236,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				maxPasswordLength: number;
 			};
 			checkPassword: CheckPasswordFn<Options>;
+			checkPasswordLength: CheckPasswordLengthFn<Options>;
 		};
 		tables: BetterAuthDBSchema;
 		runMigrations: () => Promise<void>;

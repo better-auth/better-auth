@@ -14,7 +14,7 @@ import {
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import { generateId } from "./utils";
 import { env, isProduction } from "@better-auth/core/env";
-import { checkPassword, checkMinPassword } from "./utils/password";
+import { checkPassword, checkPasswordLength } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import { BetterAuthError } from "@better-auth/core/error";
 import { createTelemetry } from "@better-auth/telemetry";
@@ -144,7 +144,7 @@ export const init = async (options: BetterAuthOptions) => {
 				maxPasswordLength: options.emailAndPassword?.maxPasswordLength || 128,
 			},
 			checkPassword,
-			checkMinPassword,
+			checkPasswordLength,
 		},
 		setNewSession(session) {
 			this.newSession = session;

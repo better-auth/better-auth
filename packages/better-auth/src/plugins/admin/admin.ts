@@ -462,7 +462,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						}
 					}
 
-					ctx.context.password.checkMinPassword(ctx.body.password, ctx);
+					ctx.context.password.checkPasswordLength(ctx.body.password, ctx);
 
 					const existUser = await ctx.context.internalAdapter.findUserByEmail(
 						ctx.body.email,
@@ -470,14 +470,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {
 							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
-						});
-					}
-					const maxPasswordLength =
-						ctx.context.password.config.maxPasswordLength;
-					if (ctx.body.password.length > maxPasswordLength) {
-						ctx.context.logger.error("Password is too long");
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 						});
 					}
 					const user =
