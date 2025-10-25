@@ -461,6 +461,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							});
 						}
 					}
+
+					ctx.context.password.checkPasswordLength(ctx.body.password, ctx);
+
 					const existUser = await ctx.context.internalAdapter.findUserByEmail(
 						ctx.body.email,
 					);
