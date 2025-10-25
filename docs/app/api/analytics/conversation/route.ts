@@ -1,8 +1,8 @@
-import {
-	logConversationToAnalytics,
-	type InkeepMessage,
-} from "@/lib/inkeep-analytics";
 import { NextRequest, NextResponse } from "next/server";
+import {
+	type InkeepMessage,
+	logConversationToAnalytics,
+} from "@/lib/inkeep-analytics";
 
 export const runtime = "edge";
 

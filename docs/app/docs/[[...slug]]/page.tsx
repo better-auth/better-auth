@@ -1,35 +1,34 @@
-import { source } from "@/lib/source";
-import { DocsPage, DocsBody, DocsTitle } from "@/components/docs/page";
-import { notFound } from "next/navigation";
-import { absoluteUrl } from "@/lib/utils";
-import DatabaseTable from "@/components/mdx/database-tables";
-import { cn } from "@/lib/utils";
-import { Step, Steps } from "fumadocs-ui/components/steps";
-import { Tab, Tabs } from "fumadocs-ui/components/tabs";
-import { GenerateSecret } from "@/components/generate-secret";
-import { AnimatePresence } from "@/components/ui/fade-in";
-import { TypeTable } from "fumadocs-ui/components/type-table";
-import { Features } from "@/components/blocks/features";
-import { ForkButton } from "@/components/fork-button";
-import Link from "next/link";
-import defaultMdxComponents from "fumadocs-ui/mdx";
-import {
-	CodeBlock,
-	Pre,
-	CodeBlockTab,
-	CodeBlockTabsList,
-	CodeBlockTabs,
-} from "@/components/ui/code-block";
-import { File, Folder, Files } from "fumadocs-ui/components/files";
 import { AutoTypeTable } from "fumadocs-typescript/ui";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
-import { Endpoint } from "@/components/endpoint";
-import { DividerText } from "@/components/divider-text";
+import { File, Files, Folder } from "fumadocs-ui/components/files";
+import { Step, Steps } from "fumadocs-ui/components/steps";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { TypeTable } from "fumadocs-ui/components/type-table";
+import defaultMdxComponents from "fumadocs-ui/mdx";
+import Link from "next/link";
+import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
-import { LLMCopyButton, ViewOptions } from "./page.client";
+import { Features } from "@/components/blocks/features";
+import { DividerText } from "@/components/divider-text";
+import { DocsBody, DocsPage, DocsTitle } from "@/components/docs/page";
+import { Endpoint } from "@/components/endpoint";
+import { ForkButton } from "@/components/fork-button";
 import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
-import { Callout } from "@/components/ui/callout";
+import { GenerateSecret } from "@/components/generate-secret";
 import { AddToCursor } from "@/components/mdx/add-to-cursor";
+import DatabaseTable from "@/components/mdx/database-tables";
+import { Callout } from "@/components/ui/callout";
+import {
+	CodeBlock,
+	CodeBlockTab,
+	CodeBlockTabs,
+	CodeBlockTabsList,
+	Pre,
+} from "@/components/ui/code-block";
+import { AnimatePresence } from "@/components/ui/fade-in";
+import { source } from "@/lib/source";
+import { absoluteUrl, cn } from "@/lib/utils";
+import { LLMCopyButton, ViewOptions } from "./page.client";
 export default async function Page({
 	params,
 }: {
@@ -51,7 +50,7 @@ export default async function Page({
 			editOnGithub={{
 				owner: "better-auth",
 				repo: "better-auth",
-				sha: process.env.VERCEL_GIT_COMMIT_SHA || "main",
+				branch: "canary",
 				path: `/docs/content/docs/${page.path}`,
 			}}
 			tableOfContent={{
@@ -95,7 +94,11 @@ export default async function Page({
 						},
 						pre: (props) => {
 							return (
-								<CodeBlock className="rounded-xl bg-fd-muted" {...props}>
+								<CodeBlock
+									className="rounded-xl bg-fd-muted"
+									allowCopy={true}
+									{...props}
+								>
 									<div style={{ minWidth: "100%", display: "table" }}>
 										<Pre className="px-0 py-3 bg-fd-muted focus-visible:outline-none">
 											{props.children}

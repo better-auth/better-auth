@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { parseSetCookieHeader } from "../cookies";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { parseSetCookieHeader } from "../cookies";
 
 export function toNextJsHandler(
 	auth:
