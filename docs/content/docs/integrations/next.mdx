@@ -220,6 +220,75 @@ In older Next.js versions, middleware runs on the Edge Runtime and cannot make d
 The <code>getSessionCookie()</code> function does not automatically reference the auth config specified in <code>auth.ts</code>. Therefore, if you customized the cookie name or prefix, you need to ensure that the configuration in <code>getSessionCookie()</code> matches the config defined in your <code>auth.ts</code>.
 </Callout>
 
+#### For Next.js release `15.1.7` and below
+
+If you need the full session object, you'll have to fetch it from the `/api/auth/get-session` API route. Since Next.js middleware doesn't support running Node.js APIs directly, you must make an HTTP request.
+
+<Callout>
+  The example uses [better-fetch](https://better-fetch.vercel.app), but you can use any fetch library.
+</Callout>
+
+```ts title="middleware.ts"
+import { betterFetch } from "@better-fetch/fetch";
+import type { auth } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+
+type Session = typeof auth.$Infer.Session;
+
+export async function middleware(request: NextRequest) {
+	const { data: session } = await betterFetch<Session>("/api/auth/get-session", {
+		baseURL: request.nextUrl.origin,
+		headers: {
+			cookie: request.headers.get("cookie") || "", // Forward the cookies from the request
+		},
+	});
+
+	if (!session) {
+		return NextResponse.redirect(new URL("/sign-in", request.url));
+	}
+
+	return NextResponse.next();
+}
+
+export const config = {
+	matcher: ["/dashboard"], // Apply middleware to specific routes
+};
+```
+
+#### For Next.js release `15.2.0` and above
+
+From Next.js 15.2.0, you can use the Node.js runtime in middleware for full session validation with database checks:
+
+<Callout type="warn">
+  You may refer to the [Next.js documentation](https://nextjs.org/docs/app/building-your-application/routing/middleware#runtime) for more information about runtime configuration, and how to enable it.
+  Be careful when using the new runtime. It's an experimental feature and it may be subject to breaking changes.
+</Callout>
+
+```ts title="middleware.ts"
+import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
+
+export async function middleware(request: NextRequest) {
+    const session = await auth.api.getSession({
+        headers: await headers()
+    })
+
+    if(!session) {
+        return NextResponse.redirect(new URL("/sign-in", request.url));
+    }
+
+    return NextResponse.next();
+}
+
+export const config = {
+  runtime: "nodejs",
+  matcher: ["/dashboard"], // Apply middleware to specific routes
+};
+```
+
+#### Cookie-based checks (recommended for all versions)
+
 ```ts title="middleware.ts"
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
