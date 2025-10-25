@@ -147,7 +147,7 @@ export async function validateApiKey({
 
 	const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
 
-	const newApiKey = await ctx.context.adapter.update<ApiKey>({
+	ctx.context.adapter.update<ApiKey>({
 		model: API_KEY_TABLE_NAME,
 		where: [
 			{
@@ -162,13 +162,6 @@ export async function validateApiKey({
 		},
 	});
 
-	if (!newApiKey) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			message: ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
-			code: "INTERNAL_SERVER_ERROR" as const,
-		});
-	}
-
 	if (success === false) {
 		throw new APIError("UNAUTHORIZED", {
 			message: message ?? undefined,
@@ -179,7 +172,12 @@ export async function validateApiKey({
 		});
 	}
 
-	return newApiKey;
+	return {
+		...apiKey,
+		...update,
+		remaining,
+		lastRefillAt,
+	};
 }
 
 export function verifyApiKey({
@@ -256,7 +254,7 @@ export function verifyApiKey({
 					opts,
 					schema,
 				});
-				await deleteAllExpiredApiKeys(ctx.context);
+				deleteAllExpiredApiKeys(ctx.context);
 			} catch (error) {
 				if (error instanceof APIError) {
 					return ctx.json({
