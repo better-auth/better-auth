@@ -1,8 +1,8 @@
-import type { BetterAuthClientPlugin, Store } from "better-auth/types";
+import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
+import type { BetterFetchOption } from "@better-fetch/fetch";
+import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
-import Constants from "expo-constants";
-import type { BetterFetchOption } from "@better-fetch/fetch";
 
 interface CookieAttributes {
 	value: string;
@@ -266,7 +266,7 @@ export function storageAdapter(storage: {
 }
 
 export const expoClient = (opts: ExpoClientOptions) => {
-	let store: Store | null = null;
+	let store: ClientStore | null = null;
 	const storagePrefix = opts?.storagePrefix || "better-auth";
 	const cookieName = `${storagePrefix}_cookie`;
 	const localCacheName = `${storagePrefix}_session_data`;

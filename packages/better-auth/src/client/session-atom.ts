@@ -1,7 +1,7 @@
 import type { BetterFetch } from "@better-fetch/fetch";
 import { atom } from "nanostores";
-import { useAuthQuery } from "./query";
 import type { Session, User } from "../types";
+import { useAuthQuery } from "./query";
 
 export function getSessionAtom($fetch: BetterFetch) {
 	const $signal = atom<boolean>(false);

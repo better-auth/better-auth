@@ -1,18 +1,18 @@
+import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	Account,
 	BetterAuthDBSchema,
+	DBPreservedModels,
 	SecondaryStorage,
 	Session,
 	User,
 	Verification,
 } from "../db";
-import type { OAuthProvider } from "../oauth2";
-import { createLogger } from "../env";
 import type { DBAdapter, Where } from "../db/adapter";
+import { createLogger } from "../env";
+import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookies } from "./cookie";
-import type { DBPreservedModels } from "../db";
 import type { LiteralUnion } from "./helper";
-import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
@@ -218,6 +218,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			updateAge: number;
 			expiresIn: number;
 			freshAge: number;
+			cookieFreshCache: number | false;
 		};
 		generateId: (options: {
 			model: LiteralUnion<DBPreservedModels, string>;

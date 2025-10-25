@@ -1,8 +1,8 @@
 "use client";
 
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
+import remarkGfm from "remark-gfm";
 import "highlight.js/styles/dark.css";
 import { Pre } from "fumadocs-ui/components/codeblock";
 
