@@ -792,9 +792,51 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 			}
-			await adapter.deleteMember(member.id);
-			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
+			const organization = await adapter.findOrganizationById(
+				ctx.body.organizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+			try {
+				if (options?.organizationHooks?.beforeLeaveOrganization) {
+					await options.organizationHooks.beforeLeaveOrganization({
+						member,
+						user: session.user,
+						organization,
+					});
+				}
+
+				await adapter.deleteMember(member.id);
+
+				if (session.session.activeOrganizationId === ctx.body.organizationId) {
+					await adapter.setActiveOrganization(session.session.token, null, ctx);
+				}
+
+				if (options?.organizationHooks?.afterLeaveOrganization) {
+					await options.organizationHooks.afterLeaveOrganization({
+						member,
+						user: session.user,
+						organization,
+					});
+				}
+			} catch (error) {
+				ctx.context.logger.error(
+					"Error during beforeLeaveOrganization hook:",
+					error,
+				);
+				if (error instanceof APIError) {
+					throw error;
+				}
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message:
+						error instanceof Error
+							? error.message
+							: "An error occurred preventing the user from leaving the organization.",
+					cause: error,
+				});
 			}
 			return ctx.json(member);
 		},

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createAuthClient } from "../../../client";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
@@ -428,5 +428,182 @@ describe("activeMemberRole", async () => {
 		});
 
 		expect(activeMember.data?.role).toBe("member");
+	});
+});
+
+describe("leaveOrganization", async () => {
+	const beforeLeaveOrganization = vi.fn();
+	const afterLeaveOrganization = vi.fn();
+
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	const { auth, signInWithTestUser, cookieSetter, customFetchImpl } =
+		await getTestInstance({
+			plugins: [
+				organization({
+					organizationHooks: {
+						beforeLeaveOrganization,
+						afterLeaveOrganization,
+					},
+				}),
+			],
+		});
+
+	it("should call beforeLeaveOrganization and afterLeaveOrganization hooks when a member leaves", async () => {
+		const { headers: ownerHeaders } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "org-for-leaving",
+			slug: "org-for-leaving",
+			fetchOptions: {
+				headers: ownerHeaders,
+			},
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "member-to-leave@test.com",
+				name: "member-to-leave",
+				password: "password",
+			},
+		});
+
+		const newMember = await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+
+		const memberHeaders = new Headers();
+		await client.signIn.email({
+			email: "member-to-leave@test.com",
+			password: "password",
+			fetchOptions: {
+				onSuccess: cookieSetter(memberHeaders),
+			},
+		});
+
+		const result = await client.organization.leave(
+			{
+				organizationId: org.data?.id as string,
+			},
+			{
+				headers: memberHeaders,
+			},
+		);
+
+		expect(result.error).toBeNull();
+		expect(result.data?.id).toBe(newMember?.id);
+		expect(beforeLeaveOrganization).toHaveBeenCalledOnce();
+		expect(afterLeaveOrganization).toHaveBeenCalledOnce();
+
+		// Verify the member is actually gone
+		const members = await client.organization.listMembers({
+			query: { organizationId: org.data?.id as string },
+			fetchOptions: { headers: ownerHeaders },
+		});
+		expect(members.data?.members.length).toBe(1); // Only the owner left
+		expect(
+			members.data?.members.find((m) => m.id === newMember?.id),
+		).toBeUndefined();
+	});
+
+	it("should prevent leaving if beforeLeaveOrganization hook throws an error", async () => {
+		const beforeLeaveMock = vi.fn().mockImplementation(() => {
+			throw new Error("Cleanup failed");
+		});
+		const afterLeaveMock = vi.fn();
+		const {
+			auth: auth2,
+			signInWithTestUser: signInWithTestUser2,
+			cookieSetter: cookieSetter2,
+			customFetchImpl: customFetchImpl2,
+		} = await getTestInstance({
+			plugins: [
+				organization({
+					organizationHooks: {
+						beforeLeaveOrganization: beforeLeaveMock,
+						afterLeaveOrganization: afterLeaveMock,
+					},
+				}),
+			],
+		});
+
+		const { headers: ownerHeaders } = await signInWithTestUser2();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: customFetchImpl2,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "org-for-hook-fail",
+			slug: "org-for-hook-fail",
+			fetchOptions: {
+				headers: ownerHeaders,
+			},
+		});
+
+		const newUser = await auth2.api.signUpEmail({
+			body: {
+				email: "member-hook-fail@test.com",
+				name: "member-hook-fail",
+				password: "password",
+			},
+		});
+
+		const newMember = await auth2.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+
+		const memberHeaders = new Headers();
+		await client.signIn.email({
+			email: "member-hook-fail@test.com",
+			password: "password",
+			fetchOptions: {
+				onSuccess: cookieSetter2(memberHeaders),
+			},
+		});
+
+		const result = await client.organization.leave(
+			{
+				organizationId: org.data?.id as string,
+			},
+			{
+				headers: memberHeaders,
+			},
+		);
+
+		expect(result.error).toBeTruthy();
+		expect(result.error?.message).toBe("Cleanup failed");
+		expect(beforeLeaveMock).toHaveBeenCalledOnce();
+		expect(afterLeaveMock).not.toHaveBeenCalled();
+
+		// Verify the member is NOT gone
+		const members = await client.organization.listMembers({
+			query: { organizationId: org.data?.id as string },
+			fetchOptions: { headers: ownerHeaders },
+		});
+		expect(members.data?.members.length).toBe(2); // Owner and member
+		expect(
+			members.data?.members.find((m) => m.id === newMember?.id),
+		).toBeDefined();
 	});
 });

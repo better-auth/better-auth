@@ -554,6 +554,29 @@ export interface OrganizationOptions {
 		}) => Promise<void>;
 
 		/**
+		 * A callback that runs before a member leaves an organization
+		 * This hook only runs when a user initiates leaving themselves
+		 * via the `leaveOrganization` endpoint, NOT when an admin removes them
+		 * If this hook throws an error, the leave operation will be prevented
+		 */
+		beforeLeaveOrganization?: (data: {
+			member: Member & Record<string, any>;
+			user: User & Record<string, any>;
+			organization: Organization & Record<string, any>;
+		}) => Promise<void>;
+
+		/**
+		 * * A callback that runs after a member successfully leaves an organization
+		 * This hook only runs when a user initiates leaving themselves
+		 * via the `leaveOrganization` endpoint, NOT when an admin removes them
+		 */
+		afterLeaveOrganization?: (data: {
+			member: Member & Record<string, any>;
+			user: User & Record<string, any>;
+			organization: Organization & Record<string, any>;
+		}) => Promise<void>;
+
+		/**
 		 * A callback that runs before a member's role is updated
 		 *
 		 * You can return a `data` object to override the default data.
