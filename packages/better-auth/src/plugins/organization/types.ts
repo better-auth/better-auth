@@ -563,7 +563,9 @@ export interface OrganizationOptions {
 					member: Member & Record<string, any>;
 					user: User & Record<string, any>;
 					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				},
+				ctx: AuthContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs after a member is removed from an organization
@@ -572,7 +574,9 @@ export interface OrganizationOptions {
 					member: Member & Record<string, any>;
 					user: User & Record<string, any>;
 					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				},
+				ctx: AuthContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs before a member's role is updated

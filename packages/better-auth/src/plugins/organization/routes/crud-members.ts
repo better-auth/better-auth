@@ -22,7 +22,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 	const baseSchema = z.object({
 		userId: z.coerce.string().meta({
 			description:
-				'The user Id which represents the user to be added as a member. If `null` is provided, then it\'s expected to provide session headers. Eg: "user-id"',
+				'The user Id which represents the user to be added as a member. If null is provided, then it\'s expected to provide session headers. Eg: "user-id"',
 		}),
 		role: z.union([z.string(), z.array(z.string())]).meta({
 			description:
@@ -371,11 +371,14 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 
 			// Run beforeRemoveMember hook
 			if (options?.organizationHooks?.beforeRemoveMember) {
-				await options?.organizationHooks.beforeRemoveMember({
-					member: toBeRemovedMember,
-					user: userBeingRemoved,
-					organization,
-				});
+				await options?.organizationHooks.beforeRemoveMember(
+					{
+						member: toBeRemovedMember,
+						user: userBeingRemoved,
+						organization,
+					},
+					ctx.context,
+				);
 			}
 
 			await adapter.deleteMember(toBeRemovedMember.id);
@@ -389,11 +392,14 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 
 			// Run afterRemoveMember hook
 			if (options?.organizationHooks?.afterRemoveMember) {
-				await options?.organizationHooks.afterRemoveMember({
-					member: toBeRemovedMember,
-					user: userBeingRemoved,
-					organization,
-				});
+				await options?.organizationHooks.afterRemoveMember(
+					{
+						member: toBeRemovedMember,
+						user: userBeingRemoved,
+						organization,
+					},
+					ctx.context,
+				);
 			}
 
 			return ctx.json({
@@ -792,9 +798,57 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 			}
-			await adapter.deleteMember(member.id);
-			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
+			const organization = await adapter.findOrganizationById(
+				ctx.body.organizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+			try {
+				if (options?.organizationHooks?.beforeRemoveMember) {
+					await options.organizationHooks.beforeRemoveMember(
+						{
+							member,
+							user: session.user,
+							organization,
+						},
+						ctx.context,
+					);
+				}
+
+				await adapter.deleteMember(member.id);
+
+				if (session.session.activeOrganizationId === ctx.body.organizationId) {
+					await adapter.setActiveOrganization(session.session.token, null, ctx);
+				}
+
+				if (options?.organizationHooks?.afterRemoveMember) {
+					await options.organizationHooks.afterRemoveMember(
+						{
+							member,
+							user: session.user,
+							organization,
+						},
+						ctx.context,
+					);
+				}
+			} catch (error) {
+				ctx.context.logger.error(
+					`Error during beforeRemoveMember hook (triggered by ${ctx.request?.url}):`,
+					error,
+				);
+				if (error instanceof APIError) {
+					throw error;
+				}
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message:
+						error instanceof Error
+							? error.message
+							: "An error occurred preventing the user from leaving the organization.",
+					cause: error,
+				});
 			}
 			return ctx.json(member);
 		},
