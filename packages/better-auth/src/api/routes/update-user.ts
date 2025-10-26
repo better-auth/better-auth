@@ -120,7 +120,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				user,
 			});
 			return ctx.json({
-				status: true,
+				status: true as const,
 			});
 		},
 	);
@@ -357,7 +357,7 @@ export const setPassword = createAuthEndpoint(
 				password: passwordHash,
 			});
 			return ctx.json({
-				status: true,
+				status: true as const,
 			});
 		}
 		throw new APIError("BAD_REQUEST", {
@@ -475,7 +475,7 @@ export const deleteUser = createAuthEndpoint(
 				},
 			});
 			return ctx.json({
-				success: true,
+				success: true as const,
 				message: "User deleted",
 			});
 		}
@@ -506,7 +506,7 @@ export const deleteUser = createAuthEndpoint(
 				ctx.request,
 			);
 			return ctx.json({
-				success: true,
+				success: true as const,
 				message: "Verification email sent",
 			});
 		}
@@ -534,7 +534,7 @@ export const deleteUser = createAuthEndpoint(
 			await afterDelete(session.user, ctx.request);
 		}
 		return ctx.json({
-			success: true,
+			success: true as const,
 			message: "User deleted",
 		});
 	},
@@ -632,7 +632,7 @@ export const deleteUserCallback = createAuthEndpoint(
 			throw ctx.redirect(ctx.query.callbackURL || "/");
 		}
 		return ctx.json({
-			success: true,
+			success: true as const,
 			message: "User deleted",
 		});
 	},
@@ -774,7 +774,7 @@ export const changeEmail = createAuthEndpoint(
 			}
 
 			return ctx.json({
-				status: true,
+				status: true as const,
 			});
 		}
 
@@ -807,7 +807,7 @@ export const changeEmail = createAuthEndpoint(
 			ctx.request,
 		);
 		return ctx.json({
-			status: true,
+			status: true as const,
 		});
 	},
 );

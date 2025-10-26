@@ -100,7 +100,7 @@ export const requestPasswordReset = createAuthEndpoint(
 		if (!user) {
 			ctx.context.logger.error("Reset Password: User not found", { email });
 			return ctx.json({
-				status: true,
+				status: true as const,
 				message:
 					"If this email exists in our system, check your email for the reset link",
 			});
@@ -128,7 +128,7 @@ export const requestPasswordReset = createAuthEndpoint(
 			ctx.request,
 		);
 		return ctx.json({
-			status: true,
+			status: true as const,
 			message:
 				"If this email exists in our system, check your email for the reset link",
 		});
@@ -296,7 +296,7 @@ export const resetPassword = createAuthEndpoint(
 			await ctx.context.internalAdapter.deleteSessions(userId);
 		}
 		return ctx.json({
-			status: true,
+			status: true as const,
 		});
 	},
 );

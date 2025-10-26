@@ -161,12 +161,12 @@ export const sendVerificationEmail = createAuthEndpoint(
 			if (!user) {
 				//we're returning true to avoid leaking information about the user
 				return ctx.json({
-					status: true,
+					status: true as const,
 				});
 			}
 			await sendVerificationEmailFn(ctx, user.user);
 			return ctx.json({
-				status: true,
+				status: true as const,
 			});
 		}
 		if (session?.user.emailVerified) {
@@ -182,7 +182,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 		}
 		await sendVerificationEmailFn(ctx, session.user);
 		return ctx.json({
-			status: true,
+			status: true as const,
 		});
 	},
 );
@@ -385,7 +385,7 @@ export const verifyEmail = createAuthEndpoint(
 				throw ctx.redirect(ctx.query.callbackURL);
 			}
 			return ctx.json({
-				status: true,
+				status: true as const,
 				user: {
 					id: updatedUser.id,
 					email: updatedUser.email,
@@ -448,7 +448,7 @@ export const verifyEmail = createAuthEndpoint(
 			throw ctx.redirect(ctx.query.callbackURL);
 		}
 		return ctx.json({
-			status: true,
+			status: true as const,
 			user: null,
 		});
 	},

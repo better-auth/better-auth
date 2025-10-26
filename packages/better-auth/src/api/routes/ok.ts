@@ -33,7 +33,7 @@ export const ok = createAuthEndpoint(
 	},
 	async (ctx) => {
 		return ctx.json({
-			ok: true,
+			ok: true as const,
 		});
 	},
 );

@@ -303,7 +303,7 @@ export const signInSocial = createAuthEndpoint(
 			}
 			await setSessionCookie(c, data.data!);
 			return c.json({
-				redirect: false,
+				redirect: false as const,
 				token: data.data!.session.token,
 				url: undefined,
 				user: {

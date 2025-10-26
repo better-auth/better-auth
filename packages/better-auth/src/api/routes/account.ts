@@ -275,8 +275,8 @@ export const linkSocialAccount = createAuthEndpoint(
 			if (hasBeenLinked) {
 				return c.json({
 					url: "", // this is for type inference
-					status: true,
-					redirect: false,
+					status: true as const,
+					redirect: false as const,
 				});
 			}
 
@@ -333,8 +333,8 @@ export const linkSocialAccount = createAuthEndpoint(
 
 			return c.json({
 				url: "", // this is for type inference
-				status: true,
-				redirect: false,
+				status: true as const,
+				redirect: false as const,
 			});
 		}
 
@@ -414,7 +414,7 @@ export const unlinkAccount = createAuthEndpoint(
 		}
 		await ctx.context.internalAdapter.deleteAccount(accountExist.id);
 		return ctx.json({
-			status: true,
+			status: true as const,
 		});
 	},
 );

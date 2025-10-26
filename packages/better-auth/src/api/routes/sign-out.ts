@@ -45,7 +45,7 @@ export const signOut = createAuthEndpoint(
 		await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
 		deleteSessionCookie(ctx);
 		return ctx.json({
-			success: true,
+			success: true as const,
 		});
 	},
 );

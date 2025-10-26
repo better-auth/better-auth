@@ -589,7 +589,7 @@ export const revokeSession = createAuthEndpoint(
 			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
 		return ctx.json({
-			status: true,
+			status: true as const,
 		});
 	},
 );
@@ -643,7 +643,7 @@ export const revokeSessions = createAuthEndpoint(
 			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
 		return ctx.json({
-			status: true,
+			status: true as const,
 		});
 	},
 );
@@ -701,7 +701,7 @@ export const revokeOtherSessions = createAuthEndpoint(
 			),
 		);
 		return ctx.json({
-			status: true,
+			status: true as const,
 		});
 	},
 );
