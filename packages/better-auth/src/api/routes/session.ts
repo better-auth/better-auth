@@ -17,7 +17,7 @@ import {
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
-import { symmetricDecodeJWT } from "../../crypto/jwt";
+import { symmetricDecodeJWT, verifyJWT } from "../../crypto/jwt";
 import type { InferSession, InferUser, Session, User } from "../../types";
 import type { Prettify } from "../../types/helper";
 import { getDate } from "../../utils/date";
@@ -110,10 +110,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 				if (sessionDataCookie) {
 					const strategy =
-						ctx.context.options.session?.cookieCache?.strategy || "base64-hmac";
+						ctx.context.options.session?.cookieCache?.strategy || "compact";
 
-					if (strategy === "jwt") {
-						// Decode JWT (JWE with A256CBC-HS512 + HKDF)
+					if (strategy === "jwe") {
+						// Decode JWE (encrypted)
 						const payload = await symmetricDecodeJWT<{
 							session: Session;
 							user: User;
@@ -137,8 +137,33 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							});
 							return ctx.json(null);
 						}
+					} else if (strategy === "jwt") {
+						// Decode JWT (signed with HMAC, not encrypted)
+						const payload = await verifyJWT<{
+							session: Session;
+							user: User;
+							updatedAt: number;
+							exp?: number;
+						}>(sessionDataCookie, ctx.context.secret);
+
+						if (payload && payload.session && payload.user) {
+							sessionDataPayload = {
+								session: {
+									session: payload.session,
+									user: payload.user,
+									updatedAt: payload.updatedAt,
+								},
+								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
+							};
+						} else {
+							const dataCookie = ctx.context.authCookies.sessionData.name;
+							ctx.setCookie(dataCookie, "", {
+								maxAge: 0,
+							});
+							return ctx.json(null);
+						}
 					} else {
-						// Decode base64-hmac (legacy)
+						// Decode compact format (or legacy base64-hmac)
 						const parsed = safeJSONParse<{
 							session: {
 								session: Session;
@@ -191,6 +216,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					const hasExpired =
 						sessionDataPayload.expiresAt < Date.now() ||
 						session.session.expiresAt < new Date();
+
 					if (hasExpired) {
 						// When the session data cookie has expired, delete it;
 						//  then we try to fetch from DB
@@ -199,12 +225,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							maxAge: 0,
 						});
 					} else {
-						// Check if the cookie cache needs to be refreshed based on freshCache
-						const cookieFreshCache = ctx.context.sessionConfig.cookieFreshCache;
+						// Check if the cookie cache needs to be refreshed based on refreshCache
+						const cookieRefreshCache =
+							ctx.context.sessionConfig.cookieRefreshCache;
 
-						if (cookieFreshCache === false) {
-							// If freshCache is disabled, we don't need to check for freshness
-							//  return the session from cookie
+						if (cookieRefreshCache === false) {
+							// If refreshCache is disabled, return the session from cookie as-is
 							ctx.context.session = session;
 							return ctx.json({
 								session: session.session,
@@ -215,21 +241,50 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							});
 						}
 
-						// If freshCache is enabled (number), check if cache is still fresh
-						const updatedAt = sessionDataPayload.session.updatedAt ?? 0;
-						const cacheIsFresh =
-							updatedAt + cookieFreshCache * 1000 > Date.now();
+						// refreshCache is enabled - check if we need to refresh the cookie
+						// Calculate time remaining until expiry
+						const timeUntilExpiry = sessionDataPayload.expiresAt - Date.now();
+						const updateAge = cookieRefreshCache.updateAge * 1000; // Convert to milliseconds
 
-						if (cacheIsFresh) {
-							ctx.context.session = session;
-							return ctx.json({
-								session: session.session,
+						// If time remaining is less than updateAge, refresh the cookie stateless
+						if (timeUntilExpiry < updateAge) {
+							// Generate a new cookie with extended expiry (stateless refresh)
+							const cookieMaxAge =
+								ctx.context.options.session?.cookieCache?.maxAge || 60 * 5;
+							const newExpiresAt = getDate(cookieMaxAge, "sec");
+
+							// Update the session expiry in the cookie (stateless - no DB query)
+							const refreshedSession = {
+								session: {
+									...session.session,
+									expiresAt: newExpiresAt,
+								},
 								user: session.user,
+								updatedAt: Date.now(),
+							};
+
+							// Set the refreshed cookie cache
+							await setCookieCache(ctx, refreshedSession, false);
+
+							ctx.context.session = refreshedSession;
+							return ctx.json({
+								session: refreshedSession.session,
+								user: refreshedSession.user,
 							} as {
 								session: InferSession<Option>;
 								user: InferUser<Option>;
 							});
 						}
+
+						// Cookie is still fresh and doesn't need refresh yet
+						ctx.context.session = session;
+						return ctx.json({
+							session: session.session,
+							user: session.user,
+						} as {
+							session: InferSession<Option>;
+							user: InferUser<Option>;
+						});
 					}
 				}
 
@@ -237,24 +292,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
 				ctx.context.session = session;
 				if (!session || session.session.expiresAt < new Date()) {
-					if (
-						sessionDataPayload &&
-						ctx.context.sessionConfig.cookieFreshCache !== false
-					) {
-						const maxAge = (sessionDataPayload.expiresAt - Date.now()) / 1000;
-						// We still want to refresh the cookie if the session is not found.
-						// This could happen if the user doesn't provide a database, so we store the session in cookie only
-						await setSessionCookie(ctx, sessionDataPayload.session, false, {
-							maxAge,
-						});
-						return ctx.json({
-							session: sessionDataPayload.session.session,
-							user: sessionDataPayload.session.user,
-						} as {
-							session: InferSession<Option>;
-							user: InferUser<Option>;
-						});
-					}
 					deleteSessionCookie(ctx);
 					if (session) {
 						/**
@@ -271,12 +308,13 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 * or if the session refresh is disabled
 				 */
 				if (dontRememberMe || ctx.query?.disableRefresh) {
-					return ctx.json(
-						session as unknown as {
-							session: InferSession<Option>;
-							user: InferUser<Option>;
-						},
-					);
+					return ctx.json({
+						session: session.session,
+						user: session.user,
+					} as {
+						session: InferSession<Option>;
+						user: InferUser<Option>;
+					});
 				}
 				const expiresIn = ctx.context.sessionConfig.expiresIn;
 				const updateAge = ctx.context.sessionConfig.updateAge;

@@ -713,25 +713,67 @@ export type BetterAuthOptions = {
 			/**
 			 * Strategy for encoding/decoding cookie cache
 			 *
-			 * - "base64-hmac": Uses base64url encoding with HMAC-SHA256 signature
-			 * - "jwt": Uses JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation for secure encrypted tokens
+			 * - "compact": Uses base64url encoding with HMAC-SHA256 signature (compact format, no JWT spec overhead)
+			 * - "jwt": Uses JWT with HMAC signature (no encryption, follows JWT spec)
+			 * - "jwe": Uses JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation for secure encrypted tokens
 			 *
-			 * @default "base64-hmac"
+			 * @default "compact"
 			 */
-			strategy?: "base64-hmac" | "jwt";
+			strategy?: "compact" | "jwt" | "jwe";
 			/**
-			 * Controls cache freshness and when to refresh from database.
+			 * Controls stateless cookie cache refresh behavior.
 			 *
-			 * - `false`: Disable cache freshness checks. Cache is only invalidated when it reaches maxAge expiry.
-			 * - `true`: Use default freshness duration of 60 seconds.
-			 * - `number`: Custom freshness duration in seconds.
+			 * When enabled, the cookie cache will be automatically refreshed before expiry
+			 * WITHOUT querying the database. This is essential for fully stateless or DB-less scenarios.
 			 *
-			 * When enabled, if the cached data is older than the freshness threshold,
-			 * it will be refreshed from the database to ensure data consistency.
+			 * - `false`: Disable automatic refresh. Cache is only invalidated when it reaches maxAge expiry.
+			 * - `true`: Enable automatic refresh with default settings (refreshes when 80% of maxAge is reached).
+			 * - `object`: Custom refresh configuration with either `updateAge` or `shouldRefresh` function
+			 *
+			 * Note: When the cache expires (reaches maxAge), it will attempt to fetch from database if available.
+			 * The refreshCache option is specifically for refreshing BEFORE expiry in a stateless manner.
 			 *
 			 * @default false
 			 */
-			freshCache?: boolean | number;
+			refreshCache?:
+				| boolean
+				| {
+						/**
+						 * Time in seconds before expiry when the cache should be refreshed.
+						 * For example, if maxAge is 300 (5 minutes) and updateAge is 60,
+						 * the cache will be refreshed when it has 60 seconds left before expiry.
+						 *
+						 * @default 20% of maxAge
+						 */
+						updateAge?: number;
+						/**
+						 * Custom function to determine if the cache should be refreshed.
+						 * This gives you full control over the refresh logic.
+						 *
+						 * @param data - The session and user data from the cookie cache
+						 * @param data.session - The session object
+						 * @param data.user - The user object
+						 * @param data.expiresAt - When the cookie cache expires (timestamp in ms)
+						 * @param data.updatedAt - When the session was last updated (timestamp in ms)
+						 * @returns true to refresh the cache, false to keep using it
+						 *
+						 * @example
+						 * ```ts
+						 * shouldRefresh: ({ expiresAt, updatedAt }) => {
+						 *   const timeRemaining = expiresAt - Date.now();
+						 *   const timeSinceUpdate = Date.now() - updatedAt;
+						 *   // Refresh if less than 1 minute remaining or if updated more than 5 minutes ago
+						 *   return timeRemaining < 60_000 || timeSinceUpdate > 300_000;
+						 * }
+						 * ```
+						 */
+						shouldRefresh?: (data: {
+							session: Record<string, any>;
+							user: Record<string, any>;
+							expiresAt: number;
+							updatedAt: number;
+						}) => boolean | Promise<boolean>;
+				  };
 		};
 		/**
 		 * The age of the session to consider it fresh.

@@ -10,7 +10,12 @@ import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
 import { ms } from "ms";
-import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto/jwt";
+import {
+	signJWT,
+	symmetricDecodeJWT,
+	symmetricEncodeJWT,
+	verifyJWT,
+} from "../crypto/jwt";
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
@@ -138,20 +143,28 @@ export async function setCookieCache(
 
 		const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
 		const strategy =
-			ctx.context.options.session?.cookieCache?.strategy || "base64-hmac";
+			ctx.context.options.session?.cookieCache?.strategy || "compact";
 
 		let data: string;
 
-		if (strategy === "jwt") {
-			// Use JWT strategy with JWE (A256CBC-HS512 + HKDF)
+		if (strategy === "jwe") {
+			// Use JWE strategy (JSON Web Encryption) with A256CBC-HS512 + HKDF
 			data = await symmetricEncodeJWT(
 				sessionData,
 				ctx.context.secret,
 				"better-auth-session",
 				options.maxAge || 60 * 5,
 			);
+		} else if (strategy === "jwt") {
+			// Use JWT strategy with HMAC-SHA256 signature (HS256), no encryption
+			data = await signJWT(
+				sessionData,
+				ctx.context.secret,
+				options.maxAge || 60 * 5,
+			);
 		} else {
-			// Use base64-hmac strategy (legacy)
+			// Use compact strategy (base64url + HMAC, no JWT spec overhead)
+			// Also handles legacy "base64-hmac" for backward compatibility
 			data = base64Url.encode(
 				JSON.stringify({
 					session: sessionData,
@@ -323,7 +336,7 @@ export const getCookieCache = async <
 		cookieName?: string;
 		isSecure?: boolean;
 		secret?: string;
-		strategy?: "base64-hmac" | "jwt";
+		strategy?: "compact" | "jwt" | "jwe"; // base64-hmac for backward compatibility
 	},
 ) => {
 	const headers = request instanceof Headers ? request : request.headers;
@@ -351,10 +364,10 @@ export const getCookieCache = async <
 			);
 		}
 
-		const strategy = config?.strategy || "base64-hmac";
+		const strategy = config?.strategy || "compact";
 
-		if (strategy === "jwt") {
-			// Use JWT strategy with JWE (A256CBC-HS512 + HKDF)
+		if (strategy === "jwe") {
+			// Use JWE strategy (encrypted)
 			const payload = await symmetricDecodeJWT<S>(
 				sessionData,
 				secret,
@@ -365,8 +378,16 @@ export const getCookieCache = async <
 				return payload;
 			}
 			return null;
+		} else if (strategy === "jwt") {
+			// Use JWT strategy with HMAC signature (HS256), no encryption
+			const payload = await verifyJWT<S>(sessionData, secret);
+
+			if (payload && payload.session && payload.user) {
+				return payload;
+			}
+			return null;
 		} else {
-			// Use base64-hmac strategy (legacy)
+			// Use compact strategy (or legacy base64-hmac)
 			const sessionDataPayload = safeJSONParse<{
 				session: S;
 				expiresAt: number;

@@ -482,8 +482,8 @@ describe("cookie cache", async () => {
 			},
 			cookieCache: {
 				enabled: true,
-				strategy: "base64-hmac",
-				freshCache: false,
+				strategy: "compact",
+				refreshCache: false,
 			},
 		},
 	});
@@ -591,7 +591,7 @@ describe("cookie cache with JWT strategy", async () => {
 			cookieCache: {
 				enabled: true,
 				strategy: "jwt",
-				freshCache: false,
+				refreshCache: false,
 			},
 		},
 	});
@@ -715,13 +715,153 @@ describe("cookie cache with JWT strategy", async () => {
 	});
 });
 
-describe("cookie cache freshCache", async () => {
+describe("cookie cache with JWE strategy", async () => {
+	const { auth, client, testUser, cookieSetter } = await getTestInstance({
+		session: {
+			additionalFields: {
+				sensitiveData: {
+					type: "string",
+					returned: false,
+					defaultValue: "sensitive-data",
+				},
+			},
+			cookieCache: {
+				enabled: true,
+				strategy: "jwe",
+				refreshCache: false,
+			},
+		},
+	});
+	const ctx = await auth.$context;
+
+	const fn = vi.spyOn(ctx.adapter, "findOne");
+
+	const headers = new Headers();
+	it("should cache cookies with JWE strategy", async () => {
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		expect(fn).toHaveBeenCalledTimes(1);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.session).not.toHaveProperty("sensitiveData");
+		expect(session.data).not.toBeNull();
+		expect(fn).toHaveBeenCalledTimes(1); // Should still be 1 (cache hit)
+	});
+
+	it("should disable cookie cache with JWE strategy", async () => {
+		const ctx = await auth.$context;
+
+		const s = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(s.data?.user.emailVerified).toBe(false);
+		await runWithEndpointContext(
+			{
+				context: ctx,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				await ctx.internalAdapter.updateUser(s.data?.user.id || "", {
+					emailVerified: true,
+				});
+			},
+		);
+		expect(fn).toHaveBeenCalledTimes(1);
+
+		const session = await client.getSession({
+			query: {
+				disableCookieCache: true,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user.emailVerified).toBe(true);
+		expect(session.data).not.toBeNull();
+		expect(fn).toHaveBeenCalledTimes(3); // Database hit when cache disabled
+	});
+
+	it("should reset JWE cache when expires", async () => {
+		expect(fn).toHaveBeenCalledTimes(3);
+		await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(fn).toHaveBeenCalledTimes(3);
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 10);
+
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+				},
+			},
+		});
+
+		expect(fn.mock.calls.length).toBeGreaterThanOrEqual(3);
+
+		vi.useRealTimers();
+	});
+
+	it("should handle multiple concurrent requests with JWE cache", async () => {
+		vi.useRealTimers();
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		// Make multiple concurrent requests
+		const promises = Array(5)
+			.fill(0)
+			.map(() =>
+				client.getSession({
+					fetchOptions: {
+						headers,
+					},
+				}),
+			);
+
+		const results = await Promise.all(promises);
+
+		// All should return valid sessions
+		results.forEach((result) => {
+			expect(result.data).not.toBeNull();
+			expect(result.data?.user.email).toBe(testUser.email);
+		});
+	});
+});
+
+describe("cookie cache refreshCache", async () => {
 	const { auth, client, testUser, cookieSetter } = await getTestInstance({
 		session: {
 			cookieCache: {
 				enabled: true,
-				strategy: "jwt",
-				freshCache: 60, // 60 seconds
+				strategy: "jwe",
+				maxAge: 300, // 5 minutes
+				refreshCache: {
+					updateAge: 60, // Refresh when 60 seconds remain
+				},
 			},
 		},
 	});
@@ -730,7 +870,7 @@ describe("cookie cache freshCache", async () => {
 
 	const headers = new Headers();
 
-	it("should use cached data when freshCache threshold has not been reached", async () => {
+	it("should use cached data when refreshCache threshold has not been reached", async () => {
 		await client.signIn.email(
 			{
 				email: testUser.email,
@@ -759,12 +899,12 @@ describe("cookie cache freshCache", async () => {
 		expect(fn).toHaveBeenCalledTimes(1);
 	});
 
-	it("should refresh cache when freshCache threshold is exceeded", async () => {
+	it("should refresh cache stateless when refreshCache threshold is exceeded", async () => {
 		const callsBefore = fn.mock.calls.length;
 
 		vi.useFakeTimers();
-		// Advance time by 61 seconds (beyond the 60 second freshCache threshold)
-		await vi.advanceTimersByTimeAsync(1000 * 61);
+		// Advance time by 241 seconds (300 - 60 = 240, so at 241 we're within the refresh window)
+		await vi.advanceTimersByTimeAsync(1000 * 241);
 
 		const session = await client.getSession({
 			fetchOptions: {
@@ -776,8 +916,9 @@ describe("cookie cache freshCache", async () => {
 		});
 		expect(session.data).not.toBeNull();
 
+		// With stateless refresh, no DB call should be made (it just refreshes the cookie)
 		const callsAfterRefresh = fn.mock.calls.length;
-		expect(callsAfterRefresh).toBeGreaterThan(callsBefore);
+		expect(callsAfterRefresh).toBe(callsBefore); // No DB call for stateless refresh
 
 		await client.getSession({
 			fetchOptions: {
@@ -789,7 +930,7 @@ describe("cookie cache freshCache", async () => {
 		vi.useRealTimers();
 	});
 
-	it("should not refresh cache when freshCache is disabled (false)", async () => {
+	it("should not refresh cache when refreshCache is disabled (false)", async () => {
 		const {
 			client,
 			testUser: testUser0,
@@ -799,8 +940,8 @@ describe("cookie cache freshCache", async () => {
 			session: {
 				cookieCache: {
 					enabled: true,
-					strategy: "jwt",
-					freshCache: false, // Disabled
+					strategy: "jwe",
+					refreshCache: false, // Disabled
 				},
 			},
 		});
@@ -819,7 +960,7 @@ describe("cookie cache freshCache", async () => {
 		);
 		const callsAfterSignIn = fn.mock.calls.length;
 
-		// Even after advancing time, cache should still be used (freshCache disabled)
+		// Even after advancing time, cache should still be used (refreshCache disabled)
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 120); // 2 minutes
 
@@ -843,7 +984,7 @@ describe("cookie cache freshCache", async () => {
 	});
 
 	it("should work without database (session stored in cookie only)", async () => {
-		// Create instance with cookieCache enabled and freshCache disabled
+		// Create instance with cookieCache enabled and refreshCache disabled
 		const {
 			client,
 			testUser: testUser0,
@@ -853,8 +994,8 @@ describe("cookie cache freshCache", async () => {
 			session: {
 				cookieCache: {
 					enabled: true,
-					strategy: "jwt",
-					freshCache: false, // Don't refresh, use cookie only
+					strategy: "jwe",
+					refreshCache: true, // Enable stateless refresh for DB-less scenarios
 				},
 			},
 		});
@@ -900,13 +1041,16 @@ describe("cookie cache freshCache", async () => {
 		expect(sessionFromCache.data?.session?.token).toBe(sessionToken);
 	});
 
-	it("should work without database when freshCache threshold is reached", async () => {
+	it("should work without database when refreshCache threshold is reached", async () => {
 		const { client, testUser, cookieSetter, auth } = await getTestInstance({
 			session: {
 				cookieCache: {
 					enabled: true,
-					strategy: "jwt",
-					freshCache: 30, // 30s freshness threshold
+					strategy: "jwe",
+					maxAge: 300, // 5 minutes
+					refreshCache: {
+						updateAge: 60, // Refresh when 60 seconds remain
+					},
 				},
 			},
 		});
@@ -936,14 +1080,17 @@ describe("cookie cache freshCache", async () => {
 		await ctx.internalAdapter.deleteSession(sessionToken!);
 
 		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1000 * 31);
+		// Advance time to trigger refresh (300 - 60 = 240, so at 241 we're in refresh window)
+		await vi.advanceTimersByTimeAsync(1000 * 241);
 
 		const sessionFromCache = await client.getSession({
 			fetchOptions: {
 				headers,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 
+		// Should work with stateless refresh even without DB
 		expect(sessionFromCache.data).not.toBeNull();
 		expect(sessionFromCache.data?.user.email).toBe(testUser.email);
 		expect(sessionFromCache.data?.session).toBeDefined();
