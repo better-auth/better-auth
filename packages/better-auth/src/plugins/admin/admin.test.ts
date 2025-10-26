@@ -1326,7 +1326,6 @@ describe("access control", async (it) => {
 			fetchOptions: { headers },
 		});
 
-		console.log(statementsRes.data)
 		expect(statementsRes.data?.statements).toEqual({
 			user: ["create", "read", "update", "delete", "list", "set-role"],
 			order: ["create", "read", "update", "delete", "approve", "audit"],
