@@ -8,9 +8,10 @@ type Props = {
 	href: string;
 	children: React.ReactNode;
 	className?: string;
+	external?: boolean;
 };
 
-export const NavLink = ({ href, children, className }: Props) => {
+export const NavLink = ({ href, children, className, external }: Props) => {
 	const segment = useSelectedLayoutSegment();
 	const isActive =
 		segment === href.slice(1) || (segment === null && href === "/");
@@ -24,6 +25,7 @@ export const NavLink = ({ href, children, className }: Props) => {
 					"group-hover:text-foreground",
 					isActive ? "text-foreground" : "text-muted-foreground",
 				)}
+				target={external ? "_blank" : undefined}
 			>
 				{children}
 			</Link>
