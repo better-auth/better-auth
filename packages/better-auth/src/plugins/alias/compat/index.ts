@@ -13,7 +13,7 @@ export type AliasCompatOptions = {
 
 /**
  * Wraps a plugin and selectively prefixes its endpoints with
- * a sub-path to preserve iteroperability with an aliased plugin.
+ * a sub-path to preserve interoperability with an aliased plugin.
  *
  * @param aliasedPlugin - The aliased plugin indicating which parts need to be rewritten
  * @param plugin - The plugin to wrap
