@@ -3,8 +3,10 @@ import type {
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
+	ResolvedJoin,
 } from "@better-auth/core/db/adapter";
 import {
+	sql,
 	type InsertQueryBuilder,
 	type Kysely,
 	type RawBuilder,
@@ -52,7 +54,14 @@ export const kyselyAdapter = (
 	const createCustomAdapter = (
 		db: Kysely<any>,
 	): AdapterFactoryCustomizeAdapterCreator => {
-		return ({ getFieldName }) => {
+		return ({
+			getFieldName,
+			schema,
+			getDefaultFieldName,
+			getDefaultModelName,
+			getFieldAttributes,
+			getModelName,
+		}) => {
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -119,61 +128,62 @@ export const kyselyAdapter = (
 						connector = "AND",
 					} = condition;
 					let value: any = _value;
-					let field: string | RawBuilder<unknown> = getFieldName({
+					let field: string | any = getFieldName({
 						model,
 						field: _field,
 					});
 
 					const expr = (eb: any) => {
+						const f = `${model}.${field}`;
 						if (operator.toLowerCase() === "in") {
-							return eb(field, "in", Array.isArray(value) ? value : [value]);
+							return eb(f, "in", Array.isArray(value) ? value : [value]);
 						}
 
 						if (operator.toLowerCase() === "not_in") {
 							return eb(
-								field,
+								f,
 								"not in",
 								Array.isArray(value) ? value : [value],
 							);
 						}
 
 						if (operator === "contains") {
-							return eb(field, "like", `%${value}%`);
+							return eb(f, "like", `%${value}%`);
 						}
 
 						if (operator === "starts_with") {
-							return eb(field, "like", `${value}%`);
+							return eb(f, "like", `${value}%`);
 						}
 
 						if (operator === "ends_with") {
-							return eb(field, "like", `%${value}`);
+							return eb(f, "like", `%${value}`);
 						}
 
 						if (operator === "eq") {
-							return eb(field, "=", value);
+							return eb(f, "=", value);
 						}
 
 						if (operator === "ne") {
-							return eb(field, "<>", value);
+							return eb(f, "<>", value);
 						}
 
 						if (operator === "gt") {
-							return eb(field, ">", value);
+							return eb(f, ">", value);
 						}
 
 						if (operator === "gte") {
-							return eb(field, ">=", value);
+							return eb(f, ">=", value);
 						}
 
 						if (operator === "lt") {
-							return eb(field, "<", value);
+							return eb(f, "<", value);
 						}
 
 						if (operator === "lte") {
-							return eb(field, "<=", value);
+							return eb(f, "<=", value);
 						}
 
-						return eb(field, operator, value);
+						return eb(f, operator, value);
 					};
 
 					if (connector === "OR") {
@@ -188,33 +198,226 @@ export const kyselyAdapter = (
 					or: conditions.or.length ? conditions.or : null,
 				};
 			}
+
+	// Helper function to process joined results
+	function processJoinedResults(
+		rows: any[],
+		baseModel: string,
+		joinConfig: ResolvedJoin | undefined,
+		allSelectsStr: { joinModel: string; fieldName: string }[],
+	) {
+		if (!joinConfig || !rows.length) {
+			return rows;
+		}
+
+		// Group rows by main model ID
+		const groupedByMainId = new Map<string, any>();
+
+		for (const currentRow of rows) {
+			// Separate main model columns from joined columns
+			const mainModelFields: Record<string, any> = {};
+			const joinedModelFields: Record<string, Record<string, any>> = {};
+
+			// Initialize joined model fields map
+			for (const [joinModel] of Object.entries(joinConfig)) {
+				joinedModelFields[getModelName(joinModel)] = {};
+			}
+
+			// Distribute all columns - collect complete objects per model
+			for (const [key, value] of Object.entries(currentRow)) {
+				const keyStr = String(key);
+				let assigned = false;
+
+				// Check if this is a joined column
+				for (const { joinModel, fieldName } of allSelectsStr) {
+					if (keyStr === `_joined_${joinModel}_${fieldName}`) {
+						joinedModelFields[getModelName(joinModel)]![
+							getFieldName({
+								model: joinModel,
+								field: fieldName,
+							})
+						] = value;
+						assigned = true;
+						break;
+					}
+				}
+
+				if (!assigned) {
+					mainModelFields[key] = value;
+				}
+			}
+
+			const mainId = mainModelFields.id;
+			if (!mainId) continue;
+
+			// Initialize or get existing entry for this main model
+			if (!groupedByMainId.has(mainId)) {
+				const entry: Record<string, any> = { ...mainModelFields };
+
+				// Initialize joined models based on uniqueness
+				for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
+					const defaultModelName = getDefaultModelName(joinModel);
+					const fields = schema[defaultModelName]?.fields;
+					if (!fields) continue;
+					const joinFieldAttr = getFieldAttributes({
+						model: defaultModelName,
+						field: joinAttr.on.to,
+					});
+					const isUnique = joinFieldAttr?.unique ?? false;
+					entry[getModelName(joinModel)] = isUnique ? null : [];
+				}
+
+				groupedByMainId.set(mainId, entry);
+			}
+
+			const entry = groupedByMainId.get(mainId)!;
+
+			// Add joined records to the entry
+			for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
+				const defaultModelName = getDefaultModelName(joinModel);
+				const joinFieldAttr = getFieldAttributes({
+					model: defaultModelName,
+					field: joinAttr.on.to,
+				});
+				const isUnique = joinFieldAttr?.unique ?? false;
+
+				const joinedObj = joinedModelFields[getModelName(joinModel)];
+				if (isUnique) {
+					entry[getModelName(joinModel)] = joinedObj;
+				} else {
+					// For arrays, append if not already there (deduplicate by id)
+					if (
+						Array.isArray(entry[getModelName(defaultModelName)]) &&
+						joinedObj?.id
+					) {
+						if (
+							!entry[getModelName(defaultModelName)].some(
+								(item: any) => item.id === joinedObj.id,
+							)
+						) {
+							entry[getModelName(defaultModelName)].push(joinedObj);
+						}
+					}
+				}
+			}
+		}
+
+		return Array.from(groupedByMainId.values());
+	}
+
+
+
+
 			return {
 				async create({ data, model }) {
 					const builder = db.insertInto(model).values(data);
 					const returned = await withReturning(data, builder, model, []);
 					return returned;
 				},
-				async findOne({ model, where, select }) {
+				async findOne({ model, where, select, join }) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db.selectFrom(model).selectAll();
+					let query: any = db.selectFrom(model).selectAll(model);
 					if (and) {
-						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
+						query = query.where((eb: any) =>
+							eb.and(and.map((expr: any) => expr(eb))),
+						);
 					}
 					if (or) {
-						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
+						query = query.where((eb: any) =>
+							eb.or(or.map((expr: any) => expr(eb))),
+						);
 					}
-					const res = await query.executeTakeFirst();
-					if (!res) return null;
-					return res as any;
+					
+					if (join) {
+						// Add joins
+						for (const [joinModel, joinAttr] of Object.entries(join)) {
+							if (joinAttr.type === "inner") {
+								query = query.innerJoin(
+									joinModel,
+									`${joinModel}.${joinAttr.on.to}`,
+									`${model}.${joinAttr.on.from}`,
+								);
+							} else {
+								query = query.leftJoin(
+									joinModel,
+									`${joinModel}.${joinAttr.on.to}`,
+									`${model}.${joinAttr.on.from}`,
+								);
+							}
+						}
+					}
+
+					// Use selectAll which will handle column naming appropriately
+					const allSelects: RawBuilder<unknown>[] = [];
+					const allSelectsStr: { joinModel: string; fieldName: string }[] = [];
+					if (join) {
+						for (const [joinModel, _] of Object.entries(join)) {
+							const fields = schema[getDefaultModelName(joinModel)]?.fields;
+							if (!fields) continue;
+							fields.id = { type: "string" }; // make sure there is at least an id field
+							for (const [field, fieldAttr] of Object.entries(fields)) {
+								allSelects.push(
+									sql`${sql.ref(joinModel)}.${sql.ref(fieldAttr.fieldName || field)} as ${sql.ref(`_joined_${joinModel}_${fieldAttr.fieldName || field}`)}`,
+								);
+								allSelectsStr.push({
+									joinModel,
+									fieldName: fieldAttr.fieldName || field,
+								});
+							}
+						}
+						query = query.select(allSelects);
+					}
+
+					const res = await query.execute();
+					if (!res || !Array.isArray(res) || res.length === 0) return null;
+
+					// Get the first row from the result array
+					const row = res[0];
+
+					if (join) {
+						const processedRows = processJoinedResults(
+							res,
+							model,
+							join,
+							allSelectsStr,
+						);
+
+						return processedRows[0] as any;
+					}
+
+					return row as any;
 				},
-				async findMany({ model, where, limit, offset, sortBy }) {
+				async findMany({ model, where, limit, offset, sortBy, join }) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db.selectFrom(model);
+					let query: any = db.selectFrom(model).selectAll(model);
 					if (and) {
-						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
+						query = query.where((eb: any) =>
+							eb.and(and.map((expr: any) => expr(eb))),
+						);
 					}
 					if (or) {
-						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
+						query = query.where((eb: any) =>
+							eb.or(or.map((expr: any) => expr(eb))),
+						);
+					}
+
+					if (join) {
+						// Add joins
+						for (const [joinModel, joinAttr] of Object.entries(join)) {
+							if (joinAttr.type === "inner") {
+								query = query.innerJoin(
+									joinModel,
+									`${joinModel}.${joinAttr.on.to}`,
+									`${model}.${joinAttr.on.from}`,
+								);
+							} else {
+								query = query.leftJoin(
+									joinModel,
+									`${joinModel}.${joinAttr.on.to}`,
+									`${model}.${joinAttr.on.from}`,
+								);
+							}
+						}
 					}
 					if (config?.type === "mssql") {
 						if (!offset) {
@@ -240,9 +443,34 @@ export const kyselyAdapter = (
 						}
 					}
 
-					const res = await query.selectAll().execute();
+					// Use selectAll which will handle column naming appropriately
+					const allSelects: RawBuilder<unknown>[] = [];
+					const allSelectsStr: { joinModel: string; fieldName: string }[] = [];
+					if (join) {
+						for (const [joinModel, _] of Object.entries(join)) {
+							const fields = schema[getDefaultModelName(joinModel)]?.fields;
+							if (!fields) continue;
+							fields.id = { type: "string" }; // make sure there is at least an id field
+							for (const [field, fieldAttr] of Object.entries(fields)) {
+								allSelects.push(
+									sql`${sql.ref(joinModel)}.${sql.ref(fieldAttr.fieldName || field)} as ${sql.ref(`_joined_${joinModel}_${fieldAttr.fieldName || field}`)}`,
+								);
+								allSelectsStr.push({
+									joinModel,
+									fieldName: fieldAttr.fieldName || field,
+								});
+							}
+						}
+						query = query.select(allSelects);
+					}
+
+					const res = await query.execute();
 					if (!res) return [];
-					return res as any;
+					if (join) {
+						return processJoinedResults(res, model, join, allSelectsStr);
+					}
+
+					return res;
 				},
 				async update({ model, where, update: values }) {
 					const { and, or } = convertWhereClause(model, where);

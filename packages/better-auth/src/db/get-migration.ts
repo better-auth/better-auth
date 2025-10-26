@@ -10,6 +10,9 @@ import { sql } from "kysely";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
+import { initGetModelName } from "../adapters/adapter-factory/get-model-name";
+import { initGetFieldName } from "../adapters/adapter-factory/get-field-name";
+import { getAuthTables } from "./get-tables";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text"],
@@ -345,6 +348,15 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 		return typeMap[type]![dbType || "sqlite"];
 	}
+	const getModelName = initGetModelName({
+		schema: getAuthTables(config),
+		usePlural: false,
+	});
+	const getFieldName = initGetFieldName({
+		schema: getAuthTables(config),
+		usePlural: false,
+	});
+
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
@@ -356,7 +368,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 						if (field.references) {
 							col = col
 								.references(
-									`${field.references.model}.${field.references.field}`,
+									`${getModelName(field.references.model)}.${getFieldName({ model: field.references.model, field: field.references.field })}`,
 								)
 								.onDelete(field.references.onDelete || "cascade");
 						}
@@ -414,7 +426,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
-							.references(`${field.references.model}.${field.references.field}`)
+						.references(
+							`${getModelName(field.references.model)}.${getFieldName({ model: field.references.model, field: field.references.field })}`,
+					)
 							.onDelete(field.references.onDelete || "cascade");
 					}
 

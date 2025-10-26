@@ -75,7 +75,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldName, debugLog }) => {
+		({
+			getFieldName,
+			getFieldAttributes,
+			getModelName,
+			getDefaultModelName,
+		}) => {
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
 				if (!schema) {
@@ -351,6 +356,81 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 				}
 			}
+
+
+			function nestJoinedResults(
+				results: any[],
+				baseModel: string,
+				join: Record<string, any> | undefined,
+			): any[] {
+				// If no joins or no results, return as-is
+				if (!join || !results.length) {
+					return results;
+				}
+
+				const joinedModels = Object.keys(join);
+
+				// Group results by base model and nest joined data as arrays
+				const grouped = new Map<string, any>();
+
+				for (const row of results) {
+					const baseData = row[baseModel];
+					const baseId = String(baseData.id);
+
+					if (!grouped.has(baseId)) {
+						const nested: Record<string, any> = { ...baseData };
+
+						// Initialize joined arrays
+						for (const joinedModel of joinedModels) {
+							const fieldAttributes = getFieldAttributes({
+								model: joinedModel,
+								field: join[joinedModel].on.to,
+							});
+							nested[getModelName(joinedModel)] = fieldAttributes.unique
+								? null
+								: [];
+						}
+
+						grouped.set(baseId, nested);
+					}
+
+					const nestedEntry = grouped.get(baseId)!;
+
+					// Add joined data to arrays
+					for (const joinedModel of joinedModels) {
+						// The Better-Auth CLI generates Drizzle field names with underscores instead of camel case.
+						// The results from JOIN from Drizzle includes the field names not as the schema/variable field names,
+						// rather the names defined in the DB. (which is the names with underscores)
+						// we need to check both underscores as well as using `getModelName` to get the correct field name.
+						let joinedData = row[getModelName(joinedModel)];
+						if (!joinedData) {
+							const underscoreModelName = joinedModel
+								.replace(/([A-Z])/g, "_$1")
+								.toLowerCase()
+								.replace(/^_/, "");
+							joinedData = row[underscoreModelName];
+						}
+
+						if (joinedData) {
+							const m = getModelName(joinedModel);
+							if (Array.isArray(nestedEntry[m])) {
+								if (!nestedEntry[m].some((item) => item.id === joinedData.id)) {
+									nestedEntry[m].push(joinedData);
+								}
+							} else {
+								nestedEntry[m] = joinedData;
+							}
+						}
+					}
+				}
+
+				const result = Array.from(grouped.values());
+
+				// For findOne, return single object; for findMany, return array
+				// The adapter factory will handle unwrapping based on schema's unique constraint
+				return result;
+			}
+
 			return {
 				async create({ model, data: values }) {
 					const schemaModel = getSchema(model);
@@ -359,22 +439,40 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const returned = await withReturning(model, builder, values);
 					return returned;
 				},
-				async findOne({ model, where }) {
+				async findOne({ model, where, join }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const res = await db
+					let query = await db
 						.select()
 						.from(schemaModel)
 						.where(...clause);
+						if (join) {
+							for (const [model, joinAttr] of Object.entries(join)) {
+								const joinModel = getSchema(model);
+								if (joinAttr.type === "inner") {
+									query = query.innerJoin(
+										joinModel,
+										eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
+									);
+								} else {
+									query = query.leftJoin(
+										joinModel,
+										eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
+									);
+								}
+							}
+						}
+						const res = await query;
 					if (!res.length) return null;
-					return res[0];
+					const joinedResult = nestJoinedResults(res, model, join);
+					return joinedResult[0];
 				},
-				async findMany({ model, where, sortBy, limit, offset }) {
+				async findMany({ model, where, sortBy, limit, offset, join }) {
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
 
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
-					const builder = db
+					let builder = db
 						.select()
 						.from(schemaModel)
 						.limit(limit || 100)
@@ -386,7 +484,25 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							),
 						);
 					}
-					return (await builder.where(...clause)) as any[];
+					if (join) {
+						for (const [model, joinAttr] of Object.entries(join)) {
+							const joinModel = getSchema(model);
+							if (joinAttr.type === "inner") {
+								builder = builder.innerJoin(
+									joinModel,
+									eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
+								);
+							} else {
+								builder = builder.leftJoin(
+									joinModel,
+									eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
+								);
+							}
+						}
+					}
+					const res = await builder.where(...clause);
+					const joinedResult = nestJoinedResults(res, model, join);
+					return joinedResult;
 				},
 				async count({ model, where }) {
 					const schemaModel = getSchema(model);

@@ -6,6 +6,10 @@ import {
 	type AdapterTestDebugLogs,
 	type CustomAdapter,
 	createAdapterFactory,
+	initGetDefaultFieldName,
+	initGetDefaultModelName,
+	initGetFieldName,
+	initGetModelName,
 } from "./adapter-factory";
 
 export * from "@better-auth/core/db/adapter";
@@ -18,8 +22,13 @@ export type {
 	CustomAdapter,
 	AdapterFactoryCustomizeAdapterCreator,
 };
-
-export { createAdapterFactory };
+export {
+	createAdapterFactory,
+	initGetDefaultFieldName,
+	initGetDefaultModelName,
+	initGetFieldName,
+	initGetModelName,
+};
 
 /**
  * @deprecated Use `createAdapterFactory` instead. This export will be removed in the next major version.

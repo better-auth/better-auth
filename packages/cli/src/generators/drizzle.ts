@@ -7,6 +7,7 @@ import type { BetterAuthOptions } from "better-auth/types";
 import { existsSync } from "fs";
 import prettier from "prettier";
 import type { SchemaGenerator } from "./types";
+import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 
 export function convertToSnakeCase(str: string, camelCase?: boolean) {
 	if (camelCase) {
@@ -38,9 +39,19 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 	let code: string = generateImport({ databaseType, tables, options });
 
+	const getModelName = initGetModelName({
+		schema: tables,
+		usePlural: adapter.options?.adapterConfig?.usePlural,
+	});
+
+	const getFieldName = initGetFieldName({
+		schema: tables,
+		usePlural: adapter.options?.adapterConfig?.usePlural,
+	});
+
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
-		const modelName = getModelName(table.modelName, adapter.options);
+		const modelName = getModelName(tableKey);
 		const fields = table.fields;
 
 		function getType(name: string, field: DBFieldAttribute) {
@@ -207,10 +218,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}${
 								attr.references
 									? `.references(()=> ${getModelName(
-											tables[attr.references.model]?.modelName ||
 												attr.references.model,
-											adapter.options,
-										)}.${fields[attr.references.field]?.fieldName || attr.references.field}, { onDelete: '${
+										)}.${getFieldName({ model: attr.references.model, field: attr.references.field })}, { onDelete: '${
 											attr.references.onDelete || "cascade"
 										}' })`
 									: ""

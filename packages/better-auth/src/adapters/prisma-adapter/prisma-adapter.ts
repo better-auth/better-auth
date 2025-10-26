@@ -3,6 +3,7 @@ import type {
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
+	Join,
 } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import {
@@ -11,6 +12,9 @@ import {
 	createAdapterFactory,
 } from "../adapter-factory";
 
+
+const uppercaseFirstLetter = (str: string) =>
+	str.charAt(0).toUpperCase() + str.slice(1);
 export interface PrismaConfig {
 	/**
 	 * Database provider.
@@ -69,7 +73,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(prisma: PrismaClient): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldName }) => {
+		({ getFieldName, getModelName }) => {
 			const db = prisma as PrismaClientInternal;
 
 			const convertSelect = (select?: string[], model?: string) => {
@@ -152,27 +156,67 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						select: convertSelect(select, model),
 					});
 				},
-				async findOne({ model, where, select }) {
+				async findOne({ model, where, select, join: _join }) {
+					// this is just "Join" type because we disabled join transformation in adapter config
+					const join = _join as unknown as Join | undefined;
 					const whereClause = convertWhereClause(model, where);
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					return await db[model]!.findFirst({
-						where: whereClause,
-						select: convertSelect(select, model),
-					});
-				},
-				async findMany({ model, where, limit, offset, sortBy }) {
-					const whereClause = convertWhereClause(model, where);
-					if (!db[model]) {
-						throw new BetterAuthError(
-							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
-						);
+					
+					// transform join keys to use Prisma expected field names
+					let include: Record<string, boolean> | undefined = undefined;
+					let map = new Map<string, string>();
+					if (join) {
+						include = {};
+						for (const [model, value] of Object.entries(join)) {
+							const key = `${uppercaseFirstLetter(getModelName(model))}s`;
+							include[key] = value;
+							map.set(key, getModelName(model));
+						}
 					}
 
-					return (await db[model]!.findMany({
+					let result = await db[model]!.findFirst({
+						where: whereClause,
+						select: include ? undefined : convertSelect(select, model), // Can't use `include` and `select` together
+						include,
+					});
+
+					// transform the resulting `include` items to use better-auth expected field names
+					if (join && result) {
+						for (const [includeKey, originalKey] of map.entries()) {
+							if (includeKey in result) {
+								result[originalKey] = result[includeKey];
+								delete result[includeKey];
+							}
+						}
+					}
+					return result;
+				},
+				async findMany({ model, where, limit, offset, sortBy, join: _join }) {
+					// this is just "Join" type because we disabled join transformation in adapter config
+					const join = _join as unknown as Join | undefined;
+					const whereClause = convertWhereClause(model, where);
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+// transform join keys to use Prisma expected field names
+let include: Record<string, boolean> | undefined = undefined;
+let map = new Map<string, string>();
+if (join) {
+	include = {};
+	for (const [model, value] of Object.entries(join)) {
+		const key = `${uppercaseFirstLetter(getModelName(model))}s`;
+		include[key] = value;
+		map.set(key, getModelName(model));
+	}
+}
+
+const result = await db[model]!.findMany({
 						where: whereClause,
 						take: limit || 100,
 						skip: offset || 0,
@@ -184,7 +228,22 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 									},
 								}
 							: {}),
-					})) as any[];
+							include,
+						});
+	
+						// transform the resulting `include` items to use better-auth expected field names
+						if (join && Array.isArray(result)) {
+							for (const item of result) {
+								for (const [includeKey, originalKey] of map.entries()) {
+									if (includeKey in item) {
+										item[originalKey] = item[includeKey];
+										delete item[includeKey];
+									}
+								}
+							}
+						}
+	
+						return result;
 				},
 				async count({ model, where }) {
 					const whereClause = convertWhereClause(model, where);
@@ -259,6 +318,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 								return cb(adapter);
 							})
 					: false,
+					disableTransformJoin: true
 		},
 		adapter: createCustomAdapter(prisma),
 	};
