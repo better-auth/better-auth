@@ -1,6 +1,11 @@
 "use client";
 
-import { RemoveScroll } from "react-remove-scroll";
+import { type UIMessage, type UseChatHelpers, useChat } from "@ai-sdk/react";
+import { Presence } from "@radix-ui/react-presence";
+import { DefaultChatTransport } from "ai";
+import Link from "fumadocs-core/link";
+import { buttonVariants } from "fumadocs-ui/components/ui/button";
+import { InfoIcon, Loader2, SearchIcon, Send, Trash2, X } from "lucide-react";
 import {
 	type ComponentProps,
 	createContext,
@@ -12,23 +17,18 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { InfoIcon, Loader2, SearchIcon, Send, Trash2, X } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { buttonVariants } from "fumadocs-ui/components/ui/button";
-import Link from "fumadocs-core/link";
+import { RemoveScroll } from "react-remove-scroll";
+import type { z } from "zod";
 import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
-import { type UIMessage, useChat, type UseChatHelpers } from "@ai-sdk/react";
-import type { ProvideLinksToolSchema } from "@/lib/chat/inkeep-qa-schema";
-import type { z } from "zod";
-import { DefaultChatTransport } from "ai";
-import { Markdown } from "./markdown";
-import { Presence } from "@radix-ui/react-presence";
-import { MessageFeedback } from "./message-feedback";
 import { useIsMobile } from "@/hooks/use-mobile";
+import type { ProvideLinksToolSchema } from "@/lib/chat/inkeep-qa-schema";
+import { cn } from "@/lib/utils";
+import { Markdown } from "./markdown";
+import { MessageFeedback } from "./message-feedback";
 
 const Context = createContext<{
 	open: boolean;
