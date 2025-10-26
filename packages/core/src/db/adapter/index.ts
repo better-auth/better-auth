@@ -439,7 +439,7 @@ export interface CustomAdapter {
 		model,
 		where,
 		select,
-		join
+		join,
 	}: {
 		model: string;
 		where: CleanedWhere[];

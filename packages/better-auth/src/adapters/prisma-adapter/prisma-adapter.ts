@@ -2,8 +2,8 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	DBAdapter,
 	DBAdapterDebugLogOption,
-	Where,
 	Join,
+	Where,
 } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import {
@@ -11,7 +11,6 @@ import {
 	type AdapterFactoryOptions,
 	createAdapterFactory,
 } from "../adapter-factory";
-
 
 const uppercaseFirstLetter = (str: string) =>
 	str.charAt(0).toUpperCase() + str.slice(1);
@@ -165,7 +164,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					
+
 					// transform join keys to use Prisma expected field names
 					let include: Record<string, boolean> | undefined = undefined;
 					let map = new Map<string, string>();
@@ -204,19 +203,19 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-// transform join keys to use Prisma expected field names
-let include: Record<string, boolean> | undefined = undefined;
-let map = new Map<string, string>();
-if (join) {
-	include = {};
-	for (const [model, value] of Object.entries(join)) {
-		const key = `${uppercaseFirstLetter(getModelName(model))}s`;
-		include[key] = value;
-		map.set(key, getModelName(model));
-	}
-}
+					// transform join keys to use Prisma expected field names
+					let include: Record<string, boolean> | undefined = undefined;
+					let map = new Map<string, string>();
+					if (join) {
+						include = {};
+						for (const [model, value] of Object.entries(join)) {
+							const key = `${uppercaseFirstLetter(getModelName(model))}s`;
+							include[key] = value;
+							map.set(key, getModelName(model));
+						}
+					}
 
-const result = await db[model]!.findMany({
+					const result = await db[model]!.findMany({
 						where: whereClause,
 						take: limit || 100,
 						skip: offset || 0,
@@ -228,22 +227,22 @@ const result = await db[model]!.findMany({
 									},
 								}
 							: {}),
-							include,
-						});
-	
-						// transform the resulting `include` items to use better-auth expected field names
-						if (join && Array.isArray(result)) {
-							for (const item of result) {
-								for (const [includeKey, originalKey] of map.entries()) {
-									if (includeKey in item) {
-										item[originalKey] = item[includeKey];
-										delete item[includeKey];
-									}
+						include,
+					});
+
+					// transform the resulting `include` items to use better-auth expected field names
+					if (join && Array.isArray(result)) {
+						for (const item of result) {
+							for (const [includeKey, originalKey] of map.entries()) {
+								if (includeKey in item) {
+									item[originalKey] = item[includeKey];
+									delete item[includeKey];
 								}
 							}
 						}
-	
-						return result;
+					}
+
+					return result;
 				},
 				async count({ model, where }) {
 					const whereClause = convertWhereClause(model, where);
@@ -318,7 +317,7 @@ const result = await db[model]!.findMany({
 								return cb(adapter);
 							})
 					: false,
-					disableTransformJoin: true
+			disableTransformJoin: true,
 		},
 		adapter: createCustomAdapter(prisma),
 	};

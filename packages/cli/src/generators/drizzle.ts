@@ -1,3 +1,4 @@
+import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import {
 	type BetterAuthDBSchema,
 	type DBFieldAttribute,
@@ -7,7 +8,6 @@ import type { BetterAuthOptions } from "better-auth/types";
 import { existsSync } from "fs";
 import prettier from "prettier";
 import type { SchemaGenerator } from "./types";
-import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 
 export function convertToSnakeCase(str: string, camelCase?: boolean) {
 	if (camelCase) {
@@ -218,7 +218,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}${
 								attr.references
 									? `.references(()=> ${getModelName(
-												attr.references.model,
+											attr.references.model,
 										)}.${getFieldName({ model: attr.references.model, field: attr.references.field })}, { onDelete: '${
 											attr.references.onDelete || "cascade"
 										}' })`

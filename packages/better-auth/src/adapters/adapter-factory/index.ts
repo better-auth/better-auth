@@ -12,15 +12,15 @@ import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
 import { generateId as defaultGenerateId } from "../../utils";
 import { safeJSONParse } from "../../utils/json";
+import { initGetDefaultFieldName } from "./get-default-field-name";
+import { initGetDefaultModelName } from "./get-default-model-name";
+import { initGetFieldName } from "./get-field-name";
+import { initGetModelName } from "./get-model-name";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 } from "./types";
-import { initGetDefaultModelName } from "./get-default-model-name";
-import { initGetDefaultFieldName } from "./get-default-field-name";
-import { initGetModelName } from "./get-model-name";
-import { initGetFieldName } from "./get-field-name";
 
 export {
 	initGetDefaultModelName,
@@ -76,8 +76,6 @@ export const createAdapterFactory =
 
 		// End-user's Better-Auth instance's schema
 		const schema = getAuthTables(options);
-
-	
 
 		const debugLog = (...args: any[]) => {
 			if (config.debugLogs === true || typeof config.debugLogs === "object") {
@@ -154,7 +152,6 @@ export const createAdapterFactory =
 			schema,
 			usePlural: config.usePlural,
 		});
-
 
 		const idField = ({
 			customModelName,

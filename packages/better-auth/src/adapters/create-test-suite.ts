@@ -3,14 +3,12 @@ import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { test } from "vitest";
 import { betterAuth } from "../auth";
+import { getAuthTables } from "../db/get-tables";
 import type { Account, Session, User, Verification } from "../types";
 import { generateId } from "../utils";
 import { createAdapterFactory } from "./adapter-factory";
 import type { Logger } from "./test-adapter";
 import { deepmerge } from "./utils";
-import { getAuthTables } from "../db/get-tables";
-
-
 
 type GenerateFn = <M extends "user" | "session" | "verification" | "account">(
 	Model: M,

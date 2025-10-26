@@ -47,7 +47,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 				}
 			},
 		},
-		adapter: ({ 
+		adapter: ({
 			getFieldName,
 			options,
 			debugLog,
@@ -55,7 +55,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 			getDefaultFieldName,
 			getFieldAttributes,
 			getModelName,
-		 }) => {
+		}) => {
 			const applySortToRecords = (
 				records: any[],
 				sortBy: { field: string; direction: "asc" | "desc" } | undefined,

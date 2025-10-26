@@ -2,14 +2,14 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	DBAdapter,
 	DBAdapterDebugLogOption,
-	Where,
 	ResolvedJoin,
+	Where,
 } from "@better-auth/core/db/adapter";
 import {
-	sql,
 	type InsertQueryBuilder,
 	type Kysely,
 	type RawBuilder,
+	sql,
 	type UpdateQueryBuilder,
 } from "kysely";
 import {
@@ -140,11 +140,7 @@ export const kyselyAdapter = (
 						}
 
 						if (operator.toLowerCase() === "not_in") {
-							return eb(
-								f,
-								"not in",
-								Array.isArray(value) ? value : [value],
-							);
+							return eb(f, "not in", Array.isArray(value) ? value : [value]);
 						}
 
 						if (operator === "contains") {
@@ -199,114 +195,111 @@ export const kyselyAdapter = (
 				};
 			}
 
-	// Helper function to process joined results
-	function processJoinedResults(
-		rows: any[],
-		baseModel: string,
-		joinConfig: ResolvedJoin | undefined,
-		allSelectsStr: { joinModel: string; fieldName: string }[],
-	) {
-		if (!joinConfig || !rows.length) {
-			return rows;
-		}
+			// Helper function to process joined results
+			function processJoinedResults(
+				rows: any[],
+				baseModel: string,
+				joinConfig: ResolvedJoin | undefined,
+				allSelectsStr: { joinModel: string; fieldName: string }[],
+			) {
+				if (!joinConfig || !rows.length) {
+					return rows;
+				}
 
-		// Group rows by main model ID
-		const groupedByMainId = new Map<string, any>();
+				// Group rows by main model ID
+				const groupedByMainId = new Map<string, any>();
 
-		for (const currentRow of rows) {
-			// Separate main model columns from joined columns
-			const mainModelFields: Record<string, any> = {};
-			const joinedModelFields: Record<string, Record<string, any>> = {};
+				for (const currentRow of rows) {
+					// Separate main model columns from joined columns
+					const mainModelFields: Record<string, any> = {};
+					const joinedModelFields: Record<string, Record<string, any>> = {};
 
-			// Initialize joined model fields map
-			for (const [joinModel] of Object.entries(joinConfig)) {
-				joinedModelFields[getModelName(joinModel)] = {};
-			}
-
-			// Distribute all columns - collect complete objects per model
-			for (const [key, value] of Object.entries(currentRow)) {
-				const keyStr = String(key);
-				let assigned = false;
-
-				// Check if this is a joined column
-				for (const { joinModel, fieldName } of allSelectsStr) {
-					if (keyStr === `_joined_${joinModel}_${fieldName}`) {
-						joinedModelFields[getModelName(joinModel)]![
-							getFieldName({
-								model: joinModel,
-								field: fieldName,
-							})
-						] = value;
-						assigned = true;
-						break;
+					// Initialize joined model fields map
+					for (const [joinModel] of Object.entries(joinConfig)) {
+						joinedModelFields[getModelName(joinModel)] = {};
 					}
-				}
 
-				if (!assigned) {
-					mainModelFields[key] = value;
-				}
-			}
+					// Distribute all columns - collect complete objects per model
+					for (const [key, value] of Object.entries(currentRow)) {
+						const keyStr = String(key);
+						let assigned = false;
 
-			const mainId = mainModelFields.id;
-			if (!mainId) continue;
+						// Check if this is a joined column
+						for (const { joinModel, fieldName } of allSelectsStr) {
+							if (keyStr === `_joined_${joinModel}_${fieldName}`) {
+								joinedModelFields[getModelName(joinModel)]![
+									getFieldName({
+										model: joinModel,
+										field: fieldName,
+									})
+								] = value;
+								assigned = true;
+								break;
+							}
+						}
 
-			// Initialize or get existing entry for this main model
-			if (!groupedByMainId.has(mainId)) {
-				const entry: Record<string, any> = { ...mainModelFields };
+						if (!assigned) {
+							mainModelFields[key] = value;
+						}
+					}
 
-				// Initialize joined models based on uniqueness
-				for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
-					const defaultModelName = getDefaultModelName(joinModel);
-					const fields = schema[defaultModelName]?.fields;
-					if (!fields) continue;
-					const joinFieldAttr = getFieldAttributes({
-						model: defaultModelName,
-						field: joinAttr.on.to,
-					});
-					const isUnique = joinFieldAttr?.unique ?? false;
-					entry[getModelName(joinModel)] = isUnique ? null : [];
-				}
+					const mainId = mainModelFields.id;
+					if (!mainId) continue;
 
-				groupedByMainId.set(mainId, entry);
-			}
+					// Initialize or get existing entry for this main model
+					if (!groupedByMainId.has(mainId)) {
+						const entry: Record<string, any> = { ...mainModelFields };
 
-			const entry = groupedByMainId.get(mainId)!;
+						// Initialize joined models based on uniqueness
+						for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
+							const defaultModelName = getDefaultModelName(joinModel);
+							const fields = schema[defaultModelName]?.fields;
+							if (!fields) continue;
+							const joinFieldAttr = getFieldAttributes({
+								model: defaultModelName,
+								field: joinAttr.on.to,
+							});
+							const isUnique = joinFieldAttr?.unique ?? false;
+							entry[getModelName(joinModel)] = isUnique ? null : [];
+						}
 
-			// Add joined records to the entry
-			for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
-				const defaultModelName = getDefaultModelName(joinModel);
-				const joinFieldAttr = getFieldAttributes({
-					model: defaultModelName,
-					field: joinAttr.on.to,
-				});
-				const isUnique = joinFieldAttr?.unique ?? false;
+						groupedByMainId.set(mainId, entry);
+					}
 
-				const joinedObj = joinedModelFields[getModelName(joinModel)];
-				if (isUnique) {
-					entry[getModelName(joinModel)] = joinedObj;
-				} else {
-					// For arrays, append if not already there (deduplicate by id)
-					if (
-						Array.isArray(entry[getModelName(defaultModelName)]) &&
-						joinedObj?.id
-					) {
-						if (
-							!entry[getModelName(defaultModelName)].some(
-								(item: any) => item.id === joinedObj.id,
-							)
-						) {
-							entry[getModelName(defaultModelName)].push(joinedObj);
+					const entry = groupedByMainId.get(mainId)!;
+
+					// Add joined records to the entry
+					for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
+						const defaultModelName = getDefaultModelName(joinModel);
+						const joinFieldAttr = getFieldAttributes({
+							model: defaultModelName,
+							field: joinAttr.on.to,
+						});
+						const isUnique = joinFieldAttr?.unique ?? false;
+
+						const joinedObj = joinedModelFields[getModelName(joinModel)];
+						if (isUnique) {
+							entry[getModelName(joinModel)] = joinedObj;
+						} else {
+							// For arrays, append if not already there (deduplicate by id)
+							if (
+								Array.isArray(entry[getModelName(defaultModelName)]) &&
+								joinedObj?.id
+							) {
+								if (
+									!entry[getModelName(defaultModelName)].some(
+										(item: any) => item.id === joinedObj.id,
+									)
+								) {
+									entry[getModelName(defaultModelName)].push(joinedObj);
+								}
+							}
 						}
 					}
 				}
+
+				return Array.from(groupedByMainId.values());
 			}
-		}
-
-		return Array.from(groupedByMainId.values());
-	}
-
-
-
 
 			return {
 				async create({ data, model }) {
@@ -327,7 +320,7 @@ export const kyselyAdapter = (
 							eb.or(or.map((expr: any) => expr(eb))),
 						);
 					}
-					
+
 					if (join) {
 						// Add joins
 						for (const [joinModel, joinAttr] of Object.entries(join)) {

@@ -357,7 +357,6 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				}
 			}
 
-
 			function nestJoinedResults(
 				results: any[],
 				baseModel: string,
@@ -446,23 +445,23 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.select()
 						.from(schemaModel)
 						.where(...clause);
-						if (join) {
-							for (const [model, joinAttr] of Object.entries(join)) {
-								const joinModel = getSchema(model);
-								if (joinAttr.type === "inner") {
-									query = query.innerJoin(
-										joinModel,
-										eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
-									);
-								} else {
-									query = query.leftJoin(
-										joinModel,
-										eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
-									);
-								}
+					if (join) {
+						for (const [model, joinAttr] of Object.entries(join)) {
+							const joinModel = getSchema(model);
+							if (joinAttr.type === "inner") {
+								query = query.innerJoin(
+									joinModel,
+									eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
+								);
+							} else {
+								query = query.leftJoin(
+									joinModel,
+									eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
+								);
 							}
 						}
-						const res = await query;
+					}
+					const res = await query;
 					if (!res.length) return null;
 					const joinedResult = nestJoinedResults(res, model, join);
 					return joinedResult[0];

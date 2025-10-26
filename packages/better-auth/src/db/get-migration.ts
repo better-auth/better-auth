@@ -7,11 +7,11 @@ import type {
 	Kysely,
 } from "kysely";
 import { sql } from "kysely";
+import { initGetFieldName } from "../adapters/adapter-factory/get-field-name";
+import { initGetModelName } from "../adapters/adapter-factory/get-model-name";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
-import { initGetModelName } from "../adapters/adapter-factory/get-model-name";
-import { initGetFieldName } from "../adapters/adapter-factory/get-field-name";
 import { getAuthTables } from "./get-tables";
 
 const postgresMap = {
@@ -426,9 +426,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
-						.references(
-							`${getModelName(field.references.model)}.${getFieldName({ model: field.references.model, field: field.references.field })}`,
-					)
+							.references(
+								`${getModelName(field.references.model)}.${getFieldName({ model: field.references.model, field: field.references.field })}`,
+							)
 							.onDelete(field.references.onDelete || "cascade");
 					}
 

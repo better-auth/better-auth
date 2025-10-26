@@ -299,7 +299,7 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(result).toEqual({
 				...session,
-				user: user
+				user: user,
 			});
 		},
 		"findOne - should return an object for one-to-one joins": async () => {
@@ -1602,8 +1602,6 @@ export const getNormalTestSuiteTests = ({
 			},
 	};
 };
-
-
 
 const getTestKeys = () => Object.keys(getNormalTestSuiteTests({} as any));
 type TestKeys = Partial<

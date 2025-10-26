@@ -23,7 +23,7 @@ export const testAdapter = async ({
 	prefixTests,
 	onFinish,
 	customIdGenerator,
-	skipPostTestCleanup
+	skipPostTestCleanup,
 }: {
 	/**
 	 * A function that will return the adapter instance to test with.
@@ -207,7 +207,7 @@ export const testAdapter = async ({
 						logger.warn(
 							"Warning: Skipping post test cleanup as `skipPostTestCleanup` is true",
 						);
-				}
+					}
 					await onFinish?.();
 				}, 20000);
 

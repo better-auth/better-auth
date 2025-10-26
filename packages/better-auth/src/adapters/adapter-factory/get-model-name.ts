@@ -4,7 +4,7 @@ import { initGetDefaultModelName } from "./get-default-model-name";
 export const initGetModelName = ({
 	usePlural,
 	schema,
-}: { 
+}: {
 	usePlural: boolean | undefined;
 	schema: BetterAuthDBSchema;
 }) => {
