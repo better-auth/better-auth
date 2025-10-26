@@ -441,7 +441,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				async findOne({ model, where, join }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					let query = await db
+					let query = db
 						.select()
 						.from(schemaModel)
 						.where(...clause);
