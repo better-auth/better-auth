@@ -861,7 +861,7 @@ export const getNormalTestSuiteTests = ({
 					throw error;
 				}
 			},
-		"findMany - should find many models with with multiple sortBy":
+		"findMany - should find many models with multiple sortBy":
 			async () => {
 				const users = [
 					{ name: "a", email: "a@email.com" },
