@@ -1,18 +1,18 @@
+import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	Account,
 	BetterAuthDBSchema,
+	DBPreservedModels,
 	SecondaryStorage,
 	Session,
 	User,
 	Verification,
 } from "../db";
-import type { OAuthProvider } from "../oauth2";
-import { createLogger } from "../env";
 import type { DBAdapter, Where } from "../db/adapter";
+import { createLogger } from "../env";
+import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookies } from "./cookie";
-import type { DBPreservedModels } from "../db/type";
 import type { LiteralUnion } from "./helper";
-import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
@@ -31,21 +31,18 @@ export interface InternalAdapter<
 		user: Omit<User, "id" | "createdAt" | "updatedAt">,
 		account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 			Partial<Account>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<{ user: User; account: Account }>;
 
 	createUser<T extends Record<string, any>>(
 		user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 			Partial<User> &
 			Record<string, any>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<T & User>;
 
 	createAccount<T extends Record<string, any>>(
 		account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 			Partial<Account> &
 			T,
-		context?: GenericEndpointContext<Options>,
 	): Promise<T & Account>;
 
 	listSessions(userId: string): Promise<Session[]>;
@@ -59,14 +56,10 @@ export interface InternalAdapter<
 
 	countTotalUsers(where?: Where[]): Promise<number>;
 
-	deleteUser(
-		userId: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	deleteUser(userId: string): Promise<void>;
 
 	createSession(
 		userId: string,
-		ctx: GenericEndpointContext<Options>,
 		dontRememberMe?: boolean,
 		override?: Partial<Session> & Record<string, any>,
 		overrideAll?: boolean,
@@ -84,25 +77,15 @@ export interface InternalAdapter<
 	updateSession(
 		sessionToken: string,
 		session: Partial<Session> & Record<string, any>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<Session | null>;
 
 	deleteSession(token: string): Promise<void>;
 
-	deleteAccounts(
-		userId: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	deleteAccounts(userId: string): Promise<void>;
 
-	deleteAccount(
-		accountId: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	deleteAccount(accountId: string): Promise<void>;
 
-	deleteSessions(
-		userIdOrSessionTokens: string | string[],
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	deleteSessions(userIdOrSessionTokens: string | string[]): Promise<void>;
 
 	findOAuthUser(
 		email: string,
@@ -119,27 +102,20 @@ export interface InternalAdapter<
 
 	linkAccount(
 		account: Omit<Account, "id" | "createdAt" | "updatedAt"> & Partial<Account>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<Account>;
 
 	// fixme: any type
 	updateUser(
 		userId: string,
 		data: Partial<User> & Record<string, any>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<any>;
 
 	updateUserByEmail(
 		email: string,
 		data: Partial<User & Record<string, any>>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<User>;
 
-	updatePassword(
-		userId: string,
-		password: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	updatePassword(userId: string, password: string): Promise<void>;
 
 	findAccounts(userId: string): Promise<Account[]>;
 
@@ -152,34 +128,22 @@ export interface InternalAdapter<
 
 	findAccountByUserId(userId: string): Promise<Account[]>;
 
-	updateAccount(
-		id: string,
-		data: Partial<Account>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<Account>;
+	updateAccount(id: string, data: Partial<Account>): Promise<Account>;
 
 	createVerificationValue(
 		data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 			Partial<Verification>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<Verification>;
 
 	findVerificationValue(identifier: string): Promise<Verification | null>;
 
-	deleteVerificationValue(
-		id: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	deleteVerificationValue(id: string): Promise<void>;
 
-	deleteVerificationByIdentifier(
-		identifier: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	deleteVerificationByIdentifier(identifier: string): Promise<void>;
 
 	updateVerificationValue(
 		id: string,
 		data: Partial<Verification>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<Verification>;
 }
 
@@ -202,11 +166,20 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		appName: string;
 		baseURL: string;
 		trustedOrigins: string[];
-		oauthConfig?: {
+		oauthConfig: {
 			/**
 			 * This is dangerous and should only be used in dev or staging environments.
 			 */
 			skipStateCookieCheck?: boolean;
+			/**
+			 * Strategy for storing OAuth state
+			 *
+			 * - "cookie": Store state in an encrypted cookie (stateless)
+			 * - "database": Store state in the database
+			 *
+			 * @default "cookie"
+			 */
+			storeStateStrategy: "database" | "cookie";
 		};
 		/**
 		 * New session that will be set after the request
@@ -245,6 +218,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			updateAge: number;
 			expiresIn: number;
 			freshAge: number;
+			cookieFreshCache: number | false;
 		};
 		generateId: (options: {
 			model: LiteralUnion<DBPreservedModels, string>;
@@ -267,4 +241,25 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			anonymousId?: string;
 			payload: Record<string, any>;
 		}) => Promise<void>;
+		/**
+		 * This skips the origin check for all requests.
+		 *
+		 * set to true by default for `test` environments and `false`
+		 * for other environments.
+		 *
+		 * It's inferred from the `options.advanced?.disableCSRFCheck`
+		 * option or `options.advanced?.disableOriginCheck` option.
+		 *
+		 * @default false
+		 */
+		skipOriginCheck: boolean;
+		/**
+		 * This skips the CSRF check for all requests.
+		 *
+		 * This is inferred from the `options.advanced?.
+		 * disableCSRFCheck` option.
+		 *
+		 * @default false
+		 */
+		skipCSRFCheck: boolean;
 	};

@@ -1,45 +1,26 @@
-import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../test-utils/test-instance";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { DEFAULT_SECRET } from "../utils/constants";
-import { getOAuth2Tokens } from "@better-auth/core/oauth2";
-import { signJWT } from "../crypto/jwt";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { signJWT } from "../crypto";
+import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
+import { DEFAULT_SECRET } from "../utils/constants";
 
 let mockEmail = "";
 let mockEmailVerified = true;
 
-vi.mock("@better-auth/core/oauth2", async (importOriginal) => {
-	const original = (await importOriginal()) as any;
-	return {
-		...original,
-		validateAuthorizationCode: vi.fn().mockImplementation(async () => {
-			const profile: GoogleProfile = {
-				email: mockEmail,
-				email_verified: mockEmailVerified,
-				name: "Test User",
-				picture: "https://example.com/photo.jpg",
-				exp: 1234567890,
-				sub: "google_oauth_sub_1234567890",
-				iat: 1234567890,
-				aud: "test",
-				azp: "test",
-				nbf: 1234567890,
-				iss: "test",
-				locale: "en",
-				jti: "test",
-				given_name: "Test",
-				family_name: "User",
-			};
-			const idToken = await signJWT(profile, DEFAULT_SECRET);
-			return getOAuth2Tokens({
-				access_token: "test_access_token",
-				refresh_token: "test_refresh_token",
-				id_token: idToken,
-			});
-		}),
-	};
+const server = setupServer();
+
+beforeAll(() => {
+	server.listen({ onUnhandledRequest: "bypass" });
 });
+
+afterEach(() => {
+	server.resetHandlers();
+});
+
+afterAll(() => server.close());
 
 describe("oauth2 - email verification on link", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({
@@ -65,6 +46,34 @@ describe("oauth2 - email verification on link", async () => {
 	const ctx = await auth.$context;
 
 	async function linkGoogleAccount() {
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email: mockEmail,
+					email_verified: mockEmailVerified,
+					name: "Test User",
+					picture: "https://example.com/photo.jpg",
+					exp: 1234567890,
+					sub: "google_oauth_sub_1234567890",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Test",
+					family_name: "User",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
 		const oAuthHeaders = new Headers();
 		const signInRes = await client.signIn.social({
 			provider: "google",

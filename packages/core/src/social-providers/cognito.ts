@@ -1,14 +1,14 @@
 import { betterFetch } from "@better-fetch/fetch";
+import { APIError } from "better-call";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	refreshAccessToken,
 	validateAuthorizationCode,
-} from "@better-auth/core/oauth2";
-import { logger } from "@better-auth/core/env";
-import { refreshAccessToken } from "@better-auth/core/oauth2";
-import { APIError } from "better-call";
+} from "../oauth2";
 
 export interface CognitoProfile {
 	sub: string;

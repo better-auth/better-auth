@@ -1,7 +1,7 @@
-import Section from "@/components/landing/section";
-import Hero from "@/components/landing/hero";
-import Features from "@/components/features";
 import Link from "next/link";
+import Features from "@/components/features";
+import Hero from "@/components/landing/hero";
+import Section from "@/components/landing/section";
 
 async function getGitHubStars() {
 	try {
@@ -66,7 +66,7 @@ export default async function HomePage() {
 			>
 				<Hero />
 				<Features stars={stars} />
-				<hr className="h-px bg-gray-200" />
+				<hr className="h-px bg-border" />
 			</Section>
 		</main>
 	);

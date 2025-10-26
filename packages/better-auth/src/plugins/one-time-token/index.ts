@@ -1,11 +1,13 @@
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { defaultKeyHasher } from "..";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { sessionMiddleware } from "../../api";
 import { generateRandomString } from "../../crypto";
-import type { BetterAuthPlugin } from "@better-auth/core";
 import type { Session, User } from "../../types";
-import type { GenericEndpointContext } from "@better-auth/core";
+import { defaultKeyHasher } from "..";
 
 interface OneTimeTokenOptions {
 	/**

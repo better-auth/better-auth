@@ -1,9 +1,9 @@
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { describe, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { createAuthClient } from "../../client";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { originCheck } from "./origin-check";
 import * as z from "zod";
+import { createAuthClient } from "../../client";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { isSimpleRequest, originCheck } from "./origin-check";
 
 describe("Origin Check", async (it) => {
 	const { customFetchImpl, testUser } = await getTestInstance({
@@ -19,6 +19,7 @@ describe("Origin Check", async (it) => {
 		},
 		advanced: {
 			disableCSRFCheck: false,
+			disableOriginCheck: false,
 		},
 	});
 
@@ -391,6 +392,60 @@ describe("Origin Check", async (it) => {
 		});
 		expect(httpRes.error?.status).toBe(403);
 	});
+
+	it("should work with custom scheme wildcards (e.g. exp:// for Expo)", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: [
+				"exp://10.0.0.*:*/*",
+				"exp://192.168.*.*:*/*",
+				"exp://172.*.*.*:*/*",
+			],
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword(url, user) {},
+			},
+		});
+
+		// Test custom scheme with wildcard - should work
+		const expoClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		// Test with IP matching the wildcard pattern
+		const resWithIP = await expoClient.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "exp://10.0.0.29:8081/--/",
+		});
+		expect(resWithIP.data?.user).toBeDefined();
+
+		// Test with different IP range that matches
+		const resWithIP2 = await expoClient.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "exp://192.168.1.100:8081/--/",
+		});
+		expect(resWithIP2.data?.user).toBeDefined();
+
+		// Test with different IP range that matches
+		const resWithIP3 = await expoClient.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "exp://172.16.0.1:8081/--/",
+		});
+		expect(resWithIP3.data?.user).toBeDefined();
+
+		// Test with IP that doesn't match any pattern - should fail
+		const resWithUnmatchedIP = await expoClient.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "exp://203.0.113.0:8081/--/",
+		});
+		expect(resWithUnmatchedIP.error?.status).toBe(403);
+	});
 });
 
 describe("origin check middleware", async (it) => {
@@ -434,4 +489,38 @@ describe("origin check middleware", async (it) => {
 		);
 		expect(sampleInternalEndpointInvalid.error?.status).toBe(403);
 	});
+});
+
+describe("is simple request", async (it) => {
+	it("should return true for simple requests", async () => {
+		const request = new Request("http://localhost:3000/test", {
+			method: "GET",
+		});
+		const isSimple = isSimpleRequest(request.headers);
+		expect(isSimple).toBe(true);
+	});
+
+	it("should return false for non-simple requests", async () => {
+		const request = new Request("http://localhost:3000/test", {
+			method: "POST",
+			headers: {
+				"custom-header": "value",
+			},
+		});
+		const isSimple = isSimpleRequest(request.headers);
+		expect(isSimple).toBe(false);
+	});
+
+	it("should return false for requests with a content type that is not simple", async () => {
+		const request = new Request("http://localhost:3000/test", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+			},
+		});
+		const isSimple = isSimpleRequest(request.headers);
+		expect(isSimple).toBe(false);
+	});
+
+	it;
 });

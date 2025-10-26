@@ -1,19 +1,19 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.4.0-beta.9",
+  "version": "1.4.0-beta.13",
+  "type": "module",
   "description": "The CLI for Better Auth",
-  "module": "dist/index.mjs",
+  "module": "dist/index.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",
     "directory": "packages/cli"
   },
   "homepage": "https://www.better-auth.com/docs/concepts/cli",
-  "main": "./dist/index.mjs",
+  "main": "./dist/index.js",
   "scripts": {
-    "build": "unbuild",
-    "stub": "unbuild --stub",
-    "start": "node ./dist/index.mjs",
+    "build": "tsdown",
+    "start": "node ./dist/index.js",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
     "typecheck": "tsc --project tsconfig.json"
@@ -21,7 +21,7 @@
   "publishConfig": {
     "access": "public",
     "executableFiles": [
-      "./dist/index.mjs"
+      "./dist/index.js"
     ]
   },
   "license": "MIT",
@@ -31,13 +31,13 @@
     "typescript",
     "better-auth"
   ],
-  "exports": "./dist/index.mjs",
-  "bin": "./dist/index.mjs",
+  "exports": "./dist/index.js",
+  "bin": "./dist/index.js",
   "devDependencies": {
     "@types/semver": "^7.7.1",
-    "tsx": "^4.20.5",
-    "typescript": "catalog:",
-    "unbuild": "catalog:"
+    "tsdown": "catalog:",
+    "tsx": "^4.20.6",
+    "typescript": "catalog:"
   },
   "dependencies": {
     "@babel/core": "^7.28.4",

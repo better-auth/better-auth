@@ -1,24 +1,27 @@
-import { APIError } from "better-call";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
-import { getDate } from "../../utils/date";
+} from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { base64Url } from "@better-auth/utils/base64";
+import { binary } from "@better-auth/utils/binary";
+import { createHMAC } from "@better-auth/utils/hmac";
+import { APIError } from "better-call";
+import * as z from "zod";
 import {
 	deleteSessionCookie,
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
-import * as z from "zod";
+import { symmetricDecodeJWT } from "../../crypto/jwt";
 import type { InferSession, InferUser, Session, User } from "../../types";
-import type { BetterAuthOptions } from "@better-auth/core";
 import type { Prettify } from "../../types/helper";
+import { getDate } from "../../utils/date";
 import { safeJSONParse } from "../../utils/json";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { createHMAC } from "@better-auth/utils/hmac";
-import { base64Url } from "@better-auth/utils/base64";
-import { binary } from "@better-auth/utils/binary";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 export const getSessionQuerySchema = z.optional(
 	z.object({
@@ -76,7 +79,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				},
 			},
 		},
-		async (ctx) => {
+		async (
+			ctx,
+		): Promise<{
+			session: InferSession<Option>;
+			user: InferUser<Option>;
+		} | null> => {
 			try {
 				const sessionCookieToken = await ctx.getSignedCookie(
 					ctx.context.authCookies.sessionToken.name,
@@ -86,35 +94,83 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (!sessionCookieToken) {
 					return null;
 				}
+
 				const sessionDataCookie = ctx.getCookie(
 					ctx.context.authCookies.sessionData.name,
 				);
-				const sessionDataPayload = sessionDataCookie
-					? safeJSONParse<{
+
+				let sessionDataPayload: {
+					session: {
+						session: Session;
+						user: User;
+						updatedAt: number;
+					};
+					expiresAt: number;
+				} | null = null;
+
+				if (sessionDataCookie) {
+					const strategy =
+						ctx.context.options.session?.cookieCache?.strategy || "base64-hmac";
+
+					if (strategy === "jwt") {
+						// Decode JWT (JWE with A256CBC-HS512 + HKDF)
+						const payload = await symmetricDecodeJWT<{
+							session: Session;
+							user: User;
+							updatedAt: number;
+							exp?: number;
+						}>(sessionDataCookie, ctx.context.secret, "better-auth-session");
+
+						if (payload && payload.session && payload.user) {
+							sessionDataPayload = {
+								session: {
+									session: payload.session,
+									user: payload.user,
+									updatedAt: payload.updatedAt,
+								},
+								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
+							};
+						} else {
+							const dataCookie = ctx.context.authCookies.sessionData.name;
+							ctx.setCookie(dataCookie, "", {
+								maxAge: 0,
+							});
+							return ctx.json(null);
+						}
+					} else {
+						// Decode base64-hmac (legacy)
+						const parsed = safeJSONParse<{
 							session: {
 								session: Session;
 								user: User;
+								updatedAt: number;
 							};
 							signature: string;
 							expiresAt: number;
-						}>(binary.decode(base64Url.decode(sessionDataCookie)))
-					: null;
+						}>(binary.decode(base64Url.decode(sessionDataCookie)));
 
-				if (sessionDataPayload) {
-					const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
-						ctx.context.secret,
-						JSON.stringify({
-							...sessionDataPayload.session,
-							expiresAt: sessionDataPayload.expiresAt,
-						}),
-						sessionDataPayload.signature,
-					);
-					if (!isValid) {
-						const dataCookie = ctx.context.authCookies.sessionData.name;
-						ctx.setCookie(dataCookie, "", {
-							maxAge: 0,
-						});
-						return ctx.json(null);
+						if (parsed) {
+							const isValid = await createHMAC(
+								"SHA-256",
+								"base64urlnopad",
+							).verify(
+								ctx.context.secret,
+								JSON.stringify({
+									...parsed.session,
+									expiresAt: parsed.expiresAt,
+								}),
+								parsed.signature,
+							);
+							if (isValid) {
+								sessionDataPayload = parsed;
+							} else {
+								const dataCookie = ctx.context.authCookies.sessionData.name;
+								ctx.setCookie(dataCookie, "", {
+									maxAge: 0,
+								});
+								return ctx.json(null);
+							}
+						}
 					}
 				}
 
@@ -122,8 +178,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.authCookies.dontRememberToken.name,
 					ctx.context.secret,
 				);
+
 				/**
-				 * If session data is present in the cookie, return it
+				 * If session data is present in the cookie, check if it should be used or refreshed
 				 */
 				if (
 					sessionDataPayload?.session &&
@@ -134,19 +191,45 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					const hasExpired =
 						sessionDataPayload.expiresAt < Date.now() ||
 						session.session.expiresAt < new Date();
-					if (!hasExpired) {
-						ctx.context.session = session;
-						return ctx.json(
-							session as {
-								session: InferSession<Option>;
-								user: InferUser<Option>;
-							},
-						);
-					} else {
+					if (hasExpired) {
+						// When the session data cookie has expired, delete it;
+						//  then we try to fetch from DB
 						const dataCookie = ctx.context.authCookies.sessionData.name;
 						ctx.setCookie(dataCookie, "", {
 							maxAge: 0,
 						});
+					} else {
+						// Check if the cookie cache needs to be refreshed based on freshCache
+						const cookieFreshCache = ctx.context.sessionConfig.cookieFreshCache;
+
+						if (cookieFreshCache === false) {
+							// If freshCache is disabled, we don't need to check for freshness
+							//  return the session from cookie
+							ctx.context.session = session;
+							return ctx.json({
+								session: session.session,
+								user: session.user,
+							} as {
+								session: InferSession<Option>;
+								user: InferUser<Option>;
+							});
+						}
+
+						// If freshCache is enabled (number), check if cache is still fresh
+						const updatedAt = sessionDataPayload.session.updatedAt ?? 0;
+						const cacheIsFresh =
+							updatedAt + cookieFreshCache * 1000 > Date.now();
+
+						if (cacheIsFresh) {
+							ctx.context.session = session;
+							return ctx.json({
+								session: session.session,
+								user: session.user,
+							} as {
+								session: InferSession<Option>;
+								user: InferUser<Option>;
+							});
+						}
 					}
 				}
 
@@ -154,6 +237,24 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
 				ctx.context.session = session;
 				if (!session || session.session.expiresAt < new Date()) {
+					if (
+						sessionDataPayload &&
+						ctx.context.sessionConfig.cookieFreshCache !== false
+					) {
+						const maxAge = (sessionDataPayload.expiresAt - Date.now()) / 1000;
+						// We still want to refresh the cookie if the session is not found.
+						// This could happen if the user doesn't provide a database, so we store the session in cookie only
+						await setSessionCookie(ctx, sessionDataPayload.session, false, {
+							maxAge,
+						});
+						return ctx.json({
+							session: sessionDataPayload.session.session,
+							user: sessionDataPayload.session.user,
+						} as {
+							session: InferSession<Option>;
+							user: InferUser<Option>;
+						});
+					}
 					deleteSessionCookie(ctx);
 					if (session) {
 						/**

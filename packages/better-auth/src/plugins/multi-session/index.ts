@@ -1,16 +1,17 @@
-import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../api";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
+import { defineErrorCodes } from "@better-auth/core/utils";
+import * as z from "zod";
+import { APIError, sessionMiddleware } from "../../api";
 import {
 	deleteSessionCookie,
 	parseCookies,
 	parseSetCookieHeader,
 	setSessionCookie,
 } from "../../cookies";
-import type { BetterAuthPlugin } from "@better-auth/core";
 
 interface MultiSessionConfig {
 	/**
@@ -21,6 +22,9 @@ interface MultiSessionConfig {
 	maximumSessions?: number;
 }
 
+const ERROR_CODES = defineErrorCodes({
+	INVALID_SESSION_TOKEN: "Invalid session token",
+});
 export const multiSession = (options?: MultiSessionConfig) => {
 	const opts = {
 		maximumSessions: 5,
@@ -28,10 +32,6 @@ export const multiSession = (options?: MultiSessionConfig) => {
 	};
 
 	const isMultiSessionCookie = (key: string) => key.includes("_multi-");
-
-	const ERROR_CODES = {
-		INVALID_SESSION_TOKEN: "Invalid session token",
-	} as const;
 
 	return {
 		id: "multi-session",

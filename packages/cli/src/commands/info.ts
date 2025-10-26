@@ -1,9 +1,9 @@
-import { Command } from "commander";
-import os from "os";
-import { execSync } from "child_process";
-import { existsSync, readFileSync } from "fs";
-import path from "path";
 import chalk from "chalk";
+import { execSync } from "child_process";
+import { Command } from "commander";
+import { existsSync, readFileSync } from "fs";
+import os from "os";
+import path from "path";
 import { getConfig } from "../utils/get-config";
 import { getPackageInfo } from "../utils/get-package-info";
 

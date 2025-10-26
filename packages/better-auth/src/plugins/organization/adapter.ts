@@ -1,6 +1,10 @@
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import { getCurrentAdapter } from "@better-auth/core/context";
+import { BetterAuthError } from "@better-auth/core/error";
+import parseJSON from "../../client/parser";
+import { type InferAdditionalFieldsFromPluginOptions } from "../../db";
 import type { Session, User } from "../../types";
 import { getDate } from "../../utils/date";
-import type { OrganizationOptions } from "./types";
 import type {
 	InferInvitation,
 	InferMember,
@@ -14,11 +18,7 @@ import type {
 	TeamInput,
 	TeamMember,
 } from "./schema";
-import { BetterAuthError } from "@better-auth/core/error";
-import parseJSON from "../../client/parser";
-import { type InferAdditionalFieldsFromPluginOptions } from "../../db";
-import { getCurrentAdapter } from "../../context/transaction";
-import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import type { OrganizationOptions } from "./types";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
@@ -386,7 +386,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				{
 					activeOrganizationId: organizationId,
 				},
-				ctx,
 			);
 			return session as Session;
 		},
@@ -705,7 +704,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				{
 					activeTeamId: teamId,
 				},
-				ctx,
 			);
 			return session as Session;
 		},
@@ -818,7 +816,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 		removeTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			await adapter.delete({
+			// use `deleteMany` instead of `delete` since Prisma requires 1 unique field for normal `delete` operations
+			// FKs do not count thus breaking the operation. As a solution, we'll use `deleteMany` instead.
+			await adapter.deleteMany({
 				model: "teamMember",
 				where: [
 					{

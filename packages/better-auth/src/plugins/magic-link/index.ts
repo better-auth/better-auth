@@ -1,13 +1,15 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
+import * as z from "zod";
+import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { originCheck } from "../../api";
 import { defaultKeyHasher } from "./utils";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 interface MagicLinkopts {
 	/**
@@ -179,16 +181,11 @@ export const magicLink = (options: MagicLinkopts) => {
 						? await opts.generateToken(email)
 						: generateRandomString(32, "a-z", "A-Z");
 					const storedToken = await storeToken(ctx, verificationToken);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							identifier: storedToken,
-							value: JSON.stringify({ email, name: ctx.body.name }),
-							expiresAt: new Date(
-								Date.now() + (opts.expiresIn || 60 * 5) * 1000,
-							),
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: storedToken,
+						value: JSON.stringify({ email, name: ctx.body.name }),
+						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
+					});
 					const realBaseURL = new URL(ctx.context.baseURL);
 					const pathname =
 						realBaseURL.pathname === "/" ? "" : realBaseURL.pathname;
@@ -365,14 +362,11 @@ export const magicLink = (options: MagicLinkopts) => {
 
 					if (!user) {
 						if (!opts.disableSignUp) {
-							const newUser = await ctx.context.internalAdapter.createUser(
-								{
-									email: email,
-									emailVerified: true,
-									name: name || "",
-								},
-								ctx,
-							);
+							const newUser = await ctx.context.internalAdapter.createUser({
+								email: email,
+								emailVerified: true,
+								name: name || "",
+							});
 							isNewUser = true;
 							user = newUser;
 							if (!user) {
@@ -388,18 +382,13 @@ export const magicLink = (options: MagicLinkopts) => {
 					}
 
 					if (!user.emailVerified) {
-						await ctx.context.internalAdapter.updateUser(
-							user.id,
-							{
-								emailVerified: true,
-							},
-							ctx,
-						);
+						await ctx.context.internalAdapter.updateUser(user.id, {
+							emailVerified: true,
+						});
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx,
 					);
 
 					if (!session) {

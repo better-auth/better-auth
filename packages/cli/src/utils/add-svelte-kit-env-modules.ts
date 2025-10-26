@@ -1,5 +1,5 @@
-import path from "path";
 import fs from "fs";
+import path from "path";
 
 /**
  * Adds SvelteKit environment modules and path aliases

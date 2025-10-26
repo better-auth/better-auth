@@ -1,15 +1,15 @@
-import type { Migration } from "kysely";
-import type { AuthContext } from "./context";
 import type {
 	Endpoint,
 	EndpointContext,
 	InputContext,
 	Middleware,
 } from "better-call";
+import type { Migration } from "kysely";
+import type { AuthMiddleware } from "../api";
 import type { BetterAuthPluginDBSchema } from "../db";
+import type { AuthContext } from "./context";
 import type { LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
-import type { AuthMiddleware } from "../middleware";
 
 type Awaitable<T> = T | Promise<T>;
 type DeepPartial<T> = T extends Function
@@ -18,14 +18,16 @@ type DeepPartial<T> = T extends Function
 		? { [K in keyof T]?: DeepPartial<T[K]> }
 		: T;
 
-type HookEndpointContext = EndpointContext<string, any> &
-	Omit<InputContext<string, any>, "method"> & {
-		context: AuthContext & {
-			returned?: unknown;
-			responseHeaders?: Headers;
-		};
-		headers?: Headers;
+export type HookEndpointContext = Partial<
+	EndpointContext<string, any> & Omit<InputContext<string, any>, "method">
+> & {
+	path: string;
+	context: AuthContext & {
+		returned?: unknown;
+		responseHeaders?: Headers;
 	};
+	headers?: Headers | undefined;
+};
 
 export type BetterAuthPlugin = {
 	id: LiteralString;

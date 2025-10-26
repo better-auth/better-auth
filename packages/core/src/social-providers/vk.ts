@@ -1,13 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
 import {
+	createAuthorizationURL,
 	type OAuthProvider,
 	type ProviderOptions,
-} from "@better-auth/core/oauth2";
-import {
-	createAuthorizationURL,
-	validateAuthorizationCode,
 	refreshAccessToken,
-} from "@better-auth/core/oauth2";
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export interface VkProfile {
 	user: {

@@ -1,12 +1,12 @@
-import { APIError } from "better-call";
-import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { setSessionCookie } from "../../cookies";
-import { createEmailVerificationToken } from "./email-verification";
-import { generateState } from "../../utils";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
+import { APIError } from "better-call";
+import * as z from "zod";
+import { setSessionCookie } from "../../cookies";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { generateState } from "../../utils";
+import { createEmailVerificationToken } from "./email-verification";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -539,7 +539,6 @@ export const signInEmail = createAuthEndpoint(
 
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
-			ctx,
 			ctx.body.rememberMe === false,
 		);
 

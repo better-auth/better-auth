@@ -1,26 +1,29 @@
-import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "better-call";
-import { decodeJwt } from "jose";
-import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { setSessionCookie } from "../../cookies";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import {
-	createAuthorizationURL,
-	validateAuthorizationCode,
-} from "@better-auth/core/oauth2";
 import type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
 	OAuthProvider,
 } from "@better-auth/core/oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "@better-auth/core/oauth2";
+import { defineErrorCodes } from "@better-auth/core/utils";
+import { betterFetch } from "@better-fetch/fetch";
+import { APIError } from "better-call";
+import { decodeJwt } from "jose";
+import * as z from "zod";
+import { sessionMiddleware } from "../../api";
+import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { refreshAccessToken } from "@better-auth/core/oauth2";
 import { generateState, parseState } from "../../oauth2/state";
 import type { User } from "../../types";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import type { GenericEndpointContext } from "@better-auth/core";
-import { sessionMiddleware } from "../../api";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -206,13 +209,14 @@ async function getUserInfo(
 	};
 }
 
+const ERROR_CODES = defineErrorCodes({
+	INVALID_OAUTH_CONFIGURATION: "Invalid OAuth configuration",
+});
+
 /**
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
 export const genericOAuth = (options: GenericOAuthOptions) => {
-	const ERROR_CODES = {
-		INVALID_OAUTH_CONFIGURATION: "Invalid OAuth configuration",
-	} as const;
 	return {
 		id: "generic-oauth",
 		init: (ctx) => {

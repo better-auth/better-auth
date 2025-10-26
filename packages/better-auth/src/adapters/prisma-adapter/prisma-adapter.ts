@@ -1,15 +1,15 @@
-import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterAuthOptions } from "@better-auth/core";
-import {
-	createAdapterFactory,
-	type AdapterFactoryOptions,
-	type AdapterFactoryCustomizeAdapterCreator,
-} from "../adapter-factory";
 import type {
-	DBAdapterDebugLogOption,
 	DBAdapter,
+	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { BetterAuthError } from "@better-auth/core/error";
+import {
+	type AdapterFactoryCustomizeAdapterCreator,
+	type AdapterFactoryOptions,
+	createAdapterFactory,
+} from "../adapter-factory";
 
 export interface PrismaConfig {
 	/**
@@ -42,7 +42,7 @@ export interface PrismaConfig {
 	 *
 	 * If the database doesn't support transactions,
 	 * set this to `false` and operations will be executed sequentially.
-	 * @default true
+	 * @default false
 	 */
 	transaction?: boolean;
 }
@@ -223,8 +223,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						await db[model]!.delete({
 							where: whereClause,
 						});
-					} catch (e) {
+					} catch (e: any) {
 						// If the record doesn't exist, we don't want to throw an error
+						if (e?.meta?.cause === "Record to delete does not exist.") return;
+						// otherwise if it's an unknown error, we want to just log it for debugging.
+						console.log(e);
 					}
 				},
 				async deleteMany({ model, where }) {
