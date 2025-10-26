@@ -1,11 +1,11 @@
-import { betterAuth } from "better-auth";
-import { describe, test } from "node:test";
+import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { apiKey } from "better-auth/plugins";
+import { describe, test } from "node:test";
+import { betterAuth } from "better-auth";
 import { createAuthClient } from "better-auth/client";
 import { apiKeyClient } from "better-auth/client/plugins";
 import { getMigrations } from "better-auth/db";
-import assert from "node:assert/strict";
+import { apiKey } from "better-auth/plugins";
 
 describe("server side client", () => {
 	test("can use api key on server side", async () => {

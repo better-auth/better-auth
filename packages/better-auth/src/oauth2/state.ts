@@ -1,8 +1,11 @@
-import * as z from "zod";
-import { APIError } from "better-call";
-import { generateRandomString } from "../crypto";
-import { symmetricEncrypt, symmetricDecrypt } from "../crypto";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { APIError } from "better-call";
+import * as z from "zod";
+import {
+	generateRandomString,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "../crypto";
 
 export async function generateState(
 	c: GenericEndpointContext,
@@ -185,7 +188,8 @@ export async function parseState(c: GenericEndpointContext) {
 	}
 
 	if (!parsedData.errorURL) {
-		parsedData.errorURL = `${c.context.baseURL}/error`;
+		parsedData.errorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 	}
 
 	// Check expiration

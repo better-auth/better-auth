@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
-import useMeasure from "react-use-measure";
-import Link from "next/link";
 import clsx from "clsx";
-import { Button } from "@/components/ui/button";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { Check, Copy } from "lucide-react";
+import Link from "next/link";
 import { useTheme } from "next-themes";
 import { Highlight, themes } from "prism-react-renderer";
-import { AnimatePresence, motion, MotionConfig } from "framer-motion";
+import { useEffect, useId, useState } from "react";
+import useMeasure from "react-use-measure";
+import { Button } from "@/components/ui/button";
 import { Builder } from "../builder";
-import { Spotlight } from "./spotlight";
 import { GradientBG } from "./gradient-bg";
+import { Spotlight } from "./spotlight";
 
 export default function Hero() {
 	return (
@@ -181,13 +181,15 @@ function CodePreview() {
 	const { resolvedTheme } = useTheme();
 	const [ref, { height }] = useMeasure();
 	const [copyState, setCopyState] = useState(false);
-	const [codeTheme, setCodeTheme] = useState(themes.oneDark);
+	const [codeTheme, setCodeTheme] = useState(themes.synthwave84);
 	const [currentTab, setCurrentTab] = useState<"auth.ts" | "client.ts">(
 		"auth.ts",
 	);
 
 	useEffect(() => {
-		setCodeTheme(resolvedTheme === "light" ? themes.oneLight : themes.oneDark);
+		setCodeTheme(
+			resolvedTheme === "light" ? themes.oneLight : themes.synthwave84,
+		);
 	}, [resolvedTheme]);
 
 	const copyToClipboard = (text: string) => {
