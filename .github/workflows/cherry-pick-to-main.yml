@@ -1,0 +1,93 @@
+name: Cherry-pick to Main
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - canary
+
+jobs:
+  cherry-pick:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'merge-to-main')
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Cherry-pick to main
+        id: cherry-pick
+        run: |
+          # Fetch all branches
+          git fetch origin main:main
+          git fetch origin canary:canary
+
+          # Get the merge commit SHA
+          MERGE_COMMIT="${{ github.event.pull_request.merge_commit_sha }}"
+          echo "Merge commit: $MERGE_COMMIT"
+
+          # Checkout main branch
+          git checkout main
+
+          # Attempt cherry-pick
+          if git cherry-pick -m 1 "$MERGE_COMMIT"; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "Cherry-pick successful!"
+
+            # Push to main
+            git push origin main
+            echo "Pushed to main successfully!"
+          else
+            echo "status=conflict" >> $GITHUB_OUTPUT
+            echo "conflict=true" >> $GITHUB_OUTPUT
+
+            # Get conflict details
+            CONFLICTS=$(git diff --name-only --diff-filter=U | tr '\n' ',' | sed 's/,$//')
+            echo "conflicts=$CONFLICTS" >> $GITHUB_OUTPUT
+
+            # Abort the cherry-pick
+            git cherry-pick --abort
+
+            echo "Cherry-pick failed due to conflicts"
+            exit 1
+          fi
+
+      - name: Comment on PR (Success)
+        if: steps.cherry-pick.outputs.status == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Successfully cherry-picked to `main` branch!\n\nCommit: ${{ github.event.pull_request.merge_commit_sha }}'
+            })
+
+      - name: Comment on PR (Conflict)
+        if: failure() && steps.cherry-pick.outputs.conflict == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const conflicts = '${{ steps.cherry-pick.outputs.conflicts }}';
+            const conflictFiles = conflicts ? conflicts.split(',').map(f => `- \`${f}\``).join('\n') : 'Unknown files';
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `⚠️ **Cherry-pick to \`main\` failed due to conflicts!**\n\nCommit: ${{ github.event.pull_request.merge_commit_sha }}\n\n**Conflicting files:**\n${conflictFiles}\n\nPlease manually cherry-pick this commit to the \`main\` branch and resolve the conflicts.`
+            })
