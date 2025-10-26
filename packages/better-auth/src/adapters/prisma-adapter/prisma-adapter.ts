@@ -12,8 +12,6 @@ import {
 	createAdapterFactory,
 } from "../adapter-factory";
 
-const uppercaseFirstLetter = (str: string) =>
-	str.charAt(0).toUpperCase() + str.slice(1);
 export interface PrismaConfig {
 	/**
 	 * Database provider.
@@ -72,7 +70,13 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(prisma: PrismaClient): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldName, getModelName }) => {
+		({
+			getFieldName,
+			getModelName,
+			getFieldAttributes,
+			getDefaultModelName,
+			schema,
+		}) => {
 			const db = prisma as PrismaClientInternal;
 
 			const convertSelect = (select?: string[], model?: string) => {
@@ -83,6 +87,62 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						[getFieldName({ model, field: cur })]: true,
 					};
 				}, {});
+			};
+
+			/**
+			 * Build the join key name based on whether the foreign field is unique or not.
+			 * If unique, use singular. Otherwise, pluralize (add 's').
+			 */
+			const getJoinKeyName = (
+				baseModel: string,
+				joinedModel: string,
+				schema: any,
+			): string => {
+				try {
+					const defaultBaseModelName = getDefaultModelName(baseModel);
+					const defaultJoinedModelName = getDefaultModelName(joinedModel);
+					const key = getModelName(joinedModel).toLowerCase();
+
+					// First, check if the joined model has FKs to the base model (forward join)
+					let foreignKeys = Object.entries(
+						schema[defaultJoinedModelName]?.fields || {},
+					).filter(
+						([_field, fieldAttributes]: any) =>
+							fieldAttributes.references?.model === defaultBaseModelName,
+					);
+
+					if (foreignKeys.length > 0) {
+						// Forward join: joined model has FK to base model
+						// This is typically a one-to-many relationship (plural)
+						// Unless the FK is unique, then it's one-to-one (singular)
+						const [_foreignKey, foreignKeyAttributes] = foreignKeys[0] as any;
+						// Only check if field is explicitly marked as unique
+						const isUnique = foreignKeyAttributes?.unique === true;
+						return isUnique ? key : `${key}s`;
+					}
+
+					// Check backwards: does the base model have FKs to the joined model?
+					foreignKeys = Object.entries(
+						schema[defaultBaseModelName]?.fields || {},
+					).filter(
+						([_field, fieldAttributes]: any) =>
+							fieldAttributes.references?.model === defaultJoinedModelName,
+					);
+
+					if (foreignKeys.length > 0) {
+						// Backwards join: base model has FK to joined model
+						// The relationship on the joined model is always the model name (singular)
+						// because it refers to all records in the joined model that have a FK pointing back
+						// But wait - we need to check uniqueness to pluralize correctly
+						// If the FK is unique: singular (only one record in joined model points back)
+						// If the FK is NOT unique: we still use singular because it's the model name
+						// Actually, for backwards joins, Prisma uses the model name directly as the relationship
+						return key;
+					}
+				} catch {
+					// Fallback to pluralizing if we can't determine uniqueness
+				}
+				return `${getModelName(joinedModel).toLowerCase()}s`;
 			};
 			function operatorToPrismaOperator(operator: string) {
 				switch (operator) {
@@ -170,10 +230,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					let map = new Map<string, string>();
 					if (join) {
 						include = {};
-						for (const [model, value] of Object.entries(join)) {
-							const key = `${uppercaseFirstLetter(getModelName(model))}s`;
+						for (const [joinModel, value] of Object.entries(join)) {
+							const key = getJoinKeyName(model, joinModel, schema);
 							include[key] = value;
-							map.set(key, getModelName(model));
+							map.set(key, getModelName(joinModel));
 						}
 					}
 
@@ -186,6 +246,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// transform the resulting `include` items to use better-auth expected field names
 					if (join && result) {
 						for (const [includeKey, originalKey] of map.entries()) {
+							if (includeKey === originalKey) continue;
 							if (includeKey in result) {
 								result[originalKey] = result[includeKey];
 								delete result[includeKey];
@@ -208,10 +269,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					let map = new Map<string, string>();
 					if (join) {
 						include = {};
-						for (const [model, value] of Object.entries(join)) {
-							const key = `${uppercaseFirstLetter(getModelName(model))}s`;
+						for (const [joinModel, value] of Object.entries(join)) {
+							const key = getJoinKeyName(model, joinModel, schema);
 							include[key] = value;
-							map.set(key, getModelName(model));
+							map.set(key, getModelName(joinModel));
 						}
 					}
 

@@ -234,13 +234,27 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			// Add many-to-many fields
 			if (manyToManyRelations.has(modelName)) {
 				for (const relatedModel of manyToManyRelations.get(modelName)) {
-					const fieldName = `${relatedModel.toLowerCase()}s`;
+					// Find the FK field on the related model that points to this model
+					const relatedTableName = Object.keys(tables).find(
+						(key) => capitalizeFirstLetter(tables[key]?.modelName || key) === relatedModel,
+					);
+					const relatedFields = relatedTableName ? tables[relatedTableName]?.fields : {};
+					const fkField = Object.entries(relatedFields || {}).find(
+						([_fieldName, fieldAttr]: any) =>
+							fieldAttr.references?.model === originalTableName,
+					);
+					const [_fieldKey, fkFieldAttr] = fkField || [];
+					const isUnique = fkFieldAttr?.unique === true;
+					
+					const fieldName = isUnique 
+						? `${relatedModel.toLowerCase()}`
+						: `${relatedModel.toLowerCase()}s`;
 					const existingField = builder.findByType("field", {
 						name: fieldName,
 						within: prismaModel?.properties,
 					});
 					if (!existingField) {
-						builder.model(modelName).field(fieldName, `${relatedModel}[]`);
+						builder.model(modelName).field(fieldName, `${relatedModel}${isUnique ? "?" : "[]"}`);
 					}
 				}
 			}
