@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { deviceAuthorizationOptionsSchema, deviceAuthorization } from ".";
+import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
 import type { DeviceCode } from "./schema";
 

@@ -1,14 +1,13 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { defineErrorCodes } from "@better-auth/core/utils";
 import { APIError } from "better-call";
 import { type StringValue as MSStringValue, ms } from "ms";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api/routes/session";
 import { generateRandomString } from "../../crypto";
 import { mergeSchema } from "../../db";
-import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import type { InferOptionSchema } from "../../types/plugins";
+import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import { type DeviceCode, schema } from "./schema";
 
 const msStringValueSchema = z.custom<MSStringValue>(
