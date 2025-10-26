@@ -746,33 +746,6 @@ export type BetterAuthOptions = {
 						 * @default 20% of maxAge
 						 */
 						updateAge?: number;
-						/**
-						 * Custom function to determine if the cache should be refreshed.
-						 * This gives you full control over the refresh logic.
-						 *
-						 * @param data - The session and user data from the cookie cache
-						 * @param data.session - The session object
-						 * @param data.user - The user object
-						 * @param data.expiresAt - When the cookie cache expires (timestamp in ms)
-						 * @param data.updatedAt - When the session was last updated (timestamp in ms)
-						 * @returns true to refresh the cache, false to keep using it
-						 *
-						 * @example
-						 * ```ts
-						 * shouldRefresh: ({ expiresAt, updatedAt }) => {
-						 *   const timeRemaining = expiresAt - Date.now();
-						 *   const timeSinceUpdate = Date.now() - updatedAt;
-						 *   // Refresh if less than 1 minute remaining or if updated more than 5 minutes ago
-						 *   return timeRemaining < 60_000 || timeSinceUpdate > 300_000;
-						 * }
-						 * ```
-						 */
-						shouldRefresh?: (data: {
-							session: Record<string, any>;
-							user: Record<string, any>;
-							expiresAt: number;
-							updatedAt: number;
-						}) => boolean | Promise<boolean>;
 				  };
 		};
 		/**

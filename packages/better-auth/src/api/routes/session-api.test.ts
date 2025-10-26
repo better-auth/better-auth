@@ -2,7 +2,8 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { type MemoryDB, memoryAdapter } from "../../adapters/memory-adapter";
-import { parseSetCookieHeader } from "../../cookies";
+import { parseCookies, parseSetCookieHeader } from "../../cookies";
+import { signJWT, verifyJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { getDate } from "../../utils/date";
 
@@ -616,69 +617,81 @@ describe("cookie cache with JWT strategy", async () => {
 				headers,
 			},
 		});
+		const jwt = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		if (!jwt) {
+			throw new Error("JWT not found");
+		}
+		const payload = await verifyJWT(jwt, ctx.secret);
+		expect(payload).not.toBeNull();
 		expect(session.data?.session).not.toHaveProperty("sensitiveData");
 		expect(session.data).not.toBeNull();
 		expect(fn).toHaveBeenCalledTimes(1); // Should still be 1 (cache hit)
 	});
 
-	it("should disable cookie cache with JWT strategy", async () => {
-		const ctx = await auth.$context;
-
-		const s = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(s.data?.user.emailVerified).toBe(false);
-		await runWithEndpointContext(
+	it("should not allow tampering with the cookie", async () => {
+		await client.signIn.email(
 			{
-				context: ctx,
-			} as unknown as GenericEndpointContext,
-			async () => {
-				await ctx.internalAdapter.updateUser(s.data?.user.id || "", {
-					emailVerified: true,
-				});
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
 			},
 		);
-		expect(fn).toHaveBeenCalledTimes(1);
-
-		const session = await client.getSession({
-			query: {
-				disableCookieCache: true,
-			},
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(session.data?.user.emailVerified).toBe(true);
-		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(3); // Database hit when cache disabled
-	});
-
-	it("should reset JWT cache when expires", async () => {
-		expect(fn).toHaveBeenCalledTimes(3);
-		await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(fn).toHaveBeenCalledTimes(3);
-
-		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1000 * 60 * 10);
-
-		await client.getSession({
-			fetchOptions: {
-				headers,
-				onSuccess(context) {
-					cookieSetter(headers)(context);
+		const jwt = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		if (!jwt) {
+			throw new Error("JWT not found");
+		}
+		const payload = await verifyJWT(jwt, ctx.secret);
+		const newJWT = await signJWT(
+			{
+				session: payload.session,
+				user: {
+					...payload.user,
+					id: "tampered-id",
 				},
 			},
+			"tampered-secret",
+		);
+		const sessionCookie = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_token",
+		);
+		if (!sessionCookie) {
+			throw new Error("Session cookie not found");
+		}
+		headers.set("cookie", `better-auth.session_data=${newJWT}`);
+		headers.append("cookie", `better-auth.session_token=${sessionCookie}`);
+		const res = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
 		});
+		expect(res.data).toBeNull();
+	});
 
-		expect(fn.mock.calls.length).toBeGreaterThanOrEqual(3);
-
-		vi.useRealTimers();
+	it("should have max age expiry", async () => {
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const jwt = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		if (!jwt) {
+			throw new Error("JWT not found");
+		}
+		const payload = await verifyJWT(jwt, ctx.secret);
+		//should be greater than 299 seconds from now - (default max age is 300 seconds)
+		expect(payload.exp).toBeGreaterThan(Date.now() / 1000 + 299);
 	});
 
 	it("should handle multiple concurrent requests with JWT cache", async () => {

@@ -241,19 +241,13 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							});
 						}
 
-						// refreshCache is enabled - check if we need to refresh the cookie
-						// Calculate time remaining until expiry
 						const timeUntilExpiry = sessionDataPayload.expiresAt - Date.now();
 						const updateAge = cookieRefreshCache.updateAge * 1000; // Convert to milliseconds
 
-						// If time remaining is less than updateAge, refresh the cookie stateless
 						if (timeUntilExpiry < updateAge) {
-							// Generate a new cookie with extended expiry (stateless refresh)
 							const cookieMaxAge =
 								ctx.context.options.session?.cookieCache?.maxAge || 60 * 5;
 							const newExpiresAt = getDate(cookieMaxAge, "sec");
-
-							// Update the session expiry in the cookie (stateless - no DB query)
 							const refreshedSession = {
 								session: {
 									...session.session,
