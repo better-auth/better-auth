@@ -181,13 +181,15 @@ function CodePreview() {
 	const { resolvedTheme } = useTheme();
 	const [ref, { height }] = useMeasure();
 	const [copyState, setCopyState] = useState(false);
-	const [codeTheme, setCodeTheme] = useState(themes.oneDark);
+	const [codeTheme, setCodeTheme] = useState(themes.synthwave84);
 	const [currentTab, setCurrentTab] = useState<"auth.ts" | "client.ts">(
 		"auth.ts",
 	);
 
 	useEffect(() => {
-		setCodeTheme(resolvedTheme === "light" ? themes.oneLight : themes.oneDark);
+		setCodeTheme(
+			resolvedTheme === "light" ? themes.oneLight : themes.synthwave84,
+		);
 	}, [resolvedTheme]);
 
 	const copyToClipboard = (text: string) => {
