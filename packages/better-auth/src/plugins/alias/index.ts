@@ -1,20 +1,20 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import type { AuthEndpoint } from "../../api";
 import type { LiteralString } from "../../types/helper";
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { AliasCompatOptions } from "./compat/index";
+import { aliasCompat } from "./compat/index";
 import type {
 	InferAliasedPlugin,
 	InferAliasedPlugin_base,
 } from "./types/plugin";
 import {
+	cloneEndpoint,
+	normalizePath,
+	normalizePrefix,
 	SPECIAL_ENDPOINTS,
 	toCamelCase,
-	normalizePrefix,
-	normalizePath,
 	updateMatcher,
-	cloneEndpoint,
 } from "./utils";
-import type { AliasCompatOptions } from "./compat/index";
-import { aliasCompat } from "./compat/index";
 
 export type AliasOptions = {
 	/**

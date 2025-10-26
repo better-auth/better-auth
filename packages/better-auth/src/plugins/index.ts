@@ -11,6 +11,7 @@ export {
 export * from "../types/plugins";
 export * from "../utils/hide-metadata";
 export * from "./admin";
+export * from "./alias";
 export * from "./anonymous";
 export * from "./api-key";
 export * from "./bearer";
@@ -35,4 +36,3 @@ export * from "./phone-number";
 export * from "./siwe";
 export * from "./two-factor";
 export * from "./username";
-export * from "./alias";

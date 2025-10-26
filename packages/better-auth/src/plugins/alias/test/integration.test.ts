@@ -1,16 +1,16 @@
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
-import { getTestInstance } from "../../../test-utils/test-instance";
-import { getTestInstanceMemory } from "../../../test-utils";
-import { alias } from "..";
-import { createMockClientPlugin, createMockPlugin } from "./mock-plugin";
-import { createAuthClient } from "../../../client";
-import { aliasClient } from "../client";
 import type {
 	BetterAuthClientPlugin,
 	BetterAuthPlugin,
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import z from "zod/v4";
+import { createAuthClient } from "../../../client";
+import { getTestInstanceMemory } from "../../../test-utils";
+import { getTestInstance } from "../../../test-utils/test-instance";
+import { alias } from "..";
+import { aliasClient } from "../client";
+import { createMockClientPlugin, createMockPlugin } from "./mock-plugin";
 
 describe("Alias Plugin", async () => {
 	const { auth, customFetchImpl } = await getTestInstance({

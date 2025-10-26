@@ -1,5 +1,5 @@
-export type { InferAliasedPlugin, InferAliasCompatPlugin } from "./plugin";
 export type {
-	InferAliasedClientPlugin,
 	InferAliasCompatClientPlugin,
+	InferAliasedClientPlugin,
 } from "./client";
+export type { InferAliasCompatPlugin, InferAliasedPlugin } from "./plugin";

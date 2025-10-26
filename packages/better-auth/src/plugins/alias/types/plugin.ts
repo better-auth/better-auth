@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import type { Endpoint, Middleware } from "better-call";
 import type { AliasOptions } from "..";
 import type { AliasCompatOptions } from "../compat";
-import type { Endpoint, Middleware } from "better-call";
 import type { SpecialEndpoints } from "../utils";
 import type {
 	CamelCasePrefix,

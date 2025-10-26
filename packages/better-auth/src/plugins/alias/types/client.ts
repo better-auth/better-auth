@@ -4,15 +4,15 @@ import type {
 	ClientAtomListener,
 } from "@better-auth/core";
 import type { LiteralString } from "../../../types/helper";
+import type { AliasClientOptions, AliasCompatClientOptions } from "../client";
 import type { InferAliasedPlugin_base } from "../types/plugin";
+import type { SpecialEndpoints } from "../utils";
 import type {
 	CamelCasePrefix,
 	MatchesExcluded,
 	NormalizePrefix,
 	TransformNormalizedPrefix,
 } from "./helper";
-import type { SpecialEndpoints } from "../utils";
-import type { AliasClientOptions, AliasCompatClientOptions } from "../client";
 
 type ExtendPathMethods<
 	T extends BetterAuthClientPlugin,

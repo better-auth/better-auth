@@ -1,12 +1,12 @@
-import { createAuthEndpoint } from "@better-auth/core/api";
 import type {
 	BetterAuthClientPlugin,
 	BetterAuthPlugin,
 } from "@better-auth/core";
-import type { LiteralString } from "../../../types/helper";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { atom, computed } from "nanostores";
 import z from "zod/v4";
 import { useAuthQuery } from "../../../client";
-import { atom, computed } from "nanostores";
+import type { LiteralString } from "../../../types/helper";
 
 export function createMockPlugin<ID extends LiteralString>(id: ID) {
 	return {

@@ -1,8 +1,8 @@
-import type { LiteralString } from "../../../types/helper";
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { LiteralString } from "../../../types/helper";
 import type { InferAliasCompatPlugin, InferMeta } from "../types/plugin";
 import { updateMatcher } from "../utils";
-import { BetterAuthError } from "@better-auth/core/error";
 
 export type AliasCompatOptions = {
 	/**

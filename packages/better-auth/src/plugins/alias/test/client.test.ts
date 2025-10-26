@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
+
+import { atom } from "nanostores";
 import { describe, expect, it, vi } from "vitest";
+import { createAuthClient } from "../../../client";
+import { createAuthClient as createSolidClient } from "../../../client/solid";
 import type { BetterAuthClientPlugin } from "../../../client/types";
 import { aliasClient } from "../client";
 import { createMockClientPlugin } from "./mock-plugin";
-import { createAuthClient } from "../../../client";
-import { createAuthClient as createSolidClient } from "../../../client/solid";
-import { atom } from "nanostores";
 
 describe("aliasClient plugin", () => {
 	it("should prefix pathMethods", () => {

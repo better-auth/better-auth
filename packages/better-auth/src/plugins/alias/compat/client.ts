@@ -1,14 +1,14 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { LiteralString } from "../../../types/helper";
-import { getBaseURL } from "../../../utils/url";
-import { resolveURL, toCamelCase, updateMatcher } from "../utils";
 import { BetterAuthError } from "@better-auth/core/error";
+import type { LiteralString } from "../../../types/helper";
 import { capitalizeFirstLetter } from "../../../utils";
+import { getBaseURL } from "../../../utils/url";
 import type {
 	InferAliasCompatClientPlugin,
 	InferAliasedClientPlugin_base,
 	InferClientMeta,
 } from "../types/client";
+import { resolveURL, toCamelCase, updateMatcher } from "../utils";
 
 export type AliasCompatClientOptions = {
 	/**
