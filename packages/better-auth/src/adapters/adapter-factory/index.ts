@@ -677,7 +677,6 @@ export const createAdapterFactory =
 			return transformedJoin;
 		};
 
-
 		const adapterInstance = customAdapter({
 			options,
 			schema,
@@ -945,7 +944,12 @@ export const createAdapterFactory =
 				);
 				let transformed = res as any;
 				if (!config.disableTransformOutput) {
-					transformed = await transformOutput(res as any, unsafeModel, select, join);
+					transformed = await transformOutput(
+						res as any,
+						unsafeModel,
+						select,
+						join,
+					);
 				}
 				debugLog(
 					{ method: "findOne" },
@@ -1012,7 +1016,10 @@ export const createAdapterFactory =
 				let transformed = res as any;
 				if (!config.disableTransformOutput) {
 					transformed = await Promise.all(
-						res.map(async (r) => await transformOutput(r as any, unsafeModel, undefined, join)),
+						res.map(
+							async (r) =>
+								await transformOutput(r as any, unsafeModel, undefined, join),
+						),
 					);
 				}
 				debugLog(

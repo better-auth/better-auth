@@ -166,7 +166,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 				};
 
 				if (!join) return execute(where, model);
-				
+
 				const baseRecords = execute(where, model);
 				const joinedModels = Object.keys(join);
 
