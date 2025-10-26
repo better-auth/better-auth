@@ -47,15 +47,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 				}
 			},
 		},
-		adapter: ({
-			getFieldName,
-			options,
-			debugLog,
-			getDefaultModelName,
-			getDefaultFieldName,
-			getFieldAttributes,
-			getModelName,
-		}) => {
+		adapter: ({ getFieldName, options, getModelName }) => {
 			const applySortToRecords = (
 				records: any[],
 				sortBy: { field: string; direction: "asc" | "desc" } | undefined,
@@ -174,7 +166,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 				};
 
 				if (!join) return execute(where, model);
-
+				
 				const baseRecords = execute(where, model);
 				const joinedModels = Object.keys(join);
 
