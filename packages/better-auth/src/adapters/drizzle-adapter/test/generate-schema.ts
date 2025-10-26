@@ -1,7 +1,8 @@
-import type { Adapter, BetterAuthOptions } from "../../../types";
-import { drizzleAdapter } from "../drizzle-adapter";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import fs from "fs/promises";
 import { join } from "path";
+import { drizzleAdapter } from "../drizzle-adapter";
 
 let generationCount = 0;
 
@@ -44,7 +45,7 @@ export const generateDrizzleSchema = async (
 		"./../../../../../cli/src/generators/index",
 	)) as {
 		generateSchema: (opts: {
-			adapter: Adapter;
+			adapter: DBAdapter<BetterAuthOptions>;
 			file?: string;
 			options: BetterAuthOptions;
 		}) => Promise<{

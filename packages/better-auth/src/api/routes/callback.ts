@@ -1,12 +1,12 @@
+import { createAuthEndpoint } from "@better-auth/core/api";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
-import { setTokenUtil } from "../../oauth2/utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
+import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { createAuthEndpoint } from "../call";
 import { safeJSONParse } from "../../utils/json";
-import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -166,18 +166,15 @@ export const callbackOAuth = createAuthEndpoint(
 					updateData,
 				);
 			} else {
-				const newAccount = await c.context.internalAdapter.createAccount(
-					{
-						userId: link.userId,
-						providerId: provider.id,
-						accountId: String(userInfo.id),
-						...tokens,
-						accessToken: await setTokenUtil(tokens.accessToken, c.context),
-						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-						scope: tokens.scopes?.join(","),
-					},
-					c,
-				);
+				const newAccount = await c.context.internalAdapter.createAccount({
+					userId: link.userId,
+					providerId: provider.id,
+					accountId: String(userInfo.id),
+					...tokens,
+					accessToken: await setTokenUtil(tokens.accessToken, c.context),
+					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
+					scope: tokens.scopes?.join(","),
+				});
 				if (!newAccount) {
 					return redirectOnError("unable_to_link_account");
 				}

@@ -1,41 +1,45 @@
-import { getClientConfig } from "./config";
-import { capitalizeFirstLetter } from "../utils/misc";
 import type {
+	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
-	ClientOptions,
+} from "@better-auth/core";
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type {
+	BetterFetchError,
+	BetterFetchResponse,
+} from "@better-fetch/fetch";
+import type { Atom } from "nanostores";
+import type { PrettifyDeep, UnionToIntersection } from "../types/helper";
+import { capitalizeFirstLetter } from "../utils/misc";
+import { getClientConfig } from "./config";
+import { createDynamicPathProxy } from "./proxy";
+import type {
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
 } from "./types";
-import { createDynamicPathProxy } from "./proxy";
-import type { PrettifyDeep, UnionToIntersection } from "../types/helper";
-import type { Atom } from "nanostores";
-import type {
-	BetterFetchError,
-	BetterFetchResponse,
-} from "@better-fetch/fetch";
-import type { BASE_ERROR_CODES } from "../error/codes";
 
-type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
-	infer Plugin
->
-	? Plugin extends BetterAuthClientPlugin
-		? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
-			? Atoms extends Record<string, any>
-				? {
-						[key in keyof Atoms as IsSignal<key> extends true
-							? never
-							: key extends string
-								? `use${Capitalize<key>}`
-								: never]: Atoms[key];
-					}
+type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
+	plugins: Array<infer Plugin>;
+}
+	? UnionToIntersection<
+			Plugin extends BetterAuthClientPlugin
+				? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+					? Atoms extends Record<string, any>
+						? {
+								[key in keyof Atoms as IsSignal<key> extends true
+									? never
+									: key extends string
+										? `use${Capitalize<key>}`
+										: never]: Atoms[key];
+							}
+						: {}
+					: {}
 				: {}
-			: {}
-		: {}
+		>
 	: {};
 
-export function createAuthClient<Option extends ClientOptions>(
+export function createAuthClient<Option extends BetterAuthClientOptions>(
 	options?: Option,
 ) {
 	const {

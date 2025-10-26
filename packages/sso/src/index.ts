@@ -1,12 +1,14 @@
+import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import {
-	generateState,
 	type Account,
 	type BetterAuthPlugin,
+	generateState,
 	type OAuth2Tokens,
 	type Session,
 	type User,
 } from "better-auth";
 import { APIError, sessionMiddleware } from "better-auth/api";
+import { setSessionCookie } from "better-auth/cookies";
 import {
 	createAuthorizationURL,
 	handleOAuthUserInfo,
@@ -14,17 +16,14 @@ import {
 	validateAuthorizationCode,
 	validateToken,
 } from "better-auth/oauth2";
-
 import { createAuthEndpoint } from "better-auth/plugins";
-import * as z from "zod/v4";
+import { XMLValidator } from "fast-xml-parser";
+import { decodeJwt } from "jose";
 import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
-import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
-import { decodeJwt } from "jose";
-import { setSessionCookie } from "better-auth/cookies";
-import type { FlowResult } from "samlify/types/src/flow";
-import { XMLValidator } from "fast-xml-parser";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
+import type { FlowResult } from "samlify/types/src/flow";
+import * as z from "zod/v4";
 
 const fastValidator = {
 	async validate(xml: string) {
@@ -922,6 +921,13 @@ export const sso = (options?: SSOOptions) => {
 								description: "Scopes to request from the provider.",
 							})
 							.optional(),
+						loginHint: z
+							.string({})
+							.meta({
+								description:
+									"Login hint to send to the identity provider (e.g., email or identifier). If supported, will be sent as 'login_hint'.",
+							})
+							.optional(),
 						requestSignUp: z
 							.boolean({})
 							.meta({
@@ -969,6 +975,11 @@ export const sso = (options?: SSOOptions) => {
 													type: "string",
 													description:
 														"The URL to redirect to after login if the user is new",
+												},
+												loginHint: {
+													type: "string",
+													description:
+														"Login hint to send to the identity provider (e.g., email or identifier). If supported, sent as 'login_hint'.",
 												},
 											},
 											required: ["callbackURL"],
@@ -1146,6 +1157,7 @@ export const sso = (options?: SSOOptions) => {
 									"profile",
 									"offline_access",
 								],
+							loginHint: ctx.body.loginHint || email,
 							authorizationEndpoint: provider.oidcConfig.authorizationEndpoint!,
 						});
 						return ctx.json({
@@ -1865,7 +1877,7 @@ export const sso = (options?: SSOOptions) => {
 
 					// Create session and set cookie
 					let session: Session =
-						await ctx.context.internalAdapter.createSession(user.id, ctx);
+						await ctx.context.internalAdapter.createSession(user.id);
 					await setSessionCookie(ctx, { session, user });
 
 					// Redirect to callback URL
@@ -2224,7 +2236,7 @@ export const sso = (options?: SSOOptions) => {
 					}
 
 					let session: Session =
-						await ctx.context.internalAdapter.createSession(user.id, ctx);
+						await ctx.context.internalAdapter.createSession(user.id);
 					await setSessionCookie(ctx, { session, user });
 
 					const callbackUrl =

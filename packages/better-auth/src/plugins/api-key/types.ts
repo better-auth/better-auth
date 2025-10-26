@@ -1,4 +1,8 @@
-import type { GenericEndpointContext, InferOptionSchema } from "../../types";
+import type {
+	GenericEndpointContext,
+	HookEndpointContext,
+} from "@better-auth/core";
+import type { InferOptionSchema } from "../../types";
 import type { Statements } from "../access";
 import type { apiKeySchema } from "./schema";
 export interface ApiKeyOptions {
@@ -19,7 +23,7 @@ export interface ApiKeyOptions {
 	/**
 	 * The function to get the API key from the context
 	 */
-	customAPIKeyGetter?: (ctx: GenericEndpointContext) => string | null;
+	customAPIKeyGetter?: (ctx: HookEndpointContext) => string | null;
 	/**
 	 * A custom function to validate the API key
 	 */

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
 import clsx from "clsx";
 import { animate, Segment } from "motion/react";
+import { useEffect, useId, useRef } from "react";
 
 type Star = [x: number, y: number, dim?: boolean, blur?: boolean];
 
@@ -195,7 +195,7 @@ export function StarField({ className }: { className?: string }) {
 			fill="white"
 			aria-hidden="true"
 			className={clsx(
-				"pointer-events-none absolute w-[55.0625rem] origin-top-right rotate-[30deg] overflow-visible opacity-70",
+				"pointer-events-none absolute w-[55.0625rem] max-w-[100vw] origin-top-right rotate-[30deg] overflow-visible opacity-70",
 				className,
 			)}
 		>
