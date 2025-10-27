@@ -212,9 +212,6 @@ importers:
       '@better-auth/stripe':
         specifier: workspace:*
         version: link:../../packages/stripe
-      '@better-fetch/fetch':
-        specifier: 'catalog:'
-        version: 1.1.18
       '@hookform/resolvers':
         specifier: ^5.2.1
         version: 5.2.1(react-hook-form@7.62.0(react@19.2.0))
@@ -329,9 +326,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
-      better-call:
-        specifier: 'catalog:'
-        version: 1.0.24
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.4.1
@@ -347,9 +341,6 @@ importers:
       cmdk:
         specifier: 1.1.1
         version: 1.1.1(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      consola:
-        specifier: ^3.4.2
-        version: 3.4.2
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
@@ -361,7 +352,7 @@ importers:
         version: 12.23.12(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       geist:
         specifier: ^1.4.2
-        version: 1.4.2(next@16.0.0-beta.0(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
+        version: 1.4.2(next@16.0.0(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -378,14 +369,11 @@ importers:
         specifier: ^3.14.4
         version: 3.14.4
       next:
-        specifier: 16.0.0-beta.0
-        version: 16.0.0-beta.0(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)
+        specifier: 16.0.0
+        version: 16.0.0(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      prisma:
-        specifier: ^5.22.0
-        version: 5.22.0
       react:
         specifier: 19.2.0
         version: 19.2.0
@@ -413,9 +401,6 @@ importers:
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
-      shiki:
-        specifier: ^3.12.2
-        version: 3.13.0
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -453,6 +438,9 @@ importers:
       postcss:
         specifier: ^8.5.6
         version: 8.5.6
+      prisma:
+        specifier: ^5.22.0
+        version: 5.22.0
       tailwindcss:
         specifier: ^4.1.13
         version: 4.1.13
@@ -22366,10 +22354,6 @@ snapshots:
   geist@1.4.2(next@16.0.0(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)):
     dependencies:
       next: 16.0.0(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)
-
-  geist@1.4.2(next@16.0.0-beta.0(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)):
-    dependencies:
-      next: 16.0.0-beta.0(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)
 
   generate-function@2.3.1:
     dependencies:
