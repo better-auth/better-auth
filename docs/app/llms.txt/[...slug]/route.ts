@@ -9,11 +9,24 @@ export async function GET(
 	_req: NextRequest,
 	{ params }: { params: Promise<{ slug: string[] }> },
 ) {
-	const slug = (await params).slug;
+	let slug = (await params).slug;
+
+	// Remove .md extension if present in the last segment
+	if (slug[slug.length - 1]?.endsWith(".md")) {
+		slug = [...slug.slice(0, -1), slug[slug.length - 1].replace(/\.md$/, "")];
+	}
+
+	// Remove 'docs' prefix if present (since source already includes /docs in baseUrl)
+	if (slug[0] === "docs") {
+		slug = slug.slice(1);
+	}
+
 	const page = source.getPage(slug);
 	if (!page) notFound();
 
-	return new NextResponse(await getLLMText(page), {
+	const content = await getLLMText(page);
+
+	return new NextResponse(content, {
 		headers: {
 			"Content-Type": "text/markdown",
 		},
