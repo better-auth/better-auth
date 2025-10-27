@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.4.0-beta.11",
+  "version": "1.4.0-beta.13",
   "type": "module",
   "description": "The CLI for Better Auth",
   "module": "dist/index.js",
@@ -35,9 +35,9 @@
   "bin": "./dist/index.js",
   "devDependencies": {
     "@types/semver": "^7.7.1",
-    "tsx": "^4.20.5",
-    "typescript": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsx": "^4.20.6",
+    "typescript": "catalog:"
   },
   "dependencies": {
     "@babel/core": "^7.28.4",

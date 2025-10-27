@@ -1,12 +1,12 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { toast } from "sonner";
 import SignIn from "@/components/sign-in";
 import { SignUp } from "@/components/sign-up";
 import { Tabs } from "@/components/ui/tabs2";
 import { client } from "@/lib/auth-client";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
-import { toast } from "sonner";
 import { getCallbackURL } from "@/lib/shared";
 
 export default function Page() {

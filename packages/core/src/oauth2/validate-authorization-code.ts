@@ -1,8 +1,8 @@
+import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { jwtVerify } from "jose";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
-import { base64 } from "@better-auth/utils/base64";
 
 export function createAuthorizationCodeRequest({
 	code,
@@ -29,7 +29,6 @@ export function createAuthorizationCodeRequest({
 	const requestHeaders: Record<string, any> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
-		"user-agent": "better-auth",
 		...headers,
 	};
 	body.set("grant_type", "authorization_code");
@@ -139,7 +138,6 @@ export async function validateToken(token: string, jwksEndpoint: string) {
 		method: "GET",
 		headers: {
 			accept: "application/json",
-			"user-agent": "better-auth",
 		},
 	});
 	if (error) {

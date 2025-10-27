@@ -1,21 +1,21 @@
-import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../api";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { type Session } from "../../types";
-import type { BetterAuthPlugin } from "@better-auth/core";
 import type { Where } from "@better-auth/core/db/adapter";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import * as z from "zod";
+import { APIError, getSessionFromCtx } from "../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { type Session } from "../../types";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import { mergeSchema, parseUserOutput } from "../../db/schema";
 import { type AccessControl } from "../access";
-import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
+import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { schema } from "./schema";
 import type {
 	AdminOptions,
@@ -263,7 +263,20 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
 						});
 					}
-
+					const roles = opts.roles;
+					if (roles) {
+						const inputRoles = Array.isArray(ctx.body.role)
+							? ctx.body.role
+							: [ctx.body.role];
+						for (const role of inputRoles) {
+							if (!roles[role as keyof typeof roles]) {
+								throw new APIError("BAD_REQUEST", {
+									message:
+										ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
+								});
+							}
+						}
+					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						{
@@ -448,9 +461,17 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							});
 						}
 					}
-					const existUser = await ctx.context.internalAdapter.findUserByEmail(
-						ctx.body.email,
-					);
+
+					const email = ctx.body.email.toLowerCase();
+					const isValidEmail = z.string().email().safeParse(email);
+					if (!isValidEmail.success) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.INVALID_EMAIL,
+						});
+					}
+
+					const existUser =
+						await ctx.context.internalAdapter.findUserByEmail(email);
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {
 							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
@@ -458,7 +479,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const user =
 						await ctx.context.internalAdapter.createUser<UserWithRole>({
-							email: ctx.body.email,
+							email: email,
 							name: ctx.body.name,
 							role:
 								(ctx.body.role && parseRoles(ctx.body.role)) ??
