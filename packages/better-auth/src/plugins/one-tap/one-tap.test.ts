@@ -1,11 +1,11 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import { SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
+import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oneTap } from ".";
-import { createAuthClient } from "../../client";
 import { oneTapClient } from "./client";
-import { SignJWT } from "jose";
-import { runWithEndpointContext } from "@better-auth/core/context";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 describe("oneTap - Traditional Mode", async () => {
 	const { auth, customFetchImpl, testUser } = await getTestInstance({
