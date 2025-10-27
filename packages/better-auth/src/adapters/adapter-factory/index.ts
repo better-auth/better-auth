@@ -607,7 +607,7 @@ export const createAdapterFactory =
 			unsanitizedJoin: Join | undefined,
 		): ResolvedJoin | undefined => {
 			if (!unsanitizedJoin) return undefined;
-			if(Object.keys(unsanitizedJoin).length === 0) return undefined;
+			if (Object.keys(unsanitizedJoin).length === 0) return undefined;
 			const transformedJoin: ResolvedJoin = {};
 			for (const [model, join] of Object.entries(unsanitizedJoin)) {
 				if (join !== true) continue; // for now only support "true" on joins, indicating a simple join
