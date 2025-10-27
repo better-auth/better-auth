@@ -1,3 +1,7 @@
+/**
+ * @packageDocumentation https://github.com/standard-schema/standard-schema?tab=readme-ov-file#the-interface
+ */
+
 /** The Standard Schema interface. */
 export interface StandardSchemaV1<Input = unknown, Output = Input> {
 	/** The Standard Schema properties. */

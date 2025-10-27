@@ -109,7 +109,9 @@ export function parseInputData<T extends Record<string, any>>(
 				continue;
 			}
 			if (fields[key]!.validator?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key]!.validator.input["~standard"].validate(data[key]);
+				parsedData[key] = fields[key]!.validator.input["~standard"].validate(
+					data[key],
+				);
 				continue;
 			}
 			if (fields[key]!.transform?.input && data[key] !== undefined) {
