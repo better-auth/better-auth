@@ -1,20 +1,29 @@
-import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
-import type { Database } from "better-sqlite3";
-import type { CookieOptions } from "better-call";
-import type { LiteralUnion } from "./helper";
-import type {
-	DBFieldAttribute,
-	DBPreservedModels,
-	SecondaryStorage,
-} from "../db";
-import type { Account, RateLimit, Session, User, Verification } from "../db";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
-import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { Logger } from "../env";
-import type { AuthContext, GenericEndpointContext } from "./context";
+import type { CookieOptions } from "better-call";
+import type {
+	Dialect,
+	Kysely,
+	MysqlPool,
+	PostgresPool,
+	SqliteDatabase,
+} from "kysely";
 import type { AuthMiddleware } from "../api";
+import type {
+	Account,
+	DBFieldAttribute,
+	DBPreservedModels,
+	RateLimit,
+	SecondaryStorage,
+	Session,
+	User,
+	Verification,
+} from "../db";
+import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
+import type { Logger } from "../env";
+import type { SocialProviderList, SocialProviders } from "../social-providers";
+import type { AuthContext, GenericEndpointContext } from "./context";
+import type { LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
@@ -236,6 +245,15 @@ export type BetterAuthAdvancedOptions = {
 		 * @default false
 		 */
 		skipStateCookieCheck?: boolean;
+		/**
+		 * Strategy for storing OAuth state
+		 *
+		 * - "cookie": Store state in an encrypted cookie (stateless)
+		 * - "database": Store state in the database
+		 *
+		 * @default "cookie"
+		 */
+		storeStateStrategy?: "database" | "cookie";
 	};
 };
 
@@ -295,7 +313,7 @@ export type BetterAuthOptions = {
 	database?:
 		| PostgresPool
 		| MysqlPool
-		| Database
+		| SqliteDatabase
 		| Dialect
 		| DBAdapterInstance
 		| BunDatabase
@@ -657,10 +675,6 @@ export type BetterAuthOptions = {
 			[key: string]: DBFieldAttribute;
 		};
 		/**
-		 * @default false
-		 */
-		storeSessionInJWT?: boolean;
-		/**
 		 * By default if secondary storage is provided
 		 * the session is stored in the secondary storage.
 		 *
@@ -696,6 +710,28 @@ export type BetterAuthOptions = {
 			 * @default false
 			 */
 			enabled?: boolean;
+			/**
+			 * Strategy for encoding/decoding cookie cache
+			 *
+			 * - "base64-hmac": Uses base64url encoding with HMAC-SHA256 signature
+			 * - "jwt": Uses JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation for secure encrypted tokens
+			 *
+			 * @default "base64-hmac"
+			 */
+			strategy?: "base64-hmac" | "jwt";
+			/**
+			 * Controls cache freshness and when to refresh from database.
+			 *
+			 * - `false`: Disable cache freshness checks. Cache is only invalidated when it reaches maxAge expiry.
+			 * - `true`: Use default freshness duration of 60 seconds.
+			 * - `number`: Custom freshness duration in seconds.
+			 *
+			 * When enabled, if the cached data is older than the freshness threshold,
+			 * it will be refreshed from the database to ensure data consistency.
+			 *
+			 * @default false
+			 */
+			freshCache?: boolean | number;
 		};
 		/**
 		 * The age of the session to consider it fresh.

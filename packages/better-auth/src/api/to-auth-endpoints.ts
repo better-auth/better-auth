@@ -1,3 +1,7 @@
+import type { AuthContext, HookEndpointContext } from "@better-auth/core";
+import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import { shouldPublishLog } from "@better-auth/core/env";
 import {
 	APIError,
 	type EndpointContext,
@@ -5,11 +9,7 @@ import {
 	type InputContext,
 	toResponse,
 } from "better-call";
-import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
 import { createDefu } from "defu";
-import { shouldPublishLog } from "@better-auth/core/env";
-import type { AuthContext, HookEndpointContext } from "@better-auth/core";
-import { runWithEndpointContext } from "@better-auth/core/context";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -174,9 +174,8 @@ async function runBeforeHooks(
 		handler: AuthMiddleware;
 	}[],
 ) {
-	let modifiedContext: {
-		headers?: Headers;
-	} = {};
+	let modifiedContext: Partial<InternalContext> = {};
+
 	for (const hook of hooks) {
 		if (hook.matcher(context)) {
 			const result = await hook
@@ -196,9 +195,8 @@ async function runBeforeHooks(
 				});
 			if (result && typeof result === "object") {
 				if ("context" in result && typeof result.context === "object") {
-					const { headers, ...rest } = result.context as {
-						headers: Headers;
-					};
+					const { headers, ...rest } =
+						result.context as Partial<InternalContext>;
 					if (headers instanceof Headers) {
 						if (modifiedContext.headers) {
 							headers.forEach((value, key) => {

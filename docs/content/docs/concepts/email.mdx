@@ -68,18 +68,28 @@ This sends a verification email when a user signs up. For social logins, email v
 If you enable require email verification, users must verify their email before they can log in. And every time a user tries to sign in, `sendVerificationEmail` is called.
 
 <Callout>
-    This only works if you have `sendVerificationEmail` implemented and if the user is trying to sign in with email and password.
+    This only works if you have `sendVerificationEmail` implemented, if `sendOnSignIn` is set to true and if the user is trying to sign in with email and password.
 </Callout>
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-    emailAndPassword: {
-        requireEmailVerification: true
-    }
-})
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendEmail({
+        to: user.email,
+        subject: "Verify your email address",
+        text: `Click the link to verify your email: ${url}`,
+      });
+    sendOnSignIn: true,
+    },
+  },
+  emailAndPassword: {
+    requireEmailVerification: true,
+  },
+});
 ```
 
-if a user tries to sign in without verifying their email, you can handle the error and show a message to the user.
+If a user tries to sign in without verifying their email, you can handle the error and show a message to the user.
 
 ```ts title="auth-client.ts"
 await authClient.signIn.email({
