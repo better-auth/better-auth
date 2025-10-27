@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/stripe",
   "author": "Bereket Engida",
-  "version": "1.4.0-beta.12",
+  "version": "1.4.0-beta.13",
   "type": "module",
   "main": "dist/index.js",
   "license": "MIT",
@@ -23,11 +23,13 @@
   },
   "exports": {
     ".": {
+      "better-auth-dev-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./client": {
+      "better-auth-dev-source": "./src/client.ts",
       "types": "./dist/client.d.ts",
       "import": "./dist/client.js",
       "require": "./dist/client.cjs"
