@@ -1112,3 +1112,234 @@ describe("cookie cache refreshCache", async () => {
 		vi.useRealTimers();
 	});
 });
+
+describe.only("cookie cache versioning", async () => {
+	it("should invalidate cookie cache when version changes (string version)", async () => {
+		// Create instance with version "1"
+		const {
+			client: client1,
+			testUser: testUser1,
+			cookieSetter: cookieSetter1,
+			auth: auth1,
+		} = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					version: "1",
+				},
+			},
+		});
+
+		const headers1 = new Headers();
+		await client1.signIn.email(
+			{
+				email: testUser1.email,
+				password: testUser1.password,
+			},
+			{
+				onSuccess: cookieSetter1(headers1),
+			},
+		);
+
+		// Get session with version "1" - should work
+		const session1 = await client1.getSession({
+			fetchOptions: {
+				headers: headers1,
+			},
+		});
+		expect(session1.data).not.toBeNull();
+		expect(session1.data?.user.email).toBe(testUser1.email);
+
+		// Create new instance with version "2" using same cookies
+		const { client: client2, cookieSetter: cookieSetter2 } =
+			await getTestInstance({
+				session: {
+					cookieCache: {
+						enabled: true,
+						strategy: "jwe",
+						version: "2",
+					},
+				},
+			});
+
+		// Try to get session with old cookies but new version - should invalidate cache
+		const session2 = await client2.getSession({
+			fetchOptions: {
+				headers: headers1,
+			},
+		});
+		// Should return null because version mismatch invalidates the cache
+		// and there's no valid session in the database for this new instance
+		expect(session2.data).toBeNull();
+	});
+
+	it("should work with function-based version", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					version: (session, user) => {
+						// Version based on user email
+						return user.email.includes("test") ? "test-v1" : "prod-v1";
+					},
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		// Get session - should work with function-based version
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe(testUser.email);
+	});
+
+	it("should work with async function-based version", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					version: async (session, user) => {
+						// Simulate async operation
+						await new Promise((resolve) => setTimeout(resolve, 10));
+						return `async-${user.id.slice(0, 8)}`;
+					},
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		// Get session - should work with async function-based version
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe(testUser.email);
+	});
+
+	it("should work with compact strategy", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "compact",
+					version: "compact-v1",
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe(testUser.email);
+	});
+
+	it("should work with jwt strategy", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwt",
+					version: "jwt-v1",
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe(testUser.email);
+	});
+
+	it("should default to version '1' when not specified", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					// No version specified - should default to "1"
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe(testUser.email);
+	});
+});

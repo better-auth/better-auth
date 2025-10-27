@@ -128,10 +128,24 @@ export async function setCookieCache(
 
 		// Apply field filtering to user data
 		const filteredUser = parseUserOutput(ctx.context.options, session.user);
+		
+		// Compute version
+		const versionConfig = ctx.context.options.session?.cookieCache?.version;
+		let version = "1"; // default version
+		if (versionConfig) {
+			if (typeof versionConfig === "string") {
+				version = versionConfig;
+			} else if (typeof versionConfig === "function") {
+				const result = versionConfig(session.session, session.user);
+				version = result instanceof Promise ? await result : result;
+			}
+		}
+		
 		const sessionData = {
 			session: filteredSession,
 			user: filteredUser,
 			updatedAt: Date.now(),
+			version,
 		};
 
 		const options = {
@@ -328,6 +342,7 @@ export const getCookieCache = async <
 		session: Session & Record<string, any>;
 		user: User & Record<string, any>;
 		updatedAt: number;
+		version?: string;
 	},
 >(
 	request: Request | Headers,
@@ -337,6 +352,16 @@ export const getCookieCache = async <
 		isSecure?: boolean;
 		secret?: string;
 		strategy?: "compact" | "jwt" | "jwe"; // base64-hmac for backward compatibility
+		version?:
+			| string
+			| ((
+					session: Session & Record<string, any>,
+					user: User & Record<string, any>,
+			  ) => string)
+			| ((
+					session: Session & Record<string, any>,
+					user: User & Record<string, any>,
+			  ) => Promise<string>);
 	},
 ) => {
 	const headers = request instanceof Headers ? request : request.headers;
@@ -375,6 +400,20 @@ export const getCookieCache = async <
 			);
 
 			if (payload && payload.session && payload.user) {
+				// Validate version if provided
+				if (config?.version) {
+					const cookieVersion = payload.version || "1";
+					let expectedVersion = "1";
+					if (typeof config.version === "string") {
+						expectedVersion = config.version;
+					} else if (typeof config.version === "function") {
+						const result = config.version(payload.session, payload.user);
+						expectedVersion = result instanceof Promise ? await result : result;
+					}
+					if (cookieVersion !== expectedVersion) {
+						return null;
+					}
+				}
 				return payload;
 			}
 			return null;
@@ -383,6 +422,20 @@ export const getCookieCache = async <
 			const payload = await verifyJWT<S>(sessionData, secret);
 
 			if (payload && payload.session && payload.user) {
+				// Validate version if provided
+				if (config?.version) {
+					const cookieVersion = payload.version || "1";
+					let expectedVersion = "1";
+					if (typeof config.version === "string") {
+						expectedVersion = config.version;
+					} else if (typeof config.version === "function") {
+						const result = config.version(payload.session, payload.user);
+						expectedVersion = result instanceof Promise ? await result : result;
+					}
+					if (cookieVersion !== expectedVersion) {
+						return null;
+					}
+				}
 				return payload;
 			}
 			return null;
@@ -407,6 +460,25 @@ export const getCookieCache = async <
 			if (!isValid) {
 				return null;
 			}
+			
+			// Validate version if provided
+			if (config?.version && sessionDataPayload.session) {
+				const cookieVersion = sessionDataPayload.session.version || "1";
+				let expectedVersion = "1";
+				if (typeof config.version === "string") {
+					expectedVersion = config.version;
+				} else if (typeof config.version === "function") {
+					const result = config.version(
+						sessionDataPayload.session.session,
+						sessionDataPayload.session.user,
+					);
+					expectedVersion = result instanceof Promise ? await result : result;
+				}
+				if (cookieVersion !== expectedVersion) {
+					return null;
+				}
+			}
+			
 			return sessionDataPayload.session;
 		}
 	}

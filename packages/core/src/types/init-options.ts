@@ -747,6 +747,27 @@ export type BetterAuthOptions = {
 						 */
 						updateAge?: number;
 				  };
+			/**
+			 * Version of the cookie cache
+			 *
+			 * If a cookie cache version is changed, all existing cookie caches with the old version
+			 * will be invalidated.
+			 *
+			 * It can be a string or a function that returns a string or a promise that returns a string.
+			 * If it's a function, it will be called with the session and user data
+			 *
+			 * @default "1"
+			 */
+			version?:
+				| string
+				| ((
+						session: Session & Record<string, any>,
+						user: User & Record<string, any>,
+				  ) => string)
+				| ((
+						session: Session & Record<string, any>,
+						user: User & Record<string, any>,
+				  ) => Promise<string>);
 		};
 		/**
 		 * The age of the session to consider it fresh.
