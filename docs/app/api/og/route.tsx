@@ -4,8 +4,8 @@ export const runtime = "edge";
 
 const ogSchema = z.object({
 	heading: z.string().default("Better Auth Documentation"),
-	mode: z.string().default("dark"),
-	type: z.string().default("documentation"),
+	mode: z.enum(["dark", "light"]).default("dark"),
+	type: z.enum(["documentation", "api"]).default("documentation"),
 });
 export async function GET(req: Request) {
 	try {

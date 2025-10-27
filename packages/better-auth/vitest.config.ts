@@ -7,5 +7,7 @@ export default defineConfig({
 				execArgv: ["--expose-gc"],
 			},
 		},
+		environment: "jsdom", // Simulates a browser environment
+		setupFiles: ["./vitest-setup.ts"],
 	},
 });
