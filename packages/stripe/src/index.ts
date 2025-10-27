@@ -540,7 +540,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						subscription,
 					},
 					ctx.request,
-					//@ts-expect-error
 					ctx,
 				);
 

@@ -247,6 +247,7 @@ export type SubscriptionOptions = {
 	 * parameters for session create params
 	 *
 	 * @param data - data containing user, session and plan
+	 * @param req - the request object
 	 * @param ctx - the context object
 	 */
 	getCheckoutSessionParams?: (
@@ -256,6 +257,7 @@ export type SubscriptionOptions = {
 			plan: StripePlan;
 			subscription: Subscription;
 		},
+		req: GenericEndpointContext["request"],
 		ctx: GenericEndpointContext,
 	) =>
 		| Promise<{
