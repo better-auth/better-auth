@@ -111,6 +111,10 @@ exports[`init > should match config 1`] = `
     "warn": [Function],
   },
   "newSession": null,
+  "oauthConfig": {
+    "skipStateCookieCheck": false,
+    "storeStateStrategy": "database",
+  },
   "options": {
     "basePath": "/api/auth",
     "baseURL": "http://localhost:3000",
@@ -145,6 +149,7 @@ exports[`init > should match config 1`] = `
   "secret": "better-auth-secret-123456789",
   "session": null,
   "sessionConfig": {
+    "cookieFreshCache": false,
     "expiresIn": 604800,
     "freshAge": 86400,
     "updateAge": 86400,

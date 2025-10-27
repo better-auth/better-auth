@@ -1,12 +1,12 @@
 import {
-	getAuthTables,
 	type BetterAuthDBSchema,
 	type DBFieldAttribute,
+	getAuthTables,
 } from "better-auth/db";
 import type { BetterAuthOptions } from "better-auth/types";
 import { existsSync } from "fs";
-import type { SchemaGenerator } from "./types";
 import prettier from "prettier";
+import type { SchemaGenerator } from "./types";
 
 export function convertToSnakeCase(str: string, camelCase?: boolean) {
 	if (camelCase) {

@@ -1,4 +1,6 @@
-import { drizzleAdapter } from "../drizzle-adapter";
+import { execSync } from "child_process";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
@@ -6,10 +8,8 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
-import { drizzle } from "drizzle-orm/node-postgres";
+import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
-import { Pool } from "pg";
-import { execSync } from "child_process";
 
 const pgDB = new Pool({
 	connectionString: "postgres://user:password@localhost:5432/better_auth",

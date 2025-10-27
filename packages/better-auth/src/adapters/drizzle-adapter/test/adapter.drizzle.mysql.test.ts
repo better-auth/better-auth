@@ -1,4 +1,7 @@
-import { drizzleAdapter } from "../drizzle-adapter";
+import { execSync } from "child_process";
+import { drizzle } from "drizzle-orm/mysql2";
+import { createPool } from "mysql2/promise";
+import { assert } from "vitest";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
@@ -6,11 +9,8 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
-import { createPool } from "mysql2/promise";
-import { assert } from "vitest";
-import { execSync } from "child_process";
 
 const mysqlDB = createPool({
 	uri: "mysql://user:password@localhost:3306",

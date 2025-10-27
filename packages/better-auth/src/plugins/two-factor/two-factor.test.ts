@@ -1,13 +1,13 @@
+import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
-import type { TwoFactorTable, UserWithTwoFactor } from "./types";
-import { DEFAULT_SECRET } from "../../utils/constants";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
-import { createOTP } from "@better-auth/utils/otp";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { DEFAULT_SECRET } from "../../utils/constants";
+import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
+import type { TwoFactorTable, UserWithTwoFactor } from "./types";
 
 describe("two factor", async () => {
 	let OTP = "";
