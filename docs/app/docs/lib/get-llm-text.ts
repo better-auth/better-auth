@@ -262,8 +262,6 @@ const processor = remark()
 	.use(remarkStringify);
 
 export async function getLLMText(docPage: any) {
-	const category = [docPage.slugs[0]];
-
 	// Read the raw file content
 	const rawContent = await readFile(docPage.data._file.absolutePath, "utf-8");
 
@@ -275,14 +273,10 @@ export async function getLLMText(docPage: any) {
 		value: processedContent,
 	});
 
-	return `# ${category}: ${docPage.data.title}
-URL: ${docPage.url}
-Source: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/${
-		docPage.file.path
-	}
+	return `# ${docPage.data.title}
 
-${docPage.data.description}
-        
+${docPage.data.description || ""}
+
 ${processed.toString()}
 `;
 }
