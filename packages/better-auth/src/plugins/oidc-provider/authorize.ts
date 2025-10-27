@@ -27,7 +27,7 @@ export async function authorize(
 	options: OIDCOptions,
 ) {
 	const handleRedirect = (url: string) => {
-		const fromFetch = ctx.request?.headers.get("sec-fetch-mode") === "cors";
+		const fromFetch = ctx.headers?.get("sec-fetch-mode") === "cors";
 		if (fromFetch) {
 			return ctx.json({
 				redirect: true,
@@ -50,12 +50,6 @@ export async function authorize(
 			...(options?.scopes || []),
 		],
 	};
-	if (!ctx.request) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "request not found",
-			error: "invalid_request",
-		});
-	}
 	const session = await getSessionFromCtx(ctx);
 	if (!session) {
 		/**
@@ -72,8 +66,8 @@ export async function authorize(
 				sameSite: "lax",
 			},
 		);
-		const queryFromURL = ctx.request.url?.split("?")[1]!;
-		return handleRedirect(`${options.loginPage}?${queryFromURL}`);
+		const queryParams = new URLSearchParams(ctx.query);
+		return handleRedirect(`${options.loginPage}?${queryParams.toString}`);
 	}
 
 	const query = ctx.query as AuthorizationQuery;
