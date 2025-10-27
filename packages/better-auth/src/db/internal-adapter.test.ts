@@ -615,4 +615,3 @@ describe("internal adapter test", async () => {
 		expect(accounts.length).toBe(0);
 	});
 });
-
