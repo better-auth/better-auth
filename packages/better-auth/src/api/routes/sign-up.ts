@@ -6,8 +6,8 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
-import { parseUserInput } from "../../db";
 import { generateRandomString } from "../../crypto";
+import { parseUserInput } from "../../db";
 import type { AdditionalUserFieldsInput, User } from "../../types";
 import { createEmailVerificationToken } from "./email-verification";
 
