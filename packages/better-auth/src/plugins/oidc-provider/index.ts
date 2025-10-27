@@ -810,7 +810,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const payload = {
 						sub: user.id,
 						aud: client_id.toString(),
-						iat: Date.now(),
+						iat: iat,
 						auth_time: ctx.context.session
 							? new Date(ctx.context.session.session.createdAt).getTime()
 							: undefined,
@@ -861,7 +861,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 									...jwtPlugin.options?.jwt,
 									getSubject: () => user.id,
 									audience: client_id.toString(),
-									issuer: ctx.context.options.baseURL,
+									issuer:
+										jwtPlugin.options?.jwt?.issuer ??
+										ctx.context.options.baseURL,
 									expirationTime,
 									definePayload: () => payload,
 								},
