@@ -1,13 +1,3 @@
-import { parse } from "dotenv";
-import semver from "semver";
-import { format as prettierFormat } from "prettier";
-import { Command } from "commander";
-import * as z from "zod/v4";
-import { existsSync } from "fs";
-import path from "path";
-import fs from "fs/promises";
-import { getPackageInfo } from "../utils/get-package-info";
-import chalk from "chalk";
 import {
 	cancel,
 	confirm,
@@ -20,12 +10,22 @@ import {
 	spinner,
 	text,
 } from "@clack/prompts";
-import { installDependencies } from "../utils/install-dependencies";
+import chalk from "chalk";
+import { Command } from "commander";
+import { parse } from "dotenv";
+import { existsSync } from "fs";
+import fs from "fs/promises";
+import path from "path";
+import { format as prettierFormat } from "prettier";
+import semver from "semver";
+import * as z from "zod/v4";
+import { generateAuthConfig } from "../generators/auth-config";
 import { checkPackageManagers } from "../utils/check-package-managers";
 import { formatMilliseconds } from "../utils/format-ms";
-import { generateSecretHash } from "./secret";
-import { generateAuthConfig } from "../generators/auth-config";
+import { getPackageInfo } from "../utils/get-package-info";
 import { getTsconfigInfo } from "../utils/get-tsconfig-info";
+import { installDependencies } from "../utils/install-dependencies";
+import { generateSecretHash } from "./secret";
 
 /**
  * Should only use any database that is core DBs, and supports the Better Auth CLI generate functionality.

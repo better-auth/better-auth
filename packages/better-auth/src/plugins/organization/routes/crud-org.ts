@@ -1,12 +1,16 @@
-import * as z from "zod";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "better-call";
+import * as z from "zod";
+import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
+import { setSessionCookie } from "../../../cookies";
+import {
+	type InferAdditionalFieldsFromPluginOptions,
+	toZodSchema,
+} from "../../../db";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { APIError } from "better-call";
-import { setSessionCookie } from "../../../cookies";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
-import type { OrganizationOptions } from "../types";
+import { hasPermission } from "../has-permission";
 import type {
 	InferInvitation,
 	InferMember,
@@ -15,11 +19,7 @@ import type {
 	Team,
 	TeamMember,
 } from "../schema";
-import { hasPermission } from "../has-permission";
-import {
-	toZodSchema,
-	type InferAdditionalFieldsFromPluginOptions,
-} from "../../../db";
+import type { OrganizationOptions } from "../types";
 
 export const createOrganization = <O extends OrganizationOptions>(
 	options?: O,
