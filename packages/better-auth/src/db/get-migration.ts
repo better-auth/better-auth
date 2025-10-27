@@ -3,8 +3,8 @@ import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
 import { createLogger } from "@better-auth/core/env";
 import type {
 	AlterTableColumnAlteringBuilder,
-	CreateTableBuilder,
 	CreateIndexBuilder,
+	CreateTableBuilder,
 	Kysely,
 } from "kysely";
 import { sql } from "kysely";

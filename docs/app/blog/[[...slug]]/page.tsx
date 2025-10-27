@@ -21,9 +21,6 @@ import { BlogPage } from "../_components/blog-list";
 import { Glow } from "../_components/default-changelog";
 import { XIcon } from "../_components/icons";
 import { StarField } from "../_components/stat-field";
-import { BlogPage } from "../_components/blog-list";
-import { Callout } from "@/components/ui/callout";
-import { ArrowLeftIcon, ExternalLink } from "lucide-react";
 import { Support } from "../_components/support";
 
 const metaTitle = "Blogs";
