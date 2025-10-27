@@ -106,6 +106,9 @@ pnpm lint:fix
    ```bash
    docker compose up -d
    ```
+
+   > Note: On MacOS, the **mssql** container will likely require Rosetta emulation and at least 2GB of RAM of allocated memory. See their [container requirements](https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker?view=sql-server-ver17&tabs=cli&pivots=cs1-bash#prerequisites).
+
 5. Run the test suite:
    ```bash
    # Run all tests
