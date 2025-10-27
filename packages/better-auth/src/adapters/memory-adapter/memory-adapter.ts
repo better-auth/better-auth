@@ -173,6 +173,8 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 
 				// Group results by base model and nest joined data as arrays
 				const grouped = new Map<string, any>();
+				// Track seen IDs per joined model for O(1) deduplication
+				const seenIds = new Map<string, Set<string>>();
 
 				for (const baseRecord of baseRecords) {
 					const baseId = String(baseRecord.id);
@@ -180,9 +182,10 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 					if (!grouped.has(baseId)) {
 						const nested: Record<string, any> = { ...baseRecord };
 
-						// Initialize joined arrays
+						// Initialize joined arrays and seen sets
 						for (const joinModel of joinedModels) {
 							nested[getModelName(joinModel)] = [];
+							seenIds.set(`${baseId}-${joinModel}`, new Set());
 						}
 
 						grouped.set(baseId, nested);
@@ -208,12 +211,11 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 						);
 
 						// Add matching records to the array, avoiding duplicates
+						const seenSet = seenIds.get(`${baseId}-${joinModel}`)!;
 						for (const matchingRecord of matchingRecords) {
-							const exists = nestedEntry[joinModelName].some(
-								(item: any) => item.id === matchingRecord.id,
-							);
-							if (!exists) {
+							if (!seenSet.has(matchingRecord.id)) {
 								nestedEntry[joinModelName].push(matchingRecord);
+								seenSet.add(matchingRecord.id);
 							}
 						}
 					}
