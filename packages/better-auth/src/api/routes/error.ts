@@ -1,7 +1,7 @@
-import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { isProduction } from "@better-auth/core/env";
+import { HIDE_METADATA } from "../../utils/hide-metadata";
 
 function sanitize(input: string): string {
 	return input
