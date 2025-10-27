@@ -9,6 +9,7 @@ on:
 jobs:
   cherry-pick:
     runs-on: ubuntu-latest
+    if: github.repository == 'better-auth/better-auth'
 
     permissions:
       contents: write
