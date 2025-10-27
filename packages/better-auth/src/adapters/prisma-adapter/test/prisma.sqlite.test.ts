@@ -2,7 +2,12 @@ import fs from "node:fs/promises";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { join } from "path";
 import { testAdapter } from "../../test-adapter";
-import { authFlowTestSuite, normalTestSuite, numberIdTestSuite, transactionsTestSuite } from "../../tests";
+import {
+	authFlowTestSuite,
+	normalTestSuite,
+	numberIdTestSuite,
+	transactionsTestSuite,
+} from "../../tests";
 import { prismaAdapter } from "../prisma-adapter";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";

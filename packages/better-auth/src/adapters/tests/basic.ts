@@ -1,8 +1,14 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { expect } from "vitest";
+import {
+	type Invitation,
+	type Member,
+	type Organization,
+	organization,
+	type Team,
+} from "../../plugins";
 import type { Account, Session, User } from "../../types";
 import { createTestSuite } from "../create-test-suite";
-import { organization, type Invitation, type Member, type Organization, type Team } from "../../plugins";
 
 /**
  * This test suite tests the basic CRUD operations of the adapter.
@@ -2116,7 +2122,7 @@ export const getNormalTestSuiteTests = ({
 			async () => {
 				await modifyBetterAuthOptions(
 					{
-						plugins: [organization({teams: {enabled: true}})],
+						plugins: [organization({ teams: { enabled: true } })],
 					},
 					true,
 				);
@@ -2180,7 +2186,6 @@ export const getNormalTestSuiteTests = ({
 					},
 				});
 
-				
 				expect(result).toBeDefined();
 				expect(result?.id).toBe(organizationData.id);
 				expect(result?.name).toBe("Test Organization");
