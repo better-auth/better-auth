@@ -120,6 +120,14 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					}
 				}
 			}
+			const getModelName = initGetModelName({
+				schema: getAuthTables(options),
+				usePlural: adapter.options?.adapterConfig?.usePlural,
+			});
+			const getFieldName = initGetFieldName({
+				schema: getAuthTables(options),
+				usePlural: false,
+			});
 
 			for (const field in fields) {
 				const attr = fields[field]!;
@@ -186,15 +194,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					// custom logic within that function that might not work in prisma's context.
 				}
 
-				const getModelName = initGetModelName({
-					schema: getAuthTables(options),
-					usePlural: adapter.options?.adapterConfig?.usePlural,
-				});
-				const getFieldName = initGetFieldName({
-					schema: getAuthTables(options),
-					usePlural: false,
-				});
-
 				if (attr.references) {
 					const referencedOriginalModelName = getModelName(
 						attr.references.model,
@@ -245,7 +244,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						: {};
 					const fkField = Object.entries(relatedFields || {}).find(
 						([_fieldName, fieldAttr]: any) =>
-							fieldAttr.references?.model === originalTableName,
+							fieldAttr.references &&
+							getModelName(fieldAttr.references.model) ===
+								getModelName(originalTableName),
 					);
 					const [_fieldKey, fkFieldAttr] = fkField || [];
 					const isUnique = fkFieldAttr?.unique === true;

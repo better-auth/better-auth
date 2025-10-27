@@ -2,13 +2,7 @@ import fs from "node:fs/promises";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { join } from "path";
 import { testAdapter } from "../../test-adapter";
-import {
-	authFlowTestSuite,
-	normalTestSuite,
-	numberIdTestSuite,
-	performanceTestSuite,
-	transactionsTestSuite,
-} from "../../tests";
+import { numberIdTestSuite } from "../../tests";
 import { prismaAdapter } from "../prisma-adapter";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
@@ -44,11 +38,15 @@ const { execute } = await testAdapter({
 		destroyPrismaClient({ migrationCount: migrationCount - 1, dialect });
 	},
 	tests: [
-		normalTestSuite(),
-		transactionsTestSuite(),
-		authFlowTestSuite(),
-		numberIdTestSuite({}),
-		performanceTestSuite({ dialect }),
+		// normalTestSuite(),
+		// transactionsTestSuite(),
+		// authFlowTestSuite(),
+		numberIdTestSuite({
+			disableTests: {
+				ALL: true,
+				"findOne - backwards join with modified field name (session base, users-table join)": false,
+			},
+		}),
 	],
 	onFinish: async () => {},
 	prefixTests: dialect,

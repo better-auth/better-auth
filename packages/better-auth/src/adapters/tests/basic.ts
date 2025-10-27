@@ -2081,7 +2081,7 @@ export const getNormalTestSuiteTests = ({
 				await modifyBetterAuthOptions(
 					{
 						user: {
-							modelName: "users-table",
+							modelName: "user_table",
 						},
 					},
 					true,

@@ -108,7 +108,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						schema[defaultJoinedModelName]?.fields || {},
 					).filter(
 						([_field, fieldAttributes]: any) =>
-							fieldAttributes.references?.model === defaultBaseModelName,
+							fieldAttributes.references &&
+							getDefaultModelName(fieldAttributes.references.model) ===
+								defaultBaseModelName,
 					);
 
 					if (foreignKeys.length > 0) {
@@ -126,7 +128,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						schema[defaultBaseModelName]?.fields || {},
 					).filter(
 						([_field, fieldAttributes]: any) =>
-							fieldAttributes.references?.model === defaultJoinedModelName,
+							fieldAttributes.references &&
+							getDefaultModelName(fieldAttributes.references.model) ===
+								defaultJoinedModelName,
 					);
 
 					if (foreignKeys.length > 0) {
