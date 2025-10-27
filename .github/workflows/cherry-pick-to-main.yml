@@ -218,6 +218,24 @@ jobs:
             const conflictPrs = '${{ steps.cherry-pick.outputs.conflict_prs }}'.trim().split(' ').filter(Boolean);
 
             for (const prNumber of conflictPrs) {
+              console.log(`Checking PR #${prNumber} for existing conflict comment`);
+
+              // Check if we've already commented about conflicts
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+              });
+
+              const hasConflictComment = comments.data.some(comment =>
+                comment.body.includes('Cherry-pick to `main` failed due to conflicts')
+              );
+
+              if (hasConflictComment) {
+                console.log(`⏭️ Skipping PR #${prNumber} - conflict comment already exists`);
+                continue;
+              }
+
               console.log(`Adding conflict comment to PR #${prNumber}`);
 
               await github.rest.issues.createComment({
