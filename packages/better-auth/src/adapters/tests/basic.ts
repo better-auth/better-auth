@@ -631,7 +631,7 @@ export const getNormalTestSuiteTests = ({
 				join: { session: true },
 				limit: 2,
 			});
-			
+
 			expect(result).toHaveLength(2);
 			result.forEach((user) => {
 				expect(user.session).toHaveLength(3);
@@ -744,7 +744,9 @@ export const getNormalTestSuiteTests = ({
 
 			const result = await adapter.findMany<User & { session: Session[] }>({
 				model: "user",
-				where: [{ field: "name", value: "target-user", operator: "starts_with" }],
+				where: [
+					{ field: "name", value: "target-user", operator: "starts_with" },
+				],
 				join: { session: true },
 			});
 
@@ -754,42 +756,43 @@ export const getNormalTestSuiteTests = ({
 				expect(user.session).toHaveLength(2);
 			});
 		},
-		"findMany - should find many with join, where, limit, and offset": async () => {
-			const users: User[] = [];
+		"findMany - should find many with join, where, limit, and offset":
+			async () => {
+				const users: User[] = [];
 
-			for (let i = 0; i < 10; i++) {
-				const user = await adapter.create<User>({
-					model: "user",
-					data: {
-						...(await generate("user")),
-						name: `target-${i.toString().padStart(2, "0")}`,
-					},
-					forceAllowId: true,
-				});
-				users.push(user);
-
-				for (let j = 0; j < 2; j++) {
-					await adapter.create<Session>({
-						model: "session",
-						data: { ...(await generate("session")), userId: user.id },
+				for (let i = 0; i < 10; i++) {
+					const user = await adapter.create<User>({
+						model: "user",
+						data: {
+							...(await generate("user")),
+							name: `target-${i.toString().padStart(2, "0")}`,
+						},
 						forceAllowId: true,
 					});
+					users.push(user);
+
+					for (let j = 0; j < 2; j++) {
+						await adapter.create<Session>({
+							model: "session",
+							data: { ...(await generate("session")), userId: user.id },
+							forceAllowId: true,
+						});
+					}
 				}
-			}
 
-			const result = await adapter.findMany<User & { session: Session[] }>({
-				model: "user",
-				where: [{ field: "name", value: "target", operator: "starts_with" }],
-				join: { session: true },
-				limit: 3,
-				offset: 2,
-			});
+				const result = await adapter.findMany<User & { session: Session[] }>({
+					model: "user",
+					where: [{ field: "name", value: "target", operator: "starts_with" }],
+					join: { session: true },
+					limit: 3,
+					offset: 2,
+				});
 
-			expect(result).toHaveLength(3);
-			result.forEach((user) => {
-				expect(user.session).toHaveLength(2);
-			});
-		},
+				expect(result).toHaveLength(3);
+				result.forEach((user) => {
+					expect(user.session).toHaveLength(2);
+				});
+			},
 		"findMany - should find many with one-to-one join": async () => {
 			await modifyBetterAuthOptions(
 				{
@@ -840,65 +843,66 @@ export const getNormalTestSuiteTests = ({
 				expect(user.oneToOneTable.oneToOne).toBe(user.id);
 			});
 		},
-		"findMany - should find many with both one-to-one and one-to-many joins": async () => {
-			await modifyBetterAuthOptions(
-				{
-					plugins: [
-						{
-							id: "one-to-one-test",
-							schema: {
-								oneToOneTable: {
-									fields: {
-										oneToOne: {
-											type: "string",
-											required: true,
-											references: { field: "id", model: "user" },
-											unique: true,
+		"findMany - should find many with both one-to-one and one-to-many joins":
+			async () => {
+				await modifyBetterAuthOptions(
+					{
+						plugins: [
+							{
+								id: "one-to-one-test",
+								schema: {
+									oneToOneTable: {
+										fields: {
+											oneToOne: {
+												type: "string",
+												required: true,
+												references: { field: "id", model: "user" },
+												unique: true,
+											},
 										},
 									},
 								},
-							},
-						} satisfies BetterAuthPlugin,
-					],
-				},
-				true,
-			);
+							} satisfies BetterAuthPlugin,
+						],
+					},
+					true,
+				);
 
-			type OneToOneTable = { oneToOne: string; id: string };
-			const users = (await insertRandom("user", 2)).map((x) => x[0]);
+				type OneToOneTable = { oneToOne: string; id: string };
+				const users = (await insertRandom("user", 2)).map((x) => x[0]);
 
-			for (const user of users) {
-				await adapter.create<OneToOneTable>({
-					model: "oneToOneTable",
-					data: { oneToOne: user.id },
+				for (const user of users) {
+					await adapter.create<OneToOneTable>({
+						model: "oneToOneTable",
+						data: { oneToOne: user.id },
+					});
+
+					for (let i = 0; i < 2; i++) {
+						await adapter.create<Session>({
+							model: "session",
+							data: { ...(await generate("session")), userId: user.id },
+							forceAllowId: true,
+						});
+					}
+				}
+
+				const result = await adapter.findMany<
+					User & { oneToOneTable: OneToOneTable; session: Session[] }
+				>({
+					model: "user",
+					join: { oneToOneTable: true, session: true },
 				});
 
-				for (let i = 0; i < 2; i++) {
-					await adapter.create<Session>({
-						model: "session",
-						data: { ...(await generate("session")), userId: user.id },
-						forceAllowId: true,
-					});
-				}
-			}
-
-			const result = await adapter.findMany<
-				User & { oneToOneTable: OneToOneTable; session: Session[] }
-			>({
-				model: "user",
-				join: { oneToOneTable: true, session: true },
-			});
-
-			const resultsWithBothJoins = result.filter(
-				(r) => r.oneToOneTable && r.session?.length > 0,
-			);
-			expect(resultsWithBothJoins.length).toBeGreaterThanOrEqual(2);
-			resultsWithBothJoins.forEach((user) => {
-				expect(user.oneToOneTable).toBeDefined();
-				expect(Array.isArray(user.session)).toBe(true);
-				expect(user.session.length).toBeGreaterThan(0);
-			});
-		},
+				const resultsWithBothJoins = result.filter(
+					(r) => r.oneToOneTable && r.session?.length > 0,
+				);
+				expect(resultsWithBothJoins.length).toBeGreaterThanOrEqual(2);
+				resultsWithBothJoins.forEach((user) => {
+					expect(user.oneToOneTable).toBeDefined();
+					expect(Array.isArray(user.session)).toBe(true);
+					expect(user.session.length).toBeGreaterThan(0);
+				});
+			},
 		"findMany - should return an empty array when no models are found":
 			async () => {
 				const result = await adapter.findMany<User>({
@@ -1896,52 +1900,54 @@ export const getNormalTestSuiteTests = ({
 				expect(result!.email).toBe(user.email); // Should remain unchanged
 				expect(result!.id).toBe(user.id);
 			},
-		"findOne - backwards join should only return single record not array": async () => {
-			const user = await adapter.create<User>({
-				model: "user",
-				data: { ...(await generate("user")) },
-				forceAllowId: true,
-			});
-			const session = await adapter.create<Session>({
-				model: "session",
-				data: { ...(await generate("session")), userId: user.id },
-				forceAllowId: true,
-			});
-
-			const result = await adapter.findOne<Session & { user: User }>({
-				model: "session",
-				where: [{ field: "id", value: session.id }],
-				join: { user: true },
-			});
-
-			expect(result?.user).toBeDefined();
-			expect(Array.isArray(result?.user)).toBe(false);
-			expect(result?.user?.id).toBe(user.id);
-		},
-		"findMany - backwards join should only return single record not array": async () => {
-			const users = (await insertRandom("user", 2)).map((x) => x[0]);
-			const sessions: Session[] = [];
-
-			for (const user of users) {
+		"findOne - backwards join should only return single record not array":
+			async () => {
+				const user = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
 				const session = await adapter.create<Session>({
 					model: "session",
 					data: { ...(await generate("session")), userId: user.id },
 					forceAllowId: true,
 				});
-				sessions.push(session);
-			}
 
-			const result = await adapter.findMany<Session & { user: User }>({
-				model: "session",
-				join: { user: true },
-			});
+				const result = await adapter.findOne<Session & { user: User }>({
+					model: "session",
+					where: [{ field: "id", value: session.id }],
+					join: { user: true },
+				});
 
-			result.forEach((session) => {
-				expect(session.user).toBeDefined();
-				expect(Array.isArray(session.user)).toBe(false);
-				expect(session.user?.id).toBeDefined();
-			});
-		},
+				expect(result?.user).toBeDefined();
+				expect(Array.isArray(result?.user)).toBe(false);
+				expect(result?.user?.id).toBe(user.id);
+			},
+		"findMany - backwards join should only return single record not array":
+			async () => {
+				const users = (await insertRandom("user", 2)).map((x) => x[0]);
+				const sessions: Session[] = [];
+
+				for (const user of users) {
+					const session = await adapter.create<Session>({
+						model: "session",
+						data: { ...(await generate("session")), userId: user.id },
+						forceAllowId: true,
+					});
+					sessions.push(session);
+				}
+
+				const result = await adapter.findMany<Session & { user: User }>({
+					model: "session",
+					join: { user: true },
+				});
+
+				result.forEach((session) => {
+					expect(session.user).toBeDefined();
+					expect(Array.isArray(session.user)).toBe(false);
+					expect(session.user?.id).toBeDefined();
+				});
+			},
 	};
 };
 

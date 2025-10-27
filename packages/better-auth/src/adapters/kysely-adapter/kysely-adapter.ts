@@ -477,7 +477,14 @@ export const kyselyAdapter = (
 					const res = await query.execute();
 					if (!res) return [];
 					if (join) {
-						return processJoinedResults(res, model, join, allSelectsStr, limit, offset);
+						return processJoinedResults(
+							res,
+							model,
+							join,
+							allSelectsStr,
+							limit,
+							offset,
+						);
 					}
 
 					return res;

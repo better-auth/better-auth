@@ -6,7 +6,6 @@ import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
-	enableJoinTests,
 	normalTestSuite,
 	numberIdTestSuite,
 	performanceTestSuite,

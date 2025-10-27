@@ -480,9 +480,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = where ? convertWhereClause(where, model) : [];
 
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
-					let builder = db
-						.select()
-						.from(schemaModel)
+					let builder = db.select().from(schemaModel);
 
 					if (!join) {
 						builder = builder.limit(limit || 100);
@@ -513,7 +511,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 					}
 					const res = await builder.where(...clause);
-					const joinedResult = nestJoinedResults(res, model, join, join ? limit : undefined, join ? offset : undefined);
+					const joinedResult = nestJoinedResults(
+						res,
+						model,
+						join,
+						join ? limit : undefined,
+						join ? offset : undefined,
+					);
 					return joinedResult;
 				},
 				async count({ model, where }) {

@@ -6,7 +6,6 @@ import path from "path";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
-	enableJoinTests,
 	normalTestSuite,
 	numberIdTestSuite,
 	performanceTestSuite,
