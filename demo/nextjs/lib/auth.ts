@@ -1,28 +1,28 @@
+import { sso } from "@better-auth/sso";
+import { stripe } from "@better-auth/stripe";
+import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { betterAuth } from "better-auth";
+import { nextCookies } from "better-auth/next-js";
 import {
-	bearer,
 	admin,
-	multiSession,
-	organization,
-	twoFactor,
-	oneTap,
-	oAuthProxy,
-	openAPI,
+	bearer,
 	customSession,
 	deviceAuthorization,
 	lastLoginMethod,
+	multiSession,
+	oAuthProxy,
+	oneTap,
+	openAPI,
+	organization,
+	twoFactor,
 } from "better-auth/plugins";
-import { reactInvitationEmail } from "./email/invitation";
-import { LibsqlDialect } from "@libsql/kysely-libsql";
-import { reactResetPasswordEmail } from "./email/reset-password";
-import { resend } from "./email/resend";
+import { passkey } from "better-auth/plugins/passkey";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
-import { nextCookies } from "better-auth/next-js";
-import { passkey } from "better-auth/plugins/passkey";
-import { stripe } from "@better-auth/stripe";
-import { sso } from "@better-auth/sso";
 import { Stripe } from "stripe";
+import { reactInvitationEmail } from "./email/invitation";
+import { resend } from "./email/resend";
+import { reactResetPasswordEmail } from "./email/reset-password";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";

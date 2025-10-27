@@ -1,13 +1,13 @@
+import Ionicons from "@expo/vector-icons/AntDesign";
+import { useStore } from "@nanostores/react";
+import { router } from "expo-router";
+import { useEffect } from "react";
+import { View } from "react-native";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/card";
 import { Text } from "@/components/ui/text";
 import { authClient } from "@/lib/auth-client";
-import { View } from "react-native";
-import Ionicons from "@expo/vector-icons/AntDesign";
-import { router } from "expo-router";
-import { useEffect } from "react";
-import { useStore } from "@nanostores/react";
 
 export default function Dashboard() {
 	const { data: session, isPending } = useStore(authClient.useSession);

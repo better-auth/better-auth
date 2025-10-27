@@ -1,7 +1,8 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import { Kysely, PostgresDialect } from "kysely";
-import { testAdapter } from "../../test-adapter";
-import { kyselyAdapter } from "../kysely-adapter";
 import { Pool } from "pg";
+import { getMigrations } from "../../../db";
+import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
@@ -9,8 +10,7 @@ import {
 	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
-import { getMigrations } from "../../../db";
-import type { BetterAuthOptions } from "@better-auth/core";
+import { kyselyAdapter } from "../kysely-adapter";
 
 const pgDB = new Pool({
 	connectionString: "postgres://user:password@localhost:5433/better_auth",

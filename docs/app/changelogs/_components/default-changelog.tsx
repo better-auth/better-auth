@@ -1,14 +1,14 @@
+import { betterFetch } from "@better-fetch/fetch";
+import { DiscordLogoIcon } from "@radix-ui/react-icons";
+import defaultMdxComponents from "fumadocs-ui/mdx";
 import Link from "next/link";
 import { useId } from "react";
+import Markdown from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
 import { cn } from "@/lib/utils";
 import { IconLink } from "./changelog-layout";
 import { BookIcon, GitHubIcon, XIcon } from "./icons";
-import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { StarField } from "./stat-field";
-import { betterFetch } from "@better-fetch/fetch";
-import Markdown from "react-markdown";
-import defaultMdxComponents from "fumadocs-ui/mdx";
-import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/dark.css";
 
 export const dynamic = "force-static";
@@ -79,9 +79,9 @@ const ChangelogPage = async () => {
 						<span className="">available here.</span>
 					</h1>
 					<p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
-						Better Auth is comprehensive authentication library for TypeScript
-						that provides a wide range of features to make authentication easier
-						and more secure.
+						Better Auth is the most comprehensive authentication framework for
+						TypeScript that provides a wide range of features to make
+						authentication easier and more secure.
 					</p>
 					<hr className="mt-5 h-px bg-gray-300" />
 					<div className="flex flex-wrap gap-x-1 gap-y-3 mt-8 text-gray-600 dark:text-gray-300 sm:gap-x-2">
