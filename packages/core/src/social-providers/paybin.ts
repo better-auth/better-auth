@@ -104,7 +104,11 @@ export const paybin = (options: PaybinOptions) => {
 			return {
 				user: {
 					id: user.sub,
-					name: user.name || user.preferred_username || user.email,
+					name:
+						user.name ||
+						user.preferred_username ||
+						(user.email ? user.email.split("@")[0] : "User") ||
+						"User",
 					email: user.email,
 					image: user.picture,
 					emailVerified: user.email_verified || false,
