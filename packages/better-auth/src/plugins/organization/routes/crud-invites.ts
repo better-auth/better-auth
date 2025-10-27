@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api/routes";
@@ -181,6 +182,15 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
+
+			const email = ctx.body.email.toLowerCase();
+			const isValidEmail = z.string().email().safeParse(email);
+			if (!isValidEmail.success) {
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.INVALID_EMAIL,
+				});
+			}
+
 			const adapter = getOrgAdapter<O>(ctx.context, option as O);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -225,7 +235,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const alreadyMember = await adapter.findMemberByEmail({
-				email: ctx.body.email,
+				email: email,
 				organizationId: organizationId,
 			});
 			if (alreadyMember) {
@@ -235,7 +245,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				});
 			}
 			const alreadyInvited = await adapter.findPendingInvitation({
-				email: ctx.body.email,
+				email: email,
 				organizationId: organizationId,
 			});
 			if (alreadyInvited.length && !ctx.body.resend) {
@@ -391,7 +401,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 			let invitationData = {
 				role: roles,
-				email: ctx.body.email.toLowerCase(),
+				email: email,
 				organizationId: organizationId,
 				teamIds,
 				...(additionalFields ? additionalFields : {}),
