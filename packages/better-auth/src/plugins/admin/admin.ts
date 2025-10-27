@@ -461,9 +461,17 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							});
 						}
 					}
-					const existUser = await ctx.context.internalAdapter.findUserByEmail(
-						ctx.body.email,
-					);
+
+					const email = ctx.body.email.toLowerCase();
+					const isValidEmail = z.string().email().safeParse(email);
+					if (!isValidEmail.success) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.INVALID_EMAIL,
+						});
+					}
+
+					const existUser =
+						await ctx.context.internalAdapter.findUserByEmail(email);
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {
 							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
@@ -471,7 +479,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const user =
 						await ctx.context.internalAdapter.createUser<UserWithRole>({
-							email: ctx.body.email,
+							email: email,
 							name: ctx.body.name,
 							role:
 								(ctx.body.role && parseRoles(ctx.body.role)) ??
