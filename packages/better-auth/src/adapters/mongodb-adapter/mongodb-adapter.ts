@@ -259,14 +259,14 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 						select.forEach((field) => {
 							projection[getFieldName({ field, model })] = 1;
 						});
-						
+
 						// Include joined collections in projection
 						if (join) {
 							for (const joinedModel of Object.keys(join)) {
 								projection[joinedModel] = 1;
 							}
 						}
-						
+
 						pipeline.push({ $project: projection });
 					}
 

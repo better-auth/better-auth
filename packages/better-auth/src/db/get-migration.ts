@@ -381,7 +381,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 						if (field.references) {
 							col = col
 								.references(
-									getReferencePath(field.references.model, field.references.field),
+									getReferencePath(
+										field.references.model,
+										field.references.field,
+									),
 								)
 								.onDelete(field.references.onDelete || "cascade");
 						}
@@ -440,7 +443,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 					if (field.references) {
 						col = col
 							.references(
-								getReferencePath(field.references.model, field.references.field),
+								getReferencePath(
+									field.references.model,
+									field.references.field,
+								),
 							)
 							.onDelete(field.references.onDelete || "cascade");
 					}

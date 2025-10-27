@@ -271,137 +271,134 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(result).toEqual({ email: user.email, name: user.name });
 		},
-		"findOne - should select fields with one-to-many join":
-			async () => {
-				const user = await adapter.create<User>({
-					model: "user",
-					data: { ...(await generate("user")) },
-					forceAllowId: true,
-				});
-				const session = await adapter.create<Session>({
-					model: "session",
-					data: { ...(await generate("session")), userId: user.id },
-					forceAllowId: true,
-				});
+		"findOne - should select fields with one-to-many join": async () => {
+			const user = await adapter.create<User>({
+				model: "user",
+				data: { ...(await generate("user")) },
+				forceAllowId: true,
+			});
+			const session = await adapter.create<Session>({
+				model: "session",
+				data: { ...(await generate("session")), userId: user.id },
+				forceAllowId: true,
+			});
 
-				type ResultType = Pick<User, "email" | "name"> & {
-					session: Session[];
-				};
+			type ResultType = Pick<User, "email" | "name"> & {
+				session: Session[];
+			};
 
-				const result = await adapter.findOne<ResultType>({
-					model: "user",
-					where: [{ field: "id", value: user.id }],
-					select: ["email", "name"],
-					join: { session: true },
-				});
+			const result = await adapter.findOne<ResultType>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				select: ["email", "name"],
+				join: { session: true },
+			});
 
-				expect(result).toBeDefined();
-				expect(result?.email).toEqual(user.email);
-				expect(result?.name).toEqual(user.name);
-				expect(result?.session).toBeDefined();
-				expect(Array.isArray(result?.session)).toBe(true);
-				expect(result?.session).toHaveLength(1);
-				expect(result?.session[0]).toEqual(session);
-			},
-		"findOne - should select fields with one-to-one join":
-			async () => {
-				await modifyBetterAuthOptions(
-					{
-						plugins: [
-							{
-								id: "one-to-one-test",
-								schema: {
-									oneToOneTable: {
-										fields: {
-											oneToOne: {
-												type: "string",
-												required: true,
-												references: { field: "id", model: "user" },
-												unique: true,
-											},
+			expect(result).toBeDefined();
+			expect(result?.email).toEqual(user.email);
+			expect(result?.name).toEqual(user.name);
+			expect(result?.session).toBeDefined();
+			expect(Array.isArray(result?.session)).toBe(true);
+			expect(result?.session).toHaveLength(1);
+			expect(result?.session[0]).toEqual(session);
+		},
+		"findOne - should select fields with one-to-one join": async () => {
+			await modifyBetterAuthOptions(
+				{
+					plugins: [
+						{
+							id: "one-to-one-test",
+							schema: {
+								oneToOneTable: {
+									fields: {
+										oneToOne: {
+											type: "string",
+											required: true,
+											references: { field: "id", model: "user" },
+											unique: true,
 										},
 									},
 								},
-							} satisfies BetterAuthPlugin,
-						],
-					},
-					true,
-				);
-				type OneToOneTable = { oneToOne: string };
-				const user = await adapter.create<User>({
-					model: "user",
-					data: {
-						...(await generate("user")),
-					},
-					forceAllowId: true,
-				});
+							},
+						} satisfies BetterAuthPlugin,
+					],
+				},
+				true,
+			);
+			type OneToOneTable = { oneToOne: string };
+			const user = await adapter.create<User>({
+				model: "user",
+				data: {
+					...(await generate("user")),
+				},
+				forceAllowId: true,
+			});
 
-				const oneToOne = await adapter.create<OneToOneTable>({
-					model: "oneToOneTable",
-					data: {
-						oneToOne: user.id,
-					},
-				});
+			const oneToOne = await adapter.create<OneToOneTable>({
+				model: "oneToOneTable",
+				data: {
+					oneToOne: user.id,
+				},
+			});
 
-				type ResultType = Pick<User, "email" | "name"> & {
-					oneToOneTable: OneToOneTable;
-				};
+			type ResultType = Pick<User, "email" | "name"> & {
+				oneToOneTable: OneToOneTable;
+			};
 
-				const result = await adapter.findOne<ResultType>({
-					model: "user",
-					where: [{ field: "id", value: user.id }],
-					select: ["email", "name"],
-					join: { oneToOneTable: true },
-				});
+			const result = await adapter.findOne<ResultType>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				select: ["email", "name"],
+				join: { oneToOneTable: true },
+			});
 
-				expect(result).toBeDefined();
-				expect(result?.email).toEqual(user.email);
-				expect(result?.name).toEqual(user.name);
-				expect(result?.oneToOneTable).toBeDefined();
-				expect(result?.oneToOneTable).toEqual(oneToOne);
-			},
-		"findOne - should select fields with multiple joins":
-			async () => {
-				const user = await adapter.create<User>({
-					model: "user",
-					data: { ...(await generate("user")) },
-					forceAllowId: true,
-				});
-				const session = await adapter.create<Session>({
-					model: "session",
-					data: { ...(await generate("session")), userId: user.id },
-					forceAllowId: true,
-				});
-				const account = await adapter.create<Account>({
-					model: "account",
-					data: { ...(await generate("account")), userId: user.id },
-					forceAllowId: true,
-				});
+			expect(result).toBeDefined();
+			expect(result?.email).toEqual(user.email);
+			expect(result?.name).toEqual(user.name);
+			expect(result?.oneToOneTable).toBeDefined();
+			expect(result?.oneToOneTable).toEqual(oneToOne);
+		},
+		"findOne - should select fields with multiple joins": async () => {
+			const user = await adapter.create<User>({
+				model: "user",
+				data: { ...(await generate("user")) },
+				forceAllowId: true,
+			});
+			const session = await adapter.create<Session>({
+				model: "session",
+				data: { ...(await generate("session")), userId: user.id },
+				forceAllowId: true,
+			});
+			const account = await adapter.create<Account>({
+				model: "account",
+				data: { ...(await generate("account")), userId: user.id },
+				forceAllowId: true,
+			});
 
-				type ResultType = Pick<User, "email" | "name"> & {
-					session: Session[];
-					account: Account[];
-				};
+			type ResultType = Pick<User, "email" | "name"> & {
+				session: Session[];
+				account: Account[];
+			};
 
-				const result = await adapter.findOne<ResultType>({
-					model: "user",
-					where: [{ field: "id", value: user.id }],
-					select: ["email", "name"],
-					join: { session: true, account: true },
-				});
+			const result = await adapter.findOne<ResultType>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				select: ["email", "name"],
+				join: { session: true, account: true },
+			});
 
-				expect(result).toBeDefined();
-				expect(result?.email).toEqual(user.email);
-				expect(result?.name).toEqual(user.name);
-				expect(result?.session).toBeDefined();
-				expect(Array.isArray(result?.session)).toBe(true);
-				expect(result?.session).toHaveLength(1);
-				expect(result?.session[0]).toEqual(session);
-				expect(result?.account).toBeDefined();
-				expect(Array.isArray(result?.account)).toBe(true);
-				expect(result?.account).toHaveLength(1);
-				expect(result?.account[0]).toEqual(account);
-			},
+			expect(result).toBeDefined();
+			expect(result?.email).toEqual(user.email);
+			expect(result?.name).toEqual(user.name);
+			expect(result?.session).toBeDefined();
+			expect(Array.isArray(result?.session)).toBe(true);
+			expect(result?.session).toHaveLength(1);
+			expect(result?.session[0]).toEqual(session);
+			expect(result?.account).toBeDefined();
+			expect(Array.isArray(result?.account)).toBe(true);
+			expect(result?.account).toHaveLength(1);
+			expect(result?.account[0]).toEqual(account);
+		},
 		"findOne - should find model with date field": async () => {
 			const [user] = await insertRandom("user");
 			const result = await adapter.findOne<User>({
