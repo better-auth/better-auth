@@ -482,9 +482,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 					let builder = db.select().from(schemaModel);
 
+					// Set effective defaults for limit and offset
+					const effectiveLimit = limit ?? 100;
+					const effectiveOffset = offset ?? 0;
+
 					if (!join) {
-						builder = builder.limit(limit || 100);
-						builder = builder.offset(offset || 0);
+						builder = builder.limit(effectiveLimit);
+						builder = builder.offset(effectiveOffset);
 					}
 
 					if (sortBy?.field) {
@@ -515,8 +519,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						res,
 						model,
 						join,
-						join ? limit : undefined,
-						join ? offset : undefined,
+						join ? effectiveLimit : undefined,
+						join ? effectiveOffset : undefined,
 					);
 					return joinedResult;
 				},

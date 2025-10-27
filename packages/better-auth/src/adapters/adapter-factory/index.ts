@@ -485,7 +485,8 @@ export const createAdapterFactory =
 						);
 					} else {
 						for (const item of joinedData) {
-							td.push(await transformSingleOutput(item, modelName, select));
+							// Don't pass select to joined models - select only applies to base model
+							td.push(await transformSingleOutput(item, modelName, []));
 						}
 
 						// If unique, return single object; otherwise return array
