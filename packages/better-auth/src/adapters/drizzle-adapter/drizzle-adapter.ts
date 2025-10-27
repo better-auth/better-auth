@@ -569,6 +569,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			supportsJoin: true,
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>

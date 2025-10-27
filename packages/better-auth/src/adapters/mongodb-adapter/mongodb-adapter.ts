@@ -422,6 +422,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				_id: "id",
 			},
 			supportsNumericIds: false,
+			supportsJoin: true,
 			transaction:
 				config?.client && (config?.transaction ?? true)
 					? async (cb) => {

@@ -23,6 +23,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 			adapterName: "Memory Adapter",
 			usePlural: false,
 			debugLogs: config?.debugLogs || false,
+			supportsJoin: true,
 			customTransformInput(props) {
 				if (
 					props.options.advanced?.database?.useNumberId &&

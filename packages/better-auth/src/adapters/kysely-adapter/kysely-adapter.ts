@@ -580,6 +580,7 @@ export const kyselyAdapter = (
 					? false
 					: true,
 			supportsJSON: false,
+			supportsJoin: true,
 			transaction:
 				(config?.transaction ?? false)
 					? (cb) =>

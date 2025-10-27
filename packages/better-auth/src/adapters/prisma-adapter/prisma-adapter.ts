@@ -380,6 +380,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							})
 					: false,
 			disableTransformJoin: true,
+			supportsJoin: true,
 		},
 		adapter: createCustomAdapter(prisma),
 	};
