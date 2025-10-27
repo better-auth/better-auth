@@ -4,6 +4,7 @@
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
+  "homepage": "https://better-auth.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",

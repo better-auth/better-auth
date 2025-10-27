@@ -4,6 +4,12 @@
   "version": "1.4.0-beta.13",
   "type": "module",
   "main": "dist/index.js",
+  "homepage": "https://www.better-auth.com/docs/plugins/sso",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/sso"
+  },
   "license": "MIT",
   "keywords": [
     "sso",
