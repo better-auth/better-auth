@@ -373,6 +373,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 				// Group results by base model and nest joined data as arrays
 				const grouped = new Map<string, any>();
+				// Track seen IDs per joined model for O(1) deduplication
+				const seenIds = new Map<string, Set<string>>();
 
 				for (const row of results) {
 					const baseData = row[baseModel];
@@ -381,7 +383,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (!grouped.has(baseId)) {
 						const nested: Record<string, any> = { ...baseData };
 
-						// Initialize joined arrays
+						// Initialize joined arrays and seen sets
 						for (const joinedModel of joinedModels) {
 							const fieldAttributes = getFieldAttributes({
 								model: joinedModel,
@@ -390,6 +392,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							nested[getModelName(joinedModel)] = fieldAttributes.unique
 								? null
 								: [];
+							seenIds.set(`${baseId}-${joinedModel}`, new Set());
 						}
 
 						grouped.set(baseId, nested);
@@ -414,9 +417,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 						if (joinedData) {
 							const m = getModelName(joinedModel);
+							const seenSet = seenIds.get(`${baseId}-${joinedModel}`)!;
+							
 							if (Array.isArray(nestedEntry[m])) {
-								if (!nestedEntry[m].some((item) => item.id === joinedData.id)) {
+								if (!seenSet.has(joinedData.id)) {
 									nestedEntry[m].push(joinedData);
+									seenSet.add(joinedData.id);
 								}
 							} else {
 								nestedEntry[m] = joinedData;
