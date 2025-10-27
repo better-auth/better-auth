@@ -128,7 +128,7 @@ export async function setCookieCache(
 
 		// Apply field filtering to user data
 		const filteredUser = parseUserOutput(ctx.context.options, session.user);
-		
+
 		// Compute version
 		const versionConfig = ctx.context.options.session?.cookieCache?.version;
 		let version = "1"; // default version
@@ -140,7 +140,7 @@ export async function setCookieCache(
 				version = result instanceof Promise ? await result : result;
 			}
 		}
-		
+
 		const sessionData = {
 			session: filteredSession,
 			user: filteredUser,
@@ -460,7 +460,7 @@ export const getCookieCache = async <
 			if (!isValid) {
 				return null;
 			}
-			
+
 			// Validate version if provided
 			if (config?.version && sessionDataPayload.session) {
 				const cookieVersion = sessionDataPayload.session.version || "1";
@@ -478,7 +478,7 @@ export const getCookieCache = async <
 					return null;
 				}
 			}
-			
+
 			return sessionDataPayload.session;
 		}
 	}
