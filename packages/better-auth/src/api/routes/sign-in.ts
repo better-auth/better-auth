@@ -1,12 +1,12 @@
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
-import { createEmailVerificationToken } from "./email-verification";
-import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { SocialProviderListEnum } from "../../social-providers";
+import { generateState } from "../../utils";
+import { createEmailVerificationToken } from "./email-verification";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -518,11 +518,10 @@ export const signInEmail = createAuthEndpoint(
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${
-					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${
-					ctx.body.callbackURL || "/"
-				}`;
+				const callbackURL = ctx.body.callbackURL
+					? encodeURIComponent(ctx.body.callbackURL)
+					: encodeURIComponent("/");
+				const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 				await ctx.context.options.emailVerification.sendVerificationEmail(
 					{
 						user: user.user,
@@ -540,7 +539,6 @@ export const signInEmail = createAuthEndpoint(
 
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
-			ctx,
 			ctx.body.rememberMe === false,
 		);
 

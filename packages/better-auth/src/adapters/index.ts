@@ -1,18 +1,18 @@
 import {
-	createAdapterFactory,
 	type AdapterFactory,
-	type AdapterFactoryOptions,
-	type AdapterDebugLogs,
-	type AdapterTestDebugLogs,
 	type AdapterFactoryConfig,
-	type CustomAdapter,
 	type AdapterFactoryCustomizeAdapterCreator,
+	type AdapterFactoryOptions,
+	type AdapterTestDebugLogs,
+	type CustomAdapter,
+	createAdapterFactory,
 } from "./adapter-factory";
+
+export * from "@better-auth/core/db/adapter";
 
 export type {
 	AdapterFactoryOptions,
 	AdapterFactory,
-	AdapterDebugLogs,
 	AdapterTestDebugLogs,
 	AdapterFactoryConfig,
 	CustomAdapter,

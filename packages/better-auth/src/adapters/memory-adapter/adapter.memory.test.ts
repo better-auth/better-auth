@@ -1,13 +1,14 @@
 import { getAuthTables } from "../../db";
 import { testAdapter } from "../test-adapter";
-import { memoryAdapter } from "./memory-adapter";
 import {
-	performanceTestSuite,
-	normalTestSuite,
-	transactionsTestSuite,
 	authFlowTestSuite,
+	normalTestSuite,
 	numberIdTestSuite,
+	performanceTestSuite,
+	transactionsTestSuite,
 } from "../tests";
+import { memoryAdapter } from "./memory-adapter";
+
 let db: Record<string, any[]> = {};
 
 const { execute } = await testAdapter({
@@ -16,9 +17,11 @@ const { execute } = await testAdapter({
 	},
 	runMigrations: (options) => {
 		db = {};
-		const allModels = Object.keys(getAuthTables(options));
+		const authTables = getAuthTables(options);
+		const allModels = Object.keys(authTables);
 		for (const model of allModels) {
-			db[model] = [];
+			const modelName = authTables[model]?.modelName || model;
+			db[modelName] = [];
 		}
 	},
 	tests: [

@@ -1,5 +1,6 @@
+import type { AuthContext } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import type { User, Session, AuthContext } from "../../types";
+import type { Session, User } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type {
 	Invitation,

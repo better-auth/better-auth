@@ -1,6 +1,6 @@
 import { expect } from "vitest";
-import { createTestSuite } from "../create-test-suite";
 import type { User } from "../../types";
+import { createTestSuite } from "../create-test-suite";
 
 /**
  * This test suite tests the transaction functionality of the adapter.

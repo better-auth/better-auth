@@ -1,3 +1,5 @@
+import type { BetterAuthOptions } from "@better-auth/core";
+import { createPool } from "mysql2/promise";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
@@ -9,14 +11,12 @@ import {
 import { prismaAdapter } from "../prisma-adapter";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
-import { pushPrismaSchema } from "./push-prisma-schema";
-import type { BetterAuthOptions } from "../../../types";
 import {
 	destroyPrismaClient,
 	getPrismaClient,
 	incrementMigrationCount,
 } from "./get-prisma-client";
-import { createPool } from "mysql2/promise";
+import { pushPrismaSchema } from "./push-prisma-schema";
 
 const dialect = "mysql";
 const { execute } = await testAdapter({

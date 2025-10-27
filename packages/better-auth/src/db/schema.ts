@@ -1,8 +1,10 @@
-import type { AuthPluginSchema } from "../types/plugins";
-import type { BetterAuthOptions } from "../types/options";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthPluginDBSchema,
+	DBFieldAttribute,
+} from "@better-auth/core/db";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
-import type { DBFieldAttribute } from "@better-auth/core/db";
 
 // Cache for parsed schemas to avoid reparsing on every request
 const cache = new WeakMap<
@@ -93,11 +95,13 @@ export function parseInputData<T extends Record<string, any>>(
 	for (const key in fields) {
 		if (key in data) {
 			if (fields[key]!.input === false) {
-				if (fields[key]!.defaultValue) {
-					parsedData[key] = fields[key]!.defaultValue;
-					continue;
+				if (fields[key]!.defaultValue !== undefined) {
+					if (action !== "update") {
+						parsedData[key] = fields[key]!.defaultValue;
+						continue;
+					}
 				}
-				if (parsedData[key]) {
+				if (data[key]) {
 					throw new APIError("BAD_REQUEST", {
 						message: `${key} is not allowed to be set`,
 					});
@@ -116,7 +120,7 @@ export function parseInputData<T extends Record<string, any>>(
 			continue;
 		}
 
-		if (fields[key]!.defaultValue && action === "create") {
+		if (fields[key]!.defaultValue !== undefined && action === "create") {
 			parsedData[key] = fields[key]!.defaultValue;
 			continue;
 		}
@@ -163,7 +167,7 @@ export function parseSessionInput(
 	return parseInputData(session, { fields: schema });
 }
 
-export function mergeSchema<S extends AuthPluginSchema>(
+export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	schema: S,
 	newSchema?: {
 		[K in keyof S]?: {

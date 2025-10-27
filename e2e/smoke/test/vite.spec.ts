@@ -1,9 +1,9 @@
-import { describe, it } from "node:test";
-import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import * as assert from "node:assert";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import * as assert from "node:assert";
+import { join } from "node:path";
+import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 
@@ -47,6 +47,16 @@ describe("(vite) client build", () => {
 		assert.ok(
 			!clientContent.includes("createEndpoint"),
 			"Built output should not contain 'better-call' imports",
+		);
+
+		assert.ok(
+			!clientContent.includes("async_hooks"),
+			"Built output should not contain 'async_hooks' imports",
+		);
+
+		assert.ok(
+			!clientContent.includes("AsyncLocalStorage"),
+			"Built output should not contain 'AsyncLocalStorage' imports",
 		);
 	});
 });

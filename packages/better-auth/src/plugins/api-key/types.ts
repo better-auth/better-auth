@@ -1,4 +1,8 @@
-import type { GenericEndpointContext, InferOptionSchema } from "../../types";
+import type {
+	GenericEndpointContext,
+	HookEndpointContext,
+} from "@better-auth/core";
+import type { InferOptionSchema } from "../../types";
 import type { Statements } from "../access";
 import type { apiKeySchema } from "./schema";
 export interface ApiKeyOptions {
@@ -19,7 +23,7 @@ export interface ApiKeyOptions {
 	/**
 	 * The function to get the API key from the context
 	 */
-	customAPIKeyGetter?: (ctx: GenericEndpointContext) => string | null;
+	customAPIKeyGetter?: (ctx: HookEndpointContext) => string | null;
 	/**
 	 * A custom function to validate the API key
 	 */
@@ -175,9 +179,10 @@ export interface ApiKeyOptions {
 	/**
 	 * An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
 	 *
+	 * ⚠︎ This is not recommended for production use, as it can lead to security issues.
 	 * @default false
 	 */
-	disableSessionForAPIKeys?: boolean;
+	enableSessionForAPIKeys?: boolean;
 	/**
 	 * Permissions for the API key.
 	 */

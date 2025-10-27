@@ -1,14 +1,14 @@
-import * as z from "zod";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-	originCheck,
-} from "../../api";
-import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "../../types";
-import { env } from "../../utils/env";
-import { getOrigin } from "../../utils/url";
+} from "@better-auth/core/api";
+import { env } from "@better-auth/core/env";
 import type { EndpointContext } from "better-call";
+import * as z from "zod";
+import { originCheck } from "../../api";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { getOrigin } from "../../utils/url";
 
 function getVenderBaseURL() {
 	const vercel = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined;
@@ -21,7 +21,7 @@ function getVenderBaseURL() {
 	return vercel || netlify || render || aws || google || azure;
 }
 
-interface OAuthProxyOptions {
+export interface OAuthProxyOptions {
 	/**
 	 * The current URL of the application.
 	 * The plugin will attempt to infer the current URL from your environment
@@ -153,7 +153,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return (
+						return !!(
 							context.path?.startsWith("/callback") ||
 							context.path?.startsWith("/oauth2/callback")
 						);
@@ -224,14 +224,13 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 				},
 				{
 					matcher(context) {
-						return (
+						return !!(
 							context.path?.startsWith("/sign-in/social") ||
 							context.path?.startsWith("/sign-in/oauth2")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx);
-						console.log("skipProxy", skipProxy);
 						if (skipProxy) {
 							return;
 						}

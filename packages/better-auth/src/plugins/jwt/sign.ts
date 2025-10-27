@@ -1,9 +1,9 @@
-import { importJWK, SignJWT, type JWTPayload } from "jose";
-import type { GenericEndpointContext } from "../../types";
-import { BetterAuthError } from "../../error";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { BetterAuthError } from "@better-auth/core/error";
+import { importJWK, type JWTPayload, SignJWT } from "jose";
 import { symmetricDecrypt } from "../../crypto";
-import type { JwtOptions } from "./types";
 import { getJwksAdapter } from "./adapter";
+import type { JwtOptions } from "./types";
 import { createJwk, toExpJWT } from "./utils";
 
 export async function signJWT(
@@ -66,7 +66,7 @@ export async function signJWT(
 				data: JSON.parse(key.privateKey),
 			}).catch(() => {
 				throw new BetterAuthError(
-					"Failed to decrypt private private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either cleanup your jwks or disable private key encryption.",
+					"Failed to decrypt private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either clean up your JWKS or disable private key encryption.",
 				);
 			})
 		: key.privateKey;

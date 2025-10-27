@@ -1,14 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { customSession } from ".";
-import { admin } from "../admin";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../client";
-import { customSessionClient } from "./client";
+import { parseSetCookieHeader } from "../../cookies";
+import { getTestInstance } from "../../test-utils/test-instance";
 import type { BetterAuthOptions } from "../../types";
+import { admin } from "../admin";
 import { adminClient } from "../admin/client";
 import { multiSession } from "../multi-session";
 import { multiSessionClient } from "../multi-session/client";
-import { parseSetCookieHeader } from "../../cookies";
+import { customSession } from ".";
+import { customSessionClient } from "./client";
 
 describe("Custom Session Plugin Tests", async () => {
 	const options = {
@@ -146,4 +146,25 @@ describe("Custom Session Plugin Tests", async () => {
 			expect(pluginInstances[sessionCount - 1]!.id).toBe("custom-session");
 		},
 	);
+
+	it("should infer the session type", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				customSession(async ({ user, session }) => {
+					return {
+						custom: {
+							field: "field",
+						},
+					};
+				}),
+			],
+		});
+		type Session = typeof auth.$Infer.Session;
+
+		expectTypeOf<Session>().toEqualTypeOf<{
+			custom: {
+				field: string;
+			};
+		}>();
+	});
 });

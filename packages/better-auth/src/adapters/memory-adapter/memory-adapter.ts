@@ -1,17 +1,17 @@
-import { logger } from "../../utils";
-import {
-	createAdapterFactory,
-	type AdapterDebugLogs,
-	type CleanedWhere,
-} from "../adapter-factory";
-import type { BetterAuthOptions } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	CleanedWhere,
+	DBAdapterDebugLogOption,
+} from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
+import { createAdapterFactory } from "../adapter-factory";
 
 export interface MemoryDB {
 	[key: string]: any[];
 }
 
 export interface MemoryAdapterConfig {
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption;
 }
 
 export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {

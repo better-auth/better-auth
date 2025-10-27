@@ -43,10 +43,10 @@ npx convex dev
 
 The following documentation assumes you're using Next.js.
 
-If you're not using Next.js, please refer to the [installation guide by Convex](https://convex-better-auth.netlify.app/#select-your-framework).
+If you're not using Next.js, support for other frameworks is documented in the [installation guide by Convex](https://convex-better-auth.netlify.app/#select-your-framework).
 
 <Callout>
-    For a complete example, check out Convex + Better Auth example with Next.js in this [Github repository](https://github.com/get-convex/better-auth/tree/main/examples/next).
+    For a complete example, check out Convex + Better Auth example with Next.js [on GitHub](https://github.com/get-convex/better-auth/tree/main/examples/next).
 </Callout>
 
 ### Installation
@@ -63,7 +63,7 @@ If you're not using Next.js, please refer to the [installation guide by Convex](
         </Callout>
 
         ```package-install
-        npm install better-auth@1.3.8 --save-exact
+        npm install better-auth@1.3.27 --save-exact
         npm install convex@latest @convex-dev/better-auth
         ```
     </Step>
@@ -103,8 +103,7 @@ If you're not using Next.js, please refer to the [installation guide by Convex](
     <Step>
         #### Set environment variables
 
-        Generate a secret for encryption and generating hashes. Use the command below if you have openssl installed,
-        or use the button to generate a random value instead. Or generate your own however you like.
+        Generate a secret for encryption and generating hashes. Use the command below if you have openssl installed, or generate your own however you like.
 
         ```package-install
         npx convex env set BETTER_AUTH_SECRET=$(openssl rand -base64 32)
@@ -168,9 +167,9 @@ If you're not using Next.js, please refer to the [installation guide by Convex](
 
         export const createAuth = (
             ctx: GenericCtx<DataModel>,
-                { optionsOnly } = { optionsOnly: false },
-            ) => {
-              return betterAuth({
+            { optionsOnly } = { optionsOnly: false },
+        ) => {
+            return betterAuth({
                 // disable logging when createAuth is called just to generate options.
                 // this is not required, but there's a lot of noise in logs without it.
                 logger: {
@@ -284,7 +283,7 @@ and call the function from your server code.
 First, a token helper for calling Convex functions from your server code.
 
 ```ts title="src/lib/auth-server.ts"
-import { createAuth } from "convex/auth";
+import { createAuth } from "@/convex/auth";
 import { getToken as getTokenNextjs } from "@convex-dev/better-auth/nextjs";
 
 export const getToken = () => {
@@ -306,12 +305,13 @@ export const updateUserPassword = mutation({
     newPassword: v.string(),
   },
   handler: async (ctx, args) => {
-    await createAuth(ctx).api.changePassword({
+    const { auth, headers } = await authComponent.getAuth(createAuth, ctx);
+    await auth.api.changePassword({
       body: {
         currentPassword: args.currentPassword,
         newPassword: args.newPassword,
       },
-      headers: await authComponent.getHeaders(ctx),
+      headers,
     });
   },
 });

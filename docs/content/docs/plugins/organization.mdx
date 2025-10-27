@@ -1464,7 +1464,7 @@ const canCreateProjectAndCreateSale =
 ```
 
 <Callout type="warn">
-  This will not include any dynamic roles as everything is ran syncronously on the client side.
+  This will not include any dynamic roles as everything is ran synchronously on the client side.
   Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles & permissions.
 </Callout>
 
@@ -1520,7 +1520,7 @@ export const authClient = createAuthClient({
 
 
 <Callout type="warn">
-  The `authClient.organization.checkRolePermission` function will not include any dynamic roles as everything is ran syncronously on the client side.
+  The `authClient.organization.checkRolePermission` function will not include any dynamic roles as everything is ran synchronously on the client side.
   Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles.
 </Callout>
 
@@ -1872,14 +1872,9 @@ Get all teams in an organization:
 ```ts
 type listOrganizationTeams = {
     /**
-    * Query parameters for filtering or scoping the list of teams.
+    * The organization ID which the teams are under to list. Defaults to the user's active organization. 
     */
-    query?: {
-      /**
-      * The organization ID which the teams are under to list. Defaults to the user's active organization. 
-      */
-      organizationId?: string = "organization-id"
-    }
+    organizationId?: string = "organization-id"
 }
 ```
 </APIMethod>
@@ -1973,7 +1968,7 @@ List all teams that the current user is a part of.
 
 List the members of the given team.
 
-<APIMethod path="/organization/list-team-members" method="POST">
+<APIMethod path="/organization/list-team-members" method="POST" forceAsQuery>
 ```ts
 type listTeamMembers = {
     /**
@@ -2273,6 +2268,11 @@ Table Name: `invitation`
       name: "status",
       type: "string",
       description: "The status of the invitation",
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the invitation was created"
     },
     {
       name: "expiresAt",

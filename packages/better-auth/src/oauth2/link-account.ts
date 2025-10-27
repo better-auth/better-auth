@@ -1,8 +1,7 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { isDevelopment, logger } from "@better-auth/core/env";
 import { APIError, createEmailVerificationToken } from "../api";
-import type { Account } from "../types";
-import type { GenericEndpointContext, User } from "../types";
-import { logger } from "../utils";
-import { isDevelopment } from "../utils/env";
+import type { Account, User } from "../types";
 import { setTokenUtil } from "./utils";
 
 export async function handleOAuthUserInfo(
@@ -55,7 +54,7 @@ export async function handleOAuthUserInfo(
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
-				if (isDevelopment) {
+				if (isDevelopment()) {
 					logger.warn(
 						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
 					);
@@ -66,20 +65,17 @@ export async function handleOAuthUserInfo(
 				};
 			}
 			try {
-				await c.context.internalAdapter.linkAccount(
-					{
-						providerId: account.providerId,
-						accountId: userInfo.id.toString(),
-						userId: dbUser.user.id,
-						accessToken: await setTokenUtil(account.accessToken, c.context),
-						refreshToken: await setTokenUtil(account.refreshToken, c.context),
-						idToken: account.idToken,
-						accessTokenExpiresAt: account.accessTokenExpiresAt,
-						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-						scope: account.scope,
-					},
-					c,
-				);
+				await c.context.internalAdapter.linkAccount({
+					providerId: account.providerId,
+					accountId: userInfo.id.toString(),
+					userId: dbUser.user.id,
+					accessToken: await setTokenUtil(account.accessToken, c.context),
+					refreshToken: await setTokenUtil(account.refreshToken, c.context),
+					idToken: account.idToken,
+					accessTokenExpiresAt: account.accessTokenExpiresAt,
+					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+					scope: account.scope,
+				});
 			} catch (e) {
 				logger.error("Unable to link account", e);
 				return {
@@ -114,7 +110,6 @@ export async function handleOAuthUserInfo(
 					await c.context.internalAdapter.updateAccount(
 						hasBeenLinked.id,
 						updateData,
-						c,
 					);
 				}
 			}
@@ -167,7 +162,6 @@ export async function handleOAuthUserInfo(
 						providerId: account.providerId,
 						accountId: userInfo.id.toString(),
 					},
-					c,
 				)
 				.then((res) => res?.user);
 			if (
@@ -215,7 +209,7 @@ export async function handleOAuthUserInfo(
 		};
 	}
 
-	const session = await c.context.internalAdapter.createSession(user.id, c);
+	const session = await c.context.internalAdapter.createSession(user.id);
 	if (!session) {
 		return {
 			error: "unable to create session",

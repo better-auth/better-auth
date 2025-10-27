@@ -1,23 +1,24 @@
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
+import { setSessionCookie } from "../../../cookies";
+import {
+	type InferAdditionalFieldsFromPluginOptions,
+	toZodSchema,
+} from "../../../db";
+import { getDate } from "../../../utils/date";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import { hasPermission } from "../has-permission";
+import { parseRoles } from "../organization";
 import {
 	type InferOrganizationRolesFromOption,
 	type Invitation,
 } from "../schema";
-import { APIError } from "better-call";
-import { parseRoles } from "../organization";
 import { type OrganizationOptions } from "../types";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
-import { setSessionCookie } from "../../../cookies";
-import {
-	toZodSchema,
-	type InferAdditionalFieldsFromPluginOptions,
-} from "../../../db";
-import { getDate } from "../../../utils/date";
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -148,6 +149,9 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											expiresAt: {
 												type: "string",
 											},
+											createdAt: {
+												type: "string",
+											},
 										},
 										required: [
 											"id",
@@ -157,6 +161,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											"inviterId",
 											"status",
 											"expiresAt",
+											"createdAt",
 										],
 									},
 								},
@@ -175,6 +180,15 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
+
+			const email = ctx.body.email.toLowerCase();
+			const isValidEmail = z.string().email().safeParse(email);
+			if (!isValidEmail.success) {
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.INVALID_EMAIL,
+				});
+			}
+
 			const adapter = getOrgAdapter<O>(ctx.context, option as O);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -219,7 +233,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const alreadyMember = await adapter.findMemberByEmail({
-				email: ctx.body.email,
+				email: email,
 				organizationId: organizationId,
 			});
 			if (alreadyMember) {
@@ -229,7 +243,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				});
 			}
 			const alreadyInvited = await adapter.findPendingInvitation({
-				email: ctx.body.email,
+				email: email,
 				organizationId: organizationId,
 			});
 			if (alreadyInvited.length && !ctx.body.resend) {
@@ -385,7 +399,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 			let invitationData = {
 				role: roles,
-				email: ctx.body.email.toLowerCase(),
+				email: email,
 				organizationId: organizationId,
 				teamIds,
 				...(additionalFields ? additionalFields : {}),

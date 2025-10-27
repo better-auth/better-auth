@@ -1,18 +1,19 @@
-import { APIError, createAuthEndpoint } from "../../api";
-import { setSessionCookie } from "../../cookies";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import type { BetterAuthPlugin, InferOptionSchema } from "../../types";
+import { APIError } from "../../api";
+import { setSessionCookie } from "../../cookies";
+import { mergeSchema } from "../../db/schema";
+import type { InferOptionSchema, User } from "../../types";
+import { toChecksumAddress } from "../../utils/hashing";
+import { getOrigin } from "../../utils/url";
+import { schema } from "./schema";
 import type {
 	ENSLookupArgs,
 	ENSLookupResult,
 	SIWEVerifyMessageArgs,
 	WalletAddress,
 } from "./types";
-import type { User } from "../../types";
-import { schema } from "./schema";
-import { getOrigin } from "../../utils/url";
-import { toChecksumAddress } from "../../utils/hashing";
-import { mergeSchema } from "../../db/schema";
 
 export interface SIWEPluginOptions {
 	domain: string;
@@ -270,7 +271,6 @@ export const siwe = (options: SIWEPluginOptions) =>
 
 						const session = await ctx.context.internalAdapter.createSession(
 							user.id,
-							ctx,
 						);
 
 						if (!session) {

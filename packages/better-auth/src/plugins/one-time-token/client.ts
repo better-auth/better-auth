@@ -1,5 +1,5 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { oneTimeToken } from "./index";
-import type { BetterAuthClientPlugin } from "../../client/types";
 
 export const oneTimeTokenClient = () => {
 	return {

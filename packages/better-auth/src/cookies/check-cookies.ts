@@ -1,5 +1,5 @@
+import type { AuthContext } from "@better-auth/core";
 import { parseCookies } from "../cookies";
-import type { AuthContext } from "../types";
 
 export const checkAuthCookie = async (
 	request: Request | Headers,

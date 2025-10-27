@@ -1,19 +1,16 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "../call";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
-import {
-	generateState,
-	decryptOAuthToken,
-	setTokenUtil,
-	type OAuth2Tokens,
-} from "../../oauth2";
+import * as z from "zod";
+import { generateState } from "../../oauth2/state";
+import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "./session";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { SocialProviderListEnum } from "../../social-providers";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -306,18 +303,15 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			try {
-				await c.context.internalAdapter.createAccount(
-					{
-						userId: session.user.id,
-						providerId: provider.id,
-						accountId: linkingUserId,
-						accessToken: c.body.idToken.accessToken,
-						idToken: token,
-						refreshToken: c.body.idToken.refreshToken,
-						scope: c.body.idToken.scopes?.join(","),
-					},
-					c,
-				);
+				await c.context.internalAdapter.createAccount({
+					userId: session.user.id,
+					providerId: provider.id,
+					accountId: linkingUserId,
+					accessToken: c.body.idToken.accessToken,
+					idToken: token,
+					refreshToken: c.body.idToken.refreshToken,
+					scope: c.body.idToken.scopes?.join(","),
+				});
 			} catch (e: any) {
 				throw new APIError("EXPECTATION_FAILED", {
 					message: "Account not linked - unable to create account",
@@ -538,9 +532,11 @@ export const getAccessToken = createAuthEndpoint(
 				accessTokenExpired &&
 				provider.refreshAccessToken
 			) {
-				newTokens = await provider.refreshAccessToken(
-					account.refreshToken as string,
+				const refreshToken = await decryptOAuthToken(
+					account.refreshToken,
+					ctx.context,
 				);
+				newTokens = await provider.refreshAccessToken(refreshToken);
 				await ctx.context.internalAdapter.updateAccount(account.id, {
 					accessToken: await setTokenUtil(newTokens.accessToken, ctx.context),
 					accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
@@ -549,10 +545,9 @@ export const getAccessToken = createAuthEndpoint(
 				});
 			}
 			const tokens = {
-				accessToken: await decryptOAuthToken(
-					newTokens?.accessToken ?? account.accessToken ?? "",
-					ctx.context,
-				),
+				accessToken:
+					newTokens?.accessToken ??
+					(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
 				accessTokenExpiresAt:
 					newTokens?.accessTokenExpiresAt ??
 					account.accessTokenExpiresAt ??

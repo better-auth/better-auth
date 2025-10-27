@@ -1,4 +1,4 @@
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	BetterAuthDBSchema,
 	DBFieldAttribute,
@@ -128,6 +128,7 @@ export const getAuthTables = (
 					defaultValue: false,
 					required: true,
 					fieldName: options.user?.fields?.emailVerified || "emailVerified",
+					input: false,
 				},
 				image: {
 					type: "string",
