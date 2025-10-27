@@ -295,6 +295,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					if (join && Array.isArray(result)) {
 						for (const item of result) {
 							for (const [includeKey, originalKey] of map.entries()) {
+								if (includeKey === originalKey) continue;
 								if (includeKey in item) {
 									item[originalKey] = item[includeKey];
 									delete item[includeKey];

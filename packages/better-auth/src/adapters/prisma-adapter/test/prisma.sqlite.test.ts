@@ -4,6 +4,7 @@ import { join } from "path";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	enableJoinTests,
 	normalTestSuite,
 	numberIdTestSuite,
 	performanceTestSuite,
@@ -44,7 +45,7 @@ const { execute } = await testAdapter({
 		destroyPrismaClient({ migrationCount: migrationCount - 1, dialect });
 	},
 	tests: [
-		normalTestSuite({}),
+		normalTestSuite(),
 		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite({}),

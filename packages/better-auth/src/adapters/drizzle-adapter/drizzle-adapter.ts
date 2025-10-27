@@ -361,6 +361,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				results: any[],
 				baseModel: string,
 				join: Record<string, any> | undefined,
+				limit?: number,
+				offset?: number,
 			): any[] {
 				// If no joins or no results, return as-is
 				if (!join || !results.length) {
@@ -425,6 +427,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 				const result = Array.from(grouped.values());
 
+				// Apply manual limit/offset after grouping for joins
+				if (limit !== undefined || offset !== undefined) {
+					const start = offset || 0;
+					const end = limit !== undefined ? start + limit : undefined;
+					return result.slice(start, end);
+				}
+
 				// For findOne, return single object; for findMany, return array
 				// The adapter factory will handle unwrapping based on schema's unique constraint
 				return result;
@@ -474,8 +483,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					let builder = db
 						.select()
 						.from(schemaModel)
-						.limit(limit || 100)
-						.offset(offset || 0);
+
+					if (!join) {
+						builder = builder.limit(limit || 100);
+						builder = builder.offset(offset || 0);
+					}
+
 					if (sortBy?.field) {
 						builder.orderBy(
 							sortFn(
@@ -500,7 +513,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 					}
 					const res = await builder.where(...clause);
-					const joinedResult = nestJoinedResults(res, model, join);
+					const joinedResult = nestJoinedResults(res, model, join, join ? limit : undefined, join ? offset : undefined);
 					return joinedResult;
 				},
 				async count({ model, where }) {

@@ -201,6 +201,8 @@ export const kyselyAdapter = (
 				baseModel: string,
 				joinConfig: ResolvedJoin | undefined,
 				allSelectsStr: { joinModel: string; fieldName: string }[],
+				limit?: number,
+				offset?: number,
 			) {
 				if (!joinConfig || !rows.length) {
 					return rows;
@@ -298,7 +300,16 @@ export const kyselyAdapter = (
 					}
 				}
 
-				return Array.from(groupedByMainId.values());
+				let result = Array.from(groupedByMainId.values());
+
+				// Apply limit and offset after grouping
+				if (limit !== undefined || offset !== undefined) {
+					const start = offset || 0;
+					const end = limit !== undefined ? start + limit : undefined;
+					result = result.slice(start, end);
+				}
+
+				return result;
 			}
 
 			return {
@@ -412,12 +423,16 @@ export const kyselyAdapter = (
 							}
 						}
 					}
-					if (config?.type === "mssql") {
-						if (!offset) {
-							query = query.top(limit || 100);
+					// Only apply SQL limit/offset when there's no join
+					// Joins multiply rows, so we apply limit/offset after processing
+					if (!join) {
+						if (config?.type === "mssql") {
+							if (!offset) {
+								query = query.top(limit || 100);
+							}
+						} else {
+							query = query.limit(limit || 100);
 						}
-					} else {
-						query = query.limit(limit || 100);
 					}
 					if (sortBy) {
 						query = query.orderBy(
@@ -425,14 +440,16 @@ export const kyselyAdapter = (
 							sortBy.direction,
 						);
 					}
-					if (offset) {
-						if (config?.type === "mssql") {
-							if (!sortBy) {
-								query = query.orderBy(getFieldName({ model, field: "id" }));
+					if (!join) {
+						if (offset) {
+							if (config?.type === "mssql") {
+								if (!sortBy) {
+									query = query.orderBy(getFieldName({ model, field: "id" }));
+								}
+								query = query.offset(offset).fetch(limit || 100);
+							} else {
+								query = query.offset(offset);
 							}
-							query = query.offset(offset).fetch(limit || 100);
-						} else {
-							query = query.offset(offset);
 						}
 					}
 
@@ -460,7 +477,7 @@ export const kyselyAdapter = (
 					const res = await query.execute();
 					if (!res) return [];
 					if (join) {
-						return processJoinedResults(res, model, join, allSelectsStr);
+						return processJoinedResults(res, model, join, allSelectsStr, limit, offset);
 					}
 
 					return res;

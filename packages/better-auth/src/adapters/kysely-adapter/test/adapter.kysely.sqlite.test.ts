@@ -6,6 +6,7 @@ import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	enableJoinTests,
 	normalTestSuite,
 	numberIdTestSuite,
 	performanceTestSuite,
@@ -42,8 +43,8 @@ const { execute } = await testAdapter({
 		await runMigrations();
 	},
 	tests: [
-		normalTestSuite({}),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
+		normalTestSuite(),
+		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
 		performanceTestSuite({ dialect: "sqlite" }),
