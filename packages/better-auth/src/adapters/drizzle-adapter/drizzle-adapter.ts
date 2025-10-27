@@ -418,7 +418,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						if (joinedData) {
 							const m = getModelName(joinedModel);
 							const seenSet = seenIds.get(`${baseId}-${joinedModel}`)!;
-							
+
 							if (Array.isArray(nestedEntry[m])) {
 								if (!seenSet.has(joinedData.id)) {
 									nestedEntry[m].push(joinedData);

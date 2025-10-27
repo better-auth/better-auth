@@ -1,6 +1,6 @@
+import type { Account, Session } from "@better-auth/core/db";
 import { assert, expect } from "vitest";
 import { createTestSuite } from "../create-test-suite";
-import type { Account, Session } from "@better-auth/core/db";
 
 /**
  * This test suite tests the performance of the adapter and logs the results.
@@ -10,13 +10,12 @@ export const performanceTestSuite = createTestSuite(
 	{},
 	(
 		{ adapter: originalAdapter, generate, cleanup },
-		config?: { 
-			iterations?: number
-			userSeedCount?: number
-			dialect?: string
+		config?: {
+			iterations?: number;
+			userSeedCount?: number;
+			dialect?: string;
 		},
 	) => {
-
 		const tests = {
 			create: [] as number[],
 			update: [] as number[],
@@ -46,7 +45,7 @@ export const performanceTestSuite = createTestSuite(
 					return adapterInstance.create(data);
 				},
 				async findOne(data: any) {
-					console.log(100, data)
+					console.log(100, data);
 					await delay();
 					return adapterInstance.findOne(data);
 				},
@@ -283,7 +282,9 @@ export const performanceTestSuite = createTestSuite(
 					userSeedCount,
 					adapter: adapter.options?.adapterConfig.adapterId,
 					...(config?.dialect ? { dialect: config.dialect } : {}),
-					...(dbLatencyMs > 0 ? { simulatedDbLatency: `${dbLatencyMs}ms` } : {}),
+					...(dbLatencyMs > 0
+						? { simulatedDbLatency: `${dbLatencyMs}ms` }
+						: {}),
 				});
 
 				// Calculate and log join vs non-join difference
@@ -300,7 +301,9 @@ export const performanceTestSuite = createTestSuite(
 
 				if (joinAvg > 0 && nonJoinAvg > 0) {
 					const difference = joinAvg - nonJoinAvg;
-					const percentDifference = ((difference / nonJoinAvg) * 100).toFixed(2);
+					const percentDifference = ((difference / nonJoinAvg) * 100).toFixed(
+						2,
+					);
 					console.log(`\nJoin Performance Comparison:`);
 					console.log(`  With Join:    ${joinAvg.toFixed(3)}ms`);
 					console.log(`  Without Join: ${nonJoinAvg.toFixed(3)}ms`);
