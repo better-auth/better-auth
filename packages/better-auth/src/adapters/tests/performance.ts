@@ -45,7 +45,6 @@ export const performanceTestSuite = createTestSuite(
 					return adapterInstance.create(data);
 				},
 				async findOne(data: any) {
-					console.log(100, data);
 					await delay();
 					return adapterInstance.findOne(data);
 				},

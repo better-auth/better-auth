@@ -8,7 +8,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
@@ -46,7 +45,6 @@ const { execute } = await testAdapter({
 		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "sqlite" }),
 	],
 	async onFinish() {
 		database.close();

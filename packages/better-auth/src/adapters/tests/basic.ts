@@ -422,7 +422,7 @@ export const getNormalTestSuiteTests = ({
 			});
 			const result = await adapter.findOne<Session & { user: User }>({
 				model: "session",
-				where: [{ field: "userId", value: user.id }],
+				where: [{ field: "token", value: session.token }],
 				join: { user: true },
 			});
 			expect(result).toEqual({
@@ -2075,6 +2075,41 @@ export const getNormalTestSuiteTests = ({
 					expect(Array.isArray(session.user)).toBe(false);
 					expect(session.user?.id).toBeDefined();
 				});
+			},
+		"findOne - backwards join with modified field name (session base, users-table join)":
+			async () => {
+				await modifyBetterAuthOptions(
+					{
+						user: {
+							modelName: "users-table",
+						},
+					},
+					true,
+				);
+				const user = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+				const session = await adapter.create<Session>({
+					model: "session",
+					data: { ...(await generate("session")), userId: user.id },
+					forceAllowId: true,
+				});
+
+				const result = await adapter.findOne<Session & { user: User }>({
+					model: "session",
+					where: [{ field: "id", value: session.id }],
+					join: { user: true },
+				});
+
+				expect(result).toEqual({
+					...session,
+					user: user,
+				});
+				expect(result?.user).toBeDefined();
+				expect(Array.isArray(result?.user)).toBe(false);
+				expect(result?.user?.id).toBe(user.id);
 			},
 	};
 };

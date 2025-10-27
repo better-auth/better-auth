@@ -432,7 +432,9 @@ export const createAdapterFactory =
 					// Check forward join: joined model has FK to base model
 					const forwardForeignKeyField = Object.entries(joinedModelSchema).find(
 						([_, fieldAttributes]) =>
-							fieldAttributes.references?.model === unsafe_model,
+							fieldAttributes.references &&
+							getDefaultModelName(fieldAttributes.references.model) ===
+								getDefaultModelName(unsafe_model),
 					)?.[0];
 
 					if (forwardForeignKeyField) {
@@ -451,7 +453,9 @@ export const createAdapterFactory =
 							baseModelSchema,
 						).find(
 							([_, fieldAttributes]) =>
-								fieldAttributes.references?.model === defaultModelName,
+								fieldAttributes.references &&
+								getDefaultModelName(fieldAttributes.references.model) ===
+									getDefaultModelName(defaultModelName),
 						)?.[0];
 
 						if (backwardForeignKeyField) {
@@ -614,7 +618,9 @@ export const createAdapterFactory =
 					schema[defaultModelName]!.fields,
 				).filter(
 					([field, fieldAttributes]) =>
-						fieldAttributes.references?.model === defaultBaseModelName,
+						fieldAttributes.references &&
+						getDefaultModelName(fieldAttributes.references.model) ===
+							defaultBaseModelName,
 				);
 
 				let isForwardJoin = true;
@@ -625,7 +631,9 @@ export const createAdapterFactory =
 						schema[defaultBaseModelName]!.fields,
 					).filter(
 						([field, fieldAttributes]) =>
-							fieldAttributes.references?.model === defaultModelName,
+							fieldAttributes.references &&
+							getDefaultModelName(fieldAttributes.references.model) ===
+								defaultModelName,
 					);
 					isForwardJoin = false;
 				}
