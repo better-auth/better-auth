@@ -2,6 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { expect } from "vitest";
 import type { Account, Session, User } from "../../types";
 import { createTestSuite } from "../create-test-suite";
+import { organization, type Invitation, type Member, type Organization, type Team } from "../../plugins";
 
 /**
  * This test suite tests the basic CRUD operations of the adapter.
@@ -2110,6 +2111,94 @@ export const getNormalTestSuiteTests = ({
 				expect(result?.user).toBeDefined();
 				expect(Array.isArray(result?.user)).toBe(false);
 				expect(result?.user?.id).toBe(user.id);
+			},
+		"findOne - multiple joins should return result even when some joined tables have no matching rows":
+			async () => {
+				await modifyBetterAuthOptions(
+					{
+						plugins: [organization({teams: {enabled: true}})],
+					},
+					true,
+				);
+
+				// Create a user and organization
+				const user = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+
+				const organizationData = await adapter.create<Organization>({
+					model: "organization",
+					data: {
+						name: "Test Organization",
+						slug: "test-org-" + Math.random(),
+						createdAt: new Date(),
+					},
+					forceAllowId: true,
+				});
+
+				// Add a member to the organization
+				const member = await adapter.create<Member>({
+					model: "member",
+					data: {
+						organizationId: organizationData.id,
+						userId: user.id,
+						role: "owner",
+						createdAt: new Date(),
+					},
+					forceAllowId: true,
+				});
+
+				// Create a team for the organization
+				const team = await adapter.create<Team>({
+					model: "team",
+					data: {
+						name: "Test Team",
+						organizationId: organizationData.id,
+						createdAt: new Date(),
+					},
+					forceAllowId: true,
+				});
+
+				// Do NOT create any invitations - leave it empty
+
+				// Query the organization with joins to member, team, and invitation
+				type ResultType = Organization & {
+					member: Member[];
+					team: Team[];
+					invitation: Invitation[];
+				};
+
+				const result = await adapter.findOne<ResultType>({
+					model: "organization",
+					where: [{ field: "id", value: organizationData.id }],
+					join: {
+						member: true,
+						team: true,
+						invitation: true,
+					},
+				});
+
+				
+				expect(result).toBeDefined();
+				expect(result?.id).toBe(organizationData.id);
+				expect(result?.name).toBe("Test Organization");
+
+				// Verify member join worked
+				expect(Array.isArray(result?.member)).toBe(true);
+				expect(result?.member).toHaveLength(1);
+				expect(result?.member[0]?.userId).toBe(user.id);
+				expect(result?.member[0]?.role).toBe("owner");
+
+				// Verify team join worked
+				expect(Array.isArray(result?.team)).toBe(true);
+				expect(result?.team).toHaveLength(1);
+				expect(result?.team[0]?.name).toBe("Test Team");
+
+				// Verify invitation is empty array
+				expect(Array.isArray(result?.invitation)).toBe(true);
+				expect(result?.invitation).toHaveLength(0);
 			},
 	};
 };

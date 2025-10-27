@@ -415,7 +415,7 @@ export const createAdapterFactory =
 					// base model should be represent the entire record, and any joined models should be nested under it.
 					transformedData = await transformSingleOutput(
 						baseModel,
-						modelName,
+						unsafe_model,
 						select,
 					);
 				} else {
@@ -690,7 +690,7 @@ export const createAdapterFactory =
 						from,
 						to,
 					},
-					type: "inner", // for now only support inner joins
+					type: "left", // for now only support left joins
 				};
 			}
 			return transformedJoin;

@@ -335,7 +335,7 @@ export type ResolvedJoin = {
 		 * * Not supported yet: ~~**right**: returns all rows from the right table, plus matching rows from the left (if none, NULL fills in).~~
 		 * * Not supported yet: ~~**full**: returns rows from both sides, filling in gaps with NULLs.~~
 		 *
-		 * @default "inner"
+		 * @default "left"
 		 */
 		type?: "left" | "inner";
 		on: {
