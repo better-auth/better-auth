@@ -5,6 +5,11 @@
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
+  },
   "exports": {
     ".": {
       "better-auth-dev-source": "./src/index.ts",
@@ -164,11 +169,6 @@
         "dist/oauth2/index.d.ts"
       ]
     }
-  },
-  "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
-    "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
     "@better-auth/utils": "0.3.0",

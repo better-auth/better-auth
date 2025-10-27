@@ -1,0 +1,27 @@
+{
+  "name": "@better-auth/solid",
+  "version": "1.4.0-beta.13",
+  "description": "The most comprehensive authentication framework for TypeScript.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "devDependencies": {
+    "tsdown": "catalog:",
+    "solid-js": "^1.9.9"
+  },
+  "dependencies": {
+    "@better-auth/client": "workspace:^",
+    "@better-auth/core": "workspace:^",
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:^",
+    "nanostores": "^1.0.1"
+  },
+  "peerDependencies": {
+    "solid-js": "^1.9.9"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@better-auth/react",
+  "version": "1.4.0-beta.13",
+  "description": "The most comprehensive authentication framework for TypeScript.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "devDependencies": {
+    "tsdown": "catalog:",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "@better-auth/core": "workspace:^",
+    "@better-auth/client": "workspace:^",
+    "better-auth": "workspace:^",
+    "@better-fetch/fetch": "catalog:",
+    "nanostores": "^1.0.1"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  }
+}
