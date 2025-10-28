@@ -1,5 +1,5 @@
-import { createAuthEndpoint } from "@better-auth/core/api";
 import type { BetterAuthOptions } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { isProduction } from "@better-auth/core/env";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 
