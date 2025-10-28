@@ -6,7 +6,7 @@ export function deleteAllExpiredApiKeysEndpoint({
 }: {
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		byPassLastCheckTime?: boolean | undefined,
 	): Promise<void>;
 }) {
 	return createAuthEndpoint(

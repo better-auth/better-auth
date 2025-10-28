@@ -22,11 +22,13 @@ The rest are just edge cases.
 
 async function createTestAdapter(
 	props: {
-		config?: Partial<AdapterFactoryConfig>;
-		options?: BetterAuthOptions;
-		adapter?: (
-			...args: Parameters<AdapterFactoryCustomizeAdapterCreator>
-		) => Partial<ReturnType<AdapterFactoryCustomizeAdapterCreator>>;
+		config?: Partial<AdapterFactoryConfig> | undefined;
+		options?: BetterAuthOptions | undefined;
+		adapter?:
+			| ((
+					...args: Parameters<AdapterFactoryCustomizeAdapterCreator>
+			  ) => Partial<ReturnType<AdapterFactoryCustomizeAdapterCreator>>)
+			| undefined;
 	} = {
 		config: {
 			adapterId: "test-id",
@@ -806,36 +808,39 @@ describe("Create Adapter Helper", async () => {
 			});
 
 			test("Should expect the fields to be transformed into the correct field names if customized", async () => {
-				const parameters: { data: any; select?: string[]; model: string } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								debugLogs: {},
-							},
-							options: {
-								user: {
-									fields: {
-										email: "email_address",
-									},
+				const parameters: {
+					data: any;
+					select?: string[] | undefined;
+					model: string;
+				} = await new Promise(async (r) => {
+					const adapter = await createTestAdapter({
+						config: {
+							debugLogs: {},
+						},
+						options: {
+							user: {
+								fields: {
+									email: "email_address",
 								},
 							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const res = await adapter.create({
-							model: "user",
-							data: { email: "test@test.com" },
-						});
-						expect(res).toHaveProperty("email");
-						expect(res).not.toHaveProperty("email_address");
-						expect(res.email).toEqual("test@test.com");
+						},
+						adapter(args_0) {
+							return {
+								async create(data) {
+									r(data as any);
+									return data.data;
+								},
+							};
+						},
 					});
+					const res = await adapter.create({
+						model: "user",
+						data: { email: "test@test.com" },
+					});
+					expect(res).toHaveProperty("email");
+					expect(res).not.toHaveProperty("email_address");
+					expect(res.email).toEqual("test@test.com");
+				});
 				expect(parameters).toHaveProperty("data");
 				expect(parameters.data).toHaveProperty("email_address");
 				expect(parameters.data).not.toHaveProperty("email");
@@ -843,73 +848,79 @@ describe("Create Adapter Helper", async () => {
 			});
 
 			test("Should expect the model to be transformed into the correct model name if customized", async () => {
-				const parameters: { data: any; select?: string[]; model: string } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								debugLogs: {},
+				const parameters: {
+					data: any;
+					select?: string[] | undefined;
+					model: string;
+				} = await new Promise(async (r) => {
+					const adapter = await createTestAdapter({
+						config: {
+							debugLogs: {},
+						},
+						options: {
+							user: {
+								modelName: "user_table",
 							},
-							options: {
-								user: {
-									modelName: "user_table",
+						},
+						adapter(args_0) {
+							return {
+								async create(data) {
+									r(data as any);
+									return data.data;
 								},
-							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const res = await adapter.create({
-							model: "user",
-							data: { email: "test@test.com" },
-						});
-						expect(res).toHaveProperty("id");
-						expect(res).toHaveProperty("email");
+							};
+						},
 					});
+					const res = await adapter.create({
+						model: "user",
+						data: { email: "test@test.com" },
+					});
+					expect(res).toHaveProperty("id");
+					expect(res).toHaveProperty("email");
+				});
 				expect(parameters).toHaveProperty("model");
 				expect(parameters.model).toEqual("user_table");
 			});
 
 			test("Should expect the result to follow the schema", async () => {
-				const parameters: { data: any; select?: string[]; model: string } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								debugLogs: {},
-							},
-							options: {
-								user: {
-									fields: {
-										email: "email_address",
-									},
+				const parameters: {
+					data: any;
+					select?: string[] | undefined;
+					model: string;
+				} = await new Promise(async (r) => {
+					const adapter = await createTestAdapter({
+						config: {
+							debugLogs: {},
+						},
+						options: {
+							user: {
+								fields: {
+									email: "email_address",
 								},
 							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const res = await adapter.create({
-							model: "user",
-							data: { email: "test@test.com" },
-						});
-						expect(res).toHaveProperty("email");
-						expect(res).toHaveProperty("id");
-						expect(res).toHaveProperty("createdAt");
-						expect(res).toHaveProperty("updatedAt");
-						expect(res).toHaveProperty("name");
-						expect(res).toHaveProperty("emailVerified");
-						expect(res).toHaveProperty("image");
-						expect(res).not.toHaveProperty("email_address");
+						},
+						adapter(args_0) {
+							return {
+								async create(data) {
+									r(data as any);
+									return data.data;
+								},
+							};
+						},
 					});
+					const res = await adapter.create({
+						model: "user",
+						data: { email: "test@test.com" },
+					});
+					expect(res).toHaveProperty("email");
+					expect(res).toHaveProperty("id");
+					expect(res).toHaveProperty("createdAt");
+					expect(res).toHaveProperty("updatedAt");
+					expect(res).toHaveProperty("name");
+					expect(res).toHaveProperty("emailVerified");
+					expect(res).toHaveProperty("image");
+					expect(res).not.toHaveProperty("email_address");
+				});
 				expect(parameters).toHaveProperty("data");
 				expect(parameters.data).toHaveProperty("email_address");
 				expect(parameters.data).not.toHaveProperty("email");
@@ -1456,43 +1467,46 @@ describe("Create Adapter Helper", async () => {
 
 		describe("find", () => {
 			test("findOne: Should transform the where clause according to the schema", async () => {
-				const parameters: { where: Where[]; model: string; select?: string[] } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							options: {
-								user: {
-									fields: {
-										email: "email_address",
-									},
+				const parameters: {
+					where: Where[];
+					model: string;
+					select?: string[] | undefined;
+				} = await new Promise(async (r) => {
+					const adapter = await createTestAdapter({
+						options: {
+							user: {
+								fields: {
+									email: "email_address",
 								},
 							},
-							adapter(args_0) {
-								return {
-									async findOne({ model, where, select }) {
-										const fakeResult: Omit<User, "email"> & {
-											email_address: string;
-										} = {
-											id: "random-id-oudwduwbdouwbdu123b",
-											email_address: "test@test.com",
-											emailVerified: false,
-											createdAt: new Date(),
-											updatedAt: new Date(),
-											name: "test-name",
-										};
-										r({ model, where, select });
-										return fakeResult as any;
-									},
-								};
-							},
-						});
-						const res = await adapter.findOne<User>({
-							model: "user",
-							where: [{ field: "email", value: "test@test.com" }],
-						});
-						expect(res).not.toHaveProperty("email_address");
-						expect(res).toHaveProperty("email");
-						expect(res?.email).toEqual("test@test.com");
+						},
+						adapter(args_0) {
+							return {
+								async findOne({ model, where, select }) {
+									const fakeResult: Omit<User, "email"> & {
+										email_address: string;
+									} = {
+										id: "random-id-oudwduwbdouwbdu123b",
+										email_address: "test@test.com",
+										emailVerified: false,
+										createdAt: new Date(),
+										updatedAt: new Date(),
+										name: "test-name",
+									};
+									r({ model, where, select });
+									return fakeResult as any;
+								},
+							};
+						},
 					});
+					const res = await adapter.findOne<User>({
+						model: "user",
+						where: [{ field: "email", value: "test@test.com" }],
+					});
+					expect(res).not.toHaveProperty("email_address");
+					expect(res).toHaveProperty("email");
+					expect(res?.email).toEqual("test@test.com");
+				});
 				expect(parameters.where[0]!.field).toEqual("email_address");
 			});
 			test("findMany: Should transform the where clause according to the schema", async () => {
@@ -1539,41 +1553,44 @@ describe("Create Adapter Helper", async () => {
 			});
 
 			test("findOne: Should receive an integer id in where clause if the user has enabled `useNumberId`", async () => {
-				const parameters: { where: Where[]; model: string; select?: string[] } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							options: {
-								advanced: {
-									database: {
-										useNumberId: true,
-									},
+				const parameters: {
+					where: Where[];
+					model: string;
+					select?: string[] | undefined;
+				} = await new Promise(async (r) => {
+					const adapter = await createTestAdapter({
+						options: {
+							advanced: {
+								database: {
+									useNumberId: true,
 								},
 							},
-							adapter(args_0) {
-								return {
-									async findOne({ model, where, select }) {
-										const fakeResult: Omit<User, "id"> & { id: number } = {
-											id: 1,
-											email: "test@test.com",
-											emailVerified: false,
-											createdAt: new Date(),
-											updatedAt: new Date(),
-											name: "test-name",
-										};
-										r({ model, where, select });
-										return fakeResult as any;
-									},
-								};
-							},
-						});
-						const res = await adapter.findOne<User>({
-							model: "user",
-							where: [{ field: "id", value: "1" }],
-						});
-
-						expect(res).toHaveProperty("id");
-						expect(res?.id).toEqual("1");
+						},
+						adapter(args_0) {
+							return {
+								async findOne({ model, where, select }) {
+									const fakeResult: Omit<User, "id"> & { id: number } = {
+										id: 1,
+										email: "test@test.com",
+										emailVerified: false,
+										createdAt: new Date(),
+										updatedAt: new Date(),
+										name: "test-name",
+									};
+									r({ model, where, select });
+									return fakeResult as any;
+								},
+							};
+						},
 					});
+					const res = await adapter.findOne<User>({
+						model: "user",
+						where: [{ field: "id", value: "1" }],
+					});
+
+					expect(res).toHaveProperty("id");
+					expect(res?.id).toEqual("1");
+				});
 				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
 				expect(parameters.where[0]!.value).toEqual(1);
 			});

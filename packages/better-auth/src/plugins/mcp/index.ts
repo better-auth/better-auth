@@ -30,13 +30,13 @@ import { authorizeMCPOAuth } from "./authorize";
 
 interface MCPOptions {
 	loginPage: string;
-	resource?: string;
-	oidcConfig?: OIDCOptions;
+	resource?: string | undefined;
+	oidcConfig?: OIDCOptions | undefined;
 }
 
 export const getMCPProviderMetadata = (
 	ctx: GenericEndpointContext,
-	options?: OIDCOptions,
+	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
 	const issuer = ctx.context.options.baseURL as string;
 	const baseURL = ctx.context.baseURL;
@@ -88,7 +88,7 @@ export const getMCPProviderMetadata = (
 
 export const getMCPProtectedResourceMetadata = (
 	ctx: GenericEndpointContext,
-	options?: MCPOptions,
+	options?: MCPOptions | undefined,
 ) => {
 	const baseURL = ctx.context.baseURL;
 

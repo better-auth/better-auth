@@ -13,7 +13,7 @@ export { getTelemetryAuthConfig };
 export type { TelemetryEvent } from "./types";
 export async function createTelemetry(
 	options: BetterAuthOptions,
-	context?: TelemetryContext,
+	context: TelemetryContext,
 ) {
 	const debugEnabled =
 		options.telemetry?.debug ||
@@ -53,7 +53,7 @@ export async function createTelemetry(
 		anonymousId = await getProjectId(options.baseURL);
 
 		const payload = {
-			config: getTelemetryAuthConfig(options),
+			config: getTelemetryAuthConfig(options, context),
 			runtime: detectRuntime(),
 			database: await detectDatabase(),
 			framework: await detectFramework(),

@@ -43,8 +43,8 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
 export async function getClient(
 	clientId: string,
 	adapter: any,
-	trustedClients: (Client & { skipConsent?: boolean })[] = [],
-): Promise<(Client & { skipConsent?: boolean }) | null> {
+	trustedClients: (Client & { skipConsent?: boolean | undefined })[] = [],
+): Promise<(Client & { skipConsent?: boolean | undefined }) | null> {
 	const trustedClient = trustedClients.find(
 		(client) => client.clientId === clientId,
 	);
@@ -72,7 +72,7 @@ export async function getClient(
 
 export const getMetadata = (
 	ctx: GenericEndpointContext,
-	options?: OIDCOptions,
+	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
 	const jwtPlugin = getJwtPlugin(ctx);
 	const issuer =

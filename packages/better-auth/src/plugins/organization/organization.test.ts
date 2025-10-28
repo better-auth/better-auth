@@ -1689,17 +1689,17 @@ describe("Additional Fields", async () => {
 		invitation: [] as {
 			id: string;
 			invitationRequiredField: string;
-			invitationOptionalField?: string;
+			invitationOptionalField?: string | undefined;
 		}[],
 		member: [] as {
 			id: string;
 			memberRequiredField: string;
-			memberOptionalField?: string;
+			memberOptionalField?: string | undefined;
 		}[],
 		team: [] as {
 			id: string;
 			teamRequiredField: string;
-			teamOptionalField?: string;
+			teamOptionalField?: string | undefined;
 		}[],
 		teamMember: [] as {
 			id: string;

@@ -37,47 +37,55 @@ export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
 };
 
 interface OrganizationClientOptions {
-	ac?: AccessControl;
-	roles?: {
-		[key in string]: Role;
-	};
-	teams?: {
-		enabled: boolean;
-	};
-	schema?: {
-		organization?: {
-			additionalFields?: {
-				[key: string]: DBFieldAttribute;
-			};
-		};
-		member?: {
-			additionalFields?: {
-				[key: string]: DBFieldAttribute;
-			};
-		};
-		invitation?: {
-			additionalFields?: {
-				[key: string]: DBFieldAttribute;
-			};
-		};
-		team?: {
-			additionalFields?: {
-				[key: string]: DBFieldAttribute;
-			};
-		};
-		organizationRole?: {
-			additionalFields?: {
-				[key: string]: DBFieldAttribute;
-			};
-		};
-	};
-	dynamicAccessControl?: {
-		enabled: boolean;
-	};
+	ac?: AccessControl | undefined;
+	roles?:
+		| {
+				[key in string]: Role;
+		  }
+		| undefined;
+	teams?:
+		| {
+				enabled: boolean;
+		  }
+		| undefined;
+	schema?:
+		| {
+				organization?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
+				member?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
+				invitation?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
+				team?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
+				organizationRole?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
+		  }
+		| undefined;
+	dynamicAccessControl?:
+		| {
+				enabled: boolean;
+		  }
+		| undefined;
 }
 
 export const organizationClient = <CO extends OrganizationClientOptions>(
-	options?: CO,
+	options?: CO | undefined,
 ) => {
 	const $listOrg = atom<boolean>(false);
 	const $activeOrgSignal = atom<boolean>(false);
@@ -101,11 +109,11 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				 * @deprecated Use `permissions` instead
 				 */
 				permission: PermissionType;
-				permissions?: never;
+				permissions?: never | undefined;
 		  }
 		| {
 				permissions: PermissionType;
-				permission?: never;
+				permission?: never | undefined;
 		  };
 
 	const roles = {
@@ -290,7 +298,7 @@ export const inferOrgAdditionalFields = <
 	},
 	S extends OrganizationOptions["schema"] = undefined,
 >(
-	schema?: S,
+	schema?: S | undefined,
 ) => {
 	type FindById<
 		T extends readonly BetterAuthPlugin[],

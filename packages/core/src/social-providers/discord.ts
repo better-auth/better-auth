@@ -16,12 +16,12 @@ export interface DiscordProfile extends Record<string, any> {
 	 */
 	avatar: string | null;
 	/** whether the user belongs to an OAuth2 application */
-	bot?: boolean;
+	bot?: boolean | undefined;
 	/**
 	 * whether the user is an Official Discord System user (part of the urgent
 	 * message system)
 	 */
-	system?: boolean;
+	system?: boolean | undefined;
 	/** whether the user has two factor enabled on their account */
 	mfa_enabled: boolean;
 	/**
@@ -75,8 +75,8 @@ export interface DiscordProfile extends Record<string, any> {
 
 export interface DiscordOptions extends ProviderOptions<DiscordProfile> {
 	clientId: string;
-	prompt?: "none" | "consent";
-	permissions?: number;
+	prompt?: ("none" | "consent") | undefined;
+	permissions?: number | undefined;
 }
 
 export const discord = (options: DiscordOptions) => {

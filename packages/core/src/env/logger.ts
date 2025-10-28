@@ -43,14 +43,16 @@ export function shouldPublishLog(
 }
 
 export interface Logger {
-	disabled?: boolean;
-	disableColors?: boolean;
-	level?: Exclude<LogLevel, "success">;
-	log?: (
-		level: Exclude<LogLevel, "success">,
-		message: string,
-		...args: any[]
-	) => void;
+	disabled?: boolean | undefined;
+	disableColors?: boolean | undefined;
+	level?: Exclude<LogLevel, "success"> | undefined;
+	log?:
+		| ((
+				level: Exclude<LogLevel, "success">,
+				message: string,
+				...args: any[]
+		  ) => void)
+		| undefined;
 }
 
 export type LogHandlerParams = Parameters<NonNullable<Logger["log"]>> extends [
@@ -92,7 +94,7 @@ export type InternalLogger = {
 	get level(): LogLevel;
 };
 
-export const createLogger = (options?: Logger): InternalLogger => {
+export const createLogger = (options?: Logger | undefined): InternalLogger => {
 	const enabled = options?.disabled !== true;
 	const logLevel = options?.level ?? "error";
 

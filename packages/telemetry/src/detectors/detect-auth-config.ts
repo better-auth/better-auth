@@ -3,7 +3,7 @@ import type { TelemetryContext } from "../types";
 
 export function getTelemetryAuthConfig(
 	options: BetterAuthOptions,
-	context?: TelemetryContext,
+	context: TelemetryContext,
 ) {
 	return {
 		database: context?.database,

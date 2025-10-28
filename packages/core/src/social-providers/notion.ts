@@ -10,11 +10,13 @@ export interface NotionProfile {
 	object: "user";
 	id: string;
 	type: "person" | "bot";
-	name?: string;
-	avatar_url?: string;
-	person?: {
-		email?: string;
-	};
+	name?: string | undefined;
+	avatar_url?: string | undefined;
+	person?:
+		| {
+				email?: string;
+		  }
+		| undefined;
 }
 
 export interface NotionOptions extends ProviderOptions<NotionProfile> {
