@@ -14,6 +14,13 @@ import { organization } from "./organization";
 import type { InvitationStatus } from "./schema";
 import type { OrganizationOptions } from "./types";
 
+describe("organization type", () => {
+	it("empty org type should works", () => {
+		expectTypeOf({} satisfies OrganizationOptions);
+		expectTypeOf({ schema: {} } satisfies OrganizationOptions);
+	});
+});
+
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
 		await getTestInstance({
