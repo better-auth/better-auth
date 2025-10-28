@@ -149,7 +149,7 @@ describe("type", () => {
 			},
 		});
 		type ReturnedSession = ReturnType<typeof client.useSession>;
-		expectTypeOf<ReturnedSession>().toMatchTypeOf<{
+		expectTypeOf<ReturnedSession>().toMatchObjectType<{
 			data: {
 				user: {
 					id: string;
@@ -305,7 +305,7 @@ describe("type", () => {
 			},
 		});
 		const data = client.getSession();
-		expectTypeOf(data).toMatchTypeOf<
+		expectTypeOf(data).toMatchObjectType<
 			Promise<{
 				user: {
 					id: string;
@@ -360,7 +360,7 @@ describe("type", () => {
 		});
 
 		type UseSessionReturn = ReturnType<typeof client.useSession>;
-		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+		expectTypeOf<UseSessionReturn>().toMatchObjectType<{
 			data: {
 				user: {
 					id: string;
