@@ -55,8 +55,8 @@ export const paybin = (options: PaybinOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["openid", "email", "profile"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "paybin",
 				options,

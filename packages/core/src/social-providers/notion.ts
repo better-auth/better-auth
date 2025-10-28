@@ -28,8 +28,8 @@ export const notion = (options: NotionOptions) => {
 		name: "Notion",
 		createAuthorizationURL({ state, scopes, loginHint, redirectURI }) {
 			const _scopes: string[] = options.disableDefaultScope ? [] : [];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "notion",
 				options,

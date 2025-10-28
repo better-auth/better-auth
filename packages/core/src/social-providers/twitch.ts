@@ -45,8 +45,8 @@ export const twitch = (options: TwitchOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["user:read:email", "openid"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "twitch",
 				redirectURI,

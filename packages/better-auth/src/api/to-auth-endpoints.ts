@@ -310,8 +310,8 @@ function getHooks(authContext: AuthContext) {
 	/**
 	 * Add plugin added hooks at last
 	 */
-	pluginBeforeHooks.length && beforeHooks.push(...pluginBeforeHooks);
-	pluginAfterHooks.length && afterHooks.push(...pluginAfterHooks);
+	if (pluginBeforeHooks.length) beforeHooks.push(...pluginBeforeHooks);
+	if (pluginAfterHooks.length) afterHooks.push(...pluginAfterHooks);
 
 	return {
 		beforeHooks,
