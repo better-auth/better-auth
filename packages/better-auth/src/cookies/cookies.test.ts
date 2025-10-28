@@ -370,7 +370,7 @@ describe("getSessionCookie", async () => {
 	});
 
 	it("should chunk large cookies instead of logging error", async () => {
-		const { client, testUser, cookieSetter } = await getTestInstance({
+		const { client, testUser } = await getTestInstance({
 			secret: "better-auth.secret",
 			user: {
 				additionalFields: {
