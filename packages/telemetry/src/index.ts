@@ -13,7 +13,7 @@ export { getTelemetryAuthConfig };
 export type { TelemetryEvent } from "./types";
 export async function createTelemetry(
 	options: BetterAuthOptions,
-	context: TelemetryContext,
+	context?: TelemetryContext | undefined,
 ) {
 	const debugEnabled =
 		options.telemetry?.debug ||
