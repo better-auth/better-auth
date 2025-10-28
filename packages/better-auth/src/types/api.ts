@@ -1,5 +1,6 @@
-import type { Endpoint } from "better-call";
-import type { PrettifyDeep, UnionToIntersection } from "../types/helper";
+import type { StrictEndpoint, EndpointOptions, Endpoint } from "better-call";
+import type { UnionToIntersection } from "./helper";
+import { type InputContext } from "better-call";
 
 export type FilteredAPI<API> = Omit<
 	API,
@@ -25,32 +26,49 @@ export type FilterActions<API> = Omit<
 		: never
 >;
 
+interface GetSessionFn<
+	Path extends string,
+	Options extends EndpointOptions,
+	R = any,
+> {
+	(
+		context: InputContext<Path, Options> & {
+			headers: Headers;
+			asResponse: true;
+		},
+	): Promise<Response>;
+	(
+		context: InputContext<Path, Options> & {
+			headers: Headers;
+			asResponse: false;
+			returnHeaders?: false;
+		},
+	): Promise<R>;
+	(
+		context: InputContext<Path, Options> & {
+			headers: Headers;
+			asResponse?: false;
+			returnHeaders: true;
+		},
+	): Promise<{
+		headers: Headers;
+		response: Awaited<R>;
+	}>;
+	(
+		context: InputContext<Path, Options> & {
+			headers: Headers;
+		},
+	): Promise<R>;
+}
+
 export type InferSessionAPI<API> = API extends {
 	[key: string]: infer E;
 }
 	? UnionToIntersection<
-			E extends Endpoint
-				? E["path"] extends "/get-session"
+			E extends StrictEndpoint<infer P, infer O, infer R>
+				? P extends "/get-session"
 					? {
-							getSession: <
-								R extends boolean,
-								H extends boolean = false,
-							>(context: {
-								headers: Headers;
-								query?: {
-									disableCookieCache?: boolean;
-									disableRefresh?: boolean;
-								};
-								asResponse?: R;
-								returnHeaders?: H;
-							}) => false extends R
-								? H extends true
-									? Promise<{
-											headers: Headers;
-											response: PrettifyDeep<Awaited<ReturnType<E>>> | null;
-										}>
-									: Promise<PrettifyDeep<Awaited<ReturnType<E>>> | null>
-								: Promise<Response>;
+							getSession: GetSessionFn<P, O, R>;
 						}
 					: never
 				: never
