@@ -3,8 +3,8 @@ import { APIError } from "better-call";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
-	refreshAccessToken,
 	createAuthorizationURL,
+	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
 export interface AppleProfile {

@@ -1,8 +1,10 @@
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthPluginDBSchema,
+	DBFieldAttribute,
+} from "@better-auth/core/db";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
-import type { DBFieldAttribute } from "@better-auth/core/db";
 
 // Cache for parsed schemas to avoid reparsing on every request
 const cache = new WeakMap<
@@ -94,10 +96,12 @@ export function parseInputData<T extends Record<string, any>>(
 		if (key in data) {
 			if (fields[key]!.input === false) {
 				if (fields[key]!.defaultValue !== undefined) {
-					parsedData[key] = fields[key]!.defaultValue;
-					continue;
+					if (action !== "update") {
+						parsedData[key] = fields[key]!.defaultValue;
+						continue;
+					}
 				}
-				if (parsedData[key]) {
+				if (data[key]) {
 					throw new APIError("BAD_REQUEST", {
 						message: `${key} is not allowed to be set`,
 					});
@@ -105,7 +109,9 @@ export function parseInputData<T extends Record<string, any>>(
 				continue;
 			}
 			if (fields[key]!.validator?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key]!.validator.input.parse(data[key]);
+				parsedData[key] = fields[key]!.validator.input["~standard"].validate(
+					data[key],
+				);
 				continue;
 			}
 			if (fields[key]!.transform?.input && data[key] !== undefined) {

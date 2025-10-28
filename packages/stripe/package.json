@@ -1,10 +1,16 @@
 {
   "name": "@better-auth/stripe",
   "author": "Bereket Engida",
-  "version": "1.4.0-beta.12",
+  "version": "1.4.0-beta.14",
   "type": "module",
   "main": "dist/index.js",
   "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/plugins/stripe",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/stripe"
+  },
   "keywords": [
     "stripe",
     "auth",

@@ -132,20 +132,16 @@ describe("sign-up with custom fields", async (it) => {
 	});
 
 	it("should not allow user to set the field that is set to input: false", async () => {
-		const res = await auth.api.signUpEmail({
-			body: {
-				email: "input-false@test.com",
-				password: "password",
-				name: "Input False Test",
-				//@ts-expect-error
-				role: "admin",
-			},
-		});
-		const session = await auth.api.getSession({
-			headers: new Headers({
-				authorization: `Bearer ${res.token}`,
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "input-false@test.com",
+					password: "password",
+					name: "Input False Test",
+					//@ts-expect-error
+					role: "admin",
+				},
 			}),
-		});
-		expect(session?.user.role).toBeNull();
+		).rejects.toThrow("role is not allowed to be set");
 	});
 });

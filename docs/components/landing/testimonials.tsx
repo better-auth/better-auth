@@ -1,8 +1,8 @@
+import { noSSR } from "foxact/no-ssr";
+import Link from "next/link";
+import { Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { Icons } from "../icons";
-import Link from "next/link";
-import { noSSR } from "foxact/no-ssr";
-import { Suspense } from "react";
 
 const testimonials = [
 	{
@@ -207,7 +207,7 @@ const TestimonialItem = ({
 					}}
 					className={cn(
 						"scroller flex flex-nowrap w-max min-w-full duration-[1000s] hover:[animation-play-state:paused] overflow-hidden relative gap-5 justify-around shrink-0",
-						reverse ? "animate-hrtl-scroll-reverse " : "animate-hrtl-scroll",
+						reverse ? "animate-hrtl-scroll-reverse" : "animate-hrtl-scroll",
 					)}
 				>
 					{testimonials.map((testimonial, indx) => {
