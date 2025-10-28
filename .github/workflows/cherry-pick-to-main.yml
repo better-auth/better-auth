@@ -9,6 +9,7 @@ on:
 jobs:
   cherry-pick:
     runs-on: ubuntu-latest
+    if: github.repository == 'better-auth/better-auth'
 
     permissions:
       contents: write
@@ -163,9 +164,25 @@ jobs:
                   issue_number: prNumber,
                   name: 'merge-to-main'
                 });
-                console.log(`✅ Removed label from PR #${prNumber}`);
+                console.log(`✅ Removed merge-to-main label from PR #${prNumber}`);
               } catch (error) {
-                console.log(`⚠️ Could not remove label from PR #${prNumber}: ${error.message}`);
+                console.log(`⚠️ Could not remove merge-to-main label from PR #${prNumber}: ${error.message}`);
+              }
+
+              // Remove merge-to-main-failure label if it exists
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: 'merge-to-main-failure'
+                });
+                console.log(`✅ Removed merge-to-main-failure label from PR #${prNumber}`);
+              } catch (error) {
+                // Ignore if label doesn't exist
+                if (error.status !== 404) {
+                  console.log(`⚠️ Could not remove merge-to-main-failure label from PR #${prNumber}: ${error.message}`);
+                }
               }
 
               // Add success comment
@@ -195,9 +212,25 @@ jobs:
                   issue_number: prNumber,
                   name: 'merge-to-main'
                 });
-                console.log(`✅ Removed label from PR #${prNumber}`);
+                console.log(`✅ Removed merge-to-main label from PR #${prNumber}`);
               } catch (error) {
-                console.log(`⚠️ Could not remove label from PR #${prNumber}: ${error.message}`);
+                console.log(`⚠️ Could not remove merge-to-main label from PR #${prNumber}: ${error.message}`);
+              }
+
+              // Remove merge-to-main-failure label if it exists
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: 'merge-to-main-failure'
+                });
+                console.log(`✅ Removed merge-to-main-failure label from PR #${prNumber}`);
+              } catch (error) {
+                // Ignore if label doesn't exist
+                if (error.status !== 404) {
+                  console.log(`⚠️ Could not remove merge-to-main-failure label from PR #${prNumber}: ${error.message}`);
+                }
               }
 
               // Add info comment
@@ -217,8 +250,40 @@ jobs:
             const conflictPrs = '${{ steps.cherry-pick.outputs.conflict_prs }}'.trim().split(' ').filter(Boolean);
 
             for (const prNumber of conflictPrs) {
-              console.log(`Adding conflict comment to PR #${prNumber}`);
+              console.log(`Checking PR #${prNumber} for existing conflict comment`);
 
+              // Check if we've already commented about conflicts
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+              });
+
+              const hasConflictComment = comments.data.some(comment =>
+                comment.body.includes('Cherry-pick to `main` failed due to conflicts')
+              );
+
+              if (hasConflictComment) {
+                console.log(`⏭️ Skipping PR #${prNumber} - conflict comment already exists`);
+                continue;
+              }
+
+              console.log(`Adding conflict comment and label to PR #${prNumber}`);
+
+              // Add merge-to-main-failure label
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  labels: ['merge-to-main-failure']
+                });
+                console.log(`✅ Added merge-to-main-failure label to PR #${prNumber}`);
+              } catch (error) {
+                console.log(`⚠️ Could not add label to PR #${prNumber}: ${error.message}`);
+              }
+
+              // Add conflict comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,

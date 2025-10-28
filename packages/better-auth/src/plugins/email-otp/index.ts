@@ -6,6 +6,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
@@ -95,15 +96,13 @@ export interface EmailOTPOptions {
 }
 
 const types = ["email-verification", "sign-in", "forget-password"] as const;
-const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
 const defaultOTPGenerator = (options: EmailOTPOptions) =>
 	generateRandomString(options.otpLength ?? 6, "0-9");
 
 const ERROR_CODES = defineErrorCodes({
-	OTP_EXPIRED: "otp expired",
+	OTP_EXPIRED: "OTP expired",
 	INVALID_OTP: "Invalid OTP",
-	INVALID_EMAIL: "Invalid email",
-	USER_NOT_FOUND: "User not found",
 	TOO_MANY_ATTEMPTS: "Too many attempts",
 });
 
@@ -223,17 +222,18 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						message: "send email verification is not implemented",
 					});
 				}
-				const email = ctx.body.email;
-				if (!emailRegex.test(email)) {
+				const email = ctx.body.email.toLowerCase();
+				const isValidEmail = z.string().email().safeParse(email);
+				if (!isValidEmail.success) {
 					throw ctx.error("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_EMAIL,
+						message: BASE_ERROR_CODES.INVALID_EMAIL,
 					});
 				}
 				if (opts.disableSignUp) {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_NOT_FOUND,
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 				} else if (ctx.body.type === "forget-password") {
@@ -503,16 +503,17 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					},
 				},
 				async (ctx) => {
-					const email = ctx.body.email;
-					if (!emailRegex.test(email)) {
+					const email = ctx.body.email.toLowerCase();
+					const isValidEmail = z.string().email().safeParse(email);
+					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_EMAIL,
+							message: BASE_ERROR_CODES.INVALID_EMAIL,
 						});
 					}
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_NOT_FOUND,
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 					const verificationValue =
@@ -616,8 +617,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 													user: {
 														$ref: "#/components/schemas/User",
 													},
-													required: ["status", "token", "user"],
 												},
+												required: ["status", "token", "user"],
 											},
 										},
 									},
@@ -627,10 +628,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					},
 				},
 				async (ctx) => {
-					const email = ctx.body.email;
-					if (!emailRegex.test(email)) {
+					const email = ctx.body.email.toLowerCase();
+					const isValidEmail = z.string().email().safeParse(email);
+					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_EMAIL,
+							message: BASE_ERROR_CODES.INVALID_EMAIL,
 						});
 					}
 					const verificationValue =
@@ -679,7 +681,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_NOT_FOUND,
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
@@ -855,7 +857,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					if (!user) {
 						if (opts.disableSignUp) {
 							throw new APIError("BAD_REQUEST", {
-								message: ERROR_CODES.USER_NOT_FOUND,
+								message: BASE_ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
 						const newUser = await ctx.context.internalAdapter.createUser({
@@ -965,7 +967,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_NOT_FOUND,
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 					const otp =
@@ -1053,7 +1055,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_NOT_FOUND,
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 					const verificationValue =
