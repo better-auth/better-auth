@@ -146,7 +146,7 @@ function Constellation({
 		let sequence: Array<Segment> = [
 			[
 				ref.current,
-				{ strokeDashoffset: 0, visibility: "visible" },
+				{ strokeDashoffset: 0, opacity: 1 },
 				{ duration: 5, delay: Math.random() * 3 + 2 },
 			],
 		];
@@ -177,7 +177,7 @@ function Constellation({
 				pathLength={1}
 				fill="transparent"
 				d={`M ${points.join("L")}`}
-				className="invisible"
+				style={{ opacity: 0 }}
 			/>
 			{uniquePoints.map((point, pointIndex) => (
 				<Star key={pointIndex} point={point} blurId={blurId} />
@@ -195,7 +195,7 @@ export function StarField({ className }: { className?: string }) {
 			fill="white"
 			aria-hidden="true"
 			className={clsx(
-				"pointer-events-none absolute w-[55.0625rem] origin-top-right rotate-[30deg] overflow-visible opacity-70",
+				"pointer-events-none absolute w-[55.0625rem] max-w-[100vw] origin-top-right rotate-[30deg] overflow-visible opacity-70",
 				className,
 			)}
 		>

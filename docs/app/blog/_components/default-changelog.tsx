@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import { IconLink } from "./changelog-layout";
 import { BookIcon, GitHubIcon, XIcon } from "./icons";
 import { StarField } from "./stat-field";
-import "highlight.js/styles/dark.css";
 
 export const dynamic = "force-static";
 const ChangelogPage = async () => {
