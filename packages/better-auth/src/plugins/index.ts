@@ -11,6 +11,7 @@ export {
 export * from "../types/plugins";
 export * from "../utils/hide-metadata";
 export * from "./admin";
+export * from "./alias";
 export * from "./anonymous";
 export * from "./api-key";
 export * from "./bearer";

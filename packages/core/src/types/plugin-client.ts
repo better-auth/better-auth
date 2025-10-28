@@ -81,7 +81,10 @@ export interface BetterAuthClientPlugin {
 	 * State atoms that'll be resolved by each framework
 	 * auth store.
 	 */
-	getAtoms?: ($fetch: BetterFetch) => Record<string, Atom<any>>;
+	getAtoms?: (
+		$fetch: BetterFetch,
+		options?: BetterAuthClientOptions | undefined,
+	) => Record<string, Atom<any>>;
 	/**
 	 * specify path methods for server plugin inferred
 	 * endpoints to force a specific method.
@@ -96,5 +99,7 @@ export interface BetterAuthClientPlugin {
 	 * The signal name needs to match a signal in this
 	 * plugin or any plugin the user might have added.
 	 */
-	atomListeners?: ClientAtomListener[];
+	atomListeners?:
+		| ClientAtomListener[]
+		| (() => ClientAtomListener[] | undefined);
 }

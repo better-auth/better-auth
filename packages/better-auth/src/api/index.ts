@@ -46,6 +46,15 @@ import {
 } from "./routes";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 
+function isEndpoint(endpoint: unknown): endpoint is Endpoint {
+	return (
+		typeof endpoint === "object" &&
+		endpoint !== null &&
+		Object.hasOwn(endpoint, "path") &&
+		typeof (endpoint as any).path === "string"
+	);
+}
+
 export function checkEndpointConflicts(
 	options: BetterAuthOptions,
 	logger: InternalLogger,
@@ -58,7 +67,7 @@ export function checkEndpointConflicts(
 	options.plugins?.forEach((plugin) => {
 		if (plugin.endpoints) {
 			for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
-				if (endpoint && "path" in endpoint) {
+				if (isEndpoint(endpoint)) {
 					const path = endpoint.path;
 					let methods: string[] = [];
 					if (endpoint.options && "method" in endpoint.options) {
