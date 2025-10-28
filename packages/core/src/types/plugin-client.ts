@@ -46,7 +46,7 @@ export interface RevalidateOptions {
 	 * @default false
 	 * @see https://developer.mozilla.org/en-US/docs/Web/API/NavigatorOnLine/onLine
 	 */
-	refetchWhenOffline?: false;
+	refetchWhenOffline?: boolean;
 }
 
 export interface BetterAuthClientOptions {
