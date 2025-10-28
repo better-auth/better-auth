@@ -6,22 +6,18 @@ import { generateId } from "../utils";
 
 interface AdapterTestOptions {
 	getAdapter: (
-		customOptions?: Omit<BetterAuthOptions, "database"> | undefined,
+		customOptions?: Omit<BetterAuthOptions, "database">,
 	) => Promise<DBAdapter<BetterAuthOptions>> | DBAdapter<BetterAuthOptions>;
-	disableTests?:
-		| Partial<Record<keyof typeof adapterTests, boolean>>
-		| undefined;
-	testPrefix?: string | undefined;
+	disableTests?: Partial<Record<keyof typeof adapterTests, boolean>>;
+	testPrefix?: string;
 }
 
 interface NumberIdAdapterTestOptions {
 	getAdapter: (
-		customOptions?: Omit<BetterAuthOptions, "database"> | undefined,
+		customOptions?: Omit<BetterAuthOptions, "database">,
 	) => Promise<DBAdapter<BetterAuthOptions>>;
-	disableTests?:
-		| Partial<Record<keyof typeof numberIdAdapterTests, boolean>>
-		| undefined;
-	testPrefix?: string | undefined;
+	disableTests?: Partial<Record<keyof typeof numberIdAdapterTests, boolean>>;
+	testPrefix?: string;
 }
 
 const adapterTests = {
@@ -76,11 +72,9 @@ delete numberIdAdapterTests.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND;
  */
 function adapterTest(
 	{ getAdapter, disableTests: disabledTests, testPrefix }: AdapterTestOptions,
-	internalOptions?:
-		| {
-				predefinedOptions: Omit<BetterAuthOptions, "database">;
-		  }
-		| undefined,
+	internalOptions?: {
+		predefinedOptions: Omit<BetterAuthOptions, "database">;
+	},
 ) {
 	console.warn(
 		"This test function is deprecated and will be removed in the future. Use `testAdapter` instead.",

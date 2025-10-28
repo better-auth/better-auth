@@ -47,18 +47,19 @@ export const testAdapter = async ({
 	/**
 	 * Any potential better-auth options overrides.
 	 */
-	overrideBetterAuthOptions?:
-		| (<Passed extends BetterAuthOptions, Returned extends BetterAuthOptions>(
-				betterAuthOptions: Passed,
-		  ) => Returned)
-		| undefined;
+	overrideBetterAuthOptions?: <
+		Passed extends BetterAuthOptions,
+		Returned extends BetterAuthOptions,
+	>(
+		betterAuthOptions: Passed,
+	) => Returned;
 	/**
 	 * By default we will cleanup all tables automatically,
 	 * but if you have additional cleanup logic, you can pass it here.
 	 *
 	 * Such as deleting a DB file that could had been created.
 	 */
-	additionalCleanups?: (() => Promise<void> | void) | undefined;
+	additionalCleanups?: () => Promise<void> | void;
 	/**
 	 * A test suite to run.
 	 */
@@ -66,15 +67,15 @@ export const testAdapter = async ({
 	/**
 	 * A prefix to add to the test suite name.
 	 */
-	prefixTests?: string | undefined;
+	prefixTests?: string;
 	/**
 	 * Upon finish of the tests, this function will be called.
 	 */
-	onFinish?: (() => Promise<void> | void) | undefined;
+	onFinish?: () => Promise<void> | void;
 	/**
 	 * Custom ID generator function to be used by the helper functions. (such as `insertRandom`)
 	 */
-	customIdGenerator?: (() => string | Promise<string>) | undefined;
+	customIdGenerator?: () => string | Promise<string>;
 }) => {
 	const defaultBAOptions = {} satisfies BetterAuthOptions;
 	let betterAuthOptions = (() => {
