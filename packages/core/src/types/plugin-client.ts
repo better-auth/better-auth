@@ -19,6 +19,36 @@ export type ClientAtomListener = {
 	signal: "$sessionSignal" | Omit<string, "$sessionSignal">;
 };
 
+export interface RevalidateOptions {
+	/**
+	 * A time interval (in seconds) after which the session will be re-fetched.
+	 * If set to `0` (default), the session is not polled.
+	 *
+	 * This helps prevent session expiry during idle periods by periodically
+	 * refreshing the session.
+	 *
+	 * @default 0
+	 */
+	refetchInterval?: number;
+	/**
+	 * Automatically refetch the session when the user switches back to the window/tab.
+	 * This option activates this behavior if set to `true` (default).
+	 *
+	 * Prevents expired sessions when users switch tabs and come back later.
+	 *
+	 * @default true
+	 */
+	refetchOnWindowFocus?: boolean;
+	/**
+	 * Set to `false` to stop polling when the device has no internet access
+	 * (determined by `navigator.onLine`).
+	 *
+	 * @default false
+	 * @see https://developer.mozilla.org/en-US/docs/Web/API/NavigatorOnLine/onLine
+	 */
+	refetchWhenOffline?: false;
+}
+
 export interface BetterAuthClientOptions {
 	fetchOptions?: BetterFetchOption;
 	plugins?: BetterAuthClientPlugin[];
@@ -26,6 +56,7 @@ export interface BetterAuthClientOptions {
 	basePath?: string;
 	disableDefaultFetchPlugins?: boolean;
 	$InferAuth?: BetterAuthOptions;
+	sessionOptions?: RevalidateOptions;
 }
 
 export interface BetterAuthClientPlugin {
