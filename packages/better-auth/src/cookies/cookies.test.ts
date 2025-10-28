@@ -960,7 +960,7 @@ describe("Cookie Chunking", () => {
 	it("should clean up all chunks when deleting session", async () => {
 		const largeString = "z".repeat(2000);
 
-		const { client, testUser } = await getTestInstance({
+		const { client } = await getTestInstance({
 			secret: "better-auth.secret",
 			user: {
 				additionalFields: {
