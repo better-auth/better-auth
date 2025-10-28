@@ -913,7 +913,7 @@ describe("Cookie Chunking", () => {
 	it("should reconstruct chunked cookies correctly", async () => {
 		const largeString = "y".repeat(2500);
 
-		const { client, testUser, cookieSetter } = await getTestInstance({
+		const { client, cookieSetter } = await getTestInstance({
 			secret: "better-auth.secret",
 			user: {
 				additionalFields: {
