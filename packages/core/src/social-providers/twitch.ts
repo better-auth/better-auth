@@ -35,7 +35,7 @@ export interface TwitchProfile {
 
 export interface TwitchOptions extends ProviderOptions<TwitchProfile> {
 	clientId: string;
-	claims?: string[];
+	claims?: string[] | undefined;
 }
 export const twitch = (options: TwitchOptions) => {
 	return {

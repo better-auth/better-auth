@@ -11,20 +11,22 @@ export interface PolarProfile {
 	email: string;
 	username: string;
 	avatar_url: string;
-	github_username?: string;
-	account_id?: string;
-	public_name?: string;
-	profile_settings?: {
-		profile_settings_enabled?: boolean;
-		profile_settings_public_name?: string;
-		profile_settings_public_avatar?: string;
-		profile_settings_public_bio?: string;
-		profile_settings_public_location?: string;
-		profile_settings_public_website?: string;
-		profile_settings_public_twitter?: string;
-		profile_settings_public_github?: string;
-		profile_settings_public_email?: string;
-	};
+	github_username?: string | undefined;
+	account_id?: string | undefined;
+	public_name?: string | undefined;
+	profile_settings?:
+		| {
+				profile_settings_enabled?: boolean;
+				profile_settings_public_name?: string;
+				profile_settings_public_avatar?: string;
+				profile_settings_public_bio?: string;
+				profile_settings_public_location?: string;
+				profile_settings_public_website?: string;
+				profile_settings_public_twitter?: string;
+				profile_settings_public_github?: string;
+				profile_settings_public_email?: string;
+		  }
+		| undefined;
 }
 
 export interface PolarOptions extends ProviderOptions<PolarProfile> {}

@@ -118,21 +118,23 @@ export interface MicrosoftOptions
 	 * The tenant ID of the Microsoft account
 	 * @default "common"
 	 */
-	tenantId?: string;
+	tenantId?: string | undefined;
 	/**
 	 * The authentication authority URL. Use the default "https://login.microsoftonline.com" for standard Entra ID or "https://<tenant-id>.ciamlogin.com" for CIAM scenarios.
 	 * @default "https://login.microsoftonline.com"
 	 */
-	authority?: string;
+	authority?: string | undefined;
 	/**
 	 * The size of the profile photo
 	 * @default 48
 	 */
-	profilePhotoSize?: 48 | 64 | 96 | 120 | 240 | 360 | 432 | 504 | 648;
+	profilePhotoSize?:
+		| (48 | 64 | 96 | 120 | 240 | 360 | 432 | 504 | 648)
+		| undefined;
 	/**
 	 * Disable profile photo
 	 */
-	disableProfilePhoto?: boolean;
+	disableProfilePhoto?: boolean | undefined;
 }
 
 export const microsoft = (options: MicrosoftOptions) => {

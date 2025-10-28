@@ -6,11 +6,11 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
-interface LinearUser {
+export interface LinearUser {
 	id: string;
 	name: string;
 	email: string;
-	avatarUrl?: string;
+	avatarUrl?: string | undefined;
 	active: boolean;
 	createdAt: string;
 	updatedAt: string;

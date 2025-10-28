@@ -10,8 +10,8 @@ import { parseJSON } from "./parser";
 import { getSessionAtom } from "./session-atom";
 
 export const getClientConfig = (
-	options?: BetterAuthClientOptions,
-	loadEnv?: boolean,
+	options?: BetterAuthClientOptions | undefined,
+	loadEnv?: boolean | undefined,
 ) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
@@ -98,7 +98,9 @@ export const getClientConfig = (
 	}
 
 	const $store = {
-		notify: (signal?: Omit<string, "$sessionSignal"> | "$sessionSignal") => {
+		notify: (
+			signal?: (Omit<string, "$sessionSignal"> | "$sessionSignal") | undefined,
+		) => {
 			pluginsAtoms[signal as keyof typeof pluginsAtoms]!.set(
 				!pluginsAtoms[signal as keyof typeof pluginsAtoms]!.get(),
 			);

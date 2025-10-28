@@ -29,7 +29,7 @@ export interface RevalidateOptions {
 	 *
 	 * @default 0
 	 */
-	refetchInterval?: number;
+	refetchInterval?: number | undefined;
 	/**
 	 * Automatically refetch the session when the user switches back to the window/tab.
 	 * This option activates this behavior if set to `true` (default).
@@ -38,7 +38,7 @@ export interface RevalidateOptions {
 	 *
 	 * @default true
 	 */
-	refetchOnWindowFocus?: boolean;
+	refetchOnWindowFocus?: boolean | undefined;
 	/**
 	 * Set to `false` to stop polling when the device has no internet access
 	 * (determined by `navigator.onLine`).
@@ -46,17 +46,17 @@ export interface RevalidateOptions {
 	 * @default false
 	 * @see https://developer.mozilla.org/en-US/docs/Web/API/NavigatorOnLine/onLine
 	 */
-	refetchWhenOffline?: boolean;
+	refetchWhenOffline?: boolean | undefined;
 }
 
 export interface BetterAuthClientOptions {
-	fetchOptions?: BetterFetchOption;
-	plugins?: BetterAuthClientPlugin[];
-	baseURL?: string;
-	basePath?: string;
-	disableDefaultFetchPlugins?: boolean;
-	$InferAuth?: BetterAuthOptions;
-	sessionOptions?: RevalidateOptions;
+	fetchOptions?: BetterFetchOption | undefined;
+	plugins?: BetterAuthClientPlugin[] | undefined;
+	baseURL?: string | undefined;
+	basePath?: string | undefined;
+	disableDefaultFetchPlugins?: boolean | undefined;
+	$InferAuth?: BetterAuthOptions | undefined;
+	sessionOptions?: RevalidateOptions | undefined;
 }
 
 export interface BetterAuthClientPlugin {
@@ -65,7 +65,7 @@ export interface BetterAuthClientPlugin {
 	 * only used for type inference. don't pass the
 	 * actual plugin
 	 */
-	$InferServerPlugin?: BetterAuthPlugin;
+	$InferServerPlugin?: BetterAuthPlugin | undefined;
 	/**
 	 * Custom actions
 	 */
@@ -81,20 +81,20 @@ export interface BetterAuthClientPlugin {
 	 * State atoms that'll be resolved by each framework
 	 * auth store.
 	 */
-	getAtoms?: ($fetch: BetterFetch) => Record<string, Atom<any>>;
+	getAtoms?: (($fetch: BetterFetch) => Record<string, Atom<any>>) | undefined;
 	/**
 	 * specify path methods for server plugin inferred
 	 * endpoints to force a specific method.
 	 */
-	pathMethods?: Record<string, "POST" | "GET">;
+	pathMethods?: Record<string, "POST" | "GET"> | undefined;
 	/**
 	 * Better fetch plugins
 	 */
-	fetchPlugins?: BetterFetchPlugin[];
+	fetchPlugins?: BetterFetchPlugin[] | undefined;
 	/**
 	 * a list of recaller based on a matcher function.
 	 * The signal name needs to match a signal in this
 	 * plugin or any plugin the user might have added.
 	 */
-	atomListeners?: ClientAtomListener[];
+	atomListeners?: ClientAtomListener[] | undefined;
 }

@@ -22,11 +22,14 @@ export interface RobloxProfile extends Record<string, any> {
 export interface RobloxOptions extends ProviderOptions<RobloxProfile> {
 	clientId: string;
 	prompt?:
-		| "none"
-		| "consent"
-		| "login"
-		| "select_account"
-		| "select_account consent";
+		| (
+				| "none"
+				| "consent"
+				| "login"
+				| "select_account"
+				| "select_account consent"
+		  )
+		| undefined;
 }
 
 export const roblox = (options: RobloxOptions) => {

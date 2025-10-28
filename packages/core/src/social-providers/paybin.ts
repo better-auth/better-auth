@@ -11,12 +11,12 @@ import {
 export interface PaybinProfile {
 	sub: string;
 	email: string;
-	email_verified?: boolean;
-	name?: string;
-	preferred_username?: string;
-	picture?: string;
-	given_name?: string;
-	family_name?: string;
+	email_verified?: boolean | undefined;
+	name?: string | undefined;
+	preferred_username?: string | undefined;
+	picture?: string | undefined;
+	given_name?: string | undefined;
+	family_name?: string | undefined;
 }
 
 export interface PaybinOptions extends ProviderOptions<PaybinProfile> {
@@ -25,7 +25,7 @@ export interface PaybinOptions extends ProviderOptions<PaybinProfile> {
 	 * The issuer URL of your Paybin OAuth server
 	 * @default "https://idp.paybin.io"
 	 */
-	issuer?: string;
+	issuer?: string | undefined;
 }
 
 export const paybin = (options: PaybinOptions) => {

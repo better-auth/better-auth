@@ -15,13 +15,13 @@ export interface CognitoProfile {
 	email: string;
 	email_verified: boolean;
 	name: string;
-	given_name?: string;
-	family_name?: string;
-	picture?: string;
-	username?: string;
-	locale?: string;
-	phone_number?: string;
-	phone_number_verified?: boolean;
+	given_name?: string | undefined;
+	family_name?: string | undefined;
+	picture?: string | undefined;
+	username?: string | undefined;
+	locale?: string | undefined;
+	phone_number?: string | undefined;
+	phone_number_verified?: boolean | undefined;
 	aud: string;
 	iss: string;
 	exp: number;
@@ -41,7 +41,7 @@ export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
 	 */
 	region: string;
 	userPoolId: string;
-	requireClientSecret?: boolean;
+	requireClientSecret?: boolean | undefined;
 }
 
 export const cognito = (options: CognitoOptions) => {

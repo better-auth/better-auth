@@ -28,12 +28,12 @@ export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
 	 *
 	 * @default ["id", "name", "email", "picture"]
 	 */
-	fields?: string[];
+	fields?: string[] | undefined;
 
 	/**
 	 * The config id to use when undergoing oauth
 	 */
-	configId?: string;
+	configId?: string | undefined;
 }
 
 export const facebook = (options: FacebookOptions) => {

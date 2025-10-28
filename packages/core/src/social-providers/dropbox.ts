@@ -22,7 +22,7 @@ export interface DropboxProfile {
 
 export interface DropboxOptions extends ProviderOptions<DropboxProfile> {
 	clientId: string;
-	accessType?: "offline" | "online" | "legacy";
+	accessType?: ("offline" | "online" | "legacy") | undefined;
 }
 
 export const dropbox = (options: DropboxOptions) => {

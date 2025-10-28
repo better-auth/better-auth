@@ -52,7 +52,7 @@ export interface AppleProfile {
 	 * The URL to the user's profile picture.
 	 */
 	picture: string;
-	user?: AppleNonConformUser;
+	user?: AppleNonConformUser | undefined;
 }
 
 /**
@@ -70,8 +70,8 @@ export interface AppleNonConformUser {
 
 export interface AppleOptions extends ProviderOptions<AppleProfile> {
 	clientId: string;
-	appBundleIdentifier?: string;
-	audience?: string | string[];
+	appBundleIdentifier?: string | undefined;
+	audience?: (string | string[]) | undefined;
 }
 
 export const apple = (options: AppleOptions) => {

@@ -12,18 +12,18 @@ export interface VkProfile {
 		user_id: string;
 		first_name: string;
 		last_name: string;
-		email?: string;
-		phone?: number;
-		avatar?: string;
-		sex?: number;
-		verified?: boolean;
+		email?: string | undefined;
+		phone?: number | undefined;
+		avatar?: string | undefined;
+		sex?: number | undefined;
+		verified?: boolean | undefined;
 		birthday: string;
 	};
 }
 
 export interface VkOption extends ProviderOptions {
 	clientId: string;
-	scheme?: "light" | "dark";
+	scheme?: ("light" | "dark") | undefined;
 }
 
 export const vk = (options: VkOption) => {
