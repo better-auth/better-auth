@@ -23,6 +23,51 @@ import type { Prettify } from "../../types/helper";
 import { getDate } from "../../utils/date";
 import { safeJSONParse } from "../../utils/json";
 
+function getChunkedCookie(
+	ctx: GenericEndpointContext,
+	cookieName: string,
+): string | null {
+	const value = ctx.getCookie(cookieName);
+	if (value) {
+		return value;
+	}
+
+	const chunks: Array<{ index: number; value: string }> = [];
+
+	const cookieHeader = ctx.headers?.get("cookie");
+	if (!cookieHeader) {
+		return null;
+	}
+
+	const cookies: Record<string, string> = {};
+	const pairs = cookieHeader.split("; ");
+	for (const pair of pairs) {
+		const [name, ...valueParts] = pair.split("=");
+		if (name && valueParts.length > 0) {
+			cookies[name] = valueParts.join("=");
+		}
+	}
+
+	for (const [name, val] of Object.entries(cookies)) {
+		if (name.startsWith(cookieName + ".")) {
+			const parts = name.split(".");
+			const indexStr = parts[parts.length - 1];
+			const index = parseInt(indexStr || "0", 10);
+			if (!isNaN(index)) {
+				chunks.push({ index, value: val });
+			}
+		}
+	}
+
+	if (chunks.length > 0) {
+		// Sort by index and join
+		chunks.sort((a, b) => a.index - b.index);
+		return chunks.map((c) => c.value).join("");
+	}
+
+	return null;
+}
+
 export const getSessionQuerySchema = z.optional(
 	z.object({
 		/**
@@ -95,7 +140,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					return null;
 				}
 
-				const sessionDataCookie = ctx.getCookie(
+				const sessionDataCookie = getChunkedCookie(
+					ctx,
 					ctx.context.authCookies.sessionData.name,
 				);
 

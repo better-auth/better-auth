@@ -16,6 +16,7 @@ import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
+import { createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -170,13 +171,15 @@ export async function setCookieCache(
 			);
 		}
 
-		if (data.length > 4093) {
-			ctx.context?.logger?.error(
-				`Session data exceeds cookie size limit (${data.length} bytes > 4093 bytes). Consider reducing session data size or disabling cookie cache. Session will not be cached in cookie.`,
-			);
-			return;
-		}
-		ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
+		// Use createSessionStore to handle chunking for large cookies
+		const sessionStore = createSessionStore(
+			ctx.context.authCookies.sessionData.name,
+			options,
+			ctx,
+		);
+
+		const cookies = sessionStore.chunk(data, options);
+		sessionStore.setCookies(cookies);
 	}
 }
 
@@ -249,10 +252,16 @@ export function deleteSessionCookie(
 		...ctx.context.authCookies.sessionToken.options,
 		maxAge: 0,
 	});
-	ctx.setCookie(ctx.context.authCookies.sessionData.name, "", {
-		...ctx.context.authCookies.sessionData.options,
-		maxAge: 0,
-	});
+
+	// Use createSessionStore to clean up all session data chunks
+	const sessionStore = createSessionStore(
+		ctx.context.authCookies.sessionData.name,
+		ctx.context.authCookies.sessionData.options,
+		ctx,
+	);
+	const cleanCookies = sessionStore.clean();
+	sessionStore.setCookies(cleanCookies);
+
 	if (!skipDontRememberMe) {
 		ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
 			...ctx.context.authCookies.dontRememberToken.options,
@@ -342,7 +351,30 @@ export const getCookieCache = async <
 				? `__Secure-${cookiePrefix}.${cookieName}`
 				: `${cookiePrefix}.${cookieName}`;
 	const parsedCookie = parseCookies(cookies);
-	const sessionData = parsedCookie.get(name);
+
+	// Check for chunked cookies
+	let sessionData = parsedCookie.get(name);
+	if (!sessionData) {
+		// Try to reconstruct from chunks
+		const chunks: Array<{ index: number; value: string }> = [];
+		for (const [cookieName, value] of parsedCookie.entries()) {
+			if (cookieName.startsWith(name + ".")) {
+				const parts = cookieName.split(".");
+				const indexStr = parts[parts.length - 1];
+				const index = parseInt(indexStr || "0", 10);
+				if (!isNaN(index)) {
+					chunks.push({ index, value });
+				}
+			}
+		}
+
+		if (chunks.length > 0) {
+			// Sort by index and join
+			chunks.sort((a, b) => a.index - b.index);
+			sessionData = chunks.map((c) => c.value).join("");
+		}
+	}
+
 	if (sessionData) {
 		const secret = config?.secret || env.BETTER_AUTH_SECRET;
 		if (!secret) {
@@ -393,3 +425,4 @@ export const getCookieCache = async <
 };
 
 export * from "./cookie-utils";
+export { createSessionStore, SessionStore } from "./session-store";
