@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { type Session } from "./../../types";
+import { jwtClient } from "../jwt/client";
 import { twoFactor, twoFactorClient } from "../two-factor";
 import { inferAdditionalFields } from "./client";
 
@@ -146,7 +147,7 @@ describe("additionalFields", async () => {
 				customFetchImpl,
 			},
 		});
-		expectTypeOf(client.twoFactor).toMatchTypeOf<{}>();
+		expectTypeOf(client.twoFactor).toMatchObjectType<{}>();
 
 		const headers = new Headers();
 		await client.signUp.email(
@@ -175,8 +176,9 @@ describe("additionalFields", async () => {
 		const client = createAuthClient({
 			plugins: [inferAdditionalFields<typeof auth>()],
 		});
-		type t = Awaited<ReturnType<typeof client.getSession>>["data"];
-		expectTypeOf<t>().toMatchTypeOf<{
+
+		type session = typeof client.$Infer.Session;
+		expectTypeOf<session>().toMatchObjectType<{
 			user: {
 				id: string;
 				email: string;
@@ -184,12 +186,12 @@ describe("additionalFields", async () => {
 				name: string;
 				createdAt: Date;
 				updatedAt: Date;
-				image?: string | undefined;
+				image?: string | undefined | null;
 				newField: string;
-				nonRequiredFiled?: string | undefined;
+				nonRequiredFiled?: string | undefined | null;
 			};
 			session: Session;
-		} | null>;
+		}>;
 	});
 
 	it("should infer it on the client without direct import", async () => {
@@ -204,8 +206,11 @@ describe("additionalFields", async () => {
 				}),
 			],
 		});
-		type t = Awaited<ReturnType<typeof client.getSession>>["data"];
-		expectTypeOf<t>().toMatchTypeOf<{
+
+		const s = await client.getSession();
+
+		type session = typeof client.$Infer.Session;
+		expectTypeOf<session>().toMatchObjectType<{
 			user: {
 				id: string;
 				email: string;
@@ -213,10 +218,42 @@ describe("additionalFields", async () => {
 				name: string;
 				createdAt: Date;
 				updatedAt: Date;
-				image?: string | undefined;
+				image?: string | undefined | null;
 				newField: string;
 			};
 			session: Session;
-		} | null>;
+		}>;
+	});
+
+	it("should infer on the client when other plugins are present", async () => {
+		const client = createAuthClient({
+			plugins: [
+				inferAdditionalFields({
+					user: {
+						newField: {
+							type: "string",
+						},
+					},
+				}),
+				jwtClient(),
+			],
+		});
+
+		const s = await client.getSession();
+
+		type session = typeof client.$Infer.Session;
+		expectTypeOf<session>().toMatchObjectType<{
+			user: {
+				id: string;
+				email: string;
+				emailVerified: boolean;
+				name: string;
+				createdAt: Date;
+				updatedAt: Date;
+				image?: string | undefined | null;
+				newField: string;
+			};
+			session: Session;
+		}>;
 	});
 });
