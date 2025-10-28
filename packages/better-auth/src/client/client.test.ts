@@ -7,7 +7,7 @@ import type { Accessor } from "solid-js";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import { twoFactorClient } from "../plugins";
-import type { Session, SessionQueryParams } from "../types";
+import type { SessionQueryParams } from "../types";
 import { organizationClient, passkeyClient } from "./plugins";
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createSolidClient } from "./solid";
@@ -149,24 +149,41 @@ describe("type", () => {
 			},
 		});
 		type ReturnedSession = ReturnType<typeof client.useSession>;
-		expectTypeOf<ReturnedSession>().toMatchObjectType<{
+		expectTypeOf<ReturnedSession>().toEqualTypeOf<{
 			data: {
 				user: {
 					id: string;
+					createdAt: Date;
+					updatedAt: Date;
 					email: string;
 					emailVerified: boolean;
 					name: string;
+					image?: string | null | undefined;
+					testField4: string;
+					testField?: string | null | undefined;
+					testField2?: number | null | undefined;
+				};
+				session: {
+					id: string;
 					createdAt: Date;
 					updatedAt: Date;
-					image?: string | undefined | null;
-					testField4: string;
-					testField?: string | undefined | null;
-					testField2?: number | undefined | null;
+					userId: string;
+					expiresAt: Date;
+					token: string;
+					ipAddress?: string | null | undefined;
+					userAgent?: string | null | undefined;
 				};
-				session: Session;
 			} | null;
-			error: BetterFetchError | null;
 			isPending: boolean;
+			isRefetching: boolean;
+			error: BetterFetchError | null;
+			refetch: (
+				queryParams?:
+					| {
+							query?: SessionQueryParams;
+					  }
+					| undefined,
+			) => void;
 		}>();
 	});
 	it("should infer resolved hooks react", () => {
@@ -305,26 +322,29 @@ describe("type", () => {
 			},
 		});
 		const data = client.getSession();
-		expectTypeOf(data).toMatchObjectType<
+		expectTypeOf(data).toEqualTypeOf<
 			Promise<{
 				user: {
 					id: string;
+					createdAt: Date;
+					updatedAt: Date;
 					email: string;
 					emailVerified: boolean;
 					name: string;
-					createdAt: Date;
-					updatedAt: Date;
-					image?: string | undefined | null;
+					image?: string | null | undefined;
 					testField4: string;
-					testField?: string | undefined | null;
-					testField2?: number | undefined | null;
+					testField?: string | null | undefined;
+					testField2?: number | null | undefined;
 				};
 				session: {
 					id: string;
+					createdAt: Date;
+					updatedAt: Date;
 					userId: string;
 					expiresAt: Date;
-					ipAddress?: string | undefined | null;
-					userAgent?: string | undefined | null;
+					token: string;
+					ipAddress?: string | null | undefined;
+					userAgent?: string | null | undefined;
 				};
 			} | null>
 		>();
@@ -358,27 +378,42 @@ describe("type", () => {
 				},
 			},
 		});
-
 		type UseSessionReturn = ReturnType<typeof client.useSession>;
-		expectTypeOf<UseSessionReturn>().toMatchObjectType<{
+		expectTypeOf<UseSessionReturn>().toEqualTypeOf<{
 			data: {
 				user: {
 					id: string;
+					createdAt: Date;
+					updatedAt: Date;
 					email: string;
 					emailVerified: boolean;
 					name: string;
+					image?: string | null | undefined;
+					testField4: string;
+					testField?: string | null | undefined;
+					testField2?: number | null | undefined;
+				};
+				session: {
+					id: string;
 					createdAt: Date;
 					updatedAt: Date;
-					image?: string | undefined | null;
-					testField4: string;
-					testField?: string | undefined | null;
-					testField2?: number | undefined | null;
+					userId: string;
+					expiresAt: Date;
+					token: string;
+					ipAddress?: string | null | undefined;
+					userAgent?: string | null | undefined;
 				};
-				session: Session;
 			} | null;
 			isPending: boolean;
+			isRefetching: boolean;
 			error: BetterFetchError | null;
-			refetch: (queryParams?: { query?: SessionQueryParams }) => void;
+			refetch: (
+				queryParams?:
+					| {
+							query?: SessionQueryParams;
+					  }
+					| undefined,
+			) => void;
 		}>();
 	});
 });
