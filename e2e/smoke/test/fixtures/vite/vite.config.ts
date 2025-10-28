@@ -5,7 +5,6 @@ export default defineConfig({
 	build: {
 		rollupOptions: {
 			input: {
-				server: resolve(__dirname, "src", "server.ts"),
 				client: resolve(__dirname, "src", "client.ts"),
 			},
 			output: {

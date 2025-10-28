@@ -20,7 +20,7 @@ import {
 	memberAc,
 	ownerAc,
 } from "./access";
-import { type OrganizationPlugin } from "./organization";
+import type { OrganizationPlugin } from "./organization";
 import type { HasPermissionBaseInput } from "./permission";
 import { hasPermissionFn } from "./permission";
 import type { OrganizationOptions } from "./types";
