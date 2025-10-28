@@ -18,6 +18,7 @@ import { linkedin } from "./linkedin";
 import { microsoft } from "./microsoft-entra-id";
 import { naver } from "./naver";
 import { notion } from "./notion";
+import { paybin } from "./paybin";
 import { paypal } from "./paypal";
 import { polar } from "./polar";
 import { reddit } from "./reddit";
@@ -61,6 +62,7 @@ export const socialProviders = {
 	kakao,
 	naver,
 	line,
+	paybin,
 	paypal,
 	polar,
 };
@@ -105,6 +107,7 @@ export * from "./linkedin";
 export * from "./microsoft-entra-id";
 export * from "./naver";
 export * from "./notion";
+export * from "./paybin";
 export * from "./paypal";
 export * from "./polar";
 export * from "./reddit";
