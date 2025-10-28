@@ -3,10 +3,11 @@ import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { parseState } from "../../oauth2/state";
+import { parseState, setAdditionalDataInContext } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { safeJSONParse } from "../../utils/json";
+import { APIError } from "better-call";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -58,7 +59,19 @@ export const callbackOAuth = createAuthEndpoint(
 			errorURL,
 			newUserURL,
 			requestSignUp,
+			additionalData,
 		} = await parseState(c);
+		try {
+			await setAdditionalDataInContext(c, additionalData);
+		} catch (error: unknown) {
+			if (error instanceof APIError) {
+				c.context.logger.error("Invalid additional data", error);
+				throw redirectOnError("invalid_additional_data", error.message);
+			}
+			c.context.logger.error("Invalid additional data", error);
+			throw redirectOnError("invalid_additional_data");
+		}
+		console.log(111, c.context.oauthState);
 
 		function redirectOnError(error: string, description?: string) {
 			const baseURL = errorURL ?? defaultErrorURL;
@@ -165,6 +178,12 @@ export const callbackOAuth = createAuthEndpoint(
 					existingAccount.id,
 					updateData,
 				);
+				if (additionalData) {
+					await c.context.internalAdapter.updateUser(
+						existingAccount.userId,
+						additionalData,
+					);
+				}
 			} else {
 				const newAccount = await c.context.internalAdapter.createAccount({
 					userId: link.userId,
@@ -177,6 +196,12 @@ export const callbackOAuth = createAuthEndpoint(
 				});
 				if (!newAccount) {
 					return redirectOnError("unable_to_link_account");
+				}
+				if (additionalData) {
+					await c.context.internalAdapter.updateUser(
+						link.userId,
+						additionalData,
+					);
 				}
 			}
 			let toRedirectTo: string;
@@ -214,6 +239,7 @@ export const callbackOAuth = createAuthEndpoint(
 				(provider.disableImplicitSignUp && !requestSignUp) ||
 				provider.options?.disableSignUp,
 			overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
+			additionalData,
 		});
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));

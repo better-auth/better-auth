@@ -147,6 +147,10 @@ export const signInSocial = createAuthEndpoint(
 						"The login hint to use for the authorization code request",
 				})
 				.optional(),
+			/**
+			 * Any additional data to pass through the oauth flow.
+			 */
+			data: z.record(z.string(), z.any()).optional(),
 		}),
 		metadata: {
 			openapi: {
@@ -295,6 +299,7 @@ export const signInSocial = createAuthEndpoint(
 				disableSignUp:
 					(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
 					provider.disableSignUp,
+				...(c.body.data ? { additionalData: c.body.data } : {}),
 			});
 			if (data.error) {
 				throw new APIError("UNAUTHORIZED", {
@@ -318,7 +323,9 @@ export const signInSocial = createAuthEndpoint(
 			});
 		}
 
-		const { codeVerifier, state } = await generateState(c);
+		const { codeVerifier, state } = await generateState(c, undefined, {
+			data: c.body.data,
+		});
 		const url = await provider.createAuthorizationURL({
 			state,
 			codeVerifier,

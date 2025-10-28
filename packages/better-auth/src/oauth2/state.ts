@@ -13,6 +13,12 @@ export async function generateState(
 		email: string;
 		userId: string;
 	},
+	/**
+	 * Whether to assign additional data to the state - primarily used for social providers additional data.
+	 * As of writing, this is only used by built-in social providers as well as the generic oauth plugin.
+	 * All other cases should set this to false, which will skip setting `additionalData` in the state.
+	 */
+	additionalData: { data: unknown } | false = false,
 ) {
 	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
 	if (!callbackURL) {
@@ -37,6 +43,7 @@ export async function generateState(
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
+		...(additionalData ? { additionalData: additionalData.data } : {}),
 	};
 
 	if (storeStateStrategy === "cookie") {
@@ -108,6 +115,7 @@ export async function parseState(c: GenericEndpointContext) {
 			})
 			.optional(),
 		requestSignUp: z.boolean().optional(),
+		additionalData: z.unknown().optional(),
 	});
 
 	let parsedData: z.infer<typeof stateDataSchema>;
@@ -200,4 +208,44 @@ export async function parseState(c: GenericEndpointContext) {
 	}
 
 	return parsedData;
+}
+
+/**
+ * Sets the additional data in the context.
+ *
+ * Throws an error if the additional data is invalid.
+ *
+ * @param c - The context.
+ * @param additionalData - The additional data to set.
+ * @returns The additional data.
+ */
+export async function setAdditionalDataInContext(
+	c: GenericEndpointContext,
+	additionalData: unknown,
+) {
+	console.log(222, additionalData);
+	if (!additionalData) return;
+	const additionalDataConfig = c.context.oauthConfig?.additionalData;
+	
+	if (!additionalDataConfig || !additionalDataConfig.enabled) return;
+
+	const schema = additionalDataConfig.schema || z.record(z.string(), z.any());
+
+	let result = schema["~standard"].validate(additionalData);
+	if (result instanceof Promise) result = await result;
+
+	console.log(22, result)
+
+	// if the `issues` field exists, the validation failed
+	if (result.issues) {
+		throw new APIError("BAD_REQUEST", {
+			message: `Invalid oauth additional data: ${JSON.stringify(result.issues, null, 2)}`,
+		});
+	}
+
+	const value = result.value;
+	console.log(333, value);
+	c.context.oauthState = value;
+	console.log(444, c.context.oauthState);
+	return value;
 }

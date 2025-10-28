@@ -108,6 +108,10 @@ export const init = async (options: BetterAuthOptions) => {
 				options.advanced?.oauthConfig?.storeStateStrategy || "database",
 			skipStateCookieCheck:
 				!!options.advanced?.oauthConfig?.skipStateCookieCheck,
+			additionalData: {
+				enabled: !!options.advanced?.oauthConfig?.additionalData?.enabled,
+				schema: options.advanced?.oauthConfig?.additionalData?.schema,
+			},
 		},
 		tables,
 		trustedOrigins: getTrustedOrigins(options),
@@ -147,6 +151,7 @@ export const init = async (options: BetterAuthOptions) => {
 		logger,
 		generateId: generateIdFunc,
 		session: null,
+		oauthState: null,
 		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
