@@ -2,7 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	DBAdapter,
 	DBAdapterDebugLogOption,
-	ResolvedJoin,
+	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
 import {
@@ -199,7 +199,7 @@ export const kyselyAdapter = (
 			function processJoinedResults(
 				rows: any[],
 				baseModel: string,
-				joinConfig: ResolvedJoin | undefined,
+				joinConfig: JoinConfig | undefined,
 				allSelectsStr: { joinModel: string; fieldName: string }[],
 				limit?: number,
 				offset?: number,

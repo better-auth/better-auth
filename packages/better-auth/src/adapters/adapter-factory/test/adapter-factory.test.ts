@@ -1622,7 +1622,7 @@ describe("Create Adapter Helper", async () => {
 	});
 });
 
-describe("Fallback Join System", async () => {
+describe("Fallback JoinOption System", async () => {
 	describe("supportsJoin: false (Fallback mode)", () => {
 		test("findOne: Should handle forward joins (joined model has FK to base model) by making separate queries", async () => {
 			let adapterCalls: Array<{ method: string; model: string }> = [];
@@ -1790,7 +1790,7 @@ describe("Fallback Join System", async () => {
 				join: { session: true },
 			});
 
-			// Join should NOT be passed to adapter when supportsJoin is false
+			// JoinOption should NOT be passed to adapter when supportsJoin is false
 			expect(joinPassedToAdapter).toBeUndefined();
 		});
 
@@ -1826,7 +1826,7 @@ describe("Fallback Join System", async () => {
 				join: { session: true },
 			});
 
-			// Join should NOT be passed to adapter when supportsJoin is false
+			// JoinOption should NOT be passed to adapter when supportsJoin is false
 			expect(joinPassedToAdapter).toBeUndefined();
 		});
 	});
@@ -1863,7 +1863,7 @@ describe("Fallback Join System", async () => {
 				join: { session: true },
 			});
 
-			// Join SHOULD be passed to adapter when supportsJoin is true
+			// JoinOption SHOULD be passed to adapter when supportsJoin is true
 			// It's then the adapter's responsibility to handle the join
 			expect(joinPassedToAdapter).not.toBeUndefined();
 			expect(joinPassedToAdapter).toHaveProperty("session");
@@ -1902,7 +1902,7 @@ describe("Fallback Join System", async () => {
 				join: { session: true },
 			});
 
-			// Join SHOULD be passed to adapter when supportsJoin is true
+			// JoinOption SHOULD be passed to adapter when supportsJoin is true
 			// It's then the adapter's responsibility to handle the join
 			expect(joinPassedToAdapter).not.toBeUndefined();
 			expect(joinPassedToAdapter).toHaveProperty("session");

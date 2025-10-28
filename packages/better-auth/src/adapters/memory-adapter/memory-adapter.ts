@@ -2,7 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	CleanedWhere,
 	DBAdapterDebugLogOption,
-	ResolvedJoin,
+	JoinConfig,
 } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 import { createAdapterFactory } from "../adapter-factory";
@@ -98,7 +98,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 			function convertWhereClause(
 				where: CleanedWhere[],
 				model: string,
-				join?: ResolvedJoin,
+				join?: JoinConfig,
 			): any[] {
 				const execute = (where: CleanedWhere[], model: string) => {
 					const table = db[model];
@@ -199,10 +199,10 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
 						const joinTable = db[joinModelName];
 						if (!joinTable) {
 							logger.error(
-								`[MemoryAdapter] Join model ${joinModelName} not found in the DB`,
+								`[MemoryAdapter] JoinOption model ${joinModelName} not found in the DB`,
 								Object.keys(db),
 							);
-							throw new Error(`Join model ${joinModelName} not found`);
+							throw new Error(`JoinOption model ${joinModelName} not found`);
 						}
 
 						const matchingRecords = joinTable.filter(

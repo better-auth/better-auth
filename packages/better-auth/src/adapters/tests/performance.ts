@@ -304,8 +304,8 @@ export const performanceTestSuite = createTestSuite(
 						2,
 					);
 					console.log(`\nJoin Performance Comparison:`);
-					console.log(`  With Join:    ${joinAvg.toFixed(3)}ms`);
-					console.log(`  Without Join: ${nonJoinAvg.toFixed(3)}ms`);
+					console.log(`  With JoinOption:    ${joinAvg.toFixed(3)}ms`);
+					console.log(`  Without JoinOption: ${nonJoinAvg.toFixed(3)}ms`);
 					console.log(
 						`  Difference:   ${difference.toFixed(3)}ms (${percentDifference}%)`,
 					);

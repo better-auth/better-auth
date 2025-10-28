@@ -4,8 +4,8 @@ import type {
 	CleanedWhere,
 	DBAdapter,
 	DBTransactionAdapter,
-	Join,
-	ResolvedJoin,
+	JoinConfig,
+	JoinOption,
 	Where,
 } from "@better-auth/core/db/adapter";
 import { getColorDepth, logger, TTY_COLORS } from "@better-auth/core/env";
@@ -315,7 +315,7 @@ export const createAdapterFactory =
 			data: Record<string, any> | null,
 			unsafe_model: string,
 			select: string[] = [],
-			join: ResolvedJoin | undefined = undefined,
+			join: JoinConfig | undefined = undefined,
 		) => {
 			const transformSingleOutput = async (
 				data: Record<string, any> | null,
@@ -604,11 +604,11 @@ export const createAdapterFactory =
 
 		const transformJoinClause = (
 			baseModel: string,
-			unsanitizedJoin: Join | undefined,
-		): ResolvedJoin | undefined => {
+			unsanitizedJoin: JoinOption | undefined,
+		): JoinConfig | undefined => {
 			if (!unsanitizedJoin) return undefined;
 			if (Object.keys(unsanitizedJoin).length === 0) return undefined;
-			const transformedJoin: ResolvedJoin = {};
+			const transformedJoin: JoinConfig = {};
 			for (const [model, join] of Object.entries(unsanitizedJoin)) {
 				if (join !== true) continue; // for now only support "true" on joins, indicating a simple join
 				const defaultModelName = getDefaultModelName(model);
@@ -702,7 +702,7 @@ export const createAdapterFactory =
 		const handleFallbackJoinFindOne = async <T extends Record<string, any>>(
 			baseData: T | null,
 			baseModel: string,
-			join: ResolvedJoin | undefined,
+			join: JoinConfig | undefined,
 		): Promise<T | null> => {
 			if (!baseData || !join || Object.keys(join).length === 0) {
 				return baseData;
@@ -827,7 +827,7 @@ export const createAdapterFactory =
 		const handleFallbackJoinFindMany = async <T extends Record<string, any>>(
 			baseDataList: T[],
 			baseModel: string,
-			join: ResolvedJoin | undefined,
+			join: JoinConfig | undefined,
 		): Promise<T[]> => {
 			if (
 				!baseDataList ||
@@ -1217,7 +1217,7 @@ export const createAdapterFactory =
 				model: string;
 				where: Where[];
 				select?: string[];
-				join?: Join;
+				join?: JoinOption;
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -1227,7 +1227,7 @@ export const createAdapterFactory =
 					where: unsafeWhere,
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
-				let join: ResolvedJoin | undefined;
+				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
 					join = transformJoinClause(unsafeModel, unsafeJoin);
@@ -1237,7 +1237,7 @@ export const createAdapterFactory =
 					}
 				} else {
 					// assume it's already transformed if transformation is disabled
-					join = unsafeJoin as never as ResolvedJoin;
+					join = unsafeJoin as never as JoinConfig;
 				}
 				debugLog(
 					{ method: "findOne" },
@@ -1295,7 +1295,7 @@ export const createAdapterFactory =
 				limit?: number;
 				sortBy?: { field: string; direction: "asc" | "desc" };
 				offset?: number;
-				join?: Join;
+				join?: JoinOption;
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -1309,7 +1309,7 @@ export const createAdapterFactory =
 					where: unsafeWhere,
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
-				let join: ResolvedJoin | undefined;
+				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
 					join = transformJoinClause(unsafeModel, unsafeJoin);
@@ -1319,7 +1319,7 @@ export const createAdapterFactory =
 					}
 				} else {
 					// assume it's already transformed if transformation is disabled
-					join = unsafeJoin as never as ResolvedJoin;
+					join = unsafeJoin as never as JoinConfig;
 				}
 				debugLog(
 					{ method: "findMany" },

@@ -307,28 +307,28 @@ export type Where = {
 };
 
 /**
- * Join configuration for relational queries.
+ * JoinOption configuration for relational queries.
  *
  * Allows you to join related tables/models in a single query operation.
  * Each key represents the name of the joined table/model, and the value
  * configures how the join should be performed.
  */
-export type Join = {
+export type JoinOption = {
 	[model: string]: boolean;
 	//  {
 
 	// 	// In the future we may support nested joins:
-	// 	// with?: Join;
+	// 	// with?: JoinOption;
 	// };
 };
 
 /**
- * Once `Join` has gone through the adapter factory, it will be transformed into a `ResolvedJoin`.
+ * Once `JoinOption` has gone through the adapter factory, it will be transformed into a `JoinConfig`.
  */
-export type ResolvedJoin = {
+export type JoinConfig = {
 	[model: string]: {
 		/**
-		 * The Join type that will be performed
+		 * The JoinOption type that will be performed
 		 *
 		 * * **left**: returns all rows from the left table, plus matching rows from the right (if none, NULL fills in).
 		 * * **inner**: returns rows where there’s a match in both tables.
@@ -372,7 +372,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		model: string;
 		where: Where[];
 		select?: string[];
-		join?: Join;
+		join?: JoinOption;
 	}) => Promise<T | null>;
 	findMany: <T>(data: {
 		model: string;
@@ -383,7 +383,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 			direction: "asc" | "desc";
 		};
 		offset?: number;
-		join?: Join;
+		join?: JoinOption;
 	}) => Promise<T[]>;
 	count: (data: { model: string; where?: Where[] }) => Promise<number>;
 	/**
@@ -454,7 +454,7 @@ export interface CustomAdapter {
 		model: string;
 		where: CleanedWhere[];
 		select?: string[];
-		join?: ResolvedJoin;
+		join?: JoinConfig;
 	}) => Promise<T | null>;
 	findMany: <T>({
 		model,
@@ -469,7 +469,7 @@ export interface CustomAdapter {
 		limit: number;
 		sortBy?: { field: string; direction: "asc" | "desc" };
 		offset?: number;
-		join?: ResolvedJoin;
+		join?: JoinConfig;
 	}) => Promise<T[]>;
 	delete: ({
 		model,

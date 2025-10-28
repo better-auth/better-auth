@@ -2,7 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	DBAdapter,
 	DBAdapterDebugLogOption,
-	Join,
+	JoinOption,
 	Where,
 } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -220,8 +220,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					});
 				},
 				async findOne({ model, where, select, join: _join }) {
-					// this is just "Join" type because we disabled join transformation in adapter config
-					const join = _join as unknown as Join | undefined;
+					// this is just "JoinOption" type because we disabled join transformation in adapter config
+					const join = _join as unknown as JoinOption | undefined;
 					const whereClause = convertWhereClause(model, where);
 					if (!db[model]) {
 						throw new BetterAuthError(
@@ -260,8 +260,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					return result;
 				},
 				async findMany({ model, where, limit, offset, sortBy, join: _join }) {
-					// this is just "Join" type because we disabled join transformation in adapter config
-					const join = _join as unknown as Join | undefined;
+					// this is just "JoinOption" type because we disabled join transformation in adapter config
+					const join = _join as unknown as JoinOption | undefined;
 					const whereClause = convertWhereClause(model, where);
 					if (!db[model]) {
 						throw new BetterAuthError(
