@@ -53,7 +53,7 @@ export default async function Page({
 							{formatDate(date)}
 						</p>
 					</div>
-					<h1 className=" font-sans mb-2 font-semibold tracking-tighter text-5xl">
+					<h1 className="font-sans mb-2 font-semibold tracking-tighter text-5xl">
 						{title}{" "}
 					</h1>
 					<p className="text-sm text-gray-600 mb-2 dark:text-gray-300">

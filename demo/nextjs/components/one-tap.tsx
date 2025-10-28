@@ -123,7 +123,7 @@ function SignInBox() {
 			</Button>
 			<Button
 				variant="outline"
-				className=" gap-2"
+				className="gap-2"
 				onClick={async () => {
 					await signIn.social({
 						provider: "google",
