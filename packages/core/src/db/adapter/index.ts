@@ -290,6 +290,11 @@ export type Where = {
 	connector?: "AND" | "OR";
 };
 
+export type SortBy = {
+	field: string;
+	direction: "asc" | "desc";
+};
+
 export type DBTransactionAdapter<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > = Omit<DBAdapter<Options>, "transaction">;
@@ -316,10 +321,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		model: string;
 		where?: Where[];
 		limit?: number;
-		sortBy?: {
-			field: string;
-			direction: "asc" | "desc";
-		};
+		sortBy?: SortBy | SortBy[];
 		offset?: number;
 	}) => Promise<T[]>;
 	count: (data: { model: string; where?: Where[] }) => Promise<number>;
@@ -401,7 +403,7 @@ export interface CustomAdapter {
 		model: string;
 		where?: CleanedWhere[];
 		limit: number;
-		sortBy?: { field: string; direction: "asc" | "desc" };
+		sortBy?: SortBy | SortBy[];
 		offset?: number;
 	}) => Promise<T[]>;
 	delete: ({

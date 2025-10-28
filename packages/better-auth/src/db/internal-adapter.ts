@@ -8,7 +8,7 @@ import {
 	getCurrentAuthContext,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import type { DBAdapter, SortBy, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import {
 	type Account,
@@ -197,10 +197,7 @@ export const createInternalAdapter = (
 		listUsers: async (
 			limit?: number,
 			offset?: number,
-			sortBy?: {
-				field: string;
-				direction: "asc" | "desc";
-			},
+			sortBy?: SortBy | SortBy[],
 			where?: Where[],
 		) => {
 			const users = await (await getCurrentAdapter(adapter)).findMany<User>({

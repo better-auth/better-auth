@@ -4,6 +4,7 @@ import type {
 	CleanedWhere,
 	DBAdapter,
 	DBTransactionAdapter,
+	SortBy,
 	Where,
 } from "@better-auth/core/db/adapter";
 import { getColorDepth, logger, TTY_COLORS } from "@better-auth/core/env";
@@ -854,7 +855,7 @@ export const createAdapterFactory =
 				model: string;
 				where?: Where[];
 				limit?: number;
-				sortBy?: { field: string; direction: "asc" | "desc" };
+				sortBy?: SortBy | SortBy[];
 				offset?: number;
 			}) => {
 				transactionId++;
