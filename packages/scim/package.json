@@ -40,5 +40,8 @@
   },
   "devDependencies": {
     "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "better-auth": "workspace:*"
   }
 }
