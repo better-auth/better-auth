@@ -14,81 +14,16 @@ import { APIError } from "better-call";
 import * as z from "zod";
 import {
 	deleteSessionCookie,
+	getChunkedCookie,
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
-import { symmetricDecodeJWT } from "../../crypto/jwt";
+import { getSessionQuerySchema } from "../../cookies/session-store";
+import { symmetricDecodeJWT } from "../../crypto";
 import type { InferSession, InferUser, Session, User } from "../../types";
 import type { Prettify } from "../../types/helper";
 import { getDate } from "../../utils/date";
 import { safeJSONParse } from "../../utils/json";
-
-function getChunkedCookie(
-	ctx: GenericEndpointContext,
-	cookieName: string,
-): string | null {
-	const value = ctx.getCookie(cookieName);
-	if (value) {
-		return value;
-	}
-
-	const chunks: Array<{ index: number; value: string }> = [];
-
-	const cookieHeader = ctx.headers?.get("cookie");
-	if (!cookieHeader) {
-		return null;
-	}
-
-	const cookies: Record<string, string> = {};
-	const pairs = cookieHeader.split("; ");
-	for (const pair of pairs) {
-		const [name, ...valueParts] = pair.split("=");
-		if (name && valueParts.length > 0) {
-			cookies[name] = valueParts.join("=");
-		}
-	}
-
-	for (const [name, val] of Object.entries(cookies)) {
-		if (name.startsWith(cookieName + ".")) {
-			const parts = name.split(".");
-			const indexStr = parts[parts.length - 1];
-			const index = parseInt(indexStr || "0", 10);
-			if (!isNaN(index)) {
-				chunks.push({ index, value: val });
-			}
-		}
-	}
-
-	if (chunks.length > 0) {
-		// Sort by index and join
-		chunks.sort((a, b) => a.index - b.index);
-		return chunks.map((c) => c.value).join("");
-	}
-
-	return null;
-}
-
-export const getSessionQuerySchema = z.optional(
-	z.object({
-		/**
-		 * If cookie cache is enabled, it will disable the cache
-		 * and fetch the session from the database
-		 */
-		disableCookieCache: z.coerce
-			.boolean()
-			.meta({
-				description: "Disable cookie cache and fetch session from database",
-			})
-			.optional(),
-		disableRefresh: z.coerce
-			.boolean()
-			.meta({
-				description:
-					"Disable session refresh. Useful for checking session status, without updating the session",
-			})
-			.optional(),
-	}),
-);
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
