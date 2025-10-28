@@ -1,4 +1,3 @@
-import { readFile } from "fs/promises";
 import { remarkNpm } from "fumadocs-core/mdx-plugins";
 import { fileGenerator, remarkDocGen } from "fumadocs-docgen";
 import { remarkInclude } from "fumadocs-mdx/config";
@@ -7,6 +6,7 @@ import { remark } from "remark";
 import remarkGfm from "remark-gfm";
 import remarkMdx from "remark-mdx";
 import remarkStringify from "remark-stringify";
+import { source } from "@/lib/source";
 
 function extractAPIMethods(rawContent: string): string {
 	const apiMethodRegex = /<APIMethod\s+([^>]+)>([\s\S]*?)<\/APIMethod>/g;
@@ -261,21 +261,20 @@ const processor = remark()
 	.use(remarkNpm)
 	.use(remarkStringify);
 
-export async function getLLMText(docPage: any) {
-	// Read the raw file content
-	const rawContent = await readFile(docPage.data._file.absolutePath, "utf-8");
+export async function getLLMText(docPage: ReturnType<typeof source.getPage>) {
+	const rawContent = docPage!.data.content;
 
 	// Extract APIMethod components & other nested wrapper before processing
 	const processedContent = extractAPIMethods(rawContent);
 
 	const processed = await processor.process({
-		path: docPage.data._file.absolutePath,
+		path: docPage!.path,
 		value: processedContent,
 	});
 
-	return `# ${docPage.data.title}
+	return `# ${docPage!.data.title}
 
-${docPage.data.description || ""}
+${docPage!.data.description || ""}
 
 ${processed.toString()}
 `;
