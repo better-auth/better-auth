@@ -17,71 +17,77 @@ import { getSchema, type UsernameSchema } from "./schema";
 export { USERNAME_ERROR_CODES } from "./error-codes";
 
 export type UsernameOptions = {
-	schema?: InferOptionSchema<UsernameSchema>;
+	schema?: InferOptionSchema<UsernameSchema> | undefined;
 	/**
 	 * The minimum length of the username
 	 *
 	 * @default 3
 	 */
-	minUsernameLength?: number;
+	minUsernameLength?: number | undefined;
 	/**
 	 * The maximum length of the username
 	 *
 	 * @default 30
 	 */
-	maxUsernameLength?: number;
+	maxUsernameLength?: number | undefined;
 	/**
 	 * A function to validate the username
 	 *
 	 * By default, the username should only contain alphanumeric characters and underscores
 	 */
-	usernameValidator?: (username: string) => boolean | Promise<boolean>;
+	usernameValidator?:
+		| ((username: string) => boolean | Promise<boolean>)
+		| undefined;
 	/**
 	 * A function to validate the display username
 	 *
 	 * By default, no validation is applied to display username
 	 */
-	displayUsernameValidator?: (
-		displayUsername: string,
-	) => boolean | Promise<boolean>;
+	displayUsernameValidator?:
+		| ((displayUsername: string) => boolean | Promise<boolean>)
+		| undefined;
 	/**
 	 * A function to normalize the username
 	 *
 	 * @default (username) => username.toLowerCase()
 	 */
-	usernameNormalization?: ((username: string) => string) | false;
+	usernameNormalization?: (((username: string) => string) | false) | undefined;
 	/**
 	 * A function to normalize the display username
 	 *
 	 * @default false
 	 */
-	displayUsernameNormalization?: ((displayUsername: string) => string) | false;
+	displayUsernameNormalization?:
+		| (((displayUsername: string) => string) | false)
+		| undefined;
 	/**
 	 * The order of validation
 	 *
 	 * @default { username: "pre-normalization", displayUsername: "pre-normalization" }
 	 */
-	validationOrder?: {
-		/**
-		 * The order of username validation
-		 *
-		 * @default "pre-normalization"
-		 */
-		username?: "pre-normalization" | "post-normalization";
-		/**
-		 * The order of display username validation
-		 *
-		 * @default "pre-normalization"
-		 */
-		displayUsername?: "pre-normalization" | "post-normalization";
-	};
+	validationOrder?:
+		| {
+				/**
+				 * The order of username validation
+				 *
+				 * @default "pre-normalization"
+				 */
+				username?: "pre-normalization" | "post-normalization";
+				/**
+				 * The order of display username validation
+				 *
+				 * @default "pre-normalization"
+				 */
+				displayUsername?: "pre-normalization" | "post-normalization";
+		  }
+		| undefined;
 };
 
 function defaultUsernameValidator(username: string) {
 	return /^[a-zA-Z0-9_.]+$/.test(username);
 }
 
-export const username = (options?: UsernameOptions) => {
+export const username = (options?: UsernameOptions | undefined) => {
 	const normalizer = (username: string) => {
 		if (options?.usernameNormalization === false) {
 			return username;

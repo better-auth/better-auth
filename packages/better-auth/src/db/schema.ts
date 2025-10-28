@@ -83,7 +83,7 @@ export function parseInputData<T extends Record<string, any>>(
 	data: T,
 	schema: {
 		fields: Record<string, DBFieldAttribute>;
-		action?: "create" | "update";
+		action?: ("create" | "update") | undefined;
 	},
 ) {
 	const action = schema.action || "create";
@@ -147,7 +147,7 @@ export function parseUserInput(
 
 export function parseAdditionalUserInput(
 	options: BetterAuthOptions,
-	user?: Record<string, any>,
+	user?: Record<string, any> | undefined,
 ) {
 	const schema = getAllFields(options, "user");
 	return parseInputData(user || {}, { fields: schema });
@@ -171,14 +171,16 @@ export function parseSessionInput(
 
 export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	schema: S,
-	newSchema?: {
-		[K in keyof S]?: {
-			modelName?: string;
-			fields?: {
-				[P: string]: string;
-			};
-		};
-	},
+	newSchema?:
+		| {
+				[K in keyof S]?: {
+					modelName?: string;
+					fields?: {
+						[P: string]: string;
+					};
+				};
+		  }
+		| undefined,
 ) {
 	if (!newSchema) {
 		return schema;

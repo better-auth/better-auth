@@ -7,10 +7,12 @@ export type InferOptionSchema<S extends BetterAuthPluginDBSchema> =
 	S extends Record<string, { fields: infer Fields }>
 		? {
 				[K in keyof S]?: {
-					modelName?: string;
-					fields?: {
-						[P in keyof Fields]?: string;
-					};
+					modelName?: string | undefined;
+					fields?:
+						| {
+								[P in keyof Fields]?: string;
+						  }
+						| undefined;
 				};
 			}
 		: never;

@@ -60,7 +60,7 @@ export const callbackOAuth = createAuthEndpoint(
 			requestSignUp,
 		} = await parseState(c);
 
-		function redirectOnError(error: string, description?: string) {
+		function redirectOnError(error: string, description?: string | undefined) {
 			const baseURL = errorURL ?? defaultErrorURL;
 
 			const params = new URLSearchParams({ error });

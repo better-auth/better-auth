@@ -82,7 +82,7 @@ export type SocialProviders = {
 	[K in SocialProviderList[number]]?: Parameters<
 		(typeof socialProviders)[K]
 	>[0] & {
-		enabled?: boolean;
+		enabled?: boolean | undefined;
 	};
 };
 

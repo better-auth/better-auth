@@ -12,13 +12,13 @@ interface BearerOptions {
 	 *
 	 * @default false
 	 */
-	requireSignature?: boolean;
+	requireSignature?: boolean | undefined;
 }
 
 /**
  * Converts bearer token to session cookie
  */
-export const bearer = (options?: BearerOptions) => {
+export const bearer = (options?: BearerOptions | undefined) => {
 	return {
 		id: "bearer",
 		hooks: {

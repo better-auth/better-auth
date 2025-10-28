@@ -100,7 +100,12 @@ describe("jwt", async () => {
 
 	const algorithmsToTest: {
 		keyPairConfig: JWKOptions;
-		expectedOutcome: { ec: string; length: number; crv?: string; alg: string };
+		expectedOutcome: {
+			ec: string;
+			length: number;
+			crv?: string | undefined;
+			alg: string;
+		};
 	}[] = [
 		{
 			keyPairConfig: {

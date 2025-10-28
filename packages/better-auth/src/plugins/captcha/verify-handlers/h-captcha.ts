@@ -7,8 +7,8 @@ type Params = {
 	siteVerifyURL: string;
 	secretKey: string;
 	captchaResponse: string;
-	siteKey?: string;
-	remoteIP?: string;
+	siteKey?: string | undefined;
+	remoteIP?: string | undefined;
 };
 
 type SiteVerifyResponse = {

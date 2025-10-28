@@ -30,8 +30,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			metadata: {
 				$Infer: {
 					body: {} as Partial<AdditionalUserFieldsInput<O>> & {
-						name?: string;
-						image?: string;
+						name?: string | undefined;
+						image?: string | undefined;
 					},
 				},
 				openapi: {
@@ -78,8 +78,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		},
 		async (ctx) => {
 			const body = ctx.body as {
-				name?: string;
-				image?: string;
+				name?: string | undefined;
+				image?: string | undefined;
 				[key: string]: any;
 			};
 

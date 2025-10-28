@@ -21,7 +21,7 @@ export async function validateApiKey({
 	hashedKey: string;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
-	permissions?: Record<string, string[]>;
+	permissions?: Record<string, string[]> | undefined;
 	ctx: GenericEndpointContext;
 }) {
 	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
@@ -191,7 +191,7 @@ export function verifyApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
 	return createAuthEndpoint(

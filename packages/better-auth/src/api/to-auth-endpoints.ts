@@ -15,11 +15,11 @@ type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
 > & {
 	path: string;
-	asResponse?: boolean;
+	asResponse?: boolean | undefined;
 	context: AuthContext & {
 		logger: AuthContext["logger"];
-		returned?: unknown;
-		responseHeaders?: Headers;
+		returned?: unknown | undefined;
+		responseHeaders?: Headers | undefined;
 	};
 };
 
@@ -38,8 +38,8 @@ export function toAuthEndpoints<
 		((
 			context: EndpointContext<string, any> & InputContext<string, any>,
 		) => Promise<any>) & {
-			path?: string;
-			options?: EndpointOptions;
+			path?: string | undefined;
+			options?: EndpointOptions | undefined;
 		}
 	> = {};
 

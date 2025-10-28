@@ -180,7 +180,7 @@ describe("Social Providers", async (c) => {
 	async function simulateOAuthFlowRefresh(
 		authUrl: string,
 		headers: Headers,
-		fetchImpl?: (...args: any) => any,
+		fetchImpl?: ((...args: any) => any) | undefined,
 	) {
 		let location: string | null = null;
 		await betterFetch(authUrl, {

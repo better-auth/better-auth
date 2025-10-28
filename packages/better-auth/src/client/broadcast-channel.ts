@@ -1,6 +1,6 @@
 export interface BroadcastMessage {
-	event?: "session";
-	data?: { trigger?: "signout" | "getSession" | "updateUser" };
+	event?: "session" | undefined;
+	data?: { trigger?: "signout" | "getSession" | "updateUser" } | undefined;
 	clientId: string;
 	timestamp: number;
 }

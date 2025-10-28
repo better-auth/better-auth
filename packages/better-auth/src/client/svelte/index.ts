@@ -40,7 +40,7 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 	: {};
 
 export function createAuthClient<Option extends BetterAuthClientOptions>(
-	options?: Option,
+	options?: Option | undefined,
 ) {
 	const {
 		pluginPathMethods,

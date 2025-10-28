@@ -47,7 +47,7 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 	: {};
 
 export function createAuthClient<Option extends BetterAuthClientOptions>(
-	options?: Option,
+	options?: Option | undefined,
 ) {
 	const {
 		baseURL,
@@ -88,13 +88,13 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		data: Ref<Session>;
 		isPending: false; //this is just to be consistent with the default hook
 		error: Ref<{
-			message?: string;
+			message?: string | undefined;
 			status: number;
 			statusText: string;
 		}>;
 	}>;
 	function useSession<UseFetch extends <T>(...args: any) => any>(
-		useFetch?: UseFetch,
+		useFetch?: UseFetch | undefined,
 	) {
 		if (useFetch) {
 			const ref = useStore(pluginsAtoms.$sessionSignal!);

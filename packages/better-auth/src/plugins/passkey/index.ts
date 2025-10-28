@@ -43,7 +43,7 @@ const ERROR_CODES = defineErrorCodes({
 	FAILED_TO_UPDATE_PASSKEY: "Failed to update passkey",
 });
 
-function getRpID(options: PasskeyOptions, baseURL?: string) {
+function getRpID(options: PasskeyOptions, baseURL?: string | undefined) {
 	return (
 		options.rpID || (baseURL ? new URL(baseURL).hostname : "localhost") // default rpID
 	);
@@ -56,13 +56,13 @@ export interface PasskeyOptions {
 	 *
 	 * @default "localhost"
 	 */
-	rpID?: string;
+	rpID?: string | undefined;
 	/**
 	 * Human-readable title for your website
 	 *
 	 * @default "Better Auth"
 	 */
-	rpName?: string;
+	rpName?: string | undefined;
 	/**
 	 * The URL at which registrations and authentications should occur.
 	 * `http://localhost` and `http://localhost:PORT` are also valid.
@@ -71,41 +71,43 @@ export interface PasskeyOptions {
 	 * if this isn't provided. The client itself will
 	 * pass this value.
 	 */
-	origin?: string | string[] | null;
+	origin?: (string | string[] | null) | undefined;
 
 	/**
 	 * Allow customization of the authenticatorSelection options
 	 * during passkey registration.
 	 */
-	authenticatorSelection?: AuthenticatorSelectionCriteria;
+	authenticatorSelection?: AuthenticatorSelectionCriteria | undefined;
 
 	/**
 	 * Advanced options
 	 */
-	advanced?: {
-		webAuthnChallengeCookie?: string;
-	};
+	advanced?:
+		| {
+				webAuthnChallengeCookie?: string;
+		  }
+		| undefined;
 	/**
 	 * Schema for the passkey model
 	 */
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
 export type Passkey = {
 	id: string;
-	name?: string;
+	name?: string | undefined;
 	publicKey: string;
 	userId: string;
 	credentialID: string;
 	counter: number;
 	deviceType: CredentialDeviceType;
 	backedUp: boolean;
-	transports?: string;
+	transports?: string | undefined;
 	createdAt: Date;
-	aaguid?: string;
+	aaguid?: string | undefined;
 };
 
-export const passkey = (options?: PasskeyOptions) => {
+export const passkey = (options?: PasskeyOptions | undefined) => {
 	const opts = {
 		origin: null,
 		...options,

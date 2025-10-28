@@ -19,29 +19,29 @@ export type TOTPOptions = {
 	/**
 	 * Issuer
 	 */
-	issuer?: string;
+	issuer?: string | undefined;
 	/**
 	 * How many digits the otp to be
 	 *
 	 * @default 6
 	 */
-	digits?: 6 | 8;
+	digits?: (6 | 8) | undefined;
 	/**
 	 * Period for otp in seconds.
 	 * @default 30
 	 */
-	period?: number;
+	period?: number | undefined;
 	/**
 	 * Backup codes configuration
 	 */
-	backupCodes?: BackupCodeOptions;
+	backupCodes?: BackupCodeOptions | undefined;
 	/**
 	 * Disable totp
 	 */
-	disable?: boolean;
+	disable?: boolean | undefined;
 };
 
-export const totp2fa = (options?: TOTPOptions) => {
+export const totp2fa = (options?: TOTPOptions | undefined) => {
 	const opts = {
 		...options,
 		digits: options?.digits || 6,

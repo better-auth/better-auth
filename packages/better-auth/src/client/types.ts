@@ -128,6 +128,6 @@ export type InferAdditionalFromClient<
 	: {};
 
 export type SessionQueryParams = {
-	disableCookieCache?: boolean;
-	disableRefresh?: boolean;
+	disableCookieCache?: boolean | undefined;
+	disableRefresh?: boolean | undefined;
 };

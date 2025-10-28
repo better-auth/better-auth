@@ -9,7 +9,7 @@ import { createJwk, toExpJWT } from "./utils";
 export async function signJWT(
 	ctx: GenericEndpointContext,
 	config: {
-		options?: JwtOptions;
+		options?: JwtOptions | undefined;
 		payload: JWTPayload;
 	},
 ) {
@@ -90,7 +90,7 @@ export async function signJWT(
 
 export async function getJwtToken(
 	ctx: GenericEndpointContext,
-	options?: JwtOptions,
+	options?: JwtOptions | undefined,
 ) {
 	const payload = !options?.jwt?.definePayload
 		? ctx.context.session!.user

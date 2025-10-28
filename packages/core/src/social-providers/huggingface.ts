@@ -12,27 +12,29 @@ export interface HuggingFaceProfile {
 	preferred_username: string;
 	profile: string;
 	picture: string;
-	website?: string;
-	email?: string;
-	email_verified?: boolean;
+	website?: string | undefined;
+	email?: string | undefined;
+	email_verified?: boolean | undefined;
 	isPro: boolean;
-	canPay?: boolean;
-	orgs?: {
-		sub: string;
-		name: string;
-		picture: string;
-		preferred_username: string;
-		isEnterprise: boolean | "plus";
-		canPay?: boolean;
-		roleInOrg?: "admin" | "write" | "contributor" | "read";
-		pendingSSO?: boolean;
-		missingMFA?: boolean;
-		resourceGroups?: {
-			sub: string;
-			name: string;
-			role: "admin" | "write" | "contributor" | "read";
-		}[];
-	};
+	canPay?: boolean | undefined;
+	orgs?:
+		| {
+				sub: string;
+				name: string;
+				picture: string;
+				preferred_username: string;
+				isEnterprise: boolean | "plus";
+				canPay?: boolean;
+				roleInOrg?: "admin" | "write" | "contributor" | "read";
+				pendingSSO?: boolean;
+				missingMFA?: boolean;
+				resourceGroups?: {
+					sub: string;
+					name: string;
+					role: "admin" | "write" | "contributor" | "read";
+				}[];
+		  }
+		| undefined;
 }
 
 export interface HuggingFaceOptions

@@ -8,7 +8,10 @@ function getMethod(
 	path: string,
 	knownPathMethods: Record<string, "POST" | "GET">,
 	args:
-		| { fetchOptions?: BetterFetchOption; query?: Record<string, any> }
+		| {
+				fetchOptions?: BetterFetchOption | undefined;
+				query?: Record<string, any> | undefined;
+		  }
 		| undefined,
 ) {
 	const method = knownPathMethods[path];

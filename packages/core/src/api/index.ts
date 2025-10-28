@@ -24,8 +24,8 @@ export const createAuthMiddleware = createMiddleware.create({
 		 */
 		createMiddleware(async () => {
 			return {} as {
-				returned?: unknown;
-				responseHeaders?: Headers;
+				returned?: unknown | undefined;
+				responseHeaders?: Headers | undefined;
 			};
 		}),
 	],

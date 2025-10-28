@@ -10,7 +10,7 @@ import { originCheck } from "../middlewares";
 function redirectError(
 	ctx: AuthContext,
 	callbackURL: string | undefined,
-	query?: Record<string, string>,
+	query?: Record<string, string> | undefined,
 ): string {
 	const url = callbackURL
 		? new URL(callbackURL, ctx.baseURL)
@@ -23,7 +23,7 @@ function redirectError(
 function redirectCallback(
 	ctx: AuthContext,
 	callbackURL: string,
-	query?: Record<string, string>,
+	query?: Record<string, string> | undefined,
 ): string {
 	const url = new URL(callbackURL, ctx.baseURL);
 	if (query)

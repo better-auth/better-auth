@@ -7,7 +7,7 @@ import { createSessionRefreshManager } from "./session-refresh";
 
 export function getSessionAtom(
 	$fetch: BetterFetch,
-	options?: BetterAuthClientOptions,
+	options?: BetterAuthClientOptions | undefined,
 ) {
 	const $signal = atom<boolean>(false);
 	const session = useAuthQuery<{

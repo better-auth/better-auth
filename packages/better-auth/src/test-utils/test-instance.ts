@@ -38,14 +38,16 @@ export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
 	C extends BetterAuthClientOptions,
 >(
-	options?: O,
-	config?: {
-		clientOptions?: C;
-		port?: number;
-		disableTestUser?: boolean;
-		testUser?: Partial<User>;
-		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
-	},
+	options?: O | undefined,
+	config?:
+		| {
+				clientOptions?: C;
+				port?: number;
+				disableTestUser?: boolean;
+				testUser?: Partial<User>;
+				testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
+		  }
+		| undefined,
 ) {
 	const testWith = config?.testWith || "sqlite";
 
@@ -176,7 +178,7 @@ export async function getTestInstance<
 
 	const customFetchImpl = async (
 		url: string | URL | Request,
-		init?: RequestInit,
+		init?: RequestInit | undefined,
 	) => {
 		const headers = init?.headers || {};
 		const storageHeaders = currentUserContextStorage.getStore()?.headers;

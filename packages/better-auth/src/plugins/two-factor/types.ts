@@ -10,28 +10,28 @@ export interface TwoFactorOptions {
 	/**
 	 * Application Name
 	 */
-	issuer?: string;
+	issuer?: string | undefined;
 	/**
 	 * TOTP OPtions
 	 */
-	totpOptions?: Omit<TOTPOptions, "issuer">;
+	totpOptions?: Omit<TOTPOptions, "issuer"> | undefined;
 	/**
 	 * OTP Options
 	 */
-	otpOptions?: OTPOptions;
+	otpOptions?: OTPOptions | undefined;
 	/**
 	 * Backup code options
 	 */
-	backupCodeOptions?: BackupCodeOptions;
+	backupCodeOptions?: BackupCodeOptions | undefined;
 	/**
 	 * Skip verification on enabling two factor authentication.
 	 * @default false
 	 */
-	skipVerificationOnEnable?: boolean;
+	skipVerificationOnEnable?: boolean | undefined;
 	/**
 	 * Custom schema for the two factor plugin
 	 */
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
 export interface UserWithTwoFactor extends User {
@@ -43,7 +43,7 @@ export interface UserWithTwoFactor extends User {
 
 export interface TwoFactorProvider {
 	id: LiteralString;
-	endpoints?: BetterAuthPlugin["endpoints"];
+	endpoints?: BetterAuthPlugin["endpoints"] | undefined;
 }
 
 export interface TwoFactorTable {

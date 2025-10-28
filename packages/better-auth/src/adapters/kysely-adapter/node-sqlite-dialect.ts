@@ -65,7 +65,9 @@ export interface NodeSqliteDialectConfig {
 	/**
 	 * Called once when the first query is executed.
 	 */
-	onCreateConnection?: (connection: DatabaseConnection) => Promise<void>;
+	onCreateConnection?:
+		| ((connection: DatabaseConnection) => Promise<void>)
+		| undefined;
 }
 
 export class NodeSqliteDriver implements Driver {
@@ -202,7 +204,7 @@ export class NodeSqliteIntrospector implements DatabaseIntrospector {
 	}
 
 	async getMetadata(
-		options?: DatabaseMetadataOptions,
+		options?: DatabaseMetadataOptions | undefined,
 	): Promise<DatabaseMetadata> {
 		return {
 			tables: await this.getTables(options),

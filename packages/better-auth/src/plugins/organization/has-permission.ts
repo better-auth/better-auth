@@ -20,7 +20,7 @@ export const hasPermission = async (
 		 *
 		 * @default false
 		 */
-		useMemoryCache?: boolean;
+		useMemoryCache?: boolean | undefined;
 	} & HasPermissionBaseInput,
 	ctx: GenericEndpointContext,
 ) => {

@@ -16,7 +16,7 @@ export interface GitlabProfile extends Record<string, any> {
 	web_url: string;
 	created_at: string;
 	bio: string;
-	location?: string;
+	location?: string | undefined;
 	public_email: string;
 	skype: string;
 	linkedin: string;
@@ -26,7 +26,7 @@ export interface GitlabProfile extends Record<string, any> {
 	job_title: string;
 	pronouns: string;
 	bot: boolean;
-	work_information?: string;
+	work_information?: string | undefined;
 	followers: number;
 	following: number;
 	local_time: string;
@@ -53,7 +53,7 @@ export interface GitlabProfile extends Record<string, any> {
 
 export interface GitlabOptions extends ProviderOptions<GitlabProfile> {
 	clientId: string;
-	issuer?: string;
+	issuer?: string | undefined;
 }
 
 const cleanDoubleSlashes = (input: string = "") => {
@@ -63,7 +63,7 @@ const cleanDoubleSlashes = (input: string = "") => {
 		.join("://");
 };
 
-const issuerToEndpoints = (issuer?: string) => {
+const issuerToEndpoints = (issuer?: string | undefined) => {
 	let baseUrl = issuer || "https://gitlab.com";
 	return {
 		authorizationEndpoint: cleanDoubleSlashes(`${baseUrl}/oauth/authorize`),

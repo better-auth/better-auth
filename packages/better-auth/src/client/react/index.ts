@@ -48,7 +48,7 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 	: {};
 
 export function createAuthClient<Option extends BetterAuthClientOptions>(
-	options?: Option,
+	options?: Option | undefined,
 ) {
 	const {
 		pluginPathMethods,
@@ -93,7 +93,9 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 				isPending: boolean;
 				isRefetching: boolean;
 				error: BetterFetchError | null;
-				refetch: (queryParams?: { query?: SessionQueryParams }) => void;
+				refetch: (
+					queryParams?: { query?: SessionQueryParams } | undefined,
+				) => void;
 			};
 			$Infer: {
 				Session: NonNullable<Session>;

@@ -9,17 +9,17 @@ export interface SessionRefreshOptions {
 	sessionAtom: WritableAtom<any>;
 	sessionSignal: WritableAtom<boolean>;
 	$fetch: BetterFetch;
-	options?: BetterAuthClientOptions;
+	options?: BetterAuthClientOptions | undefined;
 }
 
 interface SessionRefreshState {
 	lastSync: number;
 	cachedSession: any;
-	pollInterval?: ReturnType<typeof setInterval>;
-	unsubscribeBroadcast?: () => void;
-	unsubscribeVisibility?: () => void;
-	unsubscribeOnline?: () => void;
-	unsubscribeOffline?: () => void;
+	pollInterval?: ReturnType<typeof setInterval> | undefined;
+	unsubscribeBroadcast?: (() => void) | undefined;
+	unsubscribeVisibility?: (() => void) | undefined;
+	unsubscribeOnline?: (() => void) | undefined;
+	unsubscribeOffline?: (() => void) | undefined;
 }
 
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
@@ -45,9 +45,13 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		return refetchWhenOffline || isOnline;
 	};
 
-	const triggerRefetch = (event?: {
-		event?: "poll" | "visibilitychange" | "storage";
-	}) => {
+	const triggerRefetch = (
+		event?:
+			| {
+					event?: "poll" | "visibilitychange" | "storage";
+			  }
+			| undefined,
+	) => {
 		if (!shouldRefetch()) return;
 
 		if (event?.event === "storage") {

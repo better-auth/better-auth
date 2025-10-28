@@ -75,7 +75,7 @@ describe("oauth2", async () => {
 	async function simulateOAuthFlow(
 		authUrl: string,
 		headers: Headers,
-		fetchImpl?: (...args: any) => any,
+		fetchImpl?: ((...args: any) => any) | undefined,
 	) {
 		let location: string | null = null;
 		await betterFetch(authUrl, {
