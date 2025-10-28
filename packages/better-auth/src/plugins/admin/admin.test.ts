@@ -1257,3 +1257,88 @@ describe("access control", async (it) => {
 		);
 	});
 });
+describe("Password pattern", async () => {
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				pattern: /^[A-Za-z0-9]+$/,
+			},
+			plugins: [admin()],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
+						},
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+	const client = createAuthClient({
+		fetchOptions: {
+			customFetchImpl,
+		},
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	let newUser: UserWithRole | undefined;
+
+	const res = await client.admin.createUser(
+		{
+			name: "Test User",
+			email: "user@email.com",
+			password: "test",
+			role: "user",
+		},
+		{
+			headers: adminHeaders,
+		},
+	);
+	newUser = res.data?.user;
+	it("should allow admin to set user password with pattern", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser?.id || "",
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.status).toBe(true);
+	});
+
+	it("should not allow admin to set user password with invalid pattern", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser?.id || "",
+				newPassword: "newPassword!@#",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res).toBeDefined();
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_NOT_VALID_PATTERN");
+		expect(res.error?.message).toBe("Password not valid pattern");
+	});
+});

@@ -518,3 +518,70 @@ describe("delete user", async () => {
 		expect(sessionAfterPasswordChange.data).toBeNull();
 	});
 });
+
+describe("update user password with password pattern", async () => {
+	const { auth } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				pattern:
+					/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,128}$/,
+			},
+		},
+		{ disableTestUser: true },
+	);
+	const testUser = await auth.api.signUpEmail({
+		body: {
+			email: "email1@test.com",
+			password: "Zxcvbnm123!@",
+			name: "Test Name 1",
+			image: "https://picsum.photos/200",
+		},
+	});
+	let token = testUser.token;
+	it("should allow to update user password with pattern", async () => {
+		const res = await auth.api.changePassword({
+			body: {
+				currentPassword: "Zxcvbnm123!@",
+				newPassword: "Hieudien14310!@",
+				revokeOtherSessions: true,
+			},
+			headers: {
+				Authorization: token!,
+			},
+		});
+		expect(res).toBeDefined();
+		expect(res).toHaveProperty("token");
+		expect(res.token).toBeDefined();
+		expect(res.user).toBeDefined();
+		expect(res.user).toHaveProperty("id");
+		token = res.token;
+	});
+	it("should not allow to update user password with invaild pattern", async () => {
+		try {
+			await auth.api.changePassword({
+				body: {
+					currentPassword: "Zxcvbnm123!@",
+					newPassword: "abcdefgh",
+					revokeOtherSessions: true,
+				},
+				headers: {
+					Authorization: token!,
+				},
+			});
+		} catch (error: any) {
+			expect(error).toBeDefined();
+			expect(error).toHaveProperty("status");
+			expect(error.statusCode).toBe(400);
+
+			expect(error).toHaveProperty("statusCode");
+			expect(error.status).toBe("BAD_REQUEST");
+
+			expect(error).toHaveProperty("body");
+			expect(error.body).toHaveProperty("code");
+			expect(error.body).toHaveProperty("message");
+			expect(error.body.code).toBe("PASSWORD_NOT_VALID_PATTERN");
+			expect(error.body.message).toBe("Password not valid pattern");
+		}
+	});
+});

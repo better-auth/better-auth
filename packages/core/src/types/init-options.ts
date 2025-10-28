@@ -477,6 +477,12 @@ export type BetterAuthOptions = {
 		 */
 		minPasswordLength?: number;
 		/**
+		 * The pattern to validate the password.
+		 *
+		 * @default null
+		 */
+		pattern?: RegExp;
+		/**
 		 * send reset password
 		 */
 		sendResetPassword?: (
