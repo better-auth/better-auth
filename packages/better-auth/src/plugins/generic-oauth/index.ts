@@ -102,7 +102,7 @@ export interface GenericOAuthConfig {
 	 */
 	mapProfileToUser?: (
 		profile: Record<string, any>,
-	) => Partial<Partial<User>> | Promise<Partial<User>>;
+	) => Partial<Partial<User>>;
 	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
