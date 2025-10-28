@@ -81,8 +81,8 @@ export const apple = (options: AppleOptions) => {
 		name: "Apple",
 		async createAuthorizationURL({ state, scopes, redirectURI }) {
 			const _scope = options.disableDefaultScope ? [] : ["email", "name"];
-			options.scope && _scope.push(...options.scope);
-			scopes && _scope.push(...scopes);
+			if (options.scope) _scope.push(...options.scope);
+			if (scopes) _scope.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "apple",
 				options,

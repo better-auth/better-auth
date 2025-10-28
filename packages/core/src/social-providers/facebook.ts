@@ -44,8 +44,8 @@ export const facebook = (options: FacebookOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["email", "public_profile"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: "facebook",
 				options,

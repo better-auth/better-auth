@@ -25,8 +25,8 @@ export const spotify = (options: SpotifyOptions) => {
 		name: "Spotify",
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["user-read-email"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "spotify",
 				options,

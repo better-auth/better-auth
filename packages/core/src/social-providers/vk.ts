@@ -32,8 +32,8 @@ export const vk = (options: VkOption) => {
 		name: "VK",
 		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["email", "phone"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			const authorizationEndpoint = "https://id.vk.com/authorize";
 
 			return createAuthorizationURL({

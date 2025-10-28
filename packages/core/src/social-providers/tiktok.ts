@@ -132,8 +132,8 @@ export const tiktok = (options: TiktokOptions) => {
 		name: "TikTok",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["user.info.profile"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return new URL(
 				`https://www.tiktok.com/v2/auth/authorize?scope=${_scopes.join(
 					",",
