@@ -4,7 +4,9 @@ import type {
 	BetterAuthPlugin,
 } from "@better-auth/core";
 
+export * from "./broadcast-channel";
 export * from "./query";
+export * from "./session-refresh";
 export * from "./types";
 export * from "./vanilla";
 

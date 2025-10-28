@@ -56,7 +56,7 @@ export const getClientConfig = (
 			...pluginsFetchPlugins,
 		],
 	});
-	const { $sessionSignal, session } = getSessionAtom($fetch);
+	const { $sessionSignal, session } = getSessionAtom($fetch, options);
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	let pluginsAtoms = {
