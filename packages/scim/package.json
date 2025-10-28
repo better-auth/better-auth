@@ -1,0 +1,44 @@
+{
+  "name": "@better-auth/scim",
+  "author": "Jonathan Samines",
+  "version": "1.4.0-beta.13",
+  "type": "module",
+  "main": "dist/index.js",
+  "license": "MIT",
+  "keywords": [
+    "auth",
+    "scim"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "module": "dist/index.js",
+  "description": "SCIM plugin for Better Auth",
+  "scripts": {
+    "test": "vitest",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "exports": {
+    ".": {
+      "better-auth-dev-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.ts"
+      ],
+      "client": [
+        "./dist/client.d.ts"
+      ]
+    }
+  },
+  "devDependencies": {
+    "tsdown": "catalog:"
+  }
+}
