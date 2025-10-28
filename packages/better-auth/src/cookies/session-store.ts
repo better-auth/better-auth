@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import type { InternalLogger } from "@better-auth/core/env";
 import type { CookieOptions } from "better-call";
 import * as z from "zod";
 
@@ -86,7 +87,11 @@ function joinChunks(chunks: Chunks): string {
 /**
  * Split a cookie value into chunks if needed
  */
-function chunkCookie(cookie: Cookie, chunks: Chunks, logger: any): Cookie[] {
+function chunkCookie(
+	cookie: Cookie,
+	chunks: Chunks,
+	logger: InternalLogger,
+): Cookie[] {
 	const chunkCount = Math.ceil(cookie.value.length / CHUNK_SIZE);
 
 	if (chunkCount === 1) {
