@@ -835,7 +835,7 @@ describe("Cookie Chunking", () => {
 		// Create a large string that will exceed the cookie size limit
 		const largeString = "x".repeat(2000);
 
-		const { client, testUser, cookieSetter } = await getTestInstance({
+		const { client, cookieSetter } = await getTestInstance({
 			secret: "better-auth.secret",
 			user: {
 				additionalFields: {
