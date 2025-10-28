@@ -72,7 +72,7 @@ ${
 			content: `import { createAuthClient } from "better-auth/react";
 			${
 				options.magicLink || options.passkey
-					? `import { ${options.magicLink ? "magicLinkClient, " : ""}, ${
+					? `import { ${options.magicLink ? "magicLinkClient," : ""} ${
 							options.passkey ? "passkeyClient" : ""
 						} } from "better-auth/client/plugins";`
 					: ""
