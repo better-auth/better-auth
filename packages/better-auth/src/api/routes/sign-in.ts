@@ -147,6 +147,16 @@ export const signInSocial = createAuthEndpoint(
 						"The login hint to use for the authorization code request",
 				})
 				.optional(),
+			/**
+			 * Additional URL query arguments to add to the Authorization URL
+			 */
+			additionalParams: z
+				.record(z.string(), z.string())
+				.meta({
+					description:
+						"Additional URL query arguments to add to the Authorization URL",
+				})
+				.optional(),
 		}),
 		metadata: {
 			openapi: {
@@ -325,6 +335,7 @@ export const signInSocial = createAuthEndpoint(
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			scopes: c.body.scopes,
 			loginHint: c.body.loginHint,
+			additionalParams: c.body.additionalParams,
 		});
 
 		return c.json({
