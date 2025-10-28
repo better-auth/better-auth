@@ -96,6 +96,8 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 		if (isLoading) document.getElementById("nd-ai-input")?.focus();
 	}, [isLoading]);
 
+	const { isMobile, ...formProps } = props;
+
 	return (
 		<div
 			className={cn(
@@ -104,7 +106,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 			)}
 		>
 			<form
-				{...props}
+				{...formProps}
 				className={cn("flex items-start pe-2", props.className)}
 				onSubmit={onStart}
 			>
@@ -303,10 +305,12 @@ function List(
 		return () => container.removeEventListener("scroll", handleScroll);
 	}, []);
 
+	const { messageCount, ...divProps } = props;
+
 	return (
 		<div
 			ref={containerRef}
-			{...props}
+			{...divProps}
 			className={cn(
 				"fd-scroll-container overflow-y-auto min-w-0 flex flex-col",
 				props.className,
@@ -623,7 +627,7 @@ export function AISearchTrigger() {
 				</Presence>
 				<div
 					className={cn(
-						"fixed bg-transparent duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-xl z-30 border",
+						"fixed bg-transparent transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-xl z-30 border",
 						isMobile ? "bottom-4" : "bottom-4",
 						open
 							? isMobile
