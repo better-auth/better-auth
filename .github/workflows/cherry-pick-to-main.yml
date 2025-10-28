@@ -283,12 +283,25 @@ jobs:
                 console.log(`⚠️ Could not add label to PR #${prNumber}: ${error.message}`);
               }
 
+              // Remove merge-to-main label to stop retry attempts
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: 'merge-to-main'
+                });
+                console.log(`✅ Removed merge-to-main label from PR #${prNumber}`);
+              } catch (error) {
+                console.log(`⚠️ Could not remove label from PR #${prNumber}: ${error.message}`);
+              }
+
               // Add conflict comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                body: `⚠️ **Cherry-pick to \`main\` failed due to conflicts!**\n\nPlease manually cherry-pick this commit to the \`main\` branch and resolve the conflicts.\n\nOnce resolved, remove the \`merge-to-main\` label to stop automatic retry attempts.`
+                body: `⚠️ **Cherry-pick to \`main\` failed due to conflicts!**\n\nPlease manually cherry-pick this commit to the \`main\` branch and resolve the conflicts.`
               });
             }
 
