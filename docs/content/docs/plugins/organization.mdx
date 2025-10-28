@@ -250,6 +250,25 @@ export const auth = betterAuth({
           await logMemberRemoval(user.id, organization.id);
         },
 
+        // Before a member leaves an organization
+        beforeLeaveOrganization: async ({ member, user, organization }) => {
+          // Run cleanup logic before the member is removed
+          // NOTE: This hook is ONLY called when a user initiates leaving
+          // themselves via the `leaveOrganization` endpoint
+          // It does NOT run when an admin removes them via `removeMember`
+          // If the hook throws an error, the leave operation will be prevented
+          await cleanupUserWorkspace(user.id, organization.id);
+        },
+
+        // After a member leaves an organization
+        afterLeaveOrganization: async ({ member, user, organization }) => {
+          // Send notification or log the event
+          // NOTE: This hook is ONLY called when a user initiates leaving
+          // themselves via the `leaveOrganization` endpoint
+          // It does NOT run when an admin removes them via `removeMember`
+          await logMemberLeft(user.id, organization.id);
+        },
+
         // Before updating a member's role
         beforeUpdateMemberRole: async ({
           member,
