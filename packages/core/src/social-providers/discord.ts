@@ -85,8 +85,8 @@ export const discord = (options: DiscordOptions) => {
 		name: "Discord",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["identify", "email"];
-			scopes && _scopes.push(...scopes);
-			options.scope && _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
 			const hasBotScope = _scopes.includes("bot");
 			const permissionsParam =
 				hasBotScope && options.permissions !== undefined

@@ -88,8 +88,8 @@ export const gitlab = (options: GitlabOptions) => {
 			redirectURI,
 		}) => {
 			const _scopes = options.disableDefaultScope ? [] : ["read_user"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: issuerId,
 				options,
