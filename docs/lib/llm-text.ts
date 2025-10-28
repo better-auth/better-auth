@@ -273,7 +273,7 @@ function resolveFallbackPaths(
 
 	candidates.push(join(process.cwd(), "content", "docs", withExtension));
 
-	// Allow already-prefixed paths to resolve as-is.
+	// Add docs prefix only if not already present
 	if (!relativePath.startsWith("docs/")) {
 		candidates.push(join(process.cwd(), "docs", withExtension));
 	}
