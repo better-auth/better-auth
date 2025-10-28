@@ -6,6 +6,8 @@ import { JWTExpired } from "jose/errors";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
+import { admin } from "../../plugins/admin/admin";
+import { hasPermission } from "../../plugins/admin/has-permission";
 import type { User } from "../../types";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
@@ -159,7 +161,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 		if (!session) {
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
-				//we're returning true to avoid leaking information about the user
+				// Returning true to avoid leaking information about the user
 				return ctx.json({
 					status: true,
 				});
@@ -169,18 +171,61 @@ export const sendVerificationEmail = createAuthEndpoint(
 				status: true,
 			});
 		}
-		if (session?.user.emailVerified) {
+
+		const isSelfOperation = session.user.email === email.toLowerCase();
+		if (isSelfOperation) {
+			if (session.user.emailVerified) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						"You can only send a verification email to an unverified email",
+				});
+			}
+			await sendVerificationEmailFn(ctx, session.user);
+			return ctx.json({
+				status: true,
+			});
+		}
+
+		const adminPlugin = ctx.context.options.plugins?.find(
+			(plugin) => plugin.id === "admin",
+		) as ReturnType<typeof admin> | undefined;
+
+		if (!adminPlugin?.options) {
+			throw new APIError("FORBIDDEN", {
+				message: "You can only send a verification email to your own email",
+			});
+		}
+
+		const canManageUsers = hasPermission({
+			userId: session.user.id,
+			role: session.user.role,
+			options: adminPlugin.options,
+			permissions: {
+				user: ["update"],
+			},
+		});
+
+		if (!canManageUsers) {
+			throw new APIError("FORBIDDEN", {
+				message: "You can only send a verification email to your own email",
+			});
+		}
+
+		const targetUser = await ctx.context.internalAdapter.findUserByEmail(email);
+		if (!targetUser) {
+			return ctx.json({
+				status: true,
+			});
+		}
+
+		if (targetUser.user.emailVerified) {
 			throw new APIError("BAD_REQUEST", {
 				message:
 					"You can only send a verification email to an unverified email",
 			});
 		}
-		if (session?.user.email !== email) {
-			throw new APIError("BAD_REQUEST", {
-				message: "You can only send a verification email to your own email",
-			});
-		}
-		await sendVerificationEmailFn(ctx, session.user);
+
+		await sendVerificationEmailFn(ctx, targetUser.user);
 		return ctx.json({
 			status: true,
 		});
