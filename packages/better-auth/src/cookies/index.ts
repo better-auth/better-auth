@@ -171,7 +171,6 @@ export async function setCookieCache(
 			);
 		}
 
-		// Use createSessionStore to handle chunking for large cookies
 		const sessionStore = createSessionStore(
 			ctx.context.authCookies.sessionData.name,
 			options,
