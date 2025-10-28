@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { type NextRequest, NextResponse } from "next/server";
-import { getLLMText } from "@/app/docs/lib/get-llm-text";
+import { getLLMText, LLM_TEXT_ERROR } from "@/lib/llm-text";
 import { source } from "@/lib/source";
 
 export const revalidate = false;
@@ -24,13 +24,19 @@ export async function GET(
 	const page = source.getPage(slug);
 	if (!page) notFound();
 
-	const content = await getLLMText(page);
-
-	return new NextResponse(content, {
-		headers: {
-			"Content-Type": "text/markdown",
-		},
-	});
+	try {
+		const content = await getLLMText(page);
+		return new NextResponse(content, {
+			status: 200,
+			headers: { "Content-Type": "text/markdown" },
+		});
+	} catch (error) {
+		console.error("Error generating LLM text:", error);
+		return new NextResponse(LLM_TEXT_ERROR, {
+			status: 500,
+			headers: { "Content-Type": "text/markdown" },
+		});
+	}
 }
 
 export function generateStaticParams() {

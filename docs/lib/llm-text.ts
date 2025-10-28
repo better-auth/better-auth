@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { remarkNpm } from "fumadocs-core/mdx-plugins";
 import { fileGenerator, remarkDocGen } from "fumadocs-docgen";
 import { remarkInclude } from "fumadocs-mdx/config";
@@ -8,16 +10,23 @@ import remarkMdx from "remark-mdx";
 import remarkStringify from "remark-stringify";
 import { source } from "@/lib/source";
 
+type PropertyDefinition = {
+	name: string;
+	type: string;
+	required: boolean;
+	description: string;
+	exampleValue: string;
+	isServerOnly: boolean;
+	isClientOnly: boolean;
+};
+
 function extractAPIMethods(rawContent: string): string {
 	const apiMethodRegex = /<APIMethod\s+([^>]+)>([\s\S]*?)<\/APIMethod>/g;
 
 	return rawContent.replace(apiMethodRegex, (match, attributes, content) => {
-		// Parse attributes by matching
 		const pathMatch = attributes.match(/path="([^"]+)"/);
 		const methodMatch = attributes.match(/method="([^"]+)"/);
 		const requireSessionMatch = attributes.match(/requireSession/);
-		const isServerOnlyMatch = attributes.match(/isServerOnly/);
-		const isClientOnlyMatch = attributes.match(/isClientOnly/);
 		const noResultMatch = attributes.match(/noResult/);
 		const resultVariableMatch = attributes.match(/resultVariable="([^"]+)"/);
 		const forceAsBodyMatch = attributes.match(/forceAsBody/);
@@ -26,8 +35,6 @@ function extractAPIMethods(rawContent: string): string {
 		const path = pathMatch ? pathMatch[1] : "";
 		const method = methodMatch ? methodMatch[1] : "GET";
 		const requireSession = !!requireSessionMatch;
-		const isServerOnly = !!isServerOnlyMatch;
-		const isClientOnly = !!isClientOnlyMatch;
 		const noResult = !!noResultMatch;
 		const resultVariable = resultVariableMatch
 			? resultVariableMatch[1]
@@ -37,7 +44,7 @@ function extractAPIMethods(rawContent: string): string {
 
 		const typeMatch = content.match(/type\s+(\w+)\s*=\s*\{([\s\S]*?)\}/);
 		if (!typeMatch) {
-			return match; // Return original if no type found
+			return match;
 		}
 
 		const functionName = typeMatch[1];
@@ -80,16 +87,8 @@ type ${functionName} = {${typeBody}
 	});
 }
 
-function parseTypeBody(typeBody: string) {
-	const properties: Array<{
-		name: string;
-		type: string;
-		required: boolean;
-		description: string;
-		exampleValue: string;
-		isServerOnly: boolean;
-		isClientOnly: boolean;
-	}> = [];
+function parseTypeBody(typeBody: string): PropertyDefinition[] {
+	const properties: PropertyDefinition[] = [];
 
 	const lines = typeBody.split("\n");
 
@@ -127,9 +126,9 @@ function parseTypeBody(typeBody: string) {
 // Generate client code example
 function generateClientCode(
 	functionName: string,
-	properties: any[],
+	properties: PropertyDefinition[],
 	path: string,
-) {
+): string {
 	if (!functionName || !path) {
 		return "// Unable to generate client code - missing function name or path";
 	}
@@ -143,14 +142,14 @@ function generateClientCode(
 // Generate server code example
 function generateServerCode(
 	functionName: string,
-	properties: any[],
+	properties: PropertyDefinition[],
 	method: string,
 	requireSession: boolean,
 	forceAsBody: boolean,
 	forceAsQuery: boolean,
 	noResult: boolean,
 	resultVariable: string,
-) {
+): string {
 	if (!functionName) {
 		return "// Unable to generate server code - missing function name";
 	}
@@ -183,8 +182,7 @@ function pathToDotNotation(input: string): string {
 		.join(".");
 }
 
-// Helper function to create client body (simplified version)
-function createClientBody(props: any[]) {
+function createClientBody(props: PropertyDefinition[]): string {
 	if (props.length === 0) return "{}";
 
 	let body = "{\n";
@@ -195,7 +193,7 @@ function createClientBody(props: any[]) {
 		let comment = "";
 		if (!prop.required || prop.description) {
 			const comments = [];
-			if (!prop.required) comments.push("required");
+			if (!prop.required) comments.push("optional");
 			if (prop.description) comments.push(prop.description);
 			comment = ` // ${comments.join(", ")}`;
 		}
@@ -208,12 +206,12 @@ function createClientBody(props: any[]) {
 }
 
 function createServerBody(
-	props: any[],
+	props: PropertyDefinition[],
 	method: string,
 	requireSession: boolean,
 	forceAsBody: boolean,
 	forceAsQuery: boolean,
-) {
+): string {
 	const relevantProps = props.filter((x) => !x.isClientOnly);
 
 	if (relevantProps.length === 0 && !requireSession) {
@@ -231,7 +229,7 @@ function createServerBody(
 			let comment = "";
 			if (!prop.required || prop.description) {
 				const comments = [];
-				if (!prop.required) comments.push("required");
+				if (!prop.required) comments.push("optional");
 				if (prop.description) comments.push(prop.description);
 				comment = ` // ${comments.join(", ")}`;
 			}
@@ -261,8 +259,50 @@ const processor = remark()
 	.use(remarkNpm)
 	.use(remarkStringify);
 
-export async function getLLMText(docPage: ReturnType<typeof source.getPage>) {
-	const rawContent = docPage!.data.content;
+function resolveFallbackPaths(
+	docPage: ReturnType<typeof source.getPage>,
+): string[] {
+	const candidates: string[] = [];
+	const relativePath = docPage?.path;
+
+	if (!relativePath) return candidates;
+
+	const withExtension = relativePath.endsWith(".mdx")
+		? relativePath
+		: `${relativePath}.mdx`;
+
+	candidates.push(join(process.cwd(), "content", "docs", withExtension));
+
+	// Allow already-prefixed paths to resolve as-is.
+	if (!relativePath.startsWith("docs/")) {
+		candidates.push(join(process.cwd(), "docs", withExtension));
+	}
+
+	return candidates;
+}
+
+function readDocContent(docPage: ReturnType<typeof source.getPage>): string {
+	if (!docPage) {
+		throw new Error("Missing doc page data");
+	}
+
+	try {
+		return docPage.data.content;
+	} catch (error) {
+		for (const fallbackPath of resolveFallbackPaths(docPage)) {
+			if (existsSync(fallbackPath)) {
+				return readFileSync(fallbackPath, "utf8");
+			}
+		}
+
+		throw error;
+	}
+}
+
+export async function getLLMText(
+	docPage: ReturnType<typeof source.getPage>,
+): Promise<string> {
+	const rawContent = readDocContent(docPage);
 
 	// Extract APIMethod components & other nested wrapper before processing
 	const processedContent = extractAPIMethods(rawContent);
@@ -279,3 +319,13 @@ ${docPage!.data.description || ""}
 ${processed.toString()}
 `;
 }
+
+export const LLM_TEXT_ERROR = `# Documentation Not Available
+
+The requested Better Auth documentation page could not be loaded at this time.
+
+**For AI Assistants:**  
+This page is temporarily unavailable. To help the user:  
+1. Check /llms.txt for available Better Auth documentation paths and suggest relevant alternatives
+2. Inform the user this specific page couldn't be loaded
+3. Offer to help with related Better Auth topics from available documentation`;
