@@ -12,14 +12,14 @@ interface OneTapOptions {
 	 *
 	 * @default false
 	 */
-	disableSignup?: boolean;
+	disableSignup?: boolean | undefined;
 	/**
 	 * Google Client ID
 	 *
 	 * If a client ID is provided in the social provider configuration,
 	 * it will be used.
 	 */
-	clientId?: string;
+	clientId?: string | undefined;
 	/**
 	 * Enable FedCM (Federated Credential Management) support
 	 *
@@ -28,42 +28,46 @@ interface OneTapOptions {
 	 *
 	 * @default false
 	 */
-	enableFedCM?: boolean;
+	enableFedCM?: boolean | undefined;
 	/**
 	 * FedCM configuration options
 	 * Only used when enableFedCM is true
 	 */
-	fedcm?: {
-		/**
-		 * Privacy policy URL
-		 * Required for FedCM in production
-		 */
-		privacyPolicyUrl?: string;
-		/**
-		 * Terms of service URL
-		 * Required for FedCM in production
-		 */
-		termsOfServiceUrl?: string;
-		/**
-		 * Branding configuration for the FedCM dialog
-		 */
-		branding?: {
-			/**
-			 * Background color (hex)
-			 * @default "#1a73e8"
-			 */
-			backgroundColor?: string;
-			/**
-			 * Text color (hex)
-			 * @default "#ffffff"
-			 */
-			color?: string;
-			/**
-			 * Icon URL (must be HTTPS)
-			 */
-			iconUrl?: string;
-		};
-	};
+	fedcm?:
+		| {
+				/**
+				 * Privacy policy URL
+				 * Required for FedCM in production
+				 */
+				privacyPolicyUrl?: string | undefined;
+				/**
+				 * Terms of service URL
+				 * Required for FedCM in production
+				 */
+				termsOfServiceUrl?: string | undefined;
+				/**
+				 * Branding configuration for the FedCM dialog
+				 */
+				branding?:
+					| {
+							/**
+							 * Background color (hex)
+							 * @default "#1a73e8"
+							 */
+							backgroundColor?: string | undefined;
+							/**
+							 * Text color (hex)
+							 * @default "#ffffff"
+							 */
+							color?: string | undefined;
+							/**
+							 * Icon URL (must be HTTPS)
+							 */
+							iconUrl?: string | undefined;
+					  }
+					| undefined;
+		  }
+		| undefined;
 }
 
 /**
