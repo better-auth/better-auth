@@ -119,8 +119,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							session: Session;
 							user: User;
 							updatedAt: number;
-              version?: string;
-              exp?: number;
+							version?: string;
+							exp?: number;
 						}>(sessionDataCookie, ctx.context.secret, "better-auth-session");
 
 						if (payload && payload.session && payload.user) {

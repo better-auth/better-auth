@@ -348,23 +348,25 @@ export const getCookieCache = async <
 	},
 >(
 	request: Request | Headers,
-	config?: {
-		cookiePrefix?: string;
-		cookieName?: string;
-		isSecure?: boolean;
-		secret?: string;
-		strategy?: "compact" | "jwt" | "jwe"; // base64-hmac for backward compatibility
-		version?:
-			| string
-			| ((
-					session: Session & Record<string, any>,
-					user: User & Record<string, any>,
-			  ) => string)
-			| ((
-					session: Session & Record<string, any>,
-					user: User & Record<string, any>,
-			  ) => Promise<string>);
-	} | undefined,
+	config?:
+		| {
+				cookiePrefix?: string;
+				cookieName?: string;
+				isSecure?: boolean;
+				secret?: string;
+				strategy?: "compact" | "jwt" | "jwe"; // base64-hmac for backward compatibility
+				version?:
+					| string
+					| ((
+							session: Session & Record<string, any>,
+							user: User & Record<string, any>,
+					  ) => string)
+					| ((
+							session: Session & Record<string, any>,
+							user: User & Record<string, any>,
+					  ) => Promise<string>);
+		  }
+		| undefined,
 ) => {
 	const headers = request instanceof Headers ? request : request.headers;
 	const cookies = headers.get("cookie");
