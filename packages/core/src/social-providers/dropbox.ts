@@ -1,10 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
-} from "@better-auth/core/oauth2";
+} from "../oauth2";
 
 export interface DropboxProfile {
 	account_id: string;
@@ -22,7 +22,7 @@ export interface DropboxProfile {
 
 export interface DropboxOptions extends ProviderOptions<DropboxProfile> {
 	clientId: string;
-	accessType?: "offline" | "online" | "legacy";
+	accessType?: ("offline" | "online" | "legacy") | undefined;
 }
 
 export const dropbox = (options: DropboxOptions) => {
@@ -38,8 +38,8 @@ export const dropbox = (options: DropboxOptions) => {
 			redirectURI,
 		}) => {
 			const _scopes = options.disableDefaultScope ? [] : ["account_info.read"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			const additionalParams: Record<string, string> = {};
 			if (options.accessType) {
 				additionalParams.token_access_type = options.accessType;

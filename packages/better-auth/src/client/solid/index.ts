@@ -1,49 +1,51 @@
+import type {
+	BetterAuthClientOptions,
+	BetterAuthClientPlugin,
+} from "@better-auth/core";
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type {
+	BetterFetchError,
+	BetterFetchResponse,
+} from "@better-fetch/fetch";
+import type { Accessor } from "solid-js";
+import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
+import { capitalizeFirstLetter } from "../../utils/misc";
 import { getClientConfig } from "../config";
 import { createDynamicPathProxy } from "../proxy";
-import { capitalizeFirstLetter } from "../../utils/misc";
 import type {
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
 } from "../types";
-import type {
-	BetterAuthClientPlugin,
-	BetterAuthClientOptions,
-} from "@better-auth/core";
-
-import type { Accessor } from "solid-js";
-import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
-import type {
-	BetterFetchError,
-	BetterFetchResponse,
-} from "@better-fetch/fetch";
 import { useStore } from "./solid-store";
-import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
 }
 
-type InferResolvedHooks<O extends BetterAuthClientOptions> =
-	O["plugins"] extends Array<infer Plugin>
-		? Plugin extends BetterAuthClientPlugin
-			? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
-				? Atoms extends Record<string, any>
-					? {
-							[key in keyof Atoms as IsSignal<key> extends true
-								? never
-								: key extends string
-									? `use${Capitalize<key>}`
-									: never]: () => Accessor<ReturnType<Atoms[key]["get"]>>;
-						}
+type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
+	plugins: Array<infer Plugin>;
+}
+	? UnionToIntersection<
+			Plugin extends BetterAuthClientPlugin
+				? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+					? Atoms extends Record<string, any>
+						? {
+								[key in keyof Atoms as IsSignal<key> extends true
+									? never
+									: key extends string
+										? `use${Capitalize<key>}`
+										: never]: () => Accessor<ReturnType<Atoms[key]["get"]>>;
+							}
+						: {}
 					: {}
 				: {}
-			: {}
-		: {};
+		>
+	: {};
 
 export function createAuthClient<Option extends BetterAuthClientOptions>(
-	options?: Option,
+	options?: Option | undefined,
 ) {
 	const {
 		pluginPathMethods,

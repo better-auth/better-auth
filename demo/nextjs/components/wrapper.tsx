@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
-import { ThemeToggle } from "./theme-toggle";
-import { Logo } from "./logo";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Link from "next/link";
+import { Logo } from "./logo";
+import { ThemeToggle } from "./theme-toggle";
 
 export function Wrapper(props: { children: React.ReactNode }) {
 	return (

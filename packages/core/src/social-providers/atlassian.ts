@@ -1,27 +1,29 @@
 import { betterFetch } from "@better-fetch/fetch";
+import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	refreshAccessToken,
 	validateAuthorizationCode,
-} from "@better-auth/core/oauth2";
-import { logger } from "@better-auth/core/env";
-import { refreshAccessToken } from "@better-auth/core/oauth2";
+} from "../oauth2";
 
 export interface AtlassianProfile {
-	account_type?: string;
+	account_type?: string | undefined;
 	account_id: string;
-	email?: string;
+	email?: string | undefined;
 	name: string;
-	picture?: string;
-	nickname?: string;
-	locale?: string;
-	extended_profile?: {
-		job_title?: string;
-		organization?: string;
-		department?: string;
-		location?: string;
-	};
+	picture?: string | undefined;
+	nickname?: string | undefined;
+	locale?: string | undefined;
+	extended_profile?:
+		| {
+				job_title?: string;
+				organization?: string;
+				department?: string;
+				location?: string;
+		  }
+		| undefined;
 }
 export interface AtlassianOptions extends ProviderOptions<AtlassianProfile> {
 	clientId: string;
@@ -44,8 +46,8 @@ export const atlassian = (options: AtlassianOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["read:jira-user", "offline_access"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 
 			return createAuthorizationURL({
 				id: "atlassian",
@@ -98,8 +100,8 @@ export const atlassian = (options: AtlassianOptions) => {
 				const { data: profile } = await betterFetch<{
 					account_id: string;
 					name: string;
-					email?: string;
-					picture?: string;
+					email?: string | undefined;
+					picture?: string | undefined;
 				}>("https://api.atlassian.com/me", {
 					headers: { Authorization: `Bearer ${token.accessToken}` },
 				});

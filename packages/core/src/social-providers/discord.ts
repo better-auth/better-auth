@@ -1,9 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
-import {
-	refreshAccessToken,
-	validateAuthorizationCode,
-} from "@better-auth/core/oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
 export interface DiscordProfile extends Record<string, any> {
 	/** the user's id (i.e. the numerical snowflake) */
 	id: string;
@@ -19,12 +16,12 @@ export interface DiscordProfile extends Record<string, any> {
 	 */
 	avatar: string | null;
 	/** whether the user belongs to an OAuth2 application */
-	bot?: boolean;
+	bot?: boolean | undefined;
 	/**
 	 * whether the user is an Official Discord System user (part of the urgent
 	 * message system)
 	 */
-	system?: boolean;
+	system?: boolean | undefined;
 	/** whether the user has two factor enabled on their account */
 	mfa_enabled: boolean;
 	/**
@@ -78,8 +75,8 @@ export interface DiscordProfile extends Record<string, any> {
 
 export interface DiscordOptions extends ProviderOptions<DiscordProfile> {
 	clientId: string;
-	prompt?: "none" | "consent";
-	permissions?: number;
+	prompt?: ("none" | "consent") | undefined;
+	permissions?: number | undefined;
 }
 
 export const discord = (options: DiscordOptions) => {
@@ -88,8 +85,8 @@ export const discord = (options: DiscordOptions) => {
 		name: "Discord",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["identify", "email"];
-			scopes && _scopes.push(...scopes);
-			options.scope && _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
 			const hasBotScope = _scopes.includes("bot");
 			const permissionsParam =
 				hasBotScope && options.permissions !== undefined

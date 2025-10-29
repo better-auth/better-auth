@@ -1,27 +1,31 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "./test-utils/test-instance";
-import { DEFAULT_SECRET } from "./utils/constants";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import { refreshAccessToken } from "@better-auth/core/oauth2";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { parseSetCookieHeader } from "./cookies";
-import { getOAuth2Tokens, refreshAccessToken } from "@better-auth/core/oauth2";
-import { signJWT } from "./crypto";
-import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
 import Database from "better-sqlite3";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import { OAuth2Server } from "oauth2-mock-server";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { parseSetCookieHeader } from "./cookies";
+import { signJWT } from "./crypto";
 import { getMigrations } from "./db";
+import { getTestInstance } from "./test-utils/test-instance";
+import { DEFAULT_SECRET } from "./utils/constants";
 
 let server = new OAuth2Server();
 let port = 8005;
 
-vi.mock("@better-auth/core/oauth2", async (importOriginal) => {
-	const original = (await importOriginal()) as any;
-	return {
-		...original,
-		validateAuthorizationCode: vi
-			.fn()
-			.mockImplementation(async (option: any) => {
-				if (option.options.overrideUserInfoOnSignIn) {
-					const data: GoogleProfile = {
+const mswServer = setupServer();
+let shouldUseUpdatedProfile = false;
+
+beforeAll(async () => {
+	mswServer.listen({ onUnhandledRequest: "bypass" });
+	mswServer.use(
+		http.post("https://oauth2.googleapis.com/token", async () => {
+			const data: GoogleProfile = shouldUseUpdatedProfile
+				? {
 						email: "user@email.com",
 						email_verified: true,
 						name: "Updated User",
@@ -37,47 +41,32 @@ vi.mock("@better-auth/core/oauth2", async (importOriginal) => {
 						jti: "test",
 						given_name: "Updated",
 						family_name: "User",
+					}
+				: {
+						email: "user@email.com",
+						email_verified: true,
+						name: "First Last",
+						picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+						exp: 1234567890,
+						sub: "1234567890",
+						iat: 1234567890,
+						aud: "test",
+						azp: "test",
+						nbf: 1234567890,
+						iss: "test",
+						locale: "en",
+						jti: "test",
+						given_name: "First",
+						family_name: "Last",
 					};
-					const testIdToken = await signJWT(data, DEFAULT_SECRET);
-					const tokens = getOAuth2Tokens({
-						access_token: "test",
-						refresh_token: "test",
-						id_token: testIdToken,
-					});
-					return tokens;
-				}
-				const data: GoogleProfile = {
-					email: "user@email.com",
-					email_verified: true,
-					name: "First Last",
-					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-					exp: 1234567890,
-					sub: "1234567890",
-					iat: 1234567890,
-					aud: "test",
-					azp: "test",
-					nbf: 1234567890,
-					iss: "test",
-					locale: "en",
-					jti: "test",
-					given_name: "First",
-					family_name: "Last",
-				};
-				const testIdToken = await signJWT(data, DEFAULT_SECRET);
-				const tokens = getOAuth2Tokens({
-					access_token: "test",
-					refresh_token: "test",
-					id_token: testIdToken,
-				});
-				return tokens;
-			}),
-		refreshAccessToken: vi.fn().mockImplementation(async (args) => {
-			const { refreshToken, options, tokenEndpoint } = args;
-			expect(refreshToken).toBeDefined();
-			expect(options.clientId).toBe("test-client-id");
-			expect(options.clientSecret).toBe("test-client-secret");
-			expect(tokenEndpoint).toBe(`http://localhost:${port}/token`);
-
+			const testIdToken = await signJWT(data, DEFAULT_SECRET);
+			return HttpResponse.json({
+				access_token: "test",
+				refresh_token: "test",
+				id_token: testIdToken,
+			});
+		}),
+		http.post(`http://localhost:${port}/token`, async () => {
 			const data: GoogleProfile = {
 				email: "user@email.com",
 				email_verified: true,
@@ -96,17 +85,22 @@ vi.mock("@better-auth/core/oauth2", async (importOriginal) => {
 				family_name: "Last",
 			};
 			const testIdToken = await signJWT(data, DEFAULT_SECRET);
-			const tokens = getOAuth2Tokens({
+			return HttpResponse.json({
 				access_token: "new-access-token",
 				refresh_token: "new-refresh-token",
 				id_token: testIdToken,
 				token_type: "Bearer",
-				expires_in: 3600, // Token expires in 1 hour
+				expires_in: 3600,
 			});
-			return tokens;
 		}),
-	};
+	);
 });
+
+afterEach(() => {
+	shouldUseUpdatedProfile = false;
+});
+
+afterAll(() => mswServer.close());
 
 describe("Social Providers", async (c) => {
 	const { client, cookieSetter } = await getTestInstance(
@@ -186,7 +180,7 @@ describe("Social Providers", async (c) => {
 	async function simulateOAuthFlowRefresh(
 		authUrl: string,
 		headers: Headers,
-		fetchImpl?: (...args: any) => any,
+		fetchImpl?: ((...args: any) => any) | undefined,
 	) {
 		let location: string | null = null;
 		await betterFetch(authUrl, {
@@ -670,6 +664,7 @@ describe("signin", async () => {
 	});
 
 	it("should allow user info override during sign in", async () => {
+		shouldUseUpdatedProfile = true;
 		const headers = new Headers();
 		let state = "";
 		const { client, cookieSetter } = await getTestInstance(
@@ -765,9 +760,15 @@ describe("updateAccountOnSignIn", async () => {
 		const userAccounts = await ctx.internalAdapter.findAccounts(
 			session.data?.user.id!,
 		);
-		await ctx.internalAdapter.updateAccount(userAccounts[0]!.id, {
-			accessToken: "new-access-token",
-		});
+		await runWithEndpointContext(
+			{
+				context: ctx,
+			} as GenericEndpointContext,
+			() =>
+				ctx.internalAdapter.updateAccount(userAccounts[0]!.id, {
+					accessToken: "new-access-token",
+				}),
+		);
 
 		//re-sign in
 		const signInRes2 = await client.signIn.social({

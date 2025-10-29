@@ -9,7 +9,7 @@ export const authFlowTestSuite = createTestSuite(
 	{},
 	(
 		{ generate, getAuth, modifyBetterAuthOptions, tryCatch },
-		debug?: { showDB?: () => Promise<void> },
+		debug?: { showDB?: () => Promise<void> } | undefined,
 	) => ({
 		"should successfully sign up": async () => {
 			await modifyBetterAuthOptions(

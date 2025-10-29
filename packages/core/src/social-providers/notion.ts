@@ -1,20 +1,22 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
-} from "@better-auth/core/oauth2";
+} from "../oauth2";
 
 export interface NotionProfile {
 	object: "user";
 	id: string;
 	type: "person" | "bot";
-	name?: string;
-	avatar_url?: string;
-	person?: {
-		email?: string;
-	};
+	name?: string | undefined;
+	avatar_url?: string | undefined;
+	person?:
+		| {
+				email?: string;
+		  }
+		| undefined;
 }
 
 export interface NotionOptions extends ProviderOptions<NotionProfile> {
@@ -28,8 +30,8 @@ export const notion = (options: NotionOptions) => {
 		name: "Notion",
 		createAuthorizationURL({ state, scopes, loginHint, redirectURI }) {
 			const _scopes: string[] = options.disableDefaultScope ? [] : [];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "notion",
 				options,

@@ -1,13 +1,13 @@
+import { base64 } from "@better-auth/utils/base64";
+import { betterFetch } from "@better-fetch/fetch";
+import { decodeJwt } from "jose";
+import { logger } from "../env";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
-	validateAuthorizationCode,
 	createAuthorizationURL,
 	refreshAccessToken,
-} from "@better-auth/core/oauth2";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
-import { betterFetch } from "@better-fetch/fetch";
-import { logger } from "@better-auth/core/env";
-import { decodeJwt } from "jose";
-import { base64 } from "@better-auth/utils/base64";
+	validateAuthorizationCode,
+} from "../oauth2";
 
 /**
  * @see [Microsoft Identity Platform - Optional claims reference](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference)
@@ -118,21 +118,23 @@ export interface MicrosoftOptions
 	 * The tenant ID of the Microsoft account
 	 * @default "common"
 	 */
-	tenantId?: string;
+	tenantId?: string | undefined;
 	/**
 	 * The authentication authority URL. Use the default "https://login.microsoftonline.com" for standard Entra ID or "https://<tenant-id>.ciamlogin.com" for CIAM scenarios.
 	 * @default "https://login.microsoftonline.com"
 	 */
-	authority?: string;
+	authority?: string | undefined;
 	/**
 	 * The size of the profile photo
 	 * @default 48
 	 */
-	profilePhotoSize?: 48 | 64 | 96 | 120 | 240 | 360 | 432 | 504 | 648;
+	profilePhotoSize?:
+		| (48 | 64 | 96 | 120 | 240 | 360 | 432 | 504 | 648)
+		| undefined;
 	/**
 	 * Disable profile photo
 	 */
-	disableProfilePhoto?: boolean;
+	disableProfilePhoto?: boolean | undefined;
 }
 
 export const microsoft = (options: MicrosoftOptions) => {
@@ -147,8 +149,8 @@ export const microsoft = (options: MicrosoftOptions) => {
 			const scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email", "User.Read", "offline_access"];
-			options.scope && scopes.push(...options.scope);
-			data.scopes && scopes.push(...data.scopes);
+			if (options.scope) scopes.push(...options.scope);
+			if (data.scopes) scopes.push(...data.scopes);
 			return createAuthorizationURL({
 				id: "microsoft",
 				options,
@@ -224,7 +226,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					const scopes = options.disableDefaultScope
 						? []
 						: ["openid", "profile", "email", "User.Read", "offline_access"];
-					options.scope && scopes.push(...options.scope);
+					if (options.scope) scopes.push(...options.scope);
 
 					return refreshAccessToken({
 						refreshToken,

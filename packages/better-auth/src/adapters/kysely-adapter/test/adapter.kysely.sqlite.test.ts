@@ -1,7 +1,9 @@
-import { Kysely, SqliteDialect } from "kysely";
-import { testAdapter } from "../../test-adapter";
-import { kyselyAdapter } from "../kysely-adapter";
 import Database from "better-sqlite3";
+import fs from "fs/promises";
+import { Kysely, SqliteDialect } from "kysely";
+import path from "path";
+import { getMigrations } from "../../../db";
+import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
@@ -9,9 +11,7 @@ import {
 	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
-import path from "path";
-import { getMigrations } from "../../../db";
-import fs from "fs/promises";
+import { kyselyAdapter } from "../kysely-adapter";
 
 const dbPath = path.join(__dirname, "test.db");
 let database = new Database(dbPath);
@@ -42,7 +42,7 @@ const { execute } = await testAdapter({
 		await runMigrations();
 	},
 	tests: [
-		normalTestSuite(),
+		normalTestSuite({}),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),

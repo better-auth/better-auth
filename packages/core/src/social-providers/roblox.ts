@@ -1,9 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
-import {
-	validateAuthorizationCode,
-	refreshAccessToken,
-} from "@better-auth/core/oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
 
 export interface RobloxProfile extends Record<string, any> {
 	/** the user's id */
@@ -25,11 +22,14 @@ export interface RobloxProfile extends Record<string, any> {
 export interface RobloxOptions extends ProviderOptions<RobloxProfile> {
 	clientId: string;
 	prompt?:
-		| "none"
-		| "consent"
-		| "login"
-		| "select_account"
-		| "select_account consent";
+		| (
+				| "none"
+				| "consent"
+				| "login"
+				| "select_account"
+				| "select_account consent"
+		  )
+		| undefined;
 }
 
 export const roblox = (options: RobloxOptions) => {
@@ -38,8 +38,8 @@ export const roblox = (options: RobloxOptions) => {
 		name: "Roblox",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["openid", "profile"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return new URL(
 				`https://apis.roblox.com/oauth/v1/authorize?scope=${_scopes.join(
 					"+",

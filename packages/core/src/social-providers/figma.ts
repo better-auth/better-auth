@@ -1,12 +1,12 @@
 import { betterFetch } from "@better-fetch/fetch";
+import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "@better-auth/core/oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	refreshAccessToken,
 	validateAuthorizationCode,
-} from "@better-auth/core/oauth2";
-import { logger } from "@better-auth/core/env";
-import { refreshAccessToken } from "@better-auth/core/oauth2";
+} from "../oauth2";
 
 export interface FigmaProfile {
 	id: string;
@@ -35,8 +35,8 @@ export const figma = (options: FigmaOptions) => {
 			}
 
 			const _scopes = options.disableDefaultScope ? [] : ["file_read"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 
 			const url = await createAuthorizationURL({
 				id: "figma",

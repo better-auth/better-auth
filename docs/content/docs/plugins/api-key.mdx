@@ -384,7 +384,7 @@ Any time an endpoint in Better Auth is called that has a valid API key in the he
 export const auth = betterAuth({
   plugins: [
     apiKey({
-      sessionForAPIKeys: true,
+      enableSessionForAPIKeys: true,
     }),
   ],
 });
@@ -620,7 +620,7 @@ Customize the starting characters configuration.
   <Accordion title="startingCharactersConfig Options">
     `shouldStore` <span className="opacity-70">`boolean`</span>
 
-    Wether to store the starting characters in the database.
+    Whether to store the starting characters in the database.
     If false, we will set `start` to `null`.
     Default is `true`.
 
@@ -681,7 +681,7 @@ Customize the key expiration.
 
     `disableCustomExpiresTime` <span className="opacity-70">`boolean`</span>
 
-    Wether to disable the expires time passed from the client.
+    Whether to disable the expires time passed from the client.
     If `true`, the expires time will be based on the default values.
     Default is `false`.
 
@@ -725,9 +725,9 @@ Customize the rate-limiting.
 
 Custom schema for the API key plugin.
 
-`disableSessionForAPIKeys` <span className="opacity-70">`boolean`</span>
+`enableSessionForAPIKeys` <span className="opacity-70">`boolean`</span>
 
-An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
+An API Key can represent a valid session, so we can mock a session for the user if we find a valid API key in the request headers. Default is `false`.
 
 `permissions` <span className="opacity-70">`{ defaultPermissions?: Statements | ((userId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>) }`</span>
 
