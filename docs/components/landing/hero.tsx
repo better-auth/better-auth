@@ -118,10 +118,10 @@ export default function Hero() {
 								</GradientBG>
 							</div>
 
-							<div className="flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
+							<div className="mt-4 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
 								<Link
 									href="/docs"
-									className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8"
+									className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8 dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)]"
 								>
 									Get Started
 								</Link>
@@ -181,13 +181,15 @@ function CodePreview() {
 	const { resolvedTheme } = useTheme();
 	const [ref, { height }] = useMeasure();
 	const [copyState, setCopyState] = useState(false);
-	const [codeTheme, setCodeTheme] = useState(themes.oneDark);
+	const [codeTheme, setCodeTheme] = useState(themes.synthwave84);
 	const [currentTab, setCurrentTab] = useState<"auth.ts" | "client.ts">(
 		"auth.ts",
 	);
 
 	useEffect(() => {
-		setCodeTheme(resolvedTheme === "light" ? themes.oneLight : themes.oneDark);
+		setCodeTheme(
+			resolvedTheme === "light" ? themes.oneLight : themes.synthwave84,
+		);
 	}, [resolvedTheme]);
 
 	const copyToClipboard = (text: string) => {
