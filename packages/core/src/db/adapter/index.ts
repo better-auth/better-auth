@@ -292,7 +292,16 @@ export type Where = {
 				| "ends_with"
 		  )
 		| undefined;
-	value: string | number | boolean | string[] | number[] | Date | null | BigInt | BigInt[];
+	value:
+		| string
+		| number
+		| boolean
+		| string[]
+		| number[]
+		| Date
+		| null
+		| BigInt
+		| BigInt[];
 	field: string;
 	/**
 	 * @default AND
