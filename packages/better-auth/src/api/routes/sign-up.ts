@@ -22,9 +22,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						name: string;
 						email: string;
 						password: string;
-						image?: string;
-						callbackURL?: string;
-						rememberMe?: boolean;
+						image?: string | undefined;
+						callbackURL?: string | undefined;
+						rememberMe?: boolean | undefined;
 					} & AdditionalUserFieldsInput<O>,
 				},
 				openapi: {
@@ -164,8 +164,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				}
 				const body = ctx.body as any as User & {
 					password: string;
-					callbackURL?: string;
-					rememberMe?: boolean;
+					callbackURL?: string | undefined;
+					rememberMe?: boolean | undefined;
 				} & {
 					[key: string]: any;
 				};

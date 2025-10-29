@@ -28,7 +28,7 @@ import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 
 export * from "./error-code";
 
-export const twoFactor = (options?: TwoFactorOptions) => {
+export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
 	};

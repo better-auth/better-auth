@@ -118,21 +118,23 @@ export interface MicrosoftOptions
 	 * The tenant ID of the Microsoft account
 	 * @default "common"
 	 */
-	tenantId?: string;
+	tenantId?: string | undefined;
 	/**
 	 * The authentication authority URL. Use the default "https://login.microsoftonline.com" for standard Entra ID or "https://<tenant-id>.ciamlogin.com" for CIAM scenarios.
 	 * @default "https://login.microsoftonline.com"
 	 */
-	authority?: string;
+	authority?: string | undefined;
 	/**
 	 * The size of the profile photo
 	 * @default 48
 	 */
-	profilePhotoSize?: 48 | 64 | 96 | 120 | 240 | 360 | 432 | 504 | 648;
+	profilePhotoSize?:
+		| (48 | 64 | 96 | 120 | 240 | 360 | 432 | 504 | 648)
+		| undefined;
 	/**
 	 * Disable profile photo
 	 */
-	disableProfilePhoto?: boolean;
+	disableProfilePhoto?: boolean | undefined;
 }
 
 export const microsoft = (options: MicrosoftOptions) => {
@@ -147,8 +149,8 @@ export const microsoft = (options: MicrosoftOptions) => {
 			const scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email", "User.Read", "offline_access"];
-			options.scope && scopes.push(...options.scope);
-			data.scopes && scopes.push(...data.scopes);
+			if (options.scope) scopes.push(...options.scope);
+			if (data.scopes) scopes.push(...data.scopes);
 			return createAuthorizationURL({
 				id: "microsoft",
 				options,
@@ -224,7 +226,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					const scopes = options.disableDefaultScope
 						? []
 						: ["openid", "profile", "email", "User.Read", "offline_access"];
-					options.scope && scopes.push(...options.scope);
+					if (options.scope) scopes.push(...options.scope);
 
 					return refreshAccessToken({
 						refreshToken,

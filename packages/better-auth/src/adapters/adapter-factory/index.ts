@@ -599,17 +599,6 @@ export const createAdapterFactory =
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
-						if (
-							typeof config.debugLogs === "object" &&
-							"isRunningAdapterTests" in config.debugLogs &&
-							config.debugLogs.isRunningAdapterTests
-						) {
-							// hide warning in adapter tests
-						} else {
-							logger.warn(
-								`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
-							);
-						}
 						lazyLoadTransaction = createAsIsTransaction(adapter);
 					} else {
 						logger.debug(
