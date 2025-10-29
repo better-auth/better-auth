@@ -21,14 +21,14 @@ interface CacaoPayload {
 	aud: string;
 	nonce: string;
 	iss: string;
-	version?: string;
-	iat?: string;
-	nbf?: string;
-	exp?: string;
-	statement?: string;
-	requestId?: string;
-	resources?: string[];
-	type?: string;
+	version?: string | undefined;
+	iat?: string | undefined;
+	nbf?: string | undefined;
+	exp?: string | undefined;
+	statement?: string | undefined;
+	requestId?: string | undefined;
+	resources?: string[] | undefined;
+	type?: string | undefined;
 }
 
 interface Cacao {
@@ -37,7 +37,7 @@ interface Cacao {
 	s: {
 		t: "eip191" | "eip1271";
 		s: string;
-		m?: string;
+		m?: string | undefined;
 	};
 }
 
@@ -46,7 +46,7 @@ export interface SIWEVerifyMessageArgs {
 	signature: string;
 	address: string;
 	chainId: number;
-	cacao?: Cacao;
+	cacao?: Cacao | undefined;
 }
 
 export interface ENSLookupArgs {
