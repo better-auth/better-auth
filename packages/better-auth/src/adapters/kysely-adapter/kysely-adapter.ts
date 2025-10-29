@@ -23,19 +23,19 @@ interface KyselyAdapterConfig {
 	/**
 	 * Database type.
 	 */
-	type?: KyselyDatabaseType;
+	type?: KyselyDatabaseType | undefined;
 	/**
 	 * Enable debug logs for the adapter
 	 *
 	 * @default false
 	 */
-	debugLogs?: DBAdapterDebugLogOption;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 	/**
 	 * Use plural for table names.
 	 *
 	 * @default false
 	 */
-	usePlural?: boolean;
+	usePlural?: boolean | undefined;
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
@@ -43,12 +43,12 @@ interface KyselyAdapterConfig {
 	 * set this to `false` and operations will be executed sequentially.
 	 * @default false
 	 */
-	transaction?: boolean;
+	transaction?: boolean | undefined;
 }
 
 export const kyselyAdapter = (
 	db: Kysely<any>,
-	config?: KyselyAdapterConfig,
+	config?: KyselyAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter = (
@@ -108,7 +108,7 @@ export const kyselyAdapter = (
 				res = await builder.returningAll().executeTakeFirst();
 				return res;
 			};
-			function convertWhereClause(model: string, w?: Where[]) {
+			function convertWhereClause(model: string, w?: Where[] | undefined) {
 				if (!w)
 					return {
 						and: null,

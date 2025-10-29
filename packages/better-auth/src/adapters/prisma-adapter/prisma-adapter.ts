@@ -29,14 +29,14 @@ export interface PrismaConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: DBAdapterDebugLogOption;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 
 	/**
 	 * Use plural table names
 	 *
 	 * @default false
 	 */
-	usePlural?: boolean;
+	usePlural?: boolean | undefined;
 
 	/**
 	 * Whether to execute multiple operations in a transaction.
@@ -45,7 +45,7 @@ export interface PrismaConfig {
 	 * set this to `false` and operations will be executed sequentially.
 	 * @default false
 	 */
-	transaction?: boolean;
+	transaction?: boolean | undefined;
 }
 
 interface PrismaClient {}
@@ -79,7 +79,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		}) => {
 			const db = prisma as PrismaClientInternal;
 
-			const convertSelect = (select?: string[], model?: string) => {
+			const convertSelect = (
+				select?: string[] | undefined,
+				model?: string | undefined,
+			) => {
 				if (!select || !model) return undefined;
 				return select.reduce((prev, cur) => {
 					return {
@@ -162,7 +165,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return operator;
 				}
 			}
-			const convertWhereClause = (model: string, where?: Where[]) => {
+			const convertWhereClause = (
+				model: string,
+				where?: Where[] | undefined,
+			) => {
 				if (!where || !where.length) return {};
 				if (where.length === 1) {
 					const w = where[0]!;

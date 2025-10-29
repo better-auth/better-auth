@@ -151,7 +151,7 @@ exports[`init > should match config 1`] = `
   "secret": "better-auth-secret-123456789",
   "session": null,
   "sessionConfig": {
-    "cookieFreshCache": false,
+    "cookieRefreshCache": false,
     "expiresIn": 604800,
     "freshAge": 86400,
     "updateAge": 86400,

@@ -52,7 +52,7 @@ export type InsertRandomFn = <
 	Count extends number = 1,
 >(
 	model: M,
-	count?: Count,
+	count?: Count | undefined,
 ) => Promise<
 	Count extends 1
 		? M extends "user"
@@ -87,8 +87,8 @@ export const createTestSuite = <
 			 * @see {@link https://vitest.dev/guide/test-context#skip}
 			 */
 			readonly skip: {
-				(note?: string): never;
-				(condition: boolean, note?: string): void;
+				(note?: string | undefined): never;
+				(condition: boolean, note?: string | undefined): void;
 			};
 		}) => Promise<void>
 	>,
@@ -96,12 +96,12 @@ export const createTestSuite = <
 >(
 	suiteName: string,
 	config: {
-		defaultBetterAuthOptions?: BetterAuthOptions;
+		defaultBetterAuthOptions?: BetterAuthOptions | undefined;
 		/**
 		 * Helpful if the default better auth options require migrations to be run.
 		 */
-		alwaysMigrate?: boolean;
-		prefixTests?: string;
+		alwaysMigrate?: boolean | undefined;
+		prefixTests?: string | undefined;
 	},
 	tests: (
 		helpers: {
@@ -128,21 +128,25 @@ export const createTestSuite = <
 						id: string;
 					}
 				>,
-				by?: "id" | "createdAt",
+				by?: ("id" | "createdAt") | undefined,
 			) => (Record<string, any> & {
 				id: string;
 			})[];
 			getAuth: () => Promise<ReturnType<typeof betterAuth>>;
 			tryCatch<T, E = Error>(promise: Promise<T>): Promise<Result<T, E>>;
-			customIdGenerator?: () => string | Promise<string>;
+			customIdGenerator?: (() => string | Promise<string>) | undefined;
 		},
-		additionalOptions?: AdditionalOptions,
+		additionalOptions?: AdditionalOptions | undefined,
 	) => Tests,
 ) => {
 	return (
-		options?: {
-			disableTests?: Partial<Record<keyof Tests, boolean> & { ALL?: boolean }>;
-		} & AdditionalOptions,
+		options?:
+			| ({
+					disableTests?: Partial<
+						Record<keyof Tests, boolean> & { ALL?: boolean }
+					>;
+			  } & AdditionalOptions)
+			| undefined,
 	) => {
 		return async (helpers: {
 			adapter: () => Promise<DBAdapter<BetterAuthOptions>>;
@@ -154,14 +158,16 @@ export const createTestSuite = <
 			) => Promise<BetterAuthOptions>;
 			cleanup: () => Promise<void>;
 			runMigrations: () => Promise<void>;
-			prefixTests?: string;
+			prefixTests?: string | undefined;
 			onTestFinish: () => Promise<void>;
-			customIdGenerator?: () => string | Promise<string>;
+			customIdGenerator?: (() => string | Promise<string>) | undefined;
 		}) => {
 			const createdRows: Record<string, any[]> = {};
 
 			let adapter = await helpers.adapter();
-			const wrapperAdapter = (overrideOptions?: BetterAuthOptions) => {
+			const wrapperAdapter = (
+				overrideOptions?: BetterAuthOptions | undefined,
+			) => {
 				const options = deepmerge(
 					deepmerge(
 						helpers.getBetterAuthOptions(),

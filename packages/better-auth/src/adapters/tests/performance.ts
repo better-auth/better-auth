@@ -9,12 +9,10 @@ export const performanceTestSuite = createTestSuite(
 	"performance",
 	{},
 	(
-		{ adapter: originalAdapter, generate, cleanup },
-		config?: {
-			iterations?: number;
-			userSeedCount?: number;
-			dialect?: string;
-		},
+		{ adapter, generate, cleanup, originalAdapter },
+		config?:
+			| { iterations?: number; userSeedCount?: number; dialect?: string }
+			| undefined,
 	) => {
 		const tests = {
 			create: [] as number[],

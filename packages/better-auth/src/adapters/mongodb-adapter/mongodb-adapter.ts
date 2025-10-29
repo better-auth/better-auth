@@ -16,19 +16,19 @@ export interface MongoDBAdapterConfig {
 	 * MongoDB client instance
 	 * If not provided, Database transactions won't be enabled.
 	 */
-	client?: MongoClient;
+	client?: MongoClient | undefined;
 	/**
 	 * Enable debug logs for the adapter
 	 *
 	 * @default false
 	 */
-	debugLogs?: DBAdapterDebugLogOption;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 	/**
 	 * Use plural table names
 	 *
 	 * @default false
 	 */
-	usePlural?: boolean;
+	usePlural?: boolean | undefined;
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
@@ -36,14 +36,20 @@ export interface MongoDBAdapterConfig {
 	 * set this to `false` and operations will be executed sequentially.
 	 * @default false
 	 */
-	transaction?: boolean;
+	transaction?: boolean | undefined;
 }
 
-export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
+export const mongodbAdapter = (
+	db: Db,
+	config?: MongoDBAdapterConfig | undefined,
+) => {
 	let lazyOptions: BetterAuthOptions | null;
 
 	const createCustomAdapter =
-		(db: Db, session?: ClientSession): AdapterFactoryCustomizeAdapterCreator =>
+		(
+			db: Db,
+			session?: ClientSession | undefined,
+		): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldAttributes, getFieldName, schema, getDefaultModelName }) => {
 			function serializeID({
 				field,

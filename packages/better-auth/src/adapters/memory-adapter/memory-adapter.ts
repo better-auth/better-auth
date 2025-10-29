@@ -12,10 +12,13 @@ export interface MemoryDB {
 }
 
 export interface MemoryAdapterConfig {
-	debugLogs?: DBAdapterDebugLogOption;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 }
 
-export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
+export const memoryAdapter = (
+	db: MemoryDB,
+	config?: MemoryAdapterConfig | undefined,
+) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let adapterCreator = createAdapterFactory({
 		config: {
