@@ -731,13 +731,13 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
-	it("should work with base64-hmac strategy (legacy)", async () => {
+	it("should work with compact strategy", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			secret: "better-auth.secret",
 			session: {
 				cookieCache: {
 					enabled: true,
-					strategy: "base64-hmac",
+					strategy: "compact",
 				},
 			},
 		});
@@ -760,7 +760,7 @@ describe("Cookie Cache Field Filtering", () => {
 
 		const cache = await getCookieCache(request, {
 			secret: "better-auth.secret",
-			strategy: "base64-hmac",
+			strategy: "compact",
 		});
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
