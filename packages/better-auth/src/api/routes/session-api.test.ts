@@ -1113,7 +1113,7 @@ describe("cookie cache refreshCache", async () => {
 	});
 });
 
-describe.only("cookie cache versioning", async () => {
+describe("cookie cache versioning", async () => {
 	it("should invalidate cookie cache when version changes (string version)", async () => {
 		// Create instance with version "1"
 		const {
