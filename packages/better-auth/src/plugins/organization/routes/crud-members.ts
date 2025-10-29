@@ -71,7 +71,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			const session = ctx.body.userId
 				? await getSessionFromCtx<{
 						session: {
-							activeOrganizationId?: string;
+							activeOrganizationId?: string | undefined;
 						};
 					}>(ctx).catch((e) => null)
 				: null;
@@ -440,7 +440,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 						/**
 						 * If not provided, the active organization will be used
 						 */
-						organizationId?: string;
+						organizationId?: string | undefined;
 					},
 				},
 				openapi: {
