@@ -30,20 +30,20 @@ export interface EmailOTPOptions {
 			otp: string;
 			type: "sign-in" | "email-verification" | "forget-password";
 		},
-		request?: Request,
+		request?: Request | undefined,
 	) => Promise<void>;
 	/**
 	 * Length of the OTP
 	 *
 	 * @default 6
 	 */
-	otpLength?: number;
+	otpLength?: number | undefined;
 	/**
 	 * Expiry time of the OTP in seconds
 	 *
 	 * @default 300 (5 minutes)
 	 */
-	expiresIn?: number;
+	expiresIn?: number | undefined;
 	/**
 	 * Custom function to generate otp
 	 */
@@ -59,19 +59,19 @@ export interface EmailOTPOptions {
 	 *
 	 * @Default false
 	 */
-	sendVerificationOnSignUp?: boolean;
+	sendVerificationOnSignUp?: boolean | undefined;
 	/**
 	 * A boolean value that determines whether to prevent
 	 * automatic sign-up when the user is not registered.
 	 *
 	 * @Default false
 	 */
-	disableSignUp?: boolean;
+	disableSignUp?: boolean | undefined;
 	/**
 	 * Allowed attempts for the OTP code
 	 * @default 3
 	 */
-	allowedAttempts?: number;
+	allowedAttempts?: number | undefined;
 	/**
 	 * Store the OTP in your database in a secure way
 	 * Note: This will not affect the OTP sent to the user, it will only affect the OTP stored in your database
@@ -79,20 +79,23 @@ export interface EmailOTPOptions {
 	 * @default "plain"
 	 */
 	storeOTP?:
-		| "hashed"
-		| "plain"
-		| "encrypted"
-		| { hash: (otp: string) => Promise<string> }
-		| {
-				encrypt: (otp: string) => Promise<string>;
-				decrypt: (otp: string) => Promise<string>;
-		  };
+		| (
+				| "hashed"
+				| "plain"
+				| "encrypted"
+				| { hash: (otp: string) => Promise<string> }
+				| {
+						encrypt: (otp: string) => Promise<string>;
+						decrypt: (otp: string) => Promise<string>;
+				  }
+		  )
+		| undefined;
 	/**
 	 * Override the default email verification to use email otp instead
 	 *
 	 * @default false
 	 */
-	overrideDefaultEmailVerification?: boolean;
+	overrideDefaultEmailVerification?: boolean | undefined;
 }
 
 const types = ["email-verification", "sign-in", "forget-password"] as const;
@@ -617,8 +620,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 													user: {
 														$ref: "#/components/schemas/User",
 													},
-													required: ["status", "token", "user"],
 												},
+												required: ["status", "token", "user"],
 											},
 										},
 									},
