@@ -1,8 +1,8 @@
 import {
 	Body,
 	Button,
-	Container,
 	Column,
+	Container,
 	Head,
 	Heading,
 	Hr,
@@ -12,8 +12,8 @@ import {
 	Preview,
 	Row,
 	Section,
-	Text,
 	Tailwind,
+	Text,
 } from "@react-email/components";
 
 interface BetterAuthInviteUserEmailProps {

@@ -1,24 +1,27 @@
-import { getDate } from "../utils/date";
-import { parseSessionOutput, parseUserOutput } from "./schema";
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	InternalAdapter,
+} from "@better-auth/core";
+import {
+	getCurrentAdapter,
+	getCurrentAuthContext,
+	runWithTransaction,
+} from "@better-auth/core/context";
+import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import type { InternalLogger } from "@better-auth/core/env";
 import {
 	type Account,
 	type Session,
 	type User,
 	type Verification,
 } from "../types";
-import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
-import { getWithHooks } from "./with-hooks";
+import { generateId } from "../utils";
+import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
-import { generateId } from "../utils";
-import {
-	getCurrentAdapter,
-	runWithTransaction,
-} from "@better-auth/core/context";
-import type { InternalLogger } from "@better-auth/core/env";
-import type { AuthContext, InternalAdapter } from "@better-auth/core";
-import { getCurrentAuthContext } from "@better-auth/core/context";
+import { parseSessionOutput, parseUserOutput } from "./schema";
+import { getWithHooks } from "./with-hooks";
 
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
@@ -192,13 +195,15 @@ export const createInternalAdapter = (
 			return sessions;
 		},
 		listUsers: async (
-			limit?: number,
-			offset?: number,
-			sortBy?: {
-				field: string;
-				direction: "asc" | "desc";
-			},
-			where?: Where[],
+			limit?: number | undefined,
+			offset?: number | undefined,
+			sortBy?:
+				| {
+						field: string;
+						direction: "asc" | "desc";
+				  }
+				| undefined,
+			where?: Where[] | undefined,
 		) => {
 			const users = await (await getCurrentAdapter(adapter)).findMany<User>({
 				model: "user",
@@ -209,7 +214,7 @@ export const createInternalAdapter = (
 			});
 			return users;
 		},
-		countTotalUsers: async (where?: Where[]) => {
+		countTotalUsers: async (where?: Where[] | undefined) => {
 			const total = await (await getCurrentAdapter(adapter)).count({
 				model: "user",
 				where,
@@ -236,16 +241,17 @@ export const createInternalAdapter = (
 					undefined,
 				);
 			}
-
-			await (await getCurrentAdapter(adapter)).deleteMany({
-				model: "account",
-				where: [
+			await deleteManyWithHooks(
+				[
 					{
 						field: "userId",
 						value: userId,
 					},
 				],
-			});
+				"account",
+				undefined,
+			);
+
 			await deleteWithHooks(
 				[
 					{
@@ -259,9 +265,9 @@ export const createInternalAdapter = (
 		},
 		createSession: async (
 			userId: string,
-			dontRememberMe?: boolean,
-			override?: Partial<Session> & Record<string, any>,
-			overrideAll?: boolean,
+			dontRememberMe?: boolean | undefined,
+			override?: (Partial<Session> & Record<string, any>) | undefined,
+			overrideAll?: boolean | undefined,
 		) => {
 			const ctx = await getCurrentAuthContext();
 			const headers = ctx.headers || ctx.request?.headers;
@@ -756,7 +762,7 @@ export const createInternalAdapter = (
 		},
 		findUserByEmail: async (
 			email: string,
-			options?: { includeAccounts: boolean },
+			options?: { includeAccounts: boolean } | undefined,
 		) => {
 			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
 				model: "user",

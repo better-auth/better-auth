@@ -2,8 +2,8 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
-	validateAuthorizationCode,
 	refreshAccessToken,
+	validateAuthorizationCode,
 } from "../oauth2";
 
 export interface HuggingFaceProfile {
@@ -12,27 +12,29 @@ export interface HuggingFaceProfile {
 	preferred_username: string;
 	profile: string;
 	picture: string;
-	website?: string;
-	email?: string;
-	email_verified?: boolean;
+	website?: string | undefined;
+	email?: string | undefined;
+	email_verified?: boolean | undefined;
 	isPro: boolean;
-	canPay?: boolean;
-	orgs?: {
-		sub: string;
-		name: string;
-		picture: string;
-		preferred_username: string;
-		isEnterprise: boolean | "plus";
-		canPay?: boolean;
-		roleInOrg?: "admin" | "write" | "contributor" | "read";
-		pendingSSO?: boolean;
-		missingMFA?: boolean;
-		resourceGroups?: {
-			sub: string;
-			name: string;
-			role: "admin" | "write" | "contributor" | "read";
-		}[];
-	};
+	canPay?: boolean | undefined;
+	orgs?:
+		| {
+				sub: string;
+				name: string;
+				picture: string;
+				preferred_username: string;
+				isEnterprise: boolean | "plus";
+				canPay?: boolean;
+				roleInOrg?: "admin" | "write" | "contributor" | "read";
+				pendingSSO?: boolean;
+				missingMFA?: boolean;
+				resourceGroups?: {
+					sub: string;
+					name: string;
+					role: "admin" | "write" | "contributor" | "read";
+				}[];
+		  }
+		| undefined;
 }
 
 export interface HuggingFaceOptions
@@ -48,8 +50,8 @@ export const huggingface = (options: HuggingFaceOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "huggingface",
 				options,

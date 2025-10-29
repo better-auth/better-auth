@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { validateAuthorizationCode, refreshAccessToken } from "../oauth2";
+import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
 
 export interface SlackProfile extends Record<string, any> {
 	ok: boolean;
@@ -45,8 +45,8 @@ export const slack = (options: SlackOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email"];
-			scopes && _scopes.push(...scopes);
-			options.scope && _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
 			const url = new URL("https://slack.com/openid/connect/authorize");
 			url.searchParams.set("scope", _scopes.join(" "));
 			url.searchParams.set("response_type", "code");

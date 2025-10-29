@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { generateCodeChallenge, validateAuthorizationCode } from "../oauth2";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { generateCodeChallenge, validateAuthorizationCode } from "../oauth2";
 
 export type LoginType =
 	| 0 /** Facebook OAuth */
@@ -92,7 +92,7 @@ export interface ZoomProfile extends Record<string, any> {
 	 * Use the phone_numbers field instead of this field.
 	 * The user's phone number (Example: "+1 800000000") */
 	// @deprecated true
-	phone_number?: string;
+	phone_number?: string | undefined;
 	/** The URL for user's profile picture (Example: "example.com") */
 	pic_url: string;
 	/** Personal Meeting ID (PMI) (Example: 3542471135) */
@@ -112,32 +112,34 @@ export interface ZoomProfile extends Record<string, any> {
 	/** The user's Zoom Workplace plan option (Example: 64) */
 	zoom_one_type: number;
 	/** The user's company (Example: "Jill") */
-	company?: string;
+	company?: string | undefined;
 	/** Custom attributes that have been assigned to the user (Example: [{ "key": "cbf_cywdkexrtqc73f97gd4w6g", "name": "A1", "value": "1" }]) */
-	custom_attributes?: { key: string; name: string; value: string }[];
+	custom_attributes?:
+		| { key: string; name: string; value: string }[]
+		| undefined;
 	/** The employee's unique ID. This field only returns when SAML single sign-on (SSO) is enabled.
 	 * The `login_type` value is `101` (SSO) (Example: "HqDyI037Qjili1kNsSIrIg") */
-	employee_unique_id?: string;
+	employee_unique_id?: string | undefined;
 	/** The manager for the user (Example: "thill@example.com") */
-	manager?: string;
+	manager?: string | undefined;
 	/** The user's country for the company phone number (Example: "US")
 	 * @deprecated true */
-	phone_country?: string;
+	phone_country?: string | undefined;
 	/** The phone number's ISO country code (Example: "+1") */
-	phone_numbers?: PhoneNumber[];
+	phone_numbers?: PhoneNumber[] | undefined;
 	/** The user's plan type (Example: "1") */
-	plan_united_type?: string;
+	plan_united_type?: string | undefined;
 	/** The user's pronouns (Example: "3123") */
-	pronouns?: string;
+	pronouns?: string | undefined;
 	/** The user's display pronouns setting (Example: 1) */
-	pronouns_option?: PronounOption;
+	pronouns_option?: PronounOption | undefined;
 	/** Personal meeting room URL, if the user has one (Example: "example.com") */
-	vanity_url?: string;
+	vanity_url?: string | undefined;
 }
 
 export interface ZoomOptions extends ProviderOptions<ZoomProfile> {
 	clientId: string;
-	pkce?: boolean;
+	pkce?: boolean | undefined;
 }
 
 export const zoom = (userOptions: ZoomOptions) => {

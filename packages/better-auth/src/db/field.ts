@@ -1,16 +1,16 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	DBFieldAttribute,
 	DBFieldAttributeConfig,
 	DBFieldType,
 } from "@better-auth/core/db";
-import type { BetterAuthOptions } from "@better-auth/core";
 
 export const createFieldAttribute = <
 	T extends DBFieldType,
 	C extends DBFieldAttributeConfig,
 >(
 	type: T,
-	config?: C,
+	config?: C | undefined,
 ) => {
 	return {
 		type,
@@ -137,11 +137,13 @@ type AddOptionalFields<
 export type InferAdditionalFieldsFromPluginOptions<
 	SchemaName extends string,
 	Options extends {
-		schema?: {
-			[key in SchemaName]?: {
-				additionalFields?: Record<string, DBFieldAttribute>;
-			};
-		};
+		schema?:
+			| {
+					[key in SchemaName]?: {
+						additionalFields?: Record<string, DBFieldAttribute>;
+					};
+			  }
+			| undefined;
 	},
 	isClientSide extends boolean = true,
 > = Options["schema"] extends {

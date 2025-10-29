@@ -1,9 +1,10 @@
 {
   "name": "better-auth",
-  "version": "1.4.0-beta.12",
-  "description": "The most comprehensive authentication library for TypeScript.",
+  "version": "1.4.0-beta.15",
+  "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
+  "homepage": "https://better-auth.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",
@@ -32,6 +33,7 @@
   "module": "./dist/index.js",
   "exports": {
     ".": {
+      "better-auth-dev-source": "./src/index.ts",
       "import": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
@@ -42,6 +44,7 @@
       }
     },
     "./social-providers": {
+      "better-auth-dev-source": "./src/social-providers/index.ts",
       "import": {
         "types": "./dist/social-providers/index.d.ts",
         "default": "./dist/social-providers/index.js"
@@ -52,6 +55,7 @@
       }
     },
     "./client": {
+      "better-auth-dev-source": "./src/client/index.ts",
       "import": {
         "types": "./dist/client/index.d.ts",
         "default": "./dist/client/index.js"
@@ -62,6 +66,7 @@
       }
     },
     "./client/plugins": {
+      "better-auth-dev-source": "./src/client/plugins/index.ts",
       "import": {
         "types": "./dist/client/plugins/index.d.ts",
         "default": "./dist/client/plugins/index.js"
@@ -72,6 +77,7 @@
       }
     },
     "./types": {
+      "better-auth-dev-source": "./src/types/index.ts",
       "import": {
         "types": "./dist/types/index.d.ts",
         "default": "./dist/types/index.js"
@@ -82,6 +88,7 @@
       }
     },
     "./crypto": {
+      "better-auth-dev-source": "./src/crypto/index.ts",
       "import": {
         "types": "./dist/crypto/index.d.ts",
         "default": "./dist/crypto/index.js"
@@ -92,6 +99,7 @@
       }
     },
     "./cookies": {
+      "better-auth-dev-source": "./src/cookies/index.ts",
       "import": {
         "types": "./dist/cookies/index.d.ts",
         "default": "./dist/cookies/index.js"
@@ -102,6 +110,7 @@
       }
     },
     "./oauth2": {
+      "better-auth-dev-source": "./src/oauth2/index.ts",
       "import": {
         "types": "./dist/oauth2/index.d.ts",
         "default": "./dist/oauth2/index.js"
@@ -112,6 +121,7 @@
       }
     },
     "./react": {
+      "better-auth-dev-source": "./src/client/react/index.ts",
       "import": {
         "types": "./dist/client/react/index.d.ts",
         "default": "./dist/client/react/index.js"
@@ -122,6 +132,7 @@
       }
     },
     "./solid": {
+      "better-auth-dev-source": "./src/client/solid/index.ts",
       "import": {
         "types": "./dist/client/solid/index.d.ts",
         "default": "./dist/client/solid/index.js"
@@ -132,6 +143,7 @@
       }
     },
     "./lynx": {
+      "better-auth-dev-source": "./src/client/lynx/index.ts",
       "import": {
         "types": "./dist/client/lynx/index.d.ts",
         "default": "./dist/client/lynx/index.js"
@@ -142,6 +154,7 @@
       }
     },
     "./test": {
+      "better-auth-dev-source": "./src/test-utils/index.ts",
       "import": {
         "types": "./dist/test-utils/index.d.ts",
         "default": "./dist/test-utils/index.js"
@@ -152,6 +165,7 @@
       }
     },
     "./api": {
+      "better-auth-dev-source": "./src/api/index.ts",
       "import": {
         "types": "./dist/api/index.d.ts",
         "default": "./dist/api/index.js"
@@ -162,6 +176,7 @@
       }
     },
     "./db": {
+      "better-auth-dev-source": "./src/db/index.ts",
       "import": {
         "types": "./dist/db/index.d.ts",
         "default": "./dist/db/index.js"
@@ -172,6 +187,7 @@
       }
     },
     "./vue": {
+      "better-auth-dev-source": "./src/client/vue/index.ts",
       "import": {
         "types": "./dist/client/vue/index.d.ts",
         "default": "./dist/client/vue/index.js"
@@ -182,6 +198,7 @@
       }
     },
     "./plugins": {
+      "better-auth-dev-source": "./src/plugins/index.ts",
       "import": {
         "types": "./dist/plugins/index.d.ts",
         "default": "./dist/plugins/index.js"
@@ -192,6 +209,7 @@
       }
     },
     "./svelte-kit": {
+      "better-auth-dev-source": "./src/integrations/svelte-kit.ts",
       "import": {
         "types": "./dist/integrations/svelte-kit.d.ts",
         "default": "./dist/integrations/svelte-kit.js"
@@ -202,6 +220,7 @@
       }
     },
     "./solid-start": {
+      "better-auth-dev-source": "./src/integrations/solid-start.ts",
       "import": {
         "types": "./dist/integrations/solid-start.d.ts",
         "default": "./dist/integrations/solid-start.js"
@@ -212,6 +231,7 @@
       }
     },
     "./svelte": {
+      "better-auth-dev-source": "./src/client/svelte/index.ts",
       "import": {
         "types": "./dist/client/svelte/index.d.ts",
         "default": "./dist/client/svelte/index.js"
@@ -222,6 +242,7 @@
       }
     },
     "./next-js": {
+      "better-auth-dev-source": "./src/integrations/next-js.ts",
       "import": {
         "types": "./dist/integrations/next-js.d.ts",
         "default": "./dist/integrations/next-js.js"
@@ -232,6 +253,7 @@
       }
     },
     "./react-start": {
+      "better-auth-dev-source": "./src/integrations/react-start.ts",
       "import": {
         "types": "./dist/integrations/react-start.d.ts",
         "default": "./dist/integrations/react-start.js"
@@ -242,6 +264,7 @@
       }
     },
     "./node": {
+      "better-auth-dev-source": "./src/integrations/node.ts",
       "import": {
         "types": "./dist/integrations/node.d.ts",
         "default": "./dist/integrations/node.js"
@@ -252,6 +275,7 @@
       }
     },
     "./adapters/prisma": {
+      "better-auth-dev-source": "./src/adapters/prisma-adapter/index.ts",
       "import": {
         "types": "./dist/adapters/prisma-adapter/index.d.ts",
         "default": "./dist/adapters/prisma-adapter/index.js"
@@ -262,6 +286,7 @@
       }
     },
     "./adapters/drizzle": {
+      "better-auth-dev-source": "./src/adapters/drizzle-adapter/index.ts",
       "import": {
         "types": "./dist/adapters/drizzle-adapter/index.d.ts",
         "default": "./dist/adapters/drizzle-adapter/index.js"
@@ -272,6 +297,7 @@
       }
     },
     "./adapters/mongodb": {
+      "better-auth-dev-source": "./src/adapters/mongodb-adapter/index.ts",
       "import": {
         "types": "./dist/adapters/mongodb-adapter/index.d.ts",
         "default": "./dist/adapters/mongodb-adapter/index.js"
@@ -282,6 +308,7 @@
       }
     },
     "./adapters/memory": {
+      "better-auth-dev-source": "./src/adapters/memory-adapter/index.ts",
       "import": {
         "types": "./dist/adapters/memory-adapter/index.d.ts",
         "default": "./dist/adapters/memory-adapter/index.js"
@@ -292,6 +319,7 @@
       }
     },
     "./adapters/test": {
+      "better-auth-dev-source": "./src/adapters/test.ts",
       "import": {
         "types": "./dist/adapters/test.d.ts",
         "default": "./dist/adapters/test.js"
@@ -302,6 +330,7 @@
       }
     },
     "./adapters": {
+      "better-auth-dev-source": "./src/adapters/index.ts",
       "import": {
         "types": "./dist/adapters/index.d.ts",
         "default": "./dist/adapters/index.js"
@@ -312,6 +341,7 @@
       }
     },
     "./plugins/access": {
+      "better-auth-dev-source": "./src/plugins/access/index.ts",
       "import": {
         "types": "./dist/plugins/access/index.d.ts",
         "default": "./dist/plugins/access/index.js"
@@ -322,6 +352,7 @@
       }
     },
     "./plugins/admin": {
+      "better-auth-dev-source": "./src/plugins/admin/index.ts",
       "import": {
         "types": "./dist/plugins/admin/index.d.ts",
         "default": "./dist/plugins/admin/index.js"
@@ -332,6 +363,7 @@
       }
     },
     "./plugins/admin/access": {
+      "better-auth-dev-source": "./src/plugins/admin/access/index.ts",
       "import": {
         "types": "./dist/plugins/admin/access/index.d.ts",
         "default": "./dist/plugins/admin/access/index.js"
@@ -342,6 +374,7 @@
       }
     },
     "./plugins/anonymous": {
+      "better-auth-dev-source": "./src/plugins/anonymous/index.ts",
       "import": {
         "types": "./dist/plugins/anonymous/index.d.ts",
         "default": "./dist/plugins/anonymous/index.js"
@@ -352,6 +385,7 @@
       }
     },
     "./plugins/bearer": {
+      "better-auth-dev-source": "./src/plugins/bearer/index.ts",
       "import": {
         "types": "./dist/plugins/bearer/index.d.ts",
         "default": "./dist/plugins/bearer/index.js"
@@ -362,6 +396,7 @@
       }
     },
     "./plugins/custom-session": {
+      "better-auth-dev-source": "./src/plugins/custom-session/index.ts",
       "import": {
         "types": "./dist/plugins/custom-session/index.d.ts",
         "default": "./dist/plugins/custom-session/index.js"
@@ -372,6 +407,7 @@
       }
     },
     "./plugins/email-otp": {
+      "better-auth-dev-source": "./src/plugins/email-otp/index.ts",
       "import": {
         "types": "./dist/plugins/email-otp/index.d.ts",
         "default": "./dist/plugins/email-otp/index.js"
@@ -382,6 +418,7 @@
       }
     },
     "./plugins/generic-oauth": {
+      "better-auth-dev-source": "./src/plugins/generic-oauth/index.ts",
       "import": {
         "types": "./dist/plugins/generic-oauth/index.d.ts",
         "default": "./dist/plugins/generic-oauth/index.js"
@@ -392,6 +429,7 @@
       }
     },
     "./plugins/jwt": {
+      "better-auth-dev-source": "./src/plugins/jwt/index.ts",
       "import": {
         "types": "./dist/plugins/jwt/index.d.ts",
         "default": "./dist/plugins/jwt/index.js"
@@ -402,6 +440,7 @@
       }
     },
     "./plugins/haveibeenpwned": {
+      "better-auth-dev-source": "./src/plugins/haveibeenpwned/index.ts",
       "import": {
         "types": "./dist/plugins/haveibeenpwned/index.d.ts",
         "default": "./dist/plugins/haveibeenpwned/index.js"
@@ -412,6 +451,7 @@
       }
     },
     "./plugins/oidc-provider": {
+      "better-auth-dev-source": "./src/plugins/oidc-provider/index.ts",
       "import": {
         "types": "./dist/plugins/oidc-provider/index.d.ts",
         "default": "./dist/plugins/oidc-provider/index.js"
@@ -422,6 +462,7 @@
       }
     },
     "./plugins/magic-link": {
+      "better-auth-dev-source": "./src/plugins/magic-link/index.ts",
       "import": {
         "types": "./dist/plugins/magic-link/index.d.ts",
         "default": "./dist/plugins/magic-link/index.js"
@@ -432,6 +473,7 @@
       }
     },
     "./plugins/multi-session": {
+      "better-auth-dev-source": "./src/plugins/multi-session/index.ts",
       "import": {
         "types": "./dist/plugins/multi-session/index.d.ts",
         "default": "./dist/plugins/multi-session/index.js"
@@ -442,6 +484,7 @@
       }
     },
     "./plugins/oauth-proxy": {
+      "better-auth-dev-source": "./src/plugins/oauth-proxy/index.ts",
       "import": {
         "types": "./dist/plugins/oauth-proxy/index.d.ts",
         "default": "./dist/plugins/oauth-proxy/index.js"
@@ -452,6 +495,7 @@
       }
     },
     "./plugins/organization": {
+      "better-auth-dev-source": "./src/plugins/organization/index.ts",
       "import": {
         "types": "./dist/plugins/organization/index.d.ts",
         "default": "./dist/plugins/organization/index.js"
@@ -462,6 +506,7 @@
       }
     },
     "./plugins/organization/access": {
+      "better-auth-dev-source": "./src/plugins/organization/access/index.ts",
       "import": {
         "types": "./dist/plugins/organization/access/index.d.ts",
         "default": "./dist/plugins/organization/access/index.js"
@@ -472,6 +517,7 @@
       }
     },
     "./plugins/one-time-token": {
+      "better-auth-dev-source": "./src/plugins/one-time-token/index.ts",
       "import": {
         "types": "./dist/plugins/one-time-token/index.d.ts",
         "default": "./dist/plugins/one-time-token/index.js"
@@ -482,6 +528,7 @@
       }
     },
     "./plugins/passkey": {
+      "better-auth-dev-source": "./src/plugins/passkey/index.ts",
       "import": {
         "types": "./dist/plugins/passkey/index.d.ts",
         "default": "./dist/plugins/passkey/index.js"
@@ -492,6 +539,7 @@
       }
     },
     "./plugins/phone-number": {
+      "better-auth-dev-source": "./src/plugins/phone-number/index.ts",
       "import": {
         "types": "./dist/plugins/phone-number/index.d.ts",
         "default": "./dist/plugins/phone-number/index.js"
@@ -502,6 +550,7 @@
       }
     },
     "./plugins/two-factor": {
+      "better-auth-dev-source": "./src/plugins/two-factor/index.ts",
       "import": {
         "types": "./dist/plugins/two-factor/index.d.ts",
         "default": "./dist/plugins/two-factor/index.js"
@@ -512,6 +561,7 @@
       }
     },
     "./plugins/username": {
+      "better-auth-dev-source": "./src/plugins/username/index.ts",
       "import": {
         "types": "./dist/plugins/username/index.d.ts",
         "default": "./dist/plugins/username/index.js"
@@ -522,6 +572,7 @@
       }
     },
     "./plugins/siwe": {
+      "better-auth-dev-source": "./src/plugins/siwe/index.ts",
       "import": {
         "types": "./dist/plugins/siwe/index.d.ts",
         "default": "./dist/plugins/siwe/index.js"
@@ -532,6 +583,7 @@
       }
     },
     "./plugins/device-authorization": {
+      "better-auth-dev-source": "./src/plugins/device-authorization/index.ts",
       "import": {
         "types": "./dist/plugins/device-authorization/index.d.ts",
         "default": "./dist/plugins/device-authorization/index.js"
@@ -749,7 +801,7 @@
     "@tanstack/react-start": "^1.131.3",
     "@tanstack/start-server-core": "^1.131.36",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/bun": "^1.2.23",
+    "@types/bun": "^1.3.1",
     "@types/keccak": "^3.0.5",
     "@types/pg": "^8.15.5",
     "@types/prompts": "^2.4.9",
@@ -766,7 +818,7 @@
     "ms": "4.0.0-nightly.202508271359",
     "msw": "^2.11.5",
     "mysql2": "^3.14.4",
-    "next": "^15.5.4",
+    "next": "^16.0.1",
     "oauth2-mock-server": "^7.2.1",
     "pg": "^8.16.3",
     "prisma": "^5.22.0",

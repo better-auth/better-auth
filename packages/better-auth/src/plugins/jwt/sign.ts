@@ -1,15 +1,15 @@
-import { importJWK, SignJWT, type JWTPayload } from "jose";
-import { BetterAuthError } from "@better-auth/core/error";
-import { symmetricDecrypt } from "../../crypto";
-import type { JwtOptions } from "./types";
-import { getJwksAdapter } from "./adapter";
-import { createJwk, toExpJWT } from "./utils";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { BetterAuthError } from "@better-auth/core/error";
+import { importJWK, type JWTPayload, SignJWT } from "jose";
+import { symmetricDecrypt } from "../../crypto";
+import { getJwksAdapter } from "./adapter";
+import type { JwtOptions } from "./types";
+import { createJwk, toExpJWT } from "./utils";
 
 export async function signJWT(
 	ctx: GenericEndpointContext,
 	config: {
-		options?: JwtOptions;
+		options?: JwtOptions | undefined;
 		payload: JWTPayload;
 	},
 ) {
@@ -90,7 +90,7 @@ export async function signJWT(
 
 export async function getJwtToken(
 	ctx: GenericEndpointContext,
-	options?: JwtOptions,
+	options?: JwtOptions | undefined,
 ) {
 	const payload = !options?.jwt?.definePayload
 		? ctx.context.session!.user

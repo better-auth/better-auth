@@ -1,7 +1,8 @@
 "use client";
-import { cn } from "@/lib/utils";
+
 import Link from "next/link";
 import { useSelectedLayoutSegment } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 type Props = {
 	href: string;
@@ -24,7 +25,7 @@ export const NavLink = ({ href, children, className, external }: Props) => {
 					"group-hover:text-foreground",
 					isActive ? "text-foreground" : "text-muted-foreground",
 				)}
-				target={external ? "_blank" : "_parent"}
+				target={external ? "_blank" : undefined}
 			>
 				{children}
 			</Link>
