@@ -56,7 +56,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					if (databaseType === "pg") {
 						return `integer('${name}')`;
 					} else if (databaseType === "mysql") {
-						return `bigint('${name}')`;
+						return `bigint('${name}', { mode: 'bigint' })`;
 					} else {
 						// using sqlite
 						return `integer('${name}')`;
@@ -146,7 +146,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			} else if (databaseType === "sqlite") {
 				id = `integer("id", { mode: "number" }).primaryKey({ autoIncrement: true })`;
 			} else if (databaseType === "mysql") {
-				id = `bigint("id").autoincrement().primaryKey()`;
+				id = `bigint("id", { mode: "bigint" }).autoincrement().primaryKey()`;
 			} else {
 				id = `int("id").autoincrement().primaryKey()`;
 			}
