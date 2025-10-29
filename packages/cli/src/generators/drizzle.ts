@@ -56,7 +56,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					if (databaseType === "pg") {
 						return `integer('${name}')`;
 					} else if (databaseType === "mysql") {
-						return `int('${name}')`;
+						return `bigint('${name}')`;
 					} else {
 						// using sqlite
 						return `integer('${name}')`;
@@ -145,6 +145,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				id = `serial("id").primaryKey()`;
 			} else if (databaseType === "sqlite") {
 				id = `integer("id", { mode: "number" }).primaryKey({ autoIncrement: true })`;
+			} else if (databaseType === "mysql") {
+				id = `bigint("id").autoincrement().primaryKey()`;
 			} else {
 				id = `int("id").autoincrement().primaryKey()`;
 			}
@@ -276,10 +278,14 @@ function generateImport({
 					!field.bigint,
 			),
 		);
-		const needsInt = !!useNumberId || hasNonBigintNumber;
-		if (needsInt) {
+
+		if (hasNonBigintNumber && !coreImports.includes("int")) {
 			coreImports.push("int");
 		}
+		if (!!useNumberId && !coreImports.includes("bigint")) {
+			coreImports.push("bigint");
+		}
+		
 		const hasEnum = Object.values(tables).some((table) =>
 			Object.values(table.fields).some(
 				(field) =>

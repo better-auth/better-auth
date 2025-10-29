@@ -4,11 +4,11 @@ import {
   text,
   timestamp,
   boolean,
-  int,
+  bigint,
 } from "drizzle-orm/mysql-core";
 
 export const custom_user = mysqlTable("custom_user", {
-  id: int("id").autoincrement().primaryKey(),
+  id: bigint("id").autoincrement().primaryKey(),
   name: text("name").notNull(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
@@ -24,7 +24,7 @@ export const custom_user = mysqlTable("custom_user", {
 });
 
 export const custom_session = mysqlTable("custom_session", {
-  id: int("id").autoincrement().primaryKey(),
+  id: bigint("id").autoincrement().primaryKey(),
   expiresAt: timestamp("expires_at", { fsp: 3 }).notNull(),
   token: varchar("token", { length: 255 }).notNull().unique(),
   createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
@@ -33,16 +33,16 @@ export const custom_session = mysqlTable("custom_session", {
     .notNull(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
-  userId: int("user_id")
+  userId: bigint("user_id")
     .notNull()
     .references(() => custom_user.id, { onDelete: "cascade" }),
 });
 
 export const custom_account = mysqlTable("custom_account", {
-  id: int("id").autoincrement().primaryKey(),
+  id: bigint("id").autoincrement().primaryKey(),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
-  userId: int("user_id")
+  userId: bigint("user_id")
     .notNull()
     .references(() => custom_user.id, { onDelete: "cascade" }),
   accessToken: text("access_token"),
@@ -59,7 +59,7 @@ export const custom_account = mysqlTable("custom_account", {
 });
 
 export const custom_verification = mysqlTable("custom_verification", {
-  id: int("id").autoincrement().primaryKey(),
+  id: bigint("id").autoincrement().primaryKey(),
   identifier: text("identifier").notNull(),
   value: text("value").notNull(),
   expiresAt: timestamp("expires_at", { fsp: 3 }).notNull(),
@@ -71,10 +71,10 @@ export const custom_verification = mysqlTable("custom_verification", {
 });
 
 export const twoFactor = mysqlTable("two_factor", {
-  id: int("id").autoincrement().primaryKey(),
+  id: bigint("id").autoincrement().primaryKey(),
   secret: text("secret").notNull(),
   backupCodes: text("backup_codes").notNull(),
-  userId: int("user_id")
+  userId: bigint("user_id")
     .notNull()
     .references(() => custom_user.id, { onDelete: "cascade" }),
 });

@@ -111,7 +111,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					if (options.advanced?.database?.useNumberId) {
 						builder
 							.model(modelName)
-							.field("id", "Int")
+							.field("id", "BigInt")
 							.attribute("id")
 							.attribute("default(autoincrement())");
 					} else {
@@ -134,20 +134,25 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					}
 				}
 
+				const useNumberId = options.advanced?.database?.useNumberId;
+
 				const fieldBuilder = builder.model(modelName).field(
 					fieldName,
-					field === "id" && options.advanced?.database?.useNumberId
+					field === "id" && useNumberId
 						? getType({
-								isBigint: false,
+								isBigint: true,
 								isOptional: false,
 								type: "number",
 							})
 						: getType({
-								isBigint: attr?.bigint || false,
+								isBigint:
+									attr.references?.field === "id" && useNumberId
+										? true
+										: attr?.bigint || false,
 								isOptional: !attr?.required,
 								type:
 									attr.references?.field === "id"
-										? options.advanced?.database?.useNumberId
+										? useNumberId
 											? "number"
 											: "string"
 										: attr.type,

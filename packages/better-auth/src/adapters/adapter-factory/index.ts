@@ -263,6 +263,7 @@ export const createAdapterFactory =
 			return {
 				type: options.advanced?.database?.useNumberId ? "number" : "string",
 				required: shouldGenerateId ? true : false,
+				bigint: options.advanced?.database?.useNumberId ? true : undefined,
 				...(shouldGenerateId
 					? {
 							defaultValue() {

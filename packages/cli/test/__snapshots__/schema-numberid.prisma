@@ -9,7 +9,7 @@ datasource db {
 }
 
 model User {
-  id               Int         @id @default(autoincrement())
+  id               BigInt      @id @default(autoincrement())
   name             String
   email            String
   emailVerified    Boolean     @default(false)
@@ -29,14 +29,14 @@ model User {
 }
 
 model Session {
-  id        Int      @id @default(autoincrement())
+  id        BigInt   @id @default(autoincrement())
   expiresAt DateTime
   token     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   ipAddress String?
   userAgent String?
-  userId    Int
+  userId    BigInt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([token])
@@ -44,10 +44,10 @@ model Session {
 }
 
 model Account {
-  id                    Int       @id @default(autoincrement())
+  id                    BigInt    @id @default(autoincrement())
   accountId             String
   providerId            String
-  userId                Int
+  userId                BigInt
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken           String?
   refreshToken          String?
@@ -63,7 +63,7 @@ model Account {
 }
 
 model Verification {
-  id         Int      @id @default(autoincrement())
+  id         BigInt   @id @default(autoincrement())
   identifier String
   value      String
   expiresAt  DateTime
@@ -74,10 +74,10 @@ model Verification {
 }
 
 model TwoFactor {
-  id          Int    @id @default(autoincrement())
+  id          BigInt @id @default(autoincrement())
   secret      String
   backupCodes String
-  userId      Int
+  userId      BigInt
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("twoFactor")
