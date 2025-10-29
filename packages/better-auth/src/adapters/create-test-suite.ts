@@ -76,6 +76,24 @@ export type InsertRandomFn = <
 			>
 >;
 
+export const createTestSuite2 = <
+	Tests extends Record<
+		string,
+		(context: {
+			/**
+			 * Mark tests as skipped. All execution after this call will be skipped.
+			 * This function throws an error, so make sure you are not catching it accidentally.
+			 * @see {@link https://vitest.dev/guide/test-context#skip}
+			 */
+			readonly skip: {
+				(note?: string | undefined): never;
+				(condition: boolean, note?: string | undefined): void;
+			};
+		}) => Promise<void>
+	>,
+	AdditionalOptions extends Record<string, any> = {},
+>() => {};
+
 export const createTestSuite = <
 	Tests extends Record<
 		string,
@@ -133,7 +151,7 @@ export const createTestSuite = <
 			})[];
 			getAuth: () => Promise<ReturnType<typeof betterAuth>>;
 			tryCatch<T, E = Error>(promise: Promise<T>): Promise<Result<T, E>>;
-			customIdGenerator?: () => any | Promise<any> | undefined;;
+			customIdGenerator?: () => any | Promise<any> | undefined;
 			transformIdOutput?: (id: any) => string | undefined;
 			/**
 			 * Some adapters may change the ID type, this function allows you to pass the entire model
