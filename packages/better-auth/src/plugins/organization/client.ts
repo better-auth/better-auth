@@ -130,8 +130,8 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			} & InferOrganization<CO, false>
 		: {
 				members: InferMember<CO, false>[];
-				invitations: InferInvitation<CO>[];
-			} & InferOrganization<CO>;
+				invitations: InferInvitation<CO, false>[];
+			} & InferOrganization<CO, false>;
 
 	type Schema = CO["schema"];
 	return {
@@ -199,8 +199,8 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			const activeOrganization = useAuthQuery<
 				Prettify<
 					InferOrganization<CO, false> & {
-						members: InferMember<CO>[];
-						invitations: InferInvitation<CO>[];
+						members: InferMember<CO, false>[];
+						invitations: InferInvitation<CO, false>[];
 					}
 				>
 			>(
