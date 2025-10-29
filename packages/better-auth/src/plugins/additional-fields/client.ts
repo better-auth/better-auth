@@ -5,15 +5,19 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 export const inferAdditionalFields = <
 	T,
 	S extends {
-		user?: {
-			[key: string]: DBFieldAttribute;
-		};
-		session?: {
-			[key: string]: DBFieldAttribute;
-		};
+		user?:
+			| {
+					[key: string]: DBFieldAttribute;
+			  }
+			| undefined;
+		session?:
+			| {
+					[key: string]: DBFieldAttribute;
+			  }
+			| undefined;
 	} = {},
 >(
-	schema?: S,
+	schema?: S | undefined,
 ) => {
 	type Opts = T extends BetterAuthOptions
 		? T
@@ -25,12 +29,16 @@ export const inferAdditionalFields = <
 
 	type Plugin = Opts extends never
 		? S extends {
-				user?: {
-					[key: string]: DBFieldAttribute;
-				};
-				session?: {
-					[key: string]: DBFieldAttribute;
-				};
+				user?:
+					| {
+							[key: string]: DBFieldAttribute;
+					  }
+					| undefined;
+				session?:
+					| {
+							[key: string]: DBFieldAttribute;
+					  }
+					| undefined;
 			}
 			? {
 					id: "additional-fields-client";

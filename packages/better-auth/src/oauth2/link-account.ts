@@ -15,9 +15,9 @@ export async function handleOAuthUserInfo(
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
-		callbackURL?: string;
-		disableSignUp?: boolean;
-		overrideUserInfo?: boolean;
+		callbackURL?: string | undefined;
+		disableSignUp?: boolean | undefined;
+		overrideUserInfo?: boolean | undefined;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter

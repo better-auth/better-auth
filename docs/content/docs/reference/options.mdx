@@ -77,12 +77,15 @@ You can use wildcard patterns in trusted origins:
 ```ts
 export const auth = betterAuth({
 	trustedOrigins: [
-		"*.example.com",             // Trust all subdomains of example.com
-		"https://*.example.com",     // Trust only HTTPS subdomains
-		"http://*.dev.example.com"   // Trust HTTP subdomains of dev.example.com
+		"https://*.example.com", // trust all HTTPS subdomains of example.com
+		"http://*.dev.example.com" // trust all HTTP subdomains of dev.example.com
 	]
 })
 ```
+
+<Callout type="warn">
+  Make sure to provide the protocol prefix when using wildcard patterns. For example, `https://*.example.com` instead of `*.example.com`.
+</Callout>
 
 ## `secret`
 
