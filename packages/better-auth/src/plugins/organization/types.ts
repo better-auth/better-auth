@@ -181,7 +181,7 @@ export interface OrganizationOptions {
 				},
 				ctx: AuthContext,
 		  ) => Promise<number> | number)
-      	| undefined;
+		| undefined;
 	/**
 	 * Cancel pending invitations on re-invite.
 	 *
