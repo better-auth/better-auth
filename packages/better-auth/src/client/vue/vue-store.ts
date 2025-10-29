@@ -29,7 +29,7 @@ export function useStore<
 		state.value = value;
 	});
 
-	getCurrentScope() && onScopeDispose(unsubscribe);
+	if (getCurrentScope()) onScopeDispose(unsubscribe);
 
 	if (process.env.NODE_ENV !== "production") {
 		registerStore(store);

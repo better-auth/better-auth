@@ -382,12 +382,12 @@ export type InferMember<
 				role: InferOrganizationRolesFromOption<O>;
 				createdAt: Date;
 				userId: string;
-				teamId?: string;
+				teamId?: string | undefined;
 				user: {
 					id: string;
 					email: string;
 					name: string;
-					image?: string;
+					image?: string | undefined;
 				};
 			}
 		: {
@@ -400,7 +400,7 @@ export type InferMember<
 					id: string;
 					email: string;
 					name: string;
-					image?: string;
+					image?: string | undefined;
 				};
 			}) &
 		InferAdditionalFieldsFromPluginOptions<"member", O, isClientSide>
@@ -437,7 +437,7 @@ export type InferInvitation<
 				inviterId: string;
 				expiresAt: Date;
 				createdAt: Date;
-				teamId?: string;
+				teamId?: string | undefined;
 			}
 		: {
 				id: string;

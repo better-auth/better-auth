@@ -108,14 +108,14 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 * Resend the invitation email, if
 						 * the user is already invited
 						 */
-						resend?: boolean;
+						resend?: boolean | undefined;
 					} & (O extends { teams: { enabled: true } }
 						? {
 								/**
 								 * The team the user is
 								 * being invited to.
 								 */
-								teamId?: string | string[];
+								teamId?: (string | string[]) | undefined;
 							}
 						: {}) &
 						InferAdditionalFieldsFromPluginOptions<"invitation", O, false>,

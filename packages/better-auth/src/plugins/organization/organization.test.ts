@@ -25,6 +25,13 @@ import type {
 } from "./schema";
 import type { OrganizationOptions } from "./types";
 
+describe("organization type", () => {
+	it("empty org type should works", () => {
+		expectTypeOf({} satisfies OrganizationOptions);
+		expectTypeOf({ schema: {} } satisfies OrganizationOptions);
+	});
+});
+
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
 		await getTestInstance({
@@ -1693,18 +1700,18 @@ describe("Additional Fields", async () => {
 		invitation: [] as {
 			id: string;
 			invitationRequiredField: string;
-			invitationOptionalField?: string;
-			invitationHiddenField?: string;
+			invitationOptionalField?: string | undefined;
+			invitationHiddenField?: string | undefined;
 		}[],
 		member: [] as {
 			id: string;
 			memberRequiredField: string;
-			memberOptionalField?: string;
+			memberOptionalField?: string | undefined;
 		}[],
 		team: [] as {
 			id: string;
 			teamRequiredField: string;
-			teamOptionalField?: string;
+			teamOptionalField?: string | undefined;
 		}[],
 		teamMember: [] as {
 			id: string;

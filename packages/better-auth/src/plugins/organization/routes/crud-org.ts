@@ -23,7 +23,7 @@ import type {
 import type { OrganizationOptions } from "../types";
 
 export const createOrganization = <O extends OrganizationOptions>(
-	options?: O,
+	options?: O | undefined,
 ) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.organization?.additionalFields || {},
@@ -362,7 +362,7 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 	);
 
 export const updateOrganization = <O extends OrganizationOptions>(
-	options?: O,
+	options?: O | undefined,
 ) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.organization?.additionalFields || {},
@@ -370,10 +370,10 @@ export const updateOrganization = <O extends OrganizationOptions>(
 	});
 	type Body = {
 		data: {
-			name?: string;
-			slug?: string;
-			logo?: string;
-			metadata?: Record<string, any>;
+			name?: string | undefined;
+			slug?: string | undefined;
+			logo?: string | undefined;
+			metadata?: Record<string, any> | undefined;
 		} & Partial<InferAdditionalFieldsFromPluginOptions<"organization", O>>;
 		organizationId?: string | undefined;
 	};
