@@ -19,14 +19,16 @@ export async function getTestInstanceMemory<
 	O extends Partial<BetterAuthOptions>,
 	C extends BetterAuthClientOptions,
 >(
-	options?: O,
-	config?: {
-		clientOptions?: C;
-		port?: number;
-		disableTestUser?: boolean;
-		testUser?: Partial<User>;
-		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql" | "memory";
-	},
+	options?: O | undefined,
+	config?:
+		| {
+				clientOptions?: C;
+				port?: number;
+				disableTestUser?: boolean;
+				testUser?: Partial<User>;
+				testWith?: "sqlite" | "postgres" | "mongodb" | "mysql" | "memory";
+		  }
+		| undefined,
 ) {
 	const testWith = config?.testWith || "memory";
 	const postgres = new Kysely({
@@ -205,7 +207,7 @@ export async function getTestInstanceMemory<
 
 	const customFetchImpl = async (
 		url: string | URL | Request,
-		init?: RequestInit,
+		init?: RequestInit | undefined,
 	) => {
 		return auth.handler(new Request(url, init));
 	};
