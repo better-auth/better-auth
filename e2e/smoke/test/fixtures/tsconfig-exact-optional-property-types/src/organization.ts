@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";
 
-const auth = betterAuth({
+export const auth = betterAuth({
 	plugins: [
 		organization({
 			requireEmailVerificationOnInvitation: true,
@@ -15,4 +15,8 @@ const auth = betterAuth({
 			},
 		}),
 	],
+});
+
+export const auth2 = betterAuth({
+	plugins: [organization({})],
 });
