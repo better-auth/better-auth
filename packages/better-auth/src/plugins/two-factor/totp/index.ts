@@ -1,47 +1,47 @@
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { createOTP } from "@better-auth/utils/otp";
 import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/api";
 import { sessionMiddleware } from "../../../api";
+import { setSessionCookie } from "../../../cookies";
 import { symmetricDecrypt } from "../../../crypto";
 import type { BackupCodeOptions } from "../backup-codes";
-import { verifyTwoFactor } from "../verify-two-factor";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { setSessionCookie } from "../../../cookies";
-import { TWO_FACTOR_ERROR_CODES } from "../error-code";
-import { createOTP } from "@better-auth/utils/otp";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { verifyTwoFactor } from "../verify-two-factor";
 
 export type TOTPOptions = {
 	/**
 	 * Issuer
 	 */
-	issuer?: string;
+	issuer?: string | undefined;
 	/**
 	 * How many digits the otp to be
 	 *
 	 * @default 6
 	 */
-	digits?: 6 | 8;
+	digits?: (6 | 8) | undefined;
 	/**
 	 * Period for otp in seconds.
 	 * @default 30
 	 */
-	period?: number;
+	period?: number | undefined;
 	/**
 	 * Backup codes configuration
 	 */
-	backupCodes?: BackupCodeOptions;
+	backupCodes?: BackupCodeOptions | undefined;
 	/**
 	 * Disable totp
 	 */
-	disable?: boolean;
+	disable?: boolean | undefined;
 };
 
-export const totp2fa = (options?: TOTPOptions) => {
+export const totp2fa = (options?: TOTPOptions | undefined) => {
 	const opts = {
 		...options,
 		digits: options?.digits || 6,

@@ -1,30 +1,40 @@
+import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "better-call";
 import * as z from "zod";
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { createAuthEndpoint } from "@better-auth/core/api";
 import { getSessionFromCtx } from "../../api";
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { shimContext } from "../../utils/shim";
 import { type AccessControl } from "../access";
+import { defaultRoles, defaultStatements } from "./access";
 import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
+import { hasPermission } from "./has-permission";
+import {
+	createOrgRole,
+	deleteOrgRole,
+	getOrgRole,
+	listOrgRoles,
+	updateOrgRole,
+} from "./routes/crud-access-control";
 import {
 	acceptInvitation,
 	cancelInvitation,
 	createInvitation,
 	getInvitation,
 	listInvitations,
-	rejectInvitation,
 	listUserInvitations,
+	rejectInvitation,
 } from "./routes/crud-invites";
 import {
 	addMember,
 	getActiveMember,
+	getActiveMemberRole,
 	leaveOrganization,
 	listMembers,
 	removeMember,
 	updateMemberRole,
-	getActiveMemberRole,
 } from "./routes/crud-members";
 import {
 	checkOrganizationSlug,
@@ -36,15 +46,15 @@ import {
 	updateOrganization,
 } from "./routes/crud-org";
 import {
+	addTeamMember,
 	createTeam,
 	listOrganizationTeams,
-	removeTeam,
-	updateTeam,
-	setActiveTeam,
-	listUserTeams,
 	listTeamMembers,
-	addTeamMember,
+	listUserTeams,
+	removeTeam,
 	removeTeamMember,
+	setActiveTeam,
+	updateTeam,
 } from "./routes/crud-team";
 import type {
 	InferInvitation,
@@ -54,18 +64,7 @@ import type {
 	Team,
 	TeamMember,
 } from "./schema";
-import {
-	createOrgRole,
-	deleteOrgRole,
-	listOrgRoles,
-	getOrgRole,
-	updateOrgRole,
-} from "./routes/crud-access-control";
-import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import { defaultRoles, defaultStatements } from "./access";
-import { hasPermission } from "./has-permission";
 import type { OrganizationOptions } from "./types";
-import type { AuthContext } from "@better-auth/core";
 
 export function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -134,11 +133,11 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				 * @deprecated Use `permissions` instead
 				 */
 				permission: PermissionType;
-				permissions?: never;
+				permissions?: never | undefined;
 		  }
 		| {
 				permissions: PermissionType;
-				permission?: never;
+				permission?: never | undefined;
 		  };
 
 	return createAuthEndpoint(
@@ -166,7 +165,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					body: {} as PermissionExclusive & {
-						organizationId?: string;
+						organizationId?: string | undefined;
 					},
 				},
 				openapi: {
@@ -296,7 +295,7 @@ export function organization<
 		teams: { enabled: true };
 	},
 >(
-	options?: O,
+	options?: O | undefined,
 ): {
 	id: "organization";
 	endpoints: OrganizationEndpoints<O> & TeamEndpoints<O>;
@@ -320,7 +319,7 @@ export function organization<
 		dynamicAccessControl: { enabled: true };
 	},
 >(
-	options?: O,
+	options?: O | undefined,
 ): {
 	id: "organization";
 	endpoints: OrganizationEndpoints<O> &
@@ -345,7 +344,7 @@ export function organization<
 		dynamicAccessControl: { enabled: true };
 	},
 >(
-	options?: O,
+	options?: O | undefined,
 ): {
 	id: "organization";
 	endpoints: OrganizationEndpoints<O> & DynamicAccessControlEndpoints<O>;
@@ -364,7 +363,7 @@ export function organization<
 	options: O;
 };
 export function organization<O extends OrganizationOptions>(
-	options?: O,
+	options?: O | undefined,
 ): {
 	id: "organization";
 	endpoints: OrganizationEndpoints<O>;
@@ -382,7 +381,9 @@ export function organization<O extends OrganizationOptions>(
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: O;
 };
-export function organization<O extends OrganizationOptions>(options?: O): any {
+export function organization<O extends OrganizationOptions>(
+	options?: O | undefined,
+): any {
 	let endpoints = {
 		/**
 		 * ### Endpoint
@@ -1001,8 +1002,6 @@ export function organization<O extends OrganizationOptions>(options?: O): any {
 		: {};
 
 	const schema = {
-		...organizationRoleSchema,
-		...teamSchema,
 		...({
 			organization: {
 				modelName: options?.schema?.organization?.modelName,
@@ -1038,6 +1037,10 @@ export function organization<O extends OrganizationOptions>(options?: O): any {
 					...(options?.schema?.organization?.additionalFields || {}),
 				},
 			},
+		} satisfies BetterAuthPluginDBSchema),
+		...organizationRoleSchema,
+		...teamSchema,
+		...({
 			member: {
 				modelName: options?.schema?.member?.modelName,
 				fields: {

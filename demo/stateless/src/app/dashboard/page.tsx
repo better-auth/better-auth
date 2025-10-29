@@ -1,9 +1,9 @@
 "use client";
 
-import { signOut, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import type { APIData } from "@/app/api/user/route";
+import { signOut, useSession } from "@/lib/auth-client";
 
 export default function Dashboard() {
 	const router = useRouter();

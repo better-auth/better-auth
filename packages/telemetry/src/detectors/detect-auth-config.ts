@@ -1,9 +1,9 @@
-import type { TelemetryContext } from "../types";
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { TelemetryContext } from "../types";
 
 export function getTelemetryAuthConfig(
 	options: BetterAuthOptions,
-	context?: TelemetryContext,
+	context?: TelemetryContext | undefined,
 ) {
 	return {
 		database: context?.database,

@@ -1,14 +1,17 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
 import type { Atom, PreinitializedWritableAtom } from "nanostores";
-import type { ProxyRequest } from "./path-to-object";
-import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { isAtom } from "../utils/is-atom";
+import type { ProxyRequest } from "./path-to-object";
 
 function getMethod(
 	path: string,
 	knownPathMethods: Record<string, "POST" | "GET">,
 	args:
-		| { fetchOptions?: BetterFetchOption; query?: Record<string, any> }
+		| {
+				fetchOptions?: BetterFetchOption | undefined;
+				query?: Record<string, any> | undefined;
+		  }
 		| undefined,
 ) {
 	const method = knownPathMethods[path];
