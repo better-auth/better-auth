@@ -1229,66 +1229,68 @@ export type BetterAuthOptions = {
 	/**
 	 * API error handling
 	 */
-	onAPIError?: {
-		/**
-		 * Throw an error on API error
-		 *
-		 * @default false
-		 */
-		throw?: boolean;
-		/**
-		 * Custom error handler
-		 *
-		 * @param error
-		 * @param ctx - Auth context
-		 */
-		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
-		/**
-		 * The URL to redirect to on error
-		 *
-		 * When errorURL is provided, the error will be added to the URL as a query parameter
-		 * and the user will be redirected to the errorURL.
-		 *
-		 * @default - "/api/auth/error"
-		 */
-		errorURL?: string;
-		/**
-		 * Configure the default error page provided by Better-Auth
-		 * Start your dev server and go to /api/auth/error to see the error page.
-		 */
-		customizeDefaultErrorPage?: {
-			colors?: {
-				background?: string;
-				foreground?: string;
-				primary?: string;
-				primaryForeground?: string;
-				mutedForeground?: string;
-				border?: string;
-				destructive?: string;
-				titleBorder?: string;
-				titleColor?: string;
-				gridColor?: string;
-				cardBackground?: string;
-				cornerBorder?: string;
-			};
-			size?: {
-				radiusSm?: string;
-				radiusMd?: string;
-				radiusLg?: string;
-				textSm?: string;
-				text2xl?: string;
-				text4xl?: string;
-				text6xl?: string;
-			};
-			font?: {
-				defaultFamily?: string;
-				monoFamily?: string;
-			};
-			disableTitleBorder?: boolean;
-			disableCornerDecorations?: boolean;
-			disableBackgroundGrid?: boolean;
-		};
-	} | undefined;
+	onAPIError?:
+		| {
+				/**
+				 * Throw an error on API error
+				 *
+				 * @default false
+				 */
+				throw?: boolean;
+				/**
+				 * Custom error handler
+				 *
+				 * @param error
+				 * @param ctx - Auth context
+				 */
+				onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
+				/**
+				 * The URL to redirect to on error
+				 *
+				 * When errorURL is provided, the error will be added to the URL as a query parameter
+				 * and the user will be redirected to the errorURL.
+				 *
+				 * @default - "/api/auth/error"
+				 */
+				errorURL?: string;
+				/**
+				 * Configure the default error page provided by Better-Auth
+				 * Start your dev server and go to /api/auth/error to see the error page.
+				 */
+				customizeDefaultErrorPage?: {
+					colors?: {
+						background?: string;
+						foreground?: string;
+						primary?: string;
+						primaryForeground?: string;
+						mutedForeground?: string;
+						border?: string;
+						destructive?: string;
+						titleBorder?: string;
+						titleColor?: string;
+						gridColor?: string;
+						cardBackground?: string;
+						cornerBorder?: string;
+					};
+					size?: {
+						radiusSm?: string;
+						radiusMd?: string;
+						radiusLg?: string;
+						textSm?: string;
+						text2xl?: string;
+						text4xl?: string;
+						text6xl?: string;
+					};
+					font?: {
+						defaultFamily?: string;
+						monoFamily?: string;
+					};
+					disableTitleBorder?: boolean;
+					disableCornerDecorations?: boolean;
+					disableBackgroundGrid?: boolean;
+				};
+		  }
+		| undefined;
 	/**
 	 * Hooks
 	 */
