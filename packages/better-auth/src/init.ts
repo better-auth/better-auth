@@ -122,15 +122,29 @@ export const init = async (options: BetterAuthOptions) => {
 				options.session?.freshAge === undefined
 					? 60 * 60 * 24 // 24 hours
 					: options.session.freshAge,
-			cookieFreshCache: (() => {
-				const freshCache = options.session?.cookieCache?.freshCache;
-				if (freshCache === false || freshCache === undefined) {
-					return false; // Default: disabled
+			cookieRefreshCache: (() => {
+				const refreshCache = options.session?.cookieCache?.refreshCache;
+				const maxAge = options.session?.cookieCache?.maxAge || 60 * 5;
+
+				if (refreshCache === false || refreshCache === undefined) {
+					return false;
 				}
-				if (freshCache === true) {
-					return 60; // 60 seconds when explicitly enabled
+
+				if (refreshCache === true) {
+					// Default: refresh when 80% of maxAge is reached (20% remaining)
+					return {
+						enabled: true,
+						updateAge: Math.floor(maxAge * 0.2),
+					};
 				}
-				return freshCache; // Custom number
+
+				return {
+					enabled: true,
+					updateAge:
+						refreshCache.updateAge !== undefined
+							? refreshCache.updateAge
+							: Math.floor(maxAge * 0.2), // Default to 20% of maxAge
+				};
 			})(),
 		},
 		secret,
