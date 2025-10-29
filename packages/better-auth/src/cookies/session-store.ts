@@ -161,6 +161,13 @@ export function createSessionStore(
 		},
 
 		/**
+		 * Check if there are existing chunks
+		 */
+		hasChunks(): boolean {
+			return Object.keys(chunks).length > 0;
+		},
+
+		/**
 		 * Chunk a cookie value and return all cookies to set (including cleanup cookies)
 		 */
 		chunk(value: string, options?: Partial<CookieOptions>): Cookie[] {

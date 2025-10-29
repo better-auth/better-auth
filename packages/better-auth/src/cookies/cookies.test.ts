@@ -1029,4 +1029,65 @@ describe("Cookie Chunking", () => {
 			},
 		});
 	});
+
+	it("should NOT chunk cookies when they are under 4KB", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toBeDefined();
+
+					const parsed = parseSetCookieHeader(setCookie!);
+					let hasChunks = false;
+					let hasSingleSessionData = false;
+
+					parsed.forEach((value, name) => {
+						if (
+							name.includes("session_data.0") ||
+							name.includes("session_data.1")
+						) {
+							hasChunks = true;
+						}
+						if (name.endsWith("session_data")) {
+							hasSingleSessionData = true;
+						}
+					});
+
+					expect(hasChunks).toBe(false);
+					expect(hasSingleSessionData).toBe(true);
+
+					parsed.forEach((value, name) => {
+						headers.append("cookie", `${name}=${value.value}`);
+					});
+				},
+			},
+		);
+
+		// Verify we can read it back
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual(testUser.email);
+	});
 });
