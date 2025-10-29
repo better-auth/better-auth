@@ -320,10 +320,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 			foreignKeyId: {
 				postgres: config.advanced?.database?.useNumberId ? "integer" : "text",
 				mysql: config.advanced?.database?.useNumberId
-					? "integer"
+					? "bigint"
 					: "varchar(36)",
 				mssql: config.advanced?.database?.useNumberId
-					? "integer"
+					? "bigint"
 					: "varchar(36)",
 				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
 			},
@@ -391,7 +391,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 					config.advanced?.database?.useNumberId
 						? dbType === "postgres"
 							? "serial"
-							: "integer"
+							: dbType === "mysql" || dbType === "mssql"
+								? "bigint"
+								: "integer"
 						: dbType === "mysql" || dbType === "mssql"
 							? "varchar(36)"
 							: "text",
