@@ -284,7 +284,10 @@ describe("adapter test", async () => {
 	});
 
 	it("should calculate TTL correctly with Math.floor for secondary storage", async () => {
-		const mockStorage = new Map<string, { value: string; ttl?: number }>();
+		const mockStorage = new Map<
+			string,
+			{ value: string; ttl?: number | undefined }
+		>();
 		const capturedTTLs: number[] = [];
 
 		const testOpts = {
@@ -295,7 +298,7 @@ describe("adapter test", async () => {
 				type: "sqlite",
 			},
 			secondaryStorage: {
-				set(key: string, value: string, ttl?: number) {
+				set(key: string, value: string, ttl?: number | undefined) {
 					if (ttl !== undefined) {
 						capturedTTLs.push(ttl);
 						mockStorage.set(key, { value, ttl });

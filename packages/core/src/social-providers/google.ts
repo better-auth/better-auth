@@ -25,13 +25,13 @@ export interface GoogleProfile {
 	 * Western languages.
 	 */
 	given_name: string;
-	hd?: string;
+	hd?: string | undefined;
 	iat: number;
 	iss: string;
-	jti?: string;
-	locale?: string;
+	jti?: string | undefined;
+	locale?: string | undefined;
 	name: string;
-	nbf?: number;
+	nbf?: number | undefined;
 	picture: string;
 	sub: string;
 }
@@ -41,15 +41,15 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	/**
 	 * The access type to use for the authorization code request
 	 */
-	accessType?: "offline" | "online";
+	accessType?: ("offline" | "online") | undefined;
 	/**
 	 * The display mode to use for the authorization code request
 	 */
-	display?: "page" | "popup" | "touch" | "wap";
+	display?: ("page" | "popup" | "touch" | "wap") | undefined;
 	/**
 	 * The hosted domain of the user
 	 */
-	hd?: string;
+	hd?: string | undefined;
 }
 
 export const google = (options: GoogleOptions) => {
@@ -76,8 +76,8 @@ export const google = (options: GoogleOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["email", "profile", "openid"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "google",
 				options,

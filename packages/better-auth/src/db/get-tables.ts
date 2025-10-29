@@ -129,6 +129,7 @@ export const getAuthTables = (
 					defaultValue: false,
 					required: true,
 					fieldName: options.user?.fields?.emailVerified || "emailVerified",
+					input: false,
 				},
 				image: {
 					type: "string",

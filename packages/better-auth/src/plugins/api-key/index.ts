@@ -58,7 +58,7 @@ export const ERROR_CODES = defineErrorCodes({
 
 export const API_KEY_TABLE_NAME = "apikey";
 
-export const apiKey = (options?: ApiKeyOptions) => {
+export const apiKey = (options?: ApiKeyOptions | undefined) => {
 	const opts = {
 		...options,
 		apiKeyHeaders: options?.apiKeyHeaders ?? "x-api-key",

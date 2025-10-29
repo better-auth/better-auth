@@ -92,7 +92,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						role: string;
 						permission: Record<string, string[]>;
 					} & (IsExactlyEmptyObject<AdditionalFields> extends true
-						? { additionalFields?: {} }
+						? { additionalFields?: {} | undefined }
 						: { additionalFields: AdditionalFields }),
 				},
 			},

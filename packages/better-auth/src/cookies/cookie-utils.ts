@@ -1,12 +1,12 @@
 interface CookieAttributes {
 	value: string;
-	"max-age"?: number;
-	expires?: Date;
-	domain?: string;
-	path?: string;
-	secure?: boolean;
-	httponly?: boolean;
-	samesite?: "strict" | "lax" | "none";
+	"max-age"?: number | undefined;
+	expires?: Date | undefined;
+	domain?: string | undefined;
+	path?: string | undefined;
+	secure?: boolean | undefined;
+	httponly?: boolean | undefined;
+	samesite?: ("strict" | "lax" | "none") | undefined;
 	[key: string]: any;
 }
 
