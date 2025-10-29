@@ -15,62 +15,66 @@ import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 
 export interface Path {
-	get?: {
-		tags?: string[];
-		operationId?: string;
-		description?: string;
-		security?: [{ bearerAuth: string[] }];
-		parameters?: OpenAPIParameter[];
-		responses?: {
-			[key in string]: {
+	get?:
+		| {
+				tags?: string[];
+				operationId?: string;
 				description?: string;
-				content: {
-					"application/json": {
-						schema: {
-							type?: OpenAPISchemaType;
-							properties?: Record<string, any>;
-							required?: string[];
-							$ref?: string;
+				security?: [{ bearerAuth: string[] }];
+				parameters?: OpenAPIParameter[];
+				responses?: {
+					[key in string]: {
+						description?: string;
+						content: {
+							"application/json": {
+								schema: {
+									type?: OpenAPISchemaType;
+									properties?: Record<string, any>;
+									required?: string[];
+									$ref?: string;
+								};
+							};
 						};
 					};
 				};
-			};
-		};
-	};
-	post?: {
-		tags?: string[];
-		operationId?: string;
-		description?: string;
-		security?: [{ bearerAuth: string[] }];
-		parameters?: OpenAPIParameter[];
-		requestBody?: {
-			content: {
-				"application/json": {
-					schema: {
-						type?: OpenAPISchemaType;
-						properties?: Record<string, any>;
-						required?: string[];
-						$ref?: string;
-					};
-				};
-			};
-		};
-		responses?: {
-			[key in string]: {
+		  }
+		| undefined;
+	post?:
+		| {
+				tags?: string[];
+				operationId?: string;
 				description?: string;
-				content: {
-					"application/json": {
-						schema: {
-							type?: OpenAPISchemaType;
-							properties?: Record<string, any>;
-							required?: string[];
-							$ref?: string;
+				security?: [{ bearerAuth: string[] }];
+				parameters?: OpenAPIParameter[];
+				requestBody?: {
+					content: {
+						"application/json": {
+							schema: {
+								type?: OpenAPISchemaType;
+								properties?: Record<string, any>;
+								required?: string[];
+								$ref?: string;
+							};
 						};
 					};
 				};
-			};
-		};
-	};
+				responses?: {
+					[key in string]: {
+						description?: string;
+						content: {
+							"application/json": {
+								schema: {
+									type?: OpenAPISchemaType;
+									properties?: Record<string, any>;
+									required?: string[];
+									$ref?: string;
+								};
+							};
+						};
+					};
+				};
+		  }
+		| undefined;
 }
 
 type AllowedType = "string" | "number" | "boolean" | "array" | "object";
@@ -82,14 +86,16 @@ function getTypeFromZodType(zodType: z.ZodType<any>) {
 
 export type FieldSchema = {
 	type: DBFieldType;
-	default?: DBFieldAttributeConfig["defaultValue"] | "Generated at runtime";
-	readOnly?: boolean;
+	default?:
+		| (DBFieldAttributeConfig["defaultValue"] | "Generated at runtime")
+		| undefined;
+	readOnly?: boolean | undefined;
 };
 
 export type OpenAPIModelSchema = {
 	type: "object";
 	properties: Record<string, FieldSchema>;
-	required?: string[];
+	required?: string[] | undefined;
 };
 
 function getFieldSchema(field: DBFieldAttribute) {
@@ -223,7 +229,7 @@ function processZodType(zodType: z.ZodType<any>): any {
 	return baseSchema;
 }
 
-function getResponse(responses?: Record<string, any>) {
+function getResponse(responses?: Record<string, any> | undefined) {
 	return {
 		"400": {
 			content: {

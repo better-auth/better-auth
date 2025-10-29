@@ -16,10 +16,10 @@ export async function handleOAuthUserInfo(
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
-		callbackURL?: string;
-		disableSignUp?: boolean;
-		overrideUserInfo?: boolean;
-		additionalData?: unknown;
+		callbackURL?: string | undefined;
+		disableSignUp?: boolean | undefined;
+		overrideUserInfo?: boolean | undefined;
+		additionalData?: unknown | undefined;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter

@@ -73,7 +73,7 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 		console.log(111, c.context.oauthState);
 
-		function redirectOnError(error: string, description?: string) {
+		function redirectOnError(error: string, description?: string | undefined) {
 			const baseURL = errorURL ?? defaultErrorURL;
 
 			const params = new URLSearchParams({ error });

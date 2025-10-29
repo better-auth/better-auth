@@ -12,7 +12,7 @@ export async function generateState(
 	link?: {
 		email: string;
 		userId: string;
-	},
+	} | undefined,
 	/**
 	 * Whether to assign additional data to the state - primarily used for social providers additional data.
 	 * As of writing, this is only used by built-in social providers as well as the generic oauth plugin.

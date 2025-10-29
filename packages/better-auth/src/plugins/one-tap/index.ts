@@ -12,17 +12,17 @@ interface OneTapOptions {
 	 *
 	 * @default false
 	 */
-	disableSignup?: boolean;
+	disableSignup?: boolean | undefined;
 	/**
 	 * Google Client ID
 	 *
 	 * If a client ID is provided in the social provider configuration,
 	 * it will be used.
 	 */
-	clientId?: string;
+	clientId?: string | undefined;
 }
 
-export const oneTap = (options?: OneTapOptions) =>
+export const oneTap = (options?: OneTapOptions | undefined) =>
 	({
 		id: "one-tap",
 		endpoints: {
