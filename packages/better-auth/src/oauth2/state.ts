@@ -9,10 +9,12 @@ import {
 
 export async function generateState(
 	c: GenericEndpointContext,
-	link?: {
-		email: string;
-		userId: string;
-	},
+	link?:
+		| {
+				email: string;
+				userId: string;
+		  }
+		| undefined,
 ) {
 	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
 	if (!callbackURL) {

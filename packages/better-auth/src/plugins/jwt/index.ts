@@ -17,7 +17,7 @@ import { createJwk } from "./utils";
 export type * from "./types";
 export { createJwk, generateExportedKeyPair } from "./utils";
 
-export const jwt = (options?: JwtOptions) => {
+export const jwt = (options?: JwtOptions | undefined) => {
 	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
 		throw new BetterAuthError(
@@ -204,7 +204,7 @@ export const jwt = (options?: JwtOptions) => {
 						$Infer: {
 							body: {} as {
 								payload: JWTPayload;
-								overrideOptions?: JwtOptions;
+								overrideOptions?: JwtOptions | undefined;
 							},
 						},
 					},
