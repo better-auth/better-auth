@@ -1,6 +1,6 @@
+import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
-import { base64 } from "@better-auth/utils/base64";
 
 export function createRefreshAccessTokenRequest({
 	refreshToken,
@@ -11,9 +11,9 @@ export function createRefreshAccessTokenRequest({
 }: {
 	refreshToken: string;
 	options: Partial<ProviderOptions>;
-	authentication?: "basic" | "post";
-	extraParams?: Record<string, string>;
-	resource?: string | string[];
+	authentication?: ("basic" | "post") | undefined;
+	extraParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
 }) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
@@ -78,10 +78,10 @@ export async function refreshAccessToken({
 	refreshToken: string;
 	options: Partial<ProviderOptions>;
 	tokenEndpoint: string;
-	authentication?: "basic" | "post";
-	extraParams?: Record<string, string>;
+	authentication?: ("basic" | "post") | undefined;
+	extraParams?: Record<string, string> | undefined;
 	/** @deprecated always "refresh_token" */
-	grantType?: string;
+	grantType?: string | undefined;
 }): Promise<OAuth2Tokens> {
 	const { body, headers } = createRefreshAccessTokenRequest({
 		refreshToken,
@@ -92,11 +92,11 @@ export async function refreshAccessToken({
 
 	const { data, error } = await betterFetch<{
 		access_token: string;
-		refresh_token?: string;
-		expires_in?: number;
-		token_type?: string;
-		scope?: string;
-		id_token?: string;
+		refresh_token?: string | undefined;
+		expires_in?: number | undefined;
+		token_type?: string | undefined;
+		scope?: string | undefined;
+		id_token?: string | undefined;
 	}>(tokenEndpoint, {
 		method: "POST",
 		body,

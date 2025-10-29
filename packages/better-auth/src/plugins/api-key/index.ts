@@ -1,16 +1,16 @@
-import { APIError } from "../../api";
-import { createAuthMiddleware } from "@better-auth/core/api";
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { mergeSchema } from "../../db";
-import { apiKeySchema } from "./schema";
-import { getIp } from "../../utils/get-request-ip";
-import { getDate } from "../../utils/date";
-import type { ApiKeyOptions } from "./types";
-import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
-import { validateApiKey } from "./routes/verify-api-key";
+import { createAuthMiddleware } from "@better-auth/core/api";
+import { defineErrorCodes } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { APIError } from "../../api";
+import { mergeSchema } from "../../db";
+import { getDate } from "../../utils/date";
+import { getIp } from "../../utils/get-request-ip";
+import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
+import { validateApiKey } from "./routes/verify-api-key";
+import { apiKeySchema } from "./schema";
+import type { ApiKeyOptions } from "./types";
 
 export const defaultKeyHasher = async (key: string) => {
 	const hash = await createHash("SHA-256").digest(
@@ -58,7 +58,7 @@ export const ERROR_CODES = defineErrorCodes({
 
 export const API_KEY_TABLE_NAME = "apikey";
 
-export const apiKey = (options?: ApiKeyOptions) => {
+export const apiKey = (options?: ApiKeyOptions | undefined) => {
 	const opts = {
 		...options,
 		apiKeyHeaders: options?.apiKeyHeaders ?? "x-api-key",

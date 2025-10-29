@@ -1,15 +1,15 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import { Kysely, PostgresDialect } from "kysely";
-import { testAdapter } from "../../test-adapter";
-import { kyselyAdapter } from "../kysely-adapter";
 import { Pool } from "pg";
+import { getMigrations } from "../../../db";
+import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
-import { getMigrations } from "../../../db";
-import type { BetterAuthOptions } from "@better-auth/core";
+import { kyselyAdapter } from "../kysely-adapter";
 
 /**
  * Test suite for PostgreSQL with custom (non-default) schema

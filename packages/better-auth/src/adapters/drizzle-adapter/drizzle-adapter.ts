@@ -1,3 +1,10 @@
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	DBAdapter,
+	DBAdapterDebugLogOption,
+	Where,
+} from "@better-auth/core/db/adapter";
+import { BetterAuthError } from "@better-auth/core/error";
 import {
 	and,
 	asc,
@@ -7,27 +14,20 @@ import {
 	gt,
 	gte,
 	inArray,
-	notInArray,
 	like,
 	lt,
 	lte,
 	ne,
+	notInArray,
 	or,
-	sql,
 	SQL,
+	sql,
 } from "drizzle-orm";
-import { BetterAuthError } from "@better-auth/core/error";
-import type { BetterAuthOptions } from "@better-auth/core";
 import {
-	createAdapterFactory,
-	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
+	type AdapterFactoryOptions,
+	createAdapterFactory,
 } from "../adapter-factory";
-import type {
-	DBAdapterDebugLogOption,
-	DBAdapter,
-	Where,
-} from "@better-auth/core/db/adapter";
 
 export interface DB {
 	[key: string]: any;
@@ -37,7 +37,7 @@ export interface DrizzleAdapterConfig {
 	/**
 	 * The schema object that defines the tables and fields
 	 */
-	schema?: Record<string, any>;
+	schema?: Record<string, any> | undefined;
 	/**
 	 * The database provider
 	 */
@@ -47,20 +47,20 @@ export interface DrizzleAdapterConfig {
 	 * set this to true. For example, if the schema
 	 * has an object with a key "users" instead of "user"
 	 */
-	usePlural?: boolean;
+	usePlural?: boolean | undefined;
 	/**
 	 * Enable debug logs for the adapter
 	 *
 	 * @default false
 	 */
-	debugLogs?: DBAdapterDebugLogOption;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 	/**
 	 * By default snake case is used for table and field names
 	 * when the CLI is used to generate the schema. If you want
 	 * to use camel case, set this to true.
 	 * @default false
 	 */
-	camelCase?: boolean;
+	camelCase?: boolean | undefined;
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
@@ -68,7 +68,7 @@ export interface DrizzleAdapterConfig {
 	 * set this to `false` and operations will be executed sequentially.
 	 * @default false
 	 */
-	transaction?: boolean;
+	transaction?: boolean | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -95,7 +95,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				model: string,
 				builder: any,
 				data: Record<string, any>,
-				where?: Where[],
+				where?: Where[] | undefined,
 			) => {
 				if (config.provider !== "mysql") {
 					const c = await builder.returning();

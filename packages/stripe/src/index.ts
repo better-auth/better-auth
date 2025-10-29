@@ -1,26 +1,28 @@
 import {
-	type GenericEndpointContext,
-	type BetterAuthPlugin,
-	logger,
-} from "better-auth";
-import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import Stripe from "stripe";
-import { type Stripe as StripeType } from "stripe";
-import * as z from "zod/v4";
+import { defineErrorCodes } from "@better-auth/core/utils";
 import {
-	sessionMiddleware,
+	type BetterAuthPlugin,
+	type GenericEndpointContext,
+	logger,
+} from "better-auth";
+import {
 	APIError,
-	originCheck,
 	getSessionFromCtx,
+	originCheck,
+	sessionMiddleware,
 } from "better-auth/api";
+import { defu } from "defu";
+import Stripe, { type Stripe as StripeType } from "stripe";
+import * as z from "zod/v4";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
 } from "./hooks";
+import { getSchema } from "./schema";
 import type {
 	InputSubscription,
 	StripeOptions,
@@ -29,9 +31,6 @@ import type {
 	SubscriptionOptions,
 } from "./types";
 import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
-import { getSchema } from "./schema";
-import { defu } from "defu";
-import { defineErrorCodes } from "@better-auth/core/utils";
 
 const STRIPE_ERROR_CODES = defineErrorCodes({
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
@@ -541,7 +540,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						subscription,
 					},
 					ctx.request,
-					//@ts-expect-error
 					ctx,
 				);
 

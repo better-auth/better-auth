@@ -7,7 +7,7 @@ packages:
 catalog:
   '@better-fetch/fetch': 1.1.18
   better-call: 1.0.24
-  tsdown: ^0.15.9
+  tsdown: ^0.15.11
   typescript: ^5.9.3
   vitest: ^3.2.4
 
