@@ -119,8 +119,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							session: Session;
 							user: User;
 							updatedAt: number;
-							version?: string;
-							exp?: number;
+              version?: string;
+              exp?: number;
 						}>(sessionDataCookie, ctx.context.secret, "better-auth-session");
 
 						if (payload && payload.session && payload.user) {
@@ -417,10 +417,12 @@ export const getSessionFromCtx = async <
 	S extends Record<string, any> = Record<string, any>,
 >(
 	ctx: GenericEndpointContext,
-	config?: {
-		disableCookieCache?: boolean;
-		disableRefresh?: boolean;
-	},
+	config?:
+		| {
+				disableCookieCache?: boolean;
+				disableRefresh?: boolean;
+		  }
+		| undefined,
 ) => {
 	if (ctx.context.session) {
 		return ctx.context.session as {

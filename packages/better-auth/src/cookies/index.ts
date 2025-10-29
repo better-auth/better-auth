@@ -213,8 +213,8 @@ export async function setSessionCookie(
 		session: Session & Record<string, any>;
 		user: User;
 	},
-	dontRememberMe?: boolean,
-	overrides?: Partial<CookieOptions>,
+	dontRememberMe?: boolean | undefined,
+	overrides?: Partial<CookieOptions> | undefined,
 ) {
 	const dontRememberMeCookie = await ctx.getSignedCookie(
 		ctx.context.authCookies.dontRememberToken.name,
@@ -270,7 +270,7 @@ export async function setSessionCookie(
 
 export function deleteSessionCookie(
 	ctx: GenericEndpointContext,
-	skipDontRememberMe?: boolean,
+	skipDontRememberMe?: boolean | undefined,
 ) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
 		...ctx.context.authCookies.sessionToken.options,
@@ -303,11 +303,13 @@ export type EligibleCookies = (string & {}) | (keyof BetterAuthCookies & {});
 
 export const getSessionCookie = (
 	request: Request | Headers,
-	config?: {
-		cookiePrefix?: string;
-		cookieName?: string;
-		path?: string;
-	},
+	config?:
+		| {
+				cookiePrefix?: string;
+				cookieName?: string;
+				path?: string;
+		  }
+		| undefined,
 ) => {
 	if (config?.cookiePrefix) {
 		if (config.cookieName) {
@@ -362,7 +364,7 @@ export const getCookieCache = async <
 					session: Session & Record<string, any>,
 					user: User & Record<string, any>,
 			  ) => Promise<string>);
-	},
+	} | undefined,
 ) => {
 	const headers = request instanceof Headers ? request : request.headers;
 	const cookies = headers.get("cookie");

@@ -36,18 +36,18 @@ export type InferSignUpEmailCtx<
 	email: string;
 	name: string;
 	password: string;
-	image?: string;
-	callbackURL?: string;
-	fetchOptions?: FetchOptions;
+	image?: string | undefined;
+	callbackURL?: string | undefined;
+	fetchOptions?: FetchOptions | undefined;
 } & UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>;
 
 export type InferUserUpdateCtx<
 	ClientOpts extends BetterAuthClientOptions,
 	FetchOptions extends BetterFetchOption,
 > = {
-	image?: string | null;
-	name?: string;
-	fetchOptions?: FetchOptions;
+	image?: (string | null) | undefined;
+	name?: string | undefined;
+	fetchOptions?: FetchOptions | undefined;
 } & Partial<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
@@ -57,20 +57,20 @@ export type InferCtx<
 	FetchOptions extends BetterFetchOption,
 > = C["body"] extends Record<string, any>
 	? C["body"] & {
-			fetchOptions?: FetchOptions;
+			fetchOptions?: FetchOptions | undefined;
 		}
 	: C["query"] extends Record<string, any>
 		? {
 				query: C["query"];
-				fetchOptions?: FetchOptions;
+				fetchOptions?: FetchOptions | undefined;
 			}
 		: C["query"] extends Record<string, any> | undefined
 			? {
-					query?: C["query"];
-					fetchOptions?: FetchOptions;
+					query?: C["query"] | undefined;
+					fetchOptions?: FetchOptions | undefined;
 				}
 			: {
-					fetchOptions?: FetchOptions;
+					fetchOptions?: FetchOptions | undefined;
 				};
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
@@ -136,8 +136,8 @@ export type InferRoute<
 													T["options"]["error"]["~standard"]["types"]
 												>["output"]
 											: {
-													code?: string;
-													message?: string;
+													code?: string | undefined;
+													message?: string | undefined;
 												},
 										FetchOptions["throw"] extends true
 											? true
@@ -158,7 +158,7 @@ export type InferRoutes<
 > = MergeRoutes<InferRoute<API, ClientOpts>>;
 
 export type ProxyRequest = {
-	options?: BetterFetchOption<any, any>;
-	query?: any;
+	options?: BetterFetchOption<any, any> | undefined;
+	query?: any | undefined;
 	[key: string]: any;
 };

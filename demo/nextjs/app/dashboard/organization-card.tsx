@@ -82,7 +82,7 @@ export function OrganizationCard(props: {
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="start">
 							<DropdownMenuItem
-								className=" py-1"
+								className="py-1"
 								onClick={async () => {
 									organization.setActive({
 										organizationId: null,
@@ -94,7 +94,7 @@ export function OrganizationCard(props: {
 							</DropdownMenuItem>
 							{organizations.data?.map((org) => (
 								<DropdownMenuItem
-									className=" py-1"
+									className="py-1"
 									key={org.id}
 									onClick={async () => {
 										if (org.id === optimisticOrg?.id) {

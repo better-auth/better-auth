@@ -30,13 +30,13 @@ export interface OAuthProxyOptions {
 	 * or as a fallback, from the `baseURL` in your auth config.
 	 * If the URL is not inferred correctly, you can provide a value here."
 	 */
-	currentURL?: string;
+	currentURL?: string | undefined;
 	/**
 	 * If a request in a production url it won't be proxied.
 	 *
 	 * default to `BETTER_AUTH_URL`
 	 */
-	productionURL?: string;
+	productionURL?: string | undefined;
 }
 
 /**
@@ -44,7 +44,7 @@ export interface OAuthProxyOptions {
  * Useful for development and preview deployments where
  * the redirect URL can't be known in advance to add to the OAuth provider.
  */
-export const oAuthProxy = (opts?: OAuthProxyOptions) => {
+export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 	const resolveCurrentURL = (ctx: EndpointContext<string, any>) => {
 		return new URL(
 			opts?.currentURL ||
