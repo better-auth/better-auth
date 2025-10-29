@@ -270,7 +270,7 @@ export interface DBAdapterFactoryConfig<
 	 * Do not use this option unless you know what you are doing.
 	 * @default false
 	 */
-	disableTransformInput?: boolean | undefined;;
+	disableTransformInput?: boolean | undefined;
 	/**
 	 * Whether to disable the transform join.
 	 * Do not use this option unless you know what you are doing.
@@ -388,10 +388,12 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		model: string;
 		where?: Where[] | undefined;
 		limit?: number | undefined;
-		sortBy?: {
-			field: string;
-			direction: "asc" | "desc";
-		} | undefined;
+		sortBy?:
+			| {
+					field: string;
+					direction: "asc" | "desc";
+			  }
+			| undefined;
 		offset?: number | undefined;
 		join?: JoinOption | undefined;
 	}) => Promise<T[]>;
