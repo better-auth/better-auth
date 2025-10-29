@@ -111,7 +111,7 @@ export const Navbar = () => {
 						))}
 						<NavLink
 							href="https://github.com/better-auth/better-auth"
-							className=" bg-muted/20"
+							className="bg-muted/20"
 							external
 						>
 							<svg

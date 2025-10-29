@@ -11,7 +11,7 @@ const ERROR_CODES = defineErrorCodes({
 
 async function checkPasswordCompromise(
 	password: string,
-	customMessage?: string,
+	customMessage?: string | undefined,
 ) {
 	if (!password) return;
 
@@ -56,10 +56,10 @@ async function checkPasswordCompromise(
 }
 
 export interface HaveIBeenPwnedOptions {
-	customPasswordCompromisedMessage?: string;
+	customPasswordCompromisedMessage?: string | undefined;
 }
 
-export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
+export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) =>
 	({
 		id: "haveIBeenPwned",
 		init(ctx) {
