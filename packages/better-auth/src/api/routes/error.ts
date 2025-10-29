@@ -50,16 +50,27 @@ const html = (
         --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
         --radius: ${custom?.size?.radiusSm || "0.625rem"};
         --default-mono-font-family: ${custom?.font?.monoFamily || "var(--font-geist-mono)"};
+        --primary: ${custom?.colors?.primary || "black"};
+        --primary-foreground: ${custom?.colors?.primaryForeground || "white"};
+        --background: ${custom?.colors?.background || "white"};
+        --foreground: ${custom?.colors?.foreground || "oklch(0.271 0 0)"};
+        --border: ${custom?.colors?.border || "oklch(0.89 0 0)"};
+        --destructive: ${custom?.colors?.destructive || "oklch(0.55 0.15 25.723)"};
+        --muted-foreground: ${custom?.colors?.mutedForeground || "oklch(0.545 0 0)"};
+        --corner-border: ${custom?.colors?.cornerBorder || "#404040"};
       }
-      :root {
-        --primary: ${custom?.colors?.primary || "white"};
-        --primary-foreground: ${custom?.colors?.primaryForeground || "black"};
-        --background: ${custom?.colors?.background || "black"};
-        --foreground: ${custom?.colors?.foreground || "oklch(0.985 0 0)"};
-        --border: ${custom?.colors?.border || "oklch(0.269 0 0)"};
-        --destructive: ${custom?.colors?.destructive || "oklch(0.396 0.141 25.723)"};
-        --muted-foreground: ${custom?.colors?.mutedForeground || "oklch(0.708 0 0)"};
-        --corner-border: ${custom?.colors?.cornerBorder || "#BFBFBF"};
+      @media (prefers-color-scheme: dark) {
+        :root,
+        :host {
+          --primary: ${custom?.colors?.primary || "white"};
+          --primary-foreground: ${custom?.colors?.primaryForeground || "black"};
+          --background: ${custom?.colors?.background || "black"};
+          --foreground: ${custom?.colors?.foreground || "oklch(0.985 0 0)"};
+          --border: ${custom?.colors?.border || "oklch(0.269 0 0)"};
+          --destructive: ${custom?.colors?.destructive || "oklch(0.396 0.141 25.723)"};
+          --muted-foreground: ${custom?.colors?.mutedForeground || "oklch(0.708 0 0)"};
+          --corner-border: ${custom?.colors?.cornerBorder || "#BFBFBF"};
+        }
       }
 
       button, .btn {
