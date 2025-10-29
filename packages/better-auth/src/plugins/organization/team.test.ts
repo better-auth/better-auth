@@ -1,8 +1,8 @@
 import { describe, expect } from "vitest";
 import { createAuthClient } from "../../client";
+import { setCookieToHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organizationClient } from "./client";
-import { setCookieToHeader } from "../../cookies";
 import { organization } from "./organization";
 
 describe("team", async (it) => {
