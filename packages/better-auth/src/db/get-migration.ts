@@ -310,10 +310,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 			id: {
 				postgres: config.advanced?.database?.useNumberId ? "serial" : "text",
 				mysql: config.advanced?.database?.useNumberId
-					? "integer"
+					? "bigint"
 					: "varchar(36)",
 				mssql: config.advanced?.database?.useNumberId
-					? "integer"
+					? "bigint"
 					: "varchar(36)",
 				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
 			},

@@ -361,9 +361,9 @@ export const createAdapterFactory =
 					options.advanced?.database?.useNumberId
 				) {
 					if (Array.isArray(newValue)) {
-						newValue = newValue.map((x) => (x !== null ? Number(x) : null));
+						newValue = newValue.map((x) => (x !== null ? BigInt(x) : null));
 					} else {
-						newValue = newValue !== null ? Number(newValue) : null;
+						newValue = newValue !== null ? BigInt(newValue) : null;
 					}
 				} else if (
 					config.supportsJSON === false &&
@@ -530,9 +530,9 @@ export const createAdapterFactory =
 				) {
 					if (options.advanced?.database?.useNumberId) {
 						if (Array.isArray(value)) {
-							newValue = value.map(Number);
+							newValue = value.map((x) => BigInt(x as string));
 						} else {
-							newValue = Number(value);
+							newValue = BigInt(value as string);
 						}
 					}
 				}
