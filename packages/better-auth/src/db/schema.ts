@@ -171,14 +171,16 @@ export function parseSessionInput(
 
 export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	schema: S,
-	newSchema?: {
-		[K in keyof S]?: {
-			modelName?: string;
-			fields?: {
-				[P: string]: string | Partial<DBFieldAttribute>;
-			};
-		};
-	} | undefined,
+	newSchema?:
+		| {
+				[K in keyof S]?: {
+					modelName?: string;
+					fields?: {
+						[P: string]: string | Partial<DBFieldAttribute>;
+					};
+				};
+		  }
+		| undefined,
 ) {
 	if (!newSchema) {
 		return schema;

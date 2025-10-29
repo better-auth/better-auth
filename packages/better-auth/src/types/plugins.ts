@@ -10,9 +10,11 @@ export type InferOptionSchema<S extends BetterAuthPluginDBSchema> =
 		? {
 				[K in keyof S]?: {
 					modelName?: string | undefined;
-					fields?: {
-						[P in keyof Fields]?: string | Partial<DBFieldAttribute>;
-					} | undefined;
+					fields?:
+						| {
+								[P in keyof Fields]?: string | Partial<DBFieldAttribute>;
+						  }
+						| undefined;
 				};
 			}
 		: never;
