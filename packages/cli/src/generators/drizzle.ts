@@ -285,7 +285,7 @@ function generateImport({
 		if (!!useNumberId && !coreImports.includes("bigint")) {
 			coreImports.push("bigint");
 		}
-		
+
 		const hasEnum = Object.values(tables).some((table) =>
 			Object.values(table.fields).some(
 				(field) =>
