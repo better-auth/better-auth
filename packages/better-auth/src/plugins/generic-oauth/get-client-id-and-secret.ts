@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { GenericOAuthConfig } from ".";
-import type { AuthContext } from "../../types";
 import { APIError } from "../../api";
+import type { AuthContext } from "../../types";
+import type { GenericOAuthConfig } from ".";
 
 export async function getClientIdAndSecret(
 	config: GenericOAuthConfig,

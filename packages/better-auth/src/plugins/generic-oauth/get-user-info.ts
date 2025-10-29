@@ -1,6 +1,6 @@
+import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import type { OAuth2Tokens } from "../../oauth2";
-import { betterFetch } from "@better-fetch/fetch";
 
 /**
  *

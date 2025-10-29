@@ -1,8 +1,4 @@
-import type {
-	BetterAuthPlugin,
-	GenericEndpointContext,
-} from "@better-auth/core";
-import { createAuthEndpoint } from "@better-auth/core/api";
+import type { GenericEndpointContext } from "@better-auth/core";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type {
 	OAuth2Tokens,
@@ -17,17 +13,16 @@ import {
 import { defineErrorCodes } from "@better-auth/core/utils";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
+import { decodeJwt } from "jose";
 import * as z from "zod/v4";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
-import { decodeJwt } from "jose";
 import { setSessionCookie } from "../../cookies";
+import { mergeSchema } from "../../db";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
-import { mergeSchema } from "../../db";
-import { oauthRegistrationSchema } from "./schema";
 import { getClientIdAndSecret } from "./get-client-id-and-secret";
-import type { GenericOAuthOptions } from "./types";
+import { oauthRegistrationSchema } from "./schema";
 
 export * from "./types";
 
@@ -666,17 +661,16 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							});
 						}
 
-            
 						const { clientId, clientSecret } = await getClientIdAndSecret(
 							provider,
 							ctx.context,
 						);
-            
+
 						const additionalParams =
 							typeof provider.tokenUrlParams === "function"
 								? provider.tokenUrlParams(ctx)
 								: provider.tokenUrlParams;
-            
+
 						tokens = await validateAuthorizationCode({
 							headers: provider.authorizationHeaders,
 							code,
@@ -977,17 +971,15 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						email: session.user.email,
 					});
 
-          
 					const { clientId, clientSecret } = await getClientIdAndSecret(
 						provider,
 						c.context,
 					);
-          
+
 					const additionalParams =
 						typeof authorizationUrlParams === "function"
 							? authorizationUrlParams(c)
 							: authorizationUrlParams;
-          
 
 					const url = await createAuthorizationURL({
 						id: providerId,

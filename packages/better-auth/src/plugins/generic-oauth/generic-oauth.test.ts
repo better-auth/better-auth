@@ -1,16 +1,16 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { betterFetch } from "@better-fetch/fetch";
+import { toNodeHandler } from "better-call/node";
+import { listen } from "listhen";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { genericOAuth } from ".";
 import { oidcProvider } from "../oidc-provider";
+import { genericOAuth } from ".";
 import { genericOAuthClient } from "./client";
-import { listen } from "listhen";
-import { toNodeHandler } from "better-call/node";
 
 describe("oauth2", async () => {
 	const providerId = "test";
