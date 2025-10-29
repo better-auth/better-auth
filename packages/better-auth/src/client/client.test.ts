@@ -1,19 +1,20 @@
 // @vitest-environment happy-dom
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
-import { createAuthClient as createSolidClient } from "./solid";
-import { createAuthClient as createReactClient } from "./react";
-import { createAuthClient as createVueClient } from "./vue";
-import { createAuthClient as createSvelteClient } from "./svelte";
-import { createAuthClient as createVanillaClient } from "./vanilla";
-import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
-import type { Accessor } from "solid-js";
-import type { Ref } from "vue";
-import type { ReadableAtom } from "nanostores";
-import type { Session, SessionQueryParams } from "../types";
-import { BetterFetchError } from "@better-fetch/fetch";
-import { twoFactorClient } from "../plugins";
-import { organizationClient, passkeyClient } from "./plugins";
+
 import { isProxy } from "node:util/types";
+import { BetterFetchError } from "@better-fetch/fetch";
+import type { ReadableAtom } from "nanostores";
+import type { Accessor } from "solid-js";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import type { Ref } from "vue";
+import { twoFactorClient } from "../plugins";
+import type { Session, SessionQueryParams } from "../types";
+import { organizationClient, passkeyClient } from "./plugins";
+import { createAuthClient as createReactClient } from "./react";
+import { createAuthClient as createSolidClient } from "./solid";
+import { createAuthClient as createSvelteClient } from "./svelte";
+import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
+import { createAuthClient as createVanillaClient } from "./vanilla";
+import { createAuthClient as createVueClient } from "./vue";
 
 describe("run time proxy", async () => {
 	it("atom in proxy should not be proxy", async () => {
@@ -248,7 +249,7 @@ describe("type", () => {
 			},
 		});
 		const $infer = client.$Infer;
-		expectTypeOf($infer.Session).toEqualTypeOf<{
+		expectTypeOf<typeof $infer.Session>().toEqualTypeOf<{
 			session: {
 				id: string;
 				userId: string;
@@ -280,7 +281,7 @@ describe("type", () => {
 			plugins: [organizationClient(), twoFactorClient(), passkeyClient()],
 		});
 		const $infer = client.$Infer.Session;
-		expectTypeOf($infer.user).toEqualTypeOf<{
+		expectTypeOf<typeof $infer.user>().toEqualTypeOf<{
 			name: string;
 			id: string;
 			email: string;
@@ -377,7 +378,9 @@ describe("type", () => {
 			} | null;
 			isPending: boolean;
 			error: BetterFetchError | null;
-			refetch: (queryParams?: { query?: SessionQueryParams }) => void;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => void;
 		}>();
 	});
 });

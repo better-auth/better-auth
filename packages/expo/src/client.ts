@@ -1,18 +1,18 @@
-import { BetterAuthClientPlugin, Store } from "better-auth/types";
+import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
+import type { BetterFetchOption } from "@better-fetch/fetch";
+import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
-import Constants from "expo-constants";
-import { BetterFetchOption } from "@better-fetch/fetch";
 
 interface CookieAttributes {
 	value: string;
-	expires?: Date;
-	"max-age"?: number;
-	domain?: string;
-	path?: string;
-	secure?: boolean;
-	httpOnly?: boolean;
-	sameSite?: "Strict" | "Lax" | "None";
+	expires?: Date | undefined;
+	"max-age"?: number | undefined;
+	domain?: string | undefined;
+	path?: string | undefined;
+	secure?: boolean | undefined;
+	httpOnly?: boolean | undefined;
+	sameSite?: ("Strict" | "Lax" | "None") | undefined;
 }
 
 export function parseSetCookieHeader(
@@ -23,15 +23,15 @@ export function parseSetCookieHeader(
 	cookies.forEach((cookie) => {
 		const parts = cookie.split(";").map((p) => p.trim());
 		const [nameValue, ...attributes] = parts;
-		const [name, ...valueParts] = nameValue.split("=");
+		const [name, ...valueParts] = nameValue!.split("=");
 		const value = valueParts.join("=");
 		const cookieObj: CookieAttributes = { value };
 		attributes.forEach((attr) => {
 			const [attrName, ...attrValueParts] = attr.split("=");
 			const attrValue = attrValueParts.join("=");
-			cookieObj[attrName.toLowerCase() as "value"] = attrValue;
+			cookieObj[attrName!.toLowerCase() as "value"] = attrValue;
 		});
-		cookieMap.set(name, cookieObj);
+		cookieMap.set(name!, cookieObj);
 	});
 	return cookieMap;
 }
@@ -69,13 +69,24 @@ function splitSetCookieHeader(setCookie: string): string[] {
 }
 
 interface ExpoClientOptions {
-	scheme?: string;
+	scheme?: string | undefined;
 	storage: {
 		setItem: (key: string, value: string) => any;
 		getItem: (key: string) => string | null;
 	};
-	storagePrefix?: string;
-	disableCache?: boolean;
+	/**
+	 * Prefix for local storage keys (e.g., "my-app_cookie", "my-app_session_data")
+	 * @default "better-auth"
+	 */
+	storagePrefix?: string | undefined;
+	/**
+	 * Prefix for server cookie names to filter (e.g., "better-auth.session_token")
+	 * This is used to identify which cookies belong to better-auth to prevent
+	 * infinite refetching when third-party cookies are set.
+	 * @default "better-auth"
+	 */
+	cookiePrefix?: string | undefined;
+	disableCache?: boolean | undefined;
 }
 
 interface StoredCookie {
@@ -83,7 +94,7 @@ interface StoredCookie {
 	expires: string | null;
 }
 
-export function getSetCookie(header: string, prevCookie?: string) {
+export function getSetCookie(header: string, prevCookie?: string | undefined) {
 	const parsed = parseSetCookieHeader(header);
 	let toSetCookie: Record<string, StoredCookie> = {};
 	parsed.forEach((cookie, key) => {
@@ -132,12 +143,136 @@ function getOrigin(scheme: string) {
 	return schemeURI;
 }
 
+/**
+ * Compare if session cookies have actually changed by comparing their values.
+ * Ignores expiry timestamps that naturally change on each request.
+ *
+ * @param prevCookie - Previous cookie JSON string
+ * @param newCookie - New cookie JSON string
+ * @returns true if session cookies have changed, false otherwise
+ */
+function hasSessionCookieChanged(
+	prevCookie: string | null,
+	newCookie: string,
+): boolean {
+	if (!prevCookie) return true;
+
+	try {
+		const prev = JSON.parse(prevCookie) as Record<string, StoredCookie>;
+		const next = JSON.parse(newCookie) as Record<string, StoredCookie>;
+
+		// Get all session-related cookie keys (session_token, session_data)
+		const sessionKeys = new Set<string>();
+		Object.keys(prev).forEach((key) => {
+			if (key.includes("session_token") || key.includes("session_data")) {
+				sessionKeys.add(key);
+			}
+		});
+		Object.keys(next).forEach((key) => {
+			if (key.includes("session_token") || key.includes("session_data")) {
+				sessionKeys.add(key);
+			}
+		});
+
+		// Compare the values of session cookies (ignore expires timestamps)
+		for (const key of sessionKeys) {
+			const prevValue = prev[key]?.value;
+			const nextValue = next[key]?.value;
+			if (prevValue !== nextValue) {
+				return true;
+			}
+		}
+
+		return false;
+	} catch {
+		// If parsing fails, assume cookie changed
+		return true;
+	}
+}
+
+/**
+ * Check if the Set-Cookie header contains session-related better-auth cookies.
+ * Only triggers session updates when session_token or session_data cookies are present.
+ * This prevents infinite refetching when non-session cookies (like third-party cookies) change.
+ *
+ * Supports multiple cookie naming patterns:
+ * - Default: "better-auth.session_token", "__Secure-better-auth.session_token"
+ * - Custom prefix: "myapp.session_token", "__Secure-myapp.session_token"
+ * - Custom full names: "my_custom_session_token", "custom_session_data"
+ * - No prefix (cookiePrefix=""): "session_token", "my_session_token", etc.
+ *
+ * @param setCookieHeader - The Set-Cookie header value
+ * @param cookiePrefix - The cookie prefix to check for. Can be empty string for custom cookie names.
+ * @returns true if the header contains session-related cookies, false otherwise
+ */
+export function hasBetterAuthCookies(
+	setCookieHeader: string,
+	cookiePrefix: string,
+): boolean {
+	const cookies = parseSetCookieHeader(setCookieHeader);
+	const sessionCookieSuffixes = ["session_token", "session_data"];
+
+	// Check if any cookie is a session-related cookie
+	for (const name of cookies.keys()) {
+		// Remove __Secure- prefix if present for comparison
+		const nameWithoutSecure = name.startsWith("__Secure-")
+			? name.slice(9)
+			: name;
+
+		for (const suffix of sessionCookieSuffixes) {
+			if (cookiePrefix) {
+				// When prefix is provided, only match exact pattern: "prefix.suffix"
+				if (nameWithoutSecure === `${cookiePrefix}.${suffix}`) {
+					return true;
+				}
+			} else {
+				// When prefix is empty, check for:
+				// 1. Exact match: "session_token"
+				// 2. Custom names ending with suffix: "my_custom_session_token"
+				if (nameWithoutSecure.endsWith(suffix)) {
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+/**
+ * Expo secure store does not support colons in the keys.
+ * This function replaces colons with underscores.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/5426
+ *
+ * @param name cookie name to be saved in the storage
+ * @returns normalized cookie name
+ */
+export function normalizeCookieName(name: string) {
+	return name.replace(/:/g, "_");
+}
+
+export function storageAdapter(storage: {
+	getItem: (name: string) => string | null;
+	setItem: (name: string, value: string) => void;
+}) {
+	return {
+		getItem: (name: string) => {
+			return storage.getItem(normalizeCookieName(name));
+		},
+		setItem: (name: string, value: string) => {
+			return storage.setItem(normalizeCookieName(name), value);
+		},
+	};
+}
+
 export const expoClient = (opts: ExpoClientOptions) => {
-	let store: Store | null = null;
-	const cookieName = `${opts?.storagePrefix || "better-auth"}_cookie`;
-	const localCacheName = `${opts?.storagePrefix || "better-auth"}_session_data`;
-	const storage = opts?.storage;
+	let store: ClientStore | null = null;
+	const storagePrefix = opts?.storagePrefix || "better-auth";
+	const cookieName = `${storagePrefix}_cookie`;
+	const localCacheName = `${storagePrefix}_session_data`;
+	const storage = storageAdapter(opts?.storage);
 	const isWeb = Platform.OS === "web";
+	const cookiePrefix = opts?.cookiePrefix || "better-auth";
 
 	const rawScheme =
 		opts?.scheme || Constants.expoConfig?.scheme || Constants.platform?.scheme;
@@ -183,13 +318,24 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						if (isWeb) return;
 						const setCookie = context.response.headers.get("set-cookie");
 						if (setCookie) {
-							const prevCookie = await storage.getItem(cookieName);
-							const toSetCookie = getSetCookie(
-								setCookie || "",
-								prevCookie ?? undefined,
-							);
-							await storage.setItem(cookieName, toSetCookie);
-							store?.notify("$sessionSignal");
+							// Only process and notify if the Set-Cookie header contains better-auth cookies
+							// This prevents infinite refetching when other cookies (like Cloudflare's __cf_bm) are present
+							if (hasBetterAuthCookies(setCookie, cookiePrefix)) {
+								const prevCookie = await storage.getItem(cookieName);
+								const toSetCookie = getSetCookie(
+									setCookie || "",
+									prevCookie ?? undefined,
+								);
+								// Only notify $sessionSignal if the session cookie values actually changed
+								// This prevents infinite refetching when the server sends the same cookie with updated expiry
+								if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
+									await storage.setItem(cookieName, toSetCookie);
+									store?.notify("$sessionSignal");
+								} else {
+									// Still update the storage to refresh expiry times, but don't trigger refetch
+									await storage.setItem(cookieName, toSetCookie);
+								}
+							}
 						}
 
 						if (
@@ -221,7 +367,8 @@ export const expoClient = (opts: ExpoClientOptions) => {
 									},
 								);
 							}
-							const result = await Browser.openAuthSessionAsync(signInURL, to);
+							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;
+							const result = await Browser.openAuthSessionAsync(proxyURL, to);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
 							const cookie = String(url.searchParams.get("cookie"));

@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { getTestInstance } from "../../../test-utils/test-instance";
-import { organization } from "../organization";
+import { describe, expect, it } from "vitest";
 import { createAuthClient } from "../../../client";
+import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import { organization } from "../organization";
 
 describe("listMembers", async () => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
@@ -165,12 +165,12 @@ describe("listMembers", async () => {
 				sortDirection: "asc",
 			},
 		});
-		expect(members.data?.members[0].id).not.toBe(firstMember.id);
-		expect(members.data?.members[members.data?.members.length - 1].id).not.toBe(
-			lastMember.id,
-		);
-		expect(members.data?.members[0].id).toBe(secondMember.id);
-		expect(members.data?.members[members.data?.members.length - 1].id).toBe(
+		expect(members.data?.members[0]!.id).not.toBe(firstMember.id);
+		expect(
+			members.data?.members[members.data?.members.length - 1]!.id,
+		).not.toBe(lastMember.id);
+		expect(members.data?.members[0]!.id).toBe(secondMember.id);
+		expect(members.data?.members[members.data?.members.length - 1]!.id).toBe(
 			oneBeforeLastMember.id,
 		);
 	});

@@ -1,7 +1,7 @@
+import * as betterFetchModule from "@better-fetch/fetch";
 import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { captcha } from ".";
-import * as betterFetchModule from "@better-fetch/fetch";
 
 vi.mock("@better-fetch/fetch", async (importOriginal) => {
 	const actual = (await importOriginal()) as typeof betterFetchModule;
@@ -350,5 +350,75 @@ describe("captcha", async (it) => {
 		});
 
 		// TODO: Adding tests for hCaptcha
+	});
+
+	describe("captchafox", async (it) => {
+		const { client } = await getTestInstance({
+			plugins: [
+				captcha({
+					provider: "captchafox",
+					secretKey: "xx-secret-key",
+					siteKey: "xx-site-key",
+				}),
+			],
+		});
+
+		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
+			mockBetterFetch.mockResolvedValue({
+				data: {
+					success: true,
+					challenge_ts: "2022-02-28T15:14:30.096Z",
+					hostname: "example.com",
+				},
+			});
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "captcha-token",
+					},
+				},
+			});
+
+			expect(res.data?.user).toBeDefined();
+		});
+
+		it("Should return 500 if the call to /siteverify fails", async () => {
+			mockBetterFetch.mockResolvedValue({
+				error: "Failed to fetch",
+			});
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "captcha-token",
+					},
+				},
+			});
+
+			expect(res.error?.status).toBe(500);
+		});
+
+		it("Should return 403 in case of a validation failure", async () => {
+			mockBetterFetch.mockResolvedValue({
+				data: {
+					success: false,
+					"error-codes": ["invalid-input-response"],
+				},
+			});
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "invalid-captcha-token",
+					},
+				},
+			});
+
+			expect(res.error?.status).toBe(403);
+		});
 	});
 });

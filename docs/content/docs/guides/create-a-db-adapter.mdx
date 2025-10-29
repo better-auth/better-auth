@@ -22,14 +22,14 @@ All you need to do is provide the database logic, and the `createAdapter` functi
 3. Create the adapter!
 
 ```ts
-import { createAdapter, type AdapterDebugLogs } from "better-auth/adapters";
+import { createAdapter, type DBAdapterDebugLogOption } from "better-auth/adapters";
 
 // Your custom adapter config options
 interface CustomAdapterConfig {
   /**
    * Helps you debug issues with the adapter.
    */
-  debugLogs?: AdapterDebugLogs;
+  debugLogs?: DBAdapterDebugLogOption;
   /**
    * If the table names in the schema are plural.
    */
@@ -370,7 +370,7 @@ describe("My Adapter Tests", async () => {
     },
   });
 
-  await runAdapterTest({
+  runAdapterTest({
     getAdapter: async (betterAuthOptions = {}) => {
       return adapter(betterAuthOptions);
     },
@@ -398,7 +398,7 @@ describe("My Adapter Numeric ID Tests", async () => {
     },
   });
 
-  await runNumberIdAdapterTest({
+  runNumberIdAdapterTest({
     getAdapter: async (betterAuthOptions = {}) => {
       return adapter(betterAuthOptions);
     },

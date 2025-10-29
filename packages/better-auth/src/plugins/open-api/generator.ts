@@ -1,3 +1,9 @@
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import type {
+	DBFieldAttribute,
+	DBFieldAttributeConfig,
+	DBFieldType,
+} from "@better-auth/core/db";
 import type {
 	Endpoint,
 	EndpointOptions,
@@ -7,66 +13,68 @@ import type {
 import * as z from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
-import type { AuthContext, BetterAuthOptions } from "../../types";
-import type { FieldAttribute } from "../../db";
 
 export interface Path {
-	get?: {
-		tags?: string[];
-		operationId?: string;
-		description?: string;
-		security?: [{ bearerAuth: string[] }];
-		parameters?: OpenAPIParameter[];
-		responses?: {
-			[key in string]: {
+	get?:
+		| {
+				tags?: string[];
+				operationId?: string;
 				description?: string;
-				content: {
-					"application/json": {
-						schema: {
-							type?: OpenAPISchemaType;
-							properties?: Record<string, any>;
-							required?: string[];
-							$ref?: string;
+				security?: [{ bearerAuth: string[] }];
+				parameters?: OpenAPIParameter[];
+				responses?: {
+					[key in string]: {
+						description?: string;
+						content: {
+							"application/json": {
+								schema: {
+									type?: OpenAPISchemaType;
+									properties?: Record<string, any>;
+									required?: string[];
+									$ref?: string;
+								};
+							};
 						};
 					};
 				};
-			};
-		};
-	};
-	post?: {
-		tags?: string[];
-		operationId?: string;
-		description?: string;
-		security?: [{ bearerAuth: string[] }];
-		parameters?: OpenAPIParameter[];
-		requestBody?: {
-			content: {
-				"application/json": {
-					schema: {
-						type?: OpenAPISchemaType;
-						properties?: Record<string, any>;
-						required?: string[];
-						$ref?: string;
-					};
-				};
-			};
-		};
-		responses?: {
-			[key in string]: {
+		  }
+		| undefined;
+	post?:
+		| {
+				tags?: string[];
+				operationId?: string;
 				description?: string;
-				content: {
-					"application/json": {
-						schema: {
-							type?: OpenAPISchemaType;
-							properties?: Record<string, any>;
-							required?: string[];
-							$ref?: string;
+				security?: [{ bearerAuth: string[] }];
+				parameters?: OpenAPIParameter[];
+				requestBody?: {
+					content: {
+						"application/json": {
+							schema: {
+								type?: OpenAPISchemaType;
+								properties?: Record<string, any>;
+								required?: string[];
+								$ref?: string;
+							};
 						};
 					};
 				};
-			};
-		};
-	};
+				responses?: {
+					[key in string]: {
+						description?: string;
+						content: {
+							"application/json": {
+								schema: {
+									type?: OpenAPISchemaType;
+									properties?: Record<string, any>;
+									required?: string[];
+									$ref?: string;
+								};
+							};
+						};
+					};
+				};
+		  }
+		| undefined;
 }
 
 type AllowedType = "string" | "number" | "boolean" | "array" | "object";
@@ -76,8 +84,22 @@ function getTypeFromZodType(zodType: z.ZodType<any>) {
 	return allowedType.has(type) ? (type as AllowedType) : "string";
 }
 
-function getFieldSchema(field: FieldAttribute) {
-	const schema: any = {
+export type FieldSchema = {
+	type: DBFieldType;
+	default?:
+		| (DBFieldAttributeConfig["defaultValue"] | "Generated at runtime")
+		| undefined;
+	readOnly?: boolean | undefined;
+};
+
+export type OpenAPIModelSchema = {
+	type: "object";
+	properties: Record<string, FieldSchema>;
+	required?: string[] | undefined;
+};
+
+function getFieldSchema(field: DBFieldAttribute) {
+	const schema: FieldSchema = {
 		type: field.type === "date" ? "string" : field.type,
 	};
 
@@ -207,7 +229,7 @@ function processZodType(zodType: z.ZodType<any>): any {
 	return baseSchema;
 }
 
-function getResponse(responses?: Record<string, any>) {
+function getResponse(responses?: Record<string, any> | undefined) {
 	return {
 		"400": {
 			content: {
@@ -325,11 +347,13 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	});
 
 	const tables = getAuthTables(options);
-	const models = Object.entries(tables).reduce((acc, [key, value]) => {
+	const models = Object.entries(tables).reduce<
+		Record<string, OpenAPIModelSchema>
+	>((acc, [key, value]) => {
 		const modelName = key.charAt(0).toUpperCase() + key.slice(1);
 		const fields = value.fields;
 		const required: string[] = [];
-		const properties: Record<string, any> = {
+		const properties: Record<string, FieldSchema> = {
 			id: { type: "string" },
 		};
 		Object.entries(fields).forEach(([fieldKey, fieldValue]) => {
@@ -340,7 +364,6 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			}
 		});
 
-		// @ts-expect-error
 		acc[modelName] = {
 			type: "object",
 			properties,

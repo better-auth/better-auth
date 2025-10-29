@@ -1,32 +1,34 @@
-import * as z from "zod";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSessionFromCtx,
-} from "../../api";
-import { type BetterAuthPlugin, type Session, type Where } from "../../types";
+} from "@better-auth/core/api";
+import type { Where } from "@better-auth/core/db/adapter";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import * as z from "zod";
+import { APIError, getSessionFromCtx } from "../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { type Session } from "../../types";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import { mergeSchema } from "../../db/schema";
 import { type AccessControl } from "../access";
-import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
+import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
-import {
-	type AdminOptions,
-	type UserWithRole,
-	type SessionWithImpersonatedBy,
-	type InferAdminRolesFromOption,
-} from "./types";
 import { schema } from "./schema";
+import type {
+	AdminOptions,
+	InferAdminRolesFromOption,
+	SessionWithImpersonatedBy,
+	UserWithRole,
+} from "./types";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
 }
 
-export const admin = <O extends AdminOptions>(options?: O) => {
+export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 	const opts = {
 		defaultRole: options?.defaultRole ?? "user",
 		adminRoles: options?.adminRoles ?? ["admin"],
@@ -53,11 +55,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				 * @deprecated Use `permissions` instead
 				 */
 				permission: PermissionType;
-				permissions?: never;
+				permissions?: never | undefined;
 		  }
 		| {
 				permissions: PermissionType;
-				permission?: never;
+				permission?: never | undefined;
 		  };
 
 	/**
@@ -261,17 +263,94 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
 						});
 					}
-
+					const roles = opts.roles;
+					if (roles) {
+						const inputRoles = Array.isArray(ctx.body.role)
+							? ctx.body.role
+							: [ctx.body.role];
+						for (const role of inputRoles) {
+							if (!roles[role as keyof typeof roles]) {
+								throw new APIError("BAD_REQUEST", {
+									message:
+										ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
+								});
+							}
+						}
+					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						{
 							role: parseRoles(ctx.body.role),
 						},
-						ctx,
 					);
 					return ctx.json({
 						user: updatedUser as UserWithRole,
 					});
+				},
+			),
+			getUser: createAuthEndpoint(
+				"/admin/get-user",
+				{
+					method: "GET",
+					query: z.object({
+						id: z.string().meta({
+							description: "The id of the User",
+						}),
+					}),
+					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "getUser",
+							summary: "Get an existing user",
+							description: "Get an existing user",
+							responses: {
+								200: {
+									description: "User",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const { id } = ctx.query;
+
+					const canGetUser = hasPermission({
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permissions: {
+							user: ["get"],
+						},
+					});
+
+					if (!canGetUser) {
+						throw ctx.error("FORBIDDEN", {
+							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_USER,
+							code: "YOU_ARE_NOT_ALLOWED_TO_GET_USER",
+						});
+					}
+
+					const user = await ctx.context.internalAdapter.findUserById(id);
+
+					if (!user) {
+						throw new APIError("NOT_FOUND", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+
+					return parseUserOutput(ctx.context.options, user);
 				},
 			),
 			/**
@@ -355,9 +434,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								password: string;
 								name: string;
 								role?:
-									| InferAdminRolesFromOption<O>
-									| InferAdminRolesFromOption<O>[];
-								data?: Record<string, any>;
+									| (
+											| InferAdminRolesFromOption<O>
+											| InferAdminRolesFromOption<O>[]
+									  )
+									| undefined;
+								data?: Record<string, any> | undefined;
 							},
 						},
 					},
@@ -382,27 +464,32 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							});
 						}
 					}
-					const existUser = await ctx.context.internalAdapter.findUserByEmail(
-						ctx.body.email,
-					);
+
+					const email = ctx.body.email.toLowerCase();
+					const isValidEmail = z.string().email().safeParse(email);
+					if (!isValidEmail.success) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.INVALID_EMAIL,
+						});
+					}
+
+					const existUser =
+						await ctx.context.internalAdapter.findUserByEmail(email);
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS,
+							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 						});
 					}
 					const user =
-						await ctx.context.internalAdapter.createUser<UserWithRole>(
-							{
-								email: ctx.body.email,
-								name: ctx.body.name,
-								role:
-									(ctx.body.role && parseRoles(ctx.body.role)) ??
-									options?.defaultRole ??
-									"user",
-								...ctx.body.data,
-							},
-							ctx,
-						);
+						await ctx.context.internalAdapter.createUser<UserWithRole>({
+							email: email,
+							name: ctx.body.name,
+							role:
+								(ctx.body.role && parseRoles(ctx.body.role)) ??
+								options?.defaultRole ??
+								"user",
+							...ctx.body.data,
+						});
 
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -412,20 +499,32 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const hashedPassword = await ctx.context.password.hash(
 						ctx.body.password,
 					);
-					await ctx.context.internalAdapter.linkAccount(
-						{
-							accountId: user.id,
-							providerId: "credential",
-							password: hashedPassword,
-							userId: user.id,
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.linkAccount({
+						accountId: user.id,
+						providerId: "credential",
+						password: hashedPassword,
+						userId: user.id,
+					});
 					return ctx.json({
 						user: user as UserWithRole,
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/update-user`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.adminUpdateUser`
+			 *
+			 * **client:**
+			 * `authClient.admin.updateUser`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-update-user)
+			 */
 			adminUpdateUser: createAuthEndpoint(
 				"/admin/update-user",
 				{
@@ -491,7 +590,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						ctx.body.data,
-						ctx,
 					);
 
 					return ctx.json(updatedUser as UserWithRole);
@@ -909,6 +1007,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 
+					const foundUser = await ctx.context.internalAdapter.findUserById(
+						ctx.body.userId,
+					);
+
+					if (!foundUser) {
+						throw new APIError("NOT_FOUND", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+
 					if (ctx.body.userId === ctx.context.session.user.id) {
 						throw new APIError("BAD_REQUEST", {
 							message: ADMIN_ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
@@ -927,7 +1035,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									: undefined,
 							updatedAt: new Date(),
 						},
-						ctx,
 					);
 					//revoke all sessions
 					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
@@ -1017,7 +1124,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 					const session = await ctx.context.internalAdapter.createSession(
 						targetUser.id,
-						ctx,
 						true,
 						{
 							impersonatedBy: ctx.context.session.user.id,
@@ -1119,8 +1225,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const [adminSessionToken, dontRememberMeCookie] =
 						adminCookie?.split(":");
-					const adminSession =
-						await ctx.context.internalAdapter.findSession(adminSessionToken);
+					const adminSession = await ctx.context.internalAdapter.findSession(
+						adminSessionToken!,
+					);
 					if (!adminSession || adminSession.session.userId !== user.id) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: "Failed to find admin session",
@@ -1390,10 +1497,13 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						newPassword: z.string().meta({
-							description: "The new password",
-						}),
-						userId: z.coerce.string().meta({
+						newPassword: z
+							.string()
+							.nonempty("newPassword cannot be empty")
+							.meta({
+								description: "The new password",
+							}),
+						userId: z.coerce.string().nonempty("userId cannot be empty").meta({
 							description: "The user id",
 						}),
 					}),
@@ -1438,11 +1548,27 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PASSWORD,
 						});
 					}
-					const hashedPassword = await ctx.context.password.hash(
-						ctx.body.newPassword,
-					);
+
+					const { newPassword, userId } = ctx.body;
+					const minPasswordLength =
+						ctx.context.password.config.minPasswordLength;
+					if (newPassword.length < minPasswordLength) {
+						ctx.context.logger.error("Password is too short");
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+						});
+					}
+					const maxPasswordLength =
+						ctx.context.password.config.maxPasswordLength;
+					if (newPassword.length > maxPasswordLength) {
+						ctx.context.logger.error("Password is too long");
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+						});
+					}
+					const hashedPassword = await ctx.context.password.hash(newPassword);
 					await ctx.context.internalAdapter.updatePassword(
-						ctx.body.userId,
+						userId,
 						hashedPassword,
 					);
 					return ctx.json({
@@ -1538,8 +1664,8 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						},
 						$Infer: {
 							body: {} as PermissionExclusive & {
-								userId?: string;
-								role?: InferAdminRolesFromOption<O>;
+								userId?: string | undefined;
+								role?: InferAdminRolesFromOption<O> | undefined;
 							},
 						},
 					},
@@ -1568,7 +1694,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							: null) ||
 						((await ctx.context.internalAdapter.findUserById(
 							ctx.body.userId as string,
-						)) as { role?: string; id: string });
+						)) as { role?: string | undefined; id: string });
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: "user not found",

@@ -1,9 +1,12 @@
-export const ORGANIZATION_ERROR_CODES = {
+import { defineErrorCodes } from "@better-auth/core/utils";
+
+export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION:
 		"You are not allowed to create a new organization",
 	YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS:
 		"You have reached the maximum number of organizations",
 	ORGANIZATION_ALREADY_EXISTS: "Organization already exists",
+	ORGANIZATION_SLUG_ALREADY_TAKEN: "Organization slug already taken",
 	ORGANIZATION_NOT_FOUND: "Organization not found",
 	USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION:
 		"User is not a member of the organization",
@@ -71,4 +74,18 @@ export const ORGANIZATION_ERROR_CODES = {
 		"You are not allowed to access this organization as an owner",
 	YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION:
 		"You are not a member of this organization",
-} as const;
+	MISSING_AC_INSTANCE:
+		"Dynamic Access Control requires a pre-defined ac instance on the server auth plugin. Read server logs for more information",
+	YOU_MUST_BE_IN_AN_ORGANIZATION_TO_CREATE_A_ROLE:
+		"You must be in an organization to create a role",
+	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE: "You are not allowed to create a role",
+	YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE: "You are not allowed to update a role",
+	YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE: "You are not allowed to delete a role",
+	YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE: "You are not allowed to read a role",
+	YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE: "You are not allowed to list a role",
+	YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE: "You are not allowed to get a role",
+	TOO_MANY_ROLES: "This organization has too many roles",
+	INVALID_RESOURCE: "The provided permission includes an invalid resource",
+	ROLE_NAME_IS_ALREADY_TAKEN: "That role name is already taken",
+	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
+});

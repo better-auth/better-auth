@@ -1,17 +1,17 @@
-import * as z from "zod";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	sessionMiddleware,
-} from "../../api";
+} from "@better-auth/core/api";
+import { defineErrorCodes } from "@better-auth/core/utils";
+import * as z from "zod";
+import { APIError, sessionMiddleware } from "../../api";
 import {
 	deleteSessionCookie,
 	parseCookies,
 	parseSetCookieHeader,
 	setSessionCookie,
 } from "../../cookies";
-import type { BetterAuthPlugin } from "../../types";
 
 interface MultiSessionConfig {
 	/**
@@ -19,20 +19,19 @@ interface MultiSessionConfig {
 	 * at a time
 	 * @default 5
 	 */
-	maximumSessions?: number;
+	maximumSessions?: number | undefined;
 }
 
-export const multiSession = (options?: MultiSessionConfig) => {
+const ERROR_CODES = defineErrorCodes({
+	INVALID_SESSION_TOKEN: "Invalid session token",
+});
+export const multiSession = (options?: MultiSessionConfig | undefined) => {
 	const opts = {
 		maximumSessions: 5,
 		...options,
 	};
 
 	const isMultiSessionCookie = (key: string) => key.includes("_multi-");
-
-	const ERROR_CODES = {
-		INVALID_SESSION_TOKEN: "Invalid session token",
-	} as const;
 
 	return {
 		id: "multi-session",
@@ -267,7 +266,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							);
 
 							if (validSessions.length > 0) {
-								const nextSession = validSessions[0];
+								const nextSession = validSessions[0]!;
 								await setSessionCookie(ctx, nextSession);
 							} else {
 								deleteSessionCookie(ctx);
@@ -337,7 +336,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 											maxAge: 0,
 										},
 									);
-									const token = cookies[key].split(".")[0];
+									const token = cookies[key]!.split(".")[0]!;
 									return token;
 								}
 								return null;

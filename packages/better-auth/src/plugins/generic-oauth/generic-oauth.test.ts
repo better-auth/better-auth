@@ -1,13 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { genericOAuth } from ".";
-import { createAuthClient } from "../../client";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { genericOAuthClient } from "./client";
-
+import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
 import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { genericOAuth } from ".";
 import { oidcProvider } from "../oidc-provider";
+import { genericOAuthClient } from "./client";
 import { listen } from "listhen";
 import { toNodeHandler } from "better-call/node";
 
@@ -23,7 +24,7 @@ describe("oauth2", async () => {
 		await server.stop();
 	});
 
-	const { customFetchImpl, auth } = await getTestInstance({
+	const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
 		plugins: [
 			genericOAuth({
 				config: [
@@ -49,10 +50,17 @@ describe("oauth2", async () => {
 
 	beforeAll(async () => {
 		const context = await auth.$context;
-		await context.internalAdapter.createUser({
-			email: "oauth2@test.com",
-			name: "OAuth2 Test",
-		});
+		await runWithEndpointContext(
+			{
+				context,
+			} as GenericEndpointContext,
+			async () => {
+				await context.internalAdapter.createUser({
+					email: "oauth2@test.com",
+					name: "OAuth2 Test",
+				});
+			},
+		);
 		await server.issuer.keys.generate("RS256");
 	});
 
@@ -70,7 +78,7 @@ describe("oauth2", async () => {
 	async function simulateOAuthFlow(
 		authUrl: string,
 		headers: Headers,
-		fetchImpl?: (...args: any) => any,
+		fetchImpl?: ((...args: any) => any) | undefined,
 	) {
 		let location: string | null = null;
 		await betterFetch(authUrl, {
@@ -91,10 +99,7 @@ describe("oauth2", async () => {
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
-				newHeaders.set(
-					"cookie",
-					context.response.headers.get("Set-Cookie") || "",
-				);
+				cookieSetter(newHeaders)(context);
 			},
 		});
 
@@ -107,6 +112,9 @@ describe("oauth2", async () => {
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining(`http://localhost:${port}/authorize`),
@@ -136,6 +144,9 @@ describe("oauth2", async () => {
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining(`http://localhost:${port}/authorize`),
@@ -151,7 +162,7 @@ describe("oauth2", async () => {
 				headers: newHeaders,
 			},
 		});
-
+		console.log(session.data, newHeaders);
 		const ctx = await auth.$context;
 		const accounts = await ctx.internalAdapter.findAccounts(
 			session.data?.user.id!,
@@ -176,6 +187,9 @@ describe("oauth2", async () => {
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
@@ -253,12 +267,13 @@ describe("oauth2", async () => {
 				}),
 			],
 		});
-
+		const headers = new Headers();
 		const authClient = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 
@@ -266,9 +281,11 @@ describe("oauth2", async () => {
 			providerId: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
-		const headers = new Headers();
 		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
 			headers,
@@ -289,7 +306,7 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		const { customFetchImpl } = await getTestInstance({
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
@@ -305,7 +322,6 @@ describe("oauth2", async () => {
 				}),
 			],
 		});
-
 		const authClient = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
@@ -313,14 +329,16 @@ describe("oauth2", async () => {
 				customFetchImpl,
 			},
 		});
-
+		const headers = new Headers();
 		const res = await authClient.signIn.oauth2({
 			providerId: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
 			errorCallbackURL: "http://localhost:3000/error",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
-		const headers = new Headers();
 		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
 			headers,
@@ -343,7 +361,7 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		const { customFetchImpl } = await getTestInstance({
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
@@ -367,15 +385,17 @@ describe("oauth2", async () => {
 				customFetchImpl,
 			},
 		});
-
+		const headers = new Headers();
 		const res = await authClient.signIn.oauth2({
 			providerId: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
 			errorCallbackURL: "http://localhost:3000/error",
 			requestSignUp: true,
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
-		const headers = new Headers();
 		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
 			headers,
@@ -394,7 +414,7 @@ describe("oauth2", async () => {
 			receivedHeaders = req.headers as Record<string, string>;
 		});
 
-		const { customFetchImpl } = await getTestInstance({
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
@@ -410,12 +430,13 @@ describe("oauth2", async () => {
 				}),
 			],
 		});
-
+		const headers = new Headers();
 		const authClient = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 
@@ -423,10 +444,12 @@ describe("oauth2", async () => {
 			providerId: "test3",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 
 		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
-		const headers = new Headers();
 		await simulateOAuthFlow(res.data?.url || "", headers, customFetchImpl);
 
 		expect(receivedHeaders).toHaveProperty("x-custom-header");
@@ -435,7 +458,7 @@ describe("oauth2", async () => {
 
 	it("should delete oauth user with verification flow without password", async () => {
 		let token = "";
-		const { customFetchImpl } = await getTestInstance({
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			user: {
 				deleteUser: {
 					enabled: true,
@@ -457,18 +480,22 @@ describe("oauth2", async () => {
 				}),
 			],
 		});
-
+		const headers = new Headers();
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		const signInRes = await client.signIn.oauth2({
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 
 		expect(signInRes.data).toMatchObject({
@@ -476,22 +503,22 @@ describe("oauth2", async () => {
 			redirect: true,
 		});
 
-		const { headers } = await simulateOAuthFlow(
+		const { headers: newHeaders } = await simulateOAuthFlow(
 			signInRes.data?.url || "",
-			new Headers(),
+			headers,
 			customFetchImpl,
 		);
 
 		const session = await client.getSession({
 			fetchOptions: {
-				headers,
+				headers: newHeaders,
 			},
 		});
 		expect(session.data).not.toBeNull();
 
 		const deleteRes = await client.deleteUser({
 			fetchOptions: {
-				headers,
+				headers: newHeaders,
 			},
 		});
 
@@ -504,7 +531,7 @@ describe("oauth2", async () => {
 		const deleteCallbackRes = await client.deleteUser({
 			token,
 			fetchOptions: {
-				headers,
+				headers: newHeaders,
 			},
 		});
 		expect(deleteCallbackRes.data).toMatchObject({
@@ -600,7 +627,7 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		const { customFetchImpl, auth } = await getTestInstance({
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
@@ -615,12 +642,13 @@ describe("oauth2", async () => {
 				}),
 			],
 		});
-
+		const headers = new Headers();
 		const authClient = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 
@@ -633,7 +661,7 @@ describe("oauth2", async () => {
 		const { callbackURL: firstCallbackURL, headers: firstHeaders } =
 			await simulateOAuthFlow(
 				firstSignIn.data?.url || "",
-				new Headers(),
+				headers,
 				customFetchImpl,
 			);
 
@@ -676,7 +704,7 @@ describe("oauth2", async () => {
 		const { callbackURL: secondCallbackURL, headers: secondHeaders } =
 			await simulateOAuthFlow(
 				secondSignIn.data?.url || "",
-				new Headers(),
+				headers,
 				customFetchImpl,
 			);
 
@@ -693,13 +721,13 @@ describe("oauth2", async () => {
 
 		const accountsAfterSecond = await ctx.internalAdapter.findAccounts(userId);
 		expect(accountsAfterSecond).toHaveLength(1);
-		expect(accountsAfterSecond[0].accountId).toBe(String(numericAccountId));
+		expect(accountsAfterSecond[0]!.accountId).toBe(String(numericAccountId));
 	});
 
 	it("should handle custom getUserInfo returning numeric ID", async () => {
 		const numericId = 987654321;
 
-		const { customFetchImpl, auth } = await getTestInstance({
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
@@ -724,12 +752,13 @@ describe("oauth2", async () => {
 				}),
 			],
 		});
-
+		const headers = new Headers();
 		const authClient = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 
@@ -739,9 +768,9 @@ describe("oauth2", async () => {
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
 
-		const { callbackURL, headers } = await simulateOAuthFlow(
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
 			signInRes.data?.url || "",
-			new Headers(),
+			headers,
 			customFetchImpl,
 		);
 
@@ -749,7 +778,7 @@ describe("oauth2", async () => {
 
 		const session = await authClient.getSession({
 			fetchOptions: {
-				headers,
+				headers: newHeaders,
 			},
 		});
 
@@ -758,7 +787,7 @@ describe("oauth2", async () => {
 			session.data?.user.id!,
 		);
 
-		expect(accounts[0].accountId).toBe(String(numericId));
+		expect(accounts[0]!.accountId).toBe(String(numericId));
 	});
 
 	it("should handle mapProfileToUser returning numeric ID", async () => {
@@ -776,7 +805,7 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		const { customFetchImpl, auth } = await getTestInstance({
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
@@ -799,12 +828,13 @@ describe("oauth2", async () => {
 				}),
 			],
 		});
-
+		const headers = new Headers();
 		const authClient = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 
@@ -814,9 +844,9 @@ describe("oauth2", async () => {
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
 
-		const { callbackURL, headers } = await simulateOAuthFlow(
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
 			signInRes.data?.url || "",
-			new Headers(),
+			headers,
 			customFetchImpl,
 		);
 
@@ -824,7 +854,7 @@ describe("oauth2", async () => {
 
 		const session = await authClient.getSession({
 			fetchOptions: {
-				headers,
+				headers: newHeaders,
 			},
 		});
 
@@ -833,7 +863,7 @@ describe("oauth2", async () => {
 			session.data?.user.id!,
 		);
 
-		expect(accounts[0].accountId).toBe(String(numericProfileId));
+		expect(accounts[0]!.accountId).toBe(String(numericProfileId));
 	});
 
 	it("should handle Strava OAuth with custom mapProfileToUser", async () => {
@@ -851,7 +881,7 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		const { customFetchImpl, auth } = await getTestInstance({
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
@@ -879,12 +909,13 @@ describe("oauth2", async () => {
 				}),
 			],
 		});
-
+		const headers = new Headers();
 		const authClient = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 
@@ -898,9 +929,9 @@ describe("oauth2", async () => {
 		// we missed the `activity:read_all`
 		expect(signInRes.data?.url).toContain("scope=read+activity");
 
-		const { callbackURL, headers } = await simulateOAuthFlow(
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
 			signInRes.data?.url || "",
-			new Headers(),
+			headers,
 			customFetchImpl,
 		);
 
@@ -908,7 +939,7 @@ describe("oauth2", async () => {
 
 		const session = await authClient.getSession({
 			fetchOptions: {
-				headers,
+				headers: newHeaders,
 			},
 		});
 
@@ -929,5 +960,75 @@ describe("oauth2", async () => {
 			accountId: String(stravaUserId),
 			userId: session.data?.user.id,
 		});
+	});
+
+	it("should work with cookie-based state storage", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "oauth2-cookie-state@test.com",
+				name: "OAuth2 Cookie State",
+				sub: "oauth2-cookie-state",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-cookie",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+			advanced: {
+				oauthConfig: {
+					storeStateStrategy: "cookie",
+				},
+			},
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test-cookie",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe("oauth2-cookie-state@test.com");
+		expect(session.data?.user.name).toBe("OAuth2 Cookie State");
 	});
 });

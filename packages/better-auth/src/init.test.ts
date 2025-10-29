@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
-import { init } from "./init";
 import Database from "better-sqlite3";
+import { describe, expect, it, vi } from "vitest";
 import { betterAuth } from "./auth";
 import { createAuthClient } from "./client";
+import { init } from "./init";
 import { getTestInstance } from "./test-utils/test-instance";
 
 describe("init", async () => {
@@ -196,5 +196,53 @@ describe("init", async () => {
 		expect(testProvider?.refreshAccessToken).toBeDefined();
 		const githubProvider = ctx.socialProviders.find((p) => p.id === "github");
 		expect(githubProvider).toBeDefined();
+	});
+
+	it("should init async plugin", async () => {
+		const initFn = vi.fn(async () => {
+			await new Promise((r) => setTimeout(r, 100));
+			return {
+				context: {
+					baseURL: "http://async.test",
+				},
+			};
+		});
+		await init({
+			baseURL: "http://localhost:3000",
+			database,
+			plugins: [
+				{
+					id: "test-async",
+					init: initFn,
+				},
+			],
+		});
+		expect(initFn).toHaveBeenCalled();
+	});
+
+	it("handles empty basePath", async () => {
+		const res = await init({
+			database,
+			baseURL: "http://localhost:5147/",
+			basePath: "",
+		});
+		expect(res.baseURL).toBe("http://localhost:5147");
+	});
+
+	it("handles root basePath", async () => {
+		const res = await init({
+			database,
+			baseURL: "http://localhost:5147/",
+			basePath: "/",
+		});
+		expect(res.baseURL).toBe("http://localhost:5147");
+	});
+
+	it("normalizes trailing slashes with default path", async () => {
+		const res = await init({
+			database,
+			baseURL: "http://localhost:5147////",
+		});
+		expect(res.baseURL).toBe("http://localhost:5147/api/auth");
 	});
 });

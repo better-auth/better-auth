@@ -1,25 +1,25 @@
 "use client";
 
+import { Key, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
 	CardContent,
-	CardHeader,
-	CardTitle,
 	CardDescription,
 	CardFooter,
+	CardHeader,
+	CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
 import { client, signIn } from "@/lib/auth-client";
-import Link from "next/link";
-import { cn } from "@/lib/utils";
-import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
 import { getCallbackURL } from "@/lib/shared";
+import { cn } from "@/lib/utils";
 
 export default function SignIn() {
 	const [email, setEmail] = useState("");
@@ -103,19 +103,20 @@ export default function SignIn() {
 											toast.success("Successfully signed in");
 											router.push(getCallbackURL(params));
 										},
+										onError(context) {
+											toast.error(context.error.message);
+										},
 									},
 								);
 							});
 						}}
 					>
-						<div className="flex items-center justify-between w-full">
-							<span className="flex-1">
-								{loading ? (
-									<Loader2 size={16} className="animate-spin" />
-								) : (
-									"Login"
-								)}
-							</span>
+						<div className="flex items-center justify-center w-full relative">
+							{loading ? (
+								<Loader2 size={16} className="animate-spin" />
+							) : (
+								"Login"
+							)}
 							{client.isLastUsedLoginMethod("email") && <LastUsedIndicator />}
 						</div>
 					</Button>
@@ -211,6 +212,29 @@ export default function SignIn() {
 							{client.isLastUsedLoginMethod("microsoft") && (
 								<LastUsedIndicator />
 							)}
+						</Button>
+						<Button
+							variant="outline"
+							className={cn("w-full gap-2 flex items-center relative")}
+							onClick={async () => {
+								await signIn.passkey({
+									fetchOptions: {
+										onSuccess() {
+											toast.success("Successfully signed in");
+											router.push(getCallbackURL(params));
+										},
+										onError(context) {
+											toast.error(
+												"Authentication failed: " + context.error.message,
+											);
+										},
+									},
+								});
+							}}
+						>
+							<Key size={16} />
+							<span>Sign in with Passkey</span>
+							{client.isLastUsedLoginMethod("passkey") && <LastUsedIndicator />}
 						</Button>
 					</div>
 				</div>

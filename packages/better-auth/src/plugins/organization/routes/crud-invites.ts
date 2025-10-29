@@ -1,23 +1,24 @@
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
+import { setSessionCookie } from "../../../cookies";
+import {
+	type InferAdditionalFieldsFromPluginOptions,
+	toZodSchema,
+} from "../../../db";
+import { getDate } from "../../../utils/date";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import { hasPermission } from "../has-permission";
+import { parseRoles } from "../organization";
 import {
 	type InferOrganizationRolesFromOption,
 	type Invitation,
 } from "../schema";
-import { APIError } from "better-call";
-import { parseRoles } from "../organization";
 import { type OrganizationOptions } from "../types";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
-import { setSessionCookie } from "../../../cookies";
-import {
-	toZodSchema,
-	type InferAdditionalFieldsFromPluginOptions,
-} from "../../../db";
-import { getDate } from "../../../utils/date";
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -100,19 +101,19 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 * The organization ID to invite
 						 * the user to
 						 */
-						organizationId?: string;
+						organizationId?: string | undefined;
 						/**
 						 * Resend the invitation email, if
 						 * the user is already invited
 						 */
-						resend?: boolean;
+						resend?: boolean | undefined;
 					} & (O extends { teams: { enabled: true } }
 						? {
 								/**
 								 * The team the user is
 								 * being invited to.
 								 */
-								teamId?: string | string[];
+								teamId?: (string | string[]) | undefined;
 							}
 						: {}) &
 						InferAdditionalFieldsFromPluginOptions<"invitation", O, false>,
@@ -148,6 +149,9 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											expiresAt: {
 												type: "string",
 											},
+											createdAt: {
+												type: "string",
+											},
 										},
 										required: [
 											"id",
@@ -157,6 +161,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											"inviterId",
 											"status",
 											"expiresAt",
+											"createdAt",
 										],
 									},
 								},
@@ -175,6 +180,15 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
+
+			const email = ctx.body.email.toLowerCase();
+			const isValidEmail = z.string().email().safeParse(email);
+			if (!isValidEmail.success) {
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.INVALID_EMAIL,
+				});
+			}
+
 			const adapter = getOrgAdapter<O>(ctx.context, option as O);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -219,7 +233,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const alreadyMember = await adapter.findMemberByEmail({
-				email: ctx.body.email,
+				email: email,
 				organizationId: organizationId,
 			});
 			if (alreadyMember) {
@@ -229,7 +243,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				});
 			}
 			const alreadyInvited = await adapter.findPendingInvitation({
-				email: ctx.body.email,
+				email: email,
 				organizationId: organizationId,
 			});
 			if (alreadyInvited.length && !ctx.body.resend) {
@@ -262,7 +276,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					where: [
 						{
 							field: "id",
-							value: existingInvitation.id,
+							value: existingInvitation!.id,
 						},
 					],
 					update: {
@@ -277,9 +291,9 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 				await ctx.context.orgOptions.sendInvitationEmail?.(
 					{
-						id: updatedInvitation.id,
-						role: updatedInvitation.role as string,
-						email: updatedInvitation.email.toLowerCase(),
+						id: updatedInvitation.id!,
+						role: updatedInvitation.role! as string,
+						email: updatedInvitation.email!.toLowerCase(),
 						organization: organization,
 						inviter: {
 							...member,
@@ -298,7 +312,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
 			) {
 				await adapter.updateInvitation({
-					invitationId: alreadyInvited[0].id,
+					invitationId: alreadyInvited[0]!.id,
 					status: "canceled",
 				});
 			}
@@ -385,7 +399,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 			let invitationData = {
 				role: roles,
-				email: ctx.body.email.toLowerCase(),
+				email: email,
 				organizationId: organizationId,
 				teamIds,
 				...(additionalFields ? additionalFields : {}),
@@ -597,10 +611,11 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				}
 
 				if (onlyOne) {
-					const teamId = teamIds[0];
+					const teamId = teamIds[0]!;
 					const updatedSession = await adapter.setActiveTeam(
 						session.session.token,
 						teamId,
+						ctx,
 					);
 
 					await setSessionCookie(ctx, {
@@ -620,6 +635,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			await adapter.setActiveOrganization(
 				session.session.token,
 				invitation.organizationId,
+				ctx,
 			);
 			if (!acceptedI) {
 				return ctx.json(null, {

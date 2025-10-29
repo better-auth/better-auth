@@ -16,14 +16,17 @@ exports[`init > should match config 1`] = `
         "adapterId": "kysely",
         "adapterName": "Kysely Adapter",
         "debugLogs": false,
+        "disableTransformInput": false,
+        "disableTransformOutput": false,
         "supportsBooleans": false,
         "supportsDates": false,
         "supportsJSON": false,
         "supportsNumericIds": true,
-        "transaction": [Function],
+        "transaction": false,
         "usePlural": undefined,
       },
       "debugLogs": false,
+      "transaction": undefined,
       "type": "sqlite",
     },
     "transaction": [Function],
@@ -108,6 +111,10 @@ exports[`init > should match config 1`] = `
     "warn": [Function],
   },
   "newSession": null,
+  "oauthConfig": {
+    "skipStateCookieCheck": false,
+    "storeStateStrategy": "database",
+  },
   "options": {
     "basePath": "/api/auth",
     "baseURL": "http://localhost:3000",
@@ -142,11 +149,14 @@ exports[`init > should match config 1`] = `
   "secret": "better-auth-secret-123456789",
   "session": null,
   "sessionConfig": {
+    "cookieRefreshCache": false,
     "expiresIn": 604800,
     "freshAge": 86400,
     "updateAge": 86400,
   },
   "setNewSession": [Function],
+  "skipCSRFCheck": false,
+  "skipOriginCheck": true,
   "socialProviders": [],
   "tables": {
     "account": {
@@ -289,6 +299,7 @@ exports[`init > should match config 1`] = `
         "emailVerified": {
           "defaultValue": false,
           "fieldName": "emailVerified",
+          "input": false,
           "required": true,
           "type": "boolean",
         },

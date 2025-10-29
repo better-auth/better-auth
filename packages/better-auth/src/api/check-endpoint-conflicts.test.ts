@@ -1,11 +1,32 @@
-import { describe, it, expect, vi } from "vitest";
-import { checkEndpointConflicts } from "./index";
-import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type { InternalLogger, LogLevel } from "@better-auth/core/env";
 import { createEndpoint } from "better-call";
-import { mockLogger } from "../test/utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { checkEndpointConflicts } from "./index";
+
+export let mockLoggerLevel: LogLevel = "debug";
+export const mockLogger = {
+	error: vi.fn(),
+	warn: vi.fn(),
+	info: vi.fn(),
+	debug: vi.fn(),
+	success: vi.fn(),
+	get level(): LogLevel {
+		return mockLoggerLevel;
+	},
+} satisfies InternalLogger;
 
 describe("checkEndpointConflicts", () => {
 	const endpoint = createEndpoint.create({});
+
+	beforeEach(() => {
+		mockLoggerLevel = "debug";
+		mockLogger.error.mockReset();
+		mockLogger.warn.mockReset();
+		mockLogger.info.mockReset();
+		mockLogger.debug.mockReset();
+		mockLogger.success.mockReset();
+	});
 
 	it("should not log errors when there are no endpoint conflicts", () => {
 		const plugin1: BetterAuthPlugin = {
@@ -229,7 +250,7 @@ describe("checkEndpointConflicts", () => {
 		checkEndpointConflicts(options, mockLogger);
 
 		expect(mockLogger.error).toHaveBeenCalledTimes(1);
-		const errorCall = mockLogger.error.mock.calls[0][0];
+		const errorCall = mockLogger.error.mock.calls[0]![0];
 		expect(errorCall).toContain(
 			'"/api/conflict" [GET] used by plugins: plugin1, plugin2',
 		);

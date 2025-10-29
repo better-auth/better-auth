@@ -1,22 +1,21 @@
+import type {
+	AuthContext,
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSessionFromCtx,
-} from "../../api";
-import type {
-	BetterAuthPlugin,
-	InferOptionSchema,
-	AuthPluginSchema,
-	Session,
-	User,
-	AuthContext,
-} from "../../types";
-import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
-import { getOrigin } from "../../utils/url";
-import { mergeSchema } from "../../db/schema";
+} from "@better-auth/core/api";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import { defineErrorCodes } from "@better-auth/core/utils";
 import type { EndpointContext } from "better-call";
+import { APIError, getSessionFromCtx } from "../../api";
+import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
+import { mergeSchema } from "../../db/schema";
+import type { InferOptionSchema, Session, User } from "../../types";
 import { generateId } from "../../utils/id";
+import { getOrigin } from "../../utils/url";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
@@ -27,43 +26,48 @@ export interface AnonymousOptions {
 	 * address for anonymous users in the database.
 	 * @default "baseURL"
 	 */
-	emailDomainName?: string;
+	emailDomainName?: string | undefined;
 	/**
 	 * A useful hook to run after an anonymous user
 	 * is about to link their account.
 	 */
-	onLinkAccount?: (data: {
-		anonymousUser: {
-			user: UserWithAnonymous & Record<string, any>;
-			session: Session & Record<string, any>;
-		};
-		newUser: {
-			user: User & Record<string, any>;
-			session: Session & Record<string, any>;
-		};
-	}) => Promise<void> | void;
+	onLinkAccount?:
+		| ((data: {
+				anonymousUser: {
+					user: UserWithAnonymous & Record<string, any>;
+					session: Session & Record<string, any>;
+				};
+				newUser: {
+					user: User & Record<string, any>;
+					session: Session & Record<string, any>;
+				};
+				ctx: GenericEndpointContext;
+		  }) => Promise<void> | void)
+		| undefined;
 	/**
 	 * Disable deleting the anonymous user after linking
 	 */
-	disableDeleteAnonymousUser?: boolean;
+	disableDeleteAnonymousUser?: boolean | undefined;
 	/**
 	 * A hook to generate a name for the anonymous user.
 	 * Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
 	 * @returns The name for the anonymous user.
 	 */
-	generateName?: (
-		ctx: EndpointContext<
-			"/sign-in/anonymous",
-			{
-				method: "POST";
-			},
-			AuthContext
-		>,
-	) => Promise<string> | string;
+	generateName?:
+		| ((
+				ctx: EndpointContext<
+					"/sign-in/anonymous",
+					{
+						method: "POST";
+					},
+					AuthContext
+				>,
+		  ) => Promise<string> | string)
+		| undefined;
 	/**
 	 * Custom schema for the anonymous plugin
 	 */
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
 const schema = {
@@ -75,15 +79,16 @@ const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;
 
-export const anonymous = (options?: AnonymousOptions) => {
-	const ERROR_CODES = {
-		FAILED_TO_CREATE_USER: "Failed to create user",
-		COULD_NOT_CREATE_SESSION: "Could not create session",
-		ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY:
-			"Anonymous users cannot sign in again anonymously",
-	} as const;
+const ERROR_CODES = defineErrorCodes({
+	FAILED_TO_CREATE_USER: "Failed to create user",
+	COULD_NOT_CREATE_SESSION: "Could not create session",
+	ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY:
+		"Anonymous users cannot sign in again anonymously",
+});
+
+export const anonymous = (options?: AnonymousOptions | undefined) => {
 	return {
 		id: "anonymous",
 		endpoints: {
@@ -137,17 +142,14 @@ export const anonymous = (options?: AnonymousOptions) => {
 					const id = generateId();
 					const email = `temp-${id}@${emailDomainName}`;
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
-					const newUser = await ctx.context.internalAdapter.createUser(
-						{
-							email,
-							emailVerified: false,
-							isAnonymous: true,
-							name,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						},
-						ctx,
-					);
+					const newUser = await ctx.context.internalAdapter.createUser({
+						email,
+						emailVerified: false,
+						isAnonymous: true,
+						name,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					});
 					if (!newUser) {
 						throw ctx.error("INTERNAL_SERVER_ERROR", {
 							message: ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -155,7 +157,6 @@ export const anonymous = (options?: AnonymousOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						newUser.id,
-						ctx,
 					);
 					if (!session) {
 						return ctx.json(null, {
@@ -195,7 +196,8 @@ export const anonymous = (options?: AnonymousOptions) => {
 							ctx.path.startsWith("/magic-link/verify") ||
 							ctx.path.startsWith("/email-otp/verify-email") ||
 							ctx.path.startsWith("/one-tap/callback") ||
-							ctx.path.startsWith("/passkey/verify-authentication")
+							ctx.path.startsWith("/passkey/verify-authentication") ||
+							ctx.path.startsWith("/phone-number/verify")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
@@ -211,7 +213,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						 */
 						const sessionCookie = parseSetCookieHeader(setCookie || "")
 							.get(sessionTokenName)
-							?.value.split(".")[0];
+							?.value.split(".")[0]!;
 
 						if (!sessionCookie) {
 							return;
@@ -248,6 +250,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 							await options?.onLinkAccount?.({
 								anonymousUser: session,
 								newUser: newSession,
+								ctx,
 							});
 						}
 						if (!options?.disableDeleteAnonymousUser) {

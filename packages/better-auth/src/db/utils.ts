@@ -1,42 +1,56 @@
-import { getAuthTables, type FieldAttribute } from ".";
-import { BetterAuthError } from "../error";
-import type { Adapter, BetterAuthOptions } from "../types";
-import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
 import { kyselyAdapter } from "../adapters/kysely-adapter";
-import { memoryAdapter } from "../adapters/memory-adapter";
-import { logger } from "../utils";
+import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
+import { type MemoryDB, memoryAdapter } from "../adapters/memory-adapter";
+import { getAuthTables } from ".";
 
-export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
+export async function getAdapter(
+	options: BetterAuthOptions,
+): Promise<DBAdapter<BetterAuthOptions>> {
+	let adapter: DBAdapter<BetterAuthOptions>;
 	if (!options.database) {
 		const tables = getAuthTables(options);
-		const memoryDB = Object.keys(tables).reduce((acc, key) => {
-			// @ts-expect-error
+		const memoryDB = Object.keys(tables).reduce<MemoryDB>((acc, key) => {
 			acc[key] = [];
 			return acc;
 		}, {});
 		logger.warn(
 			"No database configuration provided. Using memory adapter in development",
 		);
-		return memoryAdapter(memoryDB)(options);
+		adapter = memoryAdapter(memoryDB)(options);
+	} else if (typeof options.database === "function") {
+		adapter = options.database(options);
+	} else {
+		const { kysely, databaseType, transaction } =
+			await createKyselyAdapter(options);
+		if (!kysely) {
+			throw new BetterAuthError("Failed to initialize database adapter");
+		}
+		adapter = kyselyAdapter(kysely, {
+			type: databaseType || "sqlite",
+			debugLogs:
+				"debugLogs" in options.database ? options.database.debugLogs : false,
+			transaction: transaction,
+		})(options);
 	}
-
-	if (typeof options.database === "function") {
-		return options.database(options);
+	// patch for 1.3.x to ensure we have a transaction function in the adapter
+	if (!adapter.transaction) {
+		logger.warn(
+			"Adapter does not correctly implement transaction function, patching it automatically. Please update your adapter implementation.",
+		);
+		adapter.transaction = async (cb) => {
+			return cb(adapter);
+		};
 	}
-
-	const { kysely, databaseType } = await createKyselyAdapter(options);
-	if (!kysely) {
-		throw new BetterAuthError("Failed to initialize database adapter");
-	}
-	return kyselyAdapter(kysely, {
-		type: databaseType || "sqlite",
-		debugLogs:
-			"debugLogs" in options.database ? options.database.debugLogs : false,
-	})(options);
+	return adapter;
 }
 
 export function convertToDB<T extends Record<string, any>>(
-	fields: Record<string, FieldAttribute>,
+	fields: Record<string, DBFieldAttribute>,
 	values: T,
 ) {
 	let result: Record<string, any> = values.id
@@ -45,7 +59,7 @@ export function convertToDB<T extends Record<string, any>>(
 			}
 		: {};
 	for (const key in fields) {
-		const field = fields[key];
+		const field = fields[key]!;
 		const value = values[key];
 		if (value === undefined) {
 			continue;
@@ -56,7 +70,7 @@ export function convertToDB<T extends Record<string, any>>(
 }
 
 export function convertFromDB<T extends Record<string, any>>(
-	fields: Record<string, FieldAttribute>,
+	fields: Record<string, DBFieldAttribute>,
 	values: T | null,
 ) {
 	if (!values) {

@@ -1,19 +1,19 @@
+import type { BetterAuthOptions } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "better-call";
 import * as z from "zod";
-import { createAuthEndpoint } from "../call";
-
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto";
+import { parseUserInput } from "../../db/schema";
+import type { AdditionalUserFieldsInput } from "../../types";
+import { originCheck } from "../middlewares";
+import { createEmailVerificationToken } from "./email-verification";
 import {
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
 	sessionMiddleware,
 } from "./session";
-import { APIError } from "better-call";
-import { createEmailVerificationToken } from "./email-verification";
-import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
-import { parseUserInput } from "../../db/schema";
-import { generateRandomString } from "../../crypto";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { originCheck } from "../middlewares";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -30,8 +30,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			metadata: {
 				$Infer: {
 					body: {} as Partial<AdditionalUserFieldsInput<O>> & {
-						name?: string;
-						image?: string;
+						name?: string | undefined;
+						image?: string | undefined;
 					},
 				},
 				openapi: {
@@ -78,8 +78,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		},
 		async (ctx) => {
 			const body = ctx.body as {
-				name?: string;
-				image?: string;
+				name?: string | undefined;
+				image?: string | undefined;
 				[key: string]: any;
 			};
 
@@ -90,20 +90,20 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			}
 			const { name, image, ...rest } = body;
 			const session = ctx.context.session;
-			if (
-				image === undefined &&
-				name === undefined &&
-				Object.keys(rest).length === 0
-			) {
-				return ctx.json({
-					status: true,
-				});
-			}
 			const additionalFields = parseUserInput(
 				ctx.context.options,
 				rest,
 				"update",
 			);
+			if (
+				image === undefined &&
+				name === undefined &&
+				Object.keys(additionalFields).length === 0
+			) {
+				throw new APIError("BAD_REQUEST", {
+					message: "No fields to update",
+				});
+			}
 			const user = await ctx.context.internalAdapter.updateUser(
 				session.user.id,
 				{
@@ -111,7 +111,6 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					image,
 					...additionalFields,
 				},
-				ctx,
 			);
 			/**
 			 * Update the session cookie with the new user data
@@ -277,7 +276,6 @@ export const changePassword = createAuthEndpoint(
 			await ctx.context.internalAdapter.deleteSessions(session.user.id);
 			const newSession = await ctx.context.internalAdapter.createSession(
 				session.user.id,
-				ctx,
 			);
 			if (!newSession) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -352,15 +350,12 @@ export const setPassword = createAuthEndpoint(
 		);
 		const passwordHash = await ctx.context.password.hash(newPassword);
 		if (!account) {
-			await ctx.context.internalAdapter.linkAccount(
-				{
-					userId: session.user.id,
-					providerId: "credential",
-					accountId: session.user.id,
-					password: passwordHash,
-				},
-				ctx,
-			);
+			await ctx.context.internalAdapter.linkAccount({
+				userId: session.user.id,
+				providerId: "credential",
+				accountId: session.user.id,
+				password: passwordHash,
+			});
 			return ctx.json({
 				status: true,
 			});
@@ -443,9 +438,6 @@ export const deleteUser = createAuthEndpoint(
 		if (!ctx.context.options.user?.deleteUser?.enabled) {
 			ctx.context.logger.error(
 				"Delete user is disabled. Enable it in the options",
-				{
-					session: ctx.context.session,
-				},
 			);
 			throw new APIError("NOT_FOUND");
 		}
@@ -490,19 +482,16 @@ export const deleteUser = createAuthEndpoint(
 
 		if (ctx.context.options.user.deleteUser?.sendDeleteAccountVerification) {
 			const token = generateRandomString(32, "0-9", "a-z");
-			await ctx.context.internalAdapter.createVerificationValue(
-				{
-					value: session.user.id,
-					identifier: `delete-account-${token}`,
-					expiresAt: new Date(
-						Date.now() +
-							(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
-								60 * 60 * 24) *
-								1000,
-					),
-				},
-				ctx,
-			);
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: session.user.id,
+				identifier: `delete-account-${token}`,
+				expiresAt: new Date(
+					Date.now() +
+						(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
+							60 * 60 * 24) *
+							1000,
+				),
+			});
 			const url = `${
 				ctx.context.baseURL
 			}/delete-user/callback?token=${token}&callbackURL=${
@@ -539,7 +528,6 @@ export const deleteUser = createAuthEndpoint(
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
-		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		deleteSessionCookie(ctx);
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
 		if (afterDelete) {
@@ -744,7 +732,7 @@ export const changeEmail = createAuthEndpoint(
 				await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (existing) {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
+					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				});
 			}
 			await ctx.context.internalAdapter.updateUserByEmail(
@@ -752,7 +740,6 @@ export const changeEmail = createAuthEndpoint(
 				{
 					email: newEmail,
 				},
-				ctx,
 			);
 			await setSessionCookie(ctx, {
 				session: ctx.context.session.session,

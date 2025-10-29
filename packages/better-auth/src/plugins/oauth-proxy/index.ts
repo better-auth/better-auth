@@ -1,14 +1,14 @@
-import * as z from "zod";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-	originCheck,
-} from "../../api";
-import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "../../types";
-import { env } from "../../utils/env";
-import { getOrigin } from "../../utils/url";
+} from "@better-auth/core/api";
+import { env } from "@better-auth/core/env";
 import type { EndpointContext } from "better-call";
+import * as z from "zod";
+import { originCheck } from "../../api";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { getOrigin } from "../../utils/url";
 
 function getVenderBaseURL() {
 	const vercel = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined;
@@ -21,7 +21,7 @@ function getVenderBaseURL() {
 	return vercel || netlify || render || aws || google || azure;
 }
 
-interface OAuthProxyOptions {
+export interface OAuthProxyOptions {
 	/**
 	 * The current URL of the application.
 	 * The plugin will attempt to infer the current URL from your environment
@@ -30,13 +30,13 @@ interface OAuthProxyOptions {
 	 * or as a fallback, from the `baseURL` in your auth config.
 	 * If the URL is not inferred correctly, you can provide a value here."
 	 */
-	currentURL?: string;
+	currentURL?: string | undefined;
 	/**
 	 * If a request in a production url it won't be proxied.
 	 *
 	 * default to `BETTER_AUTH_URL`
 	 */
-	productionURL?: string;
+	productionURL?: string | undefined;
 }
 
 /**
@@ -44,7 +44,7 @@ interface OAuthProxyOptions {
  * Useful for development and preview deployments where
  * the redirect URL can't be known in advance to add to the OAuth provider.
  */
-export const oAuthProxy = (opts?: OAuthProxyOptions) => {
+export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 	const resolveCurrentURL = (ctx: EndpointContext<string, any>) => {
 		return new URL(
 			opts?.currentURL ||
@@ -54,8 +54,22 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 		);
 	};
 
+	const checkSkipProxy = (ctx: EndpointContext<string, any>) => {
+		// if skip proxy header is set, we don't need to proxy
+		const skipProxy = ctx.request?.headers.get("x-skip-oauth-proxy");
+		if (skipProxy) {
+			return true;
+		}
+		const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
+		if (productionURL === ctx.context.options.baseURL) {
+			return true;
+		}
+		return false;
+	};
+
 	return {
 		id: "oauth-proxy",
+		options: opts,
 		endpoints: {
 			oAuthProxy: createAuthEndpoint(
 				"/oauth-proxy-callback",
@@ -139,7 +153,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return (
+						return !!(
 							context.path?.startsWith("/callback") ||
 							context.path?.startsWith("/oauth2/callback")
 						);
@@ -157,7 +171,11 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 							 * We don't want to redirect to the proxy URL if the origin is the same
 							 * as the current URL
 							 */
-							if (origin === getOrigin(ctx.context.baseURL)) {
+							const productionURL =
+								opts?.productionURL ||
+								ctx.context.options.baseURL ||
+								ctx.context.baseURL;
+							if (origin === getOrigin(productionURL)) {
 								const newLocation = locationURL.searchParams.get("callbackURL");
 								if (!newLocation) {
 									return;
@@ -185,21 +203,39 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 			],
 			before: [
 				{
+					matcher() {
+						return true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const skipProxy = checkSkipProxy(ctx);
+						if (skipProxy || ctx.path !== "/callback/:id") {
+							return;
+						}
+						return {
+							context: {
+								context: {
+									oauthConfig: {
+										skipStateCookieCheck: true,
+									},
+								},
+							},
+						};
+					}),
+				},
+				{
 					matcher(context) {
-						return (
+						return !!(
 							context.path?.startsWith("/sign-in/social") ||
 							context.path?.startsWith("/sign-in/oauth2")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						// if skip proxy header is set, we don't need to proxy
-						const skipProxy = ctx.request?.headers.get("x-skip-oauth-proxy");
+						const skipProxy = checkSkipProxy(ctx);
 						if (skipProxy) {
 							return;
 						}
 						const url = resolveCurrentURL(ctx);
-						const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
-						if (productionURL === ctx.context.options.baseURL) {
+						if (!ctx.body) {
 							return;
 						}
 						ctx.body.callbackURL = `${url.origin}${

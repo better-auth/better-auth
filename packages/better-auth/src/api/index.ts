@@ -1,44 +1,49 @@
-import { APIError, type Middleware, createRouter } from "better-call";
-import type { AuthContext } from "../init";
-import type { BetterAuthOptions } from "../types";
-import type { UnionToIntersection } from "../types/helper";
-import { originCheckMiddleware } from "./middlewares/origin-check";
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	BetterAuthPlugin,
+} from "@better-auth/core";
+import { type InternalLogger, logger } from "@better-auth/core/env";
 import {
+	APIError,
+	createRouter,
+	type Endpoint,
+	type Middleware,
+} from "better-call";
+import type { UnionToIntersection } from "../types/helper";
+import { originCheckMiddleware } from "./middlewares";
+import { onRequestRateLimit } from "./rate-limiter";
+import {
+	accountInfo,
 	callbackOAuth,
-	forgetPassword,
-	forgetPasswordCallback,
+	changeEmail,
+	changePassword,
+	deleteUser,
+	deleteUserCallback,
+	error,
+	getAccessToken,
 	getSession,
+	linkSocialAccount,
 	listSessions,
+	listUserAccounts,
+	ok,
+	refreshToken,
+	requestPasswordReset,
+	requestPasswordResetCallback,
 	resetPassword,
+	revokeOtherSessions,
 	revokeSession,
 	revokeSessions,
 	sendVerificationEmail,
-	changeEmail,
+	setPassword,
 	signInEmail,
 	signInSocial,
 	signOut,
-	verifyEmail,
-	linkSocialAccount,
-	revokeOtherSessions,
-	listUserAccounts,
-	changePassword,
-	deleteUser,
-	setPassword,
-	updateUser,
-	deleteUserCallback,
+	signUpEmail,
 	unlinkAccount,
-	refreshToken,
-	getAccessToken,
-	accountInfo,
-	requestPasswordReset,
-	requestPasswordResetCallback,
+	updateUser,
+	verifyEmail,
 } from "./routes";
-import { ok } from "./routes/ok";
-import { signUpEmail } from "./routes/sign-up";
-import { error } from "./routes/error";
-import { type InternalLogger, logger } from "../utils/logger";
-import type { BetterAuthPlugin } from "../plugins";
-import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 
 export function checkEndpointConflicts(
@@ -152,19 +157,17 @@ To resolve this, you can:
 	}
 }
 
-export function getEndpoints<
-	C extends AuthContext,
-	Option extends BetterAuthOptions,
->(ctx: Promise<C> | C, options: Option) {
-	const pluginEndpoints = options.plugins?.reduce(
-		(acc, plugin) => {
+export function getEndpoints<Option extends BetterAuthOptions>(
+	ctx: Promise<AuthContext> | AuthContext,
+	options: Option,
+) {
+	const pluginEndpoints =
+		options.plugins?.reduce<Record<string, Endpoint>>((acc, plugin) => {
 			return {
 				...acc,
 				...plugin.endpoints,
 			};
-		},
-		{} as Record<string, any>,
-	);
+		}, {}) ?? {};
 
 	type PluginEndpoint = UnionToIntersection<
 		Option["plugins"] extends Array<infer T>
@@ -209,7 +212,6 @@ export function getEndpoints<
 		signOut,
 		signUpEmail: signUpEmail<Option>(),
 		signInEmail,
-		forgetPassword,
 		resetPassword,
 		verifyEmail,
 		sendVerificationEmail,
@@ -218,7 +220,6 @@ export function getEndpoints<
 		setPassword,
 		updateUser: updateUser<Option>(),
 		deleteUser,
-		forgetPasswordCallback,
 		requestPasswordReset,
 		requestPasswordResetCallback,
 		listSessions: listSessions<Option>(),
@@ -238,15 +239,15 @@ export function getEndpoints<
 		...pluginEndpoints,
 		ok,
 		error,
-	};
+	} as const;
 	const api = toAuthEndpoints(endpoints, ctx);
 	return {
 		api: api as typeof endpoints & PluginEndpoint,
 		middlewares,
 	};
 }
-export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
-	ctx: C,
+export const router = <Option extends BetterAuthOptions>(
+	ctx: AuthContext,
 	options: Option,
 ) => {
 	const { api, middlewares } = getEndpoints(ctx, options);
@@ -277,6 +278,16 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 					const response = await plugin.onRequest(req, ctx);
 					if (response && "response" in response) {
 						return response.response;
+					}
+					if (response && "request" in response) {
+						const rateLimitResponse = await onRequestRateLimit(
+							response.request,
+							ctx,
+						);
+						if (rateLimitResponse) {
+							return rateLimitResponse;
+						}
+						return response.request;
 					}
 				}
 			}
@@ -347,7 +358,13 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	});
 };
 
-export * from "./routes";
-export * from "./middlewares";
-export * from "./call";
+export {
+	type AuthEndpoint,
+	type AuthMiddleware,
+	createAuthEndpoint,
+	createAuthMiddleware,
+	optionsMiddleware,
+} from "@better-auth/core/api";
 export { APIError } from "better-call";
+export * from "./middlewares";
+export * from "./routes";

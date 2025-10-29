@@ -1,15 +1,23 @@
+import type {
+	BetterAuthClientOptions,
+	ClientAtomListener,
+} from "@better-auth/core";
 import { createFetch } from "@better-fetch/fetch";
-import { getBaseURL } from "../utils/url";
 import { type WritableAtom } from "nanostores";
-import type { AtomListener, ClientOptions } from "./types";
-import { redirectPlugin } from "./fetch-plugins";
-import { getSessionAtom } from "./session-atom";
+import { getBaseURL } from "../utils/url";
+import { redirectPlugin, userAgentPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
+import { getSessionAtom } from "./session-atom";
 
-export const getClientConfig = (options?: ClientOptions) => {
+export const getClientConfig = (
+	options?: BetterAuthClientOptions | undefined,
+	loadEnv?: boolean | undefined,
+) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
-	const baseURL = getBaseURL(options?.baseURL, options?.basePath);
+	const baseURL =
+		getBaseURL(options?.baseURL, options?.basePath, undefined, loadEnv) ??
+		"/api/auth";
 	const pluginsFetchPlugins =
 		options?.plugins
 			?.flatMap((plugin) => plugin.fetchPlugins)
@@ -42,12 +50,13 @@ export const getClientConfig = (options?: ClientOptions) => {
 		...restOfFetchOptions,
 		plugins: [
 			lifeCyclePlugin,
+			userAgentPlugin,
 			...(restOfFetchOptions.plugins || []),
 			...(options?.disableDefaultFetchPlugins ? [] : [redirectPlugin]),
 			...pluginsFetchPlugins,
 		],
 	});
-	const { $sessionSignal, session } = getSessionAtom($fetch);
+	const { $sessionSignal, session } = getSessionAtom($fetch, options);
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	let pluginsAtoms = {
@@ -60,7 +69,7 @@ export const getClientConfig = (options?: ClientOptions) => {
 		"/revoke-other-sessions": "POST",
 		"/delete-user": "POST",
 	};
-	const atomListeners: AtomListener[] = [
+	const atomListeners: ClientAtomListener[] = [
 		{
 			signal: "$sessionSignal",
 			matcher(path) {
@@ -89,16 +98,18 @@ export const getClientConfig = (options?: ClientOptions) => {
 	}
 
 	const $store = {
-		notify: (signal?: Omit<string, "$sessionSignal"> | "$sessionSignal") => {
-			pluginsAtoms[signal as keyof typeof pluginsAtoms].set(
-				!pluginsAtoms[signal as keyof typeof pluginsAtoms].get(),
+		notify: (
+			signal?: (Omit<string, "$sessionSignal"> | "$sessionSignal") | undefined,
+		) => {
+			pluginsAtoms[signal as keyof typeof pluginsAtoms]!.set(
+				!pluginsAtoms[signal as keyof typeof pluginsAtoms]!.get(),
 			);
 		},
 		listen: (
 			signal: Omit<string, "$sessionSignal"> | "$sessionSignal",
 			listener: (value: boolean, oldValue?: boolean | undefined) => void,
 		) => {
-			pluginsAtoms[signal as keyof typeof pluginsAtoms].subscribe(listener);
+			pluginsAtoms[signal as keyof typeof pluginsAtoms]!.subscribe(listener);
 		},
 		atoms: pluginsAtoms,
 	};

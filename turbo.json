@@ -37,10 +37,6 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "typecheck": {
-      "outputs": [],
-      "cache": true
-    },
     "deploy": {
       "cache": false
     },

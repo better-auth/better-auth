@@ -1,11 +1,13 @@
-import { expect, test, describe, beforeAll } from "vitest";
-import type { Adapter, BetterAuthOptions, User } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { beforeAll, describe, expect, test } from "vitest";
+import type { User } from "../types";
 import { generateId } from "../utils";
 
 interface AdapterTestOptions {
 	getAdapter: (
 		customOptions?: Omit<BetterAuthOptions, "database">,
-	) => Promise<Adapter>;
+	) => Promise<DBAdapter<BetterAuthOptions>> | DBAdapter<BetterAuthOptions>;
 	disableTests?: Partial<Record<keyof typeof adapterTests, boolean>>;
 	testPrefix?: string;
 }
@@ -13,7 +15,7 @@ interface AdapterTestOptions {
 interface NumberIdAdapterTestOptions {
 	getAdapter: (
 		customOptions?: Omit<BetterAuthOptions, "database">,
-	) => Promise<Adapter>;
+	) => Promise<DBAdapter<BetterAuthOptions>>;
 	disableTests?: Partial<Record<keyof typeof numberIdAdapterTests, boolean>>;
 	testPrefix?: string;
 }
@@ -65,12 +67,18 @@ const numberIdAdapterTests = {
 // biome-ignore lint/performance/noDelete: testing propose
 delete numberIdAdapterTests.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND;
 
-async function adapterTest(
+/**
+ * @deprecated Use `testAdapter` instead.
+ */
+function adapterTest(
 	{ getAdapter, disableTests: disabledTests, testPrefix }: AdapterTestOptions,
 	internalOptions?: {
 		predefinedOptions: Omit<BetterAuthOptions, "database">;
 	},
 ) {
+	console.warn(
+		"This test function is deprecated and will be removed in the future. Use `testAdapter` instead.",
+	);
 	const adapter = async () =>
 		await getAdapter(internalOptions?.predefinedOptions);
 
@@ -511,7 +519,7 @@ async function adapterTest(
 					direction: "asc",
 				},
 			});
-			expect(res[0].name).toBe("a");
+			expect(res[0]!.name).toBe("a");
 
 			const res2 = await (await adapter()).findMany<User>({
 				model: "user",
@@ -521,7 +529,7 @@ async function adapterTest(
 				},
 			});
 
-			expect(res2[res2.length - 1].name).toBe("a");
+			expect(res2[res2.length - 1]!.name).toBe("a");
 		},
 	);
 
@@ -874,12 +882,26 @@ async function adapterTest(
 
 	test.skipIf(disabledTests?.SHOULD_ROLLBACK_FAILING_TRANSACTION)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.SHOULD_ROLLBACK_FAILING_TRANSACTION}`,
-		async ({ onTestFailed }) => {
+		async ({ onTestFailed, skip }) => {
 			await resetDebugLogs();
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
 			const customAdapter = await adapter();
+
+			// Check if adapter actually supports transactions
+			const enableTransaction =
+				customAdapter?.options?.adapterConfig.transaction;
+			if (!enableTransaction) {
+				skip(
+					`Skipping test: ${
+						customAdapter?.options?.adapterConfig.adapterName || "Adapter"
+					}
+					 does not support transactions`,
+				);
+				return;
+			}
+
 			const user5 = {
 				name: "user5",
 				email: getUniqueEmail("user5@email.com"),
@@ -924,12 +946,25 @@ async function adapterTest(
 
 	test.skipIf(disabledTests?.SHOULD_RETURN_TRANSACTION_RESULT)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.SHOULD_RETURN_TRANSACTION_RESULT}`,
-		async ({ onTestFailed }) => {
+		async ({ onTestFailed, skip }) => {
 			await resetDebugLogs();
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
 			const customAdapter = await adapter();
+
+			const enableTransaction =
+				customAdapter?.options?.adapterConfig.transaction;
+			if (!enableTransaction) {
+				skip(
+					`Skipping test: ${
+						customAdapter?.options?.adapterConfig.adapterName || "Adapter"
+					}
+					 does not support transactions`,
+				);
+				return;
+			}
+
 			const result = await customAdapter.transaction(async (tx) => {
 				const createdUser = await tx.create<User>({
 					model: "user",
@@ -1018,11 +1053,11 @@ async function adapterTest(
 	);
 }
 
-export async function runAdapterTest(opts: AdapterTestOptions) {
+export function runAdapterTest(opts: AdapterTestOptions) {
 	return adapterTest(opts);
 }
 
-export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
+export function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 	const cleanup: { modelName: string; id: string }[] = [];
 
 	// Generate unique test identifier for this test run to avoid conflicts
@@ -1123,4 +1158,13 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 			},
 		);
 	});
+}
+
+export function recoverProcessTZ() {
+	const originalTZ = process.env.TZ;
+	return {
+		[Symbol.dispose]: () => {
+			process.env.TZ = originalTZ;
+		},
+	};
 }
