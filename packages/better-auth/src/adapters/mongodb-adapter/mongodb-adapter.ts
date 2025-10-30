@@ -143,19 +143,59 @@ export const mongodbAdapter = (
 							};
 							break;
 						case "gt":
-							condition = { [field]: { $gt: value } };
+							condition = {
+								[field]: {
+									$gt: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "gte":
-							condition = { [field]: { $gte: value } };
+							condition = {
+								[field]: {
+									$gte: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "lt":
-							condition = { [field]: { $lt: value } };
+							condition = {
+								[field]: {
+									$lt: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "lte":
-							condition = { [field]: { $lte: value } };
+							condition = {
+								[field]: {
+									$lte: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "ne":
-							condition = { [field]: { $ne: value } };
+							condition = {
+								[field]: {
+									$ne: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "contains":
 							condition = {
