@@ -1,5 +1,5 @@
 import type { Account, User } from "better-auth";
-import type { SCIMName, SCIMEmail } from "./types";
+import type { SCIMEmail, SCIMName } from "./types";
 
 export const createUserResource = (
 	baseURL: string,

@@ -827,83 +827,88 @@ export const sso = (options?: SSOOptions | undefined) => {
 					let scimToken: string | undefined;
 
 					if (options?.enableSCIMProvisioning) {
-						const isSCIMPluginEnabled = ctx.context.options.plugins?.some((p) => p.id === 'scim');
+						const isSCIMPluginEnabled = ctx.context.options.plugins?.some(
+							(p) => p.id === "scim",
+						);
 
 						if (isSCIMPluginEnabled) {
 							scimToken = randomBytes(48).toString("hex");
 						}
 					}
 
-					const provider = await ctx.context.adapter.transaction<SSOProvider>(async () => {
-						if (scimToken) {
-							ctx.context.logger.debug('SCIM token provisioning activated');
-							await ctx.context.adapter.create<Record<string, any>, null>({
-								model: "scimProvider",
+					const provider = await ctx.context.adapter.transaction<SSOProvider>(
+						async () => {
+							if (scimToken) {
+								ctx.context.logger.debug("SCIM token provisioning activated");
+								await ctx.context.adapter.create<Record<string, any>, null>({
+									model: "scimProvider",
+									data: {
+										organizationId: body.organizationId,
+										providerId: body.providerId,
+										scimToken,
+									},
+								});
+							}
+
+							return await ctx.context.adapter.create<
+								Record<string, any>,
+								SSOProvider
+							>({
+								model: "ssoProvider",
 								data: {
+									issuer: body.issuer,
+									domain: body.domain,
+									oidcConfig: body.oidcConfig
+										? JSON.stringify({
+												issuer: body.issuer,
+												clientId: body.oidcConfig.clientId,
+												clientSecret: body.oidcConfig.clientSecret,
+												authorizationEndpoint:
+													body.oidcConfig.authorizationEndpoint,
+												tokenEndpoint: body.oidcConfig.tokenEndpoint,
+												tokenEndpointAuthentication:
+													body.oidcConfig.tokenEndpointAuthentication,
+												jwksEndpoint: body.oidcConfig.jwksEndpoint,
+												pkce: body.oidcConfig.pkce,
+												discoveryEndpoint:
+													body.oidcConfig.discoveryEndpoint ||
+													`${body.issuer}/.well-known/openid-configuration`,
+												mapping: body.oidcConfig.mapping,
+												scopes: body.oidcConfig.scopes,
+												userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
+												overrideUserInfo:
+													ctx.body.overrideUserInfo ||
+													options?.defaultOverrideUserInfo ||
+													false,
+											})
+										: null,
+									samlConfig: body.samlConfig
+										? JSON.stringify({
+												issuer: body.issuer,
+												entryPoint: body.samlConfig.entryPoint,
+												cert: body.samlConfig.cert,
+												callbackUrl: body.samlConfig.callbackUrl,
+												audience: body.samlConfig.audience,
+												idpMetadata: body.samlConfig.idpMetadata,
+												spMetadata: body.samlConfig.spMetadata,
+												wantAssertionsSigned:
+													body.samlConfig.wantAssertionsSigned,
+												signatureAlgorithm: body.samlConfig.signatureAlgorithm,
+												digestAlgorithm: body.samlConfig.digestAlgorithm,
+												identifierFormat: body.samlConfig.identifierFormat,
+												privateKey: body.samlConfig.privateKey,
+												decryptionPvk: body.samlConfig.decryptionPvk,
+												additionalParams: body.samlConfig.additionalParams,
+												mapping: body.samlConfig.mapping,
+											})
+										: null,
 									organizationId: body.organizationId,
+									userId: ctx.context.session.user.id,
 									providerId: body.providerId,
-									scimToken,
 								},
 							});
-						}
-
-						return await ctx.context.adapter.create<
-							Record<string, any>,
-							SSOProvider
-						>({
-							model: "ssoProvider",
-							data: {
-								issuer: body.issuer,
-								domain: body.domain,
-								oidcConfig: body.oidcConfig
-									? JSON.stringify({
-											issuer: body.issuer,
-											clientId: body.oidcConfig.clientId,
-											clientSecret: body.oidcConfig.clientSecret,
-											authorizationEndpoint:
-												body.oidcConfig.authorizationEndpoint,
-											tokenEndpoint: body.oidcConfig.tokenEndpoint,
-											tokenEndpointAuthentication:
-												body.oidcConfig.tokenEndpointAuthentication,
-											jwksEndpoint: body.oidcConfig.jwksEndpoint,
-											pkce: body.oidcConfig.pkce,
-											discoveryEndpoint:
-												body.oidcConfig.discoveryEndpoint ||
-												`${body.issuer}/.well-known/openid-configuration`,
-											mapping: body.oidcConfig.mapping,
-											scopes: body.oidcConfig.scopes,
-											userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
-											overrideUserInfo:
-												ctx.body.overrideUserInfo ||
-												options?.defaultOverrideUserInfo ||
-												false,
-										})
-									: null,
-								samlConfig: body.samlConfig
-									? JSON.stringify({
-											issuer: body.issuer,
-											entryPoint: body.samlConfig.entryPoint,
-											cert: body.samlConfig.cert,
-											callbackUrl: body.samlConfig.callbackUrl,
-											audience: body.samlConfig.audience,
-											idpMetadata: body.samlConfig.idpMetadata,
-											spMetadata: body.samlConfig.spMetadata,
-											wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
-											signatureAlgorithm: body.samlConfig.signatureAlgorithm,
-											digestAlgorithm: body.samlConfig.digestAlgorithm,
-											identifierFormat: body.samlConfig.identifierFormat,
-											privateKey: body.samlConfig.privateKey,
-											decryptionPvk: body.samlConfig.decryptionPvk,
-											additionalParams: body.samlConfig.additionalParams,
-											mapping: body.samlConfig.mapping,
-										})
-									: null,
-								organizationId: body.organizationId,
-								userId: ctx.context.session.user.id,
-								providerId: body.providerId,
-							},
-						});
-					});
+						},
+					);
 
 					return ctx.json({
 						...provider,

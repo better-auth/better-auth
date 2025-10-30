@@ -4,6 +4,10 @@ export interface SCIMProvider {
 	organizationId: string;
 }
 
-export type SCIMName = { formatted?: string; givenName?: string; familyName?: string };
+export type SCIMName = {
+	formatted?: string;
+	givenName?: string;
+	familyName?: string;
+};
 
 export type SCIMEmail = { value?: string; primary?: boolean };

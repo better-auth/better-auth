@@ -8,14 +8,14 @@ import { APIError } from "better-auth/api";
 import { createAuthEndpoint, type Member } from "better-auth/plugins";
 import * as z from "zod/v4";
 import { authMiddleware } from "./middlewares";
-import { UserResourceSchema } from "./schemas";
 import {
+	createUserResource,
 	getUserFullName,
 	getUserPrimaryEmail,
-	createUserResource,
 	getUserResourceLocation,
 } from "./normalizers";
 import { applyUserPatch } from "./patch-operations";
+import { UserResourceSchema } from "./schemas";
 
 const findUserById = async (
 	adapter: DBAdapter,
@@ -221,7 +221,9 @@ export const scim = () => {
 					}
 
 					const [updatedUser, updatedAccount] =
-						await ctx.context.adapter.transaction<[User | null, Account | null]>(async () => {
+						await ctx.context.adapter.transaction<
+							[User | null, Account | null]
+						>(async () => {
 							const primaryEmail = getUserPrimaryEmail(body.emails);
 							const email = primaryEmail ?? body.userName;
 							const name = getUserFullName(email, body.name);
