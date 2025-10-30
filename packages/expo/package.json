@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.4.0-beta.12",
+  "version": "1.4.0-beta.15",
   "type": "module",
   "description": "Better Auth integration for Expo and React Native applications.",
   "main": "dist/index.js",
@@ -53,6 +53,7 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
@@ -66,7 +67,7 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "better-auth": "workspace:*",
+    "@better-auth/core": "workspace:*",
     "expo-constants": ">=17.0.0",
     "expo-crypto": ">=13.0.0",
     "expo-linking": ">=7.0.0",
@@ -75,6 +76,7 @@
   },
   "dependencies": {
     "@better-fetch/fetch": "catalog:",
+    "better-call": "catalog:",
     "zod": "^4.1.5"
   },
   "files": [

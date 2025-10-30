@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.0-beta.12",
-  "description": "The most comprehensive authentication library for TypeScript.",
+  "version": "1.4.0-beta.15",
+  "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -182,6 +182,7 @@
     "tsdown": "catalog:"
   },
   "dependencies": {
+    "@standard-schema/spec": "^1.0.0",
     "zod": "^4.1.5"
   },
   "peerDependencies": {

@@ -1,34 +1,34 @@
-import { ClientSession, ObjectId, type Db, type MongoClient } from "mongodb";
 import type { BetterAuthOptions } from "@better-auth/core";
-import {
-	createAdapterFactory,
-	type AdapterFactoryOptions,
-	type AdapterFactoryCustomizeAdapterCreator,
-} from "../adapter-factory";
 import type {
-	DBAdapterDebugLogOption,
 	DBAdapter,
+	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { ClientSession, type Db, type MongoClient, ObjectId } from "mongodb";
+import {
+	type AdapterFactoryCustomizeAdapterCreator,
+	type AdapterFactoryOptions,
+	createAdapterFactory,
+} from "../adapter-factory";
 
 export interface MongoDBAdapterConfig {
 	/**
 	 * MongoDB client instance
 	 * If not provided, Database transactions won't be enabled.
 	 */
-	client?: MongoClient;
+	client?: MongoClient | undefined;
 	/**
 	 * Enable debug logs for the adapter
 	 *
 	 * @default false
 	 */
-	debugLogs?: DBAdapterDebugLogOption;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 	/**
 	 * Use plural table names
 	 *
 	 * @default false
 	 */
-	usePlural?: boolean;
+	usePlural?: boolean | undefined;
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
@@ -36,14 +36,20 @@ export interface MongoDBAdapterConfig {
 	 * set this to `false` and operations will be executed sequentially.
 	 * @default false
 	 */
-	transaction?: boolean;
+	transaction?: boolean | undefined;
 }
 
-export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
+export const mongodbAdapter = (
+	db: Db,
+	config?: MongoDBAdapterConfig | undefined,
+) => {
 	let lazyOptions: BetterAuthOptions | null;
 
 	const createCustomAdapter =
-		(db: Db, session?: ClientSession): AdapterFactoryCustomizeAdapterCreator =>
+		(
+			db: Db,
+			session?: ClientSession | undefined,
+		): AdapterFactoryCustomizeAdapterCreator =>
 		({ options, getFieldName, schema, getDefaultModelName }) => {
 			function serializeID({
 				field,

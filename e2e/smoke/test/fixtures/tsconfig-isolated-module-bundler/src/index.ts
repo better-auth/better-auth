@@ -1,7 +1,6 @@
 // Copy and modify from https://github.com/wannabespace/conar/blob/ae42097562d1d57b21e6ca32b31a203cebbaad6f/apps/api/src/lib/auth.ts
 import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 import { betterAuth } from "better-auth";
-import { emailHarmony } from "better-auth-harmony";
 import {
 	anonymous,
 	bearer,
@@ -10,6 +9,7 @@ import {
 	organization,
 	twoFactor,
 } from "better-auth/plugins";
+import { emailHarmony } from "better-auth-harmony";
 
 /**
  * Plugin to prevent setting the "set-cookie" header in responses.

@@ -1,32 +1,34 @@
+import type { BetterAuthClientOptions } from "@better-auth/core";
+import type { SuccessContext } from "@better-fetch/fetch";
+import { Kysely, MysqlDialect, PostgresDialect, sql } from "kysely";
+import { MongoClient } from "mongodb";
+import { createPool } from "mysql2/promise";
+import { Pool } from "pg";
 import { afterAll } from "vitest";
+import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
-import type { BetterAuthOptions, Session, User } from "../types";
-import { getMigrations } from "../db/get-migration";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
-import type { SuccessContext } from "@better-fetch/fetch";
+import { getMigrations } from "../db/get-migration";
 import { getAdapter } from "../db/utils";
-import { getBaseURL } from "../utils/url";
-import { Kysely, MysqlDialect, PostgresDialect, sql } from "kysely";
-import { Pool } from "pg";
-import { MongoClient } from "mongodb";
-import { mongodbAdapter } from "../adapters/mongodb-adapter";
-import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
-import type { BetterAuthClientOptions } from "@better-auth/core";
+import type { BetterAuthOptions, Session, User } from "../types";
+import { getBaseURL } from "../utils/url";
 
 export async function getTestInstanceMemory<
 	O extends Partial<BetterAuthOptions>,
 	C extends BetterAuthClientOptions,
 >(
-	options?: O,
-	config?: {
-		clientOptions?: C;
-		port?: number;
-		disableTestUser?: boolean;
-		testUser?: Partial<User>;
-		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql" | "memory";
-	},
+	options?: O | undefined,
+	config?:
+		| {
+				clientOptions?: C;
+				port?: number;
+				disableTestUser?: boolean;
+				testUser?: Partial<User>;
+				testWith?: "sqlite" | "postgres" | "mongodb" | "mysql" | "memory";
+		  }
+		| undefined,
 ) {
 	const testWith = config?.testWith || "memory";
 	const postgres = new Kysely({
@@ -205,7 +207,7 @@ export async function getTestInstanceMemory<
 
 	const customFetchImpl = async (
 		url: string | URL | Request,
-		init?: RequestInit,
+		init?: RequestInit | undefined,
 	) => {
 		return auth.handler(new Request(url, init));
 	};
