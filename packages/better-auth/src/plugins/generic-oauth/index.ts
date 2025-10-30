@@ -333,7 +333,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							data: userInfo,
 						};
 					},
-					options: c
+					options: c,
 				} as OAuthProvider;
 			});
 			return {
