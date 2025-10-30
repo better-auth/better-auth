@@ -79,8 +79,8 @@ export const auth = betterAuth({
     },
     socialProviders: { // [!code highlight]
         github: { // [!code highlight]
-            clientId: process.env.GITHUB_CLIENT_ID, // [!code highlight]
-            clientSecret: process.env.GITHUB_CLIENT_SECRET, // [!code highlight]
+            clientId: process.env.GITHUB_CLIENT_ID!, // [!code highlight]
+            clientSecret: process.env.GITHUB_CLIENT_SECRET!, // [!code highlight]
         } // [!code highlight]
     } // [!code highlight]
 })
@@ -172,14 +172,7 @@ Run the migration to create the necessary tables in your database.
 npx @better-auth/cli migrate
 ```
 
-This will create the following tables in your database:
-
-- [`user`](/docs/concepts/database#user)
-- [`account`](/docs/concepts/database#account)
-- [`session`](/docs/concepts/database#session)
-- [`verification`](/docs/concepts/database#verification)
-
-This tables will be created on the `public` schema.
+This will create the necessary tables in the `public` schema of your Better Auth instance.
 
 Now that we have the necessary tables in our database, we can run the migration script to migrate the users and accounts from Supabase to Better Auth.
 
