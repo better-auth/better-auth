@@ -542,13 +542,9 @@ export const steam = (config: SteamAuthPluginOptions) =>
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx,
 					);
 
-					await setSessionCookie(ctx, {
-						session,
-						user,
-					});
+					await setSessionCookie(ctx, { session, user });
 
 					throw ctx.redirect(
 						isNewUser
