@@ -329,7 +329,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								emailVerified: userInfo?.emailVerified,
 								image: userInfo?.image,
 								name: userInfo?.name,
-								...c.mapProfileToUser?.(userInfo),
+								...(await c.mapProfileToUser?.(userInfo)),
 							},
 							data: userInfo,
 						};
