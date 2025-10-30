@@ -48,7 +48,7 @@ export const slack = (options: SlackOptions) => {
 			scopes && _scopes.push(...scopes);
 			options.scope && _scopes.push(...options.scope);
 			const url = new URL("https://slack.com/openid/connect/authorize");
-			url.searchParams.set("scope", _scopes.join(" "));
+			url.searchParams.set("scope", _scopes.join(","));
 			url.searchParams.set("response_type", "code");
 			url.searchParams.set("client_id", options.clientId);
 			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
