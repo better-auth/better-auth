@@ -2,10 +2,6 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import type { Jwk } from "./types";
 
-/**
- * Application-level mutex for JWK creation.
- * This ensures only one JWK creation happens at a time across the application.
- */
 class JwkCreationMutex {
 	private locked = false;
 	private queue: Array<() => void> = [];
