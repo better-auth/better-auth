@@ -12,7 +12,7 @@ import { getJwksAdapter } from "./adapter";
 import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
 import type { JwtOptions } from "./types";
-import { createJwk } from "./utils";
+import { generateJwkData } from "./utils";
 
 export type * from "./types";
 export { createJwk, generateExportedKeyPair } from "./utils";
@@ -133,11 +133,13 @@ export const jwt = (options?: JwtOptions | undefined) => {
 
 					const adapter = getJwksAdapter(ctx.context.adapter);
 
-					const keySets = await adapter.getAllKeys();
+					let keySets = await adapter.getAllKeys();
 
 					if (keySets.length === 0) {
-						const key = await createJwk(ctx, options);
-						keySets.push(key);
+						const key = await adapter.getOrCreateLatestKey(async () => {
+							return await generateJwkData(ctx, options);
+						});
+						keySets = [key];
 					}
 
 					const keyPairConfig = options?.jwks?.keyPairConfig;

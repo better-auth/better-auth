@@ -701,3 +701,157 @@ describe("jwt - remote url", async () => {
 		expect(jwtHeader).toBeTruthy();
 	});
 });
+
+describe("jwt - race condition prevention", async () => {
+	it("should prevent duplicate JWKs when /jwks endpoint is called concurrently", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [jwt()],
+			logger: {
+				level: "error",
+			},
+		});
+
+		const client = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		const results = await Promise.all(
+			Array.from({ length: 10 }, () => client.jwks()),
+		);
+
+		results.forEach((result) => {
+			expect(result.data?.keys).toBeDefined();
+			expect(result.data?.keys.length).toBeGreaterThan(0);
+		});
+
+		const jwks = await client.jwks();
+		expect(jwks.data?.keys.length).toBe(1);
+	});
+
+	it("should prevent duplicate JWKs when signing tokens concurrently", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [jwt()],
+			logger: {
+				level: "error",
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		const client = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		const results = await Promise.all(
+			Array.from({ length: 10 }, () =>
+				client.token({
+					fetchOptions: {
+						headers,
+					},
+				}),
+			),
+		);
+
+		results.forEach((result) => {
+			expect(result.data?.token).toBeDefined();
+		});
+
+		const jwks = await client.jwks();
+		expect(jwks.data?.keys.length).toBe(1);
+	});
+
+	it("should prevent duplicate JWKs when signJWT API is called concurrently", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [jwt()],
+			logger: {
+				level: "error",
+			},
+		});
+
+		const results = await Promise.all(
+			Array.from({ length: 10 }, () =>
+				auth.api.signJWT({
+					body: {
+						payload: {
+							sub: "123",
+							exp: Math.floor(Date.now() / 1000) + 600,
+							iat: Math.floor(Date.now() / 1000),
+							iss: "https://example.com",
+							aud: "https://example.com",
+						},
+					},
+				}),
+			),
+		);
+
+		results.forEach((result) => {
+			expect(result?.token).toBeDefined();
+		});
+
+		const jwks = await auth.api.getJwks();
+		expect(jwks.keys.length).toBe(1);
+	});
+
+	it("should prevent duplicate JWKs in mixed concurrent scenarios", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [jwt()],
+			logger: {
+				level: "error",
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		const client = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		const results = await Promise.all([
+			client.jwks(),
+			client.jwks(),
+			client.token({ fetchOptions: { headers } }),
+			client.token({ fetchOptions: { headers } }),
+			auth.api.signJWT({
+				body: {
+					payload: {
+						sub: "123",
+						exp: Math.floor(Date.now() / 1000) + 600,
+						iat: Math.floor(Date.now() / 1000),
+					},
+				},
+			}),
+			auth.api.signJWT({
+				body: {
+					payload: {
+						sub: "456",
+						exp: Math.floor(Date.now() / 1000) + 600,
+						iat: Math.floor(Date.now() / 1000),
+					},
+				},
+			}),
+		]);
+
+		expect(results).toHaveLength(6);
+
+		const jwks = await client.jwks();
+		expect(jwks.data?.keys.length).toBe(1);
+	});
+});

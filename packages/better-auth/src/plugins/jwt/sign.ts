@@ -4,7 +4,7 @@ import { importJWK, type JWTPayload, SignJWT } from "jose";
 import { symmetricDecrypt } from "../../crypto";
 import { getJwksAdapter } from "./adapter";
 import type { JwtOptions } from "./types";
-import { createJwk, toExpJWT } from "./utils";
+import { generateJwkData, toExpJWT } from "./utils";
 
 export async function signJWT(
 	ctx: GenericEndpointContext,
@@ -52,13 +52,12 @@ export async function signJWT(
 	}
 
 	const adapter = getJwksAdapter(ctx.context.adapter);
-	let key = await adapter.getLatestKey();
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
 
-	if (key === undefined) {
-		key = await createJwk(ctx, options);
-	}
+	const key = await adapter.getOrCreateLatestKey(async () => {
+		return await generateJwkData(ctx, options);
+	});
 
 	let privateWebKey = privateKeyEncryptionEnabled
 		? await symmetricDecrypt({
