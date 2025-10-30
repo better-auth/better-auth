@@ -16,6 +16,7 @@ import {
 } from "./normalizers";
 import { applyUserPatch } from "./patch-operations";
 import { UserResourceSchema } from "./schemas";
+import { parseSCIMUserFilter, SCIMParseError } from "./scim-filters";
 
 const findUserById = async (
 	adapter: DBAdapter,
@@ -265,6 +266,11 @@ export const scim = () => {
 				"/scim/v2/Users",
 				{
 					method: "GET",
+					query: z
+						.object({
+							filter: z.string().optional(),
+						})
+						.optional(),
 					metadata: {
 						openapi: {
 							summary: "List SCIM users",
@@ -296,6 +302,19 @@ export const scim = () => {
 					use: [authMiddleware],
 				},
 				async (ctx) => {
+					let filters = [];
+					try {
+						filters = parseSCIMUserFilter(ctx.query?.filter ?? "");
+					} catch (error) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								error instanceof SCIMParseError
+									? error.message
+									: "Invalid SCIM filter",
+							scimType: "invalidFilter",
+						});
+					}
+
 					const organizationId = ctx.context.scimProvider.organizationId;
 					const members = await ctx.context.adapter.findMany<Member>({
 						model: "member",
@@ -307,7 +326,10 @@ export const scim = () => {
 					const [users, accounts] = await Promise.all([
 						ctx.context.adapter.findMany<User>({
 							model: "user",
-							where: [{ field: "id", value: usersIds, operator: "in" }],
+							where: [
+								{ field: "id", value: usersIds, operator: "in" },
+								...filters,
+							],
 						}),
 						ctx.context.adapter.findMany<Account>({
 							model: "account",
