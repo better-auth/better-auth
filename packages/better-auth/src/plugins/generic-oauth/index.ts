@@ -314,7 +314,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: finalTokenUrl,
 						});
 					},
-
 					async getUserInfo(tokens) {
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
@@ -334,6 +333,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							data: userInfo,
 						};
 					},
+					options: c
 				} as OAuthProvider;
 			});
 			return {
