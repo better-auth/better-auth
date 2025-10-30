@@ -27,6 +27,7 @@ npm install pg
 And then you can use the following code to connect to your database.
 
 ```ts title="auth.ts"
+import { betterAuth } from 'better-auth';
 import { Pool } from "pg";
 
 export const auth = betterAuth({
@@ -43,7 +44,8 @@ export const auth = betterAuth({
 Enable the email and password in your auth config.
 
 ```ts title="auth.ts"
-import { admin, anonymous } from "better-auth/plugins";
+import { betterAuth } from 'better-auth';
+import { Pool } from "pg";
 
 export const auth = betterAuth({
     database: new Pool({ 
@@ -68,7 +70,8 @@ export const auth = betterAuth({
 Add all the social providers used in Supabase to the auth config. Missing any may cause user data loss during migration.
 
 ```ts title="auth.ts"
-import { admin, anonymous } from "better-auth/plugins";
+import { betterAuth } from 'better-auth';
+import { Pool } from "pg";
 
 export const auth = betterAuth({
     database: new Pool({ 
@@ -93,7 +96,9 @@ export const auth = betterAuth({
 Add the [admin](/docs/plugins/admin), [anonymous](/docs/plugins/anonymous) and [phoneNumber](/docs/plugins/phone-number) plugins to your auth config. To minimize data loss from Supabase Auth during migration, these plugins must be included in the auth config.
 
 ```ts title="auth.ts"
-import { admin, anonymous } from "better-auth/plugins";
+import { betterAuth } from 'better-auth';
+import { Pool } from "pg";
+import { admin, anonymous, phoneNumber } from 'better-auth/plugins';
 
 export const auth = betterAuth({
     database: new Pool({ 
@@ -119,7 +124,9 @@ export const auth = betterAuth({
 To minimize data loss from Supabase Auth, the following additional fields are required. You can adjust them as needed after the migration is complete.
 
 ```ts title="auth.ts"
-import { admin, anonymous } from "better-auth/plugins";
+import { betterAuth } from 'better-auth';
+import { Pool } from "pg";
+import { admin, anonymous, phoneNumber } from 'better-auth/plugins';
 
 export const auth = betterAuth({
     database: new Pool({ 
