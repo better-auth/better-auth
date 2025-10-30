@@ -1156,6 +1156,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 							message: ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
 						});
 					}
+					await opts.events?.impersonateStart(ctx.context.session, targetUser);
 					const authCookies = ctx.context.authCookies;
 					deleteSessionCookie(ctx);
 					const dontRememberMeCookie = await ctx.getSignedCookie(
@@ -1179,7 +1180,6 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						},
 						true,
 					);
-					await opts.events?.impersonateStart(ctx.context.session, targetUser);
 					return ctx.json({
 						session: session,
 						user: targetUser,
