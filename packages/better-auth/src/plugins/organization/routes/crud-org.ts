@@ -879,13 +879,13 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
 						members: InferMember<O, false>[];
-						invitations: InferInvitation<O>[];
+						invitations: InferInvitation<O, false>[];
 						teams: InferTeam<O, false>[];
-					} & InferOrganization<O>
+					} & InferOrganization<O, false>
 				: {
 						members: InferMember<O, false>[];
-						invitations: InferInvitation<O>[];
-					} & InferOrganization<O>;
+						invitations: InferInvitation<O, false>[];
+					} & InferOrganization<O, false>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
