@@ -508,6 +508,24 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(sortModels(result)).toEqual(sortModels(users.slice(1)));
 		},
+		"findMany - should find many models with ne operator on id field":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "id", value: users[0]!.id, operator: "ne" }],
+				});
+				expect(sortModels(result)).toEqual(sortModels(users.slice(1)));
+			},
+		"findMany - should find many models with ne operator on _id field (MongoDB)":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "_id", value: users[0]!.id, operator: "ne" }],
+				});
+				expect(sortModels(result)).toEqual(sortModels(users.slice(1)));
+			},
 		"findMany - should find many models with gt operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const oldestUser = users.sort(
