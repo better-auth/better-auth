@@ -526,6 +526,15 @@ export const getNormalTestSuiteTests = ({
 				});
 				expect(sortModels(result)).toEqual(sortModels(users.slice(1)));
 			},
+		"findMany - should handle ne operator with null value on id field":
+			async () => {
+				await insertRandom("user", 3);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "id", value: null, operator: "ne" }],
+				});
+				expect(Array.isArray(result)).toBe(true);
+			},
 		"findMany - should find many models with gt operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const oldestUser = users.sort(

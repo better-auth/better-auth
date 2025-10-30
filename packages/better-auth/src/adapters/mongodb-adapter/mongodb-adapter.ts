@@ -66,6 +66,9 @@ export const mongodbAdapter = (
 					field === "_id" ||
 					schema[model]!.fields[field]?.references?.field === "id"
 				) {
+					if (value === null || value === undefined) {
+						return value;
+					}
 					if (typeof value !== "string") {
 						if (value instanceof ObjectId) {
 							return value;
