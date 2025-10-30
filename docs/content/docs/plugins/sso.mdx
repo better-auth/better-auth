@@ -814,5 +814,10 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
             },
         },
     },
+    enableSCIMProvisioning: {
+        description: "Enables SCIM token provisioning. Upon registration of an SSO provider, a SCIM token will also be automatically generated",
+        type: "boolean",
+        default: false
+    }
   }}
 />
