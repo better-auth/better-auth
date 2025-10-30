@@ -505,6 +505,9 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						password: hashedPassword,
 						userId: user.id,
 					});
+
+					await opts.events?.userCreate(session, user);
+
 					return ctx.json({
 						user: user as UserWithRole,
 					});
@@ -909,7 +912,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						});
 					}
 
-					const user = await ctx.context.internalAdapter.updateUser(
+					let user: UserWithRole = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						{
 							banned: false,
@@ -918,6 +921,12 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 							updatedAt: new Date(),
 						},
 					);
+					if (opts.events?.unban) {
+						user = (await ctx.context.internalAdapter.findUserById(
+							ctx.body.userId,
+						)) as UserWithRole;
+						await opts.events?.unban(session, user);
+					}
 					return ctx.json({
 						user: user,
 					});
@@ -1022,7 +1031,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 							message: ADMIN_ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
 						});
 					}
-					const user = await ctx.context.internalAdapter.updateUser(
+					let user: UserWithRole = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						{
 							banned: true,
@@ -1036,6 +1045,15 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 							updatedAt: new Date(),
 						},
 					);
+
+					if (opts.events?.ban) {
+						// must get the user as the result from `user` is not garenteed to give the full updated user obj
+						user = (await ctx.context.internalAdapter.findUserById(
+							ctx.body.userId,
+						)) as UserWithRole;
+						await opts.events?.ban(session, user);
+					}
+
 					//revoke all sessions
 					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
 					return ctx.json({
@@ -1161,6 +1179,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						},
 						true,
 					);
+					await opts.events?.impersonateStart(ctx.context.session, targetUser);
 					return ctx.json({
 						session: session,
 						user: targetUser,
@@ -1237,6 +1256,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						session.session.token,
 					);
 					await setSessionCookie(ctx, adminSession, !!dontRememberMeCookie);
+					await opts.events?.impersonateEnd(adminSession);
 					return ctx.json(adminSession);
 				},
 			),
@@ -1472,6 +1492,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 					}
 
 					await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
+					await opts.events?.userRemove(ctx.context.session, user);
 					return ctx.json({
 						success: true,
 					});
