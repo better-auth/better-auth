@@ -335,7 +335,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					},
 					options: {
 						overrideUserInfoOnSignIn: c.overrideUserInfo,
-					}
+					},
 				} as OAuthProvider;
 			});
 			return {
