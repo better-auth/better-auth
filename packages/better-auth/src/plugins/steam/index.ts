@@ -1,13 +1,13 @@
+import { betterFetch } from "@better-fetch/fetch";
+import { z } from "zod";
 import {
 	APIError,
 	createAuthEndpoint,
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "../../api";
-import type { BetterAuthPlugin, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
-import { z } from "zod";
-import { betterFetch } from "@better-fetch/fetch";
+import type { BetterAuthPlugin, User } from "../../types";
 import { wildcardMatch } from "../../utils/wildcard";
 
 const STEAM_BASE_URL = "https://api.steampowered.com/";

@@ -18,7 +18,7 @@ export * from "../../plugins/organization/client";
 export * from "../../plugins/passkey/client";
 export * from "../../plugins/phone-number/client";
 export * from "../../plugins/siwe/client";
+export * from "../../plugins/steam/client";
 export * from "../../plugins/two-factor/client";
 export * from "../../plugins/username/client";
 export * from "./infer-plugin";
-export * from "../../plugins/steam/client";
