@@ -126,6 +126,7 @@ export async function handleOAuthUserInfo(
 		}
 		if (overrideUserInfo) {
 			const { id: _, ...restUserInfo } = userInfo;
+			console.log(`handleOauthUserInfo - overriding user info`, restUserInfo)
 			// update user info from the provider if overrideUserInfo is true
 			await c.context.internalAdapter.updateUser(dbUser.user.id, {
 				...restUserInfo,
@@ -146,6 +147,7 @@ export async function handleOAuthUserInfo(
 		}
 		try {
 			const { id: _, ...restUserInfo } = userInfo;
+			console.log(`handleOauthUserInfo - creating user`, restUserInfo)
 			user = await c.context.internalAdapter
 				.createOAuthUser(
 					{
