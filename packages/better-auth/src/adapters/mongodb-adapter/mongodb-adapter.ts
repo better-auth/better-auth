@@ -75,6 +75,9 @@ export const mongodbAdapter = (
 						}
 						if (Array.isArray(value)) {
 							return value.map((v) => {
+								if (v === null || v === undefined) {
+									return v;
+								}
 								if (typeof v === "string") {
 									try {
 										return new ObjectId(v);

@@ -535,6 +535,21 @@ export const getNormalTestSuiteTests = ({
 				});
 				expect(Array.isArray(result)).toBe(true);
 			},
+		"findMany - should handle in operator with null value in array":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{
+							field: "id",
+							value: [users[0]!.id, null, users[1]!.id] as any,
+							operator: "in",
+						},
+					],
+				});
+				expect(result.length).toBeGreaterThanOrEqual(2);
+			},
 		"findMany - should find many models with gt operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const oldestUser = users.sort(
