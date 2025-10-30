@@ -771,8 +771,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						}
 						throw ctx.redirect(toRedirectTo);
 					}
-
-					console.log(`genericOAuth - userInfo`, userInfo)
 					const result = await handleOAuthUserInfo(ctx, {
 						userInfo,
 						account: {

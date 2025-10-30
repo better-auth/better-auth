@@ -196,6 +196,7 @@ export const callbackOAuth = createAuthEndpoint(
 			return redirectOnError("email_not_found");
 		}
 
+		console.log(`callbackOAuth - userInfo`, userInfo)
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
