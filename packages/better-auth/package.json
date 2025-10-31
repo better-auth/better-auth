@@ -45,14 +45,8 @@
     },
     "./minimal": {
       "better-auth-dev-source": "./src/auth/auth-minimal.ts",
-      "import": {
-        "types": "./dist/auth/auth-minimal.d.ts",
-        "default": "./dist/auth/auth-minimal.js"
-      },
-      "require": {
-        "types": "./dist/auth/auth-minimal.d.cts",
-        "default": "./dist/auth/auth-minimal.cjs"
-      }
+      "types": "./dist/auth/auth-minimal.d.ts",
+      "default": "./dist/auth/auth-minimal.js"
     },
     "./social-providers": {
       "better-auth-dev-source": "./src/social-providers/index.ts",
