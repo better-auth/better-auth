@@ -46,6 +46,17 @@ export interface PrismaConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Whether to enable experimental features.
+	 */
+	experimental?: {
+		/**
+		 * Whether to enable joins.
+		 *
+		 * @default false
+		 */
+		joins?: boolean;
+	};
 }
 
 interface PrismaClient {}
@@ -236,13 +247,23 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 
 					// transform join keys to use Prisma expected field names
-					let include: Record<string, boolean> | undefined = undefined;
+					let include: Record<string, boolean | { take?: number }> | undefined =
+						undefined;
 					let map = new Map<string, string>();
 					if (join) {
 						include = {};
 						for (const [joinModel, value] of Object.entries(join)) {
 							const key = getJoinKeyName(model, joinModel, schema);
-							include[key] = value;
+							// Handle limit: if value is an object with limit, use Prisma's take syntax
+							if (
+								typeof value === "object" &&
+								value !== null &&
+								"limit" in value
+							) {
+								include[key] = { take: value.limit };
+							} else {
+								include[key] = value as boolean;
+							}
 							map.set(key, getModelName(joinModel));
 						}
 					}
@@ -275,13 +296,23 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						);
 					}
 					// transform join keys to use Prisma expected field names
-					let include: Record<string, boolean> | undefined = undefined;
+					let include: Record<string, boolean | { take?: number }> | undefined =
+						undefined;
 					let map = new Map<string, string>();
 					if (join) {
 						include = {};
 						for (const [joinModel, value] of Object.entries(join)) {
 							const key = getJoinKeyName(model, joinModel, schema);
-							include[key] = value;
+							// Handle limit: if value is an object with limit, use Prisma's take syntax
+							if (
+								typeof value === "object" &&
+								value !== null &&
+								"limit" in value
+							) {
+								include[key] = { take: value.limit };
+							} else {
+								include[key] = value as boolean;
+							}
 							map.set(key, getModelName(joinModel));
 						}
 					}
@@ -390,7 +421,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							})
 					: false,
 			disableTransformJoin: true,
-			supportsJoin: true,
+			supportsJoin: config.experimental?.joins ?? false,
 		},
 		adapter: createCustomAdapter(prisma),
 	};

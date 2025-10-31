@@ -20,10 +20,13 @@ const mysqlDB = createPool({
 const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(mysqlDB, options, "mysql");
-		return drizzleAdapter(drizzle(mysqlDB), {
+		return drizzleAdapter(drizzle(mysqlDB, { schema }), {
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "mysql",
+			experimental: {
+				joins: true,
+			},
 		});
 	},
 	async runMigrations(betterAuthOptions) {

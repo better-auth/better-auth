@@ -25,11 +25,14 @@ const cleanupDatabase = async (shouldDestroy = false) => {
 const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(pgDB, options, "pg");
-		return drizzleAdapter(drizzle(pgDB), {
+		return drizzleAdapter(drizzle(pgDB, { schema }), {
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "pg",
 			transaction: true,
+			experimental: {
+				joins: true,
+			},
 		});
 	},
 	async runMigrations(betterAuthOptions) {

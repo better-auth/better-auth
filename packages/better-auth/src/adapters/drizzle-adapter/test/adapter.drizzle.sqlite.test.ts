@@ -23,10 +23,13 @@ let sqliteDB = new Database(dbFilePath);
 const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(sqliteDB, options, "sqlite");
-		return drizzleAdapter(drizzle(sqliteDB), {
+		return drizzleAdapter(drizzle(sqliteDB, { schema }), {
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "sqlite",
+			experimental: {
+				joins: true,
+			},
 		});
 	},
 	async runMigrations(betterAuthOptions) {
