@@ -1,7 +1,7 @@
 export type DBFilter = {
 	field: string;
 	value: string | string[];
-	operator: any;
+	operator?: any;
 };
 
 const SCIMOperators: Record<string, string | undefined> = {

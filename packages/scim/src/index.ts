@@ -32,11 +32,28 @@ const supportedSCIMResourceTypes = [SCIMUserResourceType];
 
 const findUserById = async (
 	adapter: DBAdapter,
-	userId: string,
-	organizationId?: string,
+	{
+		userId,
+		providerId,
+		organizationId,
+	}: { userId: string; providerId: string; organizationId?: string },
 ) => {
-	let member: Member | null = null;
+	const account = await adapter.findOne<Account>({
+		model: "account",
+		where: [
+			{ field: "userId", value: userId },
+			{ field: "providerId", value: providerId },
+		],
+	});
 
+	// Disallows access to the resource
+	// Account is not associated to the provider
+
+	if (!account) {
+		return { user: null, account: null };
+	}
+
+	let member: Member | null = null;
 	if (organizationId) {
 		member = await adapter.findOne<Member>({
 			model: "member",
@@ -48,16 +65,22 @@ const findUserById = async (
 	}
 
 	// Disallows access to the resource
-	// when the token is restricted to an organization but the resource is not part of it
+	// Token is restricted to an org and the member is not part of it
 
 	if (organizationId && !member) {
-		return null;
+		return { user: null, account: null };
 	}
 
-	return await adapter.findOne<User>({
+	const user = await adapter.findOne<User>({
 		model: "user",
 		where: [{ field: "id", value: userId }],
 	});
+
+	if (!user) {
+		return { user: null, account: null };
+	}
+
+	return { user, account };
 };
 
 export const scim = () => {
@@ -91,10 +114,14 @@ export const scim = () => {
 				async (ctx) => {
 					const body = ctx.body;
 					const accountId = body.externalId ?? body.userName;
+					const providerId = ctx.context.scimProvider.providerId;
 
 					const existingAccount = await ctx.context.adapter.findOne<Account>({
 						model: "account",
-						where: [{ field: "accountId", value: accountId }],
+						where: [
+							{ field: "accountId", value: accountId },
+							{ field: "providerId", value: providerId },
+						],
 					});
 
 					if (existingAccount) {
@@ -198,13 +225,14 @@ export const scim = () => {
 					const body = ctx.body;
 					const userId = ctx.params.userId;
 					const organizationId = ctx.context.scimProvider.organizationId;
+					const providerId = ctx.context.scimProvider.providerId;
 					const accountId = body.externalId ?? body.userName;
 
-					const user = await findUserById(
-						ctx.context.adapter,
+					const { user } = await findUserById(ctx.context.adapter, {
 						userId,
+						providerId,
 						organizationId,
-					);
+					});
 
 					if (!user) {
 						return ctx.json({ error: "User not found" }, { status: 404 });
@@ -297,34 +325,37 @@ export const scim = () => {
 
 					ctx.context.logger.info("Querying result with filters: ", apiFilters);
 
-					let userFilters: DBFilter[] = [];
-					let accountsFilters: DBFilter[] = [];
+					const providerId = ctx.context.scimProvider.providerId;
+					const accounts = await ctx.context.adapter.findMany<Account>({
+						model: "account",
+						where: [{ field: "providerId", value: providerId }],
+					});
+
+					const accountUserIds = accounts.map((account) => account.userId);
+					let userFilters: DBFilter[] = [
+						{ field: "id", value: accountUserIds, operator: "in" },
+					];
 
 					const organizationId = ctx.context.scimProvider.organizationId;
 					if (organizationId) {
 						const members = await ctx.context.adapter.findMany<Member>({
 							model: "member",
-							where: [{ field: "organizationId", value: organizationId }],
+							where: [
+								{ field: "organizationId", value: organizationId },
+								{ field: "userId", value: accountUserIds, operator: "in" },
+							],
 						});
 
-						const userIds = members.map((member) => member.userId);
-
-						userFilters = [{ field: "id", value: userIds, operator: "in" }];
-						accountsFilters = [
-							{ field: "userId", value: userIds, operator: "in" },
+						const memberUserIds = members.map((member) => member.userId);
+						userFilters = [
+							{ field: "id", value: memberUserIds, operator: "in" },
 						];
 					}
 
-					const [users, accounts] = await Promise.all([
-						ctx.context.adapter.findMany<User>({
-							model: "user",
-							where: [...userFilters, ...apiFilters],
-						}),
-						ctx.context.adapter.findMany<Account>({
-							model: "account",
-							where: [...accountsFilters],
-						}),
-					]);
+					const users = await ctx.context.adapter.findMany<User>({
+						model: "user",
+						where: [...userFilters, ...apiFilters],
+					});
 
 					return ctx.json({
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
@@ -363,15 +394,14 @@ export const scim = () => {
 				},
 				async (ctx) => {
 					const userId = ctx.params.userId;
+					const providerId = ctx.context.scimProvider.providerId;
 					const organizationId = ctx.context.scimProvider.organizationId;
 
-					const [user, account] = await Promise.all([
-						findUserById(ctx.context.adapter, userId, organizationId),
-						ctx.context.adapter.findOne<Account>({
-							model: "account",
-							where: [{ field: "userId", value: userId }],
-						}),
-					]);
+					const { user, account } = await findUserById(ctx.context.adapter, {
+						userId,
+						providerId,
+						organizationId,
+					});
 
 					if (!user) {
 						return ctx.json({ error: "User not found" }, { status: 404 });
@@ -415,12 +445,13 @@ export const scim = () => {
 				async (ctx) => {
 					const userId = ctx.params.userId;
 					const organizationId = ctx.context.scimProvider.organizationId;
+					const providerId = ctx.context.scimProvider.providerId;
 
-					const user = await findUserById(
-						ctx.context.adapter,
+					const { user } = await findUserById(ctx.context.adapter, {
 						userId,
+						providerId,
 						organizationId,
-					);
+					});
 
 					if (!user) {
 						return ctx.json({ error: "User not found" }, { status: 404 });
@@ -467,13 +498,14 @@ export const scim = () => {
 				},
 				async (ctx) => {
 					const userId = ctx.params.userId;
+					const providerId = ctx.context.scimProvider.providerId;
 					const organizationId = ctx.context.scimProvider.organizationId;
 
-					const user = await findUserById(
-						ctx.context.adapter,
+					const { user } = await findUserById(ctx.context.adapter, {
 						userId,
+						providerId,
 						organizationId,
-					);
+					});
 
 					if (!user) {
 						return ctx.json({ error: "User not found" }, { status: 404 });
