@@ -1,4 +1,4 @@
-type OnlineListener = (online: boolean) => void;
+export type OnlineListener = (online: boolean) => void;
 
 export const kOnlineManager = Symbol.for("better-auth:online-manager");
 

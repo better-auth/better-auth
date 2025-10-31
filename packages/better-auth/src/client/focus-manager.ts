@@ -1,4 +1,4 @@
-type FocusListener = (focused: boolean) => void;
+export type FocusListener = (focused: boolean) => void;
 
 export const kFocusManager = Symbol.for("better-auth:focus-manager");
 
