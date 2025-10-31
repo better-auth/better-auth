@@ -29,6 +29,9 @@ describe("generate", async () => {
 				),
 				plugins: [twoFactor(), username()],
 			},
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/schema.prisma");
 	});
@@ -56,6 +59,9 @@ describe("generate", async () => {
 					},
 				},
 			},
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-numberid.prisma",
@@ -80,6 +86,9 @@ describe("generate", async () => {
 				),
 				plugins: [twoFactor(), username()],
 			},
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-mongodb.prisma",
@@ -103,6 +112,9 @@ describe("generate", async () => {
 					},
 				),
 				plugins: [twoFactor(), username()],
+			},
+			experimental: {
+				joins: true,
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
@@ -141,6 +153,9 @@ describe("generate", async () => {
 					}),
 				],
 			},
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-mysql-custom.prisma",
@@ -178,6 +193,9 @@ describe("generate", async () => {
 				verification: {
 					modelName: "custom_verification",
 				},
+			},
+			experimental: {
+				joins: true,
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.txt");
@@ -219,6 +237,9 @@ describe("generate", async () => {
 				verification: {
 					modelName: "custom_verification",
 				},
+			},
+			experimental: {
+				joins: true,
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
@@ -288,6 +309,9 @@ describe("JSON field support in CLI generators", () => {
 					},
 				},
 			} as BetterAuthOptions,
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).toContain("preferences: jsonb(");
 	});
@@ -312,6 +336,9 @@ describe("JSON field support in CLI generators", () => {
 					},
 				},
 			} as BetterAuthOptions,
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).toContain("preferences: json(");
 	});
@@ -336,6 +363,9 @@ describe("JSON field support in CLI generators", () => {
 					},
 				},
 			} as BetterAuthOptions,
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).toContain("preferences: text(");
 	});
@@ -357,6 +387,9 @@ describe("JSON field support in CLI generators", () => {
 					},
 				},
 			} as BetterAuthOptions,
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).toContain("preferences   Json?");
 	});
@@ -384,6 +417,9 @@ describe("Enum field support in Drizzle schemas", () => {
 					},
 				},
 			} as BetterAuthOptions,
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).toContain(
 			'role: text("role", { enum: ["admin", "user", "guest"] })',
@@ -414,6 +450,9 @@ describe("Enum field support in Drizzle schemas", () => {
 					},
 				},
 			} as BetterAuthOptions,
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).toContain("mysqlEnum");
 		expect(schema.code).toContain(
@@ -444,6 +483,9 @@ describe("Enum field support in Drizzle schemas", () => {
 					},
 				},
 			} as BetterAuthOptions,
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).toContain("text({ enum: [");
 		expect(schema.code).toContain(
@@ -474,6 +516,9 @@ describe("Enum field support in Drizzle schemas", () => {
 					},
 				},
 			} as BetterAuthOptions,
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).toMatch(
 			/import.*mysqlEnum.*from.*drizzle-orm\/mysql-core/s,
@@ -500,6 +545,9 @@ describe("Enum field support in Drizzle schemas", () => {
 					},
 				},
 			} as BetterAuthOptions,
+			experimental: {
+				joins: true,
+			},
 		});
 		expect(schema.code).not.toContain("enum");
 	});

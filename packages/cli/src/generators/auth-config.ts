@@ -659,7 +659,7 @@ function insertContent(params: {
 		targetLine.slice(character);
 	lines[targetLineIndex] = updatedLine;
 
-	// Join the lines back into a single string
+	// JoinOption the lines back into a single string
 	return lines.join("\n");
 }
 

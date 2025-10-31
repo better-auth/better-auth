@@ -15,7 +15,7 @@ import type {
 import { safeJSONParse } from "../utils/json";
 import { getMigrations } from "./get-migration";
 
-describe("adapter test", async () => {
+describe("internal adapter test", async () => {
 	const sqliteDialect = new SqliteDialect({
 		database: new Database(":memory:"),
 	});
