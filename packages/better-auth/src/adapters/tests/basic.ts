@@ -2205,7 +2205,7 @@ export const getNormalTestSuiteTests = ({
 				expect(Array.isArray(result?.invitation)).toBe(true);
 				expect(result?.invitation).toHaveLength(0);
 			},
-		"findOne - should be able to perform a simple limited join": async () => {
+		"findOne - should be able to perform a limited join": async () => {
 			const user = await adapter.create<User>({
 				model: "user",
 				data: { ...(await generate("user")) },
@@ -2268,7 +2268,7 @@ export const getNormalTestSuiteTests = ({
 			expect(result?.account).toBeDefined();
 			expect(result?.account).toHaveLength(3);
 		},
-		"findMany - should be able to perform a simple limited join": async () => {
+		"findMany - should be able to perform a limited join": async () => {
 			const users: User[] = [];
 
 			for (let i = 0; i < 5; i++) {
