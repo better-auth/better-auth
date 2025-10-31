@@ -15,10 +15,13 @@ import {
 	getUserResourceLocation,
 } from "./normalizers";
 import { applyUserPatch } from "./patch-operations";
-import { UserResourceSchema } from "./schemas";
 import { parseSCIMUserFilter, SCIMParseError } from "./scim-filters";
-import { SCIMUserResourceType } from "./scim-resource-types";
-import { SCIMUserResourceSchema } from "./scim-schemas";
+import {
+	APIUserSchema,
+	OpenAPIUserResourceSchema,
+	SCIMUserResourceSchema,
+	SCIMUserResourceType,
+} from "./user-schemas";
 
 const findUserById = async (
 	adapter: DBAdapter,
@@ -50,25 +53,7 @@ export const scim = () => {
 				"/scim/v2/Users",
 				{
 					method: "POST",
-					body: z.object({
-						userName: z.string(),
-						externalId: z.string().optional(),
-						name: z
-							.object({
-								formatted: z.string().optional(),
-								givenName: z.string().optional(),
-								familyName: z.string().optional(),
-							})
-							.optional(),
-						emails: z
-							.array(
-								z.object({
-									value: z.email(),
-									primary: z.boolean().optional(),
-								}),
-							)
-							.optional(),
-					}),
+					body: APIUserSchema,
 					metadata: {
 						openapi: {
 							summary: "Create SCIM user.",
@@ -79,7 +64,7 @@ export const scim = () => {
 									description: "SCIM user resource",
 									content: {
 										"application/json": {
-											schema: UserResourceSchema,
+											schema: OpenAPIUserResourceSchema,
 										},
 									},
 								},
@@ -170,25 +155,7 @@ export const scim = () => {
 				"/scim/v2/Users/:userId",
 				{
 					method: "PUT",
-					body: z.object({
-						userName: z.string(),
-						externalId: z.string().optional(),
-						name: z
-							.object({
-								formatted: z.string().optional(),
-								givenName: z.string().optional(),
-								familyName: z.string().optional(),
-							})
-							.optional(),
-						emails: z
-							.array(
-								z.object({
-									value: z.email(),
-									primary: z.boolean().optional(),
-								}),
-							)
-							.optional(),
-					}),
+					body: APIUserSchema,
 					metadata: {
 						openapi: {
 							summary: "Update SCIM user.",
@@ -199,7 +166,7 @@ export const scim = () => {
 									description: "SCIM user resource",
 									content: {
 										"application/json": {
-											schema: UserResourceSchema,
+											schema: OpenAPIUserResourceSchema,
 										},
 									},
 								},
@@ -291,7 +258,7 @@ export const scim = () => {
 													startIndex: { type: "number" },
 													Resources: {
 														type: "array",
-														items: UserResourceSchema,
+														items: OpenAPIUserResourceSchema,
 													},
 												},
 											},
@@ -367,7 +334,7 @@ export const scim = () => {
 									description: "SCIM user resource",
 									content: {
 										"application/json": {
-											schema: UserResourceSchema,
+											schema: OpenAPIUserResourceSchema,
 										},
 									},
 								},
@@ -565,9 +532,7 @@ export const scim = () => {
 					},
 				},
 				async (ctx) => {
-					return ctx.json([
-						SCIMUserResourceSchema
-					]);
+					return ctx.json([SCIMUserResourceSchema]);
 				},
 			),
 			getResourceTypes: createAuthEndpoint(
@@ -588,9 +553,7 @@ export const scim = () => {
 					},
 				},
 				async (ctx) => {
-					return ctx.json([
-						SCIMUserResourceType,
-					]);
+					return ctx.json([SCIMUserResourceType]);
 				},
 			),
 		},

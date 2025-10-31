@@ -1,3 +1,55 @@
+import * as z from "zod/v4";
+
+export const APIUserSchema = z.object({
+	userName: z.string(),
+	externalId: z.string().optional(),
+	name: z
+		.object({
+			formatted: z.string().optional(),
+			givenName: z.string().optional(),
+			familyName: z.string().optional(),
+		})
+		.optional(),
+	emails: z
+		.array(
+			z.object({
+				value: z.email(),
+				primary: z.boolean().optional(),
+			}),
+		)
+		.optional(),
+});
+
+export const OpenAPIUserResourceSchema = {
+	type: "object",
+	properties: {
+		id: { type: "string" },
+		meta: {
+			type: "object",
+			properties: {
+				resourceType: { type: "string" },
+				created: { type: "date" },
+				lastModified: { type: "date" },
+				location: { type: "string" },
+			},
+		},
+		userName: { type: "string" },
+		name: { type: "string" },
+		displayName: { type: "string" },
+		active: { type: "boolean" },
+		emails: {
+			type: "array",
+			items: {
+				type: "string",
+			},
+		},
+		schemas: {
+			type: "array",
+			items: { type: "string" },
+		},
+	},
+} as const;
+
 export const SCIMUserResourceSchema = {
 	id: "urn:ietf:params:scim:schemas:core:2.0:User",
 	name: "User",
@@ -132,5 +184,18 @@ export const SCIMUserResourceSchema = {
 	meta: {
 		resourceType: "Schema",
 		location: "/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User",
+	},
+};
+
+export const SCIMUserResourceType = {
+	schemas: ["urn:ietf:params:scim:schemas:core:2.0:ResourceType"],
+	id: "User",
+	name: "User",
+	endpoint: "/Users",
+	description: "User Account",
+	schema: "urn:ietf:params:scim:schemas:core:2.0:User",
+	meta: {
+		location: "https://example.com/v2/ResourceTypes/User",
+		resourceType: "ResourceType",
 	},
 };
