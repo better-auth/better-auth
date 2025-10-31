@@ -144,6 +144,7 @@ describe("captcha", async (it) => {
 				fetchOptions: {
 					headers: {
 						"x-captcha-response": "captcha-token",
+						"x-forwarded-for": "127.0.0.1",
 					},
 				},
 			});
@@ -217,6 +218,7 @@ describe("captcha", async (it) => {
 				fetchOptions: {
 					headers: {
 						"x-captcha-response": "captcha-token",
+						"x-forwarded-for": "127.0.0.1",
 					},
 				},
 			});
@@ -317,6 +319,7 @@ describe("captcha", async (it) => {
 				fetchOptions: {
 					headers: {
 						"x-captcha-response": "captcha-token",
+						"x-forwarded-for": "127.0.0.1",
 					},
 				},
 			});
@@ -394,6 +397,7 @@ describe("captcha", async (it) => {
 				fetchOptions: {
 					headers: {
 						"x-captcha-response": "captcha-token",
+						"x-forwarded-for": "127.0.0.1",
 					},
 				},
 			});
