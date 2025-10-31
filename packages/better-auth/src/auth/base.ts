@@ -1,4 +1,4 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
@@ -12,7 +12,7 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 	options: Options &
 		// fixme(alex): do we need Record<never, never> here?
 		Record<never, never>,
-	initFn: (options: Options) => ReturnType<typeof import("../context").init>,
+	initFn: (options: Options) => Promise<AuthContext>,
 ): Auth<Options> => {
 	const authContext = initFn(options);
 	const { api } = getEndpoints(authContext, options);
