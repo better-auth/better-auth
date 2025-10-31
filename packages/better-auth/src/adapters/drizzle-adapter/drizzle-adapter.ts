@@ -412,10 +412,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								with: includes,
 							});
 							const res = await query;
-							for (const pluralJoinResult of pluralJoinResults) {
-								const singularJoinResultName = pluralJoinResult.slice(0, -1);
-								res[singularJoinResultName] = res[pluralJoinResult];
-								delete res[pluralJoinResult];
+							if (res) {
+								for (const pluralJoinResult of pluralJoinResults) {
+									const singularJoinResultName = pluralJoinResult.slice(0, -1);
+									res[singularJoinResultName] = res[pluralJoinResult];
+									delete res[pluralJoinResult];
+								}
 							}
 							return res;
 						}
@@ -458,18 +460,32 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									if (!isUnique) pluralJoinResults.push(`${model}s`);
 								}
 							}
+							let orderBy: SQL<unknown>[] | undefined = undefined;
+							if (sortBy?.field) {
+								orderBy = [
+									sortFn(
+										schemaModel[getFieldName({ model, field: sortBy?.field })],
+									),
+								];
+							}
 							let query = db.query[model].findMany({
 								where: clause[0],
 								with: includes,
 								limit: limit ?? 100,
 								offset: offset ?? 0,
+								orderBy,
 							});
 							let res = await query;
-							for (const item of res) {
-								for (const pluralJoinResult of pluralJoinResults) {
-									const singularJoinResultName = pluralJoinResult.slice(0, -1);
-									item[singularJoinResultName] = item[pluralJoinResult];
-									delete item[pluralJoinResult];
+							if (res) {
+								for (const item of res) {
+									for (const pluralJoinResult of pluralJoinResults) {
+										const singularJoinResultName = pluralJoinResult.slice(
+											0,
+											-1,
+										);
+										item[singularJoinResultName] = item[pluralJoinResult];
+										delete item[pluralJoinResult];
+									}
 								}
 							}
 							return res;
@@ -485,7 +501,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					builder = builder.offset(effectiveOffset);
 
 					if (sortBy?.field) {
-						builder.orderBy(
+						builder = builder.orderBy(
 							sortFn(
 								schemaModel[getFieldName({ model, field: sortBy?.field })],
 							),
