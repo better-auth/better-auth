@@ -3,12 +3,12 @@ import { BetterAuthError } from "@better-auth/core/error";
 import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { APIError } from "../../api";
-import type { Auth } from "../../auth";
 import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 	timingSafeEqual,
 } from "../../crypto";
+import type { Auth } from "../../types";
 import type { jwt } from "../jwt";
 import type { oauthProvider } from "../oauth-provider";
 import { type DatabaseClient, databaseToSchema } from "./register";
