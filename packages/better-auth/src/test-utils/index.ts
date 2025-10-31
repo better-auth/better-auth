@@ -108,6 +108,7 @@ export async function getTestInstanceMemory<
 		if (config?.disableTestUser) {
 			return;
 		}
+		//@ts-expect-error
 		const res = await auth.api.signUpEmail({
 			body: testUser,
 		});
