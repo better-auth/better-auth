@@ -103,42 +103,52 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				where?: Where[] | undefined,
 			) => {
 				if (!where || !where.length) return {};
+				const buildSingleCondition = (w: Where) => {
+					const fieldName = getFieldName({ model, field: w.field });
+					// Special handling for Prisma null semantics, for non-nullable fields this is a tautology. Skip condition.
+					if (w.operator === "ne" && w.value === null) {
+						return {};
+					}
+					if (
+						(w.operator === "in" || w.operator === "not_in") &&
+						Array.isArray(w.value)
+					) {
+						const filtered = w.value.filter((v) => v != null);
+						if (filtered.length === 0) {
+							if (w.operator === "in") {
+								return {
+									AND: [
+										{ [fieldName]: { equals: "__never__" } },
+										{ [fieldName]: { not: "__never__" } },
+									],
+								};
+							} else {
+								return {};
+							}
+						}
+						const prismaOp = operatorToPrismaOperator(w.operator);
+						return { [fieldName]: { [prismaOp]: filtered } };
+					}
+					if (w.operator === "eq" || !w.operator) {
+						return { [fieldName]: w.value };
+					}
+					return {
+						[fieldName]: {
+							[operatorToPrismaOperator(w.operator)]: w.value,
+						},
+					};
+				};
 				if (where.length === 1) {
 					const w = where[0]!;
 					if (!w) {
 						return;
 					}
-					return {
-						[getFieldName({ model, field: w.field })]:
-							w.operator === "eq" || !w.operator
-								? w.value
-								: {
-										[operatorToPrismaOperator(w.operator)]: w.value,
-									},
-					};
+					return buildSingleCondition(w);
 				}
 				const and = where.filter((w) => w.connector === "AND" || !w.connector);
 				const or = where.filter((w) => w.connector === "OR");
-				const andClause = and.map((w) => {
-					return {
-						[getFieldName({ model, field: w.field })]:
-							w.operator === "eq" || !w.operator
-								? w.value
-								: {
-										[operatorToPrismaOperator(w.operator)]: w.value,
-									},
-					};
-				});
-				const orClause = or.map((w) => {
-					return {
-						[getFieldName({ model, field: w.field })]:
-							w.operator === "eq" || !w.operator
-								? w.value
-								: {
-										[operatorToPrismaOperator(w.operator)]: w.value,
-									},
-					};
-				});
+				const andClause = and.map((w) => buildSingleCondition(w));
+				const orClause = or.map((w) => buildSingleCondition(w));
 
 				return {
 					...(andClause.length ? { AND: andClause } : {}),
