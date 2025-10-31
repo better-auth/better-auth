@@ -4,7 +4,7 @@ import Database from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth";
-import { init } from "../init";
+import { init } from "../context";
 import { getTestInstance } from "../test-utils/test-instance";
 import type {
 	BetterAuthOptions,
