@@ -1,4 +1,8 @@
-export type DBFilter = { field: string; value: string; operator: any };
+export type DBFilter = {
+	field: string;
+	value: string | string[];
+	operator: any;
+};
 
 const SCIMOperators: Record<string, string | undefined> = {
 	eq: "eq",

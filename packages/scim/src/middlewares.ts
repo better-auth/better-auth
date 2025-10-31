@@ -20,7 +20,7 @@ export const authMiddleware = createAuthMiddleware(async (ctx) => {
 		where: [{ field: "scimToken", value: authSCIMToken }],
 	});
 
-	if (!scimProvider?.organizationId) {
+	if (!scimProvider) {
 		throw new APIError("UNAUTHORIZED", { message: "Invalid SCIM token" });
 	}
 

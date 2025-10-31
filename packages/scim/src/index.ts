@@ -32,24 +32,32 @@ const supportedSCIMResourceTypes = [SCIMUserResourceType];
 
 const findUserById = async (
 	adapter: DBAdapter,
-	{ organizationId, userId }: { organizationId: string; userId: string },
+	userId: string,
+	organizationId?: string,
 ) => {
-	const member = await adapter.findOne<Member>({
-		model: "member",
-		where: [
-			{ field: "organizationId", value: organizationId },
-			{ field: "userId", value: userId },
-		],
-	});
+	let member: Member | null = null;
 
-	if (member) {
-		return await adapter.findOne<User>({
-			model: "user",
-			where: [{ field: "id", value: userId }],
+	if (organizationId) {
+		member = await adapter.findOne<Member>({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: organizationId },
+				{ field: "userId", value: userId },
+			],
 		});
 	}
 
-	return null;
+	// Disallows access to the resource
+	// when the token is restricted to an organization but the resource is not part of it
+
+	if (organizationId && !member) {
+		return null;
+	}
+
+	return await adapter.findOne<User>({
+		model: "user",
+		where: [{ field: "id", value: userId }],
+	});
 };
 
 export const scim = () => {
@@ -97,7 +105,7 @@ export const scim = () => {
 					}
 
 					const [newUser, newAccount] = await ctx.context.adapter.transaction<
-						[User, Account, Member]
+						[User, Account]
 					>(async () => {
 						const primaryEmail = getUserPrimaryEmail(body.emails);
 						const email = primaryEmail ?? body.userName;
@@ -128,17 +136,21 @@ export const scim = () => {
 						});
 
 						const organizationId = ctx.context.scimProvider.organizationId;
-						const member = await ctx.context.adapter.create<Member>({
-							model: "member",
-							data: {
-								organizationId,
-								userId: user.id,
-								role: "member",
-								createdAt: new Date(),
-							},
-						});
+						if (organizationId) {
+							await ctx.context.adapter.create<Member>({
+								model: "member",
+								data: {
+									userId: user.id,
+									role: "member",
+									createdAt: new Date(),
+									organizationId,
+								},
+							});
 
-						return [user, account, member];
+							return [user, account];
+						}
+
+						return [user, account];
 					});
 
 					const userResource = createUserResource(
@@ -188,10 +200,11 @@ export const scim = () => {
 					const organizationId = ctx.context.scimProvider.organizationId;
 					const accountId = body.externalId ?? body.userName;
 
-					const user = await findUserById(ctx.context.adapter, {
+					const user = await findUserById(
+						ctx.context.adapter,
 						userId,
 						organizationId,
-					});
+					);
 
 					if (!user) {
 						return ctx.json({ error: "User not found" }, { status: 404 });
@@ -278,29 +291,38 @@ export const scim = () => {
 					use: [authMiddleware],
 				},
 				async (ctx) => {
-					let filters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
+					let apiFilters: DBFilter[] = parseSCIMAPIUserFilter(
+						ctx.query?.filter,
+					);
 
-					ctx.context.logger.info("Querying result with filters: ", filters);
+					ctx.context.logger.info("Querying result with filters: ", apiFilters);
+
+					let userFilters: DBFilter[] = [];
+					let accountsFilters: DBFilter[] = [];
 
 					const organizationId = ctx.context.scimProvider.organizationId;
-					const members = await ctx.context.adapter.findMany<Member>({
-						model: "member",
-						where: [{ field: "organizationId", value: organizationId }],
-					});
+					if (organizationId) {
+						const members = await ctx.context.adapter.findMany<Member>({
+							model: "member",
+							where: [{ field: "organizationId", value: organizationId }],
+						});
 
-					const userIds = members.map((member) => member.userId);
+						const userIds = members.map((member) => member.userId);
+
+						userFilters = [{ field: "id", value: userIds, operator: "in" }];
+						accountsFilters = [
+							{ field: "userId", value: userIds, operator: "in" },
+						];
+					}
 
 					const [users, accounts] = await Promise.all([
 						ctx.context.adapter.findMany<User>({
 							model: "user",
-							where: [
-								{ field: "id", value: userIds, operator: "in" },
-								...filters,
-							],
+							where: [...userFilters, ...apiFilters],
 						}),
 						ctx.context.adapter.findMany<Account>({
 							model: "account",
-							where: [{ field: "userId", value: userIds, operator: "in" }],
+							where: [...accountsFilters],
 						}),
 					]);
 
@@ -344,10 +366,7 @@ export const scim = () => {
 					const organizationId = ctx.context.scimProvider.organizationId;
 
 					const [user, account] = await Promise.all([
-						findUserById(ctx.context.adapter, {
-							userId,
-							organizationId,
-						}),
+						findUserById(ctx.context.adapter, userId, organizationId),
 						ctx.context.adapter.findOne<Account>({
 							model: "account",
 							where: [{ field: "userId", value: userId }],
@@ -397,10 +416,11 @@ export const scim = () => {
 					const userId = ctx.params.userId;
 					const organizationId = ctx.context.scimProvider.organizationId;
 
-					const user = await findUserById(ctx.context.adapter, {
+					const user = await findUserById(
+						ctx.context.adapter,
 						userId,
 						organizationId,
-					});
+					);
 
 					if (!user) {
 						return ctx.json({ error: "User not found" }, { status: 404 });
@@ -449,10 +469,11 @@ export const scim = () => {
 					const userId = ctx.params.userId;
 					const organizationId = ctx.context.scimProvider.organizationId;
 
-					const user = await findUserById(ctx.context.adapter, {
+					const user = await findUserById(
+						ctx.context.adapter,
 						userId,
 						organizationId,
-					});
+					);
 
 					if (!user) {
 						return ctx.json({ error: "User not found" }, { status: 404 });

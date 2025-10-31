@@ -1,7 +1,7 @@
 export interface SCIMProvider {
 	providerId: string;
 	scimToken: string;
-	organizationId: string;
+	organizationId?: string;
 }
 
 export type SCIMName = {
