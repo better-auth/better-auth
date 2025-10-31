@@ -1,7 +1,7 @@
 import {
 	kOnlineManager,
-	OnlineListener,
-	OnlineManager,
+	type OnlineListener,
+	type OnlineManager,
 } from "better-auth/client";
 
 class ExpoOnlineManager implements OnlineManager {
@@ -23,23 +23,14 @@ class ExpoOnlineManager implements OnlineManager {
 
 	setup() {
 		try {
-			const NetInfo = require("@react-native-community/netinfo");
-			this.unsubscribe = NetInfo.addEventListener(
-				(state: { isConnected: boolean | null }) => {
+			const { Network } = require("expo-network");
+			const subscription = Network.addNetworkStateListener(
+				(state: { isConnected: boolean }) => {
 					this.setOnline(!!state.isConnected);
 				},
 			);
-		} catch {
-			try {
-				const { Network } = require("expo-network");
-				const subscription = Network.addNetworkStateListener(
-					(state: { isConnected: boolean }) => {
-						this.setOnline(!!state.isConnected);
-					},
-				);
-				this.unsubscribe = () => subscription.remove();
-			} catch {}
-		}
+			this.unsubscribe = () => subscription.remove();
+		} catch {}
 
 		return () => {
 			this.unsubscribe?.();
