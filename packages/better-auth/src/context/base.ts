@@ -80,7 +80,7 @@ export async function createAuthContext(
 			const provider = socialProviders[key](config as never);
 			(provider as OAuthProvider).disableImplicitSignUp =
 				config.disableImplicitSignUp;
-			return provider; // TODO: Array
+			return provider;
 		})
 		.filter((x) => x !== null);
 
