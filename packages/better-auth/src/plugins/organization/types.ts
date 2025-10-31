@@ -33,7 +33,9 @@ export interface OrganizationOptions {
 	 *
 	 * You can also pass a function that returns a boolean
 	 */
-	organizationLimit?: number | ((user: User) => Promise<boolean> | boolean);
+	organizationLimit?:
+		| number
+		| ((user: User & Record<string, any>) => Promise<boolean> | boolean);
 	/**
 	 * The role that is assigned to the creator of the
 	 * organization.
@@ -119,8 +121,8 @@ export interface OrganizationOptions {
 					data: {
 						organizationId: string;
 						session: {
-							user: User;
-							session: Session;
+							user: User & Record<string, any>;
+							session: Session & Record<string, any>;
 						} | null;
 					},
 					request?: Request,
@@ -138,7 +140,10 @@ export interface OrganizationOptions {
 			| number
 			| ((data: {
 					teamId: string;
-					session: { user: User; session: Session };
+					session: {
+						user: User & Record<string, any>;
+						session: Session & Record<string, any>;
+					};
 					organizationId: string;
 			  }) => Promise<number> | number)
 			| undefined;
@@ -166,9 +171,9 @@ export interface OrganizationOptions {
 		| number
 		| ((
 				data: {
-					user: User;
-					organization: Organization;
-					member: Member;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+					member: Member & Record<string, any>;
 				},
 				ctx: AuthContext,
 		  ) => Promise<number> | number);
@@ -225,17 +230,17 @@ export interface OrganizationOptions {
 			/**
 			 * the organization the user is invited to join
 			 */
-			organization: Organization;
+			organization: Organization & Record<string, any>;
 			/**
 			 * the invitation object
 			 */
-			invitation: Invitation;
+			invitation: Invitation & Record<string, any>;
 			/**
 			 * the member who is inviting the user
 			 */
 			inviter: Member & {
-				user: User;
-			};
+				user: User & Record<string, any>;
+			} & Record<string, any>;
 		},
 		/**
 		 * The request object
@@ -333,8 +338,8 @@ export interface OrganizationOptions {
 		 */
 		beforeDelete?: (
 			data: {
-				organization: Organization;
-				user: User;
+				organization: Organization & Record<string, any>;
+				user: User & Record<string, any>;
 			},
 			request?: Request,
 		) => Promise<void>;
@@ -349,8 +354,8 @@ export interface OrganizationOptions {
 		 */
 		afterDelete?: (
 			data: {
-				organization: Organization;
-				user: User;
+				organization: Organization & Record<string, any>;
+				user: User & Record<string, any>;
 			},
 			request?: Request,
 		) => Promise<void>;
