@@ -98,9 +98,9 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
   </Step>
 
   <Step>
-    ### Create your first client
+    ### Create your first oauth client
 
-    Create your first confidential client.
+    Create your first confidential oauth client.
 
     ```ts
     const client = await auth.api.createOAuthClient({
@@ -111,6 +111,10 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
 		});
     console.log(client); // You may add this to `trustedClients`
     ```
+
+    <Callout type="info">
+    To create a public client (ie. without a client secret), set `token_endpoint_auth_method: "none"`.
+    </Callout>
   </Step>
 </Steps>
 
@@ -526,9 +530,12 @@ oauthProvider({
 The plugin will redirect the user to the `selectAccountPage`. This page should prompt for account selection and upon completion of selection, should call `oauth2Continue`. Note the `oauth_login_prompt` is automatically stored in a signed cookie.
 
 ```ts title="select-account.ts"
-const res = await client.oauth2.oauth2Continue({
+await authClient.multiSession.setActive({
+  sessionToken,
+});
+await client.oauth2.oauth2Continue({
   confirm: true,
-})
+});
 ```
 
 ### Post Login Screen
@@ -568,9 +575,12 @@ oauthProvider({
 The plugin will redirect the user to the `postLoginPage`. This page should prompt for account selection and upon completion of selection, should call `oauth2Continue`. Note the `oauth_login_prompt` is automatically stored in a signed cookie.
 
 ```ts title="select-organization.ts"
-const res = await client.oauth2.oauth2Continue({
+await authClient.organization.setActive({
+  organizationId,
+});
+await client.oauth2.oauth2Continue({
   postLogin: true,
-})
+});
 ```
 
 
