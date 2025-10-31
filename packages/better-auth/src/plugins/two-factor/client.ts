@@ -21,7 +21,7 @@ export const twoFactorClient = (
 				onTwoFactorRedirect?: () => void | Promise<void>;
 		  }
 		| undefined,
-): BetterAuthClientPlugin => {
+) => {
 	return {
 		id: "two-factor",
 		$InferServerPlugin: {} as ReturnType<typeof twoFa>,
@@ -48,15 +48,14 @@ export const twoFactorClient = (
 				hooks: {
 					async onSuccess(context) {
 						if (context.data?.twoFactorRedirect) {
-							if (options?.twoFactorPage) {
-								if (typeof window !== "undefined" && window.location) {
-									window.location.href = options.twoFactorPage;
-									return;
-								}
-							}
-
 							if (options?.onTwoFactorRedirect) {
 								await options.onTwoFactorRedirect();
+								return;
+							}
+
+							// fallback for when `onTwoFactorRedirect` is not used and only `twoFactorPage` is provided
+							if (options?.twoFactorPage && typeof window !== "undefined") {
+								window.location.href = options.twoFactorPage;
 							}
 						}
 					},
