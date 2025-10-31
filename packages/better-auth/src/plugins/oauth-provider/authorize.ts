@@ -353,6 +353,23 @@ async function redirectWithAuthorizationCode(
 			verificationValue.query.state,
 		);
 	}
+
+	// Clear prompt cookie upon receipt of authorization code if it exists
+	const { name: loginPromptCookieName, attributes: cookieAttributes } =
+		ctx.context.createAuthCookie("oauth_login_prompt");
+	const cookie = await ctx.getSignedCookie(
+		loginPromptCookieName,
+		ctx.context.secret,
+	);
+	if (cookie) {
+		ctx.setCookie(loginPromptCookieName, "", {
+			path: ctx.context.options.basePath,
+			sameSite: "lax",
+			...cookieAttributes,
+			maxAge: 0,
+		});
+	}
+
 	return handleRedirect(ctx, redirectUriWithCode.toString());
 }
 

@@ -201,9 +201,13 @@ export const oauthProvider = (options: OAuthOptions) => {
 				 */
 				{
 					matcher(ctx) {
-						return parseSetCookieHeader(
-							ctx.context.responseHeaders?.get("set-cookie") || "",
-						).has(ctx.context.authCookies.sessionToken.name);
+						return (
+							(ctx.path.startsWith("/oauth2") ||
+								ctx.path.startsWith("/sign-in")) &&
+							parseSetCookieHeader(
+								ctx.context.responseHeaders?.get("set-cookie") || "",
+							).has(ctx.context.authCookies.sessionToken.name)
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						// Obtain original prompt
@@ -236,12 +240,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 						if (ctx.query?.prompt === "login") {
 							ctx.query!.prompt = undefined;
 						}
-						ctx.setCookie(loginPromptCookieName, "", {
-							path: ctx.context.options.basePath,
-							sameSite: "lax",
-							...cookieAttributes,
-							maxAge: 0,
-						});
+						ctx.headers?.set("accept", "application/json");
 						return await authorizeEndpoint(ctx, opts);
 					}),
 				},

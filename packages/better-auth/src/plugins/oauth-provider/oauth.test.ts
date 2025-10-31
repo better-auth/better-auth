@@ -11,6 +11,7 @@ import { type GenericOAuthConfig, genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
 import { multiSession } from "../multi-session";
+import { multiSessionClient } from "../multi-session/client";
 import { type Organization, organization } from "../organization";
 import { organizationClient } from "../organization/client";
 import { oauthProviderClient } from "./client";
@@ -230,6 +231,9 @@ describe("oauth", async () => {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
+				expect(ctx.response.headers.get("set-cookie")).toContain(
+					"better-auth.oauth_login_prompt=",
+				);
 				cookieSetter(authClientHeaders)(ctx);
 			},
 		});
@@ -247,6 +251,11 @@ describe("oauth", async () => {
 			},
 			{
 				headers: authClientHeaders,
+				onResponse: (ctx) => {
+					expect(ctx.response.headers.get("set-cookie")).toContain(
+						"better-auth.oauth_login_prompt=; Max-Age=0",
+					);
+				},
 			},
 		);
 		expect(res.data?.redirect).toBeTruthy();
@@ -302,6 +311,9 @@ describe("oauth", async () => {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
+				expect(ctx.response.headers.get("set-cookie")).toContain(
+					"better-auth.oauth_login_prompt=",
+				);
 				cookieSetter(authClientHeaders)(ctx);
 			},
 		});
@@ -319,6 +331,11 @@ describe("oauth", async () => {
 			},
 			{
 				headers: authClientHeaders,
+				onResponse: (ctx) => {
+					expect(ctx.response.headers.get("set-cookie")).toContain(
+						"better-auth.oauth_login_prompt=; Max-Age=0",
+					);
+				},
 			},
 		);
 		expect(res.data?.redirect).toBeTruthy();
@@ -394,7 +411,11 @@ describe("oauth - prompt", async () => {
 
 	const { headers, user } = await signInWithTestUser();
 	const serverClient = createAuthClient({
-		plugins: [oauthProviderClient(), organizationClient()],
+		plugins: [
+			oauthProviderClient(),
+			organizationClient(),
+			multiSessionClient(),
+		],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -747,7 +768,7 @@ describe("oauth - prompt", async () => {
 		expect(consentRedirectUri).toContain(`state=`);
 	});
 
-	it("select_account - should sign in requesting account selection and consent", async () => {
+	it("select_account - should sign in requesting account selection", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -781,14 +802,17 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /select-account
 		let selectAccountRedirectUri = "";
-		const newHeaders = new Headers();
+		const authClientHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
-			onError(context) {
-				selectAccountRedirectUri =
-					context.response.headers.get("Location") || "";
-				cookieSetter(newHeaders)(context);
-				newHeaders.append("Cookie", headers.get("Cookie") || "");
+			headers,
+			onError(ctx) {
+				selectAccountRedirectUri = ctx.response.headers.get("Location") || "";
+				expect(ctx.response.headers.get("set-cookie")).toContain(
+					"better-auth.oauth_login_prompt=",
+				);
+				cookieSetter(authClientHeaders)(ctx);
+				authClientHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
 		});
 		expect(selectAccountRedirectUri).toContain(`/select-account`);
@@ -804,10 +828,12 @@ describe("oauth - prompt", async () => {
 				selected: true,
 			},
 			{
-				headers: newHeaders,
+				headers: authClientHeaders,
 				throw: true,
-				onResponse(context) {
-					cookieSetter(newHeaders)(context);
+				onResponse(ctx) {
+					expect(ctx.response.headers.get("set-cookie")).toContain(
+						"better-auth.oauth_login_prompt=; Max-Age=0",
+					);
 				},
 			},
 		);
