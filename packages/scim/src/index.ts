@@ -640,11 +640,11 @@ export const scim = () => {
 					},
 				},
 				async (ctx) => {
-					const schema = supportedSCIMSchemas.find(
+					const resourceType = supportedSCIMResourceTypes.find(
 						(s) => s.id === ctx.params.resourceTypeId,
 					);
 
-					if (!schema) {
+					if (!resourceType) {
 						return ctx.json(
 							{ error: "Resource type not found" },
 							{ status: 404 },
@@ -652,10 +652,10 @@ export const scim = () => {
 					}
 
 					return ctx.json({
-						...schema,
+						...resourceType,
 						meta: {
-							...schema.meta,
-							location: new URL(schema.meta.location, ctx.context.baseURL),
+							...resourceType.meta,
+							location: new URL(resourceType.meta.location, ctx.context.baseURL),
 						},
 					});
 				},
