@@ -72,7 +72,7 @@ export default function Hero() {
 											npm i{" "}
 											<span className="relative dark:text-fuchsia-300 text-fuchsia-800">
 												better-auth
-												<span className="absolute h-2 bg-gradient-to-tr from-white via-stone-300 to-stone-400 blur-3xl w-full top-0 left-2"></span>
+												<span className="absolute h-2 bg-gradient-to-tr from-white via-stone-200 to-stone-300 blur-3xl w-full top-0 left-2"></span>
 											</span>
 										</p>
 									</div>
