@@ -1,5 +1,4 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import type { DBFieldAttribute } from "@better-auth/core/db";
 import type {
 	CleanedWhere,
 	DBAdapter,
@@ -12,11 +11,12 @@ import { getColorDepth, logger, TTY_COLORS } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import { generateId as defaultGenerateId } from "../../utils";
 import { safeJSONParse } from "../../utils/json";
 import { initGetDefaultFieldName } from "./get-default-field-name";
 import { initGetDefaultModelName } from "./get-default-model-name";
+import { initGetFieldAttributes } from "./get-field-attributes";
 import { initGetFieldName } from "./get-field-name";
+import { initGetIdField } from "./get-id-field";
 import { initGetModelName } from "./get-model-name";
 import type {
 	AdapterFactoryConfig,
@@ -29,6 +29,8 @@ export {
 	initGetDefaultFieldName,
 	initGetModelName,
 	initGetFieldName,
+	initGetFieldAttributes,
+	initGetIdField,
 };
 export * from "./types";
 
@@ -156,70 +158,21 @@ export const createAdapterFactory =
 			usePlural: config.usePlural,
 		});
 
-		const idField = ({
-			customModelName,
-			forceAllowId,
-		}: {
-			customModelName?: string;
-			forceAllowId?: boolean;
-		}) => {
-			const shouldGenerateId =
-				!config.disableIdGeneration &&
-				!options.advanced?.database?.useNumberId &&
-				!forceAllowId;
-			const model = getDefaultModelName(customModelName ?? "id");
-			return {
-				type: options.advanced?.database?.useNumberId ? "number" : "string",
-				required: shouldGenerateId ? true : false,
-				...(shouldGenerateId
-					? {
-							defaultValue() {
-								if (config.disableIdGeneration) return undefined;
-								const useNumberId = options.advanced?.database?.useNumberId;
-								let generateId = options.advanced?.database?.generateId;
-								if (options.advanced?.generateId !== undefined) {
-									logger.warn(
-										"Your Better Auth config includes advanced.generateId which is deprecated. Please use advanced.database.generateId instead. This will be removed in future releases.",
-									);
-									generateId = options.advanced?.generateId;
-								}
-								if (generateId === false || useNumberId) return undefined;
-								if (generateId) {
-									return generateId({
-										model,
-									});
-								}
-								if (config.customIdGenerator) {
-									return config.customIdGenerator({ model });
-								}
-								return defaultGenerateId();
-							},
-						}
-					: {}),
-			} satisfies DBFieldAttribute;
-		};
+		const idField = initGetIdField({
+			schema,
+			options,
+			usePlural: config.usePlural,
+			disableIdGeneration: config.disableIdGeneration,
+			customIdGenerator: config.customIdGenerator,
+		});
 
-		const getFieldAttributes = ({
-			model,
-			field,
-		}: {
-			model: string;
-			field: string;
-		}) => {
-			const defaultModelName = getDefaultModelName(model);
-			const defaultFieldName = getDefaultFieldName({
-				field: field,
-				model: defaultModelName,
-			});
-
-			const fields = schema[defaultModelName]!.fields;
-			fields.id = idField({ customModelName: defaultModelName });
-			const fieldAttributes = fields[defaultFieldName];
-			if (!fieldAttributes) {
-				throw new BetterAuthError(`Field ${field} not found in model ${model}`);
-			}
-			return fieldAttributes;
-		};
+		const getFieldAttributes = initGetFieldAttributes({
+			schema,
+			options,
+			usePlural: config.usePlural,
+			disableIdGeneration: config.disableIdGeneration,
+			customIdGenerator: config.customIdGenerator,
+		});
 
 		const transformInput = async (
 			data: Record<string, any>,
@@ -690,7 +643,8 @@ export const createAdapterFactory =
 						from,
 						to,
 					},
-					type: "left", // for now only support left joins
+					type: "left",
+					limit: 100,
 				};
 			}
 			return transformedJoin;

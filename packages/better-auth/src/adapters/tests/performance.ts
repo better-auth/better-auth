@@ -9,7 +9,7 @@ export const performanceTestSuite = createTestSuite(
 	"performance",
 	{},
 	(
-		{ adapter, generate, cleanup, originalAdapter },
+		{ generate, cleanup, adapter: originalAdapter },
 		config?:
 			| { iterations?: number; userSeedCount?: number; dialect?: string }
 			| undefined,

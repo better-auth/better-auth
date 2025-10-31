@@ -24,6 +24,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	options,
 	file,
 	adapter,
+	experimental,
 }) => {
 	const tables = getAuthTables(options);
 	const filePath = file || "./auth-schema.ts";
@@ -37,7 +38,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	}
 	const fileExist = existsSync(filePath);
 
-	let code: string = generateImport({ databaseType, tables, options });
+	let code: string = generateImport({
+		databaseType,
+		tables,
+		options,
+		experimental,
+	});
 
 	const getModelName = initGetModelName({
 		schema: tables,
@@ -227,8 +233,114 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						})
 						.join(",\n ")}
 				});`;
+
 		code += `\n${schema}\n`;
 	}
+
+	let relationsString: string = "";
+	if (experimental?.joins) {
+		for (const tableKey in tables) {
+			const table = tables[tableKey]!;
+
+			type Relation = {
+				/**
+				 * The key of the relation that will be defined in the Drizzle schema.
+				 * For "one" relations: singular (e.g., "user")
+				 * For "many" relations: plural (e.g., "posts")
+				 */
+				key: string;
+				/**
+				 * The model name being referenced.
+				 */
+				model: string;
+				/**
+				 * The type of the relation: "one" (many-to-one) or "many" (one-to-many).
+				 */
+				type: "one" | "many";
+				/**
+				 * Foreign key field name and reference details (only for "one" relations).
+				 */
+				reference?: {
+					field: string;
+					references: string;
+				};
+			};
+
+			const relations: Relation[] = [];
+
+			// 1. Find all foreign keys in THIS table (creates "one" relations)
+			const fields = Object.entries(table.fields);
+			const foreignFields = fields.filter(([_, field]) => field.references);
+
+			for (const [fieldName, field] of foreignFields) {
+				const referencedModel = field.references!.model;
+				relations.push({
+					key: getModelName(referencedModel),
+					model: getModelName(referencedModel),
+					type: "one",
+					reference: {
+						field: `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`,
+						references: `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`,
+					},
+				});
+			}
+
+			// 2. Find all OTHER tables that reference THIS table (creates "many" relations)
+			const otherModels = Object.entries(tables).filter(
+				([modelName]) => modelName !== tableKey,
+			);
+
+			for (const [modelName, otherTable] of otherModels) {
+				const foreignKeysPointingHere = Object.entries(
+					otherTable.fields,
+				).filter(
+					([_, field]) =>
+						field.references?.model === tableKey ||
+						field.references?.model === getModelName(tableKey),
+				);
+
+				for (const [fieldName, field] of foreignKeysPointingHere) {
+					const isUnique = !!field.unique;
+					const relationKey = isUnique
+						? getModelName(modelName)
+						: `${getModelName(modelName)}s`;
+
+					relations.push({
+						key: relationKey,
+						model: getModelName(modelName),
+						type: isUnique ? "one" : "many",
+					});
+				}
+			}
+
+			const hasOne = relations.some((relation) => relation.type === "one");
+			const hasMany = relations.some((relation) => relation.type === "many");
+
+			let tableRelation = `export const ${table.modelName}Relations = relations(${getModelName(
+				table.modelName,
+			)}, ({ ${hasOne ? "one" : ""}${hasMany ? `${hasOne ? ", " : ""}many` : ""} }) => ({
+				${relations
+					.map(
+						({ key, type, model, reference }) =>
+							` ${key}: ${type}(${model}${
+								!reference
+									? ""
+									: `, {
+								fields: [${reference.field}],
+								references: [${reference.references}],
+							}`
+							})`,
+					)
+					.join(",\n ")}
+			}))`;
+
+			if (relations.length > 0) {
+				relationsString += `\n${tableRelation}\n`;
+			}
+		}
+		code += `\n${relationsString}`;
+	}
+
 	const formattedCode = await prettier.format(code, {
 		parser: "typescript",
 	});
@@ -243,10 +355,14 @@ function generateImport({
 	databaseType,
 	tables,
 	options,
+	experimental,
 }: {
 	databaseType: "sqlite" | "mysql" | "pg";
 	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
+	experimental?: {
+		joins?: boolean;
+	};
 }) {
 	const rootImports: string[] = [];
 	const coreImports: string[] = [];
@@ -260,6 +376,10 @@ function generateImport({
 			if (field.type === "json") hasJson = true;
 		}
 		if (hasJson && hasBigint) break;
+	}
+
+	if (experimental?.joins) {
+		rootImports.push("relations");
 	}
 
 	const useNumberId = options.advanced?.database?.useNumberId;

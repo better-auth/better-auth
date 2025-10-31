@@ -347,7 +347,7 @@ export type JoinConfig = {
 		 *
 		 * @default "left"
 		 */
-		type?: "left" | "inner";
+		type: "left" | "inner";
 		on: {
 			/**
 			 * Column name from the main table
@@ -358,6 +358,14 @@ export type JoinConfig = {
 			 */
 			to: string;
 		};
+		/**
+		 * Limit the number of rows to return.
+		 *
+		 * If the relation has `unique` constraint, then this option will be ignored and limit will be set to 1.
+		 *
+		 * @default 100
+		 */
+		limit: number;
 	};
 };
 

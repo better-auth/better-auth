@@ -8,7 +8,9 @@ import {
 	createAdapterFactory,
 	initGetDefaultFieldName,
 	initGetDefaultModelName,
+	initGetFieldAttributes,
 	initGetFieldName,
+	initGetIdField,
 	initGetModelName,
 } from "./adapter-factory";
 
@@ -28,6 +30,8 @@ export {
 	initGetDefaultModelName,
 	initGetFieldName,
 	initGetModelName,
+	initGetFieldAttributes,
+	initGetIdField,
 };
 
 /**

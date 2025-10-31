@@ -13,6 +13,9 @@ export const generateSchema = (opts: {
 	adapter: DBAdapter;
 	file?: string;
 	options: BetterAuthOptions;
+	experimental?: {
+		joins?: boolean;
+	};
 }) => {
 	const adapter = opts.adapter;
 	const generator =

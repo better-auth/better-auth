@@ -5,6 +5,9 @@ export interface SchemaGenerator {
 		file?: string;
 		adapter: DBAdapter;
 		options: Options;
+		experimental?: {
+			joins?: boolean;
+		};
 	}): Promise<{
 		code?: string;
 		fileName: string;
