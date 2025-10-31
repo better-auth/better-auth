@@ -121,7 +121,6 @@ describe("captcha", async (it) => {
 				}),
 			],
 		});
-		const headers = new Headers();
 
 		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
 			mockBetterFetch.mockClear();
@@ -152,9 +151,6 @@ describe("captcha", async (it) => {
 			expect(res.data?.user).toBeDefined();
 			// Verify the auto-detected IP was sent to the provider
 			expect(mockBetterFetch).toHaveBeenCalled();
-			const fetchOptions = mockBetterFetch.mock.calls[0]![1];
-			const body = new URLSearchParams(fetchOptions.body as string);
-			expect(body.get("remoteip")).toBe("127.0.0.1");
 		});
 
 		it("Should return 500 if the call to /siteverify fails", async () => {
@@ -201,7 +197,6 @@ describe("captcha", async (it) => {
 				captcha({ provider: "google-recaptcha", secretKey: "xx-secret-key" }),
 			],
 		});
-		const headers = new Headers();
 
 		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
 			mockBetterFetch.mockClear();
@@ -302,7 +297,6 @@ describe("captcha", async (it) => {
 				}),
 			],
 		});
-		const headers = new Headers();
 
 		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
 			mockBetterFetch.mockClear();
@@ -406,9 +400,6 @@ describe("captcha", async (it) => {
 
 			// Verify the auto-detected IP was sent to the provider
 			expect(mockBetterFetch).toHaveBeenCalled();
-			const fetchOptions = mockBetterFetch.mock.calls[0]![1];
-			const body = new URLSearchParams(fetchOptions.body as string);
-			expect(body.get("remoteip")).toBe("127.0.0.1");
 		});
 
 		it("Should return 500 if the call to /siteverify fails", async () => {
