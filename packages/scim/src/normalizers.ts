@@ -34,7 +34,7 @@ export const createUserResource = (
 };
 
 export const getUserResourceLocation = (baseURL: string, userId: string) => {
-	return new URL(`/api/auth/scim/v2/Users/${userId}`, baseURL).toString();
+	return new URL(`/scim/v2/Users/${userId}`, baseURL).toString();
 };
 
 export const getFormattedName = (name: SCIMName) => {

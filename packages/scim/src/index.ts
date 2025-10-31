@@ -23,6 +23,9 @@ import {
 	SCIMUserResourceType,
 } from "./user-schemas";
 
+const supportedSCIMSchemas = [SCIMUserResourceSchema];
+const supportedSCIMResourceTypes = [SCIMUserResourceType];
+
 const findUserById = async (
 	adapter: DBAdapter,
 	{ organizationId, userId }: { organizationId: string; userId: string },
@@ -532,7 +535,56 @@ export const scim = () => {
 					},
 				},
 				async (ctx) => {
-					return ctx.json([SCIMUserResourceSchema]);
+					return ctx.json({
+						totalResults: supportedSCIMSchemas.length,
+						itemsPerPage: supportedSCIMSchemas.length,
+						startIndex: 1,
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+						Resources: supportedSCIMSchemas.map((s) => {
+							return {
+								...s,
+								meta: {
+									...s.meta,
+									location: new URL(s.meta.location, ctx.context.baseURL),
+								},
+							};
+						}),
+					});
+				},
+			),
+			getSchema: createAuthEndpoint(
+				"/scim/v2/Schemas/:schemaId",
+				{
+					method: "GET",
+					metadata: {
+						openapi: {
+							summary: "SCIM a Service Provider Configuration Schema",
+							description:
+								"Standard SCIM metadata endpoint used by identity providers to acquire information about a given schema. See https://datatracker.ietf.org/doc/html/rfc7644#section-4",
+							responses: {
+								"200": {
+									description: "SCIM metadata object",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const schema = supportedSCIMSchemas.find(
+						(s) => s.id === ctx.params.schemaId,
+					);
+
+					if (!schema) {
+						return ctx.json({ error: "Schema not found" }, { status: 404 });
+					}
+
+					return ctx.json({
+						...schema,
+						meta: {
+							...schema.meta,
+							location: new URL(schema.meta.location, ctx.context.baseURL),
+						},
+					});
 				},
 			),
 			getResourceTypes: createAuthEndpoint(
@@ -553,7 +605,59 @@ export const scim = () => {
 					},
 				},
 				async (ctx) => {
-					return ctx.json([SCIMUserResourceType]);
+					return ctx.json({
+						totalResults: supportedSCIMResourceTypes.length,
+						itemsPerPage: supportedSCIMResourceTypes.length,
+						startIndex: 1,
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+						Resources: supportedSCIMResourceTypes.map((s) => {
+							return {
+								...s,
+								meta: {
+									...s.meta,
+									location: new URL(s.meta.location, ctx.context.baseURL),
+								},
+							};
+						}),
+					});
+				},
+			),
+			getResourceType: createAuthEndpoint(
+				"/scim/v2/ResourceTypes/:resourceTypeId",
+				{
+					method: "GET",
+					metadata: {
+						openapi: {
+							summary: "SCIM Service Provider Supported Resource Type",
+							description:
+								"Standard SCIM metadata endpoint used by identity providers to get a server supported type. See https://datatracker.ietf.org/doc/html/rfc7644#section-4",
+							responses: {
+								"200": {
+									description: "SCIM metadata object",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const schema = supportedSCIMSchemas.find(
+						(s) => s.id === ctx.params.resourceTypeId,
+					);
+
+					if (!schema) {
+						return ctx.json(
+							{ error: "Resource type not found" },
+							{ status: 404 },
+						);
+					}
+
+					return ctx.json({
+						...schema,
+						meta: {
+							...schema.meta,
+							location: new URL(schema.meta.location, ctx.context.baseURL),
+						},
+					});
 				},
 			),
 		},

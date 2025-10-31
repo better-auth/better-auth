@@ -194,7 +194,7 @@ export const SCIMUserResourceSchema = {
 	],
 	meta: {
 		resourceType: "Schema",
-		location: "/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User",
+		location: "/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User",
 	},
 };
 
@@ -206,7 +206,7 @@ export const SCIMUserResourceType = {
 	description: "User Account",
 	schema: "urn:ietf:params:scim:schemas:core:2.0:User",
 	meta: {
-		location: "https://example.com/v2/ResourceTypes/User",
 		resourceType: "ResourceType",
+		location: "/scim/v2/ResourceTypes/User",
 	},
 };

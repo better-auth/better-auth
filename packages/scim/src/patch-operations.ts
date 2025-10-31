@@ -27,7 +27,9 @@ const givenName = (user: User, op: Operation) => {
 };
 
 const familyName = (user: User, op: Operation) => {
-	const givenName = (user.name.split(" ").slice(0, -1).join(" ") || user.name).trim();
+	const givenName = (
+		user.name.split(" ").slice(0, -1).join(" ") || user.name
+	).trim();
 	const familyName = op.value;
 	return getUserFullName(user.email, {
 		familyName,
