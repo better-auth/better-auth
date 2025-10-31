@@ -22,15 +22,17 @@ class ExpoOnlineManager implements OnlineManager {
 	}
 
 	setup() {
-		try {
-			const { Network } = require("expo-network");
-			const subscription = Network.addNetworkStateListener(
-				(state: { isConnected: boolean }) => {
-					this.setOnline(!!state.isConnected);
-				},
-			);
-			this.unsubscribe = () => subscription.remove();
-		} catch {}
+		import("expo-network")
+			.then(({ addNetworkStateListener }) => {
+				const subscription = addNetworkStateListener((state) => {
+					this.setOnline(!!state.isInternetReachable);
+				});
+				this.unsubscribe = () => subscription.remove();
+			})
+			.catch(() => {
+				// fallback to always online
+				this.setOnline(true);
+			});
 
 		return () => {
 			this.unsubscribe?.();
