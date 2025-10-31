@@ -324,7 +324,7 @@ export type Where = {
  * configures how the join should be performed.
  */
 export type JoinOption = {
-	[model: string]: boolean;
+	[model: string]: boolean | { limit?: number };
 	//  {
 
 	// 	// In the future we may support nested joins:

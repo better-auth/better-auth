@@ -563,7 +563,7 @@ export const createAdapterFactory =
 			if (Object.keys(unsanitizedJoin).length === 0) return undefined;
 			const transformedJoin: JoinConfig = {};
 			for (const [model, join] of Object.entries(unsanitizedJoin)) {
-				if (join !== true) continue; // for now only support "true" on joins, indicating a simple join
+				if (!join) continue;
 				const defaultModelName = getDefaultModelName(model);
 				const defaultBaseModelName = getDefaultModelName(baseModel);
 
@@ -613,6 +613,12 @@ export const createAdapterFactory =
 
 				let from: string;
 				let to: string;
+				let limit: number =
+					typeof join === "object" &&
+					"limit" in join &&
+					join.limit !== undefined
+						? join.limit
+						: 100;
 
 				if (isForwardJoin) {
 					// joined model has FK to base model
@@ -644,7 +650,7 @@ export const createAdapterFactory =
 						to,
 					},
 					type: "left",
-					limit: 100,
+					limit,
 				};
 			}
 			return transformedJoin;
@@ -684,37 +690,48 @@ export const createAdapterFactory =
 						field: forwardForeignKeyField,
 					});
 					const baseIdFieldName = joinConfig.on.from;
-
-					// Query for joined data
-					const joinedDataList = await adapterInstance.findMany<
-						Record<string, any>
-					>({
-						model: modelName,
-						where: [
-							{
-								field: fkFieldName,
-								value: baseData[baseIdFieldName],
-								operator: "eq",
-								connector: "AND",
-							},
-						],
-						limit: 100,
-					});
-
 					// Check if the foreign key field has unique constraint
-					const fieldDef =
-						joinedModelSchema[
-							getDefaultFieldName({
-								field: forwardForeignKeyField,
-								model: defaultModelName,
-							})
-						];
+					const fieldName = getDefaultFieldName({
+						model: defaultModelName,
+						field: forwardForeignKeyField,
+					});
+					const fieldDef = joinedModelSchema[fieldName];
 					const isUnique = fieldDef?.unique === true;
 
+					let joinedData:
+						| Record<string, any>
+						| null
+						| (Record<string, any> | null)[] = null;
+
+					if (!isUnique) {
+						joinedData = await adapterInstance.findMany<Record<string, any>>({
+							model: modelName,
+							where: [
+								{
+									field: fkFieldName,
+									value: baseData[baseIdFieldName],
+									operator: "eq",
+									connector: "AND",
+								},
+							],
+							limit: joinConfig.limit,
+						});
+					} else {
+						joinedData = await adapterInstance.findOne<Record<string, any>>({
+							model: modelName,
+							where: [
+								{
+									field: fkFieldName,
+									value: baseData[baseIdFieldName],
+									connector: "AND",
+									operator: "eq",
+								},
+							],
+						});
+					}
+
 					result[modelName] =
-						isUnique && joinedDataList.length > 0
-							? joinedDataList[0]
-							: joinedDataList;
+						isUnique && joinedData ? [joinedData] : joinedData;
 				} else {
 					// Backward join: base model has FK to joined model
 					const backwardForeignKeyField = Object.entries(baseModelSchema).find(
@@ -723,48 +740,52 @@ export const createAdapterFactory =
 					)?.[0];
 
 					if (backwardForeignKeyField) {
-						const baseModelFkValue =
-							baseData[
-								getFieldName({
-									model: baseModel,
-									field: backwardForeignKeyField,
-								})
-							];
+						const fieldName = getFieldName({
+							model: baseModel,
+							field: backwardForeignKeyField,
+						});
+						const baseModelFkValue = baseData[fieldName];
 
 						if (baseModelFkValue) {
-							// Query for joined data
-							const joinedDataList = await adapterInstance.findMany<
-								Record<string, any>
-							>({
-								model: modelName,
-								where: [
-									{
-										field: joinConfig.on.to,
-										value: baseModelFkValue,
-										operator: "eq",
-										connector: "AND",
-									},
-								],
-								limit: 100,
+							const fieldName = getDefaultFieldName({
+								model: defaultModelName,
+								field: joinConfig.on.to,
 							});
+							const joinedField = schema[defaultModelName]?.fields[fieldName];
+							const isUnique = joinedField?.unique === true;
 
-							// Check if the reference field is unique
-							if (joinedDataList.length > 0) {
-								const joinedField =
-									schema[defaultModelName]?.fields[
-										getDefaultFieldName({
+							let joinData:
+								| (Record<string, any> | null)[]
+								| Record<string, any>
+								| null = [];
+							if (!isUnique) {
+								joinData = await adapterInstance.findMany<Record<string, any>>({
+									model: modelName,
+									where: [
+										{
 											field: joinConfig.on.to,
-											model: defaultModelName,
-										})
-									];
-								const isUnique = joinedField?.unique === true;
-
-								result[modelName] = isUnique
-									? joinedDataList[0]
-									: joinedDataList;
+											value: baseModelFkValue,
+											operator: "eq",
+											connector: "AND",
+										},
+									],
+									limit: joinConfig.limit,
+								});
 							} else {
-								result[modelName] = null;
+								joinData = await adapterInstance.findOne<Record<string, any>>({
+									model: modelName,
+									where: [
+										{
+											field: joinConfig.on.to,
+											value: baseModelFkValue,
+											operator: "eq",
+											connector: "AND",
+										},
+									],
+								});
 							}
+
+							result[modelName] = isUnique && joinData ? [joinData] : joinData;
 						} else {
 							result[modelName] = null;
 						}
