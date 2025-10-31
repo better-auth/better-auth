@@ -38,7 +38,7 @@ export const OpenAPIUserResourceSchema = {
 			type: "object",
 			properties: {
 				formatted: { type: "string" },
-				giveName: { type: "string" },
+				givenName: { type: "string" },
 				familyName: { type: "string" },
 			},
 		},
