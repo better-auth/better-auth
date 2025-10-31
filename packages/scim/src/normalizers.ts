@@ -1,5 +1,6 @@
 import type { Account, User } from "better-auth";
 import type { SCIMEmail, SCIMName } from "./types";
+import { SCIMUserResourceSchema } from "./user-schemas";
 
 export const createUserResource = (
 	baseURL: string,
@@ -29,7 +30,7 @@ export const createUserResource = (
 		displayName: user.name,
 		active: true,
 		emails: [{ primary: true, value: user.email }],
-		schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+		schemas: [SCIMUserResourceSchema.id],
 	};
 };
 
