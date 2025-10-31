@@ -43,11 +43,11 @@ export async function runPluginInit(ctx: AuthContext) {
 	}
 	// Add the global database hooks last
 	dbHooks.push(options.databaseHooks);
-	context.internalAdapter = createInternalAdapter(ctx.adapter, {
+	context.internalAdapter = createInternalAdapter(context.adapter, {
 		options,
-		logger: ctx.logger,
+		logger: context.logger,
 		hooks: dbHooks.filter((u) => u !== undefined),
-		generateId: ctx.generateId,
+		generateId: context.generateId,
 	});
 	context.options = options;
 	return { context };
