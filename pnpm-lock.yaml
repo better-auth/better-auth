@@ -1287,9 +1287,6 @@ importers:
       jose:
         specifier: ^6.1.0
         version: 6.1.0
-      oauth2-mock-server:
-        specifier: ^7.2.1
-        version: 7.2.1
       samlify:
         specifier: ^2.10.1
         version: 2.10.1
@@ -1315,6 +1312,9 @@ importers:
       express:
         specifier: ^5.1.0
         version: 5.1.0
+      oauth2-mock-server:
+        specifier: ^7.2.1
+        version: 7.2.1
       tsdown:
         specifier: 'catalog:'
         version: 0.15.11(typescript@5.9.3)
