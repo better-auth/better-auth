@@ -315,6 +315,8 @@ export const scim = () => {
 						});
 					}
 
+					ctx.context.logger.info("Querying result with filters: ", filters);
+
 					const organizationId = ctx.context.scimProvider.organizationId;
 					const members = await ctx.context.adapter.findMany<Member>({
 						model: "member",
