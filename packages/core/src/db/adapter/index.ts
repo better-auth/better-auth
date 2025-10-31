@@ -325,11 +325,6 @@ export type Where = {
  */
 export type JoinOption = {
 	[model: string]: boolean | { limit?: number };
-	//  {
-
-	// 	// In the future we may support nested joins:
-	// 	// with?: JoinOption;
-	// };
 };
 
 /**
@@ -366,6 +361,12 @@ export type JoinConfig = {
 		 * @default 100
 		 */
 		limit: number;
+		/**
+		 * Whether the relation has a unique constraint.
+		 *
+		 * If set to `true`, then the relation will be treated as a one-to-one relationship.
+		 */
+		isUnique: boolean;
 	};
 };
 
