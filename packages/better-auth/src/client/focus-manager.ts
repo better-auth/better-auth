@@ -1,4 +1,4 @@
-type FocusListener = () => void;
+type FocusListener = (focused: boolean) => void;
 
 export const kFocusManager = Symbol.for("better-auth:focus-manager");
 
@@ -19,9 +19,7 @@ class WindowFocusManager implements FocusManager {
 	}
 
 	setFocused(focused: boolean) {
-		if (focused) {
-			this.listeners.forEach((listener) => listener());
-		}
+		this.listeners.forEach((listener) => listener(focused));
 	}
 
 	setup() {
