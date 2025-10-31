@@ -614,12 +614,6 @@ export const createAdapterFactory =
 
 				let from: string;
 				let to: string;
-				let limit: number =
-					typeof join === "object" &&
-					"limit" in join &&
-					join.limit !== undefined
-						? join.limit
-						: 100;
 
 				if (isForwardJoin) {
 					// joined model has FK to base model
@@ -647,6 +641,13 @@ export const createAdapterFactory =
 
 				const isUnique =
 					to === "id" ? true : (foreignKeyAttributes.unique ?? false);
+
+				let limit: number = 100;
+				if (isUnique) {
+					limit = 1;
+				} else if (typeof join === "object" && typeof join.limit === "number") {
+					limit = join.limit;
+				}
 
 				transformedJoin[getModelName(model)] = {
 					on: {

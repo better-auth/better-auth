@@ -13,6 +13,9 @@ export interface MemoryDB {
 
 export interface MemoryAdapterConfig {
 	debugLogs?: DBAdapterDebugLogOption | undefined;
+	experimental?: {
+		joins?: boolean;
+	};
 }
 
 export const memoryAdapter = (
@@ -26,7 +29,7 @@ export const memoryAdapter = (
 			adapterName: "Memory Adapter",
 			usePlural: false,
 			debugLogs: config?.debugLogs || false,
-			supportsJoin: true,
+			supportsJoin: config?.experimental?.joins ?? false,
 			customTransformInput(props) {
 				if (
 					props.options.advanced?.database?.useNumberId &&
@@ -172,7 +175,6 @@ export const memoryAdapter = (
 				if (!join) return execute(where, model);
 
 				const baseRecords = execute(where, model);
-				const joinedModels = Object.keys(join);
 
 				// Group results by base model and nest joined data as arrays
 				const grouped = new Map<string, any>();
@@ -185,10 +187,15 @@ export const memoryAdapter = (
 					if (!grouped.has(baseId)) {
 						const nested: Record<string, any> = { ...baseRecord };
 
-						// Initialize joined arrays and seen sets
-						for (const joinModel of joinedModels) {
-							nested[getModelName(joinModel)] = [];
-							seenIds.set(`${baseId}-${joinModel}`, new Set());
+						// Initialize joined data structures based on isUnique
+						for (const [joinModel, joinAttr] of Object.entries(join)) {
+							const joinModelName = getModelName(joinModel);
+							if (joinAttr.isUnique) {
+								nested[joinModelName] = null;
+							} else {
+								nested[joinModelName] = [];
+								seenIds.set(`${baseId}-${joinModel}`, new Set());
+							}
 						}
 
 						grouped.set(baseId, nested);
@@ -196,7 +203,7 @@ export const memoryAdapter = (
 
 					const nestedEntry = grouped.get(baseId)!;
 
-					// Add joined data to arrays
+					// Add joined data
 					for (const [joinModel, joinAttr] of Object.entries(join)) {
 						const joinModelName = getModelName(joinModel);
 						const joinTable = db[joinModelName];
@@ -213,12 +220,22 @@ export const memoryAdapter = (
 								joinRecord[joinAttr.on.to] === baseRecord[joinAttr.on.from],
 						);
 
-						// Add matching records to the array, avoiding duplicates
-						const seenSet = seenIds.get(`${baseId}-${joinModel}`)!;
-						for (const matchingRecord of matchingRecords) {
-							if (!seenSet.has(matchingRecord.id)) {
-								nestedEntry[joinModelName].push(matchingRecord);
-								seenSet.add(matchingRecord.id);
+						if (joinAttr.isUnique) {
+							// For unique relationships, store a single object (or null)
+							nestedEntry[joinModelName] = matchingRecords[0] || null;
+						} else {
+							// For non-unique relationships, store array with limit
+							const seenSet = seenIds.get(`${baseId}-${joinModel}`)!;
+							const limit = joinAttr.limit ?? 100;
+							let count = 0;
+							
+							for (const matchingRecord of matchingRecords) {
+								if (count >= limit) break;
+								if (!seenSet.has(matchingRecord.id)) {
+									nestedEntry[joinModelName].push(matchingRecord);
+									seenSet.add(matchingRecord.id);
+									count++;
+								}
 							}
 						}
 					}

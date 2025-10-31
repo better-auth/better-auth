@@ -2205,6 +2205,153 @@ export const getNormalTestSuiteTests = ({
 				expect(Array.isArray(result?.invitation)).toBe(true);
 				expect(result?.invitation).toHaveLength(0);
 			},
+		"findOne - should be able to perform a simple limited join": async () => {
+			const user = await adapter.create<User>({
+				model: "user",
+				data: { ...(await generate("user")) },
+				forceAllowId: true,
+			});
+
+			for (let i = 0; i < 5; i++) {
+				await adapter.create<Session>({
+					model: "session",
+					data: { ...(await generate("session")), userId: user.id },
+					forceAllowId: true,
+				});
+			}
+
+			const result = await adapter.findOne<User & { session: Session[] }>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				join: {
+					session: { limit: 2 },
+				},
+			});
+			expect(result).toBeDefined();
+			expect(result?.session).toBeDefined();
+			expect(result?.session).toHaveLength(2);
+			expect(result?.session[0]?.userId).toBe(user.id);
+		},
+		"findOne - should be able to perform a complex limited join": async () => {
+			const user = await adapter.create<User>({
+				model: "user",
+				data: { ...(await generate("user")) },
+				forceAllowId: true,
+			});
+
+			for (let i = 0; i < 5; i++) {
+				await adapter.create<Session>({
+					model: "session",
+					data: { ...(await generate("session")), userId: user.id },
+					forceAllowId: true,
+				});
+				await adapter.create<Account>({
+					model: "account",
+					data: { ...(await generate("account")), userId: user.id },
+					forceAllowId: true,
+				});
+			}
+
+			const result = await adapter.findOne<
+				User & { session: Session[]; account: Account[] }
+			>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				join: {
+					session: { limit: 2 },
+					account: { limit: 3 },
+				},
+			});
+			expect(result).toBeDefined();
+			expect(result?.session).toBeDefined();
+			expect(result?.session).toHaveLength(2);
+			expect(result?.account).toBeDefined();
+			expect(result?.account).toHaveLength(3);
+		},
+		"findMany - should be able to perform a simple limited join": async () => {
+			const users: User[] = [];
+
+			for (let i = 0; i < 5; i++) {
+				const user = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+				users.push(user);
+			}
+			const sessionsByUser: Map<string, Session[]> = new Map();
+			for (const user of users) {
+				sessionsByUser.set(user.id, []);
+				for (let i = 0; i < 5; i++) {
+					const session = await adapter.create<Session>({
+						model: "session",
+						data: { ...(await generate("session")), userId: user.id },
+						forceAllowId: true,
+					});
+					sessionsByUser.get(user.id)!.push(session);
+				}
+			}
+			const result = await adapter.findMany<User & { session: Session[] }>({
+				model: "user",
+				join: { session: { limit: 2 } },
+			});
+			expect(result).toBeDefined();
+			expect(result).toHaveLength(5);
+			result.forEach((user) => {
+				expect(user.session).toBeDefined();
+				expect(user.session).toHaveLength(2);
+				expect(user.session[0]?.userId).toBe(user.id);
+			});
+		},
+		"findMany - should be able to perform a complex limited join": async () => {
+			const users: User[] = [];
+			const sessionsByUser: Map<string, Session[]> = new Map();
+			const accountsByUser: Map<string, Account[]> = new Map();
+			for (let i = 0; i < 5; i++) {
+				const user = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+				users.push(user);
+				sessionsByUser.set(user.id, []);
+				accountsByUser.set(user.id, []);
+				for (let i = 0; i < 5; i++) {
+					const session = await adapter.create<Session>({
+						model: "session",
+						data: { ...(await generate("session")), userId: user.id },
+						forceAllowId: true,
+					});
+					sessionsByUser.get(user.id)!.push(session);
+					const account = await adapter.create<Account>({
+						model: "account",
+						data: { ...(await generate("account")), userId: user.id },
+						forceAllowId: true,
+					});
+					accountsByUser.get(user.id)!.push(account);
+				}
+			}
+			type ResultType = User & { session: Session[]; account: Account[] };
+			const result = await adapter.findMany<ResultType>({
+				model: "user",
+				join: {
+					session: { limit: 2 },
+					account: { limit: 3 },
+				},
+				limit: 2,
+				offset: 2,
+			});
+			expect(result).toBeDefined();
+			expect(result).toHaveLength(2);
+			result.forEach((user) => {
+				expect(user.session).toBeDefined();
+				expect(user.session).toHaveLength(2);
+				expect(user.session[0]?.userId).toBe(user.id);
+				expect(user.account).toBeDefined();
+				expect(user.account).toHaveLength(3);
+				expect(user.account[0]?.userId).toBe(user.id);
+			});
+		},
 	};
 };
 

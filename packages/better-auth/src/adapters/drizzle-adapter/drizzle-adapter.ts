@@ -28,6 +28,7 @@ import {
 	type AdapterFactoryOptions,
 	createAdapterFactory,
 } from "../adapter-factory";
+import { logger } from "@better-auth/core/env";
 
 export interface DB {
 	[key: string]: any;
@@ -69,6 +70,20 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Whether to enable experimental features.
+	 */
+	experimental?: {
+		/**
+		 * Whether to enable joins.
+		 *
+		 * If set to `true`, it's expected that your drizzle schema includes Drizzle Relations.
+		 * @see https://orm.drizzle.team/docs/relations
+		 *
+		 * @default false
+		 */
+		joins?: boolean;
+	};
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -357,94 +372,6 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				}
 			}
 
-			function nestJoinedResults(
-				results: any[],
-				baseModel: string,
-				join: Record<string, any> | undefined,
-				limit?: number,
-				offset?: number,
-			): any[] {
-				// If no joins or no results, return as-is
-				if (!join || !results.length) {
-					return results;
-				}
-
-				const joinedModels = Object.keys(join);
-
-				// Group results by base model and nest joined data as arrays
-				const grouped = new Map<string, any>();
-				// Track seen IDs per joined model for O(1) deduplication
-				const seenIds = new Map<string, Set<string>>();
-
-				for (const row of results) {
-					const baseData = row[baseModel];
-					const baseId = String(baseData.id);
-
-					if (!grouped.has(baseId)) {
-						const nested: Record<string, any> = { ...baseData };
-
-						// Initialize joined arrays and seen sets
-						for (const joinedModel of joinedModels) {
-							const fieldAttributes = getFieldAttributes({
-								model: joinedModel,
-								field: join[joinedModel].on.to,
-							});
-							nested[getModelName(joinedModel)] = fieldAttributes.unique
-								? null
-								: [];
-							seenIds.set(`${baseId}-${joinedModel}`, new Set());
-						}
-
-						grouped.set(baseId, nested);
-					}
-
-					const nestedEntry = grouped.get(baseId)!;
-
-					// Add joined data to arrays
-					for (const joinedModel of joinedModels) {
-						// The Better-Auth CLI generates Drizzle field names with underscores instead of camel case.
-						// The results from JOIN from Drizzle includes the field names not as the schema/variable field names,
-						// rather the names defined in the DB. (which is the names with underscores)
-						// we need to check both underscores as well as using `getModelName` to get the correct field name.
-						let joinedData = row[getModelName(joinedModel)];
-						if (!joinedData) {
-							const underscoreModelName = joinedModel
-								.replace(/([A-Z])/g, "_$1")
-								.toLowerCase()
-								.replace(/^_/, "");
-							joinedData = row[underscoreModelName];
-						}
-
-						if (joinedData) {
-							const m = getModelName(joinedModel);
-							const seenSet = seenIds.get(`${baseId}-${joinedModel}`)!;
-
-							if (Array.isArray(nestedEntry[m])) {
-								if (!seenSet.has(joinedData.id)) {
-									nestedEntry[m].push(joinedData);
-									seenSet.add(joinedData.id);
-								}
-							} else {
-								nestedEntry[m] = joinedData;
-							}
-						}
-					}
-				}
-
-				const result = Array.from(grouped.values());
-
-				// Apply manual limit/offset after grouping for joins
-				if (limit !== undefined || offset !== undefined) {
-					const start = offset || 0;
-					const end = limit !== undefined ? start + limit : undefined;
-					return result.slice(start, end);
-				}
-
-				// For findOne, return single object; for findMany, return array
-				// The adapter factory will handle unwrapping based on schema's unique constraint
-				return result;
-			}
-
 			return {
 				async create({ model, data: values }) {
 					const schemaModel = getSchema(model);
@@ -456,46 +383,106 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				async findOne({ model, where, join }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
+
+					if (config.experimental?.joins) {
+						if (!db.query[model]) {
+							logger.error(
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,
+							);
+							logger.info("Falling back to regular query");
+						} else {
+							let includes:
+								| Record<string, { limit: number } | boolean>
+								| undefined;
+
+							const pluralJoinResults: string[] = [];
+							if (join) {
+								includes = {};
+								const joinEntries = Object.entries(join);
+								for (const [model, joinAttr] of joinEntries) {
+									const isUnique = joinAttr.isUnique;
+									includes[`${model}${isUnique ? "" : "s"}`] = isUnique
+										? true
+										: { limit: joinAttr.limit };
+									if (!isUnique) pluralJoinResults.push(`${model}s`);
+								}
+							}
+							let query = db.query[model].findFirst({
+								where: clause[0],
+								with: includes,
+							});
+							const res = await query;
+							for (const pluralJoinResult of pluralJoinResults) {
+								const singularJoinResultName = pluralJoinResult.slice(0, -1);
+								res[singularJoinResultName] = res[pluralJoinResult];
+								delete res[pluralJoinResult];
+							}
+							return res;
+						}
+					}
+
 					let query = db
 						.select()
 						.from(schemaModel)
 						.where(...clause);
-					if (join) {
-						for (const [model, joinAttr] of Object.entries(join)) {
-							const joinModel = getSchema(model);
-							if (joinAttr.type === "inner") {
-								query = query.innerJoin(
-									joinModel,
-									eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
-								);
-							} else {
-								query = query.leftJoin(
-									joinModel,
-									eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
-								);
-							}
-						}
-					}
+
 					const res = await query;
 					if (!res.length) return null;
-					const joinedResult = nestJoinedResults(res, model, join);
-					return joinedResult[0];
+					return res[0];
 				},
 				async findMany({ model, where, sortBy, limit, offset, join }) {
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
-
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
+
+					if (config.experimental?.joins) {
+						if (!db.query[model]) {
+							logger.error(
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,
+							);
+							logger.info("Falling back to regular query");
+						} else {
+							let includes:
+								| Record<string, { limit: number } | boolean>
+								| undefined;
+
+							const pluralJoinResults: string[] = [];
+							if (join) {
+								includes = {};
+								const joinEntries = Object.entries(join);
+								for (const [model, joinAttr] of joinEntries) {
+									const isUnique = joinAttr.isUnique;
+									includes[`${model}${isUnique ? "" : "s"}`] = isUnique
+										? true
+										: { limit: joinAttr.limit };
+									if (!isUnique) pluralJoinResults.push(`${model}s`);
+								}
+							}
+							let query = db.query[model].findMany({
+								where: clause[0],
+								with: includes,
+								limit: limit ?? 100,
+								offset: offset ?? 0,
+							});
+							let res = await query;
+							for (const item of res) {
+								for (const pluralJoinResult of pluralJoinResults) {
+									const singularJoinResultName = pluralJoinResult.slice(0, -1);
+									item[singularJoinResultName] = item[pluralJoinResult];
+									delete item[pluralJoinResult];
+								}
+							}
+							return res;
+						}
+					}
+
 					let builder = db.select().from(schemaModel);
 
-					// Set effective defaults for limit and offset
 					const effectiveLimit = limit ?? 100;
 					const effectiveOffset = offset ?? 0;
 
-					if (!join) {
-						builder = builder.limit(effectiveLimit);
-						builder = builder.offset(effectiveOffset);
-					}
+					builder = builder.limit(effectiveLimit);
+					builder = builder.offset(effectiveOffset);
 
 					if (sortBy?.field) {
 						builder.orderBy(
@@ -504,31 +491,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							),
 						);
 					}
-					if (join) {
-						for (const [model, joinAttr] of Object.entries(join)) {
-							const joinModel = getSchema(model);
-							if (joinAttr.type === "inner") {
-								builder = builder.innerJoin(
-									joinModel,
-									eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
-								);
-							} else {
-								builder = builder.leftJoin(
-									joinModel,
-									eq(schemaModel[joinAttr.on.from], joinModel[joinAttr.on.to]),
-								);
-							}
-						}
-					}
+
 					const res = await builder.where(...clause);
-					const joinedResult = nestJoinedResults(
-						res,
-						model,
-						join,
-						join ? effectiveLimit : undefined,
-						join ? effectiveOffset : undefined,
-					);
-					return joinedResult;
+					return res;
 				},
 				async count({ model, where }) {
 					const schemaModel = getSchema(model);
@@ -579,7 +544,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
-			supportsJoin: true,
+			supportsJoin: config.experimental?.joins ?? false,
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
