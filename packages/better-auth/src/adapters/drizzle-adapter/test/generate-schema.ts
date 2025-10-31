@@ -48,9 +48,6 @@ export const generateDrizzleSchema = async (
 			adapter: DBAdapter<BetterAuthOptions>;
 			file?: string;
 			options: BetterAuthOptions;
-			experimental?: {
-				joins?: boolean;
-			};
 		}) => Promise<{
 			code: string | undefined;
 			fileName: string;
@@ -71,9 +68,6 @@ export const generateDrizzleSchema = async (
 	let { code } = await generateSchema({
 		adapter,
 		options,
-		experimental: {
-			joins: true,
-		},
 	});
 
 	await fs.writeFile(
