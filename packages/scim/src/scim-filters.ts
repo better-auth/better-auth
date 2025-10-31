@@ -10,10 +10,20 @@ const SCIMUserAttributes: Record<string, string | undefined> = {
 
 export class SCIMParseError extends Error {}
 
-const parseSCIMFilter = (filter: string) => {
-	const [attribute, op, value, ...other] = filter.split(" ");
+const SCIMFilterRegex =
+	/^\s*(?<attribute>[^\s]+)\s+(?<op>eq|ne|co|sw|ew|pr)\s*(?:(?<value>"[^"]*"|[^\s]+))?\s*$/i;
 
-	if (!attribute || !op || !value || other.length !== 0) {
+const parseSCIMFilter = (filter: string) => {
+	const match = filter.match(SCIMFilterRegex);
+	if (!match) {
+		throw new SCIMParseError("Invalid filter expression");
+	}
+
+	const attribute = match.groups?.attribute;
+	const op = match.groups?.op?.toLowerCase();
+	const value = match.groups?.value;
+
+	if (!attribute || !op || !value) {
 		throw new SCIMParseError("Invalid filter expression");
 	}
 
