@@ -17,6 +17,8 @@ import {
 import { applyUserPatch } from "./patch-operations";
 import { UserResourceSchema } from "./schemas";
 import { parseSCIMUserFilter, SCIMParseError } from "./scim-filters";
+import { SCIMUserResourceType } from "./scim-resource-types";
+import { SCIMUserResourceSchema } from "./scim-schemas";
 
 const findUserById = async (
 	adapter: DBAdapter,
@@ -499,6 +501,96 @@ export const scim = () => {
 					});
 
 					return ctx.json(null, { status: 204 });
+				},
+			),
+			getServiceProviderConfig: createAuthEndpoint(
+				"/scim/v2/ServiceProviderConfig",
+				{
+					method: "GET",
+					metadata: {
+						openapi: {
+							summary: "SCIM Service Provider Configuration",
+							description:
+								"Standard SCIM metadata endpoint used by identity providers. See https://datatracker.ietf.org/doc/html/rfc7644#section-4",
+							responses: {
+								"200": {
+									description: "SCIM metadata object",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return ctx.json({
+						patch: { supported: true },
+						bulk: { supported: false },
+						filter: { supported: true },
+						changePassword: { supported: false },
+						sort: { supported: false },
+						etag: { supported: false },
+						authenticationSchemes: [
+							{
+								name: "OAuth Bearer Token",
+								description:
+									"Authentication scheme using the Authorization header with a bearer token tied to an organization.",
+								specUri: "http://www.rfc-editor.org/info/rfc6750",
+								type: "oauthbearertoken",
+								primary: true,
+							},
+						],
+						schemas: [
+							"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig",
+						],
+						meta: {
+							resourceType: "ServiceProviderConfig",
+						},
+					});
+				},
+			),
+			getSchemas: createAuthEndpoint(
+				"/scim/v2/Schemas",
+				{
+					method: "GET",
+					metadata: {
+						openapi: {
+							summary: "SCIM Service Provider Configuration Schemas",
+							description:
+								"Standard SCIM metadata endpoint used by identity providers to acquire information about supported schemas. See https://datatracker.ietf.org/doc/html/rfc7644#section-4",
+							responses: {
+								"200": {
+									description: "SCIM metadata object",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return ctx.json([
+						SCIMUserResourceSchema
+					]);
+				},
+			),
+			getResourceTypes: createAuthEndpoint(
+				"/scim/v2/ResourceTypes",
+				{
+					method: "GET",
+					metadata: {
+						openapi: {
+							summary: "SCIM Service Provider Suppoted Resource Types",
+							description:
+								"Standard SCIM metadata endpoint used by identity providers to get a list of server supported types. See https://datatracker.ietf.org/doc/html/rfc7644#section-4",
+							responses: {
+								"200": {
+									description: "SCIM metadata object",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return ctx.json([
+						SCIMUserResourceType,
+					]);
 				},
 			),
 		},
