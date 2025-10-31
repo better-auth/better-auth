@@ -610,6 +610,9 @@
       "*": [
         "./dist/index.d.ts"
       ],
+      "minimal": [
+        "./dist/auth/auth-minimal.d.ts"
+      ],
       "node": [
         "./dist/integrations/node.d.ts"
       ],
