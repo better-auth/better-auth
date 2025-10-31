@@ -62,7 +62,6 @@
     "@better-fetch/fetch": "catalog:",
     "fast-xml-parser": "^5.2.5",
     "jose": "^6.1.0",
-    "oauth2-mock-server": "^7.2.1",
     "samlify": "^2.10.1",
     "zod": "^4.1.5"
   },
@@ -73,6 +72,7 @@
     "better-call": "catalog:",
     "body-parser": "^2.2.0",
     "express": "^5.1.0",
+    "oauth2-mock-server": "^7.2.1",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
