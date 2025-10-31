@@ -655,7 +655,10 @@ export const scim = () => {
 						...resourceType,
 						meta: {
 							...resourceType.meta,
-							location: new URL(resourceType.meta.location, ctx.context.baseURL),
+							location: new URL(
+								resourceType.meta.location,
+								ctx.context.baseURL,
+							),
 						},
 					});
 				},
