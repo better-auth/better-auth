@@ -15,7 +15,11 @@ import {
 	getUserResourceLocation,
 } from "./normalizers";
 import { applyUserPatch } from "./patch-operations";
-import { parseSCIMUserFilter, SCIMParseError } from "./scim-filters";
+import {
+	type DBFilter,
+	parseSCIMUserFilter,
+	SCIMParseError,
+} from "./scim-filters";
 import {
 	APIUserSchema,
 	OpenAPIUserResourceSchema,
@@ -274,18 +278,7 @@ export const scim = () => {
 					use: [authMiddleware],
 				},
 				async (ctx) => {
-					let filters = [];
-					try {
-						filters = parseSCIMUserFilter(ctx.query?.filter ?? "");
-					} catch (error) {
-						throw new APIError("BAD_REQUEST", {
-							message:
-								error instanceof SCIMParseError
-									? error.message
-									: "Invalid SCIM filter",
-							scimType: "invalidFilter",
-						});
-					}
+					let filters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
 
 					ctx.context.logger.info("Querying result with filters: ", filters);
 
@@ -685,4 +678,20 @@ export const scim = () => {
 			},
 		},
 	} satisfies BetterAuthPlugin;
+};
+
+const parseSCIMAPIUserFilter = (filter?: string) => {
+	let filters: DBFilter[] = [];
+
+	try {
+		filters = filter ? parseSCIMUserFilter(filter) : [];
+	} catch (error) {
+		throw new APIError("BAD_REQUEST", {
+			message:
+				error instanceof SCIMParseError ? error.message : "Invalid SCIM filter",
+			scimType: "invalidFilter",
+		});
+	}
+
+	return filters;
 };
