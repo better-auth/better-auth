@@ -129,6 +129,7 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			return;
 		}
+		//@ts-expect-error
 		await auth.api.signUpEmail({
 			body: testUser,
 		});
