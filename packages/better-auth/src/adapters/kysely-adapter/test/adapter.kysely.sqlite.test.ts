@@ -6,6 +6,7 @@ import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	enableJoinTests,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
@@ -24,6 +25,9 @@ const { execute } = await testAdapter({
 		return kyselyAdapter(kyselyDB, {
 			type: "sqlite",
 			debugLogs: { isRunningAdapterTests: true },
+			experimental: {
+				joins: true,
+			},
 		});
 	},
 	prefixTests: "sqlite",
