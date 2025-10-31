@@ -23,10 +23,12 @@ export const createUserResource = (
 		// See https://datatracker.ietf.org/doc/html/rfc7643#section-4.1
 
 		userName: user.email,
-		name: user.name,
+		name: {
+			formatted: user.name,
+		},
 		displayName: user.name,
 		active: true,
-		emails: [user.email],
+		emails: [{ primary: true, value: user.email }],
 		schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
 	};
 };

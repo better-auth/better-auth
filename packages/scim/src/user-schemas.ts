@@ -28,19 +28,30 @@ export const OpenAPIUserResourceSchema = {
 			type: "object",
 			properties: {
 				resourceType: { type: "string" },
-				created: { type: "date" },
-				lastModified: { type: "date" },
+				created: { type: "string", format: "date-time" },
+				lastModified: { type: "string", format: "date-time" },
 				location: { type: "string" },
 			},
 		},
 		userName: { type: "string" },
-		name: { type: "string" },
+		name: {
+			type: "object",
+			properties: {
+				formatted: { type: "string" },
+				giveName: { type: "string" },
+				familyName: { type: "string" },
+			},
+		},
 		displayName: { type: "string" },
 		active: { type: "boolean" },
 		emails: {
 			type: "array",
 			items: {
-				type: "string",
+				type: "object",
+				properties: {
+					value: { type: "string" },
+					primary: { type: "boolean" },
+				},
 			},
 		},
 		schemas: {
