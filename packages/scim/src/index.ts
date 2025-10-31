@@ -292,19 +292,19 @@ export const scim = () => {
 						where: [{ field: "organizationId", value: organizationId }],
 					});
 
-					const usersIds = members.map((member) => member.userId);
+					const userIds = members.map((member) => member.userId);
 
 					const [users, accounts] = await Promise.all([
 						ctx.context.adapter.findMany<User>({
 							model: "user",
 							where: [
-								{ field: "id", value: usersIds, operator: "in" },
+								{ field: "id", value: userIds, operator: "in" },
 								...filters,
 							],
 						}),
 						ctx.context.adapter.findMany<Account>({
 							model: "account",
-							where: [{ field: "userId", value: usersIds, operator: "in" }],
+							where: [{ field: "userId", value: userIds, operator: "in" }],
 						}),
 					]);
 
