@@ -560,7 +560,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
-			supportsJoin: config.experimental?.joins ?? false,
+			supportsJoin: (() => {
+				if (config.experimental?.joins) {
+					if (!db.query || Object.keys(db.query).length === 0) {
+						logger.error(
+							"You have enabled experimental joins for Drizzle, however we're unable to detect any relations.\nPlease ensure that you have re-generated your drizzle schema or adde drizzle-kit relations to your schema.",
+						);
+						return false;
+					}
+					return true;
+				}
+				return false;
+			})(),
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
