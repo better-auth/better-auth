@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { memoryAdapter } from "../adapters/memory-adapter/memory-adapter";
 import { initMinimal } from "./init-minimal";
 
-describe("init-minimal", async () => {
+describe("init-minimal", () => {
 	const db: Record<string, any[]> = {};
 
 	it("should initialize without Kysely dependencies", async () => {
