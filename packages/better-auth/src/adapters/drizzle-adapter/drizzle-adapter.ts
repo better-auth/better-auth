@@ -4,6 +4,7 @@ import type {
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import {
 	and,
@@ -28,7 +29,6 @@ import {
 	type AdapterFactoryOptions,
 	createAdapterFactory,
 } from "../adapter-factory";
-import { logger } from "@better-auth/core/env";
 
 export interface DB {
 	[key: string]: any;
