@@ -1,9 +1,9 @@
 import Database from "better-sqlite3";
 import { describe, expect, it, vi } from "vitest";
-import { betterAuth } from "./auth";
-import { createAuthClient } from "./client";
+import { betterAuth } from "../auth";
+import { createAuthClient } from "../client";
+import { getTestInstance } from "../test-utils/test-instance";
 import { init } from "./init";
-import { getTestInstance } from "./test-utils/test-instance";
 
 describe("init", async () => {
 	const database = new Database(":memory:");

@@ -9,8 +9,8 @@ import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
+import { getAdapter } from "../db";
 import { getMigrations } from "../db/get-migration";
-import { getAdapter } from "../db/utils";
 import { bearer } from "../plugins";
 import type { BetterAuthOptions, Session, User } from "../types";
 import { getBaseURL } from "../utils/url";
@@ -108,7 +108,6 @@ export async function getTestInstanceMemory<
 		if (config?.disableTestUser) {
 			return;
 		}
-		//@ts-expect-error
 		const res = await auth.api.signUpEmail({
 			body: testUser,
 		});
