@@ -62,6 +62,11 @@
       "types": "./dist/client/plugins/index.d.mts",
       "default": "./dist/client/plugins/index.mjs"
     },
+    "./server/plugins": {
+      "better-auth-dev-source": "./src/server/plugins/index.ts",
+      "types": "./dist/server/plugins/index.d.mts",
+      "default": "./dist/server/plugins/index.mjs"
+    },
     "./types": {
       "dev-source": "./src/types/index.ts",
       "types": "./dist/types/index.d.mts",
@@ -232,6 +237,11 @@
       "types": "./dist/plugins/haveibeenpwned/index.d.mts",
       "default": "./dist/plugins/haveibeenpwned/index.mjs"
     },
+    "./plugins/oauth-provider": {
+      "better-auth-dev-source": "./src/plugins/oauth-provider/index.ts",
+      "types": "./dist/plugins/oauth-provider/index.d.mts",
+      "default": "./dist/plugins/oauth-provider/index.mjs"
+    },
     "./plugins/oidc-provider": {
       "dev-source": "./src/plugins/oidc-provider/index.ts",
       "types": "./dist/plugins/oidc-provider/index.d.mts",
@@ -322,6 +332,9 @@
       "client/plugins": [
         "./dist/client/plugins/index.d.mts"
       ],
+      "server/plugins": [
+        "./dist/server/plugins/index.d.mts"
+      ],
       "types": [
         "./dist/types/index.d.mts"
       ],
@@ -408,6 +421,9 @@
       ],
       "plugins/one-time-token": [
         "./dist/plugins/one-time-token/index.d.mts"
+      ],
+      "plugins/oauth-provider": [
+        "./dist/plugins/oauth-provider/index.d.mts"
       ],
       "plugins/oidc-provider": [
         "./dist/plugins/oidc-provider/index.d.mts"
