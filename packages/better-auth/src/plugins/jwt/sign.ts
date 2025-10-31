@@ -18,22 +18,33 @@ import {
 import { importJWK, SignJWT } from "jose";
 
 /**
- * Signs a payload in **JWT** format.
+ * Signs an arbitrary payload in the **JWT** format.
  *
- * ⓘ **Internal use only**: This function is not exported in `index.ts` and is intended for use inside the **JWT plugin endpoint**. It is called before the plugin is initialized, at which point `getJwtPluginOptions` cannot access the plugin configuration, so the options are passed directly.
+ * ⓘ **Internal use only**: This function is not exported.
  *
- * @param ctx - Endpoint context.
- * @param payload - Payload to sign. Can include JWT-specific fields like `exp` or `aud`.
- * @param jwtOpts - JWT signing options (e.g. issuer, expiration time, audience).
- * @param jwk - **ID** of the key in the database or the **private key** itself. If omitted, **latest JWK** will be used. If `id` in the **private key** is not provided, there will be no **"kid" (Key ID) Field** in the **JWT Protected Header**.
- * @param skipClaims @todo
- * @param customType @todo
+ * @description
  *
- * @throws {SyntaxError} - If a key (public or private) cannot be parsed as JSON.
- * @throws {Error} - If key retrieval (`getJwk`), creation (`createJwk`), or decryption fails.
- * @throws {TypeError} - If `SignJWT.sign` fails due to an invalid key or payload.
+ * 🔑 `jwk` can be either:
+ * - An **ID** ({`string`}) referencing a {@link JWK **JWK**} in the **JWKS**.
+ * - An **external key** ({`CryptoKeyExtended`}) provided directly. If `id` is `undefined`, no **"kid" (Key ID)** field will be included in the **JWT Header**.
  *
- * @returns Signed JWT.
+ * If `jwk` is **omited**, the **default JWK** will be used - either the `jwks.defaultKeyId` from the current **"jwt" plugin configuration** ({@link JwtPluginOptions}), or, if `defaultKeyId` is `undefined`, the **latest JWK** in the **database** (created automatically if none exists).
+ *
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
+ * @param payload - The payload to sign. Can include the **JWT**-specific fields like `exp` or `aud`.
+ * @param keyChain - *Not implemented yet*.
+ * @param jwk - The **ID** ({`string`}) of the **private JWK** in **JWKS** or the **private key** ({`CryptoKeyExtended`}).
+ * @param skipClaims - A list of {`boolean`}s that tell which **JWT Claims** should not be set to the default values.
+ * @param customType - Sets **"typ" (Type) JWT Protecter Header Parameter**.
+ *
+ * @throws {`SyntaxError`} - If the {@link JWK **JWK**} cannot be parsed as **JSON**.
+ * @throws {`BetterAuthError`} - If {@link JWK **JWK**} is **revoked** or its **JWK algorithm** is **invalid**.
+ * @throws {`JOSEError`} - If *JOSE* `signJWT`/`importJWK` failed.
+ * @throws {`JOSENotSupported`} - If {@link JWK **JWK**} is invalid for *JOSE* `importJWK`. Subclass of {`JOSEError`}.
+ * @throws {`Error`} - If **private JWK encryption** or **database insertion** failed when creating a new {@link JWK **JWK**} (`jwk` is `undefined` and the **database** was empty). Exact type depends on the **database**.
+ *
+ * @returns Signed **JWT**.
  */
 async function signJwtPayload(
 	ctx: GenericEndpointContext,
@@ -114,26 +125,32 @@ async function signJwtPayload(
 /**
  * Signs arbitrary data in **JWT** format.
  *
- * @description Converts the provided `data` into a **JWT payload** and signs it using a **JWK**.
- * For security, any standard **JWT claims** (`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`) present in `data` will be **removed** to prevent malicious manipulation.
- * Optional `claims` can be provided to **set** or **override** certain **JWT Claims** instead.
+ * ⓘ **Internal use only**: This function is not exported from `better-auth/plugins/jwt`. It may be called before the **"jwt" plugin** is initialized - in such cases, `getJwtPluginOptions` cannot access the **"jwt" plugin configuration**, so `pluginOpts` must be provided directly.
  *
- * ⚠ Note: `iat` ("Issued At") and `iss` ("Issuer") Claims **cannot** be overwritten for security reasons.
+ * @description Converts the provided `data` into a **JWT payload** and signs it using the {@link JWK **JWK**}.
  *
- * ⓘ **Internal use only**: This function is not exported in `index.ts` and is intended for use inside the **JWT plugin endpoint**. It is called before the plugin is initialized, at which point `getJwtPluginOptions` cannot access the plugin configuration, so the options are passed directly.
+ * 🔑 `jwk` can be either:
+ * - An **ID** ({`string`}) referencing a {@link JWK **JWK**} in the **JWKS**.
+ * - An **external key** ({`CryptoKeyExtended`}) provided directly. If `id` is `undefined`, no **"kid" (Key ID)** field will be included in the **JWT Header**.
  *
- * @param ctx - Endpoint context.
- * @param data - Arbitrary data to include in the JWT payload. Any standard JWT claims present here will be removed.
- * @param pluginOpts - Plugin options.
- * @param options - Optional signing options.
- * @param options.jwk - **ID** of the key in the database or the **private key** itself. If omitted, **latest JWK** will be used. If `id` in the **private key** is not provided, there will be no **"kid" (Key ID) Field** in the **JWT Protected Header**.
- * @param options.claims - Optional JWT claims to set or override (`aud`, `exp`, `jti`, `nbf`, `sub`). `iat` and `iss` cannot be overridden.
+ * If `jwk` is **omited**, the **default JWK** will be used - either the `jwks.defaultKeyId` from the current **"jwt" plugin configuration** ({@link JwtPluginOptions}), or, if `defaultKeyId` is `undefined`, the **latest JWK** in the **database** (created automatically if none exists).
  *
- * @throws {SyntaxError} - If a key (public or private) cannot be parsed as JSON.
- * @throws {BetterAuthError} - If a **key ID** is provided but not found in the database or `iat` ("Issued At" Claim) is set into future.
- * @throws {TypeError | JOSENotSupported} - If signing the JWT fails due to an invalid key or payload.
+ * ⚠ Any standard **JWT claims** (`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`) present in `data` will be **omitted** to prevent malicious manipulation. Instead, use `options.claims` to **set** or **override JWT Claims**. **JWT `iss` ("Issuer") Claim cannot** be overwritten to enforce good practices.
  *
- * @returns Signed JWT.
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
+ * @param data - Arbitrary data to include in the **JWT Payload**. Any standard **JWT Claims** present here will be removed.
+ * @param options.keyChain - *Not implemented yet*.
+ * @param options.jwk - The **ID** ({`string`}) of the **private JWK** in **JWKS** or the **private key** ({`CryptoKeyExtended`}).
+ * @param options.claims - **JWT Claims** to set or override (`aud`, `exp`, `iat`, `jti`, `nbf`, `sub`). `iss` cannot be overridden.
+ *
+ * @throws {`SyntaxError`} - If the {@link JWK **JWK**} cannot be parsed as **JSON**.
+ * @throws {`BetterAuthError`} - If {@link JWK **JWK**} is **revoked** or its **JWK algorithm** is **invalid**.
+ * @throws {`JOSEError`} - If *JOSE* `signJWT`/`importJWK` failed.
+ * @throws {`JOSENotSupported`} - If {@link JWK **JWK**} is invalid for *JOSE* `importJWK`. Subclass of {`JOSEError`}.
+ * @throws {`Error`} - If **private JWK encryption** or **database insertion** failed when creating a new {@link JWK **JWK**} (`jwk` is `undefined` and the **database** was empty). Exact type depends on the **database**.
+ *
+ * @returns Signed **JWT**.
  */
 export async function signJwtInternal(
 	ctx: GenericEndpointContext,
@@ -178,23 +195,29 @@ export async function signJwtInternal(
 /**
  * Signs arbitrary data in **JWT** format.
  *
- * @description Converts the provided `data` into a **JWT payload** and signs it using a **JWK**.
- * For security, any standard **JWT claims** (`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`) present in `data` will be **removed** to prevent malicious manipulation.
- * Optional `claims` can be provided to **set** or **override** certain **JWT Claims** instead.
+ * ⓘ **Internal use only**: This function is not exported from `better-auth/plugins/jwt`. It may be called before the **"jwt" plugin** is initialized - in such cases, `getJwtPluginOptions` cannot access the **"jwt" plugin configuration**, so `pluginOpts` must be provided directly.
  *
- * ⚠ Note: `iat` ("Issued At") and `iss` ("Issuer") Claims **cannot** be overwritten for security reasons.
+ * @description Converts `data` into a **JWT payload** and signs it using the {@link JWK **JWK**}.
  *
- * @param ctx - Endpoint context.
- * @param data - Arbitrary data to include in the JWT payload. Any standard JWT claims present here will be removed.
- * @param options - Optional signing options.
- * @param options.jwk - **ID** of the key in the database or the **private key** itself. If omitted, **latest JWK** will be used. If `id` in the **private key** is not provided, there will be no **"kid" (Key ID) Field** in the **JWT Protected Header**.
- * @param options.claims - Optional JWT claims to set or override (`aud`, `exp`, `jti`, `nbf`, `sub`). `iat` and `iss` cannot be overridden.
+ * 🔑 `jwk` can be either:
+ * - An **ID** ({`string`}) referencing a {@link JWK **JWK**} in the **JWKS**.
+ * - An **external key** ({`CryptoKeyExtended`}) provided directly. If `id` is `undefined`, no **"kid" (Key ID)** field will be included in the **JWT Header**.
  *
- * @throws {SyntaxError} - If a key (public or private) cannot be parsed as JSON.
- * @throws {BetterAuthError} - If a **key ID** is provided but not found in the database.
- * @throws {TypeError | JOSENotSupported} - If signing the JWT fails due to an invalid key or payload.
+ * If `jwk` is **omited**, the **default JWK** will be used - either the `jwks.defaultKeyId` from the current **"jwt" plugin configuration** ({@link JwtPluginOptions}), or, if `defaultKeyId` is `undefined`, the **latest JWK** in the **database** (created automatically if none exists).
  *
- * @returns Signed JWT.
+ * ⚠ Any standard **JWT claims** (`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`) present in `data` will be **omitted** to prevent malicious manipulation. Instead, use `options.claims` to **set** or **override JWT Claims**. **JWT `iss` ("Issuer") Claim cannot** be overwritten to enforce good practices.
+ *
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param data - Arbitrary data to include in the **JWT Payload**. Any standard **JWT Claims** present here will be removed.
+ * @param options.jwk - The **ID** ({`string`}) of the **private JWK** in **JWKS** or the **private key** ({`CryptoKeyExtended`}).
+ * @param options.claims - **JWT Claims** to set or override (`aud`, `exp`, `iat`, `jti`, `nbf`, `sub`). `iss` cannot be overridden.
+ *
+ * @throws {`SyntaxError`} - If the {@link JWK **JWK**} cannot be parsed as **JSON**.
+ * @throws {`BetterAuthError`} - If {@link JWK **JWK**} is **revoked** or its **JWK algorithm** is **invalid**.
+ * @throws {`JOSEError`} - If *JOSE* `signJWT`/`importJWK` failed.
+ * @throws {`JOSENotSupported`} - If {@link JWK **JWK**} is invalid for *JOSE* `importJWK`. Subclass of {`JOSEError`}.
+ * @throws {`Error`} - If **private JWK encryption** or **database insertion** failed when creating a new {@link JWK **JWK**} (`jwk` is `undefined` and the **database** was empty). Exact type depends on the **database**.
+ * @returns Signed **JWT**.
  */
 export async function signJwt(
 	ctx: GenericEndpointContext,
@@ -214,23 +237,26 @@ export async function signJwt(
 }
 
 /**
- * Creates and signs a **JSON Web Token (JWT)** containing **session data**.
+ * Creates and signs a **JSON Web Token (JWT)** containing the **session data**.
  *
- * ⓘ **Internal use only**: This function is not exported in `index.ts` and is intended for use inside the **JWT plugin endpoint**. It is called before the plugin is initialized, at which point `getJwtPluginOptions` cannot access the plugin configuration, so the options are passed directly.
+ ⓘ **Internal use only**: This function is not exported from `better-auth/plugins/jwt`. It may be called before the **"jwt" plugin** is initialized - in such cases, `getJwtPluginOptions` cannot access the **"jwt" plugin configuration**, so `pluginOpts` must be provided directly.
  *
- * @description Returns a **JWT** containing the result of `defineSessionJwtData` from **plugin configuration**, or `session.user` if `defineSessionJwtData` is `undefined`.
- * The **JWT `sub` ("Subject" Claim)** is determined by `defineSessionJwtSubject` from **plugin configuration**, or `session.user.id` if `defineSessionJwtSubject` is `undefined`.
+ * @description Returns a **JWT** containing the result of `defineSessionJwtData` from the **"jwt" plugin configuration** ({@link JwtPluginOptions}). If `defineSessionJwtSubject` is `undefined`, `session.user` is used instead.
  *
- * ⚠︎ Any standard **JWT Claims** (`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`) set by `defineSessionJwtData` or *custom session fields* will be overwritten or removed by this function.
+ * ⚠︎ Any data conflicting with the standard **JWT Claims** (`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`) set by `defineSessionJwtData` or **custom session fields** will be **omited**.
+ * 
+ * The **JWT `sub` ("Subject") Claim** is determined by `defineSessionJwtSubject` from the **"jwt" plugin configuration** ({@link JwtPluginOptions}). If `defineSessionJwtSubject` is `undefined`, `session.user.id` is used instead.
  *
- * @param ctx - Endpoint context.
- * @param pluginOpts - Plugin options.
- * @param jwk - **ID** of the key in the database or the **private key** itself. If omitted, **latest JWK** will be used. If `id` in the **private key** is not provided, there will be no **"kid" (Key ID) Field** in the **JWT Protected Header**.
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
+ * @param keyChain - *Not implemented yet*. 
+ * @param jwk - The **ID** ({`string`}) of the **private JWK** in **JWKS** or the **private key** ({`CryptoKeyExtended`}).
  *
- * @throws {SyntaxError} - If a key (public or private) cannot be parsed as JSON.
- * @throws {BetterAuthError} - If a **key ID** is provided but not found in the database.
- * @throws {TypeError | JOSENotSupported} - If signing the JWT fails due to an invalid key or payload.
- * @throws {Error} - If `defineSessionJwtData` or `defineSessionJwtSubject` callbacks throw.
+ * @throws {`SyntaxError`} - If the {@link JWK **JWK**} cannot be parsed as **JSON**.
+ * @throws {`BetterAuthError`} - If {@link JWK **JWK**} is **revoked** or its **JWK algorithm** is **invalid**.
+ * @throws {`JOSEError`} - If *JOSE* `signJWT`/`importJWK` failed.
+ * @throws {`JOSENotSupported`} - If {@link JWK **JWK**} is invalid for *JOSE* `importJWK`. Subclass of {`JOSEError`}.
+ * @throws {`Error`} - If **private JWK encryption** or **database insertion** failed when creating a new {@link JWK **JWK**} (`jwk` is `undefined` and the **database** was empty). Exact type depends on the **database**.
  *
  * @returns A signed **JWT** containing **session data**.
  */
@@ -258,18 +284,19 @@ export async function getSessionJwtInternal(
 /**
  * Creates and signs a **JSON Web Token (JWT)** containing **session data**.
  *
- * @description Returns a **JWT** containing the result of `defineSessionJwtData` from **plugin configuration**, or `session.user` if `defineSessionJwtData` is `undefined`.
- * The **JWT `sub` ("Subject" Claim)** is determined by `defineSessionJwtSubject` from **plugin configuration**, or `session.user.id` if `defineSessionJwtSubject` is `undefined`.
+ * @description Returns a **JWT** containing the result of `defineSessionJwtData` from the **"jwt" plugin configuration** ({@link JwtPluginOptions}). If `defineSessionJwtSubject` is `undefined`, `session.user` is used instead.
  *
- * ⚠︎ Any standard **JWT Claims** (`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`) set by `defineSessionJwtData` or *custom session fields* will be overwritten or removed by this function.
+ * ⚠︎ Any data conflicting with the standard **JWT Claims** (`aud`, `exp`, `iat`, `iss`, `jti`, `nbf`, `sub`) set by `defineSessionJwtData` or **custom session fields** will be **omited**.
  *
- * @param ctx - Endpoint context.
- * @param jwk - **ID** of the key in the database or the **private key** itself. If omitted, **latest JWK** will be used. If `id` in the **private key** is not provided, there will be no **"kid" (Key ID) Field** in the **JWT Protected Header**.
+ * The **JWT `sub` ("Subject") Claim** is determined by `defineSessionJwtSubject` from the **"jwt" plugin configuration** ({@link JwtPluginOptions}). If `defineSessionJwtSubject` is `undefined`, `session.user.id` is used instead.
  *
- * @throws {SyntaxError} - If a key (public or private) cannot be parsed as JSON.
- * @throws {BetterAuthError} - If a **key ID** is provided but not found in the database.
- * @throws {TypeError | JOSENotSupported} - If signing the JWT fails due to an invalid key or payload.
- * @throws {Error} - If `defineSessionJwtData` or `defineSessionJwtSubject` callbacks throw.
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param options.jwk - The **ID** ({`string`}) of the {@link JWK **JWK**} or the **private key** ({`CryptoKeyExtended`}). If **omited**, the **latest JWK** will be used. If `id` in the **private key** is not provided, there will be no **JWT "kid" (Key ID) Header Parameter** in the **JWT Header**.
+ *
+ * @throws {SyntaxError} - If the **key** cannot be parsed as **JSON**.
+ * @throws {BetterAuthError} - If a **key ID** ({`string`}) is provided but **not found**.
+ * @throws {JOSEError} - If the **JWT** signing failed.
+ * @throws {Error} - If the `defineSessionJwtData` or `defineSessionJwtSubject` callbacks throw.
  *
  * @returns A signed **JWT** containing **session data**.
  */

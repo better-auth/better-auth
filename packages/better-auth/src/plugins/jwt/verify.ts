@@ -16,24 +16,27 @@ import { createLocalJWKSet, jwtVerify } from "jose";
 import { getJwtPluginOptions, revokedTag } from "./utils";
 
 /**
- * Verifies the **JWT** using *JOSE*. Common code for `verifyJWT` and `verifyJWTWithKey`.
+ * Verifies the **JWT** using *JOSE*. This is common code for `verifyJwt` and `verifyJwtWithKey`.
  *
  * ⓘ **Internal use only**: This function is not exported.
  *
- * @description `jwk` is a **public key** {`CryptoKey`} or a **JSON Web Key Set (JWKS) resolver** {`JWTVerifyGetKey`} used to verify the **JWT**.
+ * @description This function ensures that the **JWT signature** is **valid** and the **token** is **trustworthy**.
  *
- * @param ctx - Endpoint context.
- * @param pluginOpts - Plugin configuration.
+ * 🔑 `jwk` can be either:
+ * - A **public key** {`CryptoKey`}.
+ * - A **JSON Web Key Set (JWKS) resolver** {`JWTVerifyGetKey`}.
+ *
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
  * @param jwt - The **JWT** to verify.
- * @param jwk - A **public key** or a **JSON Web Key Set (JWKS) resolver**.
+ * @param jwk - The {@link CryptoKey **public key**} or a **JSON Web Key Set (JWKS) resolver** ({`JWTVerifyGetKey`}).
  * @param options - Verification options, including allowed issuers, audiences, subject, maximum expiration time.
  *
- * @throws {JOSEError} - If signature verification fails or the **JWT** format is invalid.
- * @throws {JWTExpired} - If the token has **expired**.
- * @throws {JWTClaimValidationFailed} - If a **JWT Claim** (issuer, audience, subject, etc.) is invalid.
- * @throws {TypeError} - If `jwk` is invalid.
+ * @throws {`JOSEError`} - If the **JWT signature** verification has failed or the **JWT format** is **invalid**.
+ * @throws {`JWTExpired`} - If the **JWT** has **expired**. Subclass of {`JOSEError`}.
+ * @throws {`JWTClaimValidationFailed`} - If a **JWT Claim** (issuer, audience, subject, etc.) is invalid. Subclass of {`JOSEError`}.
  *
- * @returns **JWT Payload** and its **Protected Header**.
+ * @returns The **JWT Payload** and its **Protected Header**.
  */
 async function verifyJwtJose(
 	ctx: GenericEndpointContext,
@@ -84,24 +87,27 @@ async function verifyJwtJose(
 }
 
 /**
- * Verifies the **JWT**. Determines which **JWK** to use based on the **JWT "kty" (Key Type) Header Parameter** and **JWT (Key ID) JWT Header** fields. Makes sure the key used is not revoked.
+ * Verifies the **JWT**. Makes sure the {@link JWK **JWK**} used is **not revoked**.
  *
  * ⓘ **Internal use only**: This function is not exported.
  *
- * @param ctx - Endpoint context.
- * @param pluginOpts - Plugin configuration.
+ * @description Determines which {@link JWK **JWK**} to use based on the **JWT "kty" (Key Type) Header Parameter** and **JWT (Key ID) JWT Header** fields. Throws an **error** if its **ID** ends with `revokedTag` (`" revoked"`).
+ *
+ * This function ensures that the **JWT signature** is **valid** and the **token** is **trustworthy**.
+ *
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
  * @param jwt - The **JWT** to verify.
  * @param options - Verification options, including allowed issuers, audiences, subject, maximum expiration time, and type enforcement.
  *
- * @throws {BetterAuthError} - If tried to verify the **JWT** using a **revoked key**.
- * @throws {JOSEError} - If signature verification fails or the **JWT** format is invalid.
- * @throws {JWTExpired} - If the token has **expired**.
- * @throws {JWTClaimValidationFailed} - If a **JWT Claim** (issuer, audience, subject, etc.) is invalid.
- * @throws {TypeError} - If `jwk` is invalid.
+ * @throws {`BetterAuthError`} - If tried to verify the **JWT** using a **revoked JWK**.
+ * @throws {`JOSEError`} - If the **JWT signature** verification has failed or the **JWT format** is **invalid**.
+ * @throws {`JWTExpired`} - If the **JWT** has **expired**. Subclass of {`JOSEError`}.
+ * @throws {`JWTClaimValidationFailed`} - If a **JWT Claim** (issuer, audience, subject, etc.) is invalid. Subclass of {`JOSEError`}.
  *
- * @todo Check if **JWT** is revoked, not only **JWK**.
+ * @todo Check if the **JWT** is revoked, not only the {@link JWK **JWK**}.
  *
- * @returns **JWT Payload** and its **Protected Header**.
+ * @returns The **JWT Payload** and its **Protected Header**.
  */
 async function verifyJwtUnrevoked(
 	ctx: GenericEndpointContext,
@@ -138,20 +144,24 @@ async function verifyJwtUnrevoked(
 }
 
 /**
- * Verifies the **JWT**. Determines which **JWK** to use based on the **JWT "kty" (Key Type) Header Parameter** and **JWT (Key ID) JWT Header** fields.
+ * Verifies the **JWT**. 
  *
- * ⓘ **Internal use only**: This function is not exported in `index.ts` and is intended for use inside the **JWT plugin endpoint**. It is called before the plugin is initialized, at which point `getJwtPluginOptions` cannot access the plugin configuration, so the options are passed directly.
+ * ⓘ **Internal use only**: This function is not exported from `better-auth/plugins/jwt`. It may be called before the **"jwt" plugin** is initialized - in such cases, `getJwtPluginOptions` cannot access the **"jwt" plugin configuration**, so `pluginOpts` must be provided directly.
+
+ * @description Determines which {@link JWK **JWK**} to use based on the **JWT "kty" (Key Type) Header Parameter** and **JWT (Key ID) JWT Header** fields.
  *
- * @param ctx - Endpoint context.
- * @param pluginOpts - Plugin configuration.
+ * This function ensures that the **JWT signature** is **valid** and the **token** is **trustworthy**.
+ *
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
  * @param jwt - The **JWT** to verify.
  * @param options - Verification options, including allowed issuers, audiences, subject, maximum expiration time, and type enforcement.
  *
- * @throws {BetterAuthError} - If tried to verify the **JWT** using a **revoked key**.
- * @throws {JOSEError} - If signature verification fails or the **JWT** format is invalid.
- * @throws {JWTExpired} - If the token has **expired**.
- * @throws {JWTClaimValidationFailed} - If a **JWT Claim** (issuer, audience, subject, etc.) is invalid.
- * @throws {TypeError} - If `jwk` is invalid.
+ * @throws {`BetterAuthError`} - If tried to verify the **JWT** using a **revoked JWK**.
+ * @throws {`JOSEError`} - If the **JWT signature** verification has failed or the **JWT format** is **invalid**.
+ * @throws {`JWTExpired`} - If the **JWT** has **expired**. Subclass of {`JOSEError`}.
+ * @throws {`JWTClaimValidationFailed`} - If a **JWT Claim** (issuer, audience, subject, etc.) is invalid. Subclass of {`JOSEError`}.
+ * 
  * @returns **JWT Payload**.
  */
 export async function verifyJwtInternal(
@@ -169,17 +179,20 @@ export async function verifyJwtInternal(
 }
 
 /**
- * Verifies the **JWT**. Determines which **JWK** to use based on the **JWT "kty" (Key Type) Header Parameter** and **JWT (Key ID) JWT Header** fields.
+ * Verifies the **JWT**.
  *
- * @param ctx - Endpoint context.
+ * @description Determines which {@link JWK **JWK**} to use based on the **JWT "kty" (Key Type) Header Parameter** and **JWT (Key ID) JWT Header** fields.
+ *
+ * This function ensures that the **JWT signature** is **valid** and the **token** is **trustworthy**.
+ *
+ * @param {GenericEndpointContext} ctx - The endpoint context.
  * @param jwt - The **JWT** to verify.
  * @param options - Verification options, including allowed issuers, audiences, subject, maximum expiration time, and type enforcement.
  *
- * @throws {BetterAuthError} - If tried to verify the **JWT** using a **revoked key**.
- * @throws {JOSEError} - If signature verification fails or the **JWT** format is invalid.
- * @throws {JWTExpired} - If the token has **expired**.
- * @throws {JWTClaimValidationFailed} - If a **JWT Claim** (issuer, audience, subject, etc.) is invalid.
- * @throws {TypeError} - If `jwk` is invalid.
+ * @throws {`BetterAuthError`} - If tried to verify the **JWT** using a **revoked JWK**.
+ * @throws {`JOSEError`} - If the **JWT signature** verification has failed or the **JWT format** is **invalid**.
+ * @throws {`JWTExpired`} - If the **JWT** has **expired**. Subclass of {`JOSEError`}.
+ * @throws {`JWTClaimValidationFailed`} - If a **JWT Claim** (issuer, audience, subject, etc.) is invalid. Subclass of {`JOSEError`}.
  *
  * @returns **JWT Payload**.
  */
@@ -192,25 +205,30 @@ export async function verifyJwt(
 }
 
 /**
- * Verifies the **JWT** with the provided **JWK**.
+ * Verifies the **JWT** with the provided {@link JWK **JWK**}.
  *
- * ⓘ **Internal use only**: This function is not exported in `index.ts` and is intended for use inside the **JWT plugin endpoint**. It is called before the plugin is initialized, at which point `getJwtPluginOptions` cannot access the plugin configuration, so the options are passed directly.
+ * ⓘ **Internal use only**: This function is not exported from `better-auth/plugins/jwt`. It may be called before the **"jwt" plugin** is initialized - in such cases, `getJwtPluginOptions` cannot access the **"jwt" plugin configuration**, so `pluginOpts` must be provided directly.
  *
- * @description Uses a **public JWK**, that can be either an external one {`CryptoKeyIdAlg`} or an **ID** {`string`} of one in the **JWKS**.
+ * @description This function ensures that the **JWT signature** is **valid** and the **token** is **trustworthy**.
  *
- * @param ctx - Endpoint context.
- * @param pluginOpts - Plugin configuration.
+ * 🔑 `jwk` can be either:
+ * - An **ID** ({`string`}) referencing a {@link JWK **JWK**} in the **JWKS**.
+ * - An **external key** ({`CryptoKeyExtended`}) provided directly. If `id` is `undefined`, the **JWT "kid" (Key ID) Header Parameter** will not be checked in the **JWT Header**.
+ *
+ * If `jwk` is **omited**, the **default JWK** will be used - either `jwks.defaultKeyId` from the current **"jwt" plugin configuration** ({@link JwtPluginOptions}), or, if `defaultKeyId` is `undefined`, the **latest JWK** in the database (created automatically if none exists).
+ *
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
  * @param jwt - The **JWT** to verify.
- * @param jwk - **ID** of the key {`string`} or the **public key** itself {`CryptoKeyIdAlg`}. If omitted, the **latest JWK** will be used. If `id` in the **public key** is not provided, the **"kid" (Key ID) Field** will not be checked in the **JWT Protected Header**.
+ * @param jwk - The **ID** ({`string`}) of the {@link JWK **JWK**} or the **public key** ({`CryptoKeyExtended`}).
  * @param options - Verification options, including allowed issuers, audiences, subject, maximum expiration time, and type enforcement.
  *
- * @throws {BetterAuthError} - If tried to verify the **JWT** using a **revoked key** or the **key** was **not found**.
- * @throws {JOSEError} - If signature verification fails or the **JWT** format is invalid.
- * @throws {JWTExpired} - If the token has **expired**.
- * @throws {JWTClaimValidationFailed} - If a **JWT Claim** (issuer, audience, subject, etc.) is invalid.
- * @throws {TypeError} - If `jwk` is invalid.
+ * @throws {`BetterAuthError`} - If tried to verify the **JWT** using a **revoked key** or the **key** was **not found**.
+ * @throws {`JOSEError`} - If the **JWT signature** verification has failed or the **JWT format** is **invalid**.
+ * @throws {`JWTExpired`} - If the **JWT** has **expired**. Subclass of {`JOSEError`}.
+ * @throws {`JWTClaimValidationFailed`} - If a **JWT Claim** (issuer, audience, subject, etc.) is invalid. Subclass of {`JOSEError`}.
  *
- * @returns **JWT** Payload.
+ * @returns **JWT Payload**.
  */
 export async function verifyJwtWithKeyInternal(
 	ctx: GenericEndpointContext,
@@ -237,22 +255,27 @@ export async function verifyJwtWithKeyInternal(
 }
 
 /**
- * Verifies **JWT** with provided key and options.
+ * Verifies the **JWT** with the {@link JWK **JWK**}.
  *
- * @description Uses `jwk` **public key**, can be an external one or an ID of one in the **JWKS**.
+ * @description This function ensures that the **JWT signature** is **valid** and the **token** is **trustworthy**.
  *
- * @param ctx - Endpoint context.
- * @param jwt - **JWT** to be verified.
- * @param jwk - **ID** of the key in the database or the **public key** itself. If omitted, **latest JWK** will be used. If `id` in the **public key** is not provided, the **"kid" (Key ID) Field** will not be checked in the **JWT Protected Header**.
+ * 🔑 `jwk` can be either:
+ * - An **ID** ({`string`}) referencing a {@link JWK **JWK**} in the **JWKS**.
+ * - An **external key** ({`CryptoKeyExtended`}) provided directly. If `id` is `undefined`, the **JWT "kid" (Key ID) Header Parameter** will not be checked in the **JWT Header**.
+ *
+ * If `jwk` is **omited**, the **default JWK** will be used - either `jwks.defaultKeyId` from the current **"jwt" plugin configuration** ({@link JwtPluginOptions}), or, if `defaultKeyId` is `undefined`, the **latest JWK** in the database (created automatically if none exists).
+ *
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param jwt - The **JWT** to be verified.
+ * @param jwk - The **ID** ({`string`}) of the {@link JWK **JWK**} or the **public key** ({`CryptoKeyExtended`}).
  * @param options - Verification options, including allowed issuers, audiences, subject, maximum expiration time, and type enforcement.
  *
- * @throws {BetterAuthError} - If tried to verify the **JWT** using a **revoked key** or the **key** was **not found**.
- * @throws {JOSEError} - If signature verification fails or the **JWT** format is invalid.
- * @throws {JWTExpired} - If the token has **expired**.
- * @throws {JWTClaimValidationFailed} - If a **JWT Claim** (issuer, audience, subject, etc.) is invalid.
- * @throws {TypeError} - If `jwk` is invalid.
+ * @throws {`BetterAuthError`} - If tried to verify the **JWT** using a **revoked JWK** or the {@link JWK **JWK**} was **not found**.
+ * @throws {`JOSEError`} - If the **JWT signature** verification has failed or the **JWT format** is **invalid**.
+ * @throws {`JWTExpired`} - If the **JWT** has **expired**. Subclass of {`JOSEError`}.
+ * @throws {`JWTClaimValidationFailed`} - If a **JWT Claim** (issuer, audience, subject, etc.) is invalid. Subclass of {`JOSEError`}.
  *
- * @returns **JWT** Payload.
+ * @returns **JWT Payload**.
  */
 export async function verifyJwtWithKey(
 	ctx: GenericEndpointContext,

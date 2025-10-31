@@ -30,16 +30,18 @@ const jwksCache: JwksCache = {
 };
 
 /**
- * Generates a new **JSON Web Key (JWK) pair** in a serializable format.
+ * Generates a new {@link JWK **JWK**} **pair** in a serializable format.
  *
- * @param jwkOpts - Configuration for the key pair (algorithm, curve, etc.)
+ * ⓘ **Internal use only**: This function is not exported from `better-auth/plugins/jwt`.
  *
- * @throws {TypeError} - If the key generation parameters are invalid.
- * @throws {JOSENotSupported} - If the algorithm or curve is not supported.
+ * @param jwkOpts - Configuration for the **JWK pair**, including algorithm, curve, and other parameters. Defaults to `{ alg: "EdDSA", crv: "Ed25519" }`.
+ *
+ * @throws {`JOSEError`} *JOSE* `exportJWK`/`generateKeyPair` failed.
+ * @throws {`JOSENotSupported`} - If the **JWK algorithm** is not supported. Subclass of {`JOSEError`}.
  *
  * @returns An object containing:
- * - `publicKey`: The exported **public JWK**
- * - `privateKey`: The exported **private JWK**
+ * - `publicKey`: The exported **public JWK**.
+ * - `privateKey`: The exported **private JWK**.
  */
 export async function generateExportedKeyPair(
 	jwkOpts?: JwkOptions,
@@ -117,22 +119,28 @@ async function getKeySet(
 /**
  * Returns a **private** or **public key** as a {`CryptoKey`}.
  * @todo: correct this description
+ * Returns the **parsed JWK** ({`CryptoKeyWithId`}) if available.
+ *
+ * ⓘ **Internal use only**: This function is not exported from `better-auth/plugins/jwt`. It may be called before the **"jwt" plugin** is initialized - in such cases, `getJwtPluginOptions` cannot access the **"jwt" plugin configuration**, so `pluginOpts` must be provided directly.
+ *
  * @description
- * - If `jwk` is a {`CryptoKeyWithId`}, returns it directly.
- * - If `jwk` is a {`string`}, treats it as a **key ID** and fetches it from the database. If the key is not found, throws {`BetterAuthError`}.
- * - If `jwk` is **`undefined`**, returns the **latest key** from the database. Returns `undefined` if the database is **empty**.
+ * - If `jwk` is a {`CryptoKeyWithId`}, it is returned as-is. This is an **external JWK**.
+ * - If `jwk` is a {`string`}, it is treated as a **key ID** and looked up in the **cache**, **database**, or {@link JwksOptions **remote JWK**s}.
+ * - If `jwk` is `undefined`, the **latest JWK** is retrieved from the **database**. Returns `undefined` if the **database** has no **non-revoked JWK**s.
  *
- * @param ctx - Endpoint context.
- * @param jwk - Optional. Either a **key ID** ({`string`}) or a {`CryptoKeyWithId`} object containing a {`CryptoKey`} and an optional `id` field to uniquely identify external keys.
- * @param isPrivate - Whether to return the **private key** or the **public key**.
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
+ * @param jwk - The **ID** ({`string`}) of the {@link JWK **JWK**} or the **parsed JWK** ({`CryptoKeyExtended`}).
+ * @param isPrivate - Whether to return the **private JWK** or the **public JWK**.
  *
- * @throws {BetterAuthError} - If a **key ID** is provided but not found in the database.
- * @throws {TypeError | JOSENotSupported} - If `importJWK` fails due to **invalid key**.
+ * @throws {`BetterAuthError`} - If a **key ID** is provided but not found in the **database**.
+ * @throws {`JOSEError`} - If *JOSE* `importJWK`/`exportJWK`/`generateKeyPair` failed.
+ * @todo update throws
  *
- * @returns An object containing:
- * - `keyId` — the **key ID** in the database or `undefined` if it's an external key without manually assigned **ID**
- * - `key` — the key: `CryptoKey` instance or `undefined` if the database is empty
- * - `alg` — the algorithm name or `undefined` if the database is empty
+ * @returns `undefined` if the **database** has no **non-revoked JWK**s, or an object containing:
+ * - `keyId` - The **key ID** or `undefined` if it's an **external JWK** without manually assigned **ID**.
+ * - `key` - {`CryptoKey`} or `undefined` if the {@link JWK **JWK**} was not found.
+ * - `alg` - The **JWK algorithm** name .
  */
 export async function getJwkInternal(
 	ctx: GenericEndpointContext,
@@ -191,24 +199,26 @@ export async function getJwkInternal(
 }
 
 /**
- * Returns a **private** or **public key** as a {`CryptoKey`}.
+ * Returns the **parsed JWK** ({`CryptoKeyWithId`}) if available.
  *
  * @description
- * - If `jwk` is a {`CryptoKeyWithId`}, returns it directly.
- * - If `jwk` is a {`string`}, treats it as a **key ID** and fetches it from the database. If the key is not found, throws {`BetterAuthError`}.
- * - If `jwk` is **`undefined`**, returns the **latest key** from the database. Returns `undefined` if the database is **empty**.
+ * - If `jwk` is a {`CryptoKeyWithId`}, it is returned as-is. This is an **external JWK**.
+ * - If `jwk` is a {`string`}, it is treated as a **key ID** and looked up in the **cache**, **database**, or {@link JwksOptions **remote JWK**s}.
+ * - If `jwk` is `undefined`, the **latest JWK** is retrieved from the **database**. Returns `undefined` if the **database** has no **non-revoked JWK**s.
  *
- * @param ctx - Endpoint context.
- * @param isPrivate - Whether to return the **private key** or the **public key**.
- * @param jwk - Optional. Either a **key ID** ({`string`}) or a {`CryptoKeyWithId`} object containing a {`CryptoKey`} and an optional `id` field to uniquely identify external keys.
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
+ * @param jwk - The **ID** ({`string`}) of the {@link JWK **JWK**} or the **parsed JWK** ({`CryptoKeyExtended`}).
+ * @param isPrivate - Whether to return the **private JWK** or the **public  JWK**.
  *
- * @throws {BetterAuthError} - If a **key ID** is provided but not found in the database.
- * @throws {TypeError | JOSENotSupported} - If `importJWK` fails due to **invalid key**.
+ * @throws {`BetterAuthError`} - If a **key ID** is provided but not found in the **database**.
+ * @throws {`JOSEError`} - If *JOSE* `importJWK`/`exportJWK`/`generateKeyPair` failed.
+ * @todo update throws
  *
- * @returns An object containing:
- * - `keyId` — the **key ID** in the database or `undefined` if it's an external key without manually assigned **ID**
- * - `key` — the key: `CryptoKey` instance or `undefined` if the database is empty
- * - `alg` — the algorithm name or `undefined` if the database is empty
+ * @returns `undefined` if the **database** has no **non-revoked JWK**s, or an object containing:
+ * - `keyId` - The **key ID** or `undefined` if it's an **external JWK** without manually assigned **ID**.
+ * - `key` - {`CryptoKey`} or `undefined` if the {@link JWK **JWK**} was not found.
+ * - `alg` - The **JWK algorithm** name .
  */
 export async function getJwk(
 	ctx: GenericEndpointContext,
@@ -219,17 +229,23 @@ export async function getJwk(
 }
 
 /**
- * Creates a new **JSON Web Key (JWK)** pair and saves it in the database.
+ * Creates a new **JSON Web Key (JWK) pair** - consisting of a **public key** and a **private key** that share the same **ID** - and saves it to the **database**.
  *
- * ⓘ **Internal use only**: not exported in `index.ts`.
+ * ⓘ **Internal use only**: This function is not exported from `better-auth/plugins/jwt`. It may be called before the **"jwt" plugin** is initialized - in such cases, `getJwtPluginOptions` cannot access the **"jwt" plugin configuration**, so `pluginOpts` must be provided directly.
  *
- * @param ctx - Endpoint context.
- * @param jwksOpts - Optional. Configuration for the key pair (algorithm, curve, etc.) and if to encrypt the private key.
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
  *
- * @throws {TypeError | JOSENotSupported} - If key generation fails.
- * @throws {Error} - If private key encryption or database insert fails.
+ * @throws {`BetterAuth`} - In case of very unprobable streak of generating 10 {@link JWK **JWK**}s in a row with already **revoked ID**, or ones that have their **ID taken** by the **remote JWK**s.
+ * @throws {`JOSEError`} - If *JOSE* `exportJWK`/`generateKeyPair` failed.
+ * @throws {`JOSENotSupported`} - If the **JWK algorithm** is not supported. Subclass of {`JOSEError`}.
+ * @throws {`Error`} - If **private JWK encryption** or **database insertion** failed. The exact type depends on the **database**.
  *
- * @returns The created JWK object stored in the database.
+ * @returns An object representing the **database record** of the new **JSON Web Key (JWK) pair**, containing:
+ * - `id`: The unique identifier of the **JWK pair**.
+ * - `publicKey`: The serialized **public JWK**.
+ * - `privateKey`: The serialized **private JWK**.
+ * - `createdAt`: A **creation timestamp** of the **JWK pair**.
  */
 export async function createJwkInternal(
 	ctx: GenericEndpointContext,
@@ -260,21 +276,26 @@ export async function createJwkInternal(
 }
 
 /**
- * Creates a new **JSON Web Key (JWK)** pair and saves it in the database.
+ * Creates a new **JSON Web Key (JWK) pair** - consisting of a **public key** and a **private key** that share the same **ID** - and saves it to the **database**.
  *
- * ⓘ **Internal use only**: not exported in `index.ts`.
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param options.jwkOpts - Configuration for the **JWK pair**, including algorithm, curve, and other parameters. Defaults to `{ alg: "EdDSA", crv: "Ed25519" }`.
  *
- * @param ctx - Endpoint context.
- * @param options.jwkOpts - Optional. Configuration for the key pair (algorithm, curve, etc.). If not provided, plugin defaults are used.
+ * @throws {`BetterAuth`} - In case of very unprobable streak of generating 10 {@link JWK **JWK**s} in a row with already **revoked ID**, or ones that have their **ID taken** by the **remote JWK**s.
+ * @throws {`JOSEError`} - If *JOSE* `exportJWK`/`generateKeyPair` failed.
+ * @throws {`JOSENotSupported`} - If the **JWK algorithm** is not supported. Subclass of {`JOSEError`}.
+ * @throws {`Error`} - If **private JWK encryption** or **database insertion** failed. The exact type depends on the **database**.
  *
- * @throws {TypeError | JOSENotSupported} - If key generation fails.
- * @throws {Error} - If private key encryption or the database insert fails.
- *
- * @returns The newly created **JWK** stored in the database.
+ * @returns An object representing the **database record** of the new **JSON Web Key (JWK) pair**, containing:
+ * - `id`: The unique identifier of the **JWK pair**.
+ * - `publicKey`: The serialized **public JWK**.
+ * - `privateKey`: The serialized **private JWK**.
+ * - `createdAt`: A **creation timestamp** of the **JWK pair**.
  */
 export async function createJwk(
 	ctx: GenericEndpointContext,
 	options?: {
+		//keyRing?: string;
 		jwkOpts?: JwkOptions;
 	},
 ): Promise<Jwk> {
@@ -290,14 +311,22 @@ export async function createJwk(
 }
 
 /**
- * Imports existing **JSON Web Key (JWK)** pair into the database.
+ * Imports an existing **JSON Web Key (JWK)** into the **database**.
  *
- * @param ctx - Endpoint context.
- * @param jwk - Imported key. **Must** have `id`.
+ * ⓘ **Internal use only**: This function is not exported from `better-auth/plugins/jwt`. It may be called before the **"jwt" plugin** is initialized - in such cases, `getJwtPluginOptions` cannot access the **"jwt" plugin configuration**, so `pluginOpts` must be provided directly.
  *
- * @throws {Error} - If private key encryption or the database insert fails.
+ * @description Parses the {@link JWK **JWK**} to match the **database schema**, and:
+ * - If the {@link JWK **JWK**} is **private**, creates a **public JWK** from it and inserts the **JWK pair** into the **database**.
+ * - If the {@link JWK **JWK**} is **public**, the `privateKey` field will be `""` (an empty {`string`}).
  *
- * @returns The imported **JWK** stored in the database.
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
+ * @param jwk - The {@link JWK **JWK**} to import.
+ *
+ * @throws {`Error`} - If **private JWK encryption** or **database insertion** failed. The exact type depends on the **database**.
+ * @throws {`BetterAuth`} Tried to import a {@link JWk **JWK**} that has same **ID** as one of **local** or **remote** {@link JWK **JWK**s}.
+ *
+ * @returns An object representing the **imported JWK** in the **database**.
  */
 export async function importJwkInternal(
 	ctx: GenericEndpointContext,
@@ -329,14 +358,19 @@ export async function importJwkInternal(
 }
 
 /**
- * Imports existing **JSON Web Key (JWK)** pair into the database.
+ * Imports an existing **JSON Web Key (JWK)** into the **database**.
  *
- * @param ctx - Endpoint context.
- * @param privateKey - Private key. **Must** have `id`.
+ * @description Parses the {@link JWK **JWK**} to match the **database schema**, and:
+ * - If the {@link JWK **JWK**} is **private**, creates a **public JWK** from it and inserts the **JWK pair** into the **database**.
+ * - If the {@link JWK **JWK**} is **public**, sets `privateKey` to `""` (an empty {`string`}).
  *
- * @throws {Error} - If private key encryption or the database insert fails.
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
+ * @param jwk - The {@link JWK **JWK**} to import.
  *
- * @returns The imported **JWK** stored in the database.
+ * @throws {`Error`} - If the **private JWK encryption** or **database insertion** failed. Exact type depends on the **database**.
+ *
+ * @returns An object representing the **imported JWK** in the **database**.
  */
 export async function importJwk(
 	ctx: GenericEndpointContext,
@@ -360,14 +394,20 @@ export async function importJwk(
 	);
 }
 /**
- * Revokes **JWK pair**, it is still kept in the database with different `id` for transparency.
+ * Revokes a **JWK pair** while keeping it in the **database** under a new **ID** (`id` + `revokedTag`) for transparency.
  *
- * @param ctx - Endpoint context.
- * @param keyId - **Key Id** of the pair to be revoked.
+ * ⓘ **Internal use only**: This function is not exported from `better-auth/plugins/jwt`. It may be called before the **"jwt" plugin** is initialized - in such cases, `getJwtPluginOptions` cannot access the **"jwt" plugin configuration**, so `pluginOpts` must be provided directly.
  *
- * @throws {Error} - If the database update fails.
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param {JwtPluginOptions | undefined} pluginOpts - {@link JwtPluginOptions The "jwt" plugin configuration}.
+ * @param keyId - The **key ID** of the **JWK pair** to revoke.
  *
- * @returns The revoked **JWK** in the database.
+ * @throws {`BetterAuthError`} - If no matching **JWK pair** is found.
+ * @throws {`Error`} - If the **database update** failed.
+ *
+ * @returns An object representing the **revoked JWK** record in the **database**.
+ *
+ * @todo Check if it is possible to add an optional "revoked" database "jwks" table field  without forcing a **database migration**, and allow revoking only when the field exists.
  */
 export async function revokeJwkInternal(
 	ctx: GenericEndpointContext,
@@ -393,14 +433,15 @@ export async function revokeJwkInternal(
 }
 
 /**
- * Revokes **JWK pair**, it is still kept in the database with different `id` for transparency.
+ * Revokes a **JWK pair** while keeping it in the **database** under a new **ID** (`id` + `revokedTag`) for transparency.
  *
- * @param ctx - Endpoint context.
- * @param keyId - **Key Id** of the pair to be revoked.
+ * @param {GenericEndpointContext} ctx - The endpoint context.
+ * @param keyId - The **key ID** of the **JWK pair** to revoke.
  *
- * @throws {Error} - If the database update fails.
+ * @throws {`BetterAuthError`} - If no matching **JWK pair** is found.
+ * @throws {`Error`} - If **private JWK encryption** or **database insertion** failed. The exact type depends on the **database**.
  *
- * @returns The revoked **JWK** in the database.
+ * @returns An object representing the **revoked JWK** record in the **database**.
  */
 export async function revokeJwk(
 	ctx: GenericEndpointContext,
