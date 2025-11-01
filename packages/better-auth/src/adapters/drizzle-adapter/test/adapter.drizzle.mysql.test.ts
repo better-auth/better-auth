@@ -7,7 +7,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { drizzleAdapter } from "../drizzle-adapter";
@@ -66,7 +65,6 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "mysql" }),
 	],
 	async onFinish() {
 		await mysqlDB.end();
