@@ -454,6 +454,13 @@ export const kyselyAdapter = (
 								b = b.offset(offset);
 							}
 
+							if (sortBy?.field) {
+								b = b.orderBy(
+									`${getFieldName({ model, field: sortBy.field })}`,
+									sortBy.direction,
+								);
+							}
+
 							if (and) {
 								b = b.where((eb: any) =>
 									eb.and(and.map((expr: any) => expr(eb))),
@@ -505,12 +512,14 @@ export const kyselyAdapter = (
 
 					if (sortBy?.field) {
 						query = query.orderBy(
-							`${model}.${getFieldName({ model, field: sortBy.field })}`,
+							`${getFieldName({ model, field: sortBy.field })}`,
 							sortBy.direction,
 						);
 					}
 
+					// console.log("sql query:", await query.compile());
 					const res = await query.execute();
+					// console.log(`raw unparsed result:`, res);
 
 					if (!res) return [];
 					if (join) return processJoinedResults(res, join, allSelectsStr);
