@@ -4,6 +4,7 @@ import type {
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import {
 	and,
@@ -425,7 +426,22 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 					const builder = db.delete(schemaModel).where(...clause);
-					return await builder;
+					const res = await builder;
+					let count = 0;
+					if (res && "rowCount" in res) count = res.rowCount;
+					else if (Array.isArray(res)) count = res.length;
+					else if (
+						res &&
+						("affectedRows" in res || "rowsAffected" in res || "changes" in res)
+					)
+						count = res.affectedRows ?? res.rowsAffected ?? res.changes;
+					if (typeof count !== "number") {
+						logger.error(
+							"[Drizzle Adapter] The result of the deleteMany operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.",
+							{ res, model, where },
+						);
+					}
+					return count;
 				},
 				options: config,
 			};
