@@ -59,4 +59,41 @@ describe("getAuthTables", () => {
 		expect(refreshTokenExpiresAtField.fieldName).toBe("refreshTokenExpiresAt");
 		expect(accessTokenExpiresAtField.fieldName).toBe("accessTokenExpiresAt");
 	});
+
+	it("should use isActive field if deleteSessionOnSignOut.enabled = false and deleteSessionOnSignOut.timestamp = false | undefined", () => {
+		const tables = getAuthTables({
+			session: { deleteSessionOnSignOut: { enabled: false } },
+		});
+
+		const sessionTable = tables.session;
+		const isActiveField = sessionTable!.fields.isActive!;
+		const invalidatedAtField = sessionTable!.fields.invalidatedAt!;
+
+		expect(isActiveField.fieldName).toBe("isActive");
+		expect(invalidatedAtField).toBeUndefined();
+	});
+
+	it("should use invalidated field if deleteSessionOnSignOut.enabled = false and deleteSessionOnSignOut.timestamp = true", () => {
+		const tables = getAuthTables({
+			session: { deleteSessionOnSignOut: { enabled: false, timestamp: true } },
+		});
+
+		const sessionTable = tables.session;
+		const isActiveField = sessionTable!.fields.isActive!;
+		const invalidatedAtField = sessionTable!.fields.invalidatedAt!;
+
+		expect(isActiveField).toBeUndefined();
+		expect(invalidatedAtField.fieldName).toBe("invalidatedAt");
+	});
+
+	it("should not use isActive or invalidatedAt field if deleteSessionOnSignOut.enabled = true | undefined", () => {
+		const tables = getAuthTables({});
+
+		const sessionTable = tables.session;
+		const isActiveField = sessionTable!.fields.isActive!;
+		const invalidatedAtField = sessionTable!.fields.invalidatedAt!;
+
+		expect(isActiveField).toBeUndefined();
+		expect(invalidatedAtField).toBeUndefined();
+	});
 });
