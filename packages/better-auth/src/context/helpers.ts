@@ -6,7 +6,7 @@ import type {
 import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { defu } from "defu";
-import { createInternalAdapter } from "../db";
+import { createInternalAdapter } from "../db/internal-adapter";
 import { isPromise } from "../utils/is-promise";
 import { getBaseURL } from "../utils/url";
 
