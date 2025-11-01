@@ -1,7 +1,6 @@
 import { BetterAuthError } from "@better-auth/core/error";
 import { getKyselyDatabaseType } from "../adapters/kysely-adapter/dialect";
-import { getAdapterWithKysely } from "../db/adapter-kysely";
-import { getMigrations } from "../db/get-migration";
+import { getAdapterWithKysely, getMigrations } from "../db";
 import type { BetterAuthOptions, DBAdapter } from "../types";
 import { createAuthContext } from "./base";
 
