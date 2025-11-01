@@ -14,7 +14,6 @@ import type {
 	Member,
 	MemberInput,
 	OrganizationInput,
-	Team,
 	TeamInput,
 	TeamMember,
 } from "./schema";
@@ -28,7 +27,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 	return {
 		findOrganizationBySlug: async (slug: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const organization = await adapter.findOne<InferOrganization<O>>({
+			const organization = await adapter.findOne<InferOrganization<O, false>>({
 				model: "organization",
 				where: [
 					{
@@ -84,7 +83,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			if (!user) {
 				return null;
 			}
-			const member = await adapter.findOne<Member>({
+			const member = await adapter.findOne<InferMember<O, false>>({
 				model: "member",
 				where: [
 					{
@@ -126,7 +125,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const members = await Promise.all([
-				adapter.findMany<Member>({
+				adapter.findMany<InferMember<O, false>>({
 					model: "member",
 					where: [
 						{ field: "organizationId", value: data.organizationId },
@@ -197,7 +196,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const [member, user] = await Promise.all([
-				await adapter.findOne<Member>({
+				await adapter.findOne<InferMember<O, false>>({
 					model: "member",
 					where: [
 						{
@@ -235,7 +234,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		findMemberById: async (memberId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.findOne<Member>({
+			const member = await adapter.findOne<InferMember<O, false>>({
 				model: "member",
 				where: [
 					{
@@ -289,7 +288,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateMember: async (memberId: string, role: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.update<InferMember<O>>({
+			const member = await adapter.update<InferMember<O, false>>({
 				model: "member",
 				where: [
 					{
@@ -305,7 +304,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		deleteMember: async (memberId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.delete<InferMember<O>>({
+			const member = await adapter.delete<InferMember<O, false>>({
 				model: "member",
 				where: [
 					{
@@ -321,7 +320,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			data: Partial<OrganizationInput>,
 		) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const organization = await adapter.update<InferOrganization<O>>({
+			const organization = await adapter.update<InferOrganization<O, false>>({
 				model: "organization",
 				where: [
 					{
@@ -367,7 +366,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			await adapter.delete<InferOrganization<O>>({
+			await adapter.delete<InferOrganization<O, false>>({
 				model: "organization",
 				where: [
 					{
@@ -393,7 +392,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		findOrganizationById: async (organizationId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const organization = await adapter.findOne<InferOrganization<O>>({
+			const organization = await adapter.findOne<InferOrganization<O, false>>({
 				model: "organization",
 				where: [
 					{
@@ -412,7 +411,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.findOne<InferMember<O>>({
+			const member = await adapter.findOne<InferMember<O, false>>({
 				model: "member",
 				where: [
 					{
@@ -442,7 +441,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			membersLimit?: number | undefined;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const org = await adapter.findOne<InferOrganization<O>>({
+			const org = await adapter.findOne<InferOrganization<O, false>>({
 				model: "organization",
 				where: [{ field: isSlug ? "slug" : "id", value: organizationId }],
 			});
@@ -507,7 +506,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		listOrganizations: async (userId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const members = await adapter.findMany<InferMember<O>>({
+			const members = await adapter.findMany<InferMember<O, false>>({
 				model: "member",
 				where: [
 					{
@@ -523,21 +522,26 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			const organizationIds = members.map((member) => member.organizationId);
 
-			const organizations = await adapter.findMany<InferOrganization<O>>({
-				model: "organization",
-				where: [
-					{
-						field: "id",
-						value: organizationIds,
-						operator: "in",
-					},
-				],
-			});
+			const organizations = await adapter.findMany<InferOrganization<O, false>>(
+				{
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: organizationIds,
+							operator: "in",
+						},
+					],
+				},
+			);
 			return organizations;
 		},
 		createTeam: async (data: Omit<TeamInput, "id">) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const team = await adapter.create<Omit<TeamInput, "id">, InferTeam<O>>({
+			const team = await adapter.create<
+				Omit<TeamInput, "id">,
+				InferTeam<O, false>
+			>({
 				model: "team",
 				data,
 			});
@@ -596,7 +600,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				};
 			}
 
-			return team as InferTeam<O> &
+			return team as InferTeam<O, false> &
 				(IncludeMembers extends true ? { members: TeamMember[] } : {});
 		},
 		updateTeam: async (
@@ -610,7 +614,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const adapter = await getCurrentAdapter(baseAdapter);
 			if ("id" in data) data.id = undefined;
 			const team = await adapter.update<
-				Team & InferAdditionalFieldsFromPluginOptions<"team", O>
+				InferTeam<O, false> & InferAdditionalFieldsFromPluginOptions<"team", O>
 			>({
 				model: "team",
 				where: [
@@ -637,7 +641,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			const team = await adapter.delete<Team>({
+
+			const team = await adapter.delete<InferTeam<O, false>>({
 				model: "team",
 				where: [
 					{
@@ -651,7 +656,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 		listTeams: async (organizationId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const teams = await adapter.findMany<Team>({
+			const teams = await adapter.findMany<InferTeam<O, false>>({
 				model: "team",
 				where: [
 					{
@@ -756,7 +761,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 			});
 
-			const teams = await adapter.findMany<Team>({
+			const teams = await adapter.findMany<InferTeam<O, false>>({
 				model: "team",
 				where: [
 					{
@@ -841,7 +846,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 		findInvitationsByTeamId: async (teamId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const invitations = await adapter.findMany<InferInvitation<O>>({
+			const invitations = await adapter.findMany<InferInvitation<O, false>>({
 				model: "invitation",
 				where: [
 					{
@@ -854,7 +859,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		listUserInvitations: async (email: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const invitations = await adapter.findMany<InferInvitation<O>>({
+			const invitations = await adapter.findMany<InferInvitation<O, false>>({
 				model: "invitation",
 				where: [{ field: "email", value: email.toLowerCase() }],
 			});
@@ -880,7 +885,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			);
 			const invite = await adapter.create<
 				Omit<InvitationInput, "id">,
-				InferInvitation<O>
+				InferInvitation<O, false>
 			>({
 				model: "invitation",
 				data: {
@@ -898,7 +903,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		findInvitationById: async (id: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const invitation = await adapter.findOne<InferInvitation<O>>({
+			const invitation = await adapter.findOne<InferInvitation<O, false>>({
 				model: "invitation",
 				where: [
 					{
@@ -914,7 +919,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const invitation = await adapter.findMany<InferInvitation<O>>({
+			const invitation = await adapter.findMany<InferInvitation<O, false>>({
 				model: "invitation",
 				where: [
 					{
@@ -937,7 +942,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		findPendingInvitations: async (data: { organizationId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const invitations = await adapter.findMany<InferInvitation<O>>({
+			const invitations = await adapter.findMany<InferInvitation<O, false>>({
 				model: "invitation",
 				where: [
 					{
@@ -956,7 +961,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		listInvitations: async (data: { organizationId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const invitations = await adapter.findMany<InferInvitation<O>>({
+			const invitations = await adapter.findMany<InferInvitation<O, false>>({
 				model: "invitation",
 				where: [
 					{
@@ -972,7 +977,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			status: "accepted" | "canceled" | "rejected";
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const invitation = await adapter.update<InferInvitation<O>>({
+			const invitation = await adapter.update<InferInvitation<O, false>>({
 				model: "invitation",
 				where: [
 					{
