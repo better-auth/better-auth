@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
-import { getAdapterWithoutKysely } from "../db";
+import { getAdapterWithoutKysely } from "../db/adapter-without-kysely";
 import { createAuthContext } from "./base";
 
 const initBase = async (
