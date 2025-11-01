@@ -162,7 +162,7 @@ describe("organization", async (it) => {
 		const organization = await auth.api.createOrganization({
 			body: {
 				name: "test2",
-				slug: "test2",
+				slug: "testlist-organization-limit",
 				userId: session.data?.session.userId,
 			},
 		});
@@ -179,6 +179,43 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(organizations.data?.length).toBe(2);
+	});
+
+	it("should allow listing organizations with limit", async () => {
+		const organizations = await client.organization.list({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				limit: 1,
+			},
+		});
+		expect(organizations.data?.length).toBe(1);
+	});
+
+	it("should allow listing organizations with limit and offset", async () => {
+		const firstPage = await client.organization.list({
+			query: {
+				limit: 1,
+				offset: 0,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(firstPage.data?.length).toBe(1);
+
+		const secondPage = await client.organization.list({
+			query: {
+				limit: 1,
+				offset: 10000,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(secondPage.data?.length).toBe(0);
 	});
 
 	it("should allow updating organization", async () => {
