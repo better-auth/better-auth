@@ -42,7 +42,8 @@
     "zod": "^4.1.5"
   },
   "devDependencies": {
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "@better-auth/sso": "workspace:*"
   },
   "peerDependencies": {
     "better-auth": "workspace:*"
