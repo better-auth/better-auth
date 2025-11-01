@@ -158,6 +158,16 @@ export const linkSocialAccount = createAuthEndpoint(
 						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
+			/**
+			 * The login hint to use for the authorization code request
+			 */
+			loginHint: z
+				.string()
+				.meta({
+					description:
+						"The login hint to use for the authorization code request",
+				})
+				.optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
@@ -349,6 +359,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			codeVerifier: state.codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			scopes: c.body.scopes,
+			loginHint: c.body.loginHint,
 		});
 
 		return c.json({
