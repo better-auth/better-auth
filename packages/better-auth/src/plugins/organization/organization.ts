@@ -285,10 +285,19 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				role = member.role;
 			}
 
+			// Merge team roles into options when checking team-specific permissions
+			const optionsForPermissionCheck: OrganizationOptions = options || {};
+			if (teamId && options?.teams?.enabled && options?.teams?.teamRoles?.roles) {
+				optionsForPermissionCheck.roles = {
+					...options.roles,
+					...options.teams.teamRoles.roles,
+				};
+			}
+
 			const result = await hasPermission(
 				{
 					role,
-					options: options || {},
+					options: optionsForPermissionCheck,
 					permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					organizationId: activeOrganizationId,
 				},
