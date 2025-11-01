@@ -8,7 +8,11 @@ import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import type { PredefinedApiKeyOptions } from ".";
+import {
+	prepareApiKeyForDB,
+	prepareApiKeyForHook,
+	type PredefinedApiKeyOptions,
+} from ".";
 
 export function createApiKey({
 	keyGenerator,
@@ -448,6 +452,21 @@ export function createApiKey({
 				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
 			}
 
+			if (opts.hooks?.create?.before) {
+				const apiKeyInput = prepareApiKeyForHook(data);
+				const apiKeyData = await opts.hooks?.create?.before(apiKeyInput, ctx);
+
+				if (apiKeyData === false) {
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.BEFORE_HOOK_FAILED,
+					});
+				}
+
+				if (apiKeyData && typeof apiKeyData === "object" && apiKeyData.data) {
+					data = prepareApiKeyForDB(apiKeyData.data);
+				}
+			}
+
 			const apiKey = await ctx.context.adapter.create<
 				Omit<ApiKey, "id">,
 				ApiKey
@@ -456,10 +475,15 @@ export function createApiKey({
 				data: data,
 			});
 
+			if (opts.hooks?.create?.after) {
+				const apiKeyInput = prepareApiKeyForHook(apiKey);
+				await opts?.hooks?.create?.after(apiKeyInput);
+			}
+
 			return ctx.json({
 				...(apiKey as ApiKey),
 				key: key,
-				metadata: metadata ?? null,
+				metadata: apiKey.metadata ? safeJSONParse(apiKey.metadata) : null,
 				permissions: apiKey.permissions
 					? safeJSONParse(apiKey.permissions)
 					: null,

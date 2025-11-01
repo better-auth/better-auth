@@ -5,7 +5,7 @@ import { APIError, sessionMiddleware } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import type { PredefinedApiKeyOptions } from ".";
+import { prepareApiKeyForHook, type PredefinedApiKeyOptions } from ".";
 export function deleteApiKey({
 	opts,
 	schema,
@@ -94,6 +94,17 @@ export function deleteApiKey({
 				});
 			}
 
+			const apiKeyInput = prepareApiKeyForHook(apiKey);
+			if (opts.hooks?.delete?.before) {
+				const apiKeyData = await opts?.hooks?.delete?.before(apiKeyInput, ctx);
+
+				if (apiKeyData === false) {
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.BEFORE_HOOK_FAILED,
+					});
+				}
+			}
+
 			try {
 				await ctx.context.adapter.delete<ApiKey>({
 					model: API_KEY_TABLE_NAME,
@@ -109,6 +120,11 @@ export function deleteApiKey({
 					message: error?.message,
 				});
 			}
+
+			if (opts.hooks?.delete?.after) {
+				await opts.hooks?.delete?.after(apiKeyInput, ctx);
+			}
+
 			deleteAllExpiredApiKeys(ctx.context);
 			return ctx.json({
 				success: true,
