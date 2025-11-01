@@ -45,6 +45,8 @@ import {
 	listTeamMembers,
 	addTeamMember,
 	removeTeamMember,
+	updateTeamMemberRole,
+	getTeamMember,
 } from "./routes/crud-team";
 import type {
 	InferInvitation,
@@ -569,6 +571,38 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-remove-team-member)
 		 */
 		removeTeamMember: removeTeamMember(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/update-team-member-role`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.updateTeamMemberRole`
+		 *
+		 * **client:**
+		 * `authClient.organization.updateTeamMemberRole`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-update-team-member-role)
+		 */
+		updateTeamMemberRole: updateTeamMemberRole(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get-team-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getTeamMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.getTeamMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-get-team-member)
+		 */
+		getTeamMember: getTeamMember(options as O),
 	};
 	if (teamSupport) {
 		endpoints = {
@@ -649,6 +683,13 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								field: "id",
 							},
 							fieldName: options?.schema?.teamMember?.fields?.userId,
+						},
+						role: {
+							type: "string",
+							required: true,
+							defaultValue:
+								options?.teams?.teamRoles?.defaultRole || "member",
+							fieldName: options?.schema?.teamMember?.fields?.role,
 						},
 						createdAt: {
 							type: "date",

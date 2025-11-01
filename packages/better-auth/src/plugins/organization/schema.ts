@@ -52,6 +52,7 @@ export const teamMemberSchema = z.object({
 	id: z.string().default(generateId),
 	teamId: z.string(),
 	userId: z.string(),
+	role: z.string().default("member"),
 	createdAt: z.date().default(() => new Date()),
 });
 
