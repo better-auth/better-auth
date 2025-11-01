@@ -43,6 +43,7 @@ import {
 	unlinkAccount,
 	updateUser,
 	verifyEmail,
+	verifyEmailWithOTP,
 } from "./routes";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 
@@ -214,6 +215,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		signInEmail,
 		resetPassword,
 		verifyEmail,
+		verifyEmailWithOTP,
 		sendVerificationEmail,
 		changeEmail,
 		changePassword,

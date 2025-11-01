@@ -15,6 +15,8 @@ export function getTelemetryAuthConfig(
 			autoSignInAfterVerification:
 				!!options.emailVerification?.autoSignInAfterVerification,
 			expiresIn: options.emailVerification?.expiresIn,
+			includeOTP: !!options.emailVerification?.includeOTP,
+			otpLength: options.emailVerification?.otpLength,
 			onEmailVerification: !!options.emailVerification?.onEmailVerification,
 			afterEmailVerification:
 				!!options.emailVerification?.afterEmailVerification,
