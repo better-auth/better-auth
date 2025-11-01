@@ -90,6 +90,7 @@ export type TeamEndpoints<O extends OrganizationOptions> = {
 	listTeamMembers: ReturnType<typeof listTeamMembers<O>>;
 	addTeamMember: ReturnType<typeof addTeamMember<O>>;
 	removeTeamMember: ReturnType<typeof removeTeamMember<O>>;
+	updateTeamMemberRole: ReturnType<typeof updateTeamMemberRole<O>>;
 };
 
 export type OrganizationEndpoints<O extends OrganizationOptions> = {

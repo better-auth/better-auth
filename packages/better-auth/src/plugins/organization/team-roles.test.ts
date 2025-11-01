@@ -69,8 +69,12 @@ describe("organization - team roles", async (it) => {
 				slug: "test-org-team-roles",
 			},
 		});
+
+		if (!org?.id) {
+			throw new Error("Organization creation failed, no ID returned.");
+		}
+
 		organizationId = org.id;
-		expect(organizationId).toBeDefined();
 
 		// Add user3 as organization admin
 		await auth.api.addMember({
@@ -114,7 +118,7 @@ describe("organization - team roles", async (it) => {
 			(m: any) => m.userId === admin.user.id,
 		);
 		expect(creatorMembership).toBeDefined();
-		expect(creatorMembership.role).toBe("admin");
+		expect(creatorMembership?.role).toBe("admin");
 	});
 
 	it("team admin can add members to the team with specific role", async () => {
@@ -158,7 +162,7 @@ describe("organization - team roles", async (it) => {
 			},
 		});
 
-		expect(updatedMember.role).toBe("admin");
+		expect(updatedMember?.role).toBe("admin");
 	});
 
 	it("team admin can demote member roles", async () => {
@@ -172,7 +176,7 @@ describe("organization - team roles", async (it) => {
 			},
 		});
 
-		expect(updatedMember.role).toBe("member");
+		expect(updatedMember?.role).toBe("member");
 	});
 
 	it("users cannot change their own team role", async () => {
@@ -257,7 +261,7 @@ describe("organization - team roles", async (it) => {
 			},
 		});
 
-		expect(updatedMember.role).toBe("admin");
+		expect(updatedMember?.role).toBe("admin");
 
 		// Reset back to member for other tests
 		await auth.api.updateTeamMemberRole({
@@ -487,7 +491,7 @@ describe("organization - team roles", async (it) => {
 			await auth.api.hasPermission({
 				headers: user2.headers,
 				body: {
-					organizationId: secondOrg.id, // Different org
+					organizationId: secondOrg?.id, // Different org
 					permissions: {
 						teamMember: ["create", "update", "delete"],
 					},
@@ -504,7 +508,7 @@ describe("organization - team roles", async (it) => {
 			await auth.api.hasPermission({
 				headers: user2.headers,
 				body: {
-					organizationId: secondOrg.id,
+					organizationId: secondOrg?.id,
 					permissions: {
 						teamMember: ["read"],
 					},
