@@ -4,7 +4,7 @@ import { organization } from "./organization";
 import { APIError } from "better-call";
 
 describe("organization - team roles", async (it) => {
-	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [
 			organization({
 				teams: {

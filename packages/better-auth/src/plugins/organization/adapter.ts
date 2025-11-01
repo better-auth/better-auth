@@ -827,6 +827,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			userId: string;
 			role: string;
 		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
 			const teamMember = await adapter.update<TeamMember>({
 				model: "teamMember",
 				where: [

@@ -1324,12 +1324,16 @@ export const updateTeamMemberRole = <O extends OrganizationOptions>(
 				userId: session.user.id,
 			});
 
+			// Define which roles are considered team admins.
+			// By default, both "admin" and the configured creatorRole have team admin privileges.
+			const TEAM_ADMIN_ROLES = [
+				"admin",
+				options?.teams?.teamRoles?.creatorRole,
+			].filter(Boolean);
+
 			// Check if user is team admin
 			const isTeamAdmin =
-				currentTeamMember &&
-				(currentTeamMember.role === "admin" ||
-					currentTeamMember.role ===
-						options?.teams?.teamRoles?.creatorRole);
+				currentTeamMember && TEAM_ADMIN_ROLES.includes(currentTeamMember.role);
 
 			if (!hasOrgPermission && !isTeamAdmin) {
 				throw new APIError("FORBIDDEN", {
