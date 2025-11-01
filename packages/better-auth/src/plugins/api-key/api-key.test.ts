@@ -738,7 +738,7 @@ describe("api-key", async () => {
 
 		expect(result.success).toBeNull();
 		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("NOT_FOUND");
+		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(ERROR_CODES.BEFORE_HOOK_FAILED);
 	});
 
