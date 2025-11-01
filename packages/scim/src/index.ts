@@ -591,7 +591,10 @@ export const scim = () => {
 								...s,
 								meta: {
 									...s.meta,
-									location: new URL(s.meta.location, ctx.context.baseURL).toString(),
+									location: new URL(
+										s.meta.location,
+										ctx.context.baseURL,
+									).toString(),
 								},
 							};
 						}),
@@ -661,7 +664,10 @@ export const scim = () => {
 								...s,
 								meta: {
 									...s.meta,
-									location: new URL(s.meta.location, ctx.context.baseURL).toString(),
+									location: new URL(
+										s.meta.location,
+										ctx.context.baseURL,
+									).toString(),
 								},
 							};
 						}),
