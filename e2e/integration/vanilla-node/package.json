@@ -7,12 +7,12 @@
   },
   "devDependencies": {
     "@better-auth/test-utils": "workspace:*",
-    "vite": "^7.1.5"
+    "vite": "^7.1.12"
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.2.0",
-    "kysely": "^0.28.5",
+    "better-sqlite3": "^12.4.1",
+    "kysely": "^0.28.8",
     "kysely-postgres-js": "^3.0.0",
     "postgres": "^3.4.7"
   }
