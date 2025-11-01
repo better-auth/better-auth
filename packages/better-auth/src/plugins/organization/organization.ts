@@ -48,6 +48,7 @@ import {
 import {
 	addTeamMember,
 	createTeam,
+	getTeamMember,
 	listOrganizationTeams,
 	listTeamMembers,
 	listUserTeams,
@@ -56,7 +57,6 @@ import {
 	setActiveTeam,
 	updateTeam,
 	updateTeamMemberRole,
-	getTeamMember,
 } from "./routes/crud-team";
 import type {
 	InferInvitation,
