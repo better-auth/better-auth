@@ -88,4 +88,10 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	INVALID_RESOURCE: "The provided permission includes an invalid resource",
 	ROLE_NAME_IS_ALREADY_TAKEN: "That role name is already taken",
 	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
+	YOU_ARE_NOT_ALLOWED_TO_UPDATE_TEAM_MEMBER_ROLE:
+		"You are not allowed to update team member roles",
+	INVALID_TEAM_ROLE: "Invalid team role",
+	CANNOT_CHANGE_OWN_TEAM_ROLE: "You cannot change your own team role",
+	YOU_ARE_NOT_ALLOWED_TO_VIEW_TEAM_MEMBER:
+		"You are not allowed to view this team member",
 });
