@@ -48,6 +48,12 @@ export const auth = betterAuth({
 
 Make sure to have `createdAt` and `updatedAt` fields on your session schema.
 
+
+#### Verification Schema
+
+- Rename the schema name from `VerificationToken` to `Verification`.
+
+
 #### Account Schema
 
 Map these fields in the account schema:
@@ -78,6 +84,9 @@ export const auth = betterAuth({
     },
 });
 ```
+
+
+
 
 **Note:** If you use ORM adapters, you can map these fields in your schema file.
 
