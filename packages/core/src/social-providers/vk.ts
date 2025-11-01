@@ -98,11 +98,11 @@ export const vk = (options: VkOption) => {
 			if (error) {
 				return null;
 			}
-			if (!profile.user.email) {
-				return null;
-			}
 
 			const userMap = await options.mapProfileToUser?.(profile);
+			if (!profile.user.email && !userMap?.email) {
+				return null;
+			}
 
 			return {
 				user: {
