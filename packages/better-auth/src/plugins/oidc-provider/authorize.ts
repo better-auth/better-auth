@@ -146,12 +146,14 @@ export async function authorize(
 		return !opts.scopes.includes(scope);
 	});
 	if (invalidScopes.length) {
+		const description = `The following scopes are invalid: ${invalidScopes.join(
+			", ",
+		)}`;
+		const params = new URLSearchParams();
+		params.set("error", "invalid_scope");
+		params.set("error_description", description);
 		return handleRedirect(
-			`${query.redirect_uri}${
-				query.redirect_uri.includes("?") ? "&" : "?"
-			}error=invalid_scope&error_description=${`The following scopes are invalid: ${invalidScopes.join(
-				", ",
-			)}`}`,
+			`${query.redirect_uri}${query.redirect_uri.includes("?") ? "&" : "?"}${params.toString()}`,
 		);
 	}
 
@@ -160,9 +162,12 @@ export async function authorize(
 		options.requirePKCE
 	) {
 		return handleRedirect(
-			`${query.redirect_uri}${
-				query.redirect_uri.includes("?") ? "&" : "?"
-			}error=invalid_request&error_description=pkce is required`,
+			`${query.redirect_uri}${query.redirect_uri.includes("?") ? "&" : "?"}${new URLSearchParams(
+				{
+					error: "invalid_request",
+					error_description: "pkce is required",
+				},
+			).toString()}`,
 		);
 	}
 
@@ -177,9 +182,12 @@ export async function authorize(
 		].includes(query.code_challenge_method?.toLowerCase() || "")
 	) {
 		return handleRedirect(
-			`${query.redirect_uri}${
-				query.redirect_uri.includes("?") ? "&" : "?"
-			}error=invalid_request&error_description=invalid code_challenge method`,
+			`${query.redirect_uri}${query.redirect_uri.includes("?") ? "&" : "?"}${new URLSearchParams(
+				{
+					error: "invalid_request",
+					error_description: "invalid code_challenge method",
+				},
+			).toString()}`,
 		);
 	}
 
@@ -245,9 +253,12 @@ export async function authorize(
 		});
 	} catch (e) {
 		return handleRedirect(
-			`${query.redirect_uri}${
-				query.redirect_uri.includes("?") ? "&" : "?"
-			}error=server_error&error_description=An error occurred while processing the request`,
+			`${query.redirect_uri}${query.redirect_uri.includes("?") ? "&" : "?"}${new URLSearchParams(
+				{
+					error: "server_error",
+					error_description: "An error occurred while processing the request",
+				},
+			).toString()}`,
 		);
 	}
 
