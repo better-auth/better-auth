@@ -98,7 +98,7 @@ export function deleteApiKey({
 				const apiKeyData = await opts?.hooks?.delete?.before(apiKey, ctx);
 
 				if (apiKeyData === false) {
-					throw new APIError("NOT_FOUND", {
+					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.BEFORE_HOOK_FAILED,
 					});
 				}
