@@ -68,40 +68,60 @@ export const getJwksAdapter = (adapter: DBAdapter<BetterAuthOptions>) => {
 
 			return jwk;
 		},
-		/**
-		 * Get the latest key or create a new one if none exists.
-		 * This operation uses an application-level mutex to prevent race conditions.
-		 *
-		 * @param createKeyFn - Function that returns the key data to create
-		 * @returns The latest key (existing or newly created)
-		 */
 		getOrCreateLatestKey: async (
 			createKeyFn: () => Promise<Omit<Jwk, "id">>,
-		) => {
+		): Promise<Jwk> => {
 			return jwkMutex.runExclusive(async () => {
-				const existingKeys = await adapter.findMany<Jwk>({
-					model: "jwks",
-					sortBy: {
-						field: "createdAt",
-						direction: "desc",
-					},
-					limit: 1,
-				});
+				const maxRetries = 2;
 
-				if (existingKeys.length > 0) {
-					return existingKeys[0]!;
+				for (let attempt = 0; attempt < maxRetries; attempt++) {
+					const existingKeys = await adapter.findMany<Jwk>({
+						model: "jwks",
+						sortBy: {
+							field: "createdAt",
+							direction: "desc",
+						},
+						limit: 1,
+					});
+
+					if (existingKeys.length > 0) {
+						return existingKeys[0]!;
+					}
+
+					try {
+						const keyData = await createKeyFn();
+						const newKey = await adapter.create<Omit<Jwk, "id">, Jwk>({
+							model: "jwks",
+							data: {
+								...keyData,
+								createdAt: new Date(),
+							},
+						});
+
+						return newKey;
+					} catch (error) {
+						const recheckKeys = await adapter.findMany<Jwk>({
+							model: "jwks",
+							sortBy: {
+								field: "createdAt",
+								direction: "desc",
+							},
+							limit: 1,
+						});
+
+						if (recheckKeys.length > 0) {
+							return recheckKeys[0]!;
+						}
+
+						if (attempt === maxRetries - 1) {
+							throw error;
+						}
+
+						await new Promise((resolve) => setTimeout(resolve, 50));
+					}
 				}
 
-				const keyData = await createKeyFn();
-				const newKey = await adapter.create<Omit<Jwk, "id">, Jwk>({
-					model: "jwks",
-					data: {
-						...keyData,
-						createdAt: new Date(),
-					},
-				});
-
-				return newKey;
+				throw new Error("Failed to get or create JWK after maximum retries");
 			});
 		},
 	};
