@@ -209,6 +209,58 @@ export interface ApiKeyOptions {
 					  ) => Statements | Promise<Statements>);
 		  }
 		| undefined;
+	/**
+	 * Hooks
+	 */
+	hooks?: {
+		create?: {
+			/**
+			 * Hook that is called before a api key is created.
+			 * if the hook returns false, the api key will not be created.
+			 * If the hook returns an object, it'll be used instead of the original data
+			 */
+			before?: (
+				apiKey: Omit<ApiKey, "id">,
+				ctx: GenericEndpointContext,
+			) => Promise<boolean | void | { data?: Omit<ApiKey, "id"> }>;
+			/**
+			 * Hook that is called after a api key is created.
+			 */
+			after?: (apiKey: ApiKey) => Promise<void>;
+		};
+		update?: {
+			/**
+			 * Hook that is called before a api key is updated.
+			 * if the hook returns false, the api key will not be updated.
+			 * If the hook returns an object, it'll be used instead of the original data
+			 */
+			before?: (
+				apiKey: Partial<ApiKey>,
+				ctx: GenericEndpointContext,
+			) => Promise<boolean | void | { data?: Partial<ApiKey> }>;
+			/**
+			 * Hook that is called after a api key is updated.
+			 */
+			after?: (
+				apiKey: Partial<ApiKey>,
+				ctx: GenericEndpointContext,
+			) => Promise<void>;
+		};
+		delete?: {
+			/**
+			 * Hook that is called before a api key is deleted.
+			 * if the hook returns false, the api key will not be deleted.
+			 */
+			before?: (
+				apiKey: ApiKey,
+				ctx: GenericEndpointContext,
+			) => Promise<boolean | void>;
+			/**
+			 * Hook that is called after a api key is deleted.
+			 */
+			after?: (apiKey: ApiKey, ctx: GenericEndpointContext) => Promise<void>;
+		};
+	};
 }
 
 export type ApiKey = {

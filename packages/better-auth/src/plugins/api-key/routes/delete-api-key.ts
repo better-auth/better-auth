@@ -94,6 +94,16 @@ export function deleteApiKey({
 				});
 			}
 
+			if (opts.hooks?.delete?.before) {
+				const apiKeyData = await opts?.hooks?.delete?.before(apiKey, ctx);
+
+				if (apiKeyData === false) {
+					throw new APIError("NOT_FOUND", {
+						message: ERROR_CODES.BEFORE_HOOK_FAILED,
+					});
+				}
+			}
+
 			try {
 				await ctx.context.adapter.delete<ApiKey>({
 					model: API_KEY_TABLE_NAME,
@@ -109,6 +119,11 @@ export function deleteApiKey({
 					message: error?.message,
 				});
 			}
+
+			if (opts.hooks?.delete?.after) {
+				await opts.hooks?.delete?.after(apiKey, ctx);
+			}
+
 			deleteAllExpiredApiKeys(ctx.context);
 			return ctx.json({
 				success: true,
