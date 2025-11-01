@@ -1,16 +1,11 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { SuccessContext } from "@better-fetch/fetch";
-import { Kysely, MysqlDialect, PostgresDialect, sql } from "kysely";
-import { MongoClient } from "mongodb";
-import { createPool } from "mysql2/promise";
-import { Pool } from "pg";
 import { afterAll } from "vitest";
 import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { betterAuth } from "../auth";
-import { createAuthClient } from "../client/vanilla";
+import { createAuthClient } from "../client";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
-import { getMigrations } from "../db/get-migration";
-import { getAdapter } from "../db/utils";
+import { getAdapter, getMigrations } from "../db";
 import { bearer } from "../plugins";
 import type { BetterAuthOptions, Session, User } from "../types";
 import { getBaseURL } from "../utils/url";
@@ -31,21 +26,32 @@ export async function getTestInstanceMemory<
 		| undefined,
 ) {
 	const testWith = config?.testWith || "memory";
-	const postgres = new Kysely({
-		dialect: new PostgresDialect({
-			pool: new Pool({
-				connectionString: "postgres://user:password@localhost:5432/better_auth",
-			}),
-		}),
-	});
 
-	const mysql = new Kysely({
-		dialect: new MysqlDialect(
-			createPool("mysql://user:password@localhost:3306/better_auth"),
-		),
-	});
+	async function getPostgres() {
+		const { Kysely, PostgresDialect } = await import("kysely");
+		const { Pool } = await import("pg");
+		return new Kysely({
+			dialect: new PostgresDialect({
+				pool: new Pool({
+					connectionString:
+						"postgres://user:password@localhost:5432/better_auth",
+				}),
+			}),
+		});
+	}
+
+	async function getMysql() {
+		const { Kysely, MysqlDialect } = await import("kysely");
+		const { createPool } = await import("mysql2/promise");
+		return new Kysely({
+			dialect: new MysqlDialect(
+				createPool("mysql://user:password@localhost:3306/better_auth"),
+			),
+		});
+	}
 
 	async function mongodbClient() {
+		const { MongoClient } = await import("mongodb");
 		const dbClient = async (connectionString: string, dbName: string) => {
 			const client = new MongoClient(connectionString);
 			await client.connect();
@@ -70,11 +76,11 @@ export async function getTestInstanceMemory<
 		secret: "better-auth.secret",
 		database:
 			testWith === "postgres"
-				? { db: postgres, type: "postgres" }
+				? { db: await getPostgres(), type: "postgres" }
 				: testWith === "mongodb"
 					? mongodbAdapter(await mongodbClient())
 					: testWith === "mysql"
-						? { db: mysql, type: "mysql" }
+						? { db: await getMysql(), type: "mysql" }
 						: undefined,
 		emailAndPassword: {
 			enabled: true,
@@ -131,6 +137,8 @@ export async function getTestInstanceMemory<
 			return;
 		}
 		if (testWith === "postgres") {
+			const { sql } = await import("kysely");
+			const postgres = await getPostgres();
 			await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
 				postgres,
 			);
@@ -139,6 +147,8 @@ export async function getTestInstanceMemory<
 		}
 
 		if (testWith === "mysql") {
+			const { sql } = await import("kysely");
+			const mysql = await getMysql();
 			await sql`SET FOREIGN_KEY_CHECKS = 0;`.execute(mysql);
 			const tables = await mysql.introspection.getTables();
 			for (const table of tables) {
