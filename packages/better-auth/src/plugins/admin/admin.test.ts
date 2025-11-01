@@ -161,7 +161,7 @@ describe("Admin plugin", async () => {
 			{
 				name: "Test User",
 				email: "user@email.com",
-				password: "test",
+				password: "testuser123",
 				role: "user",
 			},
 			{
@@ -177,7 +177,7 @@ describe("Admin plugin", async () => {
 			{
 				name: "Test User mr",
 				email: "testmr@test.com",
-				password: "test",
+				password: "testuser123",
 				role: ["user", "admin"],
 			},
 			{
@@ -211,7 +211,7 @@ describe("Admin plugin", async () => {
 			{
 				name: "Test User",
 				email: "test2@test.com",
-				password: "test",
+				password: "testuser123",
 				role: "user",
 			},
 			{
@@ -421,7 +421,7 @@ describe("Admin plugin", async () => {
 			{
 				name: "Test User mr",
 				email: "testmr@test.com",
-				password: "test",
+				password: "testuser123",
 				role: "user",
 			},
 			{
@@ -505,7 +505,7 @@ describe("Admin plugin", async () => {
 	it("should not allow banned user to sign in", async () => {
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
-			password: "test",
+			password: "testuser123",
 		});
 		expect(res.error?.code).toBe("BANNED_USER");
 		expect(res.error?.status).toBe(403);
@@ -544,7 +544,7 @@ describe("Admin plugin", async () => {
 	it("should change banned user message", async () => {
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
-			password: "test",
+			password: "testuser123",
 		});
 		expect(res.error?.message).toBe("Custom banned user message");
 	});
@@ -554,7 +554,7 @@ describe("Admin plugin", async () => {
 		await vi.advanceTimersByTimeAsync(60 * 60 * 24 * 1000);
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
-			password: "test",
+			password: "testuser123",
 		});
 		expect(res.data?.user).toBeDefined();
 	});
@@ -1248,7 +1248,7 @@ describe("access control", async (it) => {
 			{
 				name: "Test User mr",
 				email: "testmr@test.com",
-				password: "test",
+				password: "testuser123",
 				role: ["user"],
 			},
 			{
@@ -1279,7 +1279,7 @@ describe("access control", async (it) => {
 			{
 				name: "Test User mr",
 				email: "testmr@test.com",
-				password: "test",
+				password: "testuser123",
 				role: "user",
 			},
 			{

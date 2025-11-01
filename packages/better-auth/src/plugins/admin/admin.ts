@@ -465,6 +465,8 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						}
 					}
 
+					ctx.context.password.checkPasswordLength(ctx.body.password, ctx);
+
 					const email = ctx.body.email.toLowerCase();
 					const isValidEmail = z.string().email().safeParse(email);
 					if (!isValidEmail.success) {

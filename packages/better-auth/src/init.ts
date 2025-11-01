@@ -22,7 +22,7 @@ import { getAdapter } from "./db/utils";
 import { generateId } from "./utils";
 import { DEFAULT_SECRET } from "./utils/constants";
 import { isPromise } from "./utils/is-promise";
-import { checkPassword } from "./utils/password";
+import { checkPassword, checkPasswordLength } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 
 export const init = async (options: BetterAuthOptions) => {
@@ -170,6 +170,7 @@ export const init = async (options: BetterAuthOptions) => {
 				maxPasswordLength: options.emailAndPassword?.maxPasswordLength || 128,
 			},
 			checkPassword,
+			checkPasswordLength,
 		},
 		setNewSession(session) {
 			this.newSession = session;
