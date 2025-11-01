@@ -906,29 +906,6 @@ describe("jwt - race condition prevention", async () => {
 });
 
 describe("jwt - edge cases and error handling", async () => {
-	it("should handle database query errors gracefully", async () => {
-		const { auth } = await getTestInstance({
-			plugins: [jwt()],
-			logger: {
-				level: "error",
-			},
-		});
-
-		const token1 = await auth.api.signJWT({
-			body: {
-				payload: {
-					sub: "123",
-					exp: Math.floor(Date.now() / 1000) + 600,
-					iat: Math.floor(Date.now() / 1000),
-				},
-			},
-		});
-		expect(token1?.token).toBeDefined();
-
-		const jwks = await auth.api.getJwks();
-		expect(jwks.keys.length).toBe(1);
-	});
-
 	it("should return existing key on subsequent calls", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [jwt()],
@@ -948,5 +925,56 @@ describe("jwt - edge cases and error handling", async () => {
 		expect(jwks1.keys.length).toBe(1);
 		expect(jwks2.keys.length).toBe(1);
 		expect(jwks3.keys.length).toBe(1);
+	});
+
+	it("should handle race condition when key is created between query and create", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [jwt()],
+			logger: {
+				level: "error",
+			},
+		});
+
+		const jwks1 = await auth.api.getJwks();
+		const firstKeyId = jwks1.keys[0]?.kid;
+		expect(firstKeyId).toBeDefined();
+
+		const token1 = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "123",
+					exp: Math.floor(Date.now() / 1000) + 600,
+					iat: Math.floor(Date.now() / 1000),
+				},
+			},
+		});
+		expect(token1?.token).toBeDefined();
+
+		const jwks2 = await auth.api.getJwks();
+		expect(jwks2.keys[0]?.kid).toBe(firstKeyId);
+		expect(jwks2.keys.length).toBe(1);
+	});
+
+	it("should query for existing key before attempting to create", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [jwt()],
+			logger: {
+				level: "error",
+			},
+		});
+
+		const jwks1 = await auth.api.getJwks();
+		const firstKeyId = jwks1.keys[0]?.kid;
+		expect(firstKeyId).toBeDefined();
+
+		for (let i = 0; i < 5; i++) {
+			const jwks = await auth.api.getJwks();
+			expect(jwks.keys[0]?.kid).toBe(firstKeyId);
+			expect(jwks.keys.length).toBe(1);
+		}
+
+		const finalJwks = await auth.api.getJwks();
+		expect(finalJwks.keys.length).toBe(1);
+		expect(finalJwks.keys[0]?.kid).toBe(firstKeyId);
 	});
 });
