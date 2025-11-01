@@ -50,17 +50,27 @@ export const mongodbAdapter = (
 			db: Db,
 			session?: ClientSession | undefined,
 		): AdapterFactoryCustomizeAdapterCreator =>
-		({ options, getFieldName, schema, getDefaultModelName }) => {
+		({
+			options,
+			getFieldName,
+			schema,
+			getDefaultModelName,
+			getDefaultFieldName,
+		}) => {
 			function serializeID({
-				field,
+				field: field_name,
 				value,
-				model,
+				model: model_name,
 			}: {
 				field: string;
 				value: any;
 				model: string;
 			}) {
-				model = getDefaultModelName(model);
+				const model = getDefaultModelName(model_name);
+				const field = getDefaultFieldName({
+					model: model_name,
+					field: field_name,
+				});
 				if (
 					field === "id" ||
 					field === "_id" ||
