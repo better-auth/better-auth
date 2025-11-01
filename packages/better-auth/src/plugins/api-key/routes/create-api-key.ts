@@ -448,6 +448,20 @@ export function createApiKey({
 				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
 			}
 
+			if (opts.hooks?.create?.before) {
+				const apiKeyData = await opts.hooks?.create?.before(data, ctx);
+
+				if (apiKeyData === false) {
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.BEFORE_HOOK_FAILED,
+					});
+				}
+
+				if (typeof apiKeyData === "object" && apiKeyData.data) {
+					data = apiKeyData.data;
+				}
+			}
+
 			const apiKey = await ctx.context.adapter.create<
 				Omit<ApiKey, "id">,
 				ApiKey
@@ -455,6 +469,10 @@ export function createApiKey({
 				model: API_KEY_TABLE_NAME,
 				data: data,
 			});
+
+			if (opts.hooks?.create?.after) {
+				await opts?.hooks?.create?.after(apiKey);
+			}
 
 			return ctx.json({
 				...(apiKey as ApiKey),

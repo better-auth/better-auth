@@ -519,6 +519,276 @@ describe("api-key", async () => {
 		);
 	});
 
+	it("should fail to create API key if return value of before hook is `false`", async () => {
+		let result: { data: ApiKey | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				apiKey({
+					hooks: {
+						create: {
+							before: async (apiKey, ctx) => {
+								return false;
+							},
+						},
+					},
+				}),
+			],
+		});
+
+		const { user } = await signInWithTestUser();
+
+		try {
+			const apiKey = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");
+		expect(result.error?.body.message).toEqual(ERROR_CODES.BEFORE_HOOK_FAILED);
+	});
+
+	it("should create API key with data modified by before hook and invoke after hook with the created record", async () => {
+		let result: { data: ApiKey | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+
+		const name = "new-test-name";
+
+		const afterHook = vi.fn();
+
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				apiKey({
+					hooks: {
+						create: {
+							before: async (apiKey, ctx) => {
+								return { data: { ...apiKey, name } };
+							},
+							after: afterHook,
+						},
+					},
+				}),
+			],
+		});
+
+		const { user } = await signInWithTestUser();
+
+		try {
+			const apiKey = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					name: "original-name",
+				},
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+		expect(result.data).not.toBeNull();
+		expect(result.error).toBeNull();
+		expect(result.data?.name).toEqual(name);
+		expect(afterHook).toHaveBeenCalled();
+	});
+
+	it("should fail to update API key if return value of before hook is `false`", async () => {
+		let result: { data: Omit<ApiKey, "key"> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				apiKey({
+					hooks: {
+						update: {
+							before: async (apiKey, ctx) => {
+								return false;
+							},
+						},
+					},
+				}),
+			],
+		});
+		const { user, headers } = await signInWithTestUser();
+
+		const createdApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				name: "original-name",
+			},
+		});
+
+		try {
+			const updatedApiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: createdApiKey.id,
+					name: "updated-name",
+				},
+				headers: headers,
+			});
+			result.data = updatedApiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");
+		expect(result.error?.body.message).toEqual(ERROR_CODES.BEFORE_HOOK_FAILED);
+	});
+
+	it("should update API key with data modified by before hook and invoke after hook with the updated record", async () => {
+		let result: { data: Omit<ApiKey, "key"> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		const modifiedName = "hook-modified-name";
+		const afterHook = vi.fn();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				apiKey({
+					hooks: {
+						update: {
+							before: async (updateData, ctx) => {
+								return { data: { ...updateData, name: modifiedName } };
+							},
+							after: afterHook,
+						},
+					},
+				}),
+			],
+		});
+		const { user, headers } = await signInWithTestUser();
+
+		const createdApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				name: "original-name",
+			},
+		});
+
+		try {
+			const updatedApiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: createdApiKey.id,
+					name: "user-requested-name",
+				},
+				headers: headers,
+			});
+			result.data = updatedApiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.data).not.toBeNull();
+		expect(result.error).toBeNull();
+		expect(result.data?.name).toEqual(modifiedName);
+		expect(afterHook).toHaveBeenCalled();
+	});
+
+	it("should fail to delete API key if return value of before hook is `false`", async () => {
+		let result: { success: boolean | null; error: Err | null } = {
+			success: null,
+			error: null,
+		};
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				apiKey({
+					hooks: {
+						delete: {
+							before: async (apiKey, ctx) => {
+								return false;
+							},
+						},
+					},
+				}),
+			],
+		});
+		const { user, headers } = await signInWithTestUser();
+
+		const createdApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				name: "to-be-deleted",
+			},
+		});
+
+		try {
+			const deleteResult = await auth.api.deleteApiKey({
+				body: {
+					keyId: createdApiKey.id,
+				},
+				headers: headers,
+			});
+			result.success = deleteResult.success;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.success).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("NOT_FOUND");
+		expect(result.error?.body.message).toEqual(ERROR_CODES.BEFORE_HOOK_FAILED);
+	});
+
+	it("should invoke before hook prior to deletion and after hook following successful deletion with the original API key data", async () => {
+		let result: { success: boolean | null; error: Err | null } = {
+			success: null,
+			error: null,
+		};
+		const afterHook = vi.fn();
+		const beforeHook = vi.fn();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				apiKey({
+					hooks: {
+						delete: {
+							before: beforeHook,
+							after: afterHook,
+						},
+					},
+				}),
+			],
+		});
+		const { user, headers } = await signInWithTestUser();
+
+		const createdApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				name: "to-be-deleted",
+			},
+			headers: headers,
+		});
+
+		try {
+			const deleteResult = await auth.api.deleteApiKey({
+				body: {
+					keyId: createdApiKey.id,
+				},
+				headers: headers,
+			});
+			result.success = deleteResult.success;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.success).toBe(true);
+		expect(result.error).toBeNull();
+		expect(beforeHook).toHaveBeenCalled();
+		expect(afterHook).toHaveBeenCalled();
+	});
+
 	it("should fail to create API key with custom refillAndAmount from client auth", async () => {
 		const apiKey = await client.apiKey.create(
 			{
