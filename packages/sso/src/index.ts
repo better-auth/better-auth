@@ -1250,10 +1250,20 @@ export const sso = (options?: SSOOptions | undefined) => {
 					const { code, state, error, error_description } = ctx.query;
 					const stateData = await parseState(ctx);
 					if (!stateData) {
-						const errorURL =
-							ctx.context.options.onAPIError?.errorURL ||
-							`${ctx.context.baseURL}/error`;
-						throw ctx.redirect(`${errorURL}?error=invalid_state`);
+						const errorParams = { error: "invalid_state" };
+						const errorURLConfig = ctx.context.options.onAPIError?.errorURL;
+						let baseURL: string;
+
+						if (typeof errorURLConfig === "function") {
+							baseURL = await errorURLConfig(errorParams);
+						} else {
+							baseURL = errorURLConfig || `${ctx.context.baseURL}/error`;
+						}
+
+						const params = new URLSearchParams({ error: errorParams.error });
+						const sep = baseURL.includes("?") ? "&" : "?";
+						const finalURL = `${baseURL}${sep}${params.toString()}`;
+						throw ctx.redirect(finalURL);
 					}
 					const { callbackURL, errorURL, newUserURL, requestSignUp } =
 						stateData;

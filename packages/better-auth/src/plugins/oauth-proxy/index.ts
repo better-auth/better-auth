@@ -127,13 +127,25 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						ctx.context.logger.error(e);
 						return null;
 					});
-					const error =
-						ctx.context.options.onAPIError?.errorURL ||
-						`${ctx.context.options.baseURL}/api/auth/error`;
 					if (!decryptedCookies) {
-						throw ctx.redirect(
-							`${error}?error=OAuthProxy - Invalid cookies or secret`,
-						);
+						const errorParams = {
+							error: "OAuthProxy - Invalid cookies or secret",
+						};
+						const errorURLConfig = ctx.context.options.onAPIError?.errorURL;
+						let baseURL: string;
+
+						if (typeof errorURLConfig === "function") {
+							baseURL = await errorURLConfig(errorParams);
+						} else {
+							baseURL =
+								errorURLConfig ||
+								`${ctx.context.options.baseURL}/api/auth/error`;
+						}
+
+						const params = new URLSearchParams({ error: errorParams.error });
+						const sep = baseURL.includes("?") ? "&" : "?";
+						const finalURL = `${baseURL}${sep}${params.toString()}`;
+						throw ctx.redirect(finalURL);
 					}
 
 					const isSecureContext = resolveCurrentURL(ctx).protocol === "https:";

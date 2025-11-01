@@ -1247,12 +1247,24 @@ export type BetterAuthOptions = {
 				/**
 				 * The URL to redirect to on error
 				 *
-				 * When errorURL is provided, the error will be added to the URL as a query parameter
-				 * and the user will be redirected to the errorURL.
+				 * When errorURL is provided as a string, it will be used as the base path
+				 * and the error details will be appended as query parameters.
+				 *
+				 * When provided as a function, it will be called with the error
+				 * details and must return a base path string (or Promise<string>).
+				 * The error details will then be appended to that path.
 				 *
 				 * @default - "/api/auth/error"
 				 */
-				errorURL?: string;
+				errorURL?:
+					| string
+					| (({
+							error,
+							error_description,
+					  }: {
+							error: string;
+							error_description?: string;
+					  }) => string | Promise<string>);
 		  }
 		| undefined;
 	/**
