@@ -412,7 +412,7 @@ export function updateApiKey({
 					});
 				}
 
-				if (typeof apiKeyData === "object" && apiKeyData.data) {
+				if (apiKeyData && typeof apiKeyData === "object" && apiKeyData.data) {
 					newValues = apiKeyData.data;
 				}
 			}

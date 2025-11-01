@@ -457,7 +457,7 @@ export function createApiKey({
 					});
 				}
 
-				if (typeof apiKeyData === "object" && apiKeyData.data) {
+				if (apiKeyData && typeof apiKeyData === "object" && apiKeyData.data) {
 					data = apiKeyData.data;
 				}
 			}
