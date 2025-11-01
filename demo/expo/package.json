@@ -25,7 +25,7 @@
     "@types/better-sqlite3": "^7.6.12",
     "babel-plugin-transform-import-meta": "^2.2.1",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^11.6.0",
+    "better-sqlite3": "^12.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "expo": "~54.0.21",
