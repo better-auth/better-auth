@@ -1,8 +1,11 @@
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	BetterAuthPlugin,
+} from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { describe, expect, it, vi } from "vitest";
 import { getEndpoints } from "./index";
-import type { AuthContext } from "../init";
-import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
-import { createAuthMiddleware } from "./call";
 
 describe("getEndpoints", () => {
 	it("should await promise-based context before passing to middleware", async () => {

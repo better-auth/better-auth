@@ -1,16 +1,17 @@
-import { APIError } from "../../api";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { defineErrorCodes } from "@better-auth/core/utils";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import { APIError } from "../../api";
 
-const ERROR_CODES = {
+const ERROR_CODES = defineErrorCodes({
 	PASSWORD_COMPROMISED:
 		"The password you entered has been compromised. Please choose a different password.",
-} as const;
+});
 
 async function checkPasswordCompromise(
 	password: string,
-	customMessage?: string,
+	customMessage?: string | undefined,
 ) {
 	if (!password) return;
 
@@ -55,10 +56,10 @@ async function checkPasswordCompromise(
 }
 
 export interface HaveIBeenPwnedOptions {
-	customPasswordCompromisedMessage?: string;
+	customPasswordCompromisedMessage?: string | undefined;
 }
 
-export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
+export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) =>
 	({
 		id: "haveIBeenPwned",
 		init(ctx) {

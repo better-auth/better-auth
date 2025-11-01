@@ -1,38 +1,29 @@
-import { defu } from "defu";
-import { hashPassword, verifyPassword } from "./crypto/password";
-import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
-import type { Entries } from "type-fest";
-import { getAdapter } from "./db/utils";
 import type {
-	Adapter,
+	AuthContext,
 	BetterAuthOptions,
 	BetterAuthPlugin,
-	Models,
-	SecondaryStorage,
-	Session,
-	User,
-} from "./types";
-import { DEFAULT_SECRET } from "./utils/constants";
+} from "@better-auth/core";
+import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { OAuthProvider } from "@better-auth/core/oauth2";
 import {
-	type BetterAuthCookies,
-	createCookieGetter,
-	getCookies,
-} from "./cookies";
-import { createLogger } from "./utils/logger";
-import { type SocialProviders, socialProviders } from "./social-providers";
-import type { OAuthProvider } from "./oauth2";
-import { generateId } from "./utils";
-import { env, isProduction } from "./utils/env";
-import { checkPassword } from "./utils/password";
-import { getBaseURL } from "./utils/url";
-import type { LiteralUnion } from "./types/helper";
-import { BetterAuthError } from "./error";
-import { createTelemetry } from "./telemetry";
-import type { TelemetryEvent } from "./telemetry/types";
+	type SocialProviders,
+	socialProviders,
+} from "@better-auth/core/social-providers";
+import { createTelemetry } from "@better-auth/telemetry";
+import { defu } from "defu";
+import type { Entries } from "type-fest";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
+import { createCookieGetter, getCookies } from "./cookies";
+import { hashPassword, verifyPassword } from "./crypto/password";
+import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
+import { getAdapter } from "./db/utils";
+import { generateId } from "./utils";
+import { DEFAULT_SECRET } from "./utils/constants";
 import { isPromise } from "./utils/is-promise";
-import type { BetterAuthDBSchema } from "@better-auth/core/db";
+import { checkPassword } from "./utils/password";
+import { getBaseURL } from "./utils/url";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -112,6 +103,12 @@ export const init = async (options: BetterAuthOptions) => {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
+		oauthConfig: {
+			storeStateStrategy:
+				options.advanced?.oauthConfig?.storeStateStrategy || "database",
+			skipStateCookieCheck:
+				!!options.advanced?.oauthConfig?.skipStateCookieCheck,
+		},
 		tables,
 		trustedOrigins: getTrustedOrigins(options),
 		baseURL: baseURL || "",
@@ -125,6 +122,30 @@ export const init = async (options: BetterAuthOptions) => {
 				options.session?.freshAge === undefined
 					? 60 * 60 * 24 // 24 hours
 					: options.session.freshAge,
+			cookieRefreshCache: (() => {
+				const refreshCache = options.session?.cookieCache?.refreshCache;
+				const maxAge = options.session?.cookieCache?.maxAge || 60 * 5;
+
+				if (refreshCache === false || refreshCache === undefined) {
+					return false;
+				}
+
+				if (refreshCache === true) {
+					// Default: refresh when 80% of maxAge is reached (20% remaining)
+					return {
+						enabled: true,
+						updateAge: Math.floor(maxAge * 0.2),
+					};
+				}
+
+				return {
+					enabled: true,
+					updateAge:
+						refreshCache.updateAge !== undefined
+							? refreshCache.updateAge
+							: Math.floor(maxAge * 0.2), // Default to 20% of maxAge
+				};
+			})(),
 		},
 		secret,
 		rateLimit: {
@@ -173,6 +194,13 @@ export const init = async (options: BetterAuthOptions) => {
 			await runMigrations();
 		},
 		publishTelemetry: publish,
+		skipCSRFCheck: !!options.advanced?.disableCSRFCheck,
+		skipOriginCheck:
+			options.advanced?.disableOriginCheck !== undefined
+				? options.advanced.disableOriginCheck
+				: isTest()
+					? true
+					: false,
 	};
 	const initOrPromise = runPluginInit(ctx);
 	let context: AuthContext;
@@ -182,74 +210,6 @@ export const init = async (options: BetterAuthOptions) => {
 		({ context } = initOrPromise);
 	}
 	return context;
-};
-
-export type AuthContext = {
-	options: BetterAuthOptions;
-	appName: string;
-	baseURL: string;
-	trustedOrigins: string[];
-	oauthConfig?: {
-		/**
-		 * This is dangerous and should only be used in dev or staging environments.
-		 */
-		skipStateCookieCheck?: boolean;
-	};
-	/**
-	 * New session that will be set after the request
-	 * meaning: there is a `set-cookie` header that will set
-	 * the session cookie. This is the fetched session. And it's set
-	 * by `setNewSession` method.
-	 */
-	newSession: {
-		session: Session & Record<string, any>;
-		user: User & Record<string, any>;
-	} | null;
-	session: {
-		session: Session & Record<string, any>;
-		user: User & Record<string, any>;
-	} | null;
-	setNewSession: (
-		session: {
-			session: Session & Record<string, any>;
-			user: User & Record<string, any>;
-		} | null,
-	) => void;
-	socialProviders: OAuthProvider[];
-	authCookies: BetterAuthCookies;
-	logger: ReturnType<typeof createLogger>;
-	rateLimit: {
-		enabled: boolean;
-		window: number;
-		max: number;
-		storage: "memory" | "database" | "secondary-storage";
-	} & BetterAuthOptions["rateLimit"];
-	adapter: Adapter;
-	internalAdapter: ReturnType<typeof createInternalAdapter>;
-	createAuthCookie: ReturnType<typeof createCookieGetter>;
-	secret: string;
-	sessionConfig: {
-		updateAge: number;
-		expiresIn: number;
-		freshAge: number;
-	};
-	generateId: (options: {
-		model: LiteralUnion<Models, string>;
-		size?: number;
-	}) => string | false;
-	secondaryStorage: SecondaryStorage | undefined;
-	password: {
-		hash: (password: string) => Promise<string>;
-		verify: (data: { password: string; hash: string }) => Promise<boolean>;
-		config: {
-			minPasswordLength: number;
-			maxPasswordLength: number;
-		};
-		checkPassword: typeof checkPassword;
-	};
-	tables: BetterAuthDBSchema;
-	runMigrations: () => Promise<void>;
-	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
 };
 
 async function runPluginInit(ctx: AuthContext) {

@@ -1,6 +1,9 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import { Kysely, MssqlDialect } from "kysely";
+import * as Tarn from "tarn";
+import * as Tedious from "tedious";
+import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
-import { kyselyAdapter } from "../kysely-adapter";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
@@ -8,10 +11,7 @@ import {
 	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
-import { getMigrations } from "../../../db";
-import * as Tedious from "tedious";
-import * as Tarn from "tarn";
-import type { BetterAuthOptions } from "../../../types";
+import { kyselyAdapter } from "../kysely-adapter";
 
 // We are not allowed to handle the mssql connection
 // we must let kysely handle it. This is because if kysely is already

@@ -1,22 +1,8 @@
-import type { BetterAuthOptions } from "./options";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type { Session, User } from "@better-auth/core/db";
 import type { Auth } from "../auth";
 import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../db";
 import type { StripEmptyObjects, UnionToIntersection } from "./helper";
-import type { BetterAuthPlugin } from "./plugins";
-import type { User, Session } from "@better-auth/core/db";
-
-export type Models =
-	| "user"
-	| "account"
-	| "session"
-	| "verification"
-	| "rate-limit"
-	| "organization"
-	| "member"
-	| "invitation"
-	| "jwks"
-	| "passkey"
-	| "two-factor";
 
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
 	InferFieldsFromPlugins<Options, "user", "input"> &
@@ -68,25 +54,10 @@ export type InferPluginTypes<O extends BetterAuthOptions> =
 			>
 		: {};
 
-interface RateLimit {
-	/**
-	 * The key to use for rate limiting
-	 */
-	key: string;
-	/**
-	 * The number of requests made
-	 */
-	count: number;
-	/**
-	 * The last request time in milliseconds
-	 */
-	lastRequest: number;
-}
-
 export type {
-	User,
 	Account,
+	RateLimit,
 	Session,
+	User,
 	Verification,
 } from "@better-auth/core/db";
-export type { RateLimit };

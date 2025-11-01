@@ -1,8 +1,10 @@
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import type { BetterAuthOptions } from "../types/options";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthPluginDBSchema,
+	DBFieldAttribute,
+} from "@better-auth/core/db";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
-import type { DBFieldAttribute } from "@better-auth/core/db";
 
 // Cache for parsed schemas to avoid reparsing on every request
 const cache = new WeakMap<
@@ -81,7 +83,7 @@ export function parseInputData<T extends Record<string, any>>(
 	data: T,
 	schema: {
 		fields: Record<string, DBFieldAttribute>;
-		action?: "create" | "update";
+		action?: ("create" | "update") | undefined;
 	},
 ) {
 	const action = schema.action || "create";
@@ -93,11 +95,13 @@ export function parseInputData<T extends Record<string, any>>(
 	for (const key in fields) {
 		if (key in data) {
 			if (fields[key]!.input === false) {
-				if (fields[key]!.defaultValue) {
-					parsedData[key] = fields[key]!.defaultValue;
-					continue;
+				if (fields[key]!.defaultValue !== undefined) {
+					if (action !== "update") {
+						parsedData[key] = fields[key]!.defaultValue;
+						continue;
+					}
 				}
-				if (parsedData[key]) {
+				if (data[key]) {
 					throw new APIError("BAD_REQUEST", {
 						message: `${key} is not allowed to be set`,
 					});
@@ -105,7 +109,9 @@ export function parseInputData<T extends Record<string, any>>(
 				continue;
 			}
 			if (fields[key]!.validator?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key]!.validator.input.parse(data[key]);
+				parsedData[key] = fields[key]!.validator.input["~standard"].validate(
+					data[key],
+				);
 				continue;
 			}
 			if (fields[key]!.transform?.input && data[key] !== undefined) {
@@ -116,7 +122,7 @@ export function parseInputData<T extends Record<string, any>>(
 			continue;
 		}
 
-		if (fields[key]!.defaultValue && action === "create") {
+		if (fields[key]!.defaultValue !== undefined && action === "create") {
 			parsedData[key] = fields[key]!.defaultValue;
 			continue;
 		}
@@ -141,7 +147,7 @@ export function parseUserInput(
 
 export function parseAdditionalUserInput(
 	options: BetterAuthOptions,
-	user?: Record<string, any>,
+	user?: Record<string, any> | undefined,
 ) {
 	const schema = getAllFields(options, "user");
 	return parseInputData(user || {}, { fields: schema });
@@ -165,14 +171,16 @@ export function parseSessionInput(
 
 export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	schema: S,
-	newSchema?: {
-		[K in keyof S]?: {
-			modelName?: string;
-			fields?: {
-				[P: string]: string;
-			};
-		};
-	},
+	newSchema?:
+		| {
+				[K in keyof S]?: {
+					modelName?: string;
+					fields?: {
+						[P: string]: string;
+					};
+				};
+		  }
+		| undefined,
 ) {
 	if (!newSchema) {
 		return schema;

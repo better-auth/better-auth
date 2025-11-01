@@ -1,10 +1,11 @@
-import { createAuthEndpoint, sessionMiddleware } from "../../../api";
-import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
-import type { AuthContext } from "../../../types";
-import type { PredefinedApiKeyOptions } from ".";
+import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { sessionMiddleware } from "../../../api";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME } from "..";
+import type { apiKeySchema } from "../schema";
+import type { ApiKey } from "../types";
+import type { PredefinedApiKeyOptions } from ".";
 export function listApiKeys({
 	opts,
 	schema,
@@ -14,7 +15,7 @@ export function listApiKeys({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
 	return createAuthEndpoint(

@@ -1,12 +1,12 @@
-import type { Adapter } from "../types";
-import type { User, Session, Verification, Account } from "../types";
-import type { BetterAuthOptions } from "../types";
-import { createAdapterFactory } from "./adapter-factory";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { TTY_COLORS } from "@better-auth/core/env";
 import { test } from "vitest";
-import { generateId } from "../utils";
-import type { Logger } from "./test-adapter";
-import { colors } from "../utils/colors";
 import { betterAuth } from "../auth";
+import type { Account, Session, User, Verification } from "../types";
+import { generateId } from "../utils";
+import { createAdapterFactory } from "./adapter-factory";
+import type { Logger } from "./test-adapter";
 import { deepmerge } from "./utils";
 
 type GenerateFn = <M extends "user" | "session" | "verification" | "account">(
@@ -51,7 +51,7 @@ export type InsertRandomFn = <
 	Count extends number = 1,
 >(
 	model: M,
-	count?: Count,
+	count?: Count | undefined,
 ) => Promise<
 	Count extends 1
 		? M extends "user"
@@ -86,8 +86,8 @@ export const createTestSuite = <
 			 * @see {@link https://vitest.dev/guide/test-context#skip}
 			 */
 			readonly skip: {
-				(note?: string): never;
-				(condition: boolean, note?: string): void;
+				(note?: string | undefined): never;
+				(condition: boolean, note?: string | undefined): void;
 			};
 		}) => Promise<void>
 	>,
@@ -95,16 +95,16 @@ export const createTestSuite = <
 >(
 	suiteName: string,
 	config: {
-		defaultBetterAuthOptions?: BetterAuthOptions;
+		defaultBetterAuthOptions?: BetterAuthOptions | undefined;
 		/**
 		 * Helpful if the default better auth options require migrations to be run.
 		 */
-		alwaysMigrate?: boolean;
-		prefixTests?: string;
+		alwaysMigrate?: boolean | undefined;
+		prefixTests?: string | undefined;
 	},
 	tests: (
 		helpers: {
-			adapter: Adapter;
+			adapter: DBAdapter<BetterAuthOptions>;
 			log: Logger;
 			generate: GenerateFn;
 			insertRandom: InsertRandomFn;
@@ -127,24 +127,28 @@ export const createTestSuite = <
 						id: string;
 					}
 				>,
-				by?: "id" | "createdAt",
+				by?: ("id" | "createdAt") | undefined,
 			) => (Record<string, any> & {
 				id: string;
 			})[];
 			getAuth: () => Promise<ReturnType<typeof betterAuth>>;
 			tryCatch<T, E = Error>(promise: Promise<T>): Promise<Result<T, E>>;
-			customIdGenerator?: () => string | Promise<string>;
+			customIdGenerator?: (() => string | Promise<string>) | undefined;
 		},
-		additionalOptions?: AdditionalOptions,
+		additionalOptions?: AdditionalOptions | undefined,
 	) => Tests,
 ) => {
 	return (
-		options?: {
-			disableTests?: Partial<Record<keyof Tests, boolean> & { ALL?: boolean }>;
-		} & AdditionalOptions,
+		options?:
+			| ({
+					disableTests?: Partial<
+						Record<keyof Tests, boolean> & { ALL?: boolean }
+					>;
+			  } & AdditionalOptions)
+			| undefined,
 	) => {
 		return async (helpers: {
-			adapter: () => Promise<Adapter>;
+			adapter: () => Promise<DBAdapter<BetterAuthOptions>>;
 			log: Logger;
 			adapterDisplayName: string;
 			getBetterAuthOptions: () => BetterAuthOptions;
@@ -153,15 +157,16 @@ export const createTestSuite = <
 			) => Promise<BetterAuthOptions>;
 			cleanup: () => Promise<void>;
 			runMigrations: () => Promise<void>;
-			prefixTests?: string;
+			prefixTests?: string | undefined;
 			onTestFinish: () => Promise<void>;
-			customIdGenerator?: () => string | Promise<string>;
-			defaultRetryCount?: number;
+			customIdGenerator?: (() => string | Promise<string>) | undefined;
 		}) => {
 			const createdRows: Record<string, any[]> = {};
 
 			let adapter = await helpers.adapter();
-			const wrapperAdapter = (overrideOptions?: BetterAuthOptions) => {
+			const wrapperAdapter = (
+				overrideOptions?: BetterAuthOptions | undefined,
+			) => {
 				const options = deepmerge(
 					deepmerge(
 						helpers.getBetterAuthOptions(),
@@ -176,15 +181,16 @@ export const createTestSuite = <
 					disableTransformOutput: true,
 					disableTransformInput: true,
 				};
-				const adapterCreator = (options: BetterAuthOptions): Adapter =>
+				const adapterCreator = (
+					options: BetterAuthOptions,
+				): DBAdapter<BetterAuthOptions> =>
 					createAdapterFactory({
 						config: {
 							...adapterConfig,
 							transaction: adapter.transaction,
 						},
 						adapter: ({ getDefaultModelName }) => {
-							//@ts-expect-error
-							adapter.transaction = undefined;
+							adapter.transaction = undefined as any;
 							return {
 								count: adapter.count,
 								deleteMany: adapter.deleteMany,
@@ -466,7 +472,7 @@ export const createTestSuite = <
 			const allDisabled: boolean = options?.disableTests?.ALL ?? false;
 
 			// Here to display a label in the tests showing the suite name
-			test(`\n${colors.fg.white}${" ".repeat(3)}${dash.repeat(35)} [${colors.fg.magenta}${suiteName}${colors.fg.white}] ${dash.repeat(35)}`, async () => {
+			test(`\n${TTY_COLORS.fg.white}${" ".repeat(3)}${dash.repeat(35)} [${TTY_COLORS.fg.magenta}${suiteName}${TTY_COLORS.fg.white}] ${dash.repeat(35)}`, async () => {
 				try {
 					await helpers.cleanup();
 				} catch {}
@@ -506,18 +512,18 @@ export const createTestSuite = <
 					(options?.disableTests?.[testName] ?? false);
 				testName = testName.replace(
 					" - ",
-					` ${colors.dim}${dash}${colors.undim} `,
+					` ${TTY_COLORS.dim}${dash}${TTY_COLORS.undim} `,
 				);
 				if (config.prefixTests) {
-					testName = `${config.prefixTests} ${colors.dim}>${colors.undim} ${testName}`;
+					testName = `${config.prefixTests} ${TTY_COLORS.dim}>${TTY_COLORS.undim} ${testName}`;
 				}
 				if (helpers.prefixTests) {
-					testName = `[${colors.dim}${helpers.prefixTests}${colors.undim}] ${testName}`;
+					testName = `[${TTY_COLORS.dim}${helpers.prefixTests}${TTY_COLORS.undim}] ${testName}`;
 				}
 
 				test.skipIf(shouldSkip)(
 					testName,
-					{ retry: helpers?.defaultRetryCount ?? 10, timeout: 10000 },
+					{ timeout: 10000 },
 					async ({ onTestFailed, skip }) => {
 						resetDebugLogs();
 						onTestFailed(async () => {

@@ -1,5 +1,5 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { jwt } from "./index";
-import type { BetterAuthClientPlugin } from "../../types";
 
 export const jwtClient = () => {
 	return {

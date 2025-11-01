@@ -1,45 +1,55 @@
-import { ClientSession, ObjectId, type Db, type MongoClient } from "mongodb";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	DBAdapter,
+	DBAdapterDebugLogOption,
+	Where,
+} from "@better-auth/core/db/adapter";
+import { ClientSession, type Db, type MongoClient, ObjectId } from "mongodb";
 import {
-	createAdapterFactory,
-	type AdapterFactoryOptions,
 	type AdapterFactoryCustomizeAdapterCreator,
+	type AdapterFactoryOptions,
+	createAdapterFactory,
 } from "../adapter-factory";
-import type { DBAdapterDebugLogOption } from "@better-auth/core/db/adapter";
 
 export interface MongoDBAdapterConfig {
 	/**
 	 * MongoDB client instance
 	 * If not provided, Database transactions won't be enabled.
 	 */
-	client?: MongoClient;
+	client?: MongoClient | undefined;
 	/**
 	 * Enable debug logs for the adapter
 	 *
 	 * @default false
 	 */
-	debugLogs?: DBAdapterDebugLogOption;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 	/**
 	 * Use plural table names
 	 *
 	 * @default false
 	 */
-	usePlural?: boolean;
+	usePlural?: boolean | undefined;
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
 	 * If the database doesn't support transactions,
 	 * set this to `false` and operations will be executed sequentially.
-	 * @default true
+	 * @default false
 	 */
-	transaction?: boolean;
+	transaction?: boolean | undefined;
 }
 
-export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
+export const mongodbAdapter = (
+	db: Db,
+	config?: MongoDBAdapterConfig | undefined,
+) => {
 	let lazyOptions: BetterAuthOptions | null;
 
 	const createCustomAdapter =
-		(db: Db, session?: ClientSession): AdapterFactoryCustomizeAdapterCreator =>
+		(
+			db: Db,
+			session?: ClientSession | undefined,
+		): AdapterFactoryCustomizeAdapterCreator =>
 		({ options, getFieldName, schema, getDefaultModelName }) => {
 			function serializeID({
 				field,
@@ -56,12 +66,18 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					field === "_id" ||
 					schema[model]!.fields[field]?.references?.field === "id"
 				) {
+					if (value === null || value === undefined) {
+						return value;
+					}
 					if (typeof value !== "string") {
 						if (value instanceof ObjectId) {
 							return value;
 						}
 						if (Array.isArray(value)) {
 							return value.map((v) => {
+								if (v === null || v === undefined) {
+									return v;
+								}
 								if (typeof v === "string") {
 									try {
 										return new ObjectId(v);
@@ -133,29 +149,76 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 							};
 							break;
 						case "gt":
-							condition = { [field]: { $gt: value } };
+							condition = {
+								[field]: {
+									$gt: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "gte":
-							condition = { [field]: { $gte: value } };
+							condition = {
+								[field]: {
+									$gte: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "lt":
-							condition = { [field]: { $lt: value } };
+							condition = {
+								[field]: {
+									$lt: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "lte":
-							condition = { [field]: { $lte: value } };
+							condition = {
+								[field]: {
+									$lte: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "ne":
-							condition = { [field]: { $ne: value } };
+							condition = {
+								[field]: {
+									$ne: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
-
 						case "contains":
-							condition = { [field]: { $regex: `.*${value}.*` } };
+							condition = {
+								[field]: {
+									$regex: `.*${escapeForMongoRegex(value as string)}.*`,
+								},
+							};
 							break;
 						case "starts_with":
-							condition = { [field]: { $regex: `${value}.*` } };
+							condition = {
+								[field]: { $regex: `^${escapeForMongoRegex(value as string)}` },
+							};
 							break;
 						case "ends_with":
-							condition = { [field]: { $regex: `.*${value}` } };
+							condition = {
+								[field]: { $regex: `${escapeForMongoRegex(value as string)}$` },
+							};
 							break;
 						default:
 							throw new Error(`Unsupported operator: ${operator}`);
@@ -261,7 +324,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 			};
 		};
 
-	let lazyAdapter: ((options: BetterAuthOptions) => Adapter) | null = null;
+	let lazyAdapter:
+		| ((options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>)
+		| null = null;
 	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
 		config: {
@@ -277,7 +342,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 			},
 			supportsNumericIds: false,
 			transaction:
-				config?.client && (config?.transaction ?? false)
+				config?.client && (config?.transaction ?? true)
 					? async (cb) => {
 							if (!config.client) {
 								return cb(lazyAdapter!(lazyOptions!));
@@ -376,8 +441,25 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 	};
 	lazyAdapter = createAdapterFactory(adapterOptions);
 
-	return (options: BetterAuthOptions): Adapter => {
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return lazyAdapter(options);
 	};
 };
+
+/**
+ * Safely escape user input for use in a MongoDB regex.
+ * This ensures the resulting pattern is treated as literal text,
+ * and not as a regex with special syntax.
+ *
+ * @param input - The input string to escape. Any type that isn't a string will be converted to an empty string.
+ * @param maxLength - The maximum length of the input string to escape. Defaults to 256. This is to prevent DOS attacks.
+ * @returns The escaped string.
+ */
+function escapeForMongoRegex(input: string, maxLength = 256): string {
+	if (typeof input !== "string") return "";
+
+	// Escape all PCRE special characters
+	// Source: PCRE docs — https://www.pcre.org/original/doc/html/pcrepattern.html
+	return input.slice(0, maxLength).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

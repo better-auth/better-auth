@@ -1,8 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { test } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, test, vi } from "vitest";
 import { getConfig } from "../src/utils/get-config";
 
 interface TmpDirFixture {
@@ -48,7 +46,6 @@ describe("getConfig", async () => {
 			`{
               "compilerOptions": {
                 /* Path Aliases */
-                "baseUrl": ".",
                 "paths": {
                   "@server/*": ["./server/*"]
                 }
@@ -103,7 +100,6 @@ describe("getConfig", async () => {
 			`{
               "compilerOptions": {
                 /* Path Aliases */
-                "baseUrl": ".",
                 "paths": {
                   "prismaDbClient": ["./server/db/db"]
                 }
@@ -323,7 +319,6 @@ describe("getConfig", async () => {
 			`{
               "compilerOptions": {
                 /* Path Aliases */
-                "baseUrl": ".",
                 "paths": {
                   "@server/*": ["./PathIsInvalid/*"]
                 }
@@ -422,7 +417,6 @@ describe("getConfig", async () => {
 			path.join(tmpDir, "apps", "web", "tsconfig.json"),
 			`{
 				"compilerOptions": {
-					"baseUrl": ".",
 					"paths": {
 						"@web/*": ["./server/*"]
 					}
@@ -435,7 +429,6 @@ describe("getConfig", async () => {
 			path.join(tmpDir, "packages", "shared", "tsconfig.json"),
 			`{
 				"compilerOptions": {
-					"baseUrl": ".",
 					"paths": {
 						"@shared/*": ["./db/*"]
 					}
@@ -492,7 +485,6 @@ describe("getConfig", async () => {
 			path.join(tmpDir, "tsconfig.json"),
 			`{
 				"compilerOptions": {
-					"baseUrl": ".",
 					"paths": {
 						"@server/*": ["./server/*"]
 					}
@@ -534,7 +526,6 @@ describe("getConfig", async () => {
 			path.join(tmpDir, "tsconfig.json"),
 			`{
 				"compilerOptions": {
-					"baseUrl": ".",
 					"paths": {
 						"@root/*": ["./server/*"]
 					}
@@ -550,7 +541,6 @@ describe("getConfig", async () => {
 			path.join(tmpDir, "app", "tsconfig.json"),
 			`{
 				"compilerOptions": {
-					"baseUrl": ".",
 					"paths": {
 						"@app/*": ["./src/*"]
 					}
@@ -603,7 +593,6 @@ describe("getConfig", async () => {
 			path.join(tmpDir, "tsconfig.app.json"),
 			`{
 				"compilerOptions": {
-					"baseUrl": ".",
 					"paths": {
 						"@app/*": ["./server/*"]
 					}
@@ -616,7 +605,6 @@ describe("getConfig", async () => {
 			path.join(tmpDir, "tsconfig.shared.json"),
 			`{
 				"compilerOptions": {
-					"baseUrl": ".",
 					"paths": {
 						"@shared/*": ["./shared/*"]
 					}
@@ -681,7 +669,6 @@ describe("getConfig", async () => {
 			path.join(tmpDir, "apps", "web", "tsconfig.json"),
 			`{
 				"compilerOptions": {
-					"baseUrl": ".",
 					"paths": {
 						"@web/*": ["./server/*"]
 					}
@@ -694,7 +681,6 @@ describe("getConfig", async () => {
 			path.join(tmpDir, "tsconfig.utils.json"),
 			`{
 				"compilerOptions": {
-					"baseUrl": ".",
 					"paths": {
 						"@utils/*": ["./packages/utils/*"]
 					}
@@ -882,5 +868,33 @@ describe("getConfig", async () => {
 			emailAndPassword: { enabled: true },
 			trustedOrigins: ["http://localhost:3000"],
 		});
+	});
+	it("should load configs importing cloudflare workers", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.json"),
+			`{
+				"compilerOptions": {}
+			}`,
+		);
+
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+			 import { env } from "cloudflare:workers";
+
+			 export const auth = betterAuth({
+					emailAndPassword: {
+						enabled: !!env.FLAG,
+					},
+			 });`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "auth.ts",
+		});
+
+		expect(config).not.toBe(null);
+		expect(config?.emailAndPassword?.enabled).toBe(true);
 	});
 });

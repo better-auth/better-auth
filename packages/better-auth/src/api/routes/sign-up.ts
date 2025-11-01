@@ -1,17 +1,14 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "../call";
-import { createEmailVerificationToken } from "./email-verification";
-import { setSessionCookie } from "../../cookies";
+import type { BetterAuthOptions } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { runWithTransaction } from "@better-auth/core/context";
+import { isDevelopment } from "@better-auth/core/env";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import type {
-	AdditionalUserFieldsInput,
-	BetterAuthOptions,
-	User,
-} from "../../types";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { isDevelopment } from "../../utils/env";
-import { runWithTransaction } from "../../context/transaction";
+import * as z from "zod";
+import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
+import type { AdditionalUserFieldsInput, User } from "../../types";
+import { createEmailVerificationToken } from "./email-verification";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -25,9 +22,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						name: string;
 						email: string;
 						password: string;
-						image?: string;
-						callbackURL?: string;
-						rememberMe?: boolean;
+						image?: string | undefined;
+						callbackURL?: string | undefined;
+						rememberMe?: boolean | undefined;
 					} & AdditionalUserFieldsInput<O>,
 				},
 				openapi: {
@@ -167,8 +164,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				}
 				const body = ctx.body as any as User & {
 					password: string;
-					callbackURL?: string;
-					rememberMe?: boolean;
+					callbackURL?: string | undefined;
+					rememberMe?: boolean | undefined;
 				} & {
 					[key: string]: any;
 				};
@@ -225,23 +222,20 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				let createdUser: User;
 				try {
 					const data = parseUserInput(ctx.context.options, rest, "create");
-					createdUser = await ctx.context.internalAdapter.createUser(
-						{
-							email: email.toLowerCase(),
-							name,
-							image,
-							...data,
-							emailVerified: false,
-						},
-						ctx,
-					);
+					createdUser = await ctx.context.internalAdapter.createUser({
+						email: email.toLowerCase(),
+						name,
+						image,
+						...data,
+						emailVerified: false,
+					});
 					if (!createdUser) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 						});
 					}
 				} catch (e) {
-					if (isDevelopment) {
+					if (isDevelopment()) {
 						ctx.context.logger.error("Failed to create user", e);
 					}
 					if (e instanceof APIError) {
@@ -258,15 +252,12 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 					});
 				}
-				await ctx.context.internalAdapter.linkAccount(
-					{
-						userId: createdUser.id,
-						providerId: "credential",
-						accountId: createdUser.id,
-						password: hash,
-					},
-					ctx,
-				);
+				await ctx.context.internalAdapter.linkAccount({
+					userId: createdUser.id,
+					providerId: "credential",
+					accountId: createdUser.id,
+					password: hash,
+				});
 				if (
 					ctx.context.options.emailVerification?.sendOnSignUp ||
 					ctx.context.options.emailAndPassword.requireEmailVerification
@@ -328,7 +319,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 				const session = await ctx.context.internalAdapter.createSession(
 					createdUser.id,
-					ctx,
 					rememberMe === false,
 				);
 				if (!session) {

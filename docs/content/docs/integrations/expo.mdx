@@ -149,8 +149,29 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         })
         ```
 
-        <Callout>
-          The wildcard pattern can be particularly useful if your app uses different URL formats for deep linking based on features or screens.
+        ### Development Mode
+
+        During development, Expo uses the `exp://` scheme with your device's local IP address. To support this, you can use wildcards to match common local IP ranges:
+
+        ```ts title="auth.ts"
+        export const auth = betterAuth({
+            trustedOrigins: [
+                "myapp://",
+                
+                // Development mode - Expo's exp:// scheme with local IP ranges
+                ...(process.env.NODE_ENV === "development" ? [
+                    "exp://*/*",                 // Trust all Expo development URLs
+                    "exp://10.0.0.*:*/*",        // Trust 10.0.0.x IP range
+                    "exp://192.168.*.*:*/*",     // Trust 192.168.x.x IP range
+                    "exp://172.*.*.*:*/*",       // Trust 172.x.x.x IP range
+                    "exp://localhost:*/*"        // Trust localhost
+                ] : [])
+            ]
+        })
+        ```
+
+        <Callout type="warn">
+          The wildcard patterns for `exp://` should only be used in development. In production, use your app's specific scheme (e.g., `myapp://`).
         </Callout>
     </Step>
  
@@ -454,4 +475,4 @@ const authClient = createAuthClient({
 
 Server plugin options:
 
-**overrideOrigin**: Override the origin for Expo API routes (default: false). Enable this if you're facing cors origin issues with Expo API routes.
+**disableOriginOverride**: Override the origin for Expo API routes (default: false). Enable this if you're facing cors origin issues with Expo API routes.

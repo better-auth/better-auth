@@ -1,14 +1,13 @@
-import type {
-	Adapter,
-	BetterAuthOptions,
-	GenericEndpointContext,
-	Models,
-	Where,
-} from "../types";
-import { getCurrentAdapter } from "../context/transaction";
+import type { BetterAuthOptions } from "@better-auth/core";
+import {
+	getCurrentAdapter,
+	getCurrentAuthContext,
+} from "@better-auth/core/context";
+import type { DBPreservedModels } from "@better-auth/core/db";
+import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 
 export function getWithHooks(
-	adapter: Adapter,
+	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
 		options: BetterAuthOptions;
 		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
@@ -16,22 +15,25 @@ export function getWithHooks(
 ) {
 	const hooks = ctx.hooks;
 	type BaseModels = Extract<
-		Models,
+		DBPreservedModels,
 		"user" | "account" | "session" | "verification"
 	>;
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
 		model: BaseModels,
-		customCreateFn?: {
-			fn: (data: Record<string, any>) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
-		context?: GenericEndpointContext,
+		customCreateFn?:
+			| {
+					fn: (data: Record<string, any>) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
+		const context = await getCurrentAuthContext();
 		let actualData = data;
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.before;
 			if (toRun) {
+				// @ts-expect-error context type mismatch
 				const result = await toRun(actualData as any, context);
 				if (result === false) {
 					return null;
@@ -61,6 +63,7 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.after;
 			if (toRun) {
+				// @ts-expect-error context type mismatch
 				await toRun(created as any, context);
 			}
 		}
@@ -72,17 +75,20 @@ export function getWithHooks(
 		data: any,
 		where: Where[],
 		model: BaseModels,
-		customUpdateFn?: {
-			fn: (data: Record<string, any>) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
-		context?: GenericEndpointContext,
+		customUpdateFn?:
+			| {
+					fn: (data: Record<string, any>) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
+		const context = await getCurrentAuthContext();
 		let actualData = data;
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.before;
 			if (toRun) {
+				// @ts-expect-error context type mismatch
 				const result = await toRun(data as any, context);
 				if (result === false) {
 					return null;
@@ -108,6 +114,7 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.after;
 			if (toRun) {
+				// @ts-expect-error context type mismatch
 				await toRun(updated as any, context);
 			}
 		}
@@ -118,17 +125,20 @@ export function getWithHooks(
 		data: any,
 		where: Where[],
 		model: BaseModels,
-		customUpdateFn?: {
-			fn: (data: Record<string, any>) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
-		context?: GenericEndpointContext,
+		customUpdateFn?:
+			| {
+					fn: (data: Record<string, any>) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
+		const context = await getCurrentAuthContext();
 		let actualData = data;
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.before;
 			if (toRun) {
+				// @ts-expect-error context type mismatch
 				const result = await toRun(data as any, context);
 				if (result === false) {
 					return null;
@@ -154,6 +164,7 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.after;
 			if (toRun) {
+				// @ts-expect-error context type mismatch
 				await toRun(updated as any, context);
 			}
 		}
@@ -164,12 +175,14 @@ export function getWithHooks(
 	async function deleteWithHooks<T extends Record<string, any>>(
 		where: Where[],
 		model: BaseModels,
-		customDeleteFn?: {
-			fn: (where: Where[]) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
-		context?: GenericEndpointContext,
+		customDeleteFn?:
+			| {
+					fn: (where: Where[]) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
+		const context = await getCurrentAuthContext();
 		let entityToDelete: T | null = null;
 
 		try {
@@ -187,6 +200,7 @@ export function getWithHooks(
 			for (const hook of hooks || []) {
 				const toRun = hook[model]?.delete?.before;
 				if (toRun) {
+					// @ts-expect-error context type mismatch
 					const result = await toRun(entityToDelete as any, context);
 					if (result === false) {
 						return null;
@@ -211,6 +225,7 @@ export function getWithHooks(
 			for (const hook of hooks || []) {
 				const toRun = hook[model]?.delete?.after;
 				if (toRun) {
+					// @ts-expect-error context type mismatch
 					await toRun(entityToDelete as any, context);
 				}
 			}
@@ -222,12 +237,14 @@ export function getWithHooks(
 	async function deleteManyWithHooks<T extends Record<string, any>>(
 		where: Where[],
 		model: BaseModels,
-		customDeleteFn?: {
-			fn: (where: Where[]) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
-		context?: GenericEndpointContext,
+		customDeleteFn?:
+			| {
+					fn: (where: Where[]) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
+		const context = await getCurrentAuthContext();
 		let entitiesToDelete: T[] = [];
 
 		try {
@@ -243,6 +260,7 @@ export function getWithHooks(
 			for (const hook of hooks || []) {
 				const toRun = hook[model]?.delete?.before;
 				if (toRun) {
+					// @ts-expect-error context type mismatch
 					const result = await toRun(entity as any, context);
 					if (result === false) {
 						return null;
@@ -267,6 +285,7 @@ export function getWithHooks(
 			for (const hook of hooks || []) {
 				const toRun = hook[model]?.delete?.after;
 				if (toRun) {
+					// @ts-expect-error context type mismatch
 					await toRun(entity as any, context);
 				}
 			}

@@ -1,8 +1,9 @@
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import type { PrismaClient } from "@prisma/client";
-import type { Adapter, BetterAuthOptions } from "../../../types";
-import { prismaAdapter } from "../prisma-adapter";
-import { join } from "path";
 import fs from "fs/promises";
+import { join } from "path";
+import { prismaAdapter } from "../prisma-adapter";
 
 export async function generatePrismaSchema(
 	betterAuthOptions: BetterAuthOptions,
@@ -15,7 +16,7 @@ export async function generatePrismaSchema(
 		"./../../../../../cli/src/generators/index",
 	)) as {
 		generateSchema: (opts: {
-			adapter: Adapter;
+			adapter: DBAdapter<BetterAuthOptions>;
 			file?: string;
 			options: BetterAuthOptions;
 		}) => Promise<{

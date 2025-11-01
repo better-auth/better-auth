@@ -1,7 +1,7 @@
-import { createAuthEndpoint } from "../call";
-import { deleteSessionCookie } from "../../cookies";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import { BASE_ERROR_CODES } from "../../error/codes";
+import { deleteSessionCookie } from "../../cookies";
 
 export const signOut = createAuthEndpoint(
 	"/sign-out",

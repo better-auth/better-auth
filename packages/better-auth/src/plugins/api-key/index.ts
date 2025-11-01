@@ -1,14 +1,16 @@
-import { APIError, createAuthMiddleware } from "../../api";
-import type { BetterAuthPlugin } from "../../types/plugins";
-import { mergeSchema } from "../../db";
-import { apiKeySchema } from "./schema";
-import { getIp } from "../../utils/get-request-ip";
-import { getDate } from "../../utils/date";
-import type { ApiKeyOptions } from "./types";
-import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
-import { validateApiKey } from "./routes/verify-api-key";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
+import { defineErrorCodes } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import { APIError } from "../../api";
+import { mergeSchema } from "../../db";
+import { getDate } from "../../utils/date";
+import { getIp } from "../../utils/get-request-ip";
+import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
+import { validateApiKey } from "./routes/verify-api-key";
+import { apiKeySchema } from "./schema";
+import type { ApiKeyOptions } from "./types";
 
 export const defaultKeyHasher = async (key: string) => {
 	const hash = await createHash("SHA-256").digest(
@@ -20,7 +22,7 @@ export const defaultKeyHasher = async (key: string) => {
 	return hashed;
 };
 
-export const ERROR_CODES = {
+export const ERROR_CODES = defineErrorCodes({
 	INVALID_METADATA_TYPE: "metadata must be an object or undefined",
 	REFILL_AMOUNT_AND_INTERVAL_REQUIRED:
 		"refillAmount is required when refillInterval is provided",
@@ -52,11 +54,11 @@ export const ERROR_CODES = {
 		"The property you're trying to set can only be set from the server auth instance only.",
 	FAILED_TO_UPDATE_API_KEY: "Failed to update API key",
 	NAME_REQUIRED: "API Key name is required.",
-};
+});
 
 export const API_KEY_TABLE_NAME = "apikey";
 
-export const apiKey = (options?: ApiKeyOptions) => {
+export const apiKey = (options?: ApiKeyOptions | undefined) => {
 	const opts = {
 		...options,
 		apiKeyHeaders: options?.apiKeyHeaders ?? "x-api-key",

@@ -1,13 +1,14 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "../call";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import { getSessionFromCtx } from "./session";
-import { setSessionCookie } from "../../cookies";
-import type { GenericEndpointContext, User } from "../../types";
-import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
-import { signJWT } from "../../crypto/jwt";
-import { originCheck } from "../middlewares";
+import { type JWTPayload, type JWTVerifyResult, jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
+import * as z from "zod";
+import { setSessionCookie } from "../../cookies";
+import { signJWT } from "../../crypto/jwt";
+import type { User } from "../../types";
+import { originCheck } from "../middlewares";
+import { getSessionFromCtx } from "./session";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -15,7 +16,7 @@ export async function createEmailVerificationToken(
 	/**
 	 * The email to update from
 	 */
-	updateTo?: string,
+	updateTo?: string | undefined,
 	/**
 	 * The time in seconds for the token to expire
 	 */
@@ -351,7 +352,6 @@ export const verifyEmail = createAuthEndpoint(
 					email: parsed.updateTo,
 					emailVerified: false,
 				},
-				ctx,
 			);
 
 			const newToken = await createEmailVerificationToken(
@@ -408,7 +408,6 @@ export const verifyEmail = createAuthEndpoint(
 			{
 				emailVerified: true,
 			},
-			ctx,
 		);
 		if (ctx.context.options.emailVerification?.afterEmailVerification) {
 			await ctx.context.options.emailVerification.afterEmailVerification(
@@ -421,7 +420,6 @@ export const verifyEmail = createAuthEndpoint(
 			if (!currentSession || currentSession.user.email !== parsed.email) {
 				const session = await ctx.context.internalAdapter.createSession(
 					user.user.id,
-					ctx,
 				);
 				if (!session) {
 					throw new APIError("INTERNAL_SERVER_ERROR", {

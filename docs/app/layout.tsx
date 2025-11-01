@@ -1,22 +1,24 @@
-import { Navbar } from "@/components/nav-bar";
-import "./global.css";
+import { Analytics } from "@vercel/analytics/react";
 import { RootProvider } from "fumadocs-ui/provider";
-import type { ReactNode } from "react";
-import { NavbarProvider } from "@/components/nav-mobile";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
-import { baseUrl, createMetadata } from "@/lib/metadata";
-import { Analytics } from "@vercel/analytics/react";
+import type { ReactNode } from "react";
+import { AnchorScroll } from "@/components/anchor-scroll-fix";
+import { Navbar } from "@/components/nav-bar";
+import { NavbarProvider } from "@/components/nav-mobile";
+import { CustomSearchDialog } from "@/components/search-dialog";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import { CustomSearchDialog } from "@/components/search-dialog";
+import { baseUrl, createMetadata } from "@/lib/metadata";
+import "./global.css";
 
 export const metadata = createMetadata({
 	title: {
 		template: "%s | Better Auth",
 		default: "Better Auth",
 	},
-	description: "The most comprehensive authentication library for TypeScript.",
+	description:
+		"The most comprehensive authentication framework for TypeScript.",
 	metadataBase: baseUrl,
 });
 
@@ -58,6 +60,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 								: undefined,
 						}}
 					>
+						<AnchorScroll />
 						<NavbarProvider>
 							<Navbar />
 							{children}
