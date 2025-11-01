@@ -372,6 +372,109 @@ type deleteAllExpiredApiKeys = {
 
 ---
 
+## Hooks
+
+The API Key plugin provides lifecycle hooks that allow you to intercept and customize the behavior of create, update, and delete operations.
+
+### Create Hooks
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      hooks: {
+        create: {
+          before: async (apiKey, ctx) => {
+            // Return false to prevent creation
+            if (apiKey.userId === "user-id-123") {
+              return false;
+            }
+            // Return modified data
+            return {
+              data: {
+                ...apiKey,
+                prefix: "ba_" ,
+              },
+            };
+          },
+          after: async (apiKey) => {
+            // Perform actions after creation
+            await logApiKeyCreation(apiKey);
+          },
+        },
+      },
+    }),
+  ],
+});
+```
+
+**`before`** - Called before an API key is created.
+- Return `false` to prevent the creation
+- Return `{ data: modifiedApiKey }` to use modified data instead of the original
+- Return `void` to proceed normally with the original data
+
+**`after`** - Called after an API key is successfully created. Receives the created API key.
+
+### Update Hooks
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      hooks: {
+        update: {
+          before: async (apiKey, ctx) => {
+            // Validate or modify update data
+            if (apiKey.userId === "user-id-123") {
+              return false;
+            }
+          },
+          after: async (updatedApiKey, ctx) => {
+            await notifyApiKeyUpdate(updatedApiKey);
+          },
+        },
+      },
+    }),
+  ],
+});
+```
+
+**`before`** - Called before an API key is updated.
+- Return `false` to prevent the update
+- Return `{ data: modifiedData }` to use modified data instead of the original
+- Return `void` to proceed normally with the original data
+
+**`after`** - Called after an API key is successfully updated. Receives the updated API key data.
+
+### Delete Hooks
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      hooks: {
+        delete: {
+          before: async (apiKey, ctx) => {
+            // Prevent deletion of certain keys
+            if (apiKey.userId === "user-id-123") {
+              return false;
+            }
+          },
+          after: async (apiKey, ctx) => {
+            await cleanupRelatedResources(apiKey.id);
+          },
+        },
+      },
+    }),
+  ],
+});
+```
+
+**`before`** - Called before an API key is deleted.
+- Return `false` to prevent the deletion
+- Return `void` to proceed normally
+
+**`after`** - Called after an API key is successfully deleted. Receives the original API key data.
+
+---
+
 ## Sessions from API keys
 
 Any time an endpoint in Better Auth is called that has a valid API key in the headers, you can automatically create a mock session to represent the user by enabling `sessionForAPIKeys` option.
