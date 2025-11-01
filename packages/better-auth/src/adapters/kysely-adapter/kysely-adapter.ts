@@ -446,12 +446,22 @@ export const kyselyAdapter = (
 						.selectFrom((eb) => {
 							let b = eb.selectFrom(model);
 
-							if (limit !== undefined) {
-								b = b.limit(limit);
-							}
-
-							if (offset !== undefined) {
-								b = b.offset(offset);
+							if (config?.type === "mssql") {
+								if (offset !== undefined) {
+									if (!sortBy) {
+										b = b.orderBy(getFieldName({ model, field: "id" }));
+									}
+									b = b.offset(offset).fetch(limit || 100);
+								} else if (limit !== undefined) {
+									b = b.top(limit);
+								}
+							} else {
+								if (limit !== undefined) {
+									b = b.limit(limit);
+								}
+								if (offset !== undefined) {
+									b = b.offset(offset);
+								}
 							}
 
 							if (sortBy?.field) {

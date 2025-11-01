@@ -6,6 +6,7 @@ import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	enableJoinTests,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
@@ -291,6 +292,7 @@ const { execute } = await testAdapter({
 		return kyselyAdapter(kyselyDB, {
 			type: "mssql",
 			debugLogs: { isRunningAdapterTests: true },
+			experimental: { joins: true },
 		});
 	},
 	async runMigrations(betterAuthOptions) {
