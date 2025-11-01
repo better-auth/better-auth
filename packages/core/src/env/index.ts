@@ -5,6 +5,7 @@ export {
 	env,
 	getBooleanEnvVar,
 	getEnvVar,
+	isCI,
 	isDevelopment,
 	isProduction,
 	isTest,

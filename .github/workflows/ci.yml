@@ -143,4 +143,101 @@ jobs:
 
       - name: Stop Docker Containers
         run: docker compose down
-            
+
+  bench:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Cache turbo build setup
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.x
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install
+
+      - name: Build
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+          TURBO_CACHE: remote:rw
+        run: pnpm build
+
+      - name: Run benchmarks on current branch
+        run: pnpm bench
+        continue-on-error: true
+
+      - name: Comment PR with results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // Find all benchmark.md files in packages/*/logs/
+            const globber = await glob.create('packages/*/logs/benchmark.md');
+            const files = await globber.glob();
+
+            if (files.length === 0) {
+              console.log('No benchmark files found');
+              return;
+            }
+
+            // Build the comment body
+            let body = '';
+            for (const file of files) {
+              // Get package directory (e.g., packages/foo)
+              const packageDir = path.dirname(path.dirname(file));
+              const packageJsonPath = path.join(packageDir, 'package.json');
+
+              // Read package name from package.json
+              let packageName = path.basename(packageDir); // fallback to directory name
+              if (fs.existsSync(packageJsonPath)) {
+                const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+                packageName = packageJson.name || packageName;
+              }
+
+              // Read the benchmark content
+              const content = fs.readFileSync(file, 'utf8');
+
+              // Add package header and content
+              body += `<details>\n<summary><b>${packageName}</b></summary>\n\n${content}</details>\n`;
+            }
+
+            body += `\n_commit: [\`${context.sha.substring(0, 7)}\`](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha})_`
+
+            // Check if running in act
+            if (process.env.ACT) {
+              console.log('Running in act - printing comment body instead of posting:');
+              console.log('=====================================');
+              console.log(body);
+              console.log('=====================================');
+              return;
+            }
+
+            // Post the comment
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
