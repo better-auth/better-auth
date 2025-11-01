@@ -52,6 +52,11 @@
       "types": "./dist/client/plugins/index.d.ts",
       "default": "./dist/client/plugins/index.js"
     },
+    "./server/plugins": {
+      "better-auth-dev-source": "./src/server/plugins/index.ts",
+      "types": "./dist/server/plugins/index.d.ts",
+      "default": "./dist/server/plugins/index.js"
+    },
     "./types": {
       "better-auth-dev-source": "./src/types/index.ts",
       "types": "./dist/types/index.d.ts",
@@ -222,6 +227,11 @@
       "types": "./dist/plugins/haveibeenpwned/index.d.ts",
       "default": "./dist/plugins/haveibeenpwned/index.js"
     },
+    "./plugins/oauth-provider": {
+      "better-auth-dev-source": "./src/plugins/oauth-provider/index.ts",
+      "types": "./dist/plugins/oauth-provider/index.d.ts",
+      "default": "./dist/plugins/oauth-provider/index.js"
+    },
     "./plugins/oidc-provider": {
       "better-auth-dev-source": "./src/plugins/oidc-provider/index.ts",
       "types": "./dist/plugins/oidc-provider/index.d.ts",
@@ -314,6 +324,9 @@
       "client/plugins": [
         "./dist/client/plugins/index.d.ts"
       ],
+      "server/plugins": [
+        "./dist/server/plugins/index.d.ts"
+      ],
       "types": [
         "./dist/types/index.d.ts"
       ],
@@ -400,6 +413,9 @@
       ],
       "plugins/one-time-token": [
         "./dist/plugins/one-time-token/index.d.ts"
+      ],
+      "plugins/oauth-provider": [
+        "./dist/plugins/oauth-provider/index.d.ts"
       ],
       "plugins/oidc-provider": [
         "./dist/plugins/oidc-provider/index.d.ts"
@@ -490,6 +506,7 @@
   },
   "devDependencies": {
     "@lynx-js/react": "^0.114.0",
+    "@modelcontextprotocol/sdk": "^1.20.2",
     "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.37.1",
     "@tanstack/react-start": "^1.131.3",
