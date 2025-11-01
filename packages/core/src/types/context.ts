@@ -17,6 +17,7 @@ import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 } from "./init-options";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
@@ -180,6 +181,10 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * @default "cookie"
 			 */
 			storeStateStrategy: "database" | "cookie";
+			additionalData?: {
+				enabled?: boolean;
+				schema?: StandardSchemaV1<Record<string, any>>;
+			};
 		};
 		/**
 		 * New session that will be set after the request
@@ -195,6 +200,10 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			session: Session & Record<string, any>;
 			user: User & Record<string, any>;
 		} | null;
+		/**
+		 * Additional data passed through during any oauth process.
+		 */
+		oauthState: Record<string, any> | null;
 		setNewSession: (
 			session: {
 				session: Session & Record<string, any>;

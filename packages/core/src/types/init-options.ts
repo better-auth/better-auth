@@ -25,6 +25,7 @@ import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
 import type { LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type OmitId<T extends { id: unknown }> = Omit<T, "id">;
@@ -247,26 +248,44 @@ export type BetterAuthAdvancedOptions = {
 	/**
 	 * OAuth configuration
 	 */
-	oauthConfig?:
-		| {
-				/**
-				 * Skip state cookie check
-				 *
-				 * ⚠︎ this has security implications and should only be enabled if you know what you are doing.
-				 * @default false
-				 */
-				skipStateCookieCheck?: boolean;
-				/**
-				 * Strategy for storing OAuth state
-				 *
-				 * - "cookie": Store state in an encrypted cookie (stateless)
-				 * - "database": Store state in the database
-				 *
-				 * @default "cookie"
-				 */
-				storeStateStrategy?: "database" | "cookie";
-		  }
-		| undefined;
+	oauthConfig?: {
+		/**
+		 * Skip state cookie check
+		 *
+		 * ⚠︎ this has security implications and should only be enabled if you know what you are doing.
+		 * @default false
+		 */
+		skipStateCookieCheck?: boolean;
+		/**
+		 * Strategy for storing OAuth state
+		 *
+		 * - "cookie": Store state in an encrypted cookie (stateless)
+		 * - "database": Store state in the database
+		 *
+		 * @default "cookie"
+		 */
+		storeStateStrategy?: "database" | "cookie";
+		/**
+		 * Additional data to pass through the oauth flow.
+		 *
+		 * @default undefined
+		 */
+		additionalData?: {
+			/**
+			 * Whether to enable additional data.
+			 *
+			 * @default true
+			 */
+			enabled?: boolean;
+			/**
+			 * Validation schema for the additional data.
+			 *
+			 * @default undefined
+			 */
+			schema?: StandardSchemaV1<Record<string, any>>;
+
+		} | undefined
+	};
 };
 
 export type BetterAuthOptions = {
