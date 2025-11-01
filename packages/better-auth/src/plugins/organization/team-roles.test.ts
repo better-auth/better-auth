@@ -377,4 +377,269 @@ describe("organization - team roles", async (it) => {
 
 		expect(result.message).toBe("Team member removed successfully.");
 	});
+
+	/**
+	 * PERMISSION CHECKS: Verify role-based access control
+	 */
+	it("team admin should have team permissions", async () => {
+		// Admin (team creator with admin role) should have team permissions
+		const hasTeamPermission = await auth.api.hasPermission({
+			headers: admin.headers,
+			body: {
+				organizationId,
+				permissions: {
+					teamMember: ["create", "update", "delete"],
+				},
+			},
+		});
+
+		expect(hasTeamPermission.success).toBe(true);
+	});
+
+	it("organization admin should have organization and team permissions", async () => {
+		// Set user3's active organization
+		await auth.api.setActiveOrganization({
+			headers: user3.headers,
+			body: {
+				organizationId,
+			},
+		});
+
+		// Org admin should have member and team permissions
+		const hasMemberPermission = await auth.api.hasPermission({
+			headers: user3.headers,
+			body: {
+				organizationId,
+				permissions: {
+					member: ["create", "update", "delete"],
+					teamMember: ["create", "update", "delete"],
+				},
+			},
+		});
+
+		expect(hasMemberPermission.success).toBe(true);
+	});
+
+	it("team member should only have read permissions on team", async () => {
+		// Add user2 to team if not already there
+		const existingMember = await auth.api.listTeamMembers({
+			headers: admin.headers,
+			query: {
+				teamId,
+			},
+		});
+
+		const isUser2InTeam = existingMember.some(
+			(m: any) => m.userId === user2.user.id,
+		);
+
+		if (!isUser2InTeam) {
+			await auth.api.addTeamMember({
+				headers: admin.headers,
+				body: {
+					teamId,
+					userId: user2.user.id,
+					role: "member",
+				},
+			});
+		}
+
+		// Team member should have limited permissions
+		const canDeleteMember = await auth.api.hasPermission({
+			headers: user2.headers,
+			body: {
+				organizationId,
+				permissions: {
+					teamMember: ["delete"],
+				},
+			},
+		});
+
+		// Team member should NOT be able to delete team members
+		expect(canDeleteMember.success).toBe(false);
+
+		// But they should be able to read team member info
+		const canReadTeamMember = await auth.api.hasPermission({
+			headers: user2.headers,
+			body: {
+				organizationId,
+				permissions: {
+					teamMember: ["read"],
+				},
+			},
+		});
+
+		expect(canReadTeamMember.success).toBe(true);
+	});
+
+	it("user should NOT have permissions in a different organization", async () => {
+		// Create a second organization
+		const secondOrg = await auth.api.createOrganization({
+			headers: admin.headers,
+			body: {
+				name: "Different Organization",
+				slug: "different-org-team-roles",
+			},
+		});
+
+		// user2 should NOT have team permissions in an organization they're not a member of
+		try {
+			await auth.api.hasPermission({
+				headers: user2.headers,
+				body: {
+					organizationId: secondOrg.id, // Different org
+					permissions: {
+						teamMember: ["create", "update", "delete"],
+					},
+				},
+			});
+			expect.fail("Should have thrown an error");
+		} catch (error) {
+			// Expected to throw UNAUTHORIZED error
+			expect(error).toBeInstanceOf(APIError);
+		}
+
+		// Also verify they can't even read in a different org
+		try {
+			await auth.api.hasPermission({
+				headers: user2.headers,
+				body: {
+					organizationId: secondOrg.id,
+					permissions: {
+						teamMember: ["read"],
+					},
+				},
+			});
+			expect.fail("Should have thrown an error");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+		}
+	});
+
+	it("permissions should be consistent across different teams in same organization", async () => {
+		// Create a second team in the same organization
+		const secondTeam = await auth.api.createTeam({
+			headers: admin.headers,
+			body: {
+				name: "Second Test Team",
+				organizationId,
+			},
+		});
+
+		// Admin's permissions should be the same when checking with different teamIds
+		const permissionsForFirstTeam = await auth.api.hasPermission({
+			headers: admin.headers,
+			body: {
+				organizationId,
+				teamId, // Check permissions for first team
+				permissions: {
+					teamMember: ["create", "update", "delete"],
+				},
+			},
+		});
+
+		// Check permissions for the second team
+		const permissionsForSecondTeam = await auth.api.hasPermission({
+			headers: admin.headers,
+			body: {
+				organizationId,
+				teamId: secondTeam.id, // Check permissions for second team
+				permissions: {
+					teamMember: ["create", "update", "delete"],
+				},
+			},
+		});
+
+		expect(permissionsForFirstTeam.success).toBe(true);
+		expect(permissionsForSecondTeam.success).toBe(true);
+
+		// Both should have the same result (team admins have same permissions across teams)
+		expect(permissionsForFirstTeam.success).toBe(
+			permissionsForSecondTeam.success,
+		);
+	});
+
+	it("team member permissions should be specific to their team role", async () => {
+		// Create a new user who will be a basic org member
+		const limitedUserRes = await auth.api.signUpEmail({
+			body: {
+				email: "limited-team-member@example.com",
+				password: "password123",
+				name: "Limited Team Member",
+			},
+		});
+
+		// Add this user to the organization as a basic member
+		await auth.api.addMember({
+			headers: admin.headers,
+			body: {
+				userId: limitedUserRes.user.id,
+				organizationId,
+				role: "member",
+			},
+		});
+
+		// Get headers for the limited user
+		const limitedUserSignIn = await signInWithUser(
+			"limited-team-member@example.com",
+			"password123",
+		);
+
+		// Set active organization for admin
+		await auth.api.setActiveOrganization({
+			headers: admin.headers,
+			body: {
+				organizationId,
+			},
+		});
+
+		// Create another team where this user is NOT a member
+		const thirdTeam = await auth.api.createTeam({
+			headers: admin.headers,
+			body: {
+				name: "Third Test Team",
+				organizationId,
+			},
+		});
+
+		// Add limited user to the first team with admin role
+		await auth.api.addTeamMember({
+			headers: admin.headers,
+			body: {
+				teamId,
+				userId: limitedUserRes.user.id,
+				role: "admin",
+			},
+		});
+
+		// Limited user should have delete permissions in their team (as team admin)
+		const canDeleteInCurrentTeam = await auth.api.hasPermission({
+			headers: limitedUserSignIn.headers,
+			body: {
+				organizationId,
+				teamId, // First team where user is an admin
+				permissions: {
+					teamMember: ["delete"],
+				},
+			},
+		});
+
+		expect(canDeleteInCurrentTeam.success).toBe(true);
+
+		// Limited user should still have org-level member permissions
+		// (Falls back to org role when checking a team they're not a member of)
+		const orgMemberPermissions = await auth.api.hasPermission({
+			headers: limitedUserSignIn.headers,
+			body: {
+				organizationId,
+				teamId: thirdTeam.id, // Different team where user is NOT a member
+				permissions: {
+					teamMember: ["read"],
+				},
+			},
+		});
+
+		// This should succeed because they're an org member (fallback behavior)
+		expect(orgMemberPermissions.success).toBe(true);
+	});
 });

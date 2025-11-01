@@ -150,6 +150,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			body: z
 				.object({
 					organizationId: z.string().optional(),
+					teamId: z.string().optional(),
 				})
 				.and(
 					z.union([
@@ -168,6 +169,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				$Infer: {
 					body: {} as PermissionExclusive & {
 						organizationId?: string | undefined;
+						teamId?: string | undefined;
 					},
 				},
 				openapi: {
@@ -178,6 +180,14 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 								schema: {
 									type: "object",
 									properties: {
+										organizationId: {
+											type: "string",
+											description: "The organization ID to check permissions for",
+										},
+										teamId: {
+											type: "string",
+											description: "The team ID to check permissions for (optional)",
+										},
 										permission: {
 											type: "object",
 											description: "The permission to check",
@@ -227,19 +237,54 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: ctx.context.session.user.id,
-				organizationId: activeOrganizationId,
-			});
-			if (!member) {
-				throw new APIError("UNAUTHORIZED", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+
+			// Check if we're verifying team-specific permissions
+			const teamId = ctx.body.teamId;
+			let role = "";
+
+			if (teamId) {
+				// Check team member permissions
+				const teamMember = await adapter.findTeamMember({
+					userId: ctx.context.session.user.id,
+					teamId,
 				});
+
+				if (!teamMember) {
+					// If not a team member, fall back to organization role
+					const member = await adapter.findMemberByOrgId({
+						userId: ctx.context.session.user.id,
+						organizationId: activeOrganizationId,
+					});
+
+					if (!member) {
+						throw new APIError("UNAUTHORIZED", {
+							message:
+								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+						});
+					}
+					role = member.role;
+				} else {
+					role = teamMember.role;
+				}
+			} else {
+				// Check organization member permissions
+				const member = await adapter.findMemberByOrgId({
+					userId: ctx.context.session.user.id,
+					organizationId: activeOrganizationId,
+				});
+
+				if (!member) {
+					throw new APIError("UNAUTHORIZED", {
+						message:
+							ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					});
+				}
+				role = member.role;
 			}
+
 			const result = await hasPermission(
 				{
-					role: member.role,
+					role,
 					options: options || {},
 					permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					organizationId: activeOrganizationId,
