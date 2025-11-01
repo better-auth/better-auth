@@ -130,12 +130,31 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 											(ctx.path.startsWith("/callback") ||
 												ctx.path.startsWith("/oauth2/callback"))
 										) {
-											const redirectURI =
-												ctx.context.options.onAPIError?.errorURL ||
-												`${ctx.context.baseURL}/error`;
-											throw ctx.redirect(
-												`${redirectURI}?error=banned&error_description=${opts.bannedUserMessage}`,
-											);
+											const errorParams = {
+												error: "banned",
+												error_description: opts.bannedUserMessage,
+											};
+											const errorURLConfig =
+												ctx.context.options.onAPIError?.errorURL;
+											let baseURL: string;
+
+											if (typeof errorURLConfig === "function") {
+												baseURL = await errorURLConfig(errorParams);
+											} else {
+												baseURL =
+													errorURLConfig || `${ctx.context.baseURL}/error`;
+											}
+
+											const params = new URLSearchParams();
+											params.set("error", errorParams.error);
+											if (errorParams.error_description)
+												params.set(
+													"error_description",
+													errorParams.error_description,
+												);
+											const sep = baseURL.includes("?") ? "&" : "?";
+											const finalURL = `${baseURL}${sep}${params.toString()}`;
+											throw ctx.redirect(finalURL);
 										}
 
 										throw new APIError("FORBIDDEN", {

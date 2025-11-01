@@ -5,21 +5,26 @@ import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
 import type { AuthorizationQuery, OIDCOptions } from "./types";
 
-function formatErrorURL(url: string, error: string, description: string) {
-	return `${
-		url.includes("?") ? "&" : "?"
-	}error=${error}&error_description=${description}`;
-}
-
-function getErrorURL(
+async function getErrorURL(
 	ctx: GenericEndpointContext,
 	error: string,
 	description: string,
 ) {
-	const baseURL =
-		ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
-	const formattedURL = formatErrorURL(baseURL, error, description);
-	return formattedURL;
+	const errorParams = { error, error_description: description };
+	const errorURLConfig = ctx.context.options.onAPIError?.errorURL;
+	let baseURL: string;
+
+	if (typeof errorURLConfig === "function") {
+		baseURL = await errorURLConfig(errorParams);
+	} else {
+		baseURL = errorURLConfig || `${ctx.context.baseURL}/error`;
+	}
+
+	const params = new URLSearchParams();
+	params.set("error", error);
+	if (description) params.set("error_description", description);
+	const sep = baseURL.includes("?") ? "&" : "?";
+	return `${baseURL}${sep}${params.toString()}`;
 }
 
 export async function authorize(
@@ -78,7 +83,7 @@ export async function authorize(
 
 	const query = ctx.query as AuthorizationQuery;
 	if (!query.client_id) {
-		const errorURL = getErrorURL(
+		const errorURL = await getErrorURL(
 			ctx,
 			"invalid_client",
 			"client_id is required",
@@ -87,13 +92,8 @@ export async function authorize(
 	}
 
 	if (!query.response_type) {
-		const errorURL = getErrorURL(
-			ctx,
-			"invalid_request",
-			"response_type is required",
-		);
 		throw ctx.redirect(
-			getErrorURL(ctx, "invalid_request", "response_type is required"),
+			await getErrorURL(ctx, "invalid_request", "response_type is required"),
 		);
 	}
 
@@ -103,7 +103,7 @@ export async function authorize(
 		options.trustedClients || [],
 	);
 	if (!client) {
-		const errorURL = getErrorURL(
+		const errorURL = await getErrorURL(
 			ctx,
 			"invalid_client",
 			"client_id is required",
@@ -123,12 +123,16 @@ export async function authorize(
 		});
 	}
 	if (client.disabled) {
-		const errorURL = getErrorURL(ctx, "client_disabled", "client is disabled");
+		const errorURL = await getErrorURL(
+			ctx,
+			"client_disabled",
+			"client is disabled",
+		);
 		throw ctx.redirect(errorURL);
 	}
 
 	if (query.response_type !== "code") {
-		const errorURL = getErrorURL(
+		const errorURL = await getErrorURL(
 			ctx,
 			"unsupported_response_type",
 			"unsupported response type",
@@ -142,12 +146,14 @@ export async function authorize(
 		return !opts.scopes.includes(scope);
 	});
 	if (invalidScopes.length) {
+		const description = `The following scopes are invalid: ${invalidScopes.join(
+			", ",
+		)}`;
+		const params = new URLSearchParams();
+		params.set("error", "invalid_scope");
+		params.set("error_description", description);
 		return handleRedirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_scope",
-				`The following scopes are invalid: ${invalidScopes.join(", ")}`,
-			),
+			`${query.redirect_uri}${query.redirect_uri.includes("?") ? "&" : "?"}${params.toString()}`,
 		);
 	}
 
@@ -156,7 +162,12 @@ export async function authorize(
 		options.requirePKCE
 	) {
 		return handleRedirect(
-			formatErrorURL(query.redirect_uri, "invalid_request", "pkce is required"),
+			`${query.redirect_uri}${query.redirect_uri.includes("?") ? "&" : "?"}${new URLSearchParams(
+				{
+					error: "invalid_request",
+					error_description: "pkce is required",
+				},
+			).toString()}`,
 		);
 	}
 
@@ -171,11 +182,12 @@ export async function authorize(
 		].includes(query.code_challenge_method?.toLowerCase() || "")
 	) {
 		return handleRedirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"invalid code_challenge method",
-			),
+			`${query.redirect_uri}${query.redirect_uri.includes("?") ? "&" : "?"}${new URLSearchParams(
+				{
+					error: "invalid_request",
+					error_description: "invalid code_challenge method",
+				},
+			).toString()}`,
 		);
 	}
 
@@ -241,11 +253,12 @@ export async function authorize(
 		});
 	} catch (e) {
 		return handleRedirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"server_error",
-				"An error occurred while processing the request",
-			),
+			`${query.redirect_uri}${query.redirect_uri.includes("?") ? "&" : "?"}${new URLSearchParams(
+				{
+					error: "server_error",
+					error_description: "An error occurred while processing the request",
+				},
+			).toString()}`,
 		);
 	}
 

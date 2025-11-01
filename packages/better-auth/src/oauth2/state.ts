@@ -123,9 +123,20 @@ export async function parseState(c: GenericEndpointContext) {
 			c.context.logger.error("State Mismatch. OAuth state cookie not found", {
 				state,
 			});
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+			const errorParams = { error: "please_restart_the_process" };
+			const errorURLConfig = c.context.options.onAPIError?.errorURL;
+			let baseURL: string;
+
+			if (typeof errorURLConfig === "function") {
+				baseURL = await errorURLConfig(errorParams);
+			} else {
+				baseURL = errorURLConfig || `${c.context.baseURL}/error`;
+			}
+
+			const params = new URLSearchParams({ error: errorParams.error });
+			const sep = baseURL.includes("?") ? "&" : "?";
+			const finalURL = `${baseURL}${sep}${params.toString()}`;
+			throw c.redirect(finalURL);
 		}
 
 		try {
@@ -139,9 +150,20 @@ export async function parseState(c: GenericEndpointContext) {
 			c.context.logger.error("Failed to decrypt or parse OAuth state cookie", {
 				error,
 			});
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+			const errorParams = { error: "please_restart_the_process" };
+			const errorURLConfig = c.context.options.onAPIError?.errorURL;
+			let baseURL: string;
+
+			if (typeof errorURLConfig === "function") {
+				baseURL = await errorURLConfig(errorParams);
+			} else {
+				baseURL = errorURLConfig || `${c.context.baseURL}/error`;
+			}
+
+			const params = new URLSearchParams({ error: errorParams.error });
+			const sep = baseURL.includes("?") ? "&" : "?";
+			const finalURL = `${baseURL}${sep}${params.toString()}`;
+			throw c.redirect(finalURL);
 		}
 
 		// Clear the cookie after successful parsing
@@ -155,9 +177,20 @@ export async function parseState(c: GenericEndpointContext) {
 			c.context.logger.error("State Mismatch. Verification not found", {
 				state,
 			});
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+			const errorParams = { error: "please_restart_the_process" };
+			const errorURLConfig = c.context.options.onAPIError?.errorURL;
+			let baseURL: string;
+
+			if (typeof errorURLConfig === "function") {
+				baseURL = await errorURLConfig(errorParams);
+			} else {
+				baseURL = errorURLConfig || `${c.context.baseURL}/error`;
+			}
+
+			const params = new URLSearchParams({ error: errorParams.error });
+			const sep = baseURL.includes("?") ? "&" : "?";
+			const finalURL = `${baseURL}${sep}${params.toString()}`;
+			throw c.redirect(finalURL);
 		}
 
 		parsedData = stateDataSchema.parse(JSON.parse(data.value));
@@ -177,9 +210,20 @@ export async function parseState(c: GenericEndpointContext) {
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)
 		) {
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=state_mismatch`);
+			const errorParams = { error: "state_mismatch" };
+			const errorURLConfig = c.context.options.onAPIError?.errorURL;
+			let baseURL: string;
+
+			if (typeof errorURLConfig === "function") {
+				baseURL = await errorURLConfig(errorParams);
+			} else {
+				baseURL = errorURLConfig || `${c.context.baseURL}/error`;
+			}
+
+			const params = new URLSearchParams({ error: errorParams.error });
+			const sep = baseURL.includes("?") ? "&" : "?";
+			const finalURL = `${baseURL}${sep}${params.toString()}`;
+			throw c.redirect(finalURL);
 		}
 		c.setCookie(stateCookie.name, "", {
 			maxAge: 0,
@@ -190,15 +234,30 @@ export async function parseState(c: GenericEndpointContext) {
 	}
 
 	if (!parsedData.errorURL) {
-		parsedData.errorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+		const errorURLConfig = c.context.options.onAPIError?.errorURL;
+		if (typeof errorURLConfig === "string") {
+			parsedData.errorURL = errorURLConfig;
+		} else {
+			parsedData.errorURL = `${c.context.baseURL}/error`;
+		}
 	}
 
 	// Check expiration
 	if (parsedData.expiresAt < Date.now()) {
-		const errorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+		const errorParams = { error: "please_restart_the_process" };
+		const errorURLConfig = c.context.options.onAPIError?.errorURL;
+		let baseURL: string;
+
+		if (typeof errorURLConfig === "function") {
+			baseURL = await errorURLConfig(errorParams);
+		} else {
+			baseURL = errorURLConfig || `${c.context.baseURL}/error`;
+		}
+
+		const params = new URLSearchParams({ error: errorParams.error });
+		const sep = baseURL.includes("?") ? "&" : "?";
+		const finalURL = `${baseURL}${sep}${params.toString()}`;
+		throw c.redirect(finalURL);
 	}
 
 	return parsedData;
