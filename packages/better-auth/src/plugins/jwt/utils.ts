@@ -127,16 +127,16 @@ export async function generateExportedKeyPair(
 }
 
 /**
- * Creates a Jwk on the database
+ * Generates a Jwk data object ready to be saved to the database
  *
  * @param ctx
  * @param options
- * @returns
+ * @returns Jwk data without id
  */
-export async function createJwk(
+export async function generateJwkData(
 	ctx: GenericEndpointContext,
 	options?: JwtOptions | undefined,
-) {
+): Promise<Omit<Jwk, "id">> {
 	const { publicWebKey, privateWebKey, alg, cfg } =
 		await generateExportedKeyPair(options);
 
@@ -162,6 +162,21 @@ export async function createJwk(
 		createdAt: new Date(),
 	};
 
+	return jwk;
+}
+
+/**
+ * Creates a Jwk on the database
+ *
+ * @param ctx
+ * @param options
+ * @returns
+ */
+export async function createJwk(
+	ctx: GenericEndpointContext,
+	options?: JwtOptions | undefined,
+) {
+	const jwk = await generateJwkData(ctx, options);
 	const adapter = getJwksAdapter(ctx.context.adapter);
 	const key = await adapter.createJwk(jwk as Jwk);
 
