@@ -444,16 +444,14 @@ export const kyselyAdapter = (
 					const { and, or } = convertWhereClause(model, where);
 					let query: any = db
 						.selectFrom((eb) => {
-							let b = eb
-								.selectFrom(model)
-								.limit(limit ?? 100)
-								.offset(offset ?? 0);
+							let b = eb.selectFrom(model);
 
-							if (sortBy?.field) {
-								b = b.orderBy(
-									getFieldName({ model, field: sortBy.field }),
-									sortBy.direction,
-								);
+							if (limit !== undefined) {
+								b = b.limit(limit);
+							}
+
+							if (offset !== undefined) {
+								b = b.offset(offset);
 							}
 
 							if (and) {
@@ -461,15 +459,14 @@ export const kyselyAdapter = (
 									eb.and(and.map((expr: any) => expr(eb))),
 								);
 							}
+
 							if (or) {
 								b = b.where((eb: any) =>
 									eb.or(or.map((expr: any) => expr(eb))),
 								);
 							}
 
-							let r = b.selectAll().as(model);
-
-							return r;
+							return b.selectAll().as(model);
 						})
 						.selectAll(model);
 
@@ -506,12 +503,17 @@ export const kyselyAdapter = (
 					const { allSelectsStr, allSelects } = selectAllJoins(join);
 					query = query.select(allSelects);
 
-					const res = await query.execute();
-					if (!res) return [];
-					if (join) {
-						return processJoinedResults(res, join, allSelectsStr);
+					if (sortBy?.field) {
+						query = query.orderBy(
+							`${model}.${getFieldName({ model, field: sortBy.field })}`,
+							sortBy.direction,
+						);
 					}
 
+					const res = await query.execute();
+
+					if (!res) return [];
+					if (join) return processJoinedResults(res, join, allSelectsStr);
 					return res;
 				},
 				async update({ model, where, update: values }) {
