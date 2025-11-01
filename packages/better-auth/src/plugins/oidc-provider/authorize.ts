@@ -92,11 +92,6 @@ export async function authorize(
 	}
 
 	if (!query.response_type) {
-		const errorURL = await getErrorURL(
-			ctx,
-			"invalid_request",
-			"response_type is required",
-		);
 		throw ctx.redirect(
 			await getErrorURL(ctx, "invalid_request", "response_type is required"),
 		);
@@ -152,7 +147,7 @@ export async function authorize(
 	});
 	if (invalidScopes.length) {
 		return handleRedirect(
-			`${
+			`${query.redirect_uri}${
 				query.redirect_uri.includes("?") ? "&" : "?"
 			}error=invalid_scope&error_description=${`The following scopes are invalid: ${invalidScopes.join(
 				", ",
@@ -165,7 +160,7 @@ export async function authorize(
 		options.requirePKCE
 	) {
 		return handleRedirect(
-			`${
+			`${query.redirect_uri}${
 				query.redirect_uri.includes("?") ? "&" : "?"
 			}error=invalid_request&error_description=pkce is required`,
 		);
@@ -182,7 +177,7 @@ export async function authorize(
 		].includes(query.code_challenge_method?.toLowerCase() || "")
 	) {
 		return handleRedirect(
-			`${
+			`${query.redirect_uri}${
 				query.redirect_uri.includes("?") ? "&" : "?"
 			}error=invalid_request&error_description=invalid code_challenge method`,
 		);
@@ -250,7 +245,7 @@ export async function authorize(
 		});
 	} catch (e) {
 		return handleRedirect(
-			`${
+			`${query.redirect_uri}${
 				query.redirect_uri.includes("?") ? "&" : "?"
 			}error=server_error&error_description=An error occurred while processing the request`,
 		);

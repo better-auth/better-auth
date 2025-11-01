@@ -67,8 +67,8 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 
 			const params = new URLSearchParams({ error: errorParams.error });
-			const finalSep = baseURL.includes("?") ? "&" : "?"; // Use a different name to avoid conflict
-			const finalURL = `${baseURL}${finalSep}${params.toString()}`;
+			const sep = baseURL.includes("?") ? "&" : "?";
+			const finalURL = `${baseURL}${sep}${params.toString()}`;
 			throw c.redirect(finalURL);
 		}
 

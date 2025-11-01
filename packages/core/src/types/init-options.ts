@@ -1252,7 +1252,7 @@ export type BetterAuthOptions = {
 				 *
 				 * When provided as a function, it will be called with the error
 				 * details and must return a base path string (or Promise<string>).
-				 * The error details will then be appended to that path.
+				 * The error details will then be appended to that URL as query.
 				 *
 				 * @default - "/api/auth/error"
 				 */
