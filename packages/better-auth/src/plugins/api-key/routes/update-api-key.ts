@@ -7,7 +7,11 @@ import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import type { PredefinedApiKeyOptions } from ".";
+import {
+	prepareApiKeyForDB,
+	prepareApiKeyForHook,
+	type PredefinedApiKeyOptions,
+} from ".";
 export function updateApiKey({
 	opts,
 	schema,
@@ -404,7 +408,8 @@ export function updateApiKey({
 
 			let newApiKey: ApiKey = apiKey;
 			if (opts.hooks?.update?.before) {
-				const apiKeyData = await opts.hooks?.update?.before(newValues, ctx);
+				const apiKeyInput = prepareApiKeyForHook(newValues);
+				const apiKeyData = await opts.hooks?.update?.before(apiKeyInput, ctx);
 
 				if (apiKeyData === false) {
 					throw new APIError("BAD_REQUEST", {
@@ -413,7 +418,7 @@ export function updateApiKey({
 				}
 
 				if (apiKeyData && typeof apiKeyData === "object" && apiKeyData.data) {
-					newValues = apiKeyData.data;
+					newValues = prepareApiKeyForDB(apiKeyData.data);
 				}
 			}
 
@@ -438,7 +443,8 @@ export function updateApiKey({
 			}
 
 			if (opts.hooks?.update?.after) {
-				await opts.hooks?.update?.after(newApiKey, ctx);
+				const apiKeyInput = prepareApiKeyForHook(newApiKey);
+				await opts.hooks?.update?.after(apiKeyInput, ctx);
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);

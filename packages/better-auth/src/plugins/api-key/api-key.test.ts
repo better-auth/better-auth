@@ -531,6 +531,9 @@ describe("api-key", async () => {
 					hooks: {
 						create: {
 							before: async (apiKey, ctx) => {
+								if (apiKey.permissions) {
+									expect(apiKey.permissions).toBeTypeOf("object");
+								}
 								return false;
 							},
 						},
@@ -545,6 +548,10 @@ describe("api-key", async () => {
 			const apiKey = await auth.api.createApiKey({
 				body: {
 					userId: user.id,
+					permissions: {
+						admin: ["read", "write", "execute"],
+						user: ["read", "write"],
+					},
 				},
 			});
 			result.data = apiKey;
@@ -570,9 +577,13 @@ describe("api-key", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				apiKey({
+					enableMetadata: true,
 					hooks: {
 						create: {
 							before: async (apiKey, ctx) => {
+								if (apiKey.metadata) {
+									expect(apiKey.metadata).toBeTypeOf("object");
+								}
 								return { data: { ...apiKey, name } };
 							},
 							after: afterHook,
@@ -589,10 +600,12 @@ describe("api-key", async () => {
 				body: {
 					userId: user.id,
 					name: "original-name",
+					metadata: { someKey: "someValue" },
 				},
 			});
 			result.data = apiKey;
 		} catch (error: any) {
+			console.log(error);
 			result.error = error;
 		}
 		expect(result.data).not.toBeNull();

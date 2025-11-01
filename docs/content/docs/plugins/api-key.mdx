@@ -423,7 +423,7 @@ export const auth = betterAuth({
         update: {
           before: async (apiKey, ctx) => {
             // Validate or modify update data
-            if (apiKey.userId === "user-id-123") {
+            if (apiKey.name && apiKey.name.startsWith("some_prefix")) {
               return false;
             }
           },

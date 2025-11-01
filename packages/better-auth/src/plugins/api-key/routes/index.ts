@@ -9,6 +9,7 @@ import { getApiKey } from "./get-api-key";
 import { listApiKeys } from "./list-api-keys";
 import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
+import { safeJSONParse } from "../../../utils/json";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
 	Required<
@@ -36,6 +37,24 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 	};
 
 let lastChecked: Date | null = null;
+
+export function prepareApiKeyForHook<T extends Partial<ApiKey>>(data: T): T {
+	return {
+		...data,
+		metadata: data.metadata ? safeJSONParse(data.metadata as any) : null,
+		permissions: data.permissions
+			? safeJSONParse(data.permissions as any)
+			: null,
+	} as T;
+}
+
+export function prepareApiKeyForDB<T extends Partial<ApiKey>>(data: T): T {
+	return {
+		...data,
+		metadata: JSON.stringify(data.metadata),
+		permissions: JSON.stringify(data.permissions),
+	} as T;
+}
 
 export async function deleteAllExpiredApiKeys(
 	ctx: AuthContext,

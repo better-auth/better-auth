@@ -5,7 +5,7 @@ import { APIError, sessionMiddleware } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import type { PredefinedApiKeyOptions } from ".";
+import { prepareApiKeyForHook, type PredefinedApiKeyOptions } from ".";
 export function deleteApiKey({
 	opts,
 	schema,
@@ -94,8 +94,9 @@ export function deleteApiKey({
 				});
 			}
 
+			const apiKeyInput = prepareApiKeyForHook(apiKey);
 			if (opts.hooks?.delete?.before) {
-				const apiKeyData = await opts?.hooks?.delete?.before(apiKey, ctx);
+				const apiKeyData = await opts?.hooks?.delete?.before(apiKeyInput, ctx);
 
 				if (apiKeyData === false) {
 					throw new APIError("BAD_REQUEST", {
@@ -121,7 +122,7 @@ export function deleteApiKey({
 			}
 
 			if (opts.hooks?.delete?.after) {
-				await opts.hooks?.delete?.after(apiKey, ctx);
+				await opts.hooks?.delete?.after(apiKeyInput, ctx);
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);
