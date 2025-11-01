@@ -4,7 +4,7 @@ import { organization } from "./organization";
 import { APIError } from "better-call";
 
 describe("organization - team roles", async (it) => {
-	const { auth, signInWithTestUser } = await getTestInstance({
+	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
 		plugins: [
 			organization({
 				teams: {
@@ -21,23 +21,39 @@ describe("organization - team roles", async (it) => {
 	const admin = await signInWithTestUser();
 
 	// Create additional test users
-	const user2 = await auth.api.signUpEmail({
+	const user2Res = await auth.api.signUpEmail({
 		body: {
 			email: "team-member@example.com",
 			password: "password123",
 			name: "Team Member",
 		},
-		returnHeaders: true,
 	});
 
-	const user3 = await auth.api.signUpEmail({
+	const user3Res = await auth.api.signUpEmail({
 		body: {
 			email: "org-admin@example.com",
 			password: "password123",
 			name: "Org Admin",
 		},
-		returnHeaders: true,
 	});
+
+	const user2SignIn = await signInWithUser(
+		"team-member@example.com",
+		"password123",
+	);
+	const user2 = {
+		user: user2Res.user,
+		headers: user2SignIn.headers,
+	};
+
+	const user3SignIn = await signInWithUser(
+		"org-admin@example.com",
+		"password123",
+	);
+	const user3 = {
+		user: user3Res.user,
+		headers: user3SignIn.headers,
+	};
 
 	let organizationId: string;
 	let teamId: string;
@@ -201,6 +217,16 @@ describe("organization - team roles", async (it) => {
 	 * USER STORY 4: As an organization admin, I can assign roles to team members
 	 */
 	it("organization admin can view team members", async () => {
+		// First add user3 as a team member so they can view team members
+		await auth.api.addTeamMember({
+			headers: admin.headers,
+			body: {
+				teamId,
+				userId: user3.user.id,
+				role: "member",
+			},
+		});
+
 		const members = await auth.api.listTeamMembers({
 			headers: user3.headers,
 			query: {
@@ -213,7 +239,15 @@ describe("organization - team roles", async (it) => {
 	});
 
 	it("organization admin can update team member roles", async () => {
-		// user3 (org admin, not team member) updates user2's role
+		// Set active organization for user3
+		await auth.api.setActiveOrganization({
+			headers: user3.headers,
+			body: {
+				organizationId,
+			},
+		});
+
+		// user3 (org admin, now also team member) updates user2's role
 		const updatedMember = await auth.api.updateTeamMemberRole({
 			headers: user3.headers,
 			body: {
@@ -237,22 +271,57 @@ describe("organization - team roles", async (it) => {
 	});
 
 	it("organization admin can add members to any team", async () => {
-		// Add user3 to the team
+		// Set active organization for user3 if not already set
+		await auth.api.setActiveOrganization({
+			headers: user3.headers,
+			body: {
+				organizationId,
+			},
+		});
+
+		// user3 is already a team member from previous test, try to add another user
+		const newMember = await auth.api.signUpEmail({
+			body: {
+				email: "another-member@example.com",
+				password: "password123",
+				name: "Another Member",
+			},
+		});
+
+		// Add to organization first
+		await auth.api.addMember({
+			headers: admin.headers,
+			body: {
+				userId: newMember.user.id,
+				organizationId,
+				role: "member",
+			},
+		});
+
+		// Now org admin adds them to team
 		const teamMember = await auth.api.addTeamMember({
 			headers: user3.headers,
 			body: {
 				teamId,
-				userId: user3.user.id,
+				userId: newMember.user.id,
 				role: "member",
 			},
 		});
 
 		expect(teamMember).toBeDefined();
-		expect(teamMember.userId).toBe(user3.user.id);
+		expect(teamMember.userId).toBe(newMember.user.id);
 		expect(teamMember.role).toBe("member");
 	});
 
 	it("organization admin can remove members from any team", async () => {
+		// Set active organization for user3
+		await auth.api.setActiveOrganization({
+			headers: user3.headers,
+			body: {
+				organizationId,
+			},
+		});
+
 		const result = await auth.api.removeTeamMember({
 			headers: user3.headers,
 			body: {
@@ -268,19 +337,18 @@ describe("organization - team roles", async (it) => {
 	 * ADDITIONAL TESTS: Edge cases and validations
 	 */
 	it("adding team member without role uses default role", async () => {
-		const newUser = await auth.api.signUpEmail({
+		const newUserRes = await auth.api.signUpEmail({
 			body: {
 				email: "default-role@example.com",
 				password: "password123",
 				name: "Default Role User",
 			},
-			returnHeaders: true,
 		});
 
 		await auth.api.addMember({
 			headers: admin.headers,
 			body: {
-				userId: newUser.user.id,
+				userId: newUserRes.user.id,
 				organizationId,
 				role: "member",
 			},
@@ -290,7 +358,7 @@ describe("organization - team roles", async (it) => {
 			headers: admin.headers,
 			body: {
 				teamId,
-				userId: newUser.user.id,
+				userId: newUserRes.user.id,
 				// No role specified
 			},
 		});
