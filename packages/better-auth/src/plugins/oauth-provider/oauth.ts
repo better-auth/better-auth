@@ -201,9 +201,13 @@ export const oauthProvider = (options: OAuthOptions) => {
 				 */
 				{
 					matcher(ctx) {
-						return parseSetCookieHeader(
-							ctx.context.responseHeaders?.get("set-cookie") || "",
-						).has(ctx.context.authCookies.sessionToken.name);
+						return (
+							(ctx.path.startsWith("/oauth2") ||
+								ctx.path.startsWith("/sign-in")) &&
+							parseSetCookieHeader(
+								ctx.context.responseHeaders?.get("set-cookie") || "",
+							).has(ctx.context.authCookies.sessionToken.name)
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						// Obtain original prompt
