@@ -182,11 +182,13 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 									properties: {
 										organizationId: {
 											type: "string",
-											description: "The organization ID to check permissions for",
+											description:
+												"The organization ID to check permissions for",
 										},
 										teamId: {
 											type: "string",
-											description: "The team ID to check permissions for (optional)",
+											description:
+												"The team ID to check permissions for (optional)",
 										},
 										permission: {
 											type: "object",

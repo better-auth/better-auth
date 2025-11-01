@@ -1,7 +1,7 @@
+import { APIError } from "better-call";
+import { organization } from "./organization";
 import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { organization } from "./organization";
-import { APIError } from "better-call";
 
 describe("organization - team roles", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
