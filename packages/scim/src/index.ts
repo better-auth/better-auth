@@ -87,7 +87,7 @@ export const scim = () => {
 	return {
 		id: "scim",
 		endpoints: {
-			createUser: createAuthEndpoint(
+			createSCIMUser: createAuthEndpoint(
 				"/scim/v2/Users",
 				{
 					method: "POST",
@@ -197,7 +197,7 @@ export const scim = () => {
 					});
 				},
 			),
-			updateUser: createAuthEndpoint(
+			updateSCIMUser: createAuthEndpoint(
 				"/scim/v2/Users/:userId",
 				{
 					method: "PUT",
@@ -279,7 +279,7 @@ export const scim = () => {
 					});
 				},
 			),
-			listUsers: createAuthEndpoint(
+			listSCIMUsers: createAuthEndpoint(
 				"/scim/v2/Users",
 				{
 					method: "GET",
@@ -369,7 +369,7 @@ export const scim = () => {
 					});
 				},
 			),
-			getUser: createAuthEndpoint(
+			getSCIMUser: createAuthEndpoint(
 				"/scim/v2/Users/:userId",
 				{
 					method: "GET",
@@ -412,7 +412,7 @@ export const scim = () => {
 					);
 				},
 			),
-			patchUser: createAuthEndpoint(
+			patchSCIMUser: createAuthEndpoint(
 				"/scim/v2/Users/:userId",
 				{
 					method: "PATCH",
@@ -483,7 +483,7 @@ export const scim = () => {
 					return ctx.json(null, { status: 204 });
 				},
 			),
-			deleteUser: createAuthEndpoint(
+			deleteSCIMUser: createAuthEndpoint(
 				"/scim/v2/Users/:userId",
 				{
 					method: "DELETE",
@@ -519,7 +519,7 @@ export const scim = () => {
 					return ctx.json(null, { status: 204 });
 				},
 			),
-			getServiceProviderConfig: createAuthEndpoint(
+			getSCIMServiceProviderConfig: createAuthEndpoint(
 				"/scim/v2/ServiceProviderConfig",
 				{
 					method: "GET",
@@ -563,7 +563,7 @@ export const scim = () => {
 					});
 				},
 			),
-			getSchemas: createAuthEndpoint(
+			getSCIMSchemas: createAuthEndpoint(
 				"/scim/v2/Schemas",
 				{
 					method: "GET",
@@ -598,7 +598,7 @@ export const scim = () => {
 					});
 				},
 			),
-			getSchema: createAuthEndpoint(
+			getSCIMSchema: createAuthEndpoint(
 				"/scim/v2/Schemas/:schemaId",
 				{
 					method: "GET",
@@ -633,7 +633,7 @@ export const scim = () => {
 					});
 				},
 			),
-			getResourceTypes: createAuthEndpoint(
+			getSCIMResourceTypes: createAuthEndpoint(
 				"/scim/v2/ResourceTypes",
 				{
 					method: "GET",
@@ -668,7 +668,7 @@ export const scim = () => {
 					});
 				},
 			),
-			getResourceType: createAuthEndpoint(
+			getSCIMResourceType: createAuthEndpoint(
 				"/scim/v2/ResourceTypes/:resourceTypeId",
 				{
 					method: "GET",
