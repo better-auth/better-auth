@@ -11,6 +11,7 @@ import { type GenericOAuthConfig, genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
 import { multiSession } from "../multi-session";
+import { multiSessionClient } from "../multi-session/client";
 import { type Organization, organization } from "../organization";
 import { organizationClient } from "../organization/client";
 import { oauthProviderClient } from "./client";
@@ -394,7 +395,11 @@ describe("oauth - prompt", async () => {
 
 	const { headers, user } = await signInWithTestUser();
 	const serverClient = createAuthClient({
-		plugins: [oauthProviderClient(), organizationClient()],
+		plugins: [
+			oauthProviderClient(),
+			organizationClient(),
+			multiSessionClient(),
+		],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,

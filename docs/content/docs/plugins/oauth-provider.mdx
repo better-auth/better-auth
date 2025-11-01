@@ -526,9 +526,12 @@ oauthProvider({
 The plugin will redirect the user to the `selectAccountPage`. This page should prompt for account selection and upon completion of selection, should call `oauth2Continue`. Note the `oauth_login_prompt` is automatically stored in a signed cookie.
 
 ```ts title="select-account.ts"
-const res = await client.oauth2.oauth2Continue({
+await authClient.multiSession.setActive({
+  sessionToken,
+});
+await client.oauth2.oauth2Continue({
   confirm: true,
-})
+});
 ```
 
 ### Post Login Screen
@@ -568,9 +571,12 @@ oauthProvider({
 The plugin will redirect the user to the `postLoginPage`. This page should prompt for account selection and upon completion of selection, should call `oauth2Continue`. Note the `oauth_login_prompt` is automatically stored in a signed cookie.
 
 ```ts title="select-organization.ts"
-const res = await client.oauth2.oauth2Continue({
+await authClient.organization.setActive({
+  organizationId,
+});
+await client.oauth2.oauth2Continue({
   postLogin: true,
-})
+});
 ```
 
 

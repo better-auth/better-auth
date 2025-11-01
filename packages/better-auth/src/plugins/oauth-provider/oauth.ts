@@ -242,6 +242,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 							...cookieAttributes,
 							maxAge: 0,
 						});
+						ctx.headers?.set("accept", "application/json");
 						return await authorizeEndpoint(ctx, opts);
 					}),
 				},
