@@ -1,11 +1,10 @@
+import { sso } from "@better-auth/sso";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
-import { sso } from "@better-auth/sso";
-import { describe, expect, expectTypeOf, it } from "vitest";
-;
+import { describe, expect, it } from "vitest";
 import { scim } from ".";
 
 const spMetadata = `
@@ -347,6 +346,7 @@ describe("SCIM", () => {
 	async function registerSSOProvider(
 		auth: any,
 		authClient: any,
+		providerId: string = "saml-provider-1",
 		organizationId?: string,
 	) {
 		const headers = await getAuthCookieHeaders(authClient);
@@ -354,7 +354,7 @@ describe("SCIM", () => {
 		const provider = await auth.api.registerSSOProvider({
 			body: {
 				organizationId,
-				providerId: "saml-provider-1",
+				providerId: providerId,
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
@@ -1258,6 +1258,114 @@ describe("SCIM", () => {
 			});
 		});
 
+		it("should only allow access to users that belong to the same provider", async () => {
+			const { auth, authClient } = createTestInstance();
+			const { scimToken: scimTokenProviderA } = await registerSSOProvider(
+				auth,
+				authClient,
+				"provider-a",
+			);
+			const { scimToken: scimTokenProviderB } = await registerSSOProvider(
+				auth,
+				authClient,
+				"provider-b",
+			);
+
+			const createUser = (userName: string, scimToken: string) => {
+				return auth.api.createSCIMUser({
+					body: {
+						userName,
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+			};
+
+			const listUsers = (scimToken: string) => {
+				return auth.api.listSCIMUsers({
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+			};
+
+			const [userA, userB, userC] = await Promise.all([
+				createUser("user-a", scimTokenProviderB),
+				createUser("user-b", scimTokenProviderA),
+				createUser("user-c", scimTokenProviderB),
+			]);
+
+			const usersProviderA = await listUsers(scimTokenProviderA);
+			expect(usersProviderA).toMatchObject({
+				itemsPerPage: 1,
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				startIndex: 1,
+				totalResults: 1,
+				Resources: [userB],
+			});
+
+			const usersProviderB = await listUsers(scimTokenProviderB);
+			expect(usersProviderB).toMatchObject({
+				itemsPerPage: 2,
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				startIndex: 1,
+				totalResults: 2,
+				Resources: [userA, userC],
+			});
+		});
+
+		it("should filter the list of users", async () => {
+			const { auth, authClient } = createTestInstance();
+			const { scimToken } = await registerSSOProvider(auth, authClient);
+
+			const createUser = (userName: string) => {
+				return auth.api.createSCIMUser({
+					body: {
+						userName,
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+			};
+
+			const [userA] = await Promise.all([
+				createUser("user-a"),
+				createUser("user-b"),
+				createUser("user-c"),
+			]);
+
+			const users = await auth.api.listSCIMUsers({
+				query: {
+					filter: 'userName eq "user-a"',
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(users).toMatchObject({
+				itemsPerPage: 1,
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				startIndex: 1,
+				totalResults: 1,
+				Resources: [userA],
+			});
+		});
+
+		it("should not allow anonymous access", async () => {
+			const { auth } = createTestInstance();
+
+			const getUsers = async () => {
+				await auth.api.listSCIMUsers();
+			};
+
+			await expect(() => getUsers()).rejects.toThrow(/SCIM token is required/);
+		});
+	});
+
+	describe("GET /scim/v2/Users/:userId", () => {
 		it("should return a single user resource", async () => {
 			const { auth, authClient } = createTestInstance();
 			const { scimToken } = await registerSSOProvider(auth, authClient);
@@ -1283,6 +1391,68 @@ describe("SCIM", () => {
 			expect(newUser).toEqual(retrievedUser);
 		});
 
+		it("should only allow access to users that belong to the same provider", async () => {
+			const { auth, authClient } = createTestInstance();
+			const { scimToken: scimTokenProviderA } = await registerSSOProvider(
+				auth,
+				authClient,
+				"provider-a",
+			);
+			const { scimToken: scimTokenProviderB } = await registerSSOProvider(
+				auth,
+				authClient,
+				"provider-b",
+			);
+
+			const createUser = (userName: string, scimToken: string) => {
+				return auth.api.createSCIMUser({
+					body: {
+						userName,
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+			};
+
+			const getUser = (userId: string, scimToken: string) => {
+				return auth.api.getSCIMUser({
+					params: {
+						userId,
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+			};
+
+			const [userA, userB, userC] = await Promise.all([
+				createUser("user-a", scimTokenProviderB),
+				createUser("user-b", scimTokenProviderA),
+				createUser("user-c", scimTokenProviderB),
+			]);
+
+			const retrievedUserB = await getUser(userB.id, scimTokenProviderA);
+			expect(retrievedUserB).toEqual(userB);
+
+			const missing = await getUser(userB.id, scimTokenProviderB);
+			expect(missing).toMatchInlineSnapshot(`
+				{
+				  "error": "User not found",
+				}
+			`);
+
+			const retrievedUserA = await getUser(userA.id, scimTokenProviderB);
+			expect(retrievedUserA).toEqual(userA);
+
+			const otherMissing = await getUser(userA.id, scimTokenProviderA);
+			expect(otherMissing).toMatchInlineSnapshot(`
+				{
+				  "error": "User not found",
+				}
+			`);
+		});
+
 		it("should return not found for missing users", async () => {
 			const { auth, authClient } = createTestInstance();
 			const { scimToken } = await registerSSOProvider(auth, authClient);
@@ -1302,9 +1472,19 @@ describe("SCIM", () => {
               }
             `);
 		});
+
+		it("should not allow anonymous access", async () => {
+			const { auth } = createTestInstance();
+
+			const getUser = async () => {
+				await auth.api.getSCIMUser();
+			};
+
+			await expect(() => getUser()).rejects.toThrow(/SCIM token is required/);
+		});
 	});
 
-	describe("DELETE /scim/v2/Users", () => {
+	describe("DELETE /scim/v2/Users/:userId", () => {
 		it("should delete an existing user", async () => {
 			const { auth, authClient } = createTestInstance();
 			const { scimToken } = await registerSSOProvider(auth, authClient);
@@ -1345,6 +1525,22 @@ describe("SCIM", () => {
             `);
 		});
 
+		it("should not allow anonymous access", async () => {
+			const { auth } = createTestInstance();
+
+			const deleteUser = async () => {
+				await auth.api.deleteSCIMUser({
+					params: {
+						userId: "whatever",
+					},
+				});
+			};
+
+			await expect(() => deleteUser()).rejects.toThrow(
+				/SCIM token is required/,
+			);
+		});
+
 		it("should not delete a missing user", async () => {
 			const { auth, authClient } = createTestInstance();
 			const { scimToken } = await registerSSOProvider(auth, authClient);
@@ -1357,7 +1553,7 @@ describe("SCIM", () => {
 				},
 			});
 
-            expect(result).toMatchInlineSnapshot(`
+			expect(result).toMatchInlineSnapshot(`
               {
                 "error": "User not found",
               }
