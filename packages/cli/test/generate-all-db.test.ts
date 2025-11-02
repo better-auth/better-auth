@@ -38,9 +38,6 @@ describe("generate drizzle schema for all databases", async () => {
 					modelName: "custom_verification",
 				},
 			},
-			experimental: {
-				joins: true,
-			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql.txt",
@@ -78,9 +75,6 @@ describe("generate drizzle schema for all databases", async () => {
 				verification: {
 					modelName: "custom_verification",
 				},
-			},
-			experimental: {
-				joins: true,
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
@@ -125,9 +119,6 @@ describe("generate drizzle schema for all databases", async () => {
 					modelName: "custom_verification",
 				},
 			},
-			experimental: {
-				joins: true,
-			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql-number-id.txt",
@@ -171,9 +162,6 @@ describe("generate drizzle schema for all databases", async () => {
 					modelName: "custom_verification",
 				},
 			},
-			experimental: {
-				joins: true,
-			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-sqlite-number-id.txt",
@@ -214,9 +202,6 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 					modelName: "custom_verification",
 				},
 			},
-			experimental: {
-				joins: true,
-			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql-passkey.txt",
@@ -255,9 +240,6 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 					modelName: "custom_verification",
 				},
 			},
-			experimental: {
-				joins: true,
-			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-sqlite-passkey.txt",
@@ -295,9 +277,6 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 				verification: {
 					modelName: "custom_verification",
 				},
-			},
-			experimental: {
-				joins: true,
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
@@ -342,9 +321,6 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 					modelName: "custom_verification",
 				},
 			},
-			experimental: {
-				joins: true,
-			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql-passkey-number-id.txt",
@@ -387,9 +363,6 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 				verification: {
 					modelName: "custom_verification",
 				},
-			},
-			experimental: {
-				joins: true,
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
