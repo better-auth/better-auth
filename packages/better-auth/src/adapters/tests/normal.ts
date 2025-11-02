@@ -514,6 +514,48 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(sortModels(result)).toEqual(sortModels(users.slice(1)));
 		},
+		"findMany - should find many models with ne operator on id field":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "id", value: users[0]!.id, operator: "ne" }],
+				});
+				expect(sortModels(result)).toEqual(sortModels(users.slice(1)));
+			},
+		"findMany - should find many models with ne operator on _id field (MongoDB)":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "_id", value: users[0]!.id, operator: "ne" }],
+				});
+				expect(sortModels(result)).toEqual(sortModels(users.slice(1)));
+			},
+		"findMany - should handle ne operator with null value on id field":
+			async () => {
+				await insertRandom("user", 3);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "id", value: null, operator: "ne" }],
+				});
+				expect(Array.isArray(result)).toBe(true);
+			},
+		"findMany - should handle in operator with null value in array":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{
+							field: "id",
+							value: [users[0]!.id, null, users[1]!.id] as any,
+							operator: "in",
+						},
+					],
+				});
+				expect(result.length).toBeGreaterThanOrEqual(2);
+			},
 		"findMany - should find many models with gt operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const oldestUser = users.sort(
