@@ -1,9 +1,10 @@
 import { APIError, createEmailVerificationToken } from "../api";
 import type { Account } from "../types";
-import type { GenericEndpointContext, User } from "../types";
-import { logger } from "../utils";
-import { isDevelopment } from "../utils/env";
+import type { User } from "../types";
+import { logger } from "@better-auth/core/env";
+import { isDevelopment } from "@better-auth/core/env";
 import { setTokenUtil } from "./utils";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
@@ -55,7 +56,7 @@ export async function handleOAuthUserInfo(
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
-				if (isDevelopment) {
+				if (isDevelopment()) {
 					logger.warn(
 						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
 					);
@@ -87,6 +88,16 @@ export async function handleOAuthUserInfo(
 					data: null,
 				};
 			}
+
+			if (
+				userInfo.emailVerified &&
+				!dbUser.user.emailVerified &&
+				userInfo.email.toLowerCase() === dbUser.user.email
+			) {
+				await c.context.internalAdapter.updateUser(dbUser.user.id, {
+					emailVerified: true,
+				});
+			}
 		} else {
 			if (c.context.options.account?.updateAccountOnSignIn !== false) {
 				const updateData = Object.fromEntries(
@@ -107,6 +118,16 @@ export async function handleOAuthUserInfo(
 						c,
 					);
 				}
+			}
+
+			if (
+				userInfo.emailVerified &&
+				!dbUser.user.emailVerified &&
+				userInfo.email.toLowerCase() === dbUser.user.email
+			) {
+				await c.context.internalAdapter.updateUser(dbUser.user.id, {
+					emailVerified: true,
+				});
 			}
 		}
 		if (overrideUserInfo) {

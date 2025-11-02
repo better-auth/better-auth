@@ -1,19 +1,19 @@
 {
-	"compilerOptions": {
-		"esModuleInterop": true,
-		"skipLibCheck": true,
-		"target": "es2022",
-		"allowJs": true,
-		"resolveJsonModule": true,
-		"module": "Preserve",
-		"noEmit": true,
-		"moduleDetection": "force",
-		"isolatedModules": true,
-		"verbatimModuleSyntax": true,
-		"strict": true,
-		"noUncheckedIndexedAccess": true,
-		"noImplicitOverride": true,
-		"noFallthroughCasesInSwitch": true
-	},
-	"exclude": ["**/dist/**", "**/node_modules/**", "**/examples/**"]
+  "compilerOptions": {
+    "strict": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "downlevelIteration": true,
+    "baseUrl": ".",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+    "incremental": true,
+    "noErrorTruncation": true,
+    "types": ["node", "bun"]
+  },
+  "exclude": ["**/dist/**", "**/node_modules/**"]
 }

@@ -13,6 +13,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
 - Handle Stripe webhooks securely with signature verification
 - Expose subscription data to your application
 - Support for trial periods and subscription upgrades
+- **Automatic trial abuse prevention** - Users can only get one trial per account across all plans
 - Flexible reference system to associate subscriptions with users or organizations
 - Team subscription support with seats management
 
@@ -37,7 +38,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         Next, install the Stripe SDK on your server:
 
         ```package-install
-        stripe@^18.0.0
+        stripe@^19.1.0
         ```
     </Step>
     <Step>
@@ -49,7 +50,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         import Stripe from "stripe"
 
         const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-            apiVersion: "2025-02-24.acacia",
+            apiVersion: "2025-09-30.clover", // Latest API version as of Stripe SDK v19
         })
 
         export const auth = betterAuth({
@@ -63,6 +64,10 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
             ]
         })
         ```
+
+        <Callout type="info">
+        **Upgrading from Stripe v18?** Version 19 uses async webhook signature verification (`constructEventAsync`) which is handled internally by the plugin. No code changes required on your end!
+        </Callout>
     </Step>
     <Step>
         ### Add the client plugin
@@ -257,7 +262,7 @@ await client.subscription.upgrade({
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
     annual: true, // Optional: upgrade to an annual plan
-    referenceId: "org_123" // Optional: defaults to the current logged in user ID
+    referenceId: "org_123", // Optional: defaults to the current logged in user ID
     seats: 5 // Optional: for team plans
 });
 ```
@@ -396,6 +401,10 @@ To create a [Stripe billing portal session](https://docs.stripe.com/api/customer
 ```ts
 type createBillingPortal = {
     /**
+    * The IETF language tag of the locale customer portal is displayed in. If blank or auto, browser's locale is used.
+    */
+    locale?: string
+    /**
      * Reference id of the subscription to upgrade. 
      */
     referenceId?: string = "123"
@@ -406,6 +415,9 @@ type createBillingPortal = {
 }
 ```
 </APIMethod>
+<Callout type="info" >
+For supported locales, see the [IETF language tag documentation](https://docs.stripe.com/js/appendix/supported_locales).
+</Callout>
         
 This endpoint creates a Stripe billing portal session and returns a URL in the response as `data.url`. You can redirect users to this URL to allow them to manage their subscription, payment methods, and billing history.
 
@@ -803,7 +815,7 @@ subscription: {
 
 ### Automatic Tax Calculation
 
-To enable automatic tax calculation using the customer’s location, set `automatic_tax` to true. Enabling this parameter causes Checkout to collect any billing address information necessary for tax calculation. You need to have tax registration setup and configured in the Stripe dashboard first for this to work.
+To enable automatic tax calculation using the customer's location, set `automatic_tax` to true. Enabling this parameter causes Checkout to collect any billing address information necessary for tax calculation. You need to have tax registration setup and configured in the Stripe dashboard first for this to work.
 
 ```ts title="auth.ts"
 subscription: {
@@ -819,6 +831,24 @@ subscription: {
     }
 }
 ```
+
+### Trial Period Management
+
+The Stripe plugin automatically prevents users from getting multiple free trials. Once a user has used a trial period (regardless of which plan), they will not be eligible for additional trials on any plan.
+
+**How it works:**
+- The system tracks trial usage across all plans for each user
+- When a user subscribes to a plan with a trial, the system checks their subscription history
+- If the user has ever had a trial (indicated by `trialStart`/`trialEnd` fields or `trialing` status), no new trial will be offered
+- This prevents abuse where users cancel subscriptions and resubscribe to get multiple free trials
+
+**Example scenario:**
+1. User subscribes to "Starter" plan with 7-day trial
+2. User cancels the subscription after the trial
+3. User tries to subscribe to "Premium" plan - no trial will be offered
+4. User will be charged immediately for the Premium plan
+
+This behavior is automatic and requires no additional configuration. The trial eligibility is determined at the time of subscription creation and cannot be overridden through configuration.
 
 ## Troubleshooting
 

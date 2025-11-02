@@ -9,14 +9,32 @@ import type {
 } from "../../plugins/organization/schema";
 import type { Prettify } from "../../types/helper";
 import { type AccessControl, type Role } from "../access";
-import type { BetterAuthClientPlugin } from "../../client/types";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { organization } from "./organization";
 import { useAuthQuery } from "../../client";
-import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
-import { hasPermission } from "./has-permission";
-import type { FieldAttribute } from "../../db";
+import {
+	defaultStatements,
+	adminAc,
+	memberAc,
+	ownerAc,
+	defaultRoles,
+} from "./access";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 import type { OrganizationOptions } from "./types";
+import type { HasPermissionBaseInput } from "./permission";
+import { hasPermissionFn } from "./permission";
+
+/**
+ * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.
+ */
+export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
+	const acRoles: {
+		[x: string]: Role<any> | undefined;
+	} = input.options.roles || defaultRoles;
+
+	return hasPermissionFn(input, acRoles);
+};
 
 interface OrganizationClientOptions {
 	ac?: AccessControl;
@@ -29,24 +47,32 @@ interface OrganizationClientOptions {
 	schema?: {
 		organization?: {
 			additionalFields?: {
-				[key: string]: FieldAttribute;
+				[key: string]: DBFieldAttribute;
 			};
 		};
 		member?: {
 			additionalFields?: {
-				[key: string]: FieldAttribute;
+				[key: string]: DBFieldAttribute;
 			};
 		};
 		invitation?: {
 			additionalFields?: {
-				[key: string]: FieldAttribute;
+				[key: string]: DBFieldAttribute;
 			};
 		};
 		team?: {
 			additionalFields?: {
-				[key: string]: FieldAttribute;
+				[key: string]: DBFieldAttribute;
 			};
 		};
+		organizationRole?: {
+			additionalFields?: {
+				[key: string]: DBFieldAttribute;
+			};
+		};
+	};
+	dynamicAccessControl?: {
+		enabled: boolean;
 	};
 }
 
@@ -56,6 +82,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 	const $listOrg = atom<boolean>(false);
 	const $activeOrgSignal = atom<boolean>(false);
 	const $activeMemberSignal = atom<boolean>(false);
+	const $activeMemberRoleSignal = atom<boolean>(false);
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = CO["ac"] extends AccessControl<infer S>
@@ -118,9 +145,14 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 					enabled: CO["teams"] extends { enabled: true } ? true : false;
 				};
 				schema: Schema;
+				dynamicAccessControl: {
+					enabled: CO["dynamicAccessControl"] extends { enabled: true }
+						? true
+						: false;
+				};
 			}>
 		>,
-		getActions: ($fetch) => ({
+		getActions: ($fetch, _$store, co) => ({
 			$Infer: {
 				ActiveOrganization: {} as OrganizationReturn,
 				Organization: {} as Organization,
@@ -138,7 +170,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 						role: R;
 					},
 				) => {
-					const isAuthorized = hasPermission({
+					const isAuthorized = clientSideHasPermission({
 						role: data.role as string,
 						options: {
 							ac: options?.ac,
@@ -191,17 +223,29 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				},
 			);
 
+			const activeMemberRole = useAuthQuery<{ role: string }>(
+				[$activeMemberRoleSignal],
+				"/organization/get-active-member-role",
+				$fetch,
+				{
+					method: "GET",
+				},
+			);
+
 			return {
 				$listOrg,
 				$activeOrgSignal,
 				$activeMemberSignal,
+				$activeMemberRoleSignal,
 				activeOrganization,
 				listOrganizations,
 				activeMember,
+				activeMemberRole,
 			};
 		},
 		pathMethods: {
 			"/organization/get-full-organization": "GET",
+			"/organization/list-user-teams": "GET",
 		},
 		atomListeners: [
 			{
@@ -231,6 +275,12 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 					return path.includes("/organization/update-member-role");
 				},
 				signal: "$activeMemberSignal",
+			},
+			{
+				matcher(path) {
+					return path.includes("/organization/update-member-role");
+				},
+				signal: "$activeMemberRoleSignal",
 			},
 		],
 	} satisfies BetterAuthClientPlugin;

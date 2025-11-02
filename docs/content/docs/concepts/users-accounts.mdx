@@ -440,7 +440,7 @@ await authClient.unlinkAccount({
 });
 ```
 
-If the account doesn't exist, it will throw an error. Additionally, if the user only has one account, the unlinking process will fail to prevent account lockout unless `allowUnlinkingAll` is set to `true`.
+If the account doesn't exist, it will throw an error. Additionally, if the user only has one account, unlinking will be prevented to stop account lockout (unless `allowUnlinkingAll` is set to `true`).
 
 ```ts title="auth.ts"
 export const auth = betterAuth({

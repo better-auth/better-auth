@@ -1,8 +1,12 @@
 import { APIError } from "better-call";
-import * as z from "zod/v4";
-import { createAuthEndpoint } from "../../../api/call";
+import * as z from "zod";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { verifyTwoFactor } from "../verify-two-factor";
-import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
+import type {
+	TwoFactorProvider,
+	TwoFactorTable,
+	UserWithTwoFactor,
+} from "../types";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import {
 	generateRandomString,
@@ -10,9 +14,9 @@ import {
 	symmetricEncrypt,
 } from "../../../crypto";
 import { setSessionCookie } from "../../../cookies";
-import { BASE_ERROR_CODES } from "../../../error/codes";
-import type { GenericEndpointContext } from "../../../types";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { defaultKeyHasher } from "../utils";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export interface OTPOptions {
 	/**
@@ -78,6 +82,7 @@ export const otp2fa = (options?: OTPOptions) => {
 		...options,
 		period: (options?.period || 3) * 60 * 1000,
 	};
+	const twoFactorTable = "twoFactor";
 
 	async function storeOTP(ctx: GenericEndpointContext, otp: string) {
 		if (opts.storeOTP === "hashed") {
@@ -171,7 +176,16 @@ export const otp2fa = (options?: OTPOptions) => {
 				});
 			}
 			const { session, key } = await verifyTwoFactor(ctx);
-			if (!session.user.twoFactorEnabled) {
+			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+				model: twoFactorTable,
+				where: [
+					{
+						field: "userId",
+						value: session.user.id,
+					},
+				],
+			});
+			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
 				});
@@ -285,12 +299,26 @@ export const otp2fa = (options?: OTPOptions) => {
 		},
 		async (ctx) => {
 			const { session, key, valid, invalid } = await verifyTwoFactor(ctx);
+			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+				model: twoFactorTable,
+				where: [
+					{
+						field: "userId",
+						value: session.user.id,
+					},
+				],
+			});
+			if (!twoFactor) {
+				throw new APIError("BAD_REQUEST", {
+					message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
+				});
+			}
 			const toCheckOtp =
 				await ctx.context.internalAdapter.findVerificationValue(
 					`2fa-otp-${key}`,
 				);
 			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
-			const decryptedOtp = await decryptOTP(ctx, otp);
+			const decryptedOtp = await decryptOTP(ctx, otp!);
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				if (toCheckOtp) {
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -302,7 +330,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				});
 			}
 			const allowedAttempts = options?.allowedAttempts || 5;
-			if (parseInt(counter) >= allowedAttempts) {
+			if (parseInt(counter!) >= allowedAttempts) {
 				await ctx.context.internalAdapter.deleteVerificationValue(
 					toCheckOtp.id,
 				);
@@ -354,7 +382,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				await ctx.context.internalAdapter.updateVerificationValue(
 					toCheckOtp.id,
 					{
-						value: `${otp}:${(parseInt(counter, 10) || 0) + 1}`,
+						value: `${otp}:${(parseInt(counter!, 10) || 0) + 1}`,
 					},
 				);
 				return invalid("INVALID_CODE");

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
 import { parseSetCookieHeader } from "./cookie-utils";
-import type { BetterAuthOptions } from "../types/options";
+import type { BetterAuthOptions } from "@better-auth/core";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
@@ -287,6 +287,42 @@ describe("getSessionCookie", async () => {
 		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
+	it("should respect dontRememberMe when storing session in cookie cache", async () => {
+		const { client, testUser } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+				rememberMe: false,
+			},
+			{
+				onSuccess(c) {
+					const headers = c.response.headers;
+					const setCookieHeader = headers.get("set-cookie");
+					expect(setCookieHeader).toBeDefined();
+
+					const parsed = parseSetCookieHeader(setCookieHeader!);
+
+					const sessionTokenCookie = parsed.get("better-auth.session_token")!;
+					expect(sessionTokenCookie).toBeDefined();
+					expect(sessionTokenCookie["max-age"]).toBeUndefined();
+
+					const sessionDataCookie = parsed.get("better-auth.session_data")!;
+					expect(sessionDataCookie).toBeDefined();
+					expect(sessionDataCookie["max-age"]).toBeUndefined();
+				},
+			},
+		);
+	});
+
 	it("should return null if the cookie is invalid", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			session: {
@@ -331,5 +367,69 @@ describe("getSessionCookie", async () => {
 			headers,
 		});
 		await expect(getCookieCache(request)).rejects.toThrow();
+	});
+
+	it("should log error and skip setting cookie when data exceeds size limit", async () => {
+		const loggerErrors: string[] = [];
+		const mockLogger = {
+			log: (level: string, message: string) => {
+				if (level === "error") {
+					loggerErrors.push(message);
+				}
+			},
+		};
+
+		const { auth } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					customField1: {
+						type: "string",
+						defaultValue: "",
+					},
+					customField2: {
+						type: "string",
+						defaultValue: "",
+					},
+					customField3: {
+						type: "string",
+						defaultValue: "",
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+			logger: mockLogger,
+		});
+
+		// Create a very large string that will exceed the cookie size limit when combined with session data
+		// The limit is 4093 bytes, so we create data that will definitely exceed it
+		const largeString = "x".repeat(2000);
+
+		// Sign up with large user data using the server API
+		const result = await auth.api.signUpEmail({
+			body: {
+				name: "Test User",
+				email: "large-data-test@example.com",
+				password: "password123",
+				customField1: largeString,
+				customField2: largeString,
+				customField3: largeString,
+			},
+		});
+
+		// Check that logger recorded an error about exceeding size limit
+		const sizeError = loggerErrors.find((msg) =>
+			msg.includes("Session data exceeds cookie size limit"),
+		);
+		expect(sizeError).toBeDefined();
+		expect(sizeError).toContain("4093 bytes");
+
+		// The sign up should still succeed
+		expect(result).toBeDefined();
+		expect(result?.user).toBeDefined();
 	});
 });

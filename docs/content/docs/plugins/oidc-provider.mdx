@@ -182,8 +182,6 @@ This endpoint supports [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) 
 
 Once the application is created, you will receive a `client_id` and `client_secret` that you can display to the user.
 
-This Endpoint support [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
-  
 ### Trusted Clients
 
 For first-party applications and internal services, you can configure trusted clients directly in your OIDC provider configuration. Trusted clients bypass database lookups for better performance and can optionally skip consent screens for improved user experience.
@@ -339,7 +337,9 @@ export const auth = betterAuth({
 
 ### JWKS Endpoint
 
-The OIDC Provider plugin can integrate with the JWT plugin to provide proper asymmetric key signing for ID tokens. When enabled, ID tokens will be signed using RSA/EdDSA keys and can be verified using the JWKS endpoint.
+The OIDC Provider plugin can integrate with the JWT plugin to provide asymmetric key signing for ID tokens verifiable at a JWKS endpoint.
+
+To make your plugin OIDC compliant, you **MUST** disable the `/token` endpoint, the OAuth equivalent is located at `/oauth2/token` instead.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -347,6 +347,9 @@ import { oidcProvider } from "better-auth/plugins";
 import { jwt } from "better-auth/plugins";
 
 export const auth = betterAuth({
+    disabledPaths: [
+        "/token",
+    ],
     plugins: [
         jwt(), // Make sure to add the JWT plugin
         oidcProvider({
@@ -438,7 +441,8 @@ Table Name: `oauthApplication`
       name: "userId", 
       type: "string", 
       description: "ID of the user who owns the client. (optional)",
-      isOptional: true
+      isOptional: true,
+      references: { model: "user", field: "id" }
     },
     { 
       name: "createdAt", 
@@ -493,7 +497,7 @@ Table Name: `oauthAccessToken`
       type: "string", 
       description: "ID of the OAuth client",
       isForeignKey: true,
-      references: { model: "oauthClient", field: "clientId" }
+      references: { model: "oauthApplication", field: "clientId" }
     },
     { 
       name: "userId", 
@@ -545,7 +549,7 @@ Table Name: `oauthConsent`
       type: "string", 
       description: "ID of the OAuth client",
       isForeignKey: true,
-      references: { model: "oauthClient", field: "clientId" }
+      references: { model: "oauthApplication", field: "clientId" }
     },
     { 
       name: "scopes", 
@@ -587,3 +591,5 @@ Table Name: `oauthConsent`
 **getAdditionalUserInfoClaim**: `(user: User, scopes: string[], client: Client) => Record<string, any>` - Function to get additional user info claims.
 
 **useJWTPlugin**: `boolean` - When `true`, ID tokens are signed using the JWT plugin's asymmetric keys. When `false` (default), ID tokens are signed with HMAC-SHA256 using the application secret.
+
+**schema**: `AuthPluginSchema` - Customize the OIDC provider schema.

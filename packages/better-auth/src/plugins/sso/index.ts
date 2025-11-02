@@ -1,19 +1,19 @@
-import * as z from "zod/v4";
-import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
+import * as z from "zod";
+import { APIError, sessionMiddleware } from "../../api";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import type { BetterAuthPlugin, User } from "../../types";
 import {
 	createAuthorizationURL,
-	generateState,
-	parseState,
-	setTokenUtil,
 	validateAuthorizationCode,
 	validateToken,
-	type OAuth2Tokens,
-} from "../../oauth2";
+} from "@better-auth/core/oauth2";
 import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { setSessionCookie } from "../../cookies";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { generateState, parseState } from "../../oauth2/state";
+import { setTokenUtil } from "../../oauth2/utils";
 
 export interface SSOOptions {
 	/**
@@ -74,6 +74,9 @@ export interface SSOOptions {
 	defaultOverrideUserInfo?: boolean;
 }
 
+/**
+ * @deprecated Install and use `@better-auth/sso` plugin instead. This export will be removed in the next major version.
+ */
 export const sso = (options?: SSOOptions) => {
 	return {
 		id: "sso",
@@ -603,7 +606,7 @@ export const sso = (options?: SSOOptions) => {
 								"email, organizationSlug, domain or providerId is required",
 						});
 					}
-					domain = body.domain || email?.split("@")[1];
+					domain = body.domain || email?.split("@")[1]!;
 					let orgId = "";
 					if (organizationSlug) {
 						orgId = await ctx.context.adapter
@@ -1023,9 +1026,11 @@ export const sso = (options?: SSOOptions) => {
 					},
 					userId: {
 						type: "string",
+						required: false,
 						references: {
 							model: "user",
 							field: "id",
+							onDelete: "set null",
 						},
 					},
 					providerId: {
@@ -1050,7 +1055,7 @@ export const sso = (options?: SSOOptions) => {
 export interface SSOProvider {
 	issuer: string;
 	oidcConfig: OIDCConfig;
-	userId: string;
+	userId?: string;
 	providerId: string;
 	organizationId?: string;
 }

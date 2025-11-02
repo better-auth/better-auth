@@ -1,5 +1,5 @@
 import type { EndpointContext, InputContext } from "better-call";
-import type { AuthContext } from "../init";
+import type { AuthContext } from "@better-auth/core";
 
 export type HookEndpointContext = EndpointContext<string, any> &
 	Omit<InputContext<string, any>, "method"> & {
@@ -9,7 +9,3 @@ export type HookEndpointContext = EndpointContext<string, any> &
 		};
 		headers?: Headers;
 	};
-
-export type GenericEndpointContext = EndpointContext<string, any> & {
-	context: AuthContext;
-};

@@ -7,7 +7,7 @@ Cookies are used to store data such as session tokens, OAuth state, and more. Al
 
 ### Cookie Prefix
 
-Better Auth cookies will follow `${prefix}.${cookie_name}` format by default. The prefix will be "better-auth" by default. You can change the prefix by setting `cookiePrefix` in the `advanced` object of the auth options.
+By default, Better Auth cookies follow the format `${prefix}.${cookie_name}`. The default prefix is "better-auth". You can change the prefix by setting `cookiePrefix` in the `advanced` object of the auth options.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -21,7 +21,7 @@ export const auth = betterAuth({
 
 ### Custom Cookies
 
-All cookies are `httpOnly` and `secure` if the server is running in production mode.
+All cookies are `httpOnly` and `secure` when the server is running in production mode.
 
 If you want to set custom cookie names and attributes, you can do so by setting `cookieOptions` in the `advanced` object of the auth options.
 
@@ -29,7 +29,7 @@ By default, Better Auth uses the following cookies:
 
 - `session_token` to store the session token
 - `session_data` to store the session data if cookie cache is enabled
-- `dont_remember` to store the `dont_remember` flag if remember me is disabled
+- `dont_remember` to store the flag when `rememberMe` is disabled
 
 Plugins may also use cookies to store data. For example, the Two Factor Authentication plugin uses the `two_factor` cookie to store the two-factor authentication state.
 
@@ -52,10 +52,11 @@ export const auth = betterAuth({
 
 ### Cross Subdomain Cookies
 
-Sometimes you may need to share cookies across subdomains. For example, if you have `app.example.com` and `auth.example.com`, and if you authenticate on `auth.example.com`, you may want to access the same session on `app.example.com`.
+Sometimes you may need to share cookies across subdomains. 
+For example, if you authenticate on `auth.example.com`, you may also want to access the same session on `app.example.com`.
 
 <Callout type="warn">
-The `domain` attribute controls which domains can access the cookie. Setting it to your root domain (e.g. `example.com`) makes the cookie accessible across all subdomains. For security, you should:
+The `domain` attribute controls which domains can access the cookie. Setting it to your root domain (e.g. `example.com`) makes the cookie accessible across all subdomains. For security, follow these guidelines:
 
 1. Only enable cross-subdomain cookies if it's necessary
 2. Set the domain to the most specific scope needed (e.g. `app.example.com` instead of `.example.com`)

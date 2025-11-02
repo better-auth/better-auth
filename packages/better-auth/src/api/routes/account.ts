@@ -1,19 +1,16 @@
-import * as z from "zod/v4";
-import { createAuthEndpoint } from "../call";
+import * as z from "zod";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { APIError } from "better-call";
-import {
-	generateState,
-	decryptOAuthToken,
-	setTokenUtil,
-	type OAuth2Tokens,
-} from "../../oauth2";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "./session";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { SocialProviderListEnum } from "../../social-providers";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { SocialProviderListEnum } from "@better-auth/core/social-providers";
+import { generateState } from "../../oauth2/state";
+import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -36,7 +33,7 @@ export const listUserAccounts = createAuthEndpoint(
 											id: {
 												type: "string",
 											},
-											provider: {
+											providerId: {
 												type: "string",
 											},
 											createdAt: {
@@ -47,25 +44,25 @@ export const listUserAccounts = createAuthEndpoint(
 												type: "string",
 												format: "date-time",
 											},
-										},
-										accountId: {
-											type: "string",
-										},
-										scopes: {
-											type: "array",
-											items: {
+											accountId: {
 												type: "string",
 											},
+											scopes: {
+												type: "array",
+												items: {
+													type: "string",
+												},
+											},
 										},
+										required: [
+											"id",
+											"providerId",
+											"createdAt",
+											"updatedAt",
+											"accountId",
+											"scopes",
+										],
 									},
-									required: [
-										"id",
-										"provider",
-										"createdAt",
-										"updatedAt",
-										"accountId",
-										"scopes",
-									],
 								},
 							},
 						},
@@ -82,7 +79,7 @@ export const listUserAccounts = createAuthEndpoint(
 		return c.json(
 			accounts.map((a) => ({
 				id: a.id,
-				provider: a.providerId,
+				providerId: a.providerId,
 				createdAt: a.createdAt,
 				updatedAt: a.updatedAt,
 				accountId: a.accountId,

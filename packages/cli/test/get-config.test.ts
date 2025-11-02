@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { test } from "vitest";
 import fs from "node:fs/promises";
@@ -358,9 +358,20 @@ describe("getConfig", async () => {
 			export const db = new PrismaClient()`,
 		);
 
+		const consoleErrorSpy = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+
 		await expect(() =>
 			getConfig({ cwd: tmpDir, configPath: "server/auth/auth.ts" }),
 		).rejects.toThrowError();
+
+		expect(consoleErrorSpy).toHaveBeenCalledWith(
+			expect.stringContaining("Couldn't read your auth config."),
+			expect.objectContaining({
+				code: "MODULE_NOT_FOUND",
+			}),
+		);
 	});
 
 	it("should resolve js config", async () => {
@@ -760,6 +771,116 @@ describe("getConfig", async () => {
 		expect(config).not.toBe(null);
 		expect(config).toMatchObject({
 			emailAndPassword: { enabled: true },
+		});
+	});
+
+	it("should resolve export default auth", async () => {
+		const authPath = path.join(tmpDir, "server", "auth");
+		await fs.mkdir(authPath, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authPath, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+
+			 const auth = betterAuth({
+					emailAndPassword: {
+						enabled: true,
+					},
+					socialProviders: {
+						github: {
+							clientId: "test-id",
+							clientSecret: "test-secret"
+						}
+					}
+			 });
+			 
+			 export default auth;`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "server/auth/auth.ts",
+		});
+
+		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+			socialProviders: {
+				github: {
+					clientId: "test-id",
+					clientSecret: "test-secret",
+				},
+			},
+		});
+	});
+
+	it("should resolve export default auth with named export", async () => {
+		const authPath = path.join(tmpDir, "server", "auth");
+		await fs.mkdir(authPath, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authPath, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+
+			 const auth = betterAuth({
+					emailAndPassword: {
+						enabled: true,
+					},
+					socialProviders: {
+						github: {
+							clientId: "test-id",
+							clientSecret: "test-secret"
+						}
+					}
+			 });
+			 
+			 export { auth };
+
+			 export default auth;`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "server/auth/auth.ts",
+		});
+
+		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+			socialProviders: {
+				github: {
+					clientId: "test-id",
+					clientSecret: "test-secret",
+				},
+			},
+		});
+	});
+
+	it("should resolve export default with inline betterAuth call", async () => {
+		const authPath = path.join(tmpDir, "server", "auth");
+		await fs.mkdir(authPath, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authPath, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+
+			 export default betterAuth({
+					emailAndPassword: {
+						enabled: true,
+					},
+					trustedOrigins: ["http://localhost:3000"]
+			 });`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "server/auth/auth.ts",
+		});
+
+		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+			trustedOrigins: ["http://localhost:3000"],
 		});
 	});
 });

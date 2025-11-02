@@ -1,14 +1,15 @@
-import * as z from "zod/v4";
-import { APIError, createAuthEndpoint } from "../../../api";
+import * as z from "zod";
+import { createAuthEndpoint } from "@better-auth/core/middleware";
+import { APIError } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import { isRateLimited } from "../rate-limit";
-import type { AuthContext, GenericEndpointContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
 import { defaultKeyHasher } from "../";
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 
 export async function validateApiKey({
 	hashedKey,
@@ -75,10 +76,7 @@ export async function validateApiKey({
 		const apiKeyPermissions = apiKey.permissions
 			? safeJSONParse<{
 					[key: string]: string[];
-				}>(
-					//@ts-ignore - from DB, this value is always a string
-					apiKey.permissions,
-				)
+				}>(apiKey.permissions)
 			: null;
 
 		if (!apiKeyPermissions) {
@@ -129,7 +127,7 @@ export async function validateApiKey({
 		if (refillInterval && refillAmount) {
 			// if they provide refill info, then we should refill once the interval is reached.
 
-			const timeSinceLastRequest = (now - lastTime) / (1000 * 60 * 60 * 24); // in days
+			const timeSinceLastRequest = now - lastTime;
 			if (timeSinceLastRequest > refillInterval) {
 				remaining = refillAmount;
 				lastRefillAt = new Date();
@@ -194,7 +192,7 @@ export function verifyApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/verify",
@@ -295,10 +293,7 @@ export function verifyApiKey({
 			returningApiKey.permissions = returningApiKey.permissions
 				? safeJSONParse<{
 						[key: string]: string[];
-					}>(
-						//@ts-ignore - from DB, this value is always a string
-						returningApiKey.permissions,
-					)
+					}>(returningApiKey.permissions)
 				: null;
 
 			return ctx.json({

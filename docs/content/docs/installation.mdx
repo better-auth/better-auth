@@ -37,7 +37,7 @@ BETTER_AUTH_SECRET=
 2. **Set Base URL**
 
 ```txt title=".env"
-BETTER_AUTH_URL=http://localhost:3000 #Base URL of your app
+BETTER_AUTH_URL=http://localhost:3000 # Base URL of your app
 ```
 
 </Step>
@@ -131,7 +131,7 @@ Alternatively, if you prefer to use an ORM, you can use one of the built-in adap
         import { betterAuth } from "better-auth";
         import { prismaAdapter } from "better-auth/adapters/prisma";
         // If your Prisma file is located elsewhere, you can change the path
-        import { PrismaClient } from "@/generated/prisma";
+        import { PrismaClient } from "@/generated/prisma/client";
 
         const prisma = new PrismaClient();
         export const auth = betterAuth({
@@ -202,15 +202,12 @@ Configure the authentication methods you want to use. Better Auth comes with bui
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-  //...other options
-  emailAndPassword: {
-    // [!code highlight]
+  //...other options // [!code highlight]
+  emailAndPassword: { // [!code highlight]
     enabled: true, // [!code highlight]
   }, // [!code highlight]
-  socialProviders: {
-    // [!code highlight]
-    github: {
-      // [!code highlight]
+  socialProviders: { // [!code highlight]
+    github: { // [!code highlight]
       clientId: process.env.GITHUB_CLIENT_ID as string, // [!code highlight]
       clientSecret: process.env.GITHUB_CLIENT_SECRET as string, // [!code highlight]
     }, // [!code highlight]
@@ -294,7 +291,7 @@ Create a new file or route in your framework's designated catch-all route handle
 
     const app = new Hono();
 
-    app.on(["POST", "GET"], "/api/auth/**", (c) => auth.handler(c.req.raw));
+    app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
     serve(app);
     ```
@@ -371,17 +368,21 @@ Create a new file or route in your framework's designated catch-all route handle
     </Tab>
     <Tab value="tanstack-start">
     ```ts title="src/routes/api/auth/$.ts"
-    import { auth } from '~/lib/server/auth'
-    import { createServerFileRoute } from '@tanstack/react-start/server'
+    import { createFileRoute } from '@tanstack/react-router'
+    import { auth } from '@/lib/auth/auth'
 
-    export const ServerRoute = createServerFileRoute('/api/auth/$').methods({
-    GET: ({ request }) => {
-        return auth.handler(request)
+    export const Route = createFileRoute('/api/auth/$')({
+    server: {
+        handlers: {
+            GET: async ({ request }:{ request: Request }) => {
+                return await auth.handler(request)
+            },
+            POST: async ({ request }:{ request: Request }) => {
+                return await auth.handler(request)
+            },
+        },
     },
-    POST: ({ request }) => {
-        return auth.handler(request)
-    },
-    });
+    })
     ```
     </Tab>
     <Tab value="expo">

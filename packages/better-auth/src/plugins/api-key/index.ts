@@ -1,5 +1,6 @@
-import { APIError, createAuthMiddleware } from "../../api";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import { APIError } from "../../api";
+import { createAuthMiddleware } from "@better-auth/core/middleware";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { mergeSchema } from "../../db";
 import { apiKeySchema } from "./schema";
 import { getIp } from "../../utils/get-request-ip";
@@ -88,7 +89,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			charactersLength:
 				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
-		disableSessionForAPIKeys: options?.disableSessionForAPIKeys ?? false,
+		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(
@@ -135,8 +136,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		hooks: {
 			before: [
 				{
-					matcher: (ctx) =>
-						!!getter(ctx) && opts.disableSessionForAPIKeys === false,
+					matcher: (ctx) => !!getter(ctx) && opts.enableSessionForAPIKeys,
 					handler: createAuthMiddleware(async (ctx) => {
 						const key = getter(ctx)!;
 
@@ -176,39 +176,47 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						});
 
 						//for cleanup purposes
-						deleteAllExpiredApiKeys(ctx.context);
+						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
+							ctx.context.logger.error(
+								"Failed to delete expired API keys:",
+								err,
+							);
+						});
+
+						const user = await ctx.context.internalAdapter.findUserById(
+							apiKey.userId,
+						);
+						if (!user) {
+							throw new APIError("UNAUTHORIZED", {
+								message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
+							});
+						}
+
+						const session = {
+							user,
+							session: {
+								id: apiKey.id,
+								token: key,
+								userId: apiKey.userId,
+								userAgent: ctx.request?.headers.get("user-agent") ?? null,
+								ipAddress: ctx.request
+									? getIp(ctx.request, ctx.context.options)
+									: null,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								expiresAt:
+									apiKey.expiresAt ||
+									getDate(
+										ctx.context.options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
+										"ms",
+									),
+							},
+						};
+
+						// Always set the session context for API key authentication
+						ctx.context.session = session;
 
 						if (ctx.path === "/get-session") {
-							const user = await ctx.context.internalAdapter.findUserById(
-								apiKey.userId,
-							);
-							if (!user) {
-								throw new APIError("UNAUTHORIZED", {
-									message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
-								});
-							}
-							const session = {
-								user,
-								session: {
-									id: apiKey.id,
-									token: key,
-									userId: apiKey.userId,
-									userAgent: ctx.request?.headers.get("user-agent") ?? null,
-									ipAddress: ctx.request
-										? getIp(ctx.request, ctx.context.options)
-										: null,
-									createdAt: new Date(),
-									updatedAt: new Date(),
-									expiresAt:
-										apiKey.expiresAt ||
-										getDate(
-											ctx.context.options.session?.expiresIn ||
-												60 * 60 * 24 * 7, // 7 days
-											"ms",
-										),
-								},
-							};
-							ctx.context.session = session;
 							return session;
 						} else {
 							return {
