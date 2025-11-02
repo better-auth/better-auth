@@ -13,6 +13,7 @@ import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
 import type { JwtOptions } from "./types";
 import { generateExportedKeyPair } from "./utils";
+import { symmetricEncrypt } from "../../crypto";
 
 export type * from "./types";
 export { createJwk, generateExportedKeyPair } from "./utils";
@@ -38,11 +39,18 @@ export const jwt = (options?: JwtOptions | undefined) => {
 		id: "jwt",
 		async init(ctx) {
 			const adapter = getJwksAdapter(ctx.adapter);
-			if (!adapter.getLatestKey()) {
+			if (!(await adapter.getLatestKey())) {
 				const { privateWebKey, publicWebKey } =
 					await generateExportedKeyPair(options);
 				await adapter.createJwk({
-					privateKey: JSON.stringify(privateWebKey),
+					privateKey: !options?.jwks?.disablePrivateKeyEncryption
+						? JSON.stringify(
+								await symmetricEncrypt({
+									key: ctx.secret,
+									data: JSON.stringify(privateWebKey),
+								}),
+							)
+						: JSON.stringify(privateWebKey),
 					publicKey: JSON.stringify(publicWebKey),
 					createdAt: new Date(),
 				});
