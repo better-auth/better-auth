@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, describe } from "vitest";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { TTY_COLORS } from "@better-auth/core/env";
+import { afterAll, beforeAll, describe } from "vitest";
 import { getAuthTables } from "../db";
 import type { createTestSuite } from "./create-test-suite";
-import { TTY_COLORS } from "@better-auth/core/env";
 import { deepmerge } from "./utils";
 
 export type Logger = {
@@ -23,7 +23,6 @@ export const testAdapter = async ({
 	prefixTests,
 	onFinish,
 	customIdGenerator,
-	defaultRetryCount,
 }: {
 	/**
 	 * A function that will return the adapter instance to test with.
@@ -77,10 +76,6 @@ export const testAdapter = async ({
 	 * Custom ID generator function to be used by the helper functions. (such as `insertRandom`)
 	 */
 	customIdGenerator?: () => string | Promise<string>;
-	/**
-	 * Default retry count for the tests.
-	 */
-	defaultRetryCount?: number;
 }) => {
 	const defaultBAOptions = {} satisfies BetterAuthOptions;
 	let betterAuthOptions = (() => {
@@ -227,7 +222,6 @@ export const testAdapter = async ({
 						runMigrations: migrate,
 						onTestFinish: async () => {},
 						customIdGenerator,
-						defaultRetryCount: defaultRetryCount,
 					});
 				}
 			});

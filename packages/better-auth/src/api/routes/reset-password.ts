@@ -1,16 +1,16 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { APIError } from "better-call";
-import { getDate } from "../../utils/date";
-import { generateId } from "../../utils";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { originCheck } from "../middlewares";
 import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "better-call";
+import * as z from "zod";
+import { generateId } from "../../utils";
+import { getDate } from "../../utils/date";
+import { originCheck } from "../middlewares";
 
 function redirectError(
 	ctx: AuthContext,
 	callbackURL: string | undefined,
-	query?: Record<string, string>,
+	query?: Record<string, string> | undefined,
 ): string {
 	const url = callbackURL
 		? new URL(callbackURL, ctx.baseURL)
@@ -23,7 +23,7 @@ function redirectError(
 function redirectCallback(
 	ctx: AuthContext,
 	callbackURL: string,
-	query?: Record<string, string>,
+	query?: Record<string, string> | undefined,
 ): string {
 	const url = new URL(callbackURL, ctx.baseURL);
 	if (query)
@@ -112,14 +112,11 @@ export const requestPasswordReset = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue(
-			{
-				value: user.user.id,
-				identifier: `reset-password:${verificationToken}`,
-				expiresAt,
-			},
-			ctx,
-		);
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: user.user.id,
+			identifier: `reset-password:${verificationToken}`,
+			expiresAt,
+		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
@@ -134,115 +131,6 @@ export const requestPasswordReset = createAuthEndpoint(
 			status: true,
 			message:
 				"If this email exists in our system, check your email for the reset link",
-		});
-	},
-);
-
-/**
- * @deprecated Use requestPasswordReset instead. This endpoint will be removed in the next major
- * version.
- */
-export const forgetPassword = createAuthEndpoint(
-	"/forget-password",
-	{
-		method: "POST",
-		body: z.object({
-			/**
-			 * The email address of the user to send a password reset email to.
-			 */
-			email: z.string().email().meta({
-				description:
-					"The email address of the user to send a password reset email to",
-			}),
-			/**
-			 * The URL to redirect the user to reset their password.
-			 * If the token isn't valid or expired, it'll be redirected with a query parameter `?
-			 * error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?
-			 * token=VALID_TOKEN
-			 */
-			redirectTo: z
-				.string()
-				.meta({
-					description:
-						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
-				})
-				.optional(),
-		}),
-		metadata: {
-			openapi: {
-				description: "Send a password reset email to the user",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: {
-											type: "boolean",
-										},
-										message: {
-											type: "string",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	},
-	async (ctx) => {
-		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
-			ctx.context.logger.error(
-				"Reset password isn't enabled.Please pass an emailAndPassword.sendResetPassword function in your auth config!",
-			);
-			throw new APIError("BAD_REQUEST", {
-				message: "Reset password isn't enabled",
-			});
-		}
-		const { email, redirectTo } = ctx.body;
-
-		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
-			includeAccounts: true,
-		});
-		if (!user) {
-			ctx.context.logger.error("Reset Password: User not found", { email });
-			return ctx.json({
-				status: true,
-				message:
-					"If this email exists in our system, check your email for the reset link",
-			});
-		}
-		const defaultExpiresIn = 60 * 60 * 1;
-		const expiresAt = getDate(
-			ctx.context.options.emailAndPassword.resetPasswordTokenExpiresIn ||
-				defaultExpiresIn,
-			"sec",
-		);
-		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue(
-			{
-				value: user.user.id,
-				identifier: `reset-password:${verificationToken}`,
-				expiresAt,
-			},
-			ctx,
-		);
-		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
-		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
-		await ctx.context.options.emailAndPassword.sendResetPassword(
-			{
-				user: user.user,
-				url,
-				token: verificationToken,
-			},
-			ctx.request,
-		);
-		return ctx.json({
-			status: true,
 		});
 	},
 );
@@ -301,11 +189,6 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 		throw ctx.redirect(redirectCallback(ctx.context, callbackURL, { token }));
 	},
 );
-
-/**
- * @deprecated Use requestPasswordResetCallback instead
- */
-export const forgetPasswordCallback = requestPasswordResetCallback;
 
 export const resetPassword = createAuthEndpoint(
 	"/reset-password",
@@ -387,21 +270,14 @@ export const resetPassword = createAuthEndpoint(
 		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
 		const account = accounts.find((ac) => ac.providerId === "credential");
 		if (!account) {
-			await ctx.context.internalAdapter.createAccount(
-				{
-					userId,
-					providerId: "credential",
-					password: hashedPassword,
-					accountId: userId,
-				},
-				ctx,
-			);
-		} else {
-			await ctx.context.internalAdapter.updatePassword(
+			await ctx.context.internalAdapter.createAccount({
 				userId,
-				hashedPassword,
-				ctx,
-			);
+				providerId: "credential",
+				password: hashedPassword,
+				accountId: userId,
+			});
+		} else {
+			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		}
 		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 

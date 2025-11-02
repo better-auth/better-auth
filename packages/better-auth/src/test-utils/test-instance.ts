@@ -1,22 +1,24 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import type {
+	BetterAuthClientOptions,
+	BetterAuthOptions,
+} from "@better-auth/core";
+import type { SuccessContext } from "@better-fetch/fetch";
+import Database from "better-sqlite3";
+import { Kysely, MysqlDialect, PostgresDialect, sql } from "kysely";
+import { MongoClient } from "mongodb";
+import { createPool } from "mysql2/promise";
+import { Pool } from "pg";
 import { afterAll } from "vitest";
+import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
-import type { Session, User } from "../types";
-import type { BetterAuthClientOptions } from "@better-auth/core";
-import { getMigrations } from "../db/get-migration";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
-import type { SuccessContext } from "@better-fetch/fetch";
+import { getMigrations } from "../db/get-migration";
 import { getAdapter } from "../db/utils";
-import Database from "better-sqlite3";
-import { getBaseURL } from "../utils/url";
-import { Kysely, MysqlDialect, PostgresDialect, sql } from "kysely";
-import { Pool } from "pg";
-import { MongoClient } from "mongodb";
-import { mongodbAdapter } from "../adapters/mongodb-adapter";
-import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { Session, User } from "../types";
+import { getBaseURL } from "../utils/url";
 
 const cleanupSet = new Set<Function>();
 
@@ -36,14 +38,16 @@ export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
 	C extends BetterAuthClientOptions,
 >(
-	options?: O,
-	config?: {
-		clientOptions?: C;
-		port?: number;
-		disableTestUser?: boolean;
-		testUser?: Partial<User>;
-		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
-	},
+	options?: O | undefined,
+	config?:
+		| {
+				clientOptions?: C;
+				port?: number;
+				disableTestUser?: boolean;
+				testUser?: Partial<User>;
+				testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
+		  }
+		| undefined,
 ) {
 	const testWith = config?.testWith || "sqlite";
 
@@ -112,10 +116,6 @@ export async function getTestInstance<
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
-		advanced: {
-			disableCSRFCheck: true,
-			...options?.advanced,
-		},
 		plugins: [bearer(), ...(options?.plugins || [])],
 	} as unknown as O;
 
@@ -180,7 +180,7 @@ export async function getTestInstance<
 
 	const customFetchImpl = async (
 		url: string | URL | Request,
-		init?: RequestInit,
+		init?: RequestInit | undefined,
 	) => {
 		const headers = init?.headers || {};
 		const storageHeaders = currentUserContextStorage.getStore()?.headers;

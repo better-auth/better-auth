@@ -2,79 +2,79 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
-	validateAuthorizationCode,
 	refreshAccessToken,
+	validateAuthorizationCode,
 } from "../oauth2";
 
 interface Partner {
 	/** Partner-specific ID (consent required: kakaotalk_message) */
-	uuid?: string;
+	uuid?: string | undefined;
 }
 
 interface Profile {
 	/** Nickname (consent required: profile/nickname) */
-	nickname?: string;
+	nickname?: string | undefined;
 	/** Thumbnail image URL (consent required: profile/profile image) */
-	thumbnail_image_url?: string;
+	thumbnail_image_url?: string | undefined;
 	/** Profile image URL (consent required: profile/profile image) */
-	profile_image_url?: string;
+	profile_image_url?: string | undefined;
 	/** Whether the profile image is the default */
-	is_default_image?: boolean;
+	is_default_image?: boolean | undefined;
 	/** Whether the nickname is the default */
-	is_default_nickname?: boolean;
+	is_default_nickname?: boolean | undefined;
 }
 
 interface KakaoAccount {
 	/** Consent required: profile info (nickname/profile image) */
-	profile_needs_agreement?: boolean;
+	profile_needs_agreement?: boolean | undefined;
 	/** Consent required: nickname */
-	profile_nickname_needs_agreement?: boolean;
+	profile_nickname_needs_agreement?: boolean | undefined;
 	/** Consent required: profile image */
-	profile_image_needs_agreement?: boolean;
+	profile_image_needs_agreement?: boolean | undefined;
 	/** Profile info */
-	profile?: Profile;
+	profile?: Profile | undefined;
 	/** Consent required: name */
-	name_needs_agreement?: boolean;
+	name_needs_agreement?: boolean | undefined;
 	/** Name */
-	name?: string;
+	name?: string | undefined;
 	/** Consent required: email */
-	email_needs_agreement?: boolean;
+	email_needs_agreement?: boolean | undefined;
 	/** Email valid */
-	is_email_valid?: boolean;
+	is_email_valid?: boolean | undefined;
 	/** Email verified */
-	is_email_verified?: boolean;
+	is_email_verified?: boolean | undefined;
 	/** Email */
-	email?: string;
+	email?: string | undefined;
 	/** Consent required: age range */
-	age_range_needs_agreement?: boolean;
+	age_range_needs_agreement?: boolean | undefined;
 	/** Age range */
-	age_range?: string;
+	age_range?: string | undefined;
 	/** Consent required: birth year */
-	birthyear_needs_agreement?: boolean;
+	birthyear_needs_agreement?: boolean | undefined;
 	/** Birth year (YYYY) */
-	birthyear?: string;
+	birthyear?: string | undefined;
 	/** Consent required: birthday */
-	birthday_needs_agreement?: boolean;
+	birthday_needs_agreement?: boolean | undefined;
 	/** Birthday (MMDD) */
-	birthday?: string;
+	birthday?: string | undefined;
 	/** Birthday type (SOLAR/LUNAR) */
-	birthday_type?: string;
+	birthday_type?: string | undefined;
 	/** Whether birthday is in a leap month */
-	is_leap_month?: boolean;
+	is_leap_month?: boolean | undefined;
 	/** Consent required: gender */
-	gender_needs_agreement?: boolean;
+	gender_needs_agreement?: boolean | undefined;
 	/** Gender (male/female) */
-	gender?: string;
+	gender?: string | undefined;
 	/** Consent required: phone number */
-	phone_number_needs_agreement?: boolean;
+	phone_number_needs_agreement?: boolean | undefined;
 	/** Phone number */
-	phone_number?: string;
+	phone_number?: string | undefined;
 	/** Consent required: CI */
-	ci_needs_agreement?: boolean;
+	ci_needs_agreement?: boolean | undefined;
 	/** CI (unique identifier) */
-	ci?: string;
+	ci?: string | undefined;
 	/** CI authentication time (UTC) */
-	ci_authenticated_at?: string;
+	ci_authenticated_at?: string | undefined;
 }
 
 export interface KakaoProfile {
@@ -84,17 +84,17 @@ export interface KakaoProfile {
 	 * Whether the user has signed up (only present if auto-connection is disabled)
 	 * false: preregistered, true: registered
 	 */
-	has_signed_up?: boolean;
+	has_signed_up?: boolean | undefined;
 	/** UTC datetime when the user connected the service */
-	connected_at?: string;
+	connected_at?: string | undefined;
 	/** UTC datetime when the user signed up via Kakao Sync */
-	synched_at?: string;
+	synched_at?: string | undefined;
 	/** Custom user properties */
-	properties?: Record<string, any>;
+	properties?: Record<string, any> | undefined;
 	/** Kakao account info */
 	kakao_account: KakaoAccount;
 	/** Partner info */
-	for_partner?: Partner;
+	for_partner?: Partner | undefined;
 }
 
 export interface KakaoOptions extends ProviderOptions<KakaoProfile> {
@@ -109,8 +109,8 @@ export const kakao = (options: KakaoOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["account_email", "profile_image", "profile_nickname"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "kakao",
 				options,

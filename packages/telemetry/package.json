@@ -1,20 +1,15 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.4.0-beta.10",
+  "version": "1.4.0-beta.15",
   "description": "Telemetry package for Better Auth",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "better-auth-dev-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
   "typesVersions": {
@@ -31,7 +26,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "tsdown": "^0.15.6",
+    "tsdown": "catalog:",
     "type-fest": "^4.31.0"
   },
   "dependencies": {

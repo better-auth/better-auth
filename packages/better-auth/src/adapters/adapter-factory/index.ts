@@ -1,21 +1,23 @@
-import { safeJSONParse } from "../../utils/json";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import type {
+	CleanedWhere,
+	DBAdapter,
+	DBTransactionAdapter,
+	Where,
+} from "@better-auth/core/db/adapter";
+import { getColorDepth, logger, TTY_COLORS } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type { BetterAuthOptions } from "@better-auth/core";
 import { generateId as defaultGenerateId } from "../../utils";
+import { safeJSONParse } from "../../utils/json";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 } from "./types";
-import type { DBFieldAttribute } from "@better-auth/core/db";
-import { logger, TTY_COLORS, getColorDepth } from "@better-auth/core/env";
-import type {
-	DBAdapter,
-	DBTransactionAdapter,
-	Where,
-	CleanedWhere,
-} from "@better-auth/core/db/adapter";
+
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
@@ -56,7 +58,7 @@ export const createAdapterFactory =
 			options.advanced?.database?.useNumberId === true &&
 			config.supportsNumericIds === false
 		) {
-			throw new Error(
+			throw new BetterAuthError(
 				`[${config.adapterName}] Your database or database adapter does not support numeric ids. Please disable "useNumberId" in your config.`,
 			);
 		}
@@ -102,7 +104,7 @@ export const createAdapterFactory =
 			if (!f) {
 				debugLog(`Field ${field} not found in model ${model}`);
 				debugLog(`Schema:`, schema);
-				throw new Error(`Field ${field} not found in model ${model}`);
+				throw new BetterAuthError(`Field ${field} not found in model ${model}`);
 			}
 			return field;
 		};
@@ -143,7 +145,7 @@ export const createAdapterFactory =
 			if (!m) {
 				debugLog(`Model "${model}" not found in schema`);
 				debugLog(`Schema:`, schema);
-				throw new Error(`Model "${model}" not found in schema`);
+				throw new BetterAuthError(`Model "${model}" not found in schema`);
 			}
 			return m;
 		};
@@ -304,7 +306,11 @@ export const createAdapterFactory =
 
 			const fields = schema[defaultModelName]!.fields;
 			fields.id = idField({ customModelName: defaultModelName });
-			return fields[defaultFieldName]!;
+			const fieldAttributes = fields[defaultFieldName];
+			if (!fieldAttributes) {
+				throw new BetterAuthError(`Field ${field} not found in model ${model}`);
+			}
+			return fieldAttributes;
 		};
 
 		const transformInput = async (
@@ -495,7 +501,7 @@ export const createAdapterFactory =
 				} = w;
 				if (operator === "in") {
 					if (!Array.isArray(value)) {
-						throw new Error("Value must be an array");
+						throw new BetterAuthError("Value must be an array");
 					}
 				}
 
@@ -593,17 +599,6 @@ export const createAdapterFactory =
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
-						if (
-							typeof config.debugLogs === "object" &&
-							"isRunningAdapterTests" in config.debugLogs &&
-							config.debugLogs.isRunningAdapterTests
-						) {
-							// hide warning in adapter tests
-						} else {
-							logger.warn(
-								`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
-							);
-						}
 						lazyLoadTransaction = createAsIsTransaction(adapter);
 					} else {
 						logger.debug(

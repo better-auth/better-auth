@@ -1,9 +1,9 @@
-import { type Session } from "./../../types";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
-import { inferAdditionalFields } from "./client";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { type Session } from "./../../types";
 import { twoFactor, twoFactorClient } from "../two-factor";
+import { inferAdditionalFields } from "./client";
 
 describe("additionalFields", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, sessionSetter } =
