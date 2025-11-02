@@ -4,7 +4,7 @@ import { type AdminSchema } from "./schema";
 
 export interface UserWithRole extends User {
 	role?: string | undefined;
-	banned?: (boolean | null) | undefined;
+	banned: boolean | null;
 	banReason?: (string | null) | undefined;
 	banExpires?: (Date | null) | undefined;
 }
