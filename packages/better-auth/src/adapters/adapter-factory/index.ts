@@ -681,7 +681,7 @@ export const createAdapterFactory =
 				const model = modelName;
 				const field = joinConfig.on.to;
 				const value = baseData[joinConfig.on.from];
-				if (!value) {
+				if (value === null || value === undefined) {
 					// If there is no value, it could mean that the query used a `select` clause that didn't include the field.
 					// or the query result is purely empty.
 					// In any case, we return null/empty array.
