@@ -1,4 +1,5 @@
 import type { AuthContext } from "@better-auth/core";
+import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey, ApiKeyOptions } from "../types";
@@ -9,7 +10,6 @@ import { getApiKey } from "./get-api-key";
 import { listApiKeys } from "./list-api-keys";
 import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
-import { safeJSONParse } from "../../../utils/json";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
 	Required<
@@ -41,18 +41,28 @@ let lastChecked: Date | null = null;
 export function prepareApiKeyForHook<T extends Partial<ApiKey>>(data: T): T {
 	return {
 		...data,
-		metadata: data.metadata ? safeJSONParse(data.metadata as any) : null,
-		permissions: data.permissions
-			? safeJSONParse(data.permissions as any)
-			: null,
+		metadata:
+			typeof data.metadata === "string"
+				? safeJSONParse(data.metadata)
+				: data.metadata,
+		permissions:
+			typeof data.permissions === "string"
+				? safeJSONParse(data.permissions)
+				: data.permissions,
 	} as T;
 }
 
 export function prepareApiKeyForDB<T extends Partial<ApiKey>>(data: T): T {
 	return {
 		...data,
-		metadata: JSON.stringify(data.metadata),
-		permissions: JSON.stringify(data.permissions),
+		metadata:
+			data.metadata !== null && data.metadata !== undefined
+				? JSON.stringify(data.metadata)
+				: data.metadata,
+		permissions:
+			data.permissions !== null && data.permissions !== undefined
+				? JSON.stringify(data.permissions)
+				: data.permissions,
 	} as T;
 }
 

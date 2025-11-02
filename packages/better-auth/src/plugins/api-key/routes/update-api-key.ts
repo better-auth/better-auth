@@ -8,9 +8,9 @@ import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import {
+	type PredefinedApiKeyOptions,
 	prepareApiKeyForDB,
 	prepareApiKeyForHook,
-	type PredefinedApiKeyOptions,
 } from ".";
 export function updateApiKey({
 	opts,

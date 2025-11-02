@@ -9,9 +9,9 @@ import { defaultKeyHasher } from "../";
 import { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import {
+	type PredefinedApiKeyOptions,
 	prepareApiKeyForDB,
 	prepareApiKeyForHook,
-	type PredefinedApiKeyOptions,
 } from ".";
 
 export function createApiKey({

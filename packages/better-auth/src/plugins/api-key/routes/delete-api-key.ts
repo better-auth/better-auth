@@ -5,7 +5,7 @@ import { APIError, sessionMiddleware } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { prepareApiKeyForHook, type PredefinedApiKeyOptions } from ".";
+import { type PredefinedApiKeyOptions, prepareApiKeyForHook } from ".";
 export function deleteApiKey({
 	opts,
 	schema,
