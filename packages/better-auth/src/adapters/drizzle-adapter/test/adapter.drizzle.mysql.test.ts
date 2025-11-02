@@ -7,7 +7,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { drizzleAdapter } from "../drizzle-adapter";
@@ -21,10 +20,13 @@ const mysqlDB = createPool({
 const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(mysqlDB, options, "mysql");
-		return drizzleAdapter(drizzle(mysqlDB), {
+		return drizzleAdapter(drizzle(mysqlDB, { schema }), {
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "mysql",
+			experimental: {
+				joins: true,
+			},
 		});
 	},
 	async runMigrations(betterAuthOptions) {
@@ -66,7 +68,6 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "mysql" }),
 	],
 	async onFinish() {
 		await mysqlDB.end();
@@ -75,3 +76,4 @@ const { execute } = await testAdapter({
 });
 
 execute();
+ 

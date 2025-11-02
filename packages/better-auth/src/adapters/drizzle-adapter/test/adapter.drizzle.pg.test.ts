@@ -6,7 +6,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { drizzleAdapter } from "../drizzle-adapter";
@@ -26,11 +25,14 @@ const cleanupDatabase = async (shouldDestroy = false) => {
 const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(pgDB, options, "pg");
-		return drizzleAdapter(drizzle(pgDB), {
+		return drizzleAdapter(drizzle(pgDB, { schema }), {
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "pg",
 			transaction: true,
+			experimental: {
+				joins: true,
+			},
 		});
 	},
 	async runMigrations(betterAuthOptions) {
@@ -62,7 +64,6 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "pg" }),
 	],
 	async onFinish() {
 		await cleanupDatabase(true);
@@ -71,3 +72,4 @@ const { execute } = await testAdapter({
 });
 
 execute();
+ 

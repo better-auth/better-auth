@@ -7,9 +7,12 @@ import type {
 	Kysely,
 } from "kysely";
 import { sql } from "kysely";
+import { initGetFieldName } from "../adapters/adapter-factory/get-field-name";
+import { initGetModelName } from "../adapters/adapter-factory/get-model-name";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
+import { getAuthTables } from "./get-tables";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text"],
@@ -345,6 +348,28 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 		return typeMap[type]![dbType || "sqlite"];
 	}
+	const getModelName = initGetModelName({
+		schema: getAuthTables(config),
+		usePlural: false,
+	});
+	const getFieldName = initGetFieldName({
+		schema: getAuthTables(config),
+		usePlural: false,
+	});
+
+	// Helper function to safely resolve model and field names, falling back to
+	// user-supplied strings for external tables not in the BetterAuth schema
+	function getReferencePath(model: string, field: string): string {
+		try {
+			const modelName = getModelName(model);
+			const fieldName = getFieldName({ model, field });
+			return `${modelName}.${fieldName}`;
+		} catch {
+			// If resolution fails (external table), fall back to user-supplied references
+			return `${model}.${field}`;
+		}
+	}
+
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
@@ -356,7 +381,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 						if (field.references) {
 							col = col
 								.references(
-									`${field.references.model}.${field.references.field}`,
+									getReferencePath(
+										field.references.model,
+										field.references.field,
+									),
 								)
 								.onDelete(field.references.onDelete || "cascade");
 						}
@@ -414,7 +442,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
-							.references(`${field.references.model}.${field.references.field}`)
+							.references(
+								getReferencePath(
+									field.references.model,
+									field.references.field,
+								),
+							)
 							.onDelete(field.references.onDelete || "cascade");
 					}
 
@@ -449,3 +482,4 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}
 	return { toBeCreated, toBeAdded, runMigrations, compileMigrations };
 }
+ 

@@ -55,4 +55,11 @@ export async function generatePrismaSchema(
 		})
 		.join("\n");
 	await fs.writeFile(fileName, code || "", "utf-8");
+
+	// Uncomment the following code to generate the TEST.prisma file
+	// useful for testing a given iteration's Prisma schema
+	// if(iteration === 2){
+	// 	await fs.writeFile(join(import.meta.dirname, `TEST.prisma`), code || "", "utf-8");
+	// }
 }
+ 

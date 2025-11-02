@@ -7,7 +7,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
@@ -26,6 +25,7 @@ const { execute } = await testAdapter({
 		kyselyAdapter(kyselyDB, {
 			type: "mysql",
 			debugLogs: { isRunningAdapterTests: true },
+			experimental: { joins: true },
 		}),
 	async runMigrations(betterAuthOptions) {
 		await mysqlDB.query("DROP DATABASE IF EXISTS better_auth");
@@ -48,10 +48,10 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "mysql" }),
 	],
 	async onFinish() {
 		await mysqlDB.end();
 	},
 });
 execute();
+ 

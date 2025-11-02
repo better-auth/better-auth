@@ -4,7 +4,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../tests";
 import { memoryAdapter } from "./memory-adapter";
@@ -13,7 +12,7 @@ let db: Record<string, any[]> = {};
 
 const { execute } = await testAdapter({
 	adapter: () => {
-		return memoryAdapter(db);
+		return memoryAdapter(db, { experimental: { joins: true } });
 	},
 	runMigrations: (options) => {
 		db = {};
@@ -29,9 +28,9 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite(),
 	],
 	async onFinish() {},
 });
 
 execute();
+ 

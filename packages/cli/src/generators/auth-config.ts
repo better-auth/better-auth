@@ -715,3 +715,4 @@ const getPosition = (str: string, index: number) => {
 		character: lines[lines.length - 1]!.length,
 	};
 };
+ 

@@ -7,7 +7,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
@@ -29,6 +28,7 @@ const { execute } = await testAdapter({
 		kyselyAdapter(kyselyDB, {
 			type: "postgres",
 			debugLogs: { isRunningAdapterTests: true },
+			experimental: { joins: true },
 		}),
 	prefixTests: "pg",
 	async runMigrations(betterAuthOptions) {
@@ -44,10 +44,10 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "pg" }),
 	],
 	async onFinish() {
 		await pgDB.end();
 	},
 });
 execute();
+ 

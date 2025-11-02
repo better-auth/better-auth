@@ -50,7 +50,7 @@ export const mongodbAdapter = (
 			db: Db,
 			session?: ClientSession | undefined,
 		): AdapterFactoryCustomizeAdapterCreator =>
-		({ options, getFieldName, schema, getDefaultModelName }) => {
+		({ getFieldAttributes, getFieldName, schema, getDefaultModelName }) => {
 			function serializeID({
 				field,
 				value,
@@ -251,38 +251,179 @@ export const mongodbAdapter = (
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
-				async findOne({ model, where, select }) {
-					const clause = convertWhereClause({ where, model });
-					const projection = select
-						? Object.fromEntries(
-								select.map((field) => [getFieldName({ field, model }), 1]),
-							)
-						: undefined;
+				async findOne({ model, where, select, join }) {
+					const matchStage = where
+						? { $match: convertWhereClause({ where, model }) }
+						: { $match: {} };
+					const pipeline: any[] = [matchStage];
+
+					if (join) {
+						for (const [joinedModel, joinConfig] of Object.entries(join)) {
+							const localField = getFieldName({
+								field: joinConfig.on.from,
+								model,
+							});
+							const foreignField = getFieldName({
+								field: joinConfig.on.to,
+								model: joinedModel,
+							});
+
+							pipeline.push({
+								$lookup: {
+									from: joinedModel,
+									localField: localField === "id" ? "_id" : localField,
+									foreignField: foreignField === "id" ? "_id" : foreignField,
+									as: joinedModel,
+								},
+							});
+
+							// For inner join, filter out documents without matches
+							if (joinConfig.type === "inner") {
+								pipeline.push({
+									$match: {
+										[joinedModel]: { $ne: [] },
+									},
+								});
+							}
+
+							// Only unwind if the foreign field has a unique constraint (one-to-one relationship)
+							const joinedModelSchema =
+								schema[getDefaultModelName(joinedModel)];
+							const foreignFieldAttribute =
+								joinedModelSchema?.fields[joinConfig.on.to];
+							const isUnique = foreignFieldAttribute?.unique === true;
+
+							if (isUnique) {
+								// For one-to-one relationships, unwind to flatten to a single object
+								pipeline.push({
+									$unwind: {
+										path: `$${joinedModel}`,
+										preserveNullAndEmptyArrays: joinConfig.type !== "inner",
+									},
+								});
+							}
+							// For one-to-many, keep as array - no unwind
+						}
+					}
+
+					if (select) {
+						const projection: any = {};
+						select.forEach((field) => {
+							projection[getFieldName({ field, model })] = 1;
+						});
+
+						// Include joined collections in projection
+						if (join) {
+							for (const joinedModel of Object.keys(join)) {
+								projection[joinedModel] = 1;
+							}
+						}
+
+						pipeline.push({ $project: projection });
+					}
+
+					pipeline.push({ $limit: 1 });
+
 					const res = await db
 						.collection(model)
-						.findOne(clause, { session, projection });
-					if (!res) return null;
-					return res as any;
+						.aggregate(pipeline, { session })
+						.toArray();
+
+					if (!res || res.length === 0) return null;
+					return res[0] as any;
 				},
-				async findMany({ model, where, limit, offset, sortBy }) {
-					const clause = where ? convertWhereClause({ where, model }) : {};
-					const cursor = db.collection(model).find(clause, { session });
-					if (limit) cursor.limit(limit);
-					if (offset) cursor.skip(offset);
-					if (sortBy)
-						cursor.sort(
-							getFieldName({ field: sortBy.field, model }),
-							sortBy.direction === "desc" ? -1 : 1,
-						);
-					const res = await cursor.toArray();
+				async findMany({ model, where, limit, offset, sortBy, join }) {
+					const matchStage = where
+						? { $match: convertWhereClause({ where, model }) }
+						: { $match: {} };
+					const pipeline: any[] = [matchStage];
+
+					if (join) {
+						for (const [joinedModel, joinConfig] of Object.entries(join)) {
+							const localField = getFieldName({
+								field: joinConfig.on.from,
+								model,
+							});
+							const foreignField = getFieldName({
+								field: joinConfig.on.to,
+								model: joinedModel,
+							});
+
+							pipeline.push({
+								$lookup: {
+									from: joinedModel,
+									localField: localField === "id" ? "_id" : localField,
+									foreignField: foreignField === "id" ? "_id" : foreignField,
+									as: joinedModel,
+								},
+							});
+
+							// For inner join, filter out documents without matches
+							if (joinConfig.type === "inner") {
+								pipeline.push({
+									$match: {
+										[joinedModel]: { $ne: [] },
+									},
+								});
+							}
+
+							// Only unwind if the foreign field has a unique constraint (one-to-one relationship)
+							const foreignFieldAttribute = getFieldAttributes({
+								model: joinedModel,
+								field: joinConfig.on.to,
+							});
+							const isUnique = foreignFieldAttribute?.unique === true;
+
+							if (isUnique) {
+								// For one-to-one relationships, unwind to flatten to a single object
+								pipeline.push({
+									$unwind: {
+										path: `$${joinedModel}`,
+										preserveNullAndEmptyArrays: joinConfig.type !== "inner",
+									},
+								});
+							}
+							// For one-to-many, keep as array - no unwind
+						}
+					}
+
+					if (sortBy) {
+						pipeline.push({
+							$sort: {
+								[getFieldName({ field: sortBy.field, model })]:
+									sortBy.direction === "desc" ? -1 : 1,
+							},
+						});
+					}
+
+					if (offset) {
+						pipeline.push({ $skip: offset });
+					}
+
+					if (limit) {
+						pipeline.push({ $limit: limit });
+					}
+
+					const res = await db
+						.collection(model)
+						.aggregate(pipeline, { session })
+						.toArray();
+
 					return res as any;
 				},
 				async count({ model, where }) {
-					const clause = where ? convertWhereClause({ where, model }) : {};
+					const matchStage = where
+						? { $match: convertWhereClause({ where, model }) }
+						: { $match: {} };
+					const pipeline: any[] = [matchStage, { $count: "total" }];
+
 					const res = await db
 						.collection(model)
-						.countDocuments(clause, { session });
-					return res;
+						.aggregate(pipeline, { session })
+						.toArray();
+
+					if (!res || res.length === 0) return 0;
+					return res[0]?.total ?? 0;
 				},
 				async update({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
@@ -341,6 +482,7 @@ export const mongodbAdapter = (
 				_id: "id",
 			},
 			supportsNumericIds: false,
+			supportsJoin: true,
 			transaction:
 				config?.client && (config?.transaction ?? true)
 					? async (cb) => {
@@ -463,3 +605,4 @@ function escapeForMongoRegex(input: string, maxLength = 256): string {
 	// Source: PCRE docs — https://www.pcre.org/original/doc/html/pcrepattern.html
 	return input.slice(0, maxLength).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+ 

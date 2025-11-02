@@ -165,3 +165,4 @@ export type AdapterConfig = AdapterFactoryConfig;
  * @deprecated Use `AdapterFactoryCustomizeAdapterCreator` instead. This export will be removed in a future version.
  */
 export type CreateCustomAdapter = AdapterFactoryCustomizeAdapterCreator;
+ 

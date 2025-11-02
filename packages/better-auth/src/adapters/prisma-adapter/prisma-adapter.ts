@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	DBAdapter,
 	DBAdapterDebugLogOption,
+	JoinOption,
 	Where,
 } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -45,6 +46,17 @@ export interface PrismaConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Whether to enable experimental features.
+	 */
+	experimental?: {
+		/**
+		 * Whether to enable joins.
+		 *
+		 * @default false
+		 */
+		joins?: boolean;
+	};
 }
 
 interface PrismaClient {}
@@ -69,7 +81,13 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(prisma: PrismaClient): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldName }) => {
+		({
+			getFieldName,
+			getModelName,
+			getFieldAttributes,
+			getDefaultModelName,
+			schema,
+		}) => {
 			const db = prisma as PrismaClientInternal;
 
 			const convertSelect = (
@@ -83,6 +101,66 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						[getFieldName({ model, field: cur })]: true,
 					};
 				}, {});
+			};
+
+			/**
+			 * Build the join key name based on whether the foreign field is unique or not.
+			 * If unique, use singular. Otherwise, pluralize (add 's').
+			 */
+			const getJoinKeyName = (
+				baseModel: string,
+				joinedModel: string,
+				schema: any,
+			): string => {
+				try {
+					const defaultBaseModelName = getDefaultModelName(baseModel);
+					const defaultJoinedModelName = getDefaultModelName(joinedModel);
+					const key = getModelName(joinedModel).toLowerCase();
+
+					// First, check if the joined model has FKs to the base model (forward join)
+					let foreignKeys = Object.entries(
+						schema[defaultJoinedModelName]?.fields || {},
+					).filter(
+						([_field, fieldAttributes]: any) =>
+							fieldAttributes.references &&
+							getDefaultModelName(fieldAttributes.references.model) ===
+								defaultBaseModelName,
+					);
+
+					if (foreignKeys.length > 0) {
+						// Forward join: joined model has FK to base model
+						// This is typically a one-to-many relationship (plural)
+						// Unless the FK is unique, then it's one-to-one (singular)
+						const [_foreignKey, foreignKeyAttributes] = foreignKeys[0] as any;
+						// Only check if field is explicitly marked as unique
+						const isUnique = foreignKeyAttributes?.unique === true;
+						return isUnique ? key : `${key}s`;
+					}
+
+					// Check backwards: does the base model have FKs to the joined model?
+					foreignKeys = Object.entries(
+						schema[defaultBaseModelName]?.fields || {},
+					).filter(
+						([_field, fieldAttributes]: any) =>
+							fieldAttributes.references &&
+							getDefaultModelName(fieldAttributes.references.model) ===
+								defaultJoinedModelName,
+					);
+
+					if (foreignKeys.length > 0) {
+						// Backwards join: base model has FK to joined model
+						// The relationship on the joined model is always the model name (singular)
+						// because it refers to all records in the joined model that have a FK pointing back
+						// But wait - we need to check uniqueness to pluralize correctly
+						// If the FK is unique: singular (only one record in joined model points back)
+						// If the FK is NOT unique: we still use singular because it's the model name
+						// Actually, for backwards joins, Prisma uses the model name directly as the relationship
+						return key;
+					}
+				} catch {
+					// Fallback to pluralizing if we can't determine uniqueness
+				}
+				return `${getModelName(joinedModel).toLowerCase()}s`;
 			};
 			function operatorToPrismaOperator(operator: string) {
 				switch (operator) {
@@ -168,19 +246,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						select: convertSelect(select, model),
 					});
 				},
-				async findOne({ model, where, select }) {
-					const whereClause = convertWhereClause(model, where);
-					if (!db[model]) {
-						throw new BetterAuthError(
-							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
-						);
-					}
-					return await db[model]!.findFirst({
-						where: whereClause,
-						select: convertSelect(select, model),
-					});
-				},
-				async findMany({ model, where, limit, offset, sortBy }) {
+				async findOne({ model, where, select, join: _join }) {
+					// this is just "JoinOption" type because we disabled join transformation in adapter config
+					const join = _join as unknown as JoinOption | undefined;
 					const whereClause = convertWhereClause(model, where);
 					if (!db[model]) {
 						throw new BetterAuthError(
@@ -188,7 +256,78 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						);
 					}
 
-					return (await db[model]!.findMany({
+					// transform join keys to use Prisma expected field names
+					let include: Record<string, boolean | { take?: number }> | undefined =
+						undefined;
+					let map = new Map<string, string>();
+					if (join) {
+						include = {};
+						for (const [joinModel, value] of Object.entries(join)) {
+							const key = getJoinKeyName(model, joinModel, schema);
+							// Handle limit: if value is an object with limit, use Prisma's take syntax
+							if (
+								typeof value === "object" &&
+								value !== null &&
+								"limit" in value
+							) {
+								include[key] = { take: value.limit };
+							} else {
+								include[key] = value as boolean;
+							}
+							map.set(key, getModelName(joinModel));
+						}
+					}
+
+					let result = await db[model]!.findFirst({
+						where: whereClause,
+						select: include ? undefined : convertSelect(select, model), // Can't use `include` and `select` together
+						include,
+					});
+
+					// transform the resulting `include` items to use better-auth expected field names
+					if (join && result) {
+						for (const [includeKey, originalKey] of map.entries()) {
+							if (includeKey === originalKey) continue;
+							if (includeKey in result) {
+								result[originalKey] = result[includeKey];
+								delete result[includeKey];
+							}
+						}
+					}
+					return result;
+				},
+				async findMany({ model, where, limit, offset, sortBy, join: _join }) {
+					// this is just "JoinOption" type because we disabled join transformation in adapter config
+					const join = _join as unknown as JoinOption | undefined;
+					const whereClause = convertWhereClause(model, where);
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+					// transform join keys to use Prisma expected field names
+					let include: Record<string, boolean | { take?: number }> | undefined =
+						undefined;
+					let map = new Map<string, string>();
+					if (join) {
+						include = {};
+						for (const [joinModel, value] of Object.entries(join)) {
+							const key = getJoinKeyName(model, joinModel, schema);
+							// Handle limit: if value is an object with limit, use Prisma's take syntax
+							if (
+								typeof value === "object" &&
+								value !== null &&
+								"limit" in value
+							) {
+								include[key] = { take: value.limit };
+							} else {
+								include[key] = value as boolean;
+							}
+							map.set(key, getModelName(joinModel));
+						}
+					}
+
+					const result = await db[model]!.findMany({
 						where: whereClause,
 						take: limit || 100,
 						skip: offset || 0,
@@ -200,7 +339,23 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 									},
 								}
 							: {}),
-					})) as any[];
+						include,
+					});
+
+					// transform the resulting `include` items to use better-auth expected field names
+					if (join && Array.isArray(result)) {
+						for (const item of result) {
+							for (const [includeKey, originalKey] of map.entries()) {
+								if (includeKey === originalKey) continue;
+								if (includeKey in item) {
+									item[originalKey] = item[includeKey];
+									delete item[includeKey];
+								}
+							}
+						}
+					}
+
+					return result;
 				},
 				async count({ model, where }) {
 					const whereClause = convertWhereClause(model, where);
@@ -275,6 +430,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 								return cb(adapter);
 							})
 					: false,
+			disableTransformJoin: true,
+			supportsJoin: config.experimental?.joins ?? false,
 		},
 		adapter: createCustomAdapter(prisma),
 	};
@@ -285,3 +442,4 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		return adapter(options);
 	};
 };
+ 

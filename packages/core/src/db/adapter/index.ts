@@ -271,6 +271,22 @@ export interface DBAdapterFactoryConfig<
 	 * @default false
 	 */
 	disableTransformInput?: boolean | undefined;
+	/**
+	 * Whether to disable the transform join.
+	 * Do not use this option unless you know what you are doing.
+	 * @default false
+	 */
+	disableTransformJoin?: boolean | undefined;
+	/**
+	 * Whether the adapter supports native joins.
+	 *
+	 * If set to `false`, Better-Auth will handle joins by making multiple queries
+	 * and combining the results. If set to `true`, the adapter is expected to handle
+	 * joins natively (e.g., SQL JOIN operations).
+	 *
+	 * @default false
+	 */
+	supportsJoin?: boolean | undefined;
 }
 
 export type Where = {
@@ -300,6 +316,60 @@ export type Where = {
 	connector?: ("AND" | "OR") | undefined;
 };
 
+/**
+ * JoinOption configuration for relational queries.
+ *
+ * Allows you to join related tables/models in a single query operation.
+ * Each key represents the name of the joined table/model, and the value
+ * configures how the join should be performed.
+ */
+export type JoinOption = {
+	[model: string]: boolean | { limit?: number };
+};
+
+/**
+ * Once `JoinOption` has gone through the adapter factory, it will be transformed into a `JoinConfig`.
+ */
+export type JoinConfig = {
+	[model: string]: {
+		/**
+		 * The JoinOption type that will be performed
+		 *
+		 * * **left**: returns all rows from the left table, plus matching rows from the right (if none, NULL fills in).
+		 * * **inner**: returns rows where there’s a match in both tables.
+		 * * Not supported yet: ~~**right**: returns all rows from the right table, plus matching rows from the left (if none, NULL fills in).~~
+		 * * Not supported yet: ~~**full**: returns rows from both sides, filling in gaps with NULLs.~~
+		 *
+		 * @default "left"
+		 */
+		type: "left" | "inner";
+		on: {
+			/**
+			 * Column name from the main table
+			 */
+			from: string;
+			/**
+			 * Column name from the joined table
+			 */
+			to: string;
+		};
+		/**
+		 * Limit the number of rows to return.
+		 *
+		 * If the relation has `unique` constraint, then this option will be ignored and limit will be set to 1.
+		 *
+		 * @default 100
+		 */
+		limit: number;
+		/**
+		 * Whether the relation has a unique constraint.
+		 *
+		 * If set to `true`, then the relation will be treated as a one-to-one relationship.
+		 */
+		isUnique: boolean;
+	};
+};
+
 export type DBTransactionAdapter<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > = Omit<DBAdapter<Options>, "transaction">;
@@ -321,6 +391,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		model: string;
 		where: Where[];
 		select?: string[] | undefined;
+		join?: JoinOption | undefined;
 	}) => Promise<T | null>;
 	findMany: <T>(data: {
 		model: string;
@@ -333,6 +404,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 			  }
 			| undefined;
 		offset?: number | undefined;
+		join?: JoinOption | undefined;
 	}) => Promise<T[]>;
 	count: (data: {
 		model: string;
@@ -402,10 +474,12 @@ export interface CustomAdapter {
 		model,
 		where,
 		select,
+		join,
 	}: {
 		model: string;
 		where: CleanedWhere[];
 		select?: string[] | undefined;
+		join?: JoinConfig | undefined;
 	}) => Promise<T | null>;
 	findMany: <T>({
 		model,
@@ -413,12 +487,14 @@ export interface CustomAdapter {
 		limit,
 		sortBy,
 		offset,
+		join,
 	}: {
 		model: string;
 		where?: CleanedWhere[] | undefined;
 		limit: number;
 		sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
 		offset?: number | undefined;
+		join?: JoinConfig | undefined;
 	}) => Promise<T[]>;
 	delete: ({
 		model,
@@ -464,3 +540,4 @@ export interface DBAdapterInstance<
 > {
 	(options: BetterAuthOptions): DBAdapter<Options>;
 }
+ 

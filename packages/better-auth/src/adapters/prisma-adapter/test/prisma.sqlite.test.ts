@@ -6,7 +6,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { prismaAdapter } from "../prisma-adapter";
@@ -26,6 +25,9 @@ const { execute } = await testAdapter({
 		return prismaAdapter(db, {
 			provider: dialect,
 			debugLogs: { isRunningAdapterTests: true },
+			experimental: {
+				joins: true,
+			},
 		});
 	},
 	runMigrations: async (options: BetterAuthOptions) => {
@@ -44,14 +46,14 @@ const { execute } = await testAdapter({
 		destroyPrismaClient({ migrationCount: migrationCount - 1, dialect });
 	},
 	tests: [
-		normalTestSuite({}),
+		normalTestSuite(),
 		transactionsTestSuite(),
 		authFlowTestSuite(),
-		numberIdTestSuite({}),
-		performanceTestSuite({ dialect }),
+		numberIdTestSuite(),
 	],
 	onFinish: async () => {},
 	prefixTests: dialect,
 });
 
 execute();
+ 

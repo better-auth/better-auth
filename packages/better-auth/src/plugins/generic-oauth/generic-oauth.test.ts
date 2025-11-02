@@ -159,7 +159,6 @@ describe("oauth2", async () => {
 				headers: newHeaders,
 			},
 		});
-		console.log(session.data, newHeaders);
 		const ctx = await auth.$context;
 		const accounts = await ctx.internalAdapter.findAccounts(
 			session.data?.user.id!,
@@ -962,3 +961,4 @@ describe("oauth2", async () => {
 		expect(session.data?.user.name).toBe("OAuth2 Cookie State");
 	});
 });
+ 

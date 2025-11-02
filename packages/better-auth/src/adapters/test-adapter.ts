@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import { TTY_COLORS } from "@better-auth/core/env";
+import { logger, TTY_COLORS } from "@better-auth/core/env";
 import { afterAll, beforeAll, describe } from "vitest";
 import { getAuthTables } from "../db";
 import type { createTestSuite } from "./create-test-suite";
@@ -23,6 +23,7 @@ export const testAdapter = async ({
 	prefixTests,
 	onFinish,
 	customIdGenerator,
+	skipPostTestCleanup,
 }: {
 	/**
 	 * A function that will return the adapter instance to test with.
@@ -76,6 +77,11 @@ export const testAdapter = async ({
 	 * Custom ID generator function to be used by the helper functions. (such as `insertRandom`)
 	 */
 	customIdGenerator?: () => string | Promise<string>;
+	/**
+	 * If true, the post test cleanup will be skipped.
+	 * Only use if you know what you are doing, useful for debugging purposes.
+	 */
+	skipPostTestCleanup?: boolean;
 }) => {
 	const defaultBAOptions = {} satisfies BetterAuthOptions;
 	let betterAuthOptions = (() => {
@@ -195,7 +201,13 @@ export const testAdapter = async ({
 				}, 20000);
 
 				afterAll(async () => {
-					await cleanup();
+					if (!skipPostTestCleanup) {
+						await cleanup();
+					} else {
+						logger.warn(
+							"Warning: Skipping post test cleanup as `skipPostTestCleanup` is true",
+						);
+					}
 					await onFinish?.();
 				}, 20000);
 
@@ -228,3 +240,4 @@ export const testAdapter = async ({
 		},
 	};
 };
+ 

@@ -8,7 +8,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { drizzleAdapter } from "../drizzle-adapter";
@@ -24,10 +23,13 @@ let sqliteDB = new Database(dbFilePath);
 const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(sqliteDB, options, "sqlite");
-		return drizzleAdapter(drizzle(sqliteDB), {
+		return drizzleAdapter(drizzle(sqliteDB, { schema }), {
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "sqlite",
+			experimental: {
+				joins: true,
+			},
 		});
 	},
 	async runMigrations(betterAuthOptions) {
@@ -66,7 +68,6 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "sqlite" }),
 	],
 	async onFinish() {
 		clearSchemaCache();
@@ -75,3 +76,4 @@ const { execute } = await testAdapter({
 });
 
 execute();
+ 

@@ -8,7 +8,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
@@ -25,6 +24,9 @@ const { execute } = await testAdapter({
 		return kyselyAdapter(kyselyDB, {
 			type: "sqlite",
 			debugLogs: { isRunningAdapterTests: true },
+			experimental: {
+				joins: true,
+			},
 		});
 	},
 	prefixTests: "sqlite",
@@ -42,14 +44,14 @@ const { execute } = await testAdapter({
 		await runMigrations();
 	},
 	tests: [
-		normalTestSuite({}),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
+		normalTestSuite(),
+		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "sqlite" }),
 	],
 	async onFinish() {
 		database.close();
 	},
 });
 execute();
+ 

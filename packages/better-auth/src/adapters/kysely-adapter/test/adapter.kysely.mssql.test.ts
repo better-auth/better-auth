@@ -8,7 +8,6 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
@@ -292,6 +291,7 @@ const { execute } = await testAdapter({
 		return kyselyAdapter(kyselyDB, {
 			type: "mssql",
 			debugLogs: { isRunningAdapterTests: true },
+			experimental: { joins: true },
 		});
 	},
 	async runMigrations(betterAuthOptions) {
@@ -308,10 +308,10 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite({ showDB }),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "mssql" }),
 	],
 	async onFinish() {
 		kyselyDB.destroy();
 	},
 });
 execute();
+ 

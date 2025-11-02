@@ -4,6 +4,7 @@ import type {
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import {
 	and,
@@ -69,13 +70,32 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Whether to enable experimental features.
+	 */
+	experimental?: {
+		/**
+		 * Whether to enable joins.
+		 *
+		 * If set to `true`, it's expected that your drizzle schema includes Drizzle Relations.
+		 * @see https://orm.drizzle.team/docs/relations
+		 *
+		 * @default false
+		 */
+		joins?: boolean;
+	};
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldName, debugLog }) => {
+		({
+			getFieldName,
+			getFieldAttributes,
+			getModelName,
+			getDefaultModelName,
+		}) => {
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
 				if (!schema) {
@@ -351,6 +371,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 				}
 			}
+
 			return {
 				async create({ model, data: values }) {
 					const schemaModel = getSchema(model);
@@ -359,34 +380,136 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const returned = await withReturning(model, builder, values);
 					return returned;
 				},
-				async findOne({ model, where }) {
+				async findOne({ model, where, join }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const res = await db
+
+					if (config.experimental?.joins) {
+						if (!db.query[model]) {
+							logger.error(
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,
+							);
+							logger.info("Falling back to regular query");
+						} else {
+							let includes:
+								| Record<string, { limit: number } | boolean>
+								| undefined;
+
+							const pluralJoinResults: string[] = [];
+							if (join) {
+								includes = {};
+								const joinEntries = Object.entries(join);
+								for (const [model, joinAttr] of joinEntries) {
+									const isUnique = joinAttr.isUnique;
+									includes[`${model}${isUnique ? "" : "s"}`] = isUnique
+										? true
+										: { limit: joinAttr.limit };
+									if (!isUnique) pluralJoinResults.push(`${model}s`);
+								}
+							}
+							let query = db.query[model].findFirst({
+								where: clause[0],
+								with: includes,
+							});
+							const res = await query;
+							if (res) {
+								for (const pluralJoinResult of pluralJoinResults) {
+									const singularJoinResultName = pluralJoinResult.slice(0, -1);
+									res[singularJoinResultName] = res[pluralJoinResult];
+									delete res[pluralJoinResult];
+								}
+							}
+							return res;
+						}
+					}
+
+					let query = db
 						.select()
 						.from(schemaModel)
 						.where(...clause);
+
+					const res = await query;
 					if (!res.length) return null;
 					return res[0];
 				},
-				async findMany({ model, where, sortBy, limit, offset }) {
+				async findMany({ model, where, sortBy, limit, offset, join }) {
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
-
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
-					const builder = db
-						.select()
-						.from(schemaModel)
-						.limit(limit || 100)
-						.offset(offset || 0);
+
+					if (config.experimental?.joins) {
+						if (!db.query[model]) {
+							logger.error(
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,
+							);
+							logger.info("Falling back to regular query");
+						} else {
+							let includes:
+								| Record<string, { limit: number } | boolean>
+								| undefined;
+
+							const pluralJoinResults: string[] = [];
+							if (join) {
+								includes = {};
+								const joinEntries = Object.entries(join);
+								for (const [model, joinAttr] of joinEntries) {
+									const isUnique = joinAttr.isUnique;
+									includes[`${model}${isUnique ? "" : "s"}`] = isUnique
+										? true
+										: { limit: joinAttr.limit };
+									if (!isUnique) pluralJoinResults.push(`${model}s`);
+								}
+							}
+							let orderBy: SQL<unknown>[] | undefined = undefined;
+							if (sortBy?.field) {
+								orderBy = [
+									sortFn(
+										schemaModel[getFieldName({ model, field: sortBy?.field })],
+									),
+								];
+							}
+							let query = db.query[model].findMany({
+								where: clause[0],
+								with: includes,
+								limit: limit ?? 100,
+								offset: offset ?? 0,
+								orderBy,
+							});
+							let res = await query;
+							if (res) {
+								for (const item of res) {
+									for (const pluralJoinResult of pluralJoinResults) {
+										const singularJoinResultName = pluralJoinResult.slice(
+											0,
+											-1,
+										);
+										item[singularJoinResultName] = item[pluralJoinResult];
+										delete item[pluralJoinResult];
+									}
+								}
+							}
+							return res;
+						}
+					}
+
+					let builder = db.select().from(schemaModel);
+
+					const effectiveLimit = limit ?? 100;
+					const effectiveOffset = offset ?? 0;
+
+					builder = builder.limit(effectiveLimit);
+					builder = builder.offset(effectiveOffset);
+
 					if (sortBy?.field) {
-						builder.orderBy(
+						builder = builder.orderBy(
 							sortFn(
 								schemaModel[getFieldName({ model, field: sortBy?.field })],
 							),
 						);
 					}
-					return (await builder.where(...clause)) as any[];
+
+					const res = await builder.where(...clause);
+					return res;
 				},
 				async count({ model, where }) {
 					const schemaModel = getSchema(model);
@@ -437,6 +560,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			supportsJoin: (() => {
+				if (config.experimental?.joins) {
+					if (!db.query || Object.keys(db.query).length === 0) {
+						logger.error(
+							"You have enabled experimental joins for Drizzle, however we're unable to detect any relations.\nPlease ensure that you have re-generated your drizzle schema or adde drizzle-kit relations to your schema.",
+						);
+						return false;
+					}
+					return true;
+				}
+				return false;
+			})(),
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
@@ -457,3 +592,4 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		return adapter(options);
 	};
 };
+ 

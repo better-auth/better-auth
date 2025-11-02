@@ -1,3 +1,4 @@
+import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import {
 	type BetterAuthDBSchema,
 	type DBFieldAttribute,
@@ -36,11 +37,25 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	}
 	const fileExist = existsSync(filePath);
 
-	let code: string = generateImport({ databaseType, tables, options });
+	let code: string = generateImport({
+		databaseType,
+		tables,
+		options,
+	});
+
+	const getModelName = initGetModelName({
+		schema: tables,
+		usePlural: adapter.options?.adapterConfig?.usePlural,
+	});
+
+	const getFieldName = initGetFieldName({
+		schema: tables,
+		usePlural: adapter.options?.adapterConfig?.usePlural,
+	});
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
-		const modelName = getModelName(table.modelName, adapter.options);
+		const modelName = getModelName(tableKey);
 		const fields = table.fields;
 
 		function getType(name: string, field: DBFieldAttribute) {
@@ -207,10 +222,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}${
 								attr.references
 									? `.references(()=> ${getModelName(
-											tables[attr.references.model]?.modelName ||
-												attr.references.model,
-											adapter.options,
-										)}.${fields[attr.references.field]?.fieldName || attr.references.field}, { onDelete: '${
+											attr.references.model,
+										)}.${getFieldName({ model: attr.references.model, field: attr.references.field })}, { onDelete: '${
 											attr.references.onDelete || "cascade"
 										}' })`
 									: ""
@@ -218,8 +231,110 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						})
 						.join(",\n ")}
 				});`;
+
 		code += `\n${schema}\n`;
 	}
+
+	let relationsString: string = "";
+	for (const tableKey in tables) {
+		const table = tables[tableKey]!;
+
+		type Relation = {
+			/**
+			 * The key of the relation that will be defined in the Drizzle schema.
+			 * For "one" relations: singular (e.g., "user")
+			 * For "many" relations: plural (e.g., "posts")
+			 */
+			key: string;
+			/**
+			 * The model name being referenced.
+			 */
+			model: string;
+			/**
+			 * The type of the relation: "one" (many-to-one) or "many" (one-to-many).
+			 */
+			type: "one" | "many";
+			/**
+			 * Foreign key field name and reference details (only for "one" relations).
+			 */
+			reference?: {
+				field: string;
+				references: string;
+			};
+		};
+
+		const relations: Relation[] = [];
+
+		// 1. Find all foreign keys in THIS table (creates "one" relations)
+		const fields = Object.entries(table.fields);
+		const foreignFields = fields.filter(([_, field]) => field.references);
+
+		for (const [fieldName, field] of foreignFields) {
+			const referencedModel = field.references!.model;
+			relations.push({
+				key: getModelName(referencedModel),
+				model: getModelName(referencedModel),
+				type: "one",
+				reference: {
+					field: `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`,
+					references: `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`,
+				},
+			});
+		}
+
+		// 2. Find all OTHER tables that reference THIS table (creates "many" relations)
+		const otherModels = Object.entries(tables).filter(
+			([modelName]) => modelName !== tableKey,
+		);
+
+		for (const [modelName, otherTable] of otherModels) {
+			const foreignKeysPointingHere = Object.entries(otherTable.fields).filter(
+				([_, field]) =>
+					field.references?.model === tableKey ||
+					field.references?.model === getModelName(tableKey),
+			);
+
+			for (const [fieldName, field] of foreignKeysPointingHere) {
+				const isUnique = !!field.unique;
+				const relationKey = isUnique
+					? getModelName(modelName)
+					: `${getModelName(modelName)}s`;
+
+				relations.push({
+					key: relationKey,
+					model: getModelName(modelName),
+					type: isUnique ? "one" : "many",
+				});
+			}
+		}
+
+		const hasOne = relations.some((relation) => relation.type === "one");
+		const hasMany = relations.some((relation) => relation.type === "many");
+
+		let tableRelation = `export const ${table.modelName}Relations = relations(${getModelName(
+			table.modelName,
+		)}, ({ ${hasOne ? "one" : ""}${hasMany ? `${hasOne ? ", " : ""}many` : ""} }) => ({
+				${relations
+					.map(
+						({ key, type, model, reference }) =>
+							` ${key}: ${type}(${model}${
+								!reference
+									? ""
+									: `, {
+								fields: [${reference.field}],
+								references: [${reference.references}],
+							}`
+							})`,
+					)
+					.join(",\n ")}
+			}))`;
+
+		if (relations.length > 0) {
+			relationsString += `\n${tableRelation}\n`;
+		}
+	}
+	code += `\n${relationsString}`;
+
 	const formattedCode = await prettier.format(code, {
 		parser: "typescript",
 	});
@@ -239,7 +354,7 @@ function generateImport({
 	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
 }) {
-	const rootImports: string[] = [];
+	const rootImports: string[] = ["relations"];
 	const coreImports: string[] = [];
 
 	let hasBigint = false;
@@ -347,9 +462,3 @@ function generateImport({
 		.join(", ")} } from "drizzle-orm/${databaseType}-core";\n`;
 }
 
-function getModelName(
-	modelName: string,
-	options: Record<string, any> | undefined,
-) {
-	return options?.usePlural ? `${modelName}s` : modelName;
-}
