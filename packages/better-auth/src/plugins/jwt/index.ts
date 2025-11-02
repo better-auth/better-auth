@@ -12,7 +12,7 @@ import { mergeSchema } from "../../db/schema";
 import * as z from "zod";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { JwtOptions } from "./types";
-import { createJwk } from "./utils";
+import { createJwk, generateExportedKeyPair } from "./utils";
 export type * from "./types";
 export { generateExportedKeyPair, createJwk } from "./utils";
 
@@ -35,6 +35,18 @@ export const jwt = (options?: JwtOptions) => {
 
 	return {
 		id: "jwt",
+		async init(ctx) {
+			const adapter = getJwksAdapter(ctx.adapter);
+			if (!adapter.getLatestKey()) {
+				const { privateWebKey, publicWebKey } =
+					await generateExportedKeyPair(options);
+				await adapter.createJwk({
+					privateKey: JSON.stringify(privateWebKey),
+					publicKey: JSON.stringify(publicWebKey),
+					createdAt: new Date(),
+				});
+			}
+		},
 		options,
 		endpoints: {
 			getJwks: createAuthEndpoint(
