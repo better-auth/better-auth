@@ -4,7 +4,7 @@ import { importJWK, type JWTPayload, SignJWT } from "jose";
 import { symmetricDecrypt } from "../../crypto";
 import { getJwksAdapter } from "./adapter";
 import type { JwtOptions } from "./types";
-import { createJwk, toExpJWT } from "./utils";
+import { toExpJWT } from "./utils";
 
 export async function signJWT(
 	ctx: GenericEndpointContext,
@@ -56,9 +56,7 @@ export async function signJWT(
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
 
-	if (key === undefined) {
-		key = await createJwk(ctx, options);
-	}
+	if (key === undefined) throw new BetterAuthError("There is no key available");
 
 	let privateWebKey = privateKeyEncryptionEnabled
 		? await symmetricDecrypt({

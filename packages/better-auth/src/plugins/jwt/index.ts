@@ -12,7 +12,8 @@ import { getJwksAdapter } from "./adapter";
 import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
 import type { JwtOptions } from "./types";
-import { createJwk, generateExportedKeyPair } from "./utils";
+import { generateExportedKeyPair } from "./utils";
+
 export type * from "./types";
 export { createJwk, generateExportedKeyPair } from "./utils";
 
@@ -146,10 +147,8 @@ export const jwt = (options?: JwtOptions | undefined) => {
 
 					const keySets = await adapter.getAllKeys();
 
-					if (keySets.length === 0) {
-						const key = await createJwk(ctx, options);
-						keySets.push(key);
-					}
+					if (keySets.length === 0)
+						throw new BetterAuthError("There is no key available");
 
 					const keyPairConfig = options?.jwks?.keyPairConfig;
 					const defaultCrv = keyPairConfig
