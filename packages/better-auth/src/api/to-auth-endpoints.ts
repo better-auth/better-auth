@@ -1,3 +1,7 @@
+import type { AuthContext, HookEndpointContext } from "@better-auth/core";
+import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import { shouldPublishLog } from "@better-auth/core/env";
 import {
 	APIError,
 	type EndpointContext,
@@ -5,21 +9,17 @@ import {
 	type InputContext,
 	toResponse,
 } from "better-call";
-import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
 import { createDefu } from "defu";
-import { shouldPublishLog } from "@better-auth/core/env";
-import type { AuthContext, HookEndpointContext } from "@better-auth/core";
-import { runWithEndpointContext } from "@better-auth/core/context";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
 > & {
 	path: string;
-	asResponse?: boolean;
+	asResponse?: boolean | undefined;
 	context: AuthContext & {
 		logger: AuthContext["logger"];
-		returned?: unknown;
-		responseHeaders?: Headers;
+		returned?: unknown | undefined;
+		responseHeaders?: Headers | undefined;
 	};
 };
 
@@ -38,8 +38,8 @@ export function toAuthEndpoints<
 		((
 			context: EndpointContext<string, any> & InputContext<string, any>,
 		) => Promise<any>) & {
-			path?: string;
-			options?: EndpointOptions;
+			path?: string | undefined;
+			options?: EndpointOptions | undefined;
 		}
 	> = {};
 
@@ -310,8 +310,8 @@ function getHooks(authContext: AuthContext) {
 	/**
 	 * Add plugin added hooks at last
 	 */
-	pluginBeforeHooks.length && beforeHooks.push(...pluginBeforeHooks);
-	pluginAfterHooks.length && afterHooks.push(...pluginAfterHooks);
+	if (pluginBeforeHooks.length) beforeHooks.push(...pluginBeforeHooks);
+	if (pluginAfterHooks.length) afterHooks.push(...pluginAfterHooks);
 
 	return {
 		beforeHooks,

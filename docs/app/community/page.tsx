@@ -1,6 +1,7 @@
+import Section from "@/components/landing/section";
 import CommunityHeader from "./_components/header";
 import Stats from "./_components/stats";
-import Section from "@/components/landing/section";
+
 type NpmPackageResp = {
 	downloads: number;
 	start: string;

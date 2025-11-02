@@ -2,6 +2,7 @@
 
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import type { ComponentProps } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -9,7 +10,6 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
 export function ThemeToggle(props: ComponentProps<typeof Button>) {
