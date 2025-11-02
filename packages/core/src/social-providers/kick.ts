@@ -31,8 +31,8 @@ export const kick = (options: KickOptions) => {
 		name: "Kick",
 		createAuthorizationURL({ state, scopes, redirectURI, codeVerifier }) {
 			const _scopes = options.disableDefaultScope ? [] : ["user:read"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 
 			return createAuthorizationURL({
 				id: "kick",

@@ -378,7 +378,9 @@ describe("type", () => {
 			} | null;
 			isPending: boolean;
 			error: BetterFetchError | null;
-			refetch: (queryParams?: { query?: SessionQueryParams }) => void;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => void;
 		}>();
 	});
 });

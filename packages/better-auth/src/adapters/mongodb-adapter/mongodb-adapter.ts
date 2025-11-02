@@ -16,19 +16,19 @@ export interface MongoDBAdapterConfig {
 	 * MongoDB client instance
 	 * If not provided, Database transactions won't be enabled.
 	 */
-	client?: MongoClient;
+	client?: MongoClient | undefined;
 	/**
 	 * Enable debug logs for the adapter
 	 *
 	 * @default false
 	 */
-	debugLogs?: DBAdapterDebugLogOption;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 	/**
 	 * Use plural table names
 	 *
 	 * @default false
 	 */
-	usePlural?: boolean;
+	usePlural?: boolean | undefined;
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
@@ -36,14 +36,20 @@ export interface MongoDBAdapterConfig {
 	 * set this to `false` and operations will be executed sequentially.
 	 * @default false
 	 */
-	transaction?: boolean;
+	transaction?: boolean | undefined;
 }
 
-export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
+export const mongodbAdapter = (
+	db: Db,
+	config?: MongoDBAdapterConfig | undefined,
+) => {
 	let lazyOptions: BetterAuthOptions | null;
 
 	const createCustomAdapter =
-		(db: Db, session?: ClientSession): AdapterFactoryCustomizeAdapterCreator =>
+		(
+			db: Db,
+			session?: ClientSession | undefined,
+		): AdapterFactoryCustomizeAdapterCreator =>
 		({ options, getFieldName, schema, getDefaultModelName }) => {
 			function serializeID({
 				field,
@@ -60,12 +66,18 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					field === "_id" ||
 					schema[model]!.fields[field]?.references?.field === "id"
 				) {
+					if (value === null || value === undefined) {
+						return value;
+					}
 					if (typeof value !== "string") {
 						if (value instanceof ObjectId) {
 							return value;
 						}
 						if (Array.isArray(value)) {
 							return value.map((v) => {
+								if (v === null || v === undefined) {
+									return v;
+								}
 								if (typeof v === "string") {
 									try {
 										return new ObjectId(v);
@@ -137,19 +149,59 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 							};
 							break;
 						case "gt":
-							condition = { [field]: { $gt: value } };
+							condition = {
+								[field]: {
+									$gt: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "gte":
-							condition = { [field]: { $gte: value } };
+							condition = {
+								[field]: {
+									$gte: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "lt":
-							condition = { [field]: { $lt: value } };
+							condition = {
+								[field]: {
+									$lt: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "lte":
-							condition = { [field]: { $lte: value } };
+							condition = {
+								[field]: {
+									$lte: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "ne":
-							condition = { [field]: { $ne: value } };
+							condition = {
+								[field]: {
+									$ne: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "contains":
 							condition = {

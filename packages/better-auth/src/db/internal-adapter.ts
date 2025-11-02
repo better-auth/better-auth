@@ -195,10 +195,10 @@ export const createInternalAdapter = (
 			return sessions;
 		},
 		listUsers: async (
-			limit?: number,
-			offset?: number,
-			sortBy?: SortBy | SortBy[],
-			where?: Where[],
+			limit?: number | undefined,
+			offset?: number | undefined,
+			sortBy?: SortBy | SortBy[] | undefined,
+			where?: Where[] | undefined,
 		) => {
 			const users = await (await getCurrentAdapter(adapter)).findMany<User>({
 				model: "user",
@@ -209,7 +209,7 @@ export const createInternalAdapter = (
 			});
 			return users;
 		},
-		countTotalUsers: async (where?: Where[]) => {
+		countTotalUsers: async (where?: Where[] | undefined) => {
 			const total = await (await getCurrentAdapter(adapter)).count({
 				model: "user",
 				where,
@@ -260,9 +260,9 @@ export const createInternalAdapter = (
 		},
 		createSession: async (
 			userId: string,
-			dontRememberMe?: boolean,
-			override?: Partial<Session> & Record<string, any>,
-			overrideAll?: boolean,
+			dontRememberMe?: boolean | undefined,
+			override?: (Partial<Session> & Record<string, any>) | undefined,
+			overrideAll?: boolean | undefined,
 		) => {
 			const ctx = await getCurrentAuthContext();
 			const headers = ctx.headers || ctx.request?.headers;
@@ -757,7 +757,7 @@ export const createInternalAdapter = (
 		},
 		findUserByEmail: async (
 			email: string,
-			options?: { includeAccounts: boolean },
+			options?: { includeAccounts: boolean } | undefined,
 		) => {
 			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
 				model: "user",
