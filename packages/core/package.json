@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.0-beta.13",
+  "version": "1.4.0-beta.15",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "main": "./dist/index.js",
@@ -8,124 +8,58 @@
   "exports": {
     ".": {
       "better-auth-dev-source": "./src/index.ts",
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./api": {
       "better-auth-dev-source": "./src/api/index.ts",
-      "import": {
-        "types": "./dist/api/index.d.ts",
-        "default": "./dist/api/index.js"
-      },
-      "require": {
-        "types": "./dist/api/index.d.cts",
-        "default": "./dist/api/index.cjs"
-      }
+      "types": "./dist/api/index.d.ts",
+      "default": "./dist/api/index.js"
     },
     "./async_hooks": {
       "better-auth-dev-source": "./src/async_hooks/index.ts",
-      "import": {
-        "types": "./dist/async_hooks/index.d.ts",
-        "default": "./dist/async_hooks/index.js"
-      },
-      "require": {
-        "types": "./dist/async_hooks/index.d.cts",
-        "default": "./dist/async_hooks/index.cjs"
-      }
+      "types": "./dist/async_hooks/index.d.ts",
+      "default": "./dist/async_hooks/index.js"
     },
     "./context": {
       "better-auth-dev-source": "./src/context/index.ts",
-      "import": {
-        "types": "./dist/context/index.d.ts",
-        "default": "./dist/context/index.js"
-      },
-      "require": {
-        "types": "./dist/context/index.d.cts",
-        "default": "./dist/context/index.cjs"
-      }
+      "types": "./dist/context/index.d.ts",
+      "default": "./dist/context/index.js"
     },
     "./env": {
       "better-auth-dev-source": "./src/env/index.ts",
-      "import": {
-        "types": "./dist/env/index.d.ts",
-        "default": "./dist/env/index.js"
-      },
-      "require": {
-        "types": "./dist/env/index.d.cts",
-        "default": "./dist/env/index.cjs"
-      }
+      "types": "./dist/env/index.d.ts",
+      "default": "./dist/env/index.js"
     },
     "./error": {
       "better-auth-dev-source": "./src/error/index.ts",
-      "import": {
-        "types": "./dist/error/index.d.ts",
-        "default": "./dist/error/index.js"
-      },
-      "require": {
-        "types": "./dist/error/index.d.cts",
-        "default": "./dist/error/index.cjs"
-      }
+      "types": "./dist/error/index.d.ts",
+      "default": "./dist/error/index.js"
     },
     "./utils": {
       "better-auth-dev-source": "./src/utils/index.ts",
-      "import": {
-        "types": "./dist/utils/index.d.ts",
-        "default": "./dist/utils/index.js"
-      },
-      "require": {
-        "types": "./dist/utils/index.d.cts",
-        "default": "./dist/utils/index.cjs"
-      }
+      "types": "./dist/utils/index.d.ts",
+      "default": "./dist/utils/index.js"
     },
     "./social-providers": {
       "better-auth-dev-source": "./src/social-providers/index.ts",
-      "import": {
-        "types": "./dist/social-providers/index.d.ts",
-        "default": "./dist/social-providers/index.js"
-      },
-      "require": {
-        "types": "./dist/social-providers/index.d.cts",
-        "default": "./dist/social-providers/index.cjs"
-      }
+      "types": "./dist/social-providers/index.d.ts",
+      "default": "./dist/social-providers/index.js"
     },
     "./db": {
       "better-auth-dev-source": "./src/db/index.ts",
-      "import": {
-        "types": "./dist/db/index.d.ts",
-        "default": "./dist/db/index.js"
-      },
-      "require": {
-        "types": "./dist/db/index.d.cts",
-        "default": "./dist/db/index.cjs"
-      }
+      "types": "./dist/db/index.d.ts",
+      "default": "./dist/db/index.js"
     },
     "./db/adapter": {
       "better-auth-dev-source": "./src/db/adapter/index.ts",
-      "import": {
-        "types": "./dist/db/adapter/index.d.ts",
-        "default": "./dist/db/adapter/index.js"
-      },
-      "require": {
-        "types": "./dist/db/adapter/index.d.cts",
-        "default": "./dist/db/adapter/index.cjs"
-      }
+      "types": "./dist/db/adapter/index.d.ts",
+      "default": "./dist/db/adapter/index.js"
     },
     "./oauth2": {
       "better-auth-dev-source": "./src/oauth2/index.ts",
-      "import": {
-        "types": "./dist/oauth2/index.d.ts",
-        "default": "./dist/oauth2/index.js"
-      },
-      "require": {
-        "types": "./dist/oauth2/index.d.cts",
-        "default": "./dist/oauth2/index.cjs"
-      }
+      "types": "./dist/oauth2/index.d.ts",
+      "default": "./dist/oauth2/index.js"
     }
   },
   "typesVersions": {
@@ -182,6 +116,7 @@
     "tsdown": "catalog:"
   },
   "dependencies": {
+    "@standard-schema/spec": "^1.0.0",
     "zod": "^4.1.5"
   },
   "peerDependencies": {

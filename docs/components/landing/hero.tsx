@@ -59,11 +59,18 @@ export default function Hero() {
 							</div>
 
 							<div className="relative flex items-center gap-2 w-full sm:w-[90%] border border-white/10">
-								<GradientBG className="w-full flex items-center justify-between">
-									<div className="w-full flex items-center gap-2">
-										<p className="relative inline tracking-tight opacity-90 text-sm dark:text-white font-mono text-black">
-											npm install{" "}
-											<span className="relative dark:text-fuchsia-200 text-fuchsia-900">
+								<GradientBG className="w-full flex items-center justify-between gap-2">
+									<div className="w-full flex flex-col min-[350px]:flex-row min-[350px]:items-center gap-0.5 min-[350px]:gap-2 min-w-0">
+										<p className="text-xs sm:text-sm font-mono select-none tracking-tighter space-x-1 shrink-0">
+											<span>
+												<span className="text-sky-500">git:</span>
+												<span className="text-red-400">(main)</span>
+											</span>
+											<span className="italic text-amber-600">x</span>
+										</p>
+										<p className="relative inline tracking-tight opacity-90 md:text-sm text-xs dark:text-white font-mono text-black">
+											npm i{" "}
+											<span className="relative dark:text-fuchsia-300 text-fuchsia-800">
 												better-auth
 												<span className="absolute h-2 bg-gradient-to-tr from-white via-stone-200 to-stone-300 blur-3xl w-full top-0 left-2"></span>
 											</span>
@@ -118,10 +125,10 @@ export default function Hero() {
 								</GradientBG>
 							</div>
 
-							<div className="flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
+							<div className="mt-4 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
 								<Link
 									href="/docs"
-									className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8"
+									className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8 dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)]"
 								>
 									Get Started
 								</Link>

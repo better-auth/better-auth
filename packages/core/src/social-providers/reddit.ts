@@ -18,7 +18,7 @@ export interface RedditProfile {
 
 export interface RedditOptions extends ProviderOptions<RedditProfile> {
 	clientId: string;
-	duration?: string;
+	duration?: string | undefined;
 }
 
 export const reddit = (options: RedditOptions) => {
@@ -27,8 +27,8 @@ export const reddit = (options: RedditOptions) => {
 		name: "Reddit",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["identity"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "reddit",
 				options,
