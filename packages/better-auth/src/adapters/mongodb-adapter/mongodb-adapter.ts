@@ -66,12 +66,18 @@ export const mongodbAdapter = (
 					field === "_id" ||
 					schema[model]!.fields[field]?.references?.field === "id"
 				) {
+					if (value === null || value === undefined) {
+						return value;
+					}
 					if (typeof value !== "string") {
 						if (value instanceof ObjectId) {
 							return value;
 						}
 						if (Array.isArray(value)) {
 							return value.map((v) => {
+								if (v === null || v === undefined) {
+									return v;
+								}
 								if (typeof v === "string") {
 									try {
 										return new ObjectId(v);
@@ -143,19 +149,59 @@ export const mongodbAdapter = (
 							};
 							break;
 						case "gt":
-							condition = { [field]: { $gt: value } };
+							condition = {
+								[field]: {
+									$gt: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "gte":
-							condition = { [field]: { $gte: value } };
+							condition = {
+								[field]: {
+									$gte: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "lt":
-							condition = { [field]: { $lt: value } };
+							condition = {
+								[field]: {
+									$lt: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "lte":
-							condition = { [field]: { $lte: value } };
+							condition = {
+								[field]: {
+									$lte: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "ne":
-							condition = { [field]: { $ne: value } };
+							condition = {
+								[field]: {
+									$ne: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "contains":
 							condition = {
