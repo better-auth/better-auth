@@ -1,9 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { BetterAuthError } from "@better-auth/core/error";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
