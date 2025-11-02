@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
-import { type MemoryDB, memoryAdapter } from "../adapters/memory-adapter";
+import type { MemoryDB } from "../adapters/memory-adapter";
 import { getAuthTables } from "./get-tables";
 
 export async function getBaseAdapter(
@@ -21,6 +21,7 @@ export async function getBaseAdapter(
 		logger.warn(
 			"No database configuration provided. Using memory adapter in development",
 		);
+		const { memoryAdapter } = await import("../adapters/memory-adapter");
 		adapter = memoryAdapter(memoryDB)(options);
 	} else if (typeof options.database === "function") {
 		adapter = options.database(options);
