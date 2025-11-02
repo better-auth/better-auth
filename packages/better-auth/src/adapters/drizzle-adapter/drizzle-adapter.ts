@@ -385,7 +385,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = convertWhereClause(where, model);
 
 					if (config.experimental?.joins) {
-						if (!db.query[model]) {
+						if (!db.query || !db.query[model]) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,
 							);

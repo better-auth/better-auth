@@ -681,6 +681,13 @@ export const createAdapterFactory =
 				const model = modelName;
 				const field = joinConfig.on.to;
 				const value = baseData[joinConfig.on.from];
+				if (!value) {
+					// If there is no value, it could mean that the query used a `select` clause that didn't include the field.
+					// or the query result is purely empty.
+					// In any case, we return null/empty array.
+					resultData[modelName] = joinConfig.isUnique ? null : [];
+					continue;
+				}
 				let result: Record<string, any> | Record<string, any>[] | null;
 				if (joinConfig.isUnique) {
 					result = await adapterInstance.findOne<Record<string, any>>({
