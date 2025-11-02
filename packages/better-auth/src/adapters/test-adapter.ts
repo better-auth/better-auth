@@ -240,4 +240,3 @@ export const testAdapter = async ({
 		},
 	};
 };
- 

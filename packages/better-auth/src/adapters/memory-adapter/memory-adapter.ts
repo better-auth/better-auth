@@ -354,4 +354,3 @@ export const memoryAdapter = (
 		return adapterCreator(options);
 	};
 };
- 

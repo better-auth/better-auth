@@ -301,4 +301,3 @@ const getNewPrisma = (provider: string) => `generator client {
 			provider === "sqlite" ? `"file:./dev.db"` : `env("DATABASE_URL")`
 		}
   }`;
- 

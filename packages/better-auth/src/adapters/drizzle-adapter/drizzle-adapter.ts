@@ -592,4 +592,3 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		return adapter(options);
 	};
 };
- 

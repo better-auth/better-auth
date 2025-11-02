@@ -461,4 +461,3 @@ function generateImport({
 		.filter((x) => x !== "")
 		.join(", ")} } from "drizzle-orm/${databaseType}-core";\n`;
 }
-

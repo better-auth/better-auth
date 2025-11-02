@@ -70,4 +70,3 @@ export const initGetIdField = ({
 
 	return idField;
 };
- 

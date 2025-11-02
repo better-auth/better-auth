@@ -397,4 +397,3 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 		);
 	});
 });
- 

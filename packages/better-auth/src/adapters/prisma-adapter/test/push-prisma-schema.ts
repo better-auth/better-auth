@@ -12,4 +12,3 @@ export async function pushPrismaSchema(
 		cwd: join(import.meta.dirname),
 	});
 }
- 

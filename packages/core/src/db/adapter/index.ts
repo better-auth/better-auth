@@ -540,4 +540,3 @@ export interface DBAdapterInstance<
 > {
 	(options: BetterAuthOptions): DBAdapter<Options>;
 }
- 

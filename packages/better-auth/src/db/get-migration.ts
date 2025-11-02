@@ -482,4 +482,3 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}
 	return { toBeCreated, toBeAdded, runMigrations, compileMigrations };
 }
- 

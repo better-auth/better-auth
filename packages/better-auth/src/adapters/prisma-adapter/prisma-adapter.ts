@@ -442,4 +442,3 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		return adapter(options);
 	};
 };
- 

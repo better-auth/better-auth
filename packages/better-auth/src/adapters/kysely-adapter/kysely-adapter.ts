@@ -649,4 +649,3 @@ export const kyselyAdapter = (
 		return adapter(options);
 	};
 };
- 

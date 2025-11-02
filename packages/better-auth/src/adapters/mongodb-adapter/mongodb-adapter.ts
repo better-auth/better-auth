@@ -605,4 +605,3 @@ function escapeForMongoRegex(input: string, maxLength = 256): string {
 	// Source: PCRE docs — https://www.pcre.org/original/doc/html/pcrepattern.html
 	return input.slice(0, maxLength).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
- 

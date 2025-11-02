@@ -62,4 +62,3 @@ export async function generatePrismaSchema(
 	// 	await fs.writeFile(join(import.meta.dirname, `TEST.prisma`), code || "", "utf-8");
 	// }
 }
- 
