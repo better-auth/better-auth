@@ -1,4 +1,9 @@
-import { type GenericEndpointContext, logger, type User } from "better-auth";
+import {
+	type GenericEndpointContext,
+	logger,
+	type User,
+	type Where,
+} from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
 import { getPlanByPriceInfo } from "./utils";
@@ -40,9 +45,13 @@ export async function onCheckoutSessionCompleted(
 				checkoutSession.customer_details?.email
 			) {
 				const customerEmail = checkoutSession.customer_details.email;
+				const where: Where[] = [{ field: "email", value: customerEmail }];
+				if (options.subscription?.requireEmailVerification) {
+					where.push({ field: "emailVerified", value: true });
+				}
 				const user = await ctx.context.adapter.findOne<User>({
 					model: "user",
-					where: [{ field: "email", value: customerEmail }],
+					where,
 				});
 				if (user) {
 					referenceId = user.id;
