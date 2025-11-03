@@ -3,13 +3,13 @@ title: Create a Database Adapter
 description: Learn how to create a custom database adapter for Better-Auth
 ---
 
-Learn how to create a custom database adapter for Better-Auth using `createAdapter`.
+Learn how to create a custom database adapter for Better-Auth using `createAdapterFactory`.
 
-Our `createAdapter` function is designed to be very flexible, and we've done our best to make it easy to understand and use.
+Our `createAdapterFactory` function is designed to be very flexible, and we've done our best to make it easy to understand and use.
 Our hope is to allow you to focus on writing database logic, and not have to worry about how the adapter is working with Better-Auth.
 
-Anything from custom schema configurations, custom ID generation, safe JSON parsing, and more is handled by the `createAdapter` function.
-All you need to do is provide the database logic, and the `createAdapter` function will handle the rest.
+Anything from custom schema configurations, custom ID generation, safe JSON parsing, and more is handled by the `createAdapterFactory` function.
+All you need to do is provide the database logic, and the `createAdapterFactory` function will handle the rest.
 
 ## Quick Start
 
@@ -17,12 +17,12 @@ All you need to do is provide the database logic, and the `createAdapter` functi
 <Step>
 ### Get things ready
 
-1. Import `createAdapter`.
+1. Import `createAdapterFactory`.
 2. Create `CustomAdapterConfig` interface that represents your adapter config options.
 3. Create the adapter!
 
 ```ts
-import { createAdapter, type DBAdapterDebugLogOption } from "better-auth/adapters";
+import { createAdapterFactory, type DBAdapterDebugLogOption } from "better-auth/adapters";
 
 // Your custom adapter config options
 interface CustomAdapterConfig {
@@ -37,7 +37,7 @@ interface CustomAdapterConfig {
 }
 
 export const myAdapter = (config: CustomAdapterConfig = {}) =>
-  createAdapter({
+  createAdapterFactory({
     // ...
   });
 ```
@@ -53,7 +53,7 @@ We try to minimize the amount of code you need to write in your adapter function
 ```ts
 // ...
 export const myAdapter = (config: CustomAdapterConfig = {}) =>
-  createAdapter({
+  createAdapterFactory({
     config: {
       adapterId: "custom-adapter", // A unique identifier for the adapter.
       adapterName: "Custom Adapter", // The name of the adapter.
@@ -77,7 +77,7 @@ The `adapter` function is where you write the code that interacts with your data
 ```ts
 // ...
 export const myAdapter = (config: CustomAdapterConfig = {}) =>
-  createAdapter({
+  createAdapterFactory({
     config: {
       // ...
     },
@@ -323,7 +323,7 @@ The `options` object is for any potential config that you got from your custom a
 
 ```ts title="Example"
 const myAdapter = (config: CustomAdapterConfig) =>
-  createAdapter({
+  createAdapterFactory({
     config: {
       // ...
     },
@@ -447,7 +447,7 @@ Whether the table names in the schema are plural. This is often defined by the u
 ```ts title="Example"
 const adapter = myAdapter({
   // This value then gets passed into the `usePlural`
-  // option in the createAdapter `config` object.
+  // option in the createAdapterFactory `config` object.
   usePlural: true,
 });
 ```
