@@ -177,7 +177,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							const filteredAttrs = attrs.filter((attr) => {
 								const lower = attr.toLowerCase();
 								return (
-									!lower.startsWith("domain=") && !lower.startsWith("secure")
+									!lower.startsWith("domain=") && lower !== "secure"
 								);
 							});
 
