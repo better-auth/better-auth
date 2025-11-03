@@ -8,6 +8,7 @@ import { shimContext } from "../../utils/shim";
 import { type AccessControl } from "../access";
 import { defaultRoles, defaultStatements } from "./access";
 import { getOrgAdapter } from "./adapter";
+import { isSuperAdmin } from "./admin";
 import { orgSessionMiddleware } from "./call";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
@@ -66,7 +67,6 @@ import type {
 	TeamMember,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
-import { isSuperAdmin } from "./admin";
 
 export function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -231,7 +231,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				userId: ctx.context.session.user.id,
 				organizationId: activeOrganizationId,
 			});
-			if (!member && !isSuperAdmin(options, ctx) || member === null) {
+			if ((!member && !isSuperAdmin(options, ctx)) || member === null) {
 				throw new APIError("UNAUTHORIZED", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,

@@ -8,6 +8,7 @@ import {
 	toZodSchema,
 } from "../../../db";
 import { getOrgAdapter } from "../adapter";
+import { isSuperAdmin } from "../admin";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
@@ -20,7 +21,6 @@ import type {
 	TeamMember,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
-import { isSuperAdmin } from "../admin";
 
 export const createOrganization = <O extends OrganizationOptions>(
 	options?: O | undefined,
@@ -477,7 +477,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				});
 			}
 			const canUpdateOrg =
-				options && isSuperAdmin(options, ctx) ||
+				(options && isSuperAdmin(options, ctx)) ||
 				(member &&
 					(await hasPermission(
 						{
@@ -489,7 +489,8 @@ export const updateOrganization = <O extends OrganizationOptions>(
 							organizationId,
 						},
 						ctx,
-					))) || member;
+					))) ||
+				member;
 			if (!canUpdateOrg) {
 				throw new APIError("FORBIDDEN", {
 					message:

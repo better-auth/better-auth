@@ -1,9 +1,9 @@
 import { describe, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
-import { organizationClient } from "./client";
-import { adminClient } from "../admin/client";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { admin } from "../admin";
+import { adminClient } from "../admin/client";
+import { organizationClient } from "./client";
 import { organization } from "./organization";
 
 describe("super admin", async (it) => {

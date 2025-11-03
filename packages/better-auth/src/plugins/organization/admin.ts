@@ -1,6 +1,9 @@
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { admin } from "../admin";
 import type { OrganizationOptions } from "./types";
-import type {BetterAuthPlugin, GenericEndpointContext} from "@better-auth/core";
 
 const getAdminPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
