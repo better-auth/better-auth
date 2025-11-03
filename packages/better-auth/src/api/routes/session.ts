@@ -267,53 +267,56 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 									updatedAt: Date.now(),
 								};
 
-						// Set the refreshed cookie cache
-						await setCookieCache(ctx, refreshedSession, false);
+								// Set the refreshed cookie cache
+								await setCookieCache(ctx, refreshedSession, false);
 
-						// Parse session and user to ensure additionalFields are included
-						const parsedRefreshedSession = parseSessionOutput(
-							ctx.context.options,
-							refreshedSession.session,
-						);
-						const parsedRefreshedUser = parseUserOutput(
-							ctx.context.options,
-							refreshedSession.user,
-						);
-						ctx.context.session = {
-							session: parsedRefreshedSession,
-							user: parsedRefreshedUser,
-						};
-						return ctx.json({
-							session: parsedRefreshedSession,
-							user: parsedRefreshedUser,
-						} as {
-							session: InferSession<Option>;
-							user: InferUser<Option>;
-						});
+								// Parse session and user to ensure additionalFields are included
+								const parsedRefreshedSession = parseSessionOutput(
+									ctx.context.options,
+									refreshedSession.session,
+								);
+								const parsedRefreshedUser = parseUserOutput(
+									ctx.context.options,
+									refreshedSession.user,
+								);
+								ctx.context.session = {
+									session: parsedRefreshedSession,
+									user: parsedRefreshedUser,
+								};
+								return ctx.json({
+									session: parsedRefreshedSession,
+									user: parsedRefreshedUser,
+								} as {
+									session: InferSession<Option>;
+									user: InferUser<Option>;
+								});
+							}
+
+							// Parse session and user to ensure additionalFields are included
+							const parsedSession = parseSessionOutput(ctx.context.options, {
+								...session.session,
+								expiresAt: new Date(session.session.expiresAt),
+								createdAt: new Date(session.session.createdAt),
+								updatedAt: new Date(session.session.updatedAt),
+							});
+							const parsedUser = parseUserOutput(ctx.context.options, {
+								...session.user,
+								createdAt: new Date(session.user.createdAt),
+								updatedAt: new Date(session.user.updatedAt),
+							});
+							ctx.context.session = {
+								session: parsedSession,
+								user: parsedUser,
+							};
+							return ctx.json({
+								session: parsedSession,
+								user: parsedUser,
+							} as {
+								session: InferSession<Option>;
+								user: InferUser<Option>;
+							});
+						}
 					}
-
-					// Parse session and user to ensure additionalFields are included
-					const parsedSession = parseSessionOutput(ctx.context.options, {
-						...session.session,
-						expiresAt: new Date(session.session.expiresAt),
-						createdAt: new Date(session.session.createdAt),
-						updatedAt: new Date(session.session.updatedAt),
-					});
-					const parsedUser = parseUserOutput(ctx.context.options, {
-						...session.user,
-						createdAt: new Date(session.user.createdAt),
-						updatedAt: new Date(session.user.updatedAt),
-					});
-					ctx.context.session = { session: parsedSession, user: parsedUser };
-					return ctx.json({
-						session: parsedSession,
-						user: parsedUser,
-					} as {
-						session: InferSession<Option>;
-						user: InferUser<Option>;
-					});
-				}
-			}
 				}
 
 				const session =
@@ -331,22 +334,25 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					}
 					return ctx.json(null);
 				}
-			/**
-			 * We don't need to update the session if the user doesn't want to be remembered
-			 * or if the session refresh is disabled
-			 */
-			if (dontRememberMe || ctx.query?.disableRefresh) {
-				// Parse session and user to ensure additionalFields are included
-				const parsedSession = parseSessionOutput(ctx.context.options, session.session);
-				const parsedUser = parseUserOutput(ctx.context.options, session.user);
-				return ctx.json({
-					session: parsedSession,
-					user: parsedUser,
-				} as {
-					session: InferSession<Option>;
-					user: InferUser<Option>;
-				});
-			}
+				/**
+				 * We don't need to update the session if the user doesn't want to be remembered
+				 * or if the session refresh is disabled
+				 */
+				if (dontRememberMe || ctx.query?.disableRefresh) {
+					// Parse session and user to ensure additionalFields are included
+					const parsedSession = parseSessionOutput(
+						ctx.context.options,
+						session.session,
+					);
+					const parsedUser = parseUserOutput(ctx.context.options, session.user);
+					return ctx.json({
+						session: parsedSession,
+						user: parsedUser,
+					} as {
+						session: InferSession<Option>;
+						user: InferUser<Option>;
+					});
+				}
 				const expiresIn = ctx.context.sessionConfig.expiresIn;
 				const updateAge = ctx.context.sessionConfig.updateAge;
 				/**
