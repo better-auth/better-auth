@@ -180,7 +180,7 @@ export interface OrganizationOptions {
 							organization: Organization;
 							member: Member;
 						},
-						ctx: AuthContext,
+						ctx: AuthContext & { request?: Request },
 				  ) => Promise<number> | number)
 		  )
 		| undefined;
@@ -565,7 +565,7 @@ export interface OrganizationOptions {
 						user: User & Record<string, any>;
 						organization: Organization & Record<string, any>;
 					},
-					ctx: AuthContext,
+					ctx: AuthContext & { request?: Request },
 				) => Promise<void>;
 
 				/**
@@ -577,7 +577,7 @@ export interface OrganizationOptions {
 						user: User & Record<string, any>;
 						organization: Organization & Record<string, any>;
 					},
-					ctx: AuthContext,
+					ctx: AuthContext & { request?: Request },
 				) => Promise<void>;
 
 				/**

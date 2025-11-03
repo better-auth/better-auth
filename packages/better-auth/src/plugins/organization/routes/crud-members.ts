@@ -377,7 +377,10 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 						user: userBeingRemoved,
 						organization,
 					},
-					ctx.context,
+					{
+						...ctx.context,
+						request: ctx.request,
+					},
 				);
 			}
 
@@ -398,7 +401,10 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 						user: userBeingRemoved,
 						organization,
 					},
-					ctx.context,
+					{
+						...ctx.context,
+						request: ctx.request,
+					},
 				);
 			}
 
@@ -814,7 +820,10 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 							user: session.user,
 							organization,
 						},
-						ctx.context,
+						{
+							...ctx.context,
+							request: ctx.request,
+						},
 					);
 				}
 
@@ -831,7 +840,10 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 							user: session.user,
 							organization,
 						},
-						ctx.context,
+						{
+							...ctx.context,
+							request: ctx.request,
+						},
 					);
 				}
 			} catch (error) {
