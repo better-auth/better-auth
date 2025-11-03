@@ -189,7 +189,7 @@ export interface DBAdapterFactoryConfig<
 				/**
 				 * The action which was called from the adapter.
 				 */
-				action: "create" | "update";
+				action: "create" | "update" | "findOne" | "findMany";
 				/**
 				 * The model name.
 				 */

@@ -37,6 +37,17 @@ export interface MongoDBAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Whether to enable experimental features.
+	 */
+	experimental?: {
+		/**
+		 * Whether to enable joins.
+		 *
+		 * @default false
+		 */
+		joins?: boolean;
+	};
 }
 
 export const mongodbAdapter = (
@@ -88,10 +99,14 @@ export const mongodbAdapter = (
 								if (v instanceof ObjectId) {
 									return v;
 								}
-								throw new Error("Invalid id value");
+								throw new Error(
+									"Invalid id value, recieved: " + JSON.stringify(v),
+								);
 							});
 						}
-						throw new Error("Invalid id value");
+						throw new Error(
+							"Invalid id value, recieved: " + JSON.stringify(value),
+						);
 					}
 					try {
 						return new ObjectId(value);
@@ -268,14 +283,53 @@ export const mongodbAdapter = (
 								model: joinedModel,
 							});
 
-							pipeline.push({
-								$lookup: {
-									from: joinedModel,
-									localField: localField === "id" ? "_id" : localField,
-									foreignField: foreignField === "id" ? "_id" : foreignField,
-									as: joinedModel,
-								},
-							});
+							const localFieldName = localField === "id" ? "_id" : localField;
+							const foreignFieldName =
+								foreignField === "id" ? "_id" : foreignField;
+
+							// Only unwind if the foreign field has a unique constraint (one-to-one relationship)
+							const joinedModelSchema =
+								schema[getDefaultModelName(joinedModel)];
+							const foreignFieldAttribute =
+								joinedModelSchema?.fields[joinConfig.on.to];
+							const isUnique = foreignFieldAttribute?.unique === true;
+
+							// For unique relationships, limit is ignored (as per JoinConfig type)
+							// For non-unique relationships, apply limit if specified
+							const shouldLimit = !isUnique && joinConfig.limit !== undefined;
+
+							if (shouldLimit && joinConfig.limit > 0) {
+								// Use pipeline syntax to support limit
+								// Construct the field reference string for the foreign field
+								const foreignFieldRef = `$${foreignFieldName}`;
+								pipeline.push({
+									$lookup: {
+										from: joinedModel,
+										let: { localFieldValue: `$${localFieldName}` },
+										pipeline: [
+											{
+												$match: {
+													$expr: {
+														$eq: [foreignFieldRef, "$$localFieldValue"],
+													},
+												},
+											},
+											{ $limit: joinConfig.limit },
+										],
+										as: joinedModel,
+									},
+								});
+							} else {
+								// Use simple syntax when no limit is needed
+								pipeline.push({
+									$lookup: {
+										from: joinedModel,
+										localField: localFieldName,
+										foreignField: foreignFieldName,
+										as: joinedModel,
+									},
+								});
+							}
 
 							// For inner join, filter out documents without matches
 							if (joinConfig.type === "inner") {
@@ -285,13 +339,6 @@ export const mongodbAdapter = (
 									},
 								});
 							}
-
-							// Only unwind if the foreign field has a unique constraint (one-to-one relationship)
-							const joinedModelSchema =
-								schema[getDefaultModelName(joinedModel)];
-							const foreignFieldAttribute =
-								joinedModelSchema?.fields[joinConfig.on.to];
-							const isUnique = foreignFieldAttribute?.unique === true;
 
 							if (isUnique) {
 								// For one-to-one relationships, unwind to flatten to a single object
@@ -349,14 +396,54 @@ export const mongodbAdapter = (
 								model: joinedModel,
 							});
 
-							pipeline.push({
-								$lookup: {
-									from: joinedModel,
-									localField: localField === "id" ? "_id" : localField,
-									foreignField: foreignField === "id" ? "_id" : foreignField,
-									as: joinedModel,
-								},
+							const localFieldName = localField === "id" ? "_id" : localField;
+							const foreignFieldName =
+								foreignField === "id" ? "_id" : foreignField;
+
+							// Only unwind if the foreign field has a unique constraint (one-to-one relationship)
+							const foreignFieldAttribute = getFieldAttributes({
+								model: joinedModel,
+								field: joinConfig.on.to,
 							});
+							const isUnique = foreignFieldAttribute?.unique === true;
+
+							// For unique relationships, limit is ignored (as per JoinConfig type)
+							// For non-unique relationships, apply limit if specified
+							const shouldLimit =
+								!joinConfig.isUnique && joinConfig.limit !== undefined;
+
+							if (shouldLimit && joinConfig.limit > 0) {
+								// Use pipeline syntax to support limit
+								// Construct the field reference string for the foreign field
+								const foreignFieldRef = `$${foreignFieldName}`;
+								pipeline.push({
+									$lookup: {
+										from: joinedModel,
+										let: { localFieldValue: `$${localFieldName}` },
+										pipeline: [
+											{
+												$match: {
+													$expr: {
+														$eq: [foreignFieldRef, "$$localFieldValue"],
+													},
+												},
+											},
+											{ $limit: joinConfig.limit },
+										],
+										as: joinedModel,
+									},
+								});
+							} else {
+								// Use simple syntax when no limit is needed
+								pipeline.push({
+									$lookup: {
+										from: joinedModel,
+										localField: localFieldName,
+										foreignField: foreignFieldName,
+										as: joinedModel,
+									},
+								});
+							}
 
 							// For inner join, filter out documents without matches
 							if (joinConfig.type === "inner") {
@@ -366,13 +453,6 @@ export const mongodbAdapter = (
 									},
 								});
 							}
-
-							// Only unwind if the foreign field has a unique constraint (one-to-one relationship)
-							const foreignFieldAttribute = getFieldAttributes({
-								model: joinedModel,
-								field: joinConfig.on.to,
-							});
-							const isUnique = foreignFieldAttribute?.unique === true;
 
 							if (isUnique) {
 								// For one-to-one relationships, unwind to flatten to a single object
@@ -482,7 +562,7 @@ export const mongodbAdapter = (
 				_id: "id",
 			},
 			supportsNumericIds: false,
-			supportsJoin: true,
+			supportsJoin: config?.experimental?.joins ?? false,
 			transaction:
 				config?.client && (config?.transaction ?? true)
 					? async (cb) => {
@@ -536,7 +616,8 @@ export const mongodbAdapter = (
 						return data.map((v) => {
 							if (typeof v === "string") {
 								try {
-									return new ObjectId(v);
+									const oid = new ObjectId(v);
+									return oid;
 								} catch (error) {
 									return v;
 								}
@@ -546,7 +627,8 @@ export const mongodbAdapter = (
 					}
 					if (typeof data === "string") {
 						try {
-							return new ObjectId(data);
+							const oid = new ObjectId(data);
+							return oid;
 						} catch (error) {
 							return new ObjectId();
 						}
@@ -554,7 +636,8 @@ export const mongodbAdapter = (
 					if (data === null && fieldAttributes.references?.field === "id") {
 						return null;
 					}
-					return new ObjectId();
+					const oid = new ObjectId();
+					return oid;
 				}
 				return data;
 			},

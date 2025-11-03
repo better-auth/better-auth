@@ -1443,9 +1443,9 @@ export const getNormalTestSuiteTests = ({
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const result = await adapter.findMany<User>({
 				model: "user",
-				limit: 1,
+				limit: 2,
 			});
-			expect(result.length).toEqual(1);
+			expect(result.length).toEqual(2);
 			expect(users.find((x) => x.id === result[0]!.id)).not.toBeNull();
 		},
 		"findMany - should find many models with offset": async () => {
@@ -2227,6 +2227,7 @@ export const getNormalTestSuiteTests = ({
 					session: { limit: 2 },
 				},
 			});
+
 			expect(result).toBeDefined();
 			expect(result?.session).toBeDefined();
 			expect(result?.session).toHaveLength(2);

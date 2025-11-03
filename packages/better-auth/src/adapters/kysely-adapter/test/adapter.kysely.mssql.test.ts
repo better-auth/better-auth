@@ -56,7 +56,7 @@ const kyselyDB = new Kysely({
 // Create better_auth database if it doesn't exist
 const ensureDatabaseExists = async () => {
 	try {
-		console.log("Ensuring better_auth database exists...");
+		// console.log("Ensuring better_auth database exists...");
 		await kyselyDB.getExecutor().executeQuery({
 			sql: `
 				IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'better_auth')
@@ -73,7 +73,7 @@ const ensureDatabaseExists = async () => {
 			query: { kind: "SelectQueryNode" },
 			queryId: { queryId: "ensure-db" },
 		});
-		console.log("Database check/creation completed");
+		// console.log("Database check/creation completed");
 	} catch (error) {
 		console.error("Failed to ensure database exists:", error);
 		throw error;
@@ -85,10 +85,10 @@ const warmupConnection = async () => {
 	const isCI =
 		process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 	if (isCI) {
-		console.log("Warming up MSSQL connection for CI environment...");
-		console.log(
-			`Environment: CI=${process.env.CI}, GITHUB_ACTIONS=${process.env.GITHUB_ACTIONS}`,
-		);
+		// console.log("Warming up MSSQL connection for CI environment...");
+		// console.log(
+		// 	`Environment: CI=${process.env.CI}, GITHUB_ACTIONS=${process.env.GITHUB_ACTIONS}`,
+		// );
 
 		try {
 			await ensureDatabaseExists();
@@ -100,7 +100,7 @@ const warmupConnection = async () => {
 				query: { kind: "SelectQueryNode" },
 				queryId: { queryId: "warmup" },
 			});
-			console.log("Connection warmup successful");
+			// console.log("Connection warmup successful");
 		} catch (error) {
 			console.warn(
 				"Connection warmup failed, will retry during validation:",
@@ -127,14 +127,14 @@ const validateConnection = async (retries: number = 10): Promise<boolean> => {
 	const maxRetries = isCI ? 15 : retries; // More retries in CI
 	const baseDelay = isCI ? 2000 : 1000; // Longer delays in CI
 
-	console.log(
-		`Validating connection (CI: ${isCI}, max retries: ${maxRetries})`,
-	);
+	// console.log(
+	// 	`Validating connection (CI: ${isCI}, max retries: ${maxRetries})`,
+	// );
 
 	for (let i = 0; i < maxRetries; i++) {
 		try {
 			await query("SELECT 1 as test", isCI ? 10000 : 5000);
-			console.log("Connection validated successfully");
+			// console.log("Connection validated successfully");
 			return true;
 		} catch (error) {
 			console.warn(
@@ -160,9 +160,9 @@ const query = async (sql: string, timeoutMs: number = 30000) => {
 	const actualTimeout = isCI ? Math.max(timeoutMs, 60000) : timeoutMs; // Minimum 60s timeout in CI
 
 	try {
-		console.log(
-			`Executing SQL: ${sql.substring(0, 100)}... (timeout: ${actualTimeout}ms, CI: ${isCI})`,
-		);
+		// console.log(
+		// 	`Executing SQL: ${sql.substring(0, 100)}... (timeout: ${actualTimeout}ms, CI: ${isCI})`,
+		// );
 
 		// Ensure we're using the better_auth database for queries
 		const sqlWithContext = sql.includes("USE ")
@@ -183,7 +183,7 @@ const query = async (sql: string, timeoutMs: number = 30000) => {
 				),
 			),
 		])) as any;
-		console.log(`Query completed successfully`);
+		// console.log(`Query completed successfully`);
 		return { rows: result.rows, rowCount: result.rows.length };
 	} catch (error) {
 		console.error(`Query failed: ${error}`);
@@ -207,9 +207,9 @@ const resetDB = async (retryCount: number = 0) => {
 	const maxRetries = isCI ? 3 : 1; // Allow retries in CI
 
 	try {
-		console.log(
-			`Starting database reset... (attempt ${retryCount + 1}/${maxRetries + 1})`,
-		);
+		// console.log(
+		// 	`Starting database reset... (attempt ${retryCount + 1}/${maxRetries + 1})`,
+		// );
 
 		// Warm up connection first (especially important for CI)
 		await warmupConnection();
@@ -257,7 +257,7 @@ const resetDB = async (retryCount: number = 0) => {
 			15000,
 		);
 
-		console.log("Database reset completed successfully");
+		// console.log("Database reset completed successfully");
 	} catch (error) {
 		console.error("Database reset failed:", error);
 
@@ -273,7 +273,7 @@ const resetDB = async (retryCount: number = 0) => {
 
 		// Final fallback - try to recreate the database
 		try {
-			console.log("Attempting database recreation...");
+			// console.log("Attempting database recreation...");
 			// This would require a separate connection to master database
 			// For now, just throw the error with better context
 			throw new Error(`Database reset failed completely: ${error}`);

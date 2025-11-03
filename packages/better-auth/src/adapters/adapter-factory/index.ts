@@ -177,7 +177,7 @@ export const createAdapterFactory =
 		const transformInput = async (
 			data: Record<string, any>,
 			defaultModelName: string,
-			action: "create" | "update",
+			action: "create" | "update" | "findOne" | "findMany",
 			forceAllowId?: boolean,
 		) => {
 			const transformedData: Record<string, any> = {};
@@ -268,7 +268,7 @@ export const createAdapterFactory =
 			data: Record<string, any> | null,
 			unsafe_model: string,
 			select: string[] = [],
-			join: JoinConfig | undefined = undefined,
+			join: JoinConfig | undefined,
 		) => {
 			const transformSingleOutput = async (
 				data: Record<string, any> | null,
@@ -349,112 +349,83 @@ export const createAdapterFactory =
 				return transformedData as any;
 			};
 
-			if (!join) return await transformSingleOutput(data, unsafe_model, select);
+			if (!join || Object.keys(join).length === 0) {
+				return await transformSingleOutput(data, unsafe_model, select);
+			}
 
-			let transformedData: Record<string, any> = {};
 			unsafe_model = getDefaultModelName(unsafe_model);
-			const requiredModels = [unsafe_model, ...Object.keys(join)].map(
-				(model) => ({
+			// for now we just transform the base model
+			// later we append the joined models to this object.
+			let transformedData: Record<string, any> = await transformSingleOutput(
+				data,
+				unsafe_model,
+				select,
+			);
+
+			// Get all the models that are required to be joined.
+			const requiredModels = Object.entries(join).map(
+				([model, joinConfig]) => ({
 					modelName: getModelName(model),
 					defaultModelName: getDefaultModelName(model),
+					joinConfig,
 				}),
 			);
 
 			if (!data) return null;
 			// Data is now the base model object directly (not wrapped under a key)
-			const baseModel: Record<string, any> = data;
 
-			for (const { modelName, defaultModelName } of requiredModels) {
-				if (defaultModelName === unsafe_model) {
-					// base model should be represent the entire record, and any joined models should be nested under it.
-					transformedData = await transformSingleOutput(
-						baseModel,
-						unsafe_model,
-						select,
-					);
-				} else {
-					// joined models should be nested under the base model.
-					let joinedData = baseModel[modelName];
-
-					// Check if the foreign key field in the joined model has a unique constraint
-					// If unique, unwrap array to single object; otherwise keep as array
-					const joinedModelSchema = schema[defaultModelName]!.fields;
-					joinedModelSchema.id = { type: "string", unique: true };
-
-					let isUnique = false;
-
-					// Check forward join: joined model has FK to base model
-					const forwardForeignKeyField = Object.entries(joinedModelSchema).find(
-						([_, fieldAttributes]) =>
-							fieldAttributes.references &&
-							getDefaultModelName(fieldAttributes.references.model) ===
-								getDefaultModelName(unsafe_model),
-					)?.[0];
-
-					if (forwardForeignKeyField) {
-						const fieldDef =
-							joinedModelSchema[
-								getDefaultFieldName({
-									field: forwardForeignKeyField,
-									model: defaultModelName,
-								})
-							];
-						isUnique = fieldDef?.unique === true;
+			for (const {
+				modelName,
+				defaultModelName,
+				joinConfig,
+			} of requiredModels) {
+				let joinedData = await (async () => {
+					if (config.supportsJoin) {
+						const result = data[modelName];
+						return result;
 					} else {
-						// Check backward join: base model has FK to joined model
-						const baseModelSchema = schema[unsafe_model]!.fields;
-						const backwardForeignKeyField = Object.entries(
-							baseModelSchema,
-						).find(
-							([_, fieldAttributes]) =>
-								fieldAttributes.references &&
-								getDefaultModelName(fieldAttributes.references.model) ===
-									getDefaultModelName(defaultModelName),
-						)?.[0];
-
-						if (backwardForeignKeyField) {
-							const fieldDef = baseModelSchema[backwardForeignKeyField];
-							if (!fieldDef?.references) return;
-							const baseModelFieldDef =
-								schema[getDefaultModelName(fieldDef.references.model)]?.fields[
-									fieldDef.references.field
-								];
-							isUnique = baseModelFieldDef?.unique === true;
-						}
+						// doesn't support joins, so fallback to handleFallbackJoin
+						const result = await handleFallbackJoin({
+							baseModel: unsafe_model,
+							baseData: transformedData,
+							joinModel: modelName,
+							specificJoinConfig: joinConfig,
+						});
+						return result;
 					}
+				})();
 
-					// If joinedData is undefined, initialize it based on relationship type
-					if (joinedData === undefined) {
-						joinedData = isUnique ? null : [];
-					}
-
-					if (isUnique && !Array.isArray(joinedData) && joinedData !== null) {
-						joinedData = [joinedData];
-					}
-
-					let td = [];
-
-					// If joinedData is null (one-to-one with no data), skip processing
-					if (joinedData === null) {
-						transformedData[defaultModelName] = null;
-					} else if (!Array.isArray(joinedData)) {
-						throw new BetterAuthError(
-							`Joined data for model ${defaultModelName} is not an array`,
-						);
-					} else {
-						for (const item of joinedData) {
-							// Don't pass select to joined models - select only applies to base model
-							td.push(await transformSingleOutput(item, modelName, []));
-						}
-
-						// If unique, return single object; otherwise return array
-						if (isUnique) {
-							transformedData[defaultModelName] = td.length > 0 ? td[0] : null;
-						} else {
-							transformedData[defaultModelName] = td;
-						}
-					}
+				// If joinedData is undefined, initialize it based on relationship type
+				if (joinedData === undefined || joinedData === null) {
+					joinedData = joinConfig.isUnique ? null : [];
 				}
+
+				if (!joinConfig.isUnique && !Array.isArray(joinedData)) {
+					joinedData = [joinedData];
+				}
+
+				let transformed = [];
+
+				if (Array.isArray(joinedData)) {
+					for (const item of joinedData) {
+						const transformedItem = await transformSingleOutput(
+							item,
+							modelName,
+							[],
+						);
+						transformed.push(transformedItem);
+					}
+				} else {
+					const transformedItem = await transformSingleOutput(
+						joinedData,
+						modelName,
+						[],
+					);
+					transformed.push(transformedItem);
+				}
+
+				const result = joinConfig.isUnique ? transformed[0] : transformed;
+				transformedData[defaultModelName] = result ?? null;
 			}
 
 			return transformedData as any;
@@ -559,7 +530,8 @@ export const createAdapterFactory =
 		const transformJoinClause = (
 			baseModel: string,
 			unsanitizedJoin: JoinOption | undefined,
-		): JoinConfig | undefined => {
+			select: string[] | undefined,
+		): { join: JoinConfig; select: string[] | undefined } | undefined => {
 			if (!unsanitizedJoin) return undefined;
 			if (Object.keys(unsanitizedJoin).length === 0) return undefined;
 			const transformedJoin: JoinConfig = {};
@@ -614,12 +586,15 @@ export const createAdapterFactory =
 
 				let from: string;
 				let to: string;
+				let requiredSelectField: string;
 
 				if (isForwardJoin) {
 					// joined model has FK to base model
+					// The field we need in select is the referenced field in the base model
+					requiredSelectField = foreignKeyAttributes.references.field;
 					from = getFieldName({
 						model: baseModel,
-						field: foreignKeyAttributes.references.field,
+						field: requiredSelectField,
 					});
 
 					to = getFieldName({
@@ -628,15 +603,22 @@ export const createAdapterFactory =
 					});
 				} else {
 					// base model has FK to joined model
+					// The field we need in select is the foreign key field in the base model
+					requiredSelectField = foreignKey;
 					from = getFieldName({
 						model: baseModel,
-						field: foreignKey,
+						field: requiredSelectField,
 					});
 
 					to = getFieldName({
 						model,
 						field: foreignKeyAttributes.references.field,
 					});
+				}
+
+				// Ensure the required field is in select if select is provided
+				if (select && !select.includes(requiredSelectField)) {
+					select.push(requiredSelectField);
 				}
 
 				const isUnique =
@@ -659,66 +641,66 @@ export const createAdapterFactory =
 					isUnique,
 				};
 			}
-			return transformedJoin;
+			return { join: transformedJoin, select };
 		};
 
 		/**
 		 * Handle joins by making separate queries and combining results (fallback for adapters that don't support native joins).
 		 */
-		const handleFallbackJoin = async <T extends Record<string, any> | null>(
-			baseData: T,
-			joinConfig: JoinConfig | undefined,
-		): Promise<T> => {
-			if (config.disableTransformJoin) return baseData;
-			if (!baseData || !joinConfig || Object.keys(joinConfig).length === 0) {
-				return baseData;
+		const handleFallbackJoin = async <T extends Record<string, any> | null>({
+			baseModel,
+			baseData,
+			joinModel,
+			specificJoinConfig: joinConfig,
+		}: {
+			baseModel: string;
+			baseData: T;
+			joinModel: string;
+			specificJoinConfig: JoinConfig[number];
+		}) => {
+			if (!baseData) return baseData;
+			const modelName = getModelName(joinModel);
+			const field = joinConfig.on.to;
+			const value =
+				baseData[
+					getDefaultFieldName({ field: joinConfig.on.from, model: baseModel })
+				];
+
+			if (value === null || value === undefined) {
+				// If there is no value, it could mean that the query used a `select` clause that didn't include the field.
+				// or the query result is purely empty.
+				// In any case, we return null/empty array.
+				return joinConfig.isUnique ? null : [];
+			}
+			let result: Record<string, any> | Record<string, any>[] | null;
+			if (joinConfig.isUnique) {
+				result = await adapterInstance.findOne<Record<string, any>>({
+					model: modelName,
+					where: [
+						{
+							field,
+							value,
+							operator: "eq",
+							connector: "AND",
+						},
+					],
+				});
+			} else {
+				result = await adapterInstance.findMany<Record<string, any>>({
+					model: modelName,
+					where: [
+						{
+							field,
+							value,
+							operator: "eq",
+							connector: "AND",
+						},
+					],
+					limit: joinConfig.limit,
+				});
 			}
 
-			const resultData: T = { ...baseData };
-
-			for (const join of Object.entries(joinConfig)) {
-				const [modelName, joinConfig] = join;
-				const model = modelName;
-				const field = joinConfig.on.to;
-				const value = baseData[joinConfig.on.from];
-				if (value === null || value === undefined) {
-					// If there is no value, it could mean that the query used a `select` clause that didn't include the field.
-					// or the query result is purely empty.
-					// In any case, we return null/empty array.
-					resultData[modelName] = joinConfig.isUnique ? null : [];
-					continue;
-				}
-				let result: Record<string, any> | Record<string, any>[] | null;
-				if (joinConfig.isUnique) {
-					result = await adapterInstance.findOne<Record<string, any>>({
-						model,
-						where: [
-							{
-								field,
-								value,
-								operator: "eq",
-								connector: "AND",
-							},
-						],
-					});
-				} else {
-					result = await adapterInstance.findMany<Record<string, any>>({
-						model,
-						where: [
-							{
-								field,
-								value,
-								operator: "eq",
-								connector: "AND",
-							},
-						],
-						limit: joinConfig.limit,
-					});
-				}
-				resultData[modelName] = result;
-			}
-
-			return resultData;
+			return result;
 		};
 
 		const adapterInstance = customAdapter({
@@ -811,7 +793,12 @@ export const createAdapterFactory =
 				);
 				let transformed = res as any;
 				if (!config.disableTransformOutput) {
-					transformed = await transformOutput(res as any, unsafeModel, select);
+					transformed = await transformOutput(
+						res as any,
+						unsafeModel,
+						select,
+						undefined,
+					);
 				}
 				debugLog(
 					{ method: "create" },
@@ -867,7 +854,12 @@ export const createAdapterFactory =
 				);
 				let transformed = res as any;
 				if (!config.disableTransformOutput) {
-					transformed = await transformOutput(res as any, unsafeModel);
+					transformed = await transformOutput(
+						res as any,
+						unsafeModel,
+						undefined,
+						undefined,
+					);
 				}
 				debugLog(
 					{ method: "update" },
@@ -952,7 +944,11 @@ export const createAdapterFactory =
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
-					join = transformJoinClause(unsafeModel, unsafeJoin);
+					const result = transformJoinClause(unsafeModel, unsafeJoin, select);
+					if (result) {
+						join = result.join;
+						select = result.select;
+					}
 					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
 					if (!config.supportsJoin && join && Object.keys(join).length > 0) {
 						passJoinToAdapter = false;
@@ -982,19 +978,9 @@ export const createAdapterFactory =
 				);
 
 				// Handle fallback join if adapter doesn't support joins
-				let joinedRes = res;
-				if (!config.supportsJoin && join && Object.keys(join).length > 0) {
-					joinedRes = await handleFallbackJoin(res, join);
-				}
-
-				let transformed = joinedRes as any;
+				let transformed = res as any;
 				if (!config.disableTransformOutput) {
-					transformed = await transformOutput(
-						joinedRes as any,
-						unsafeModel,
-						select,
-						join,
-					);
+					transformed = await transformOutput(res, unsafeModel, select, join);
 				}
 				debugLog(
 					{ method: "findOne" },
@@ -1034,7 +1020,14 @@ export const createAdapterFactory =
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
-					join = transformJoinClause(unsafeModel, unsafeJoin);
+					const result = transformJoinClause(
+						unsafeModel,
+						unsafeJoin,
+						undefined,
+					);
+					if (result) {
+						join = result.join;
+					}
 					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
 					if (!config.supportsJoin && join && Object.keys(join).length > 0) {
 						passJoinToAdapter = false;
@@ -1064,29 +1057,12 @@ export const createAdapterFactory =
 					{ model, data: res },
 				);
 
-				// Handle fallback join if adapter doesn't support joins
-				let joinedRes = [];
-				if (!config.supportsJoin && join && Object.keys(join).length > 0) {
-					for (const resObj of res) {
-						joinedRes.push(await handleFallbackJoin(resObj, join));
-					}
-					debugLog(
-						{ method: "findMany" },
-						`${formatTransactionId(thisTransactionId)} ${formatStep(2.5, 3)}`,
-						`${formatMethod("findMany")} ${formatAction("Fallback Join")}:`,
-						{ model, data: joinedRes },
-					);
-				} else {
-					joinedRes = res;
-				}
-
-				let transformed = joinedRes as any;
+				let transformed = res as any;
 				if (!config.disableTransformOutput) {
 					transformed = await Promise.all(
-						joinedRes.map(
-							async (r) =>
-								await transformOutput(r as any, unsafeModel, undefined, join),
-						),
+						res.map(async (r: Record<string, any>) => {
+							return await transformOutput(r, unsafeModel, undefined, join);
+						}),
 					);
 				}
 
