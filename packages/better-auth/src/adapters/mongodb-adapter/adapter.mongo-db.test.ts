@@ -21,7 +21,9 @@ const { db, client } = await dbClient(
 
 const { execute } = await testAdapter({
 	adapter: (options) => {
-		return mongodbAdapter(db, { transaction: false });
+		return mongodbAdapter(db, {
+			transaction: false,
+		});
 	},
 	runMigrations: async (betterAuthOptions) => {},
 	tests: [
@@ -30,7 +32,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite(),
 		// numberIdTestSuite(), // Mongo doesn't support number ids
 	],
-	customIdGenerator: () => new ObjectId().toString(),
+	customIdGenerator: () => new ObjectId().toHexString(),
 });
 
 execute();
