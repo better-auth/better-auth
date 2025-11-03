@@ -75,7 +75,7 @@ export async function onCheckoutSessionCompleted(
 							stripeCustomerId,
 							status: "incomplete",
 							referenceId,
-							seats: seats ?? 1,
+							seats,
 						},
 					});
 					subscriptionId = subscription.id;
