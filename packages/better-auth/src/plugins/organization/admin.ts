@@ -9,7 +9,7 @@ const getAdminPlugin = (ctx: GenericEndpointContext) => {
 };
 
 export const isSuperAdmin = <O extends OrganizationOptions>(
-	options?: O,
+	options: O,
 	ctx: GenericEndpointContext,
 ): boolean => {
 	const user = ctx.context.session?.user;
