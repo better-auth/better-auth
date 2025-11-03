@@ -159,7 +159,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 
 					// Process cookies: normalize for current environment
 					const processedCookies = decryptedCookies
-						.split(", ")
+					.split(/,(?=\s*[^,]+=)/)
 						.map((cookie) => {
 							const parts = cookie.split(";");
 							const [nameValue = "", ...attrs] = parts.map((p) => p.trim());
