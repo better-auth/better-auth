@@ -261,10 +261,6 @@ export const auth = betterAuth({
           await logMemberRemoval(user.id, organization.id);
         },
 
-        <Callout type="info">
-          Throwing an error in `beforeRemoveMember` will prevent the operation in both cases (admin removal and self-leave).
-        </Callout>
-
         // Before updating a member's role
         beforeUpdateMemberRole: async ({
           member,

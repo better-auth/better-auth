@@ -369,43 +369,61 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			// Run beforeRemoveMember hook
-			if (options?.organizationHooks?.beforeRemoveMember) {
-				await options?.organizationHooks.beforeRemoveMember(
-					{
-						member: toBeRemovedMember,
-						user: userBeingRemoved,
-						organization,
-					},
-					{
-						...ctx.context,
-						request: ctx.request,
-					},
-				);
-			}
+			try {
+				// Run beforeRemoveMember hook
+				if (options?.organizationHooks?.beforeRemoveMember) {
+					await options?.organizationHooks.beforeRemoveMember(
+						{
+							member: toBeRemovedMember,
+							user: userBeingRemoved,
+							organization,
+						},
+						{
+							...ctx.context,
+							request: ctx.request,
+						},
+					);
+				}
 
-			await adapter.deleteMember(toBeRemovedMember.id);
-			if (
-				session.user.id === toBeRemovedMember.userId &&
-				session.session.activeOrganizationId ===
-					toBeRemovedMember.organizationId
-			) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
+				await adapter.deleteMember(toBeRemovedMember.id);
 
-			// Run afterRemoveMember hook
-			if (options?.organizationHooks?.afterRemoveMember) {
-				await options?.organizationHooks.afterRemoveMember(
-					{
-						member: toBeRemovedMember,
-						user: userBeingRemoved,
-						organization,
-					},
-					{
-						...ctx.context,
-						request: ctx.request,
-					},
+				if (
+					session.user.id === toBeRemovedMember.userId &&
+					session.session.activeOrganizationId ===
+						toBeRemovedMember.organizationId
+				) {
+					await adapter.setActiveOrganization(session.session.token, null, ctx);
+				}
+
+				// Run afterRemoveMember hook
+				if (options?.organizationHooks?.afterRemoveMember) {
+					await options?.organizationHooks.afterRemoveMember(
+						{
+							member: toBeRemovedMember,
+							user: userBeingRemoved,
+							organization,
+						},
+						{
+							...ctx.context,
+							request: ctx.request,
+						},
+					);
+				}
+			} catch (error) {
+				ctx.context.logger.error(
+					`Error during member removal process (triggered by ${ctx.request?.url}):`,
+					error,
 				);
+				if (error instanceof APIError) {
+					throw error;
+				}
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message:
+						error instanceof Error
+							? error.message
+							: "An error occurred during member removal.",
+					cause: error,
+				});
 			}
 
 			return ctx.json({
@@ -848,7 +866,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 				}
 			} catch (error) {
 				ctx.context.logger.error(
-					`Error during beforeRemoveMember hook (triggered by ${ctx.request?.url}):`,
+					`Error during member removal process (triggered by ${ctx.request?.url})`,
 					error,
 				);
 				if (error instanceof APIError) {
