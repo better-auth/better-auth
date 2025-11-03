@@ -355,14 +355,15 @@ export const error = createAuthEndpoint(
 		},
 	},
 	async (c) => {
-		const code =
-			new URL(c.request?.url || "").searchParams.get("error") || "unknown";
-		const description =
-			new URL(c.request?.url || "").searchParams.get("error_description") ||
-			null;
+		const url = new URL(c.request?.url || "");
+		const unsaitizedCode = url.searchParams.get("error") || "UNKNOWN";
+		const description = url.searchParams.get("error_description") || null;
+
+		const isValid = /^[\'A-Za-z0-9_-]+$/.test(unsaitizedCode || "");
+		const safeCode = isValid ? unsaitizedCode : "UNKNOWN";
 
 		const queryParams = new URLSearchParams();
-		queryParams.set("error", code);
+		queryParams.set("error", safeCode);
 		if (description) {
 			queryParams.set("error_description", description);
 		}
@@ -388,7 +389,7 @@ export const error = createAuthEndpoint(
 			});
 		}
 
-		return new Response(html(c.context.options, code, description), {
+		return new Response(html(c.context.options, safeCode, description), {
 			headers: {
 				"Content-Type": "text/html",
 			},
