@@ -559,23 +559,25 @@ export interface OrganizationOptions {
 				/**
 				 * A callback that runs before a member is removed from an organization
 				 */
-				beforeRemoveMember?: (data: {
-					member: Member & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				},
-				ctx: AuthContext,
+				beforeRemoveMember?: (
+					data: {
+						member: Member & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					ctx: AuthContext,
 				) => Promise<void>;
 
 				/**
 				 * A callback that runs after a member is removed from an organization
 				 */
-				afterRemoveMember?: (data: {
-					member: Member & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				},
-				ctx: AuthContext,
+				afterRemoveMember?: (
+					data: {
+						member: Member & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					ctx: AuthContext,
 				) => Promise<void>;
 
 				/**

@@ -240,15 +240,30 @@ export const auth = betterAuth({
         },
 
         // Before a member is removed
-        beforeRemoveMember: async ({ member, user, organization }) => {
+        beforeRemoveMember: async ({ member, user, organization }, ctx) => {
           // Cleanup user's resources, send notification, etc.
+          // This hook is called by BOTH `removeMember` (admin action)
+          // and `leaveOrganization` (self-leave action)
+          // You can differentiate them by checking the request URL in the context:
+          if (ctx.request.url.includes("/organization/leave")) {
+            console.log("User is leaving the organization themselves.");
+          } else {
+            console.log("User is being removed by an admin.");
+          }
+          // If the hook throws an error, the operation will be prevented
           await cleanupUserResources(user.id, organization.id);
         },
 
         // After a member is removed
-        afterRemoveMember: async ({ member, user, organization }) => {
+        afterRemoveMember: async ({ member, user, organization }, ctx) => {
+          // This hook is also called by both `removeMember` and `leaveOrganization`
+          // You can use `ctx.request.url` here as well if needed
           await logMemberRemoval(user.id, organization.id);
         },
+
+        <Callout type="info">
+          Throwing an error in `beforeRemoveMember` will prevent the operation in both cases (admin removal and self-leave).
+        </Callout>
 
         // Before updating a member's role
         beforeUpdateMemberRole: async ({
