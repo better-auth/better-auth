@@ -20,11 +20,11 @@ import {
 } from "../../cookies";
 import { getSessionQuerySchema } from "../../cookies/session-store";
 import { symmetricDecodeJWT, verifyJWT } from "../../crypto";
+import { parseSessionOutput, parseUserOutput } from "../../db";
 import type { InferSession, InferUser, Session, User } from "../../types";
 import type { Prettify } from "../../types/helper";
 import { getDate } from "../../utils/date";
 import { safeJSONParse } from "../../utils/json";
-import { parseSessionOutput, parseUserOutput } from "../../db";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
