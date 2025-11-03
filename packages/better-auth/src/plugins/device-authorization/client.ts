@@ -1,5 +1,5 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { deviceAuthorization } from ".";
-import type { BetterAuthClientPlugin } from "../../client/types";
 
 export const deviceAuthorizationClient = () => {
 	return {

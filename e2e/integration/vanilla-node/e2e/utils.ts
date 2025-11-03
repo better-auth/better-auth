@@ -1,15 +1,8 @@
-import type { Page } from "@playwright/test";
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { terminate } from "@better-auth/test-utils/playwright";
+import type { Page } from "@playwright/test";
 import { createAuthServer } from "./app";
-
-const terminate = createRequire(import.meta.url)(
-	// use terminate instead of cp.kill,
-	//  because cp.kill will not kill the child process of the child process
-	//  to avoid the zombie process
-	"terminate/promise",
-) as (pid: number) => Promise<void>;
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -41,7 +34,7 @@ export function setup() {
 			});
 			clientChild.stderr.on("data", (data) => {
 				const message = data.toString();
-				console.log(message);
+				console.error(message);
 			});
 			clientChild.stdout.on("data", (data) => {
 				const message = data.toString();

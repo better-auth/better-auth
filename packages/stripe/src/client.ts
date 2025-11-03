@@ -6,7 +6,7 @@ export const stripeClient = <
 		subscription: boolean;
 	},
 >(
-	options?: O,
+	options?: O | undefined,
 ) => {
 	return {
 		id: "stripe-client",
@@ -29,6 +29,7 @@ export const stripeClient = <
 		>,
 		pathMethods: {
 			"/subscription/restore": "POST",
+			"/subscription/billing-portal": "POST",
 		},
 	} satisfies BetterAuthClientPlugin;
 };

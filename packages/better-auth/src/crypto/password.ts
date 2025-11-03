@@ -1,9 +1,8 @@
-import { constantTimeEqual } from "./buffer";
-import { scryptAsync } from "@noble/hashes/scrypt.js";
-import { getRandomValues } from "@better-auth/utils";
+import { BetterAuthError } from "@better-auth/core/error";
 import { hex } from "@better-auth/utils/hex";
+import { scryptAsync } from "@noble/hashes/scrypt.js";
 import { hexToBytes } from "@noble/hashes/utils.js";
-import { BetterAuthError } from "../error";
+import { constantTimeEqual } from "./buffer";
 
 const config = {
 	N: 16384,
@@ -23,7 +22,7 @@ async function generateKey(password: string, salt: string) {
 }
 
 export const hashPassword = async (password: string) => {
-	const salt = hex.encode(getRandomValues(new Uint8Array(16)));
+	const salt = hex.encode(crypto.getRandomValues(new Uint8Array(16)));
 	const key = await generateKey(password, salt);
 	return `${salt}:${hex.encode(key)}`;
 };

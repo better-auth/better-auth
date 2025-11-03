@@ -1,30 +1,29 @@
-import {
-	generateAuthenticationOptions,
-	generateRegistrationOptions,
-	verifyAuthenticationResponse,
-	verifyRegistrationResponse,
-} from "@simplewebauthn/server";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import { defineErrorCodes } from "@better-auth/core/utils";
+import { base64 } from "@better-auth/utils/base64";
 import type {
 	AuthenticationResponseJSON,
 	AuthenticatorTransportFuture,
 	CredentialDeviceType,
 	PublicKeyCredentialCreationOptionsJSON,
 } from "@simplewebauthn/server";
+import {
+	generateAuthenticationOptions,
+	generateRegistrationOptions,
+	verifyAuthenticationResponse,
+	verifyRegistrationResponse,
+} from "@simplewebauthn/server";
 import { APIError } from "better-call";
-import { generateRandomString } from "../../crypto/random";
-import * as z from "zod/v4";
-import { createAuthEndpoint } from "../../api/call";
+import * as z from "zod";
 import { sessionMiddleware } from "../../api";
 import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
-import type {
-	BetterAuthPlugin,
-	InferOptionSchema,
-	AuthPluginSchema,
-} from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
-import { generateId } from "../../utils";
+import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
-import { base64 } from "@better-auth/utils/base64";
+import type { InferOptionSchema } from "../../types/plugins";
+import { generateId } from "../../utils";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
@@ -33,7 +32,18 @@ interface WebAuthnChallengeValue {
 	};
 }
 
-function getRpID(options: PasskeyOptions, baseURL?: string) {
+const ERROR_CODES = defineErrorCodes({
+	CHALLENGE_NOT_FOUND: "Challenge not found",
+	YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY:
+		"You are not allowed to register this passkey",
+	FAILED_TO_VERIFY_REGISTRATION: "Failed to verify registration",
+	PASSKEY_NOT_FOUND: "Passkey not found",
+	AUTHENTICATION_FAILED: "Authentication failed",
+	UNABLE_TO_CREATE_SESSION: "Unable to create session",
+	FAILED_TO_UPDATE_PASSKEY: "Failed to update passkey",
+});
+
+function getRpID(options: PasskeyOptions, baseURL?: string | undefined) {
 	return (
 		options.rpID || (baseURL ? new URL(baseURL).hostname : "localhost") // default rpID
 	);
@@ -46,13 +56,13 @@ export interface PasskeyOptions {
 	 *
 	 * @default "localhost"
 	 */
-	rpID?: string;
+	rpID?: string | undefined;
 	/**
 	 * Human-readable title for your website
 	 *
 	 * @default "Better Auth"
 	 */
-	rpName?: string;
+	rpName?: string | undefined;
 	/**
 	 * The URL at which registrations and authentications should occur.
 	 * `http://localhost` and `http://localhost:PORT` are also valid.
@@ -61,41 +71,43 @@ export interface PasskeyOptions {
 	 * if this isn't provided. The client itself will
 	 * pass this value.
 	 */
-	origin?: string | null;
+	origin?: (string | string[] | null) | undefined;
 
 	/**
 	 * Allow customization of the authenticatorSelection options
 	 * during passkey registration.
 	 */
-	authenticatorSelection?: AuthenticatorSelectionCriteria;
+	authenticatorSelection?: AuthenticatorSelectionCriteria | undefined;
 
 	/**
 	 * Advanced options
 	 */
-	advanced?: {
-		webAuthnChallengeCookie?: string;
-	};
+	advanced?:
+		| {
+				webAuthnChallengeCookie?: string;
+		  }
+		| undefined;
 	/**
 	 * Schema for the passkey model
 	 */
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
 export type Passkey = {
 	id: string;
-	name?: string;
+	name?: string | undefined;
 	publicKey: string;
 	userId: string;
 	credentialID: string;
 	counter: number;
 	deviceType: CredentialDeviceType;
 	backedUp: boolean;
-	transports?: string;
+	transports?: string | undefined;
 	createdAt: Date;
-	aaguid?: string;
+	aaguid?: string | undefined;
 };
 
-export const passkey = (options?: PasskeyOptions) => {
+export const passkey = (options?: PasskeyOptions | undefined) => {
 	const opts = {
 		origin: null,
 		...options,
@@ -110,16 +122,6 @@ export const passkey = (options?: PasskeyOptions) => {
 		(expirationTime.getTime() - currentTime.getTime()) / 1000,
 	);
 
-	const ERROR_CODES = {
-		CHALLENGE_NOT_FOUND: "Challenge not found",
-		YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY:
-			"You are not allowed to register this passkey",
-		FAILED_TO_VERIFY_REGISTRATION: "Failed to verify registration",
-		PASSKEY_NOT_FOUND: "Passkey not found",
-		AUTHENTICATION_FAILED: "Authentication failed",
-		UNABLE_TO_CREATE_SESSION: "Unable to create session",
-		FAILED_TO_UPDATE_PASSKEY: "Failed to update passkey",
-	} as const;
 	return {
 		id: "passkey",
 		endpoints: {
@@ -146,13 +148,13 @@ export const passkey = (options?: PasskeyOptions) => {
 									parameters: {
 										query: {
 											authenticatorAttachment: {
-												description: `Type of authenticator to use for registration. 
-                          "platform" for device-specific authenticators, 
+												description: `Type of authenticator to use for registration.
+                          "platform" for device-specific authenticators,
                           "cross-platform" for authenticators that can be used across devices.`,
 												required: false,
 											},
 											name: {
-												description: `Optional custom name for the passkey. 
+												description: `Optional custom name for the passkey.
                           This can help identify the passkey when managing multiple credentials.`,
 												required: false,
 											},
@@ -310,19 +312,16 @@ export const passkey = (options?: PasskeyOptions) => {
 							maxAge: maxAgeInSeconds,
 						},
 					);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							identifier: id,
-							value: JSON.stringify({
-								expectedChallenge: options.challenge,
-								userData: {
-									id: session.user.id,
-								},
-							}),
-							expiresAt: expirationTime,
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: id,
+						value: JSON.stringify({
+							expectedChallenge: options.challenge,
+							userData: {
+								id: session.user.id,
+							},
+						}),
+						expiresAt: expirationTime,
+					});
 					return ctx.json(options, {
 						status: 200,
 					});
@@ -332,16 +331,6 @@ export const passkey = (options?: PasskeyOptions) => {
 				"/passkey/generate-authenticate-options",
 				{
 					method: "POST",
-					body: z
-						.object({
-							email: z
-								.string()
-								.meta({
-									description: "The email address of the user",
-								})
-								.optional(),
-						})
-						.optional(),
 					metadata: {
 						openapi: {
 							description: "Generate authentication options for a passkey",
@@ -480,14 +469,11 @@ export const passkey = (options?: PasskeyOptions) => {
 							maxAge: maxAgeInSeconds,
 						},
 					);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							identifier: id,
-							value: JSON.stringify(data),
-							expiresAt: expirationTime,
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: id,
+						value: JSON.stringify(data),
+						expiresAt: expirationTime,
+					});
 					return ctx.json(options, {
 						status: 200,
 					});
@@ -744,7 +730,6 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 						const s = await ctx.context.internalAdapter.createSession(
 							passkey.userId,
-							ctx,
 						);
 						if (!s) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -1064,4 +1049,4 @@ const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;

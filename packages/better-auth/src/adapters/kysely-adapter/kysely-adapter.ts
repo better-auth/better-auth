@@ -1,45 +1,58 @@
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
-import type { Where } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	DBAdapter,
+	DBAdapterDebugLogOption,
+	Where,
+} from "@better-auth/core/db/adapter";
+import {
+	type InsertQueryBuilder,
+	type Kysely,
+	type RawBuilder,
+	type UpdateQueryBuilder,
+} from "kysely";
+import {
+	type AdapterFactoryCustomizeAdapterCreator,
+	type AdapterFactoryOptions,
+	createAdapterFactory,
+} from "../adapter-factory";
 import type { KyselyDatabaseType } from "./types";
-import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 
 interface KyselyAdapterConfig {
 	/**
 	 * Database type.
 	 */
-	type?: KyselyDatabaseType;
+	type?: KyselyDatabaseType | undefined;
 	/**
 	 * Enable debug logs for the adapter
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 	/**
 	 * Use plural for table names.
 	 *
 	 * @default false
 	 */
-	usePlural?: boolean;
+	usePlural?: boolean | undefined;
+	/**
+	 * Whether to execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions,
+	 * set this to `false` and operations will be executed sequentially.
+	 * @default false
+	 */
+	transaction?: boolean | undefined;
 }
 
-export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
-	createAdapter({
-		config: {
-			adapterId: "kysely",
-			adapterName: "Kysely Adapter",
-			usePlural: config?.usePlural,
-			debugLogs: config?.debugLogs,
-			supportsBooleans:
-				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
-					? false
-					: true,
-			supportsDates:
-				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
-					? false
-					: true,
-			supportsJSON: false,
-		},
-		adapter: ({ getFieldName, schema }) => {
+export const kyselyAdapter = (
+	db: Kysely<any>,
+	config?: KyselyAdapterConfig | undefined,
+) => {
+	let lazyOptions: BetterAuthOptions | null = null;
+	const createCustomAdapter = (
+		db: Kysely<any>,
+	): AdapterFactoryCustomizeAdapterCreator => {
+		return ({ getFieldName }) => {
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -55,7 +68,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					await builder.execute();
 					const field = values.id
 						? "id"
-						: where.length > 0 && where[0].field
+						: where.length > 0 && where[0]?.field
 							? where[0].field
 							: "id";
 
@@ -69,7 +82,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 						return res;
 					}
 
-					const value = values[field] || where[0].value;
+					const value = values[field] || where[0]?.value;
 					res = await db
 						.selectFrom(model)
 						.selectAll()
@@ -86,31 +99,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				res = await builder.returningAll().executeTakeFirst();
 				return res;
 			};
-			function transformValueToDB(value: any, model: string, field: string) {
-				if (field === "id") {
-					return value;
-				}
-				const { type = "sqlite" } = config || {};
-				let f = schema[model]?.fields[field];
-				if (!f) {
-					//@ts-expect-error - The model name can be a sanitized, thus using the custom model name, not one of the default ones.
-					f = Object.values(schema).find((f) => f.modelName === model)!;
-				}
-				if (
-					f.type === "boolean" &&
-					(type === "sqlite" || type === "mssql") &&
-					value !== null &&
-					value !== undefined
-				) {
-					return value ? 1 : 0;
-				}
-				if (f.type === "date" && value && value instanceof Date) {
-					return type === "sqlite" ? value.toISOString() : value;
-				}
-				return value;
-			}
-
-			function convertWhereClause(model: string, w?: Where[]) {
+			function convertWhereClause(model: string, w?: Where[] | undefined) {
 				if (!w)
 					return {
 						and: null,
@@ -125,12 +114,16 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				w.forEach((condition) => {
 					let {
 						field: _field,
-						value,
+						value: _value,
 						operator = "=",
 						connector = "AND",
 					} = condition;
-					const field = getFieldName({ model, field: _field });
-					value = transformValueToDB(value, model, _field);
+					let value: any = _value;
+					let field: string | RawBuilder<unknown> = getFieldName({
+						model,
+						field: _field,
+					});
+
 					const expr = (eb: any) => {
 						if (operator.toLowerCase() === "in") {
 							return eb(field, "in", Array.isArray(value) ? value : [value]);
@@ -198,8 +191,8 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 			return {
 				async create({ data, model }) {
 					const builder = db.insertInto(model).values(data);
-
-					return (await withReturning(data, builder, model, [])) as any;
+					const returned = await withReturning(data, builder, model, []);
+					return returned;
 				},
 				async findOne({ model, where, select }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -288,7 +281,13 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					const res = await query.execute();
-					return res[0].count as number;
+					if (typeof res[0]!.count === "number") {
+						return res[0]!.count;
+					}
+					if (typeof res[0]!.count === "bigint") {
+						return Number(res[0]!.count);
+					}
+					return parseInt(res[0]!.count);
 				},
 				async delete({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -315,5 +314,46 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				},
 				options: config,
 			};
+		};
+	};
+	let adapterOptions: AdapterFactoryOptions | null = null;
+	adapterOptions = {
+		config: {
+			adapterId: "kysely",
+			adapterName: "Kysely Adapter",
+			usePlural: config?.usePlural,
+			debugLogs: config?.debugLogs,
+			supportsBooleans:
+				config?.type === "sqlite" ||
+				config?.type === "mssql" ||
+				config?.type === "mysql" ||
+				!config?.type
+					? false
+					: true,
+			supportsDates:
+				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
+					? false
+					: true,
+			supportsJSON: false,
+			transaction:
+				(config?.transaction ?? false)
+					? (cb) =>
+							db.transaction().execute((trx) => {
+								const adapter = createAdapterFactory({
+									config: adapterOptions!.config,
+									adapter: createCustomAdapter(trx),
+								})(lazyOptions!);
+								return cb(adapter);
+							})
+					: false,
 		},
-	});
+		adapter: createCustomAdapter(db),
+	};
+
+	const adapter = createAdapterFactory(adapterOptions);
+
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+		lazyOptions = options;
+		return adapter(options);
+	};
+};

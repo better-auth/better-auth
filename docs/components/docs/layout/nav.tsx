@@ -1,5 +1,6 @@
 "use client";
 import Link, { type LinkProps } from "fumadocs-core/link";
+import { useI18n } from "fumadocs-ui/provider";
 import {
 	createContext,
 	type ReactNode,
@@ -9,7 +10,6 @@ import {
 	useState,
 } from "react";
 import { cn } from "../../../lib/utils";
-import { useI18n } from "fumadocs-ui/provider";
 
 export interface NavProviderProps {
 	/**
@@ -48,11 +48,14 @@ export function NavProvider({
 		if (transparentMode !== "top") return;
 
 		const listener = () => {
+			if (document.documentElement.hasAttribute("data-anchor-scrolling")) {
+				return;
+			}
 			setTransparent(window.scrollY < 10);
 		};
 
 		listener();
-		window.addEventListener("scroll", listener);
+		window.addEventListener("scroll", listener, { passive: true });
 		return () => {
 			window.removeEventListener("scroll", listener);
 		};

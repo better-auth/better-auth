@@ -1,9 +1,9 @@
-import { Command } from "commander";
-import os from "os";
-import { execSync } from "child_process";
-import { existsSync, readFileSync } from "fs";
-import path from "path";
 import chalk from "chalk";
+import { execSync } from "child_process";
+import { Command } from "commander";
+import { existsSync, readFileSync } from "fs";
+import os from "os";
+import path from "path";
 import { getConfig } from "../utils/get-config";
 import { getPackageInfo } from "../utils/get-package-info";
 
@@ -331,9 +331,15 @@ async function getBetterAuthInfo(
 				shouldThrowOnError: false,
 			});
 			const packageInfo = await getPackageInfo();
+			const betterAuthVersion =
+				packageInfo.dependencies?.["better-auth"] ||
+				packageInfo.devDependencies?.["better-auth"] ||
+				packageInfo.peerDependencies?.["better-auth"] ||
+				packageInfo.optionalDependencies?.["better-auth"] ||
+				"Unknown";
 
 			return {
-				version: packageInfo.version || "Unknown",
+				version: betterAuthVersion,
 				config: sanitizeBetterAuthConfig(config),
 			};
 		} finally {

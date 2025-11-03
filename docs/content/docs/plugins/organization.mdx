@@ -537,12 +537,12 @@ return (
   const organizations = authClient.useListOrganizations();
 </script>
 
-<h1>Organizations</h1>s
+<h1>Organizations</h1>
 
 {#if $organizations.isPending}
 
   <p>Loading...</p>
-{:else if $organizations.data === null}
+{:else if !$organizations.data?.length}
   <p>No organizations found.</p>
 {:else}
   <ul>
@@ -584,7 +584,7 @@ export default {
 
 Or alternatively, you can call `organization.list` if you don't want to use a hook.
 
-<APIMethod path="/organization/list" method="GET">
+<APIMethod path="/organization/list" method="GET" requireSession>
   ```ts
   type listOrganizations = {
   }
@@ -1162,6 +1162,21 @@ To get the current member of the active organization you can use the `organizati
   ```
 </APIMethod>
 
+### Get Active Member Role
+To get the current role member of the active organization you can use the `organization.getActiveMemberRole` function. This function will return the user's member role in their active organization.
+
+<APIMethod
+  path="/organization/get-active-member-role"
+  method="GET"
+  requireSession
+  resultVariable="{ role }"
+>
+  ```ts
+  type getActiveMemberRole = {
+  }
+  ```
+</APIMethod>
+
 ### Add Member
 
 If you want to add a member directly to an organization without sending an invitation, you can use the `addMember` function which can only be invoked on the server.
@@ -1449,7 +1464,7 @@ const canCreateProjectAndCreateSale =
 ```
 
 <Callout type="warn">
-  This will not include any dynamic roles as everything is ran syncronously on the client side.
+  This will not include any dynamic roles as everything is ran synchronously on the client side.
   Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles & permissions.
 </Callout>
 
@@ -1505,7 +1520,7 @@ export const authClient = createAuthClient({
 
 
 <Callout type="warn">
-  The `authClient.organization.checkRolePermission` function will not include any dynamic roles as everything is ran syncronously on the client side.
+  The `authClient.organization.checkRolePermission` function will not include any dynamic roles as everything is ran synchronously on the client side.
   Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles.
 </Callout>
 
@@ -1857,8 +1872,8 @@ Get all teams in an organization:
 ```ts
 type listOrganizationTeams = {
     /**
-     * The organization ID which the teams are under to list. Defaults to the user's active organization. 
-     */
+    * The organization ID which the teams are under to list. Defaults to the user's active organization. 
+    */
     organizationId?: string = "organization-id"
 }
 ```
@@ -1953,7 +1968,7 @@ List all teams that the current user is a part of.
 
 List the members of the given team.
 
-<APIMethod path="/organization/list-team-members" method="POST">
+<APIMethod path="/organization/list-team-members" method="POST" forceAsQuery>
 ```ts
 type listTeamMembers = {
     /**
@@ -2253,6 +2268,11 @@ Table Name: `invitation`
       name: "status",
       type: "string",
       description: "The status of the invitation",
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the invitation was created"
     },
     {
       name: "expiresAt",

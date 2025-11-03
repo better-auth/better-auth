@@ -3,7 +3,7 @@ title: Options
 description: Better Auth configuration options reference.
 ---
 
-List of all the available options for configuring Better Auth. See [Better Auth Options](https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/types/options.ts#L13).
+List of all the available options for configuring Better Auth. See [Better Auth Options](https://github.com/better-auth/better-auth/blob/main/packages/core/src/types/init-options.ts).
 
 ## `appName`
 
@@ -77,12 +77,15 @@ You can use wildcard patterns in trusted origins:
 ```ts
 export const auth = betterAuth({
 	trustedOrigins: [
-		"*.example.com",             // Trust all subdomains of example.com
-		"https://*.example.com",     // Trust only HTTPS subdomains
-		"http://*.dev.example.com"   // Trust HTTP subdomains of dev.example.com
+		"https://*.example.com", // trust all HTTPS subdomains of example.com
+		"http://*.dev.example.com" // trust all HTTP subdomains of dev.example.com
 	]
 })
 ```
+
+<Callout type="warn">
+  Make sure to provide the protocol prefix when using wildcard patterns. For example, `https://*.example.com` instead of `*.example.com`.
+</Callout>
 
 ## `secret`
 
@@ -220,12 +223,12 @@ export const auth = betterAuth({
 		google: {
 			clientId: "your-client-id",
 			clientSecret: "your-client-secret",
-			redirectUri: "https://example.com/api/auth/callback/google"
+			redirectURI: "https://example.com/api/auth/callback/google"
 		},
 		github: {
 			clientId: "your-client-id",
 			clientSecret: "your-client-secret",
-			redirectUri: "https://example.com/api/auth/callback/github"
+			redirectURI: "https://example.com/api/auth/callback/github"
 		}
 	},
 })
@@ -497,6 +500,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	logger: {
 		disabled: false,
+		disableColors: false,
 		level: "error",
 		log: (level, message, ...args) => {
 			// Custom logging implementation
@@ -509,6 +513,7 @@ export const auth = betterAuth({
 The logger configuration allows you to customize how Better Auth handles logging. It supports the following options:
 
 - `disabled`: Disable all logging when set to `true` (default: `false`)
+- `disableColors`: Disable colors in the default logger implementation (default: determined by the terminal's color support)
 - `level`: Set the minimum log level to display. Available levels are:
   - `"info"`: Show all logs
   - `"warn"`: Show warnings and errors

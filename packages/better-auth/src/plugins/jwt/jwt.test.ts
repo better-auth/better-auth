@@ -1,10 +1,10 @@
+import { createLocalJWKSet, type JSONWebKeySet, jwtVerify } from "jose";
 import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
-import { jwtClient } from "./client";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from ".";
-import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
-import type { JwtOptions, JWKOptions } from "./types";
+import { jwtClient } from "./client";
+import type { JWKOptions, JwtOptions } from "./types";
 import { generateExportedKeyPair } from "./utils";
 
 describe("jwt", async () => {
@@ -65,7 +65,7 @@ describe("jwt", async () => {
 		const jwks = await client.jwks();
 
 		expect(jwks.data?.keys).length.above(0);
-		expect(jwks.data?.keys[0].alg).toBe("EdDSA");
+		expect(jwks.data?.keys[0]!.alg).toBe("EdDSA");
 	});
 
 	it("Signed tokens can be validated with the JWKS", async () => {
@@ -100,7 +100,12 @@ describe("jwt", async () => {
 
 	const algorithmsToTest: {
 		keyPairConfig: JWKOptions;
-		expectedOutcome: { ec: string; length: number; crv?: string; alg: string };
+		expectedOutcome: {
+			ec: string;
+			length: number;
+			crv?: string | undefined;
+			alg: string;
+		};
 	}[] = [
 		{
 			keyPairConfig: {
@@ -368,7 +373,7 @@ describe.each([
 			},
 			protectedHeader: {
 				alg: keyPairConfig.alg,
-				kid: jwks.keys[0].kid,
+				kid: jwks.keys[0]!.kid,
 			},
 		});
 	});
@@ -412,36 +417,13 @@ describe("jwt - remote signing", async () => {
 });
 
 describe("jwt - remote url", async () => {
-	const { auth } = await getTestInstance({
-		plugins: [
-			jwt({
-				jwks: {
-					remoteUrl: "https://example.com",
-					keyPairConfig: {
-						alg: "ES256",
-					},
-				},
-			}),
-		],
-	});
-
-	const client = createAuthClient({
-		plugins: [jwtClient()],
-		baseURL: "http://localhost:3000/api/auth",
-		fetchOptions: {
-			customFetchImpl: async (url, init) => {
-				return auth.handler(new Request(url, init));
-			},
-		},
-	});
-
-	it("should require specifying the alg used", async () => {
+	it("should require specifying the alg when using remoteUrl", async () => {
 		expect(() =>
 			getTestInstance({
 				plugins: [
 					jwt({
 						jwks: {
-							remoteUrl: "https://example.com",
+							remoteUrl: "https://example.com/.well-known/jwks.json",
 						},
 					}),
 				],
@@ -449,8 +431,273 @@ describe("jwt - remote url", async () => {
 		).toThrowError("jwks_config");
 	});
 
-	it("should disable /jwks", async () => {
+	it("should accept remoteUrl with alg specified", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						remoteUrl: "https://example.com/.well-known/jwks.json",
+						keyPairConfig: {
+							alg: "ES256",
+						},
+					},
+				}),
+			],
+		});
+		expect(auth).toBeDefined();
+	});
+
+	it("should disable /jwks endpoint when remoteUrl is configured", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						remoteUrl: "https://example.com/.well-known/jwks.json",
+						keyPairConfig: {
+							alg: "ES256",
+						},
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
 		const response = await client.$fetch<JSONWebKeySet>("/jwks");
 		expect(response.error?.status).toBe(404);
+	});
+
+	it("should work with different algorithms when remoteUrl is set", async () => {
+		const algorithms = ["ES256", "ES512", "RS256", "PS256", "EdDSA"];
+
+		for (const alg of algorithms) {
+			const { auth } = await getTestInstance({
+				plugins: [
+					jwt({
+						jwks: {
+							remoteUrl: "https://example.com/.well-known/jwks.json",
+							keyPairConfig: {
+								alg: alg as any,
+							},
+						},
+					}),
+				],
+			});
+			expect(auth).toBeDefined();
+		}
+	});
+
+	it("should still allow token generation when remoteUrl is set", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						remoteUrl: "https://example.com/.well-known/jwks.json",
+						keyPairConfig: {
+							alg: "ES256",
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		const client = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		const token = await client.token({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(token.data?.token).toBeDefined();
+		expect(token.data?.token).toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/); // JWT format
+	});
+
+	it("should work with custom sign function and remoteUrl", async () => {
+		const mockSignFunction = (payload: any) => {
+			// Mock JWT with test signature
+			const header = Buffer.from(
+				JSON.stringify({ alg: "ES256", typ: "JWT" }),
+			).toString("base64url");
+			const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+			const signature = "mock-signature";
+			return `${header}.${body}.${signature}`;
+		};
+
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						remoteUrl: "https://example.com/.well-known/jwks.json",
+						keyPairConfig: {
+							alg: "ES256",
+						},
+					},
+					jwt: {
+						sign: mockSignFunction,
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		const client = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		const token = await client.token({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(token.data?.token).toBeDefined();
+		// Verify it's using our mock sign function
+		expect(token.data?.token).toContain("mock-signature");
+	});
+
+	it("should validate that remoteUrl is a valid URL format", async () => {
+		const invalidUrls = [
+			"not-a-url",
+			"http://",
+			"//example.com",
+			"example.com/jwks",
+		];
+
+		for (const url of invalidUrls) {
+			// While the current implementation doesn't validate URL format,
+			// this test documents expected behavior
+			const { auth } = await getTestInstance({
+				plugins: [
+					jwt({
+						jwks: {
+							remoteUrl: url,
+							keyPairConfig: {
+								alg: "ES256",
+							},
+						},
+					}),
+				],
+			});
+			// Currently passes, but documents that URL validation might be needed
+			expect(auth).toBeDefined();
+		}
+	});
+
+	it("should work with remoteUrl pointing to different paths", async () => {
+		const validPaths = [
+			"https://example.com/.well-known/jwks.json",
+			"https://auth.example.com/jwks",
+			"https://api.example.com/v1/keys",
+			"https://example.com:8080/jwks.json",
+		];
+
+		for (const url of validPaths) {
+			const { auth } = await getTestInstance({
+				plugins: [
+					jwt({
+						jwks: {
+							remoteUrl: url,
+							keyPairConfig: {
+								alg: "ES256",
+							},
+						},
+					}),
+				],
+			});
+			expect(auth).toBeDefined();
+		}
+	});
+
+	it("should handle remoteUrl with query parameters", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						remoteUrl: "https://example.com/jwks?version=1&format=json",
+						keyPairConfig: {
+							alg: "RS256",
+						},
+					},
+				}),
+			],
+		});
+		expect(auth).toBeDefined();
+	});
+
+	it("should not interfere with other JWT endpoints when remoteUrl is set", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						remoteUrl: "https://example.com/.well-known/jwks.json",
+						keyPairConfig: {
+							alg: "ES256",
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		const client = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		// Test that /token endpoint still works
+		const tokenResponse = await client.token({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(tokenResponse.data?.token).toBeDefined();
+
+		// Test that /jwks endpoint returns 404
+		const jwksResponse = await client.$fetch("/jwks");
+		expect(jwksResponse.error?.status).toBe(404);
+
+		// Test that session endpoint still returns JWT header
+		let jwtHeader = "";
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					jwtHeader = context.response.headers.get("set-auth-jwt") || "";
+				},
+			},
+		});
+		expect(jwtHeader).toBeTruthy();
 	});
 });

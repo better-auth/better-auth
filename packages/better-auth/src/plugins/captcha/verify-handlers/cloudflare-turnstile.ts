@@ -6,20 +6,22 @@ type Params = {
 	siteVerifyURL: string;
 	secretKey: string;
 	captchaResponse: string;
-	remoteIP?: string;
+	remoteIP?: string | undefined;
 };
 
 type SiteVerifyResponse = {
 	success: boolean;
-	"error-codes"?: string[];
-	challenge_ts?: string;
-	hostname?: string;
-	action?: string;
-	cdata?: string;
-	metadata?: {
-		interactive: boolean;
-	};
-	messages?: string[];
+	"error-codes"?: string[] | undefined;
+	challenge_ts?: string | undefined;
+	hostname?: string | undefined;
+	action?: string | undefined;
+	cdata?: string | undefined;
+	metadata?:
+		| {
+				interactive: boolean;
+		  }
+		| undefined;
+	messages?: string[] | undefined;
 };
 
 export const cloudflareTurnstile = async ({

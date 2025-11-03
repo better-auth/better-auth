@@ -1,23 +1,23 @@
-import type { BetterAuthPlugin } from "../../types";
-import { schema } from "./schema";
-import { getJwksAdapter } from "./adapter";
-import { getJwtToken, signJWT } from "./sign";
-import type { JSONWebKeySet, JWTPayload } from "jose";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	sessionMiddleware,
-} from "../../api";
+} from "@better-auth/core/api";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { JSONWebKeySet, JWTPayload } from "jose";
+import * as z from "zod";
+import { APIError, sessionMiddleware } from "../../api";
 import { mergeSchema } from "../../db/schema";
-import z from "zod";
-import { BetterAuthError } from "../../error";
+import { getJwksAdapter } from "./adapter";
+import { schema } from "./schema";
+import { getJwtToken, signJWT } from "./sign";
 import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
-export type * from "./types";
-export { generateExportedKeyPair, createJwk } from "./utils";
 
-export const jwt = (options?: JwtOptions) => {
+export type * from "./types";
+export { createJwk, generateExportedKeyPair } from "./utils";
+
+export const jwt = (options?: JwtOptions | undefined) => {
 	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
 		throw new BetterAuthError(
@@ -204,7 +204,7 @@ export const jwt = (options?: JwtOptions) => {
 						$Infer: {
 							body: {} as {
 								payload: JWTPayload;
-								overrideOptions?: JwtOptions;
+								overrideOptions?: JwtOptions | undefined;
 							},
 						},
 					},

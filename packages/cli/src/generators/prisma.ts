@@ -1,9 +1,9 @@
-import { getAuthTables, type FieldType } from "better-auth/db";
 import { produceSchema } from "@mrleebo/prisma-ast";
-import { existsSync } from "fs";
-import path from "path";
-import fs from "fs/promises";
 import { capitalizeFirstLetter } from "better-auth";
+import { type FieldType, getAuthTables } from "better-auth/db";
+import { existsSync } from "fs";
+import fs from "fs/promises";
+import path from "path";
 import type { SchemaGenerator } from "./types";
 
 export const generatePrismaSchema: SchemaGenerator = async ({
@@ -84,6 +84,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				if (type === "date") {
 					return isOptional ? "DateTime?" : "DateTime";
 				}
+				if (type === "json") {
+					return isOptional ? "Json?" : "Json";
+				}
 				if (type === "string[]") {
 					return isOptional ? "String[]" : "String[]";
 				}
@@ -155,8 +158,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					if (provider === "mongodb") {
 						fieldBuilder.attribute(`map("_id")`);
 					}
-				} else if (fieldName !== field) {
-					fieldBuilder.attribute(`map("${field}")`);
 				}
 
 				if (attr.unique) {
@@ -169,15 +170,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					} else if (typeof attr.defaultValue === "boolean") {
 						fieldBuilder.attribute(`default(${attr.defaultValue})`);
 					} else if (typeof attr.defaultValue === "function") {
-						// For other function-based defaults, we'll need to check what they return
-						const defaultVal = attr.defaultValue();
-						if (defaultVal instanceof Date) {
-							fieldBuilder.attribute("default(now())");
-						} else {
-							console.warn(
-								`Warning: Unsupported default function for field ${fieldName} in model ${modelName}. Please adjust manually.`,
-							);
-						}
+						// we are intentionally not adding the default value here
+						// this is because if the defaultValue is a function, it could have
+						// custom logic within that function that might not work in prisma's context.
 					}
 				}
 
@@ -185,9 +180,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				if (field === "updatedAt" && attr.onUpdate) {
 					fieldBuilder.attribute("updatedAt");
 				} else if (attr.onUpdate) {
-					console.warn(
-						`Warning: 'onUpdate' is only supported on 'updatedAt' fields. Please adjust manually for field ${fieldName} in model ${modelName}.`,
-					);
+					// we are intentionally not adding the onUpdate value here
+					// this is because if the onUpdate is a function, it could have
+					// custom logic within that function that might not work in prisma's context.
 				}
 
 				if (attr.references) {
@@ -205,7 +200,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.model(modelName)
 						.field(
 							`${referencedCustomModelName.toLowerCase()}`,
-							capitalizeFirstLetter(referencedCustomModelName),
+							`${capitalizeFirstLetter(referencedCustomModelName)}${
+								!attr.required ? "?" : ""
+							}`,
 						)
 						.attribute(
 							`relation(fields: [${fieldName}], references: [${attr.references.field}], onDelete: ${action})`,
