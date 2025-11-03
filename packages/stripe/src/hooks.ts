@@ -1,4 +1,4 @@
-import { type GenericEndpointContext, logger } from "better-auth";
+import { type GenericEndpointContext, logger, type User } from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
 import { getPlanByPriceInfo } from "./utils";
@@ -25,10 +25,62 @@ export async function onCheckoutSessionCompleted(
 			priceLookupKey,
 		);
 		if (plan) {
-			const referenceId =
+			let referenceId =
 				checkoutSession?.client_reference_id ||
 				checkoutSession?.metadata?.referenceId;
-			const subscriptionId = checkoutSession?.metadata?.subscriptionId;
+			let subscriptionId = checkoutSession?.metadata?.subscriptionId;
+
+			// Support checkout sessions created from payment links
+			if (
+				!referenceId &&
+				!subscriptionId &&
+				checkoutSession.payment_link &&
+				checkoutSession.customer &&
+				checkoutSession.customer_details?.email
+			) {
+				const customerEmail = checkoutSession.customer_details.email;
+				const user = await ctx.context.adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "email", value: customerEmail }],
+				});
+				if (user) {
+					referenceId = user.id;
+
+					const stripeCustomerId =
+						typeof checkoutSession.customer === "string"
+							? checkoutSession.customer
+							: checkoutSession.customer.id;
+
+					await ctx.context.adapter.update({
+						model: "user",
+						update: {
+							stripeCustomerId,
+						},
+						where: [
+							{
+								field: "id",
+								value: user.id,
+							},
+						],
+					});
+
+					const subscription = await ctx.context.adapter.create<
+						InputSubscription,
+						Subscription
+					>({
+						model: "subscription",
+						data: {
+							plan: plan.name.toLowerCase(),
+							stripeCustomerId,
+							status: "incomplete",
+							referenceId,
+							seats: 1,
+						},
+					});
+					subscriptionId = subscription.id;
+				}
+			}
+
 			const seats = subscription.items.data[0]!.quantity;
 			if (referenceId && subscriptionId) {
 				const trial =
