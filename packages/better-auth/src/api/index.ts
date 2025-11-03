@@ -48,8 +48,7 @@ import { toAuthEndpoints } from "./to-auth-endpoints";
 
 function isEndpoint(endpoint: unknown): endpoint is Endpoint {
 	return (
-		typeof endpoint === "object" &&
-		endpoint !== null &&
+		!!endpoint &&
 		Object.hasOwn(endpoint, "path") &&
 		typeof (endpoint as any).path === "string"
 	);
