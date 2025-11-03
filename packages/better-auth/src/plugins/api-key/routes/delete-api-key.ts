@@ -1,11 +1,11 @@
-import * as z from "zod/v4";
-import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
-import { ERROR_CODES } from "..";
+import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import * as z from "zod";
+import { APIError, sessionMiddleware } from "../../../api";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { API_KEY_TABLE_NAME } from "..";
 export function deleteApiKey({
 	opts,
 	schema,
@@ -15,7 +15,7 @@ export function deleteApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
 	return createAuthEndpoint(

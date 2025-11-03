@@ -1,18 +1,26 @@
-import * as z from "zod/v4";
-import { SignJWT } from "jose";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSessionFromCtx,
-	sessionMiddleware,
-} from "../../api";
-import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+} from "@better-auth/core/api";
+import { base64 } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
+import { SignJWT } from "jose";
+import * as z from "zod";
+import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
+import { parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
+import { mergeSchema } from "../../db";
+import type { jwt } from "../jwt";
+import { getJwtToken } from "../jwt/sign";
+import { authorize } from "./authorize";
 import { schema } from "./schema";
 import type {
 	Client,
@@ -21,14 +29,7 @@ import type {
 	OIDCMetadata,
 	OIDCOptions,
 } from "./types";
-import { authorize } from "./authorize";
-import { parseSetCookieHeader } from "../../cookies";
-import { createHash } from "@better-auth/utils/hash";
-import { base64 } from "@better-auth/utils/base64";
-import { getJwtToken } from "../jwt/sign";
-import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
-import { mergeSchema } from "../../db";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -42,8 +43,8 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
 export async function getClient(
 	clientId: string,
 	adapter: any,
-	trustedClients: (Client & { skipConsent?: boolean })[] = [],
-): Promise<(Client & { skipConsent?: boolean }) | null> {
+	trustedClients: (Client & { skipConsent?: boolean | undefined })[] = [],
+): Promise<(Client & { skipConsent?: boolean | undefined }) | null> {
 	const trustedClient = trustedClients.find(
 		(client) => client.clientId === clientId,
 	);
@@ -71,7 +72,7 @@ export async function getClient(
 
 export const getMetadata = (
 	ctx: GenericEndpointContext,
-	options?: OIDCOptions,
+	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
 	const jwtPlugin = getJwtPlugin(ctx);
 	const issuer =
@@ -252,7 +253,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							maxAge: 0,
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-						const sessionToken = sessionCookie?.split(".")[0];
+						const sessionToken = sessionCookie?.split(".")[0]!;
 						if (!sessionToken) {
 							return;
 						}
@@ -262,7 +263,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							return;
 						}
 						ctx.query = JSON.parse(cookie);
-						ctx.query!.prompt = "consent";
+						// Don't force prompt to "consent" - let the authorize function
+						// determine if consent is needed based on OIDC spec requirements
 						ctx.context.session = session;
 						const response = await authorize(ctx, opts);
 						return response;
@@ -320,7 +322,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					method: "POST",
 					body: z.object({
 						accept: z.boolean(),
-						consent_code: z.string().optional(),
+						consent_code: z.string().optional().nullish(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -597,7 +599,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 						return ctx.json({
 							access_token: accessToken,
-							token_type: "bearer",
+							token_type: "Bearer",
 							expires_in: opts.accessTokenExpiresIn,
 							refresh_token: newRefreshToken,
 							scope: token.scopes,
@@ -782,8 +784,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const profile = {
-						given_name: user.name.split(" ")[0],
-						family_name: user.name.split(" ")[1],
+						given_name: user.name.split(" ")[0]!,
+						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
 						updated_at: new Date(user.updatedAt).toISOString(),
@@ -808,7 +810,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const payload = {
 						sub: user.id,
 						aud: client_id.toString(),
-						iat: Date.now(),
+						iat: iat,
 						auth_time: ctx.context.session
 							? new Date(ctx.context.session.session.createdAt).getTime()
 							: undefined,
@@ -859,7 +861,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 									...jwtPlugin.options?.jwt,
 									getSubject: () => user.id,
 									audience: client_id.toString(),
-									issuer: ctx.context.options.baseURL,
+									issuer:
+										jwtPlugin.options?.jwt?.issuer ??
+										ctx.context.options.baseURL,
 									expirationTime,
 									definePayload: () => payload,
 								},
@@ -1034,10 +1038,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 							? user.image
 							: undefined,
 						given_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[0]
+							? user.name.split(" ")[0]!
 							: undefined,
 						family_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[1]
+							? user.name.split(" ")[1]!
 							: undefined,
 						email_verified: requestedScopes.includes("email")
 							? user.emailVerified

@@ -1,17 +1,19 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { BetterFetchOption } from "@better-fetch/fetch";
-import type { BetterAuthClientPlugin } from "../../types";
 
 declare global {
 	interface Window {
-		google?: {
-			accounts: {
-				id: {
-					initialize: (config: any) => void;
-					prompt: (callback?: (notification: any) => void) => void;
-				};
-			};
-		};
-		googleScriptInitialized?: boolean;
+		google?:
+			| {
+					accounts: {
+						id: {
+							initialize: (config: any) => void;
+							prompt: (callback?: (notification: any) => void) => void;
+						};
+					};
+			  }
+			| undefined;
+		googleScriptInitialized?: boolean | undefined;
 	}
 }
 
@@ -23,11 +25,11 @@ export interface GoogleOneTapOptions {
 	/**
 	 * Auto select the account if the user is already signed in
 	 */
-	autoSelect?: boolean;
+	autoSelect?: boolean | undefined;
 	/**
 	 * Cancel the flow when the user taps outside the prompt
 	 */
-	cancelOnTapOutside?: boolean;
+	cancelOnTapOutside?: boolean | undefined;
 	/**
 	 * The mode to use for the Google One Tap flow
 	 *
@@ -36,46 +38,48 @@ export interface GoogleOneTapOptions {
 	 *
 	 * @default "popup"
 	 */
-	uxMode?: "popup" | "redirect";
+	uxMode?: ("popup" | "redirect") | undefined;
 	/**
 	 * The context to use for the Google One Tap flow. See https://developers.google.com/identity/gsi/web/reference/js-reference
 	 *
 	 * @default "signin"
 	 */
-	context?: "signin" | "signup" | "use";
+	context?: ("signin" | "signup" | "use") | undefined;
 	/**
 	 * Additional configuration options to pass to the Google One Tap API.
 	 */
-	additionalOptions?: Record<string, any>;
+	additionalOptions?: Record<string, any> | undefined;
 	/**
 	 * Configuration options for the prompt and exponential backoff behavior.
 	 */
-	promptOptions?: {
-		/**
-		 * Base delay (in milliseconds) for exponential backoff.
-		 * @default 1000
-		 */
-		baseDelay?: number;
-		/**
-		 * Maximum number of prompt attempts before calling onPromptNotification.
-		 * @default 5
-		 */
-		maxAttempts?: number;
-	};
+	promptOptions?:
+		| {
+				/**
+				 * Base delay (in milliseconds) for exponential backoff.
+				 * @default 1000
+				 */
+				baseDelay?: number;
+				/**
+				 * Maximum number of prompt attempts before calling onPromptNotification.
+				 * @default 5
+				 */
+				maxAttempts?: number;
+		  }
+		| undefined;
 }
 
 export interface GoogleOneTapActionOptions
 	extends Omit<GoogleOneTapOptions, "clientId" | "promptOptions"> {
-	fetchOptions?: BetterFetchOption;
+	fetchOptions?: BetterFetchOption | undefined;
 	/**
 	 * Callback URL.
 	 */
-	callbackURL?: string;
+	callbackURL?: string | undefined;
 	/**
 	 * Optional callback that receives the prompt notification if (or when) the prompt is dismissed or skipped.
 	 * This lets you render an alternative UI (e.g. a Google Sign-In button) to restart the process.
 	 */
-	onPromptNotification?: (notification: any) => void;
+	onPromptNotification?: ((notification: any) => void) | undefined;
 }
 
 let isRequestInProgress = false;
@@ -85,8 +89,8 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 		id: "one-tap",
 		getActions: ($fetch, _) => ({
 			oneTap: async (
-				opts?: GoogleOneTapActionOptions,
-				fetchOptions?: BetterFetchOption,
+				opts?: GoogleOneTapActionOptions | undefined,
+				fetchOptions?: BetterFetchOption | undefined,
 			) => {
 				if (isRequestInProgress) {
 					console.warn(

@@ -1,83 +1,105 @@
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import type {
+	DBFieldAttribute,
+	DBFieldAttributeConfig,
+	DBFieldType,
+} from "@better-auth/core/db";
 import type {
 	Endpoint,
 	EndpointOptions,
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
-import { z, ZodObject, ZodOptional, ZodType } from "zod/v4";
+import * as z from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
-import type { AuthContext, BetterAuthOptions } from "../../types";
-import type { FieldAttribute } from "../../db";
 
 export interface Path {
-	get?: {
-		tags?: string[];
-		operationId?: string;
-		description?: string;
-		security?: [{ bearerAuth: string[] }];
-		parameters?: OpenAPIParameter[];
-		responses?: {
-			[key in string]: {
+	get?:
+		| {
+				tags?: string[];
+				operationId?: string;
 				description?: string;
-				content: {
-					"application/json": {
-						schema: {
-							type?: OpenAPISchemaType;
-							properties?: Record<string, any>;
-							required?: string[];
-							$ref?: string;
+				security?: [{ bearerAuth: string[] }];
+				parameters?: OpenAPIParameter[];
+				responses?: {
+					[key in string]: {
+						description?: string;
+						content: {
+							"application/json": {
+								schema: {
+									type?: OpenAPISchemaType;
+									properties?: Record<string, any>;
+									required?: string[];
+									$ref?: string;
+								};
+							};
 						};
 					};
 				};
-			};
-		};
-	};
-	post?: {
-		tags?: string[];
-		operationId?: string;
-		description?: string;
-		security?: [{ bearerAuth: string[] }];
-		parameters?: OpenAPIParameter[];
-		requestBody?: {
-			content: {
-				"application/json": {
-					schema: {
-						type?: OpenAPISchemaType;
-						properties?: Record<string, any>;
-						required?: string[];
-						$ref?: string;
-					};
-				};
-			};
-		};
-		responses?: {
-			[key in string]: {
+		  }
+		| undefined;
+	post?:
+		| {
+				tags?: string[];
+				operationId?: string;
 				description?: string;
-				content: {
-					"application/json": {
-						schema: {
-							type?: OpenAPISchemaType;
-							properties?: Record<string, any>;
-							required?: string[];
-							$ref?: string;
+				security?: [{ bearerAuth: string[] }];
+				parameters?: OpenAPIParameter[];
+				requestBody?: {
+					content: {
+						"application/json": {
+							schema: {
+								type?: OpenAPISchemaType;
+								properties?: Record<string, any>;
+								required?: string[];
+								$ref?: string;
+							};
 						};
 					};
 				};
-			};
-		};
-	};
+				responses?: {
+					[key in string]: {
+						description?: string;
+						content: {
+							"application/json": {
+								schema: {
+									type?: OpenAPISchemaType;
+									properties?: Record<string, any>;
+									required?: string[];
+									$ref?: string;
+								};
+							};
+						};
+					};
+				};
+		  }
+		| undefined;
 }
 
 type AllowedType = "string" | "number" | "boolean" | "array" | "object";
 const allowedType = new Set(["string", "number", "boolean", "array", "object"]);
-function getTypeFromZodType(zodType: ZodType<any>) {
+function getTypeFromZodType(zodType: z.ZodType<any>) {
 	const type = zodType.type;
 	return allowedType.has(type) ? (type as AllowedType) : "string";
 }
 
-function getFieldSchema(field: FieldAttribute) {
-	const schema: any = {
+export type FieldSchema = {
+	type: DBFieldType;
+	default?:
+		| (DBFieldAttributeConfig["defaultValue"] | "Generated at runtime")
+		| undefined;
+	readOnly?: boolean | undefined;
+};
+
+export type OpenAPIModelSchema = {
+	type: "object";
+	properties: Record<string, FieldSchema>;
+	required?: string[] | undefined;
+};
+
+function getFieldSchema(field: DBFieldAttribute) {
+	const schema: FieldSchema = {
 		type: field.type === "date" ? "string" : field.type,
 	};
 
@@ -101,14 +123,14 @@ function getParameters(options: EndpointOptions) {
 		parameters.push(...options.metadata.openapi.parameters);
 		return parameters;
 	}
-	if (options.query instanceof ZodObject) {
+	if (options.query instanceof z.ZodObject) {
 		Object.entries(options.query.shape).forEach(([key, value]) => {
-			if (value instanceof ZodType) {
+			if (value instanceof z.ZodType) {
 				parameters.push({
 					name: key,
 					in: "query",
 					schema: {
-						...processZodType(value as ZodType<any>),
+						...processZodType(value as z.ZodType<any>),
 						...("minLength" in value && (value as any).minLength
 							? {
 									minLength: (value as any).minLength as number,
@@ -128,8 +150,8 @@ function getRequestBody(options: EndpointOptions): any {
 	}
 	if (!options.body) return undefined;
 	if (
-		options.body instanceof ZodObject ||
-		options.body instanceof ZodOptional
+		options.body instanceof z.ZodObject ||
+		options.body instanceof z.ZodOptional
 	) {
 		// @ts-expect-error
 		const shape = options.body.shape;
@@ -137,8 +159,8 @@ function getRequestBody(options: EndpointOptions): any {
 		const properties: Record<string, any> = {};
 		const required: string[] = [];
 		Object.entries(shape).forEach(([key, value]) => {
-			if (value instanceof ZodType) {
-				properties[key] = processZodType(value as ZodType<any>);
+			if (value instanceof z.ZodType) {
+				properties[key] = processZodType(value as z.ZodType<any>);
 				if (!(value instanceof z.ZodOptional)) {
 					required.push(key);
 				}
@@ -146,7 +168,7 @@ function getRequestBody(options: EndpointOptions): any {
 		});
 		return {
 			required:
-				options.body instanceof ZodOptional
+				options.body instanceof z.ZodOptional
 					? false
 					: options.body
 						? true
@@ -165,9 +187,9 @@ function getRequestBody(options: EndpointOptions): any {
 	return undefined;
 }
 
-function processZodType(zodType: ZodType<any>): any {
+function processZodType(zodType: z.ZodType<any>): any {
 	// optional unwrapping
-	if (zodType instanceof ZodOptional) {
+	if (zodType instanceof z.ZodOptional) {
 		const innerType = (zodType as any)._def.innerType;
 		const innerSchema = processZodType(innerType);
 		return {
@@ -176,14 +198,14 @@ function processZodType(zodType: ZodType<any>): any {
 		};
 	}
 	// object unwrapping
-	if (zodType instanceof ZodObject) {
+	if (zodType instanceof z.ZodObject) {
 		const shape = (zodType as any).shape;
 		if (shape) {
 			const properties: Record<string, any> = {};
 			const required: string[] = [];
 			Object.entries(shape).forEach(([key, value]) => {
-				if (value instanceof ZodType) {
-					properties[key] = processZodType(value as ZodType<any>);
+				if (value instanceof z.ZodType) {
+					properties[key] = processZodType(value as z.ZodType<any>);
 					if (!(value instanceof z.ZodOptional)) {
 						required.push(key);
 					}
@@ -207,7 +229,7 @@ function processZodType(zodType: ZodType<any>): any {
 	return baseSchema;
 }
 
-function getResponse(responses?: Record<string, any>) {
+function getResponse(responses?: Record<string, any> | undefined) {
 	return {
 		"400": {
 			content: {
@@ -325,11 +347,13 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	});
 
 	const tables = getAuthTables(options);
-	const models = Object.entries(tables).reduce((acc, [key, value]) => {
+	const models = Object.entries(tables).reduce<
+		Record<string, OpenAPIModelSchema>
+	>((acc, [key, value]) => {
 		const modelName = key.charAt(0).toUpperCase() + key.slice(1);
 		const fields = value.fields;
 		const required: string[] = [];
-		const properties: Record<string, any> = {
+		const properties: Record<string, FieldSchema> = {
 			id: { type: "string" },
 		};
 		Object.entries(fields).forEach(([fieldKey, fieldValue]) => {
@@ -340,7 +364,6 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			}
 		});
 
-		// @ts-expect-error
 		acc[modelName] = {
 			type: "object",
 			properties,

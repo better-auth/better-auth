@@ -1,32 +1,12 @@
-import type { FieldAttribute } from ".";
-import type { BetterAuthOptions } from "../types";
-
-export type BetterAuthDbSchema = Record<
-	string,
-	{
-		/**
-		 * The name of the table in the database
-		 */
-		modelName: string;
-		/**
-		 * The fields of the table
-		 */
-		fields: Record<string, FieldAttribute>;
-		/**
-		 * Whether to disable migrations for this table
-		 * @default false
-		 */
-		disableMigrations?: boolean;
-		/**
-		 * The order of the table
-		 */
-		order?: number;
-	}
->;
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthDBSchema,
+	DBFieldAttribute,
+} from "@better-auth/core/db";
 
 export const getAuthTables = (
 	options: BetterAuthOptions,
-): BetterAuthDbSchema => {
+): BetterAuthDBSchema => {
 	const pluginSchema = (options.plugins ?? []).reduce(
 		(acc, plugin) => {
 			const schema = plugin.schema;
@@ -44,7 +24,7 @@ export const getAuthTables = (
 		},
 		{} as Record<
 			string,
-			{ fields: Record<string, FieldAttribute>; modelName: string }
+			{ fields: Record<string, DBFieldAttribute>; modelName: string }
 		>,
 	);
 
@@ -68,7 +48,7 @@ export const getAuthTables = (
 				},
 			},
 		},
-	} satisfies BetterAuthDbSchema;
+	} satisfies BetterAuthDBSchema;
 
 	const { user, session, account, ...pluginTables } = pluginSchema;
 
@@ -124,7 +104,7 @@ export const getAuthTables = (
 			},
 			order: 2,
 		},
-	} satisfies BetterAuthDbSchema;
+	} satisfies BetterAuthDBSchema;
 
 	return {
 		user: {
@@ -148,6 +128,7 @@ export const getAuthTables = (
 					defaultValue: false,
 					required: true,
 					fieldName: options.user?.fields?.emailVerified || "emailVerified",
+					input: false,
 				},
 				image: {
 					type: "string",
@@ -225,7 +206,7 @@ export const getAuthTables = (
 					type: "date",
 					required: false,
 					fieldName:
-						options.account?.fields?.accessTokenExpiresAt ||
+						options.account?.fields?.refreshTokenExpiresAt ||
 						"refreshTokenExpiresAt",
 				},
 				scope: {
@@ -251,6 +232,7 @@ export const getAuthTables = (
 					onUpdate: () => new Date(),
 				},
 				...account?.fields,
+				...options.account?.additionalFields,
 			},
 			order: 3,
 		},
@@ -290,5 +272,5 @@ export const getAuthTables = (
 		},
 		...pluginTables,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
-	} satisfies BetterAuthDbSchema;
+	} satisfies BetterAuthDBSchema;
 };

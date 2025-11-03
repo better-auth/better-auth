@@ -1,26 +1,27 @@
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import { runWithAdapter } from "@better-auth/core/context";
+import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "./api";
 import { init } from "./init";
-import type { BetterAuthOptions } from "./types/options";
 import type {
+	InferAPI,
 	InferPluginErrorCodes,
 	InferPluginTypes,
 	InferSession,
 	InferUser,
-	AuthContext,
 } from "./types";
-import type { PrettifyDeep, Expand } from "./types/helper";
+import type { Expand, PrettifyDeep } from "./types/helper";
 import { getBaseURL, getOrigin } from "./utils/url";
-import type { FilterActions, InferAPI } from "./types";
-import { BASE_ERROR_CODES } from "./error/codes";
-import { BetterAuthError } from "./error";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
 
-export const betterAuth = <O extends BetterAuthOptions>(
-	options: O & Record<never, never>,
-) => {
-	const authContext = init(options as O);
-	const { api } = getEndpoints(authContext, options as O);
+export const betterAuth = <Options extends BetterAuthOptions>(
+	options: Options &
+		// fixme(alex): do we need Record<never, never> here?
+		Record<never, never>,
+): Auth<Options> => {
+	const authContext = init(options);
+	const { api } = getEndpoints(authContext, options);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
 		if (plugin.$ERROR_CODES) {
 			return {
@@ -54,28 +55,35 @@ export const betterAuth = <O extends BetterAuthOptions>(
 				ctx.options.baseURL!,
 			];
 			const { handler } = router(ctx, options);
-			return handler(request);
+			return runWithAdapter(ctx.adapter, () => handler(request));
 		},
-		api: api as InferAPI<typeof api>,
-		options: options as O,
+		api,
+		options: options,
 		$context: authContext,
-		$Infer: {} as {
-			Session: {
-				session: PrettifyDeep<InferSession<O>>;
-				user: PrettifyDeep<InferUser<O>>;
-			};
-		} & InferPluginTypes<O>,
 		$ERROR_CODES: {
 			...errorCodes,
 			...BASE_ERROR_CODES,
-		} as InferPluginErrorCodes<O> & typeof BASE_ERROR_CODES,
-	};
+		},
+	} as any;
 };
 
-export type Auth = {
+export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	handler: (request: Request) => Promise<Response>;
-	api: FilterActions<ReturnType<typeof router>["endpoints"]>;
-	options: BetterAuthOptions;
-	$ERROR_CODES: typeof BASE_ERROR_CODES;
+	api: InferAPI<ReturnType<typeof router<Options>>["endpoints"]>;
+	options: Options;
+	$ERROR_CODES: InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES;
 	$context: Promise<AuthContext>;
+	/**
+	 * Share types
+	 */
+	$Infer: InferPluginTypes<Options> extends {
+		Session: any;
+	}
+		? InferPluginTypes<Options>
+		: {
+				Session: {
+					session: PrettifyDeep<InferSession<Options>>;
+					user: PrettifyDeep<InferUser<Options>>;
+				};
+			} & InferPluginTypes<Options>;
 };

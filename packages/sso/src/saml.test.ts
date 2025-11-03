@@ -1,3 +1,20 @@
+import { betterFetch } from "@better-fetch/fetch";
+import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
+import { createAuthClient } from "better-auth/client";
+import { setCookieToHeader } from "better-auth/cookies";
+import { bearer } from "better-auth/plugins";
+import { getTestInstanceMemory } from "better-auth/test";
+import bodyParser from "body-parser";
+import { randomUUID } from "crypto";
+import type {
+	Application as ExpressApp,
+	Request as ExpressRequest,
+	Response as ExpressResponse,
+} from "express";
+import express from "express";
+import { createServer } from "http";
+import * as saml from "samlify";
 import {
 	afterAll,
 	beforeAll,
@@ -7,25 +24,8 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { betterAuth } from "better-auth";
-import { memoryAdapter } from "better-auth/adapters/memory";
-import { createAuthClient } from "better-auth/client";
-import { betterFetch } from "@better-fetch/fetch";
-import { setCookieToHeader } from "better-auth/cookies";
-import { bearer } from "better-auth/plugins";
 import { sso } from ".";
 import { ssoClient } from "./client";
-import { createServer } from "http";
-import * as saml from "samlify";
-import type {
-	Application as ExpressApp,
-	Request as ExpressRequest,
-	Response as ExpressResponse,
-} from "express";
-import express from "express";
-import bodyParser from "body-parser";
-import { randomUUID } from "crypto";
-import { getTestInstanceMemory } from "better-auth/test";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -242,7 +242,7 @@ const certificate = `
     yyoWAJDUHiAmvFA=
     -----END CERTIFICATE-----
     `;
-const idpEncyptionKey = `
+const idpEncryptionKey = `
     -----BEGIN RSA PRIVATE KEY-----
     Proc-Type: 4,ENCRYPTED
     DEK-Info: DES-EDE3-CBC,860FDB9F3BE14699
@@ -274,7 +274,7 @@ const idpEncyptionKey = `
     ISbutnQPUN5fsaIsgKDIV3T7n6519t6brobcW5bdigmf5ebFeZJ16/lYy6V77UM5
     -----END RSA PRIVATE KEY-----
     `;
-const spEncyptionKey = `
+const spEncryptionKey = `
     -----BEGIN RSA PRIVATE KEY-----
     Proc-Type: 4,ENCRYPTED
     DEK-Info: DES-EDE3-CBC,860FDB9F3BE14699
@@ -493,6 +493,98 @@ const createMockSAMLIdP = (port: number) => {
 	return { start, stop, metadataUrl };
 };
 
+describe("SAML SSO with defaultSSO array", async () => {
+	const data = {
+		user: [],
+		session: [],
+		verification: [],
+		account: [],
+		ssoProvider: [],
+	};
+
+	const memory = memoryAdapter(data);
+	const mockIdP = createMockSAMLIdP(8081); // Different port from your main app
+
+	const ssoOptions = {
+		defaultSSO: [
+			{
+				domain: "localhost:8081",
+				providerId: "default-saml",
+				samlConfig: {
+					issuer: "http://localhost:8081",
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+		],
+		provisionUser: vi
+			.fn()
+			.mockImplementation(async ({ user, userInfo, token, provider }) => {
+				return {
+					id: "provisioned-user-id",
+					email: userInfo.email,
+					name: userInfo.name,
+					attributes: userInfo.attributes,
+				};
+			}),
+	};
+
+	const auth = betterAuth({
+		database: memory,
+		baseURL: "http://localhost:3000",
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [sso(ssoOptions)],
+	});
+
+	const ctx = await auth.$context;
+
+	const authClient = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [bearer(), ssoClient()],
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	beforeAll(async () => {
+		await mockIdP.start();
+	});
+
+	afterAll(async () => {
+		await mockIdP.stop();
+	});
+
+	it("should use default SAML SSO provider from array when no provider found in database", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "default-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+	});
+});
+
 describe("SAML SSO", async () => {
 	const data = {
 		user: [],
@@ -606,7 +698,7 @@ describe("SAML SSO", async () => {
 						privateKey: idpPrivateKey,
 						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
 						isAssertionEncrypted: true,
-						encPrivateKey: idpEncyptionKey,
+						encPrivateKey: idpEncryptionKey,
 						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
 					},
 					spMetadata: {
@@ -615,7 +707,7 @@ describe("SAML SSO", async () => {
 						privateKey: spPrivateKey,
 						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 						isAssertionEncrypted: true,
-						encPrivateKey: spEncyptionKey,
+						encPrivateKey: spEncryptionKey,
 						encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
 					},
 					identifierFormat:
@@ -662,7 +754,7 @@ describe("SAML SSO", async () => {
 						privateKey: idpPrivateKey,
 						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
 						isAssertionEncrypted: true,
-						encPrivateKey: idpEncyptionKey,
+						encPrivateKey: idpEncryptionKey,
 						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
 					},
 					spMetadata: {
@@ -671,7 +763,7 @@ describe("SAML SSO", async () => {
 						privateKey: spPrivateKey,
 						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 						isAssertionEncrypted: true,
-						encPrivateKey: spEncyptionKey,
+						encPrivateKey: spEncryptionKey,
 						encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
 					},
 					identifierFormat:
@@ -689,6 +781,69 @@ describe("SAML SSO", async () => {
 		const spMetadataResResValue = await spMetadataRes.text();
 		expect(spMetadataRes.status).toBe(200);
 		expect(spMetadataResResValue).toBe(spMetadata);
+	});
+	it("Should fetch sp metadata", async () => {
+		const headers = await getAuthHeaders();
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+		const issuer = "http://localhost:8081";
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider-1",
+				issuer: issuer,
+				domain: issuer,
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl,
+					cert: certificate,
+					callbackUrl: `${issuer}/api/sso/saml2/sp/acs`,
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+						privateKey: idpPrivateKey,
+						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
+						isAssertionEncrypted: true,
+						encPrivateKey: idpEncryptionKey,
+						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
+					},
+					spMetadata: {
+						binding: "post",
+						privateKey: spPrivateKey,
+						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
+						isAssertionEncrypted: true,
+						encPrivateKey: spEncryptionKey,
+						encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const spMetadataRes = await auth.api.spMetadata({
+			query: {
+				providerId: provider.providerId,
+			},
+		});
+		const spMetadataResResValue = await spMetadataRes.text();
+		expect(spMetadataRes.status).toBe(200);
+		expect(spMetadataResResValue).toBeDefined();
+		expect(spMetadataResResValue).toContain(
+			"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+		);
+		expect(spMetadataResResValue).toContain(
+			"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+		);
+		expect(spMetadataResResValue).toContain(
+			`<EntityDescriptor entityID="${issuer}"`,
+		);
+		expect(spMetadataResResValue).toContain(
+			`Location="${issuer}/api/sso/saml2/sp/acs"`,
+		);
 	});
 	it("should initiate SAML login and handle response", async () => {
 		const headers = await getAuthHeaders();
@@ -713,7 +868,7 @@ describe("SAML SSO", async () => {
 						privateKey: idpPrivateKey,
 						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
 						isAssertionEncrypted: true,
-						encPrivateKey: idpEncyptionKey,
+						encPrivateKey: idpEncryptionKey,
 						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
 					},
 					spMetadata: {
@@ -722,7 +877,7 @@ describe("SAML SSO", async () => {
 						privateKey: spPrivateKey,
 						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 						isAssertionEncrypted: true,
-						encPrivateKey: spEncyptionKey,
+						encPrivateKey: spEncryptionKey,
 						encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
 					},
 					identifierFormat:
@@ -911,6 +1066,55 @@ describe("SAML SSO", async () => {
 			status: "FORBIDDEN",
 			body: {
 				message: "You have reached the maximum number of SSO providers",
+			},
+		});
+	});
+
+	it("should not allow creating a provider with duplicate providerId", async () => {
+		const headers = await getAuthHeaders();
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "duplicate-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl,
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					spMetadata: {
+						metadata: spMetadata,
+					},
+				},
+			},
+			headers,
+		});
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "duplicate-provider",
+					issuer: "http://localhost:8082",
+					domain: "http://localhost:8082",
+					samlConfig: {
+						entryPoint: mockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8082/api/sso/saml2/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "UNPROCESSABLE_ENTITY",
+			body: {
+				message: "SSO provider with this providerId already exists",
 			},
 		});
 	});

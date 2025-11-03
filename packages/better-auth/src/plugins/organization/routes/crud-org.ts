@@ -1,12 +1,16 @@
-import * as z from "zod/v4";
-import { createAuthEndpoint } from "../../../api/call";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "better-call";
+import * as z from "zod";
+import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
+import { setSessionCookie } from "../../../cookies";
+import {
+	type InferAdditionalFieldsFromPluginOptions,
+	toZodSchema,
+} from "../../../db";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { APIError } from "better-call";
-import { setSessionCookie } from "../../../cookies";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
-import type { OrganizationOptions } from "../types";
+import { hasPermission } from "../has-permission";
 import type {
 	InferInvitation,
 	InferMember,
@@ -15,25 +19,21 @@ import type {
 	Team,
 	TeamMember,
 } from "../schema";
-import { hasPermission } from "../has-permission";
-import {
-	toZodSchema,
-	type InferAdditionalFieldsFromPluginOptions,
-} from "../../../db";
+import type { OrganizationOptions } from "../types";
 import { isSuperAdmin } from "../admin";
 
 export const createOrganization = <O extends OrganizationOptions>(
-	options?: O,
+	options?: O | undefined,
 ) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.organization?.additionalFields || {},
 		isClientSide: true,
 	});
 	const baseSchema = z.object({
-		name: z.string().meta({
+		name: z.string().min(1).meta({
 			description: "The name of the organization",
 		}),
-		slug: z.string().meta({
+		slug: z.string().min(1).meta({
 			description: "The slug of the organization",
 		}),
 		userId: z.coerce
@@ -101,6 +101,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 		},
 		async (ctx) => {
 			const session = await getSessionFromCtx(ctx);
+
 			if (!session && (ctx.request || ctx.headers)) {
 				throw new APIError("UNAUTHORIZED");
 			}
@@ -156,7 +157,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				});
 			}
 
-			const {
+			let {
 				keepCurrentActiveOrganization: _,
 				userId: __,
 				...orgData
@@ -174,7 +175,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 					ctx.request,
 				);
 				if (response && typeof response === "object" && "data" in response) {
-					ctx.body = {
+					orgData = {
 						...ctx.body,
 						...response.data,
 					};
@@ -188,7 +189,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 						user,
 					});
 				if (response && typeof response === "object" && "data" in response) {
-					ctx.body = {
+					orgData = {
 						...ctx.body,
 						...response.data,
 					};
@@ -206,32 +207,79 @@ export const createOrganization = <O extends OrganizationOptions>(
 				| (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
 				| undefined;
 			let teamMember: TeamMember | null = null;
-
+			let data = {
+				userId: user.id,
+				organizationId: organization.id,
+				role: ctx.context.orgOptions.creatorRole || "owner",
+			};
+			if (options?.organizationHooks?.beforeAddMember) {
+				const response = await options?.organizationHooks.beforeAddMember({
+					member: {
+						userId: user.id,
+						organizationId: organization.id,
+						role: ctx.context.orgOptions.creatorRole || "owner",
+					},
+					user,
+					organization,
+				});
+				if (response && typeof response === "object" && "data" in response) {
+					data = {
+						...data,
+						...response.data,
+					};
+				}
+			}
+			member = await adapter.createMember(data);
+			if (options?.organizationHooks?.afterAddMember) {
+				await options?.organizationHooks.afterAddMember({
+					member,
+					user,
+					organization,
+				});
+			}
 			if (
 				options?.teams?.enabled &&
 				options.teams.defaultTeam?.enabled !== false
 			) {
+				let teamData = {
+					organizationId: organization.id,
+					name: `${organization.name}`,
+					createdAt: new Date(),
+				};
+				if (options?.organizationHooks?.beforeCreateTeam) {
+					const response = await options?.organizationHooks.beforeCreateTeam({
+						team: {
+							organizationId: organization.id,
+							name: `${organization.name}`,
+						},
+						user,
+						organization,
+					});
+					if (response && typeof response === "object" && "data" in response) {
+						teamData = {
+							...teamData,
+							...response.data,
+						};
+					}
+				}
 				const defaultTeam =
 					(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
 						organization,
 						ctx.request,
-					)) ||
-					(await adapter.createTeam({
-						organizationId: organization.id,
-						name: `${organization.name}`,
-						createdAt: new Date(),
-					}));
-
-				member = await adapter.createMember({
-					userId: user.id,
-					organizationId: organization.id,
-					role: ctx.context.orgOptions.creatorRole || "owner",
-				});
+					)) || (await adapter.createTeam(teamData));
 
 				teamMember = await adapter.findOrCreateTeamMember({
 					teamId: defaultTeam.id,
 					userId: user.id,
 				});
+
+				if (options?.organizationHooks?.afterCreateTeam) {
+					await options?.organizationHooks.afterCreateTeam({
+						team: defaultTeam,
+						user,
+						organization,
+					});
+				}
 			} else if (!isSuperAdmin(options, ctx)) {
 				member = await adapter.createMember({
 					userId: user.id,
@@ -263,6 +311,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				await adapter.setActiveOrganization(
 					ctx.context.session.session.token,
 					organization.id,
+					ctx,
 				);
 			}
 
@@ -274,12 +323,16 @@ export const createOrganization = <O extends OrganizationOptions>(
 				await adapter.setActiveTeam(
 					ctx.context.session.session.token,
 					teamMember.teamId,
+					ctx,
 				);
 			}
 
 			return ctx.json({
 				...organization,
-				metadata: ctx.body.metadata,
+				metadata:
+					organization.metadata && typeof organization.metadata === "string"
+						? JSON.parse(organization.metadata)
+						: organization.metadata,
 				members: [member],
 			});
 		},
@@ -315,7 +368,7 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 	);
 
 export const updateOrganization = <O extends OrganizationOptions>(
-	options?: O,
+	options?: O | undefined,
 ) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.organization?.additionalFields || {},
@@ -323,12 +376,12 @@ export const updateOrganization = <O extends OrganizationOptions>(
 	});
 	type Body = {
 		data: {
-			name?: string;
-			slug?: string;
-			logo?: string;
-			metadata?: Record<string, any>;
+			name?: string | undefined;
+			slug?: string | undefined;
+			logo?: string | undefined;
+			metadata?: Record<string, any> | undefined;
 		} & Partial<InferAdditionalFieldsFromPluginOptions<"organization", O>>;
-		organizationId: string;
+		organizationId?: string | undefined;
 	};
 	return createAuthEndpoint(
 		"/organization/update",
@@ -340,12 +393,14 @@ export const updateOrganization = <O extends OrganizationOptions>(
 						...additionalFieldsSchema.shape,
 						name: z
 							.string()
+							.min(1)
 							.meta({
 								description: "The name of the organization",
 							})
 							.optional(),
 						slug: z
 							.string()
+							.min(1)
 							.meta({
 								description: "The slug of the organization",
 							})
@@ -440,6 +495,20 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
 				});
+			}
+			// Check if slug is being updated and validate uniqueness
+			if (typeof ctx.body.data.slug === "string") {
+				const existingOrganization = await adapter.findOrganizationBySlug(
+					ctx.body.data.slug,
+				);
+				if (
+					existingOrganization &&
+					existingOrganization.id !== organizationId
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
+					});
+				}
 			}
 			if (options?.organizationHooks?.beforeUpdateOrganization) {
 				const response =
@@ -566,7 +635,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				/**
 				 * If the organization is deleted, we set the active organization to null
 				 */
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 
 			const org = await adapter.findOrganizationById(organizationId);
@@ -651,7 +720,6 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				session.session.activeOrganizationId;
 			// return null if no organization is found to avoid erroring since this is a usual scenario
 			if (!organizationId) {
-				ctx.context.logger.info("No active organization found, returning null");
 				return ctx.json(null, {
 					status: 200,
 				});
@@ -668,19 +736,15 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
-			const isMember = organization?.members.find(
-				(member) => member.userId === session.user.id,
-			);
+			const isMember = await adapter.checkMembership({
+				userId: session.user.id,
+				organizationId: organization.id,
+			});
 			if (!isMember && !isSuperAdmin(options, ctx)) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				});
-			}
-			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
 			type OrganizationReturn = O["teams"] extends { enabled: true }
@@ -756,6 +820,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				const updatedSession = await adapter.setActiveOrganization(
 					session.session.token,
 					null,
+					ctx,
 				);
 				await setSessionCookie(ctx, {
 					session: updatedSession,
@@ -794,7 +859,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				organizationId,
 			});
 			if (!isMember) {
-				await adapter.setActiveOrganization(session.session.token, null);
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
@@ -810,6 +875,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			const updatedSession = await adapter.setActiveOrganization(
 				session.session.token,
 				organization.id,
+				ctx,
 			);
 			await setSessionCookie(ctx, {
 				session: updatedSession,

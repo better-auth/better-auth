@@ -1,19 +1,19 @@
-import * as z from "zod/v4";
-import { createAuthEndpoint } from "../../../api/call";
-import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
+import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import type { OrganizationOptions } from "../types";
-import { teamSchema } from "../schema";
-import { hasPermission } from "../has-permission";
 import { setSessionCookie } from "../../../cookies";
 import {
-	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
+	toZodSchema,
 } from "../../../db";
 import type { PrettifyDeep } from "../../../types/helper";
+import { getOrgAdapter } from "../adapter";
+import { orgMiddleware, orgSessionMiddleware } from "../call";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import { hasPermission } from "../has-permission";
+import { teamSchema } from "../schema";
+import type { OrganizationOptions } from "../types";
 
 export const createTeam = <O extends OrganizationOptions>(options: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -700,6 +700,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 				const updatedSession = await adapter.setActiveTeam(
 					session.session.token,
 					null,
+					ctx,
 				);
 
 				await setSessionCookie(ctx, {
@@ -745,6 +746,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 			const updatedSession = await adapter.setActiveTeam(
 				session.session.token,
 				team.id,
+				ctx,
 			);
 
 			await setSessionCookie(ctx, {
