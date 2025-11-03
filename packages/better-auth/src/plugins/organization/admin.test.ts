@@ -35,12 +35,12 @@ describe("super admin", async (it) => {
 			},
 		);
 		expect(error).toBe(null);
-		orgId = data?.id;
+		orgId = data?.id ?? null;
 	});
 	it("should be allowed to update an org", async () => {
 		const { data, error } = await client.organization.update(
 			{
-				organizationId: orgId,
+				organizationId: orgId || undefined,
 				data: {
 					name: "testAgain",
 				},
@@ -55,7 +55,7 @@ describe("super admin", async (it) => {
 	it("should be allowed to get a full org", async () => {
 		const { data, error } = await client.organization.getFullOrganization({
 			query: {
-				organizationId: orgId,
+				organizationId: orgId || undefined,
 			},
 			fetchOptions: {
 				headers,
@@ -76,7 +76,7 @@ describe("super admin", async (it) => {
 	it("should be allowed to delete an org", async () => {
 		const { data, error } = await client.organization.delete(
 			{
-				organizationId: orgId,
+				organizationId: orgId as string,
 			},
 			{
 				headers,

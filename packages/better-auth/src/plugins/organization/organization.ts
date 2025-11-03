@@ -231,7 +231,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				userId: ctx.context.session.user.id,
 				organizationId: activeOrganizationId,
 			});
-			if (!member && !isSuperAdmin(options, ctx)) {
+			if (!member && !isSuperAdmin(options, ctx) || member === null) {
 				throw new APIError("UNAUTHORIZED", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,

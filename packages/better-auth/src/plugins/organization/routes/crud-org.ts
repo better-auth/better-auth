@@ -470,14 +470,14 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				userId: session.user.id,
 				organizationId: organizationId,
 			});
-			if (!member && !isSuperAdmin(options, ctx)) {
+			if (!member && options && !isSuperAdmin(options, ctx)) {
 				throw new APIError("BAD_REQUEST", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
 			const canUpdateOrg =
-				isSuperAdmin(options, ctx) ||
+				options && isSuperAdmin(options, ctx) ||
 				(member &&
 					(await hasPermission(
 						{
@@ -489,7 +489,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 							organizationId,
 						},
 						ctx,
-					)));
+					))) || member;
 			if (!canUpdateOrg) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -515,7 +515,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					await options.organizationHooks.beforeUpdateOrganization({
 						organization: ctx.body.data,
 						user: session.user,
-						member,
+						member: member as Member,
 					});
 				if (response && typeof response === "object" && "data" in response) {
 					ctx.body.data = {
@@ -532,7 +532,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				await options.organizationHooks.afterUpdateOrganization({
 					organization: updatedOrg,
 					user: session.user,
-					member,
+					member: member as Member,
 				});
 			}
 			return ctx.json(updatedOrg);

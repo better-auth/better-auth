@@ -509,7 +509,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			/**
 			 * TODO: Add pagination
 			 */
-			return await adapter.findMany<InferOrganization<O>>({
+			return await baseAdapter.findMany<InferOrganization<O>>({
 				model: "organization",
 				where: [],
 			});
