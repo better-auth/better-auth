@@ -29,6 +29,7 @@ export async function onCheckoutSessionCompleted(
 				checkoutSession?.client_reference_id ||
 				checkoutSession?.metadata?.referenceId;
 			let subscriptionId = checkoutSession?.metadata?.subscriptionId;
+			const seats = subscription.items.data[0]!.quantity;
 
 			// Support checkout sessions created from payment links
 			if (
@@ -74,14 +75,13 @@ export async function onCheckoutSessionCompleted(
 							stripeCustomerId,
 							status: "incomplete",
 							referenceId,
-							seats: subscription.items.data[0]?.quantity ?? 1,
+							seats: seats ?? 1,
 						},
 					});
 					subscriptionId = subscription.id;
 				}
 			}
 
-			const seats = subscription.items.data[0]!.quantity;
 			if (referenceId && subscriptionId) {
 				const trial =
 					subscription.trial_start && subscription.trial_end
