@@ -1,6 +1,10 @@
 import type { AuthContext, HookEndpointContext } from "@better-auth/core";
 import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
-import { runWithEndpointContext } from "@better-auth/core/context";
+import {
+	hasRequestStore,
+	runWithEndpointContext,
+	runWithRequestStore,
+} from "@better-auth/core/context";
 import { shouldPublishLog } from "@better-auth/core/env";
 import {
 	APIError,
@@ -30,6 +34,10 @@ const defuReplaceArrays = createDefu((obj, key, value) => {
 	}
 });
 
+type UserInputContext = Partial<
+	InputContext<string, any> & EndpointContext<string, any>
+>;
+
 export function toAuthEndpoints<
 	const E extends Record<string, Omit<AuthEndpoint, "wrap">>,
 >(endpoints: E, ctx: AuthContext | Promise<AuthContext>): E {
@@ -44,122 +52,126 @@ export function toAuthEndpoints<
 	> = {};
 
 	for (const [key, endpoint] of Object.entries(endpoints)) {
-		api[key] = async (
-			context: Partial<
-				InputContext<string, any> & EndpointContext<string, any>
-			>,
-		) => {
-			const authContext = await ctx;
-			let internalContext: InternalContext = {
-				...context,
-				context: {
-					...authContext,
-					returned: undefined,
-					responseHeaders: undefined,
-					session: null,
-				},
-				path: endpoint.path,
-				headers: context?.headers ? new Headers(context?.headers) : undefined,
-			};
-			return runWithEndpointContext(internalContext, async () => {
-				const { beforeHooks, afterHooks } = getHooks(authContext);
-				const before = await runBeforeHooks(internalContext, beforeHooks);
-				/**
-				 * If `before.context` is returned, it should
-				 * get merged with the original context
-				 */
-				if (
-					"context" in before &&
-					before.context &&
-					typeof before.context === "object"
-				) {
-					const { headers, ...rest } = before.context as {
-						headers: Headers;
-					};
+		api[key] = async (context?: UserInputContext) => {
+			const run = async () => {
+				const authContext = await ctx;
+				let internalContext: InternalContext = {
+					...context,
+					context: {
+						...authContext,
+						returned: undefined,
+						responseHeaders: undefined,
+						session: null,
+					},
+					path: endpoint.path,
+					headers: context?.headers ? new Headers(context?.headers) : undefined,
+				};
+				return runWithEndpointContext(internalContext, async () => {
+					const { beforeHooks, afterHooks } = getHooks(authContext);
+					const before = await runBeforeHooks(internalContext, beforeHooks);
 					/**
-					 * Headers should be merged differently
-					 * so the hook doesn't override the whole
-					 * header
+					 * If `before.context` is returned, it should
+					 * get merged with the original context
 					 */
-					if (headers) {
-						headers.forEach((value, key) => {
-							(internalContext.headers as Headers).set(key, value);
-						});
+					if (
+						"context" in before &&
+						before.context &&
+						typeof before.context === "object"
+					) {
+						const { headers, ...rest } = before.context as {
+							headers: Headers;
+						};
+						/**
+						 * Headers should be merged differently
+						 * so the hook doesn't override the whole
+						 * header
+						 */
+						if (headers) {
+							headers.forEach((value, key) => {
+								(internalContext.headers as Headers).set(key, value);
+							});
+						}
+						internalContext = defuReplaceArrays(rest, internalContext);
+					} else if (before) {
+						/* Return before hook response if it's anything other than a context return */
+						return context?.asResponse
+							? toResponse(before, {
+									headers: context?.headers,
+								})
+							: context?.returnHeaders
+								? {
+										headers: context?.headers,
+										response: before,
+									}
+								: before;
 					}
-					internalContext = defuReplaceArrays(rest, internalContext);
-				} else if (before) {
-					/* Return before hook response if it's anything other than a context return */
-					return context?.asResponse
-						? toResponse(before, {
-								headers: context?.headers,
+
+					internalContext.asResponse = false;
+					internalContext.returnHeaders = true;
+					const result = (await runWithEndpointContext(internalContext, () =>
+						(endpoint as any)(internalContext as any),
+					).catch((e: any) => {
+						if (e instanceof APIError) {
+							/**
+							 * API Errors from response are caught
+							 * and returned to hooks
+							 */
+							return {
+								response: e,
+								headers: e.headers ? new Headers(e.headers) : null,
+							};
+						}
+						throw e;
+					})) as {
+						headers: Headers;
+						response: any;
+					};
+
+					//if response object is returned we skip after hooks and post processing
+					if (result && result instanceof Response) {
+						return result;
+					}
+
+					internalContext.context.returned = result.response;
+					internalContext.context.responseHeaders = result.headers;
+
+					const after = await runAfterHooks(internalContext, afterHooks);
+
+					if (after.response) {
+						result.response = after.response;
+					}
+
+					if (
+						result.response instanceof APIError &&
+						shouldPublishLog(authContext.logger.level, "debug")
+					) {
+						// inherit stack from errorStack if debug mode is enabled
+						result.response.stack = result.response.errorStack;
+					}
+
+					if (result.response instanceof APIError && !context?.asResponse) {
+						throw result.response;
+					}
+
+					const response = context?.asResponse
+						? toResponse(result.response, {
+								headers: result.headers,
 							})
 						: context?.returnHeaders
 							? {
-									headers: context?.headers,
-									response: before,
+									headers: result.headers,
+									response: result.response,
 								}
-							: before;
-				}
-
-				internalContext.asResponse = false;
-				internalContext.returnHeaders = true;
-				const result = (await runWithEndpointContext(internalContext, () =>
-					(endpoint as any)(internalContext as any),
-				).catch((e: any) => {
-					if (e instanceof APIError) {
-						/**
-						 * API Errors from response are caught
-						 * and returned to hooks
-						 */
-						return {
-							response: e,
-							headers: e.headers ? new Headers(e.headers) : null,
-						};
-					}
-					throw e;
-				})) as {
-					headers: Headers;
-					response: any;
-				};
-
-				//if response object is returned we skip after hooks and post processing
-				if (result && result instanceof Response) {
-					return result;
-				}
-
-				internalContext.context.returned = result.response;
-				internalContext.context.responseHeaders = result.headers;
-
-				const after = await runAfterHooks(internalContext, afterHooks);
-
-				if (after.response) {
-					result.response = after.response;
-				}
-
-				if (
-					result.response instanceof APIError &&
-					shouldPublishLog(authContext.logger.level, "debug")
-				) {
-					// inherit stack from errorStack if debug mode is enabled
-					result.response.stack = result.response.errorStack;
-				}
-
-				if (result.response instanceof APIError && !context?.asResponse) {
-					throw result.response;
-				}
-
-				const response = context?.asResponse
-					? toResponse(result.response, {
-							headers: result.headers,
-						})
-					: context?.returnHeaders
-						? {
-								headers: result.headers,
-								response: result.response,
-							}
-						: result.response;
-				return response;
-			});
+							: result.response;
+					return response;
+				});
+			};
+			if (await hasRequestStore()) {
+				return run();
+			} else {
+				const store = new WeakMap();
+				return runWithRequestStore(store, run);
+			}
 		};
 		api[key].path = endpoint.path;
 		api[key].options = endpoint.options;

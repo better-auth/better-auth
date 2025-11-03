@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import * as z from "zod";
+import { setOauthState } from "../api/middlewares/oauth";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -9,12 +10,13 @@ import {
 
 export async function generateState(
 	c: GenericEndpointContext,
-	link?:
+	link:
 		| {
 				email: string;
 				userId: string;
 		  }
 		| undefined,
+	additionalData: Record<string, any> | false | undefined,
 ) {
 	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
 	if (!callbackURL) {
@@ -39,7 +41,25 @@ export async function generateState(
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
+		additionalData,
 	};
+
+	if (additionalData) {
+		const additionalDataConfig =
+			c.context.options.advanced?.oauthConfig?.additionalData;
+		if (additionalDataConfig?.enabled) {
+			const schema = additionalDataConfig.schema;
+			if (schema) {
+				const result = await schema["~standard"].validate(additionalData);
+				if (result.issues !== undefined) {
+					throw new APIError("BAD_REQUEST", {
+						message: `Invalid oauth additional data`,
+					});
+				}
+			}
+			await setOauthState(additionalData);
+		}
+	}
 
 	if (storeStateStrategy === "cookie") {
 		// Store state data in an encrypted cookie
@@ -112,6 +132,7 @@ export async function parseState(c: GenericEndpointContext) {
 			})
 			.optional(),
 		requestSignUp: z.boolean().optional(),
+		additionalData: z.record(z.string(), z.any()).optional(),
 	});
 
 	let parsedData: z.infer<typeof stateDataSchema>;
@@ -205,6 +226,25 @@ export async function parseState(c: GenericEndpointContext) {
 		const errorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+	}
+
+	if (parsedData.additionalData) {
+		const additionalDataConfig =
+			c.context.options.advanced?.oauthConfig?.additionalData;
+		if (additionalDataConfig?.enabled) {
+			const schema = additionalDataConfig.schema;
+			if (schema) {
+				const result = await schema["~standard"].validate(
+					parsedData.additionalData,
+				);
+				if (result.issues !== undefined) {
+					throw new APIError("BAD_REQUEST", {
+						message: `Invalid oauth additional data`,
+					});
+				}
+			}
+			await setOauthState(parsedData.additionalData);
+		}
 	}
 
 	return parsedData;

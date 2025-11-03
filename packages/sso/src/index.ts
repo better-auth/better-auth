@@ -1149,7 +1149,7 @@ export const sso = (options?: SSOOptions | undefined) => {
 						}
 					}
 					if (provider.oidcConfig && body.providerType !== "saml") {
-						const state = await generateState(ctx);
+						const state = await generateState(ctx, undefined, false);
 						const redirectURI = `${ctx.context.baseURL}/sso/callback/${provider.providerId}`;
 						const authorizationURL = await createAuthorizationURL({
 							id: provider.issuer,
