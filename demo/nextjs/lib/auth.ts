@@ -52,20 +52,16 @@ if (!dialect) {
 
 const baseURL: string | undefined =
 	process.env.VERCEL === "1"
-		? process.env.VERCEL_ENV === "production"
+		? process.env.BETTER_AUTH_URL
 			? process.env.BETTER_AUTH_URL
-			: process.env.VERCEL_ENV === "preview"
-				? `https://${process.env.VERCEL_URL}`
-				: undefined
+			: `https://${process.env.VERCEL_URL}`
 		: undefined;
 
 const cookieDomain: string | undefined =
 	process.env.VERCEL === "1"
-		? process.env.VERCEL_ENV === "production"
-			? ".better-auth.com"
-			: process.env.VERCEL_ENV === "preview"
-				? `.${process.env.VERCEL_URL}`
-				: undefined
+		? process.env.BETTER_AUTH_URL
+			? new URL(process.env.BETTER_AUTH_URL).hostname
+			: `.${process.env.VERCEL_URL}`
 		: undefined;
 
 export const auth = betterAuth({
@@ -106,6 +102,10 @@ export const auth = betterAuth({
 		},
 	},
 	socialProviders: {
+		apple: {
+			clientId: process.env.APPLE_CLIENT_ID || "",
+			clientSecret: process.env.APPLE_CLIENT_SECRET || "",
+		},
 		facebook: {
 			clientId: process.env.FACEBOOK_CLIENT_ID || "",
 			clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "",
