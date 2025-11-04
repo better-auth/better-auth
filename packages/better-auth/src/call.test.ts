@@ -10,7 +10,7 @@ import { setupServer } from "msw/node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as z from "zod";
 import { getEndpoints, router } from "./api";
-import { getOauthState } from "./api/middlewares/oauth";
+import { getOauthState } from './api';
 import { createAuthClient } from "./client";
 import { signJWT } from "./crypto";
 import { init } from "./init";
@@ -297,7 +297,7 @@ describe("call", async () => {
 			{
 				provider: "google",
 				callbackURL: "/callback",
-				data: {
+				additionalData: {
 					invitedBy: "user-123",
 				},
 			},
