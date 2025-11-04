@@ -24,6 +24,7 @@ export const testAdapter = async ({
 	onFinish,
 	customIdGenerator,
 	skipPostTestCleanup,
+	transformIdOutput,
 }: {
 	/**
 	 * A function that will return the adapter instance to test with.
@@ -76,7 +77,11 @@ export const testAdapter = async ({
 	/**
 	 * Custom ID generator function to be used by the helper functions. (such as `insertRandom`)
 	 */
-	customIdGenerator?: () => string | Promise<string>;
+	customIdGenerator?: () => any;
+	/**
+	 * A function that will transform the ID output.
+	 */
+	transformIdOutput?: (id: any) => any;
 	/**
 	 * If true, the post test cleanup will be skipped.
 	 * Only use if you know what you are doing, useful for debugging purposes.
@@ -234,6 +239,7 @@ export const testAdapter = async ({
 						runMigrations: migrate,
 						onTestFinish: async () => {},
 						customIdGenerator,
+						transformIdOutput,
 					});
 				}
 			});

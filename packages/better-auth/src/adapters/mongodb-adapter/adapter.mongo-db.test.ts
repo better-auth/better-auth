@@ -34,7 +34,7 @@ const { execute } = await testAdapter({
 		authFlowTestSuite(),
 		transactionsTestSuite(),
 	],
-	customIdGenerator: () => new ObjectId().toString(),
+	customIdGenerator: () => new ObjectId().toHexString(),
 });
 
 execute();
