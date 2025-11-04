@@ -4,7 +4,6 @@ import type {
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { createLogger } from "@better-auth/core/env";
 import { ClientSession, type Db, type MongoClient, ObjectId } from "mongodb";
 import {
 	type AdapterFactoryCustomizeAdapterCreator,
@@ -71,7 +70,13 @@ export const mongodbAdapter = (
 			db: Db,
 			session?: ClientSession | undefined,
 		): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldAttributes, getFieldName, schema, getDefaultModelName, options }) => {
+		({
+			getFieldAttributes,
+			getFieldName,
+			schema,
+			getDefaultModelName,
+			options,
+		}) => {
 			const customIdGen = getCustomIdGenerator(options);
 
 			function serializeID({
