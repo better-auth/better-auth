@@ -63,6 +63,7 @@ export const OpenAPIUserResourceSchema = {
 
 export const SCIMUserResourceSchema = {
 	id: "urn:ietf:params:scim:schemas:core:2.0:User",
+	schemas: ["urn:ietf:params:scim:schemas:core:2.0:Schema"],
 	name: "User",
 	description: "User Account",
 	attributes: [

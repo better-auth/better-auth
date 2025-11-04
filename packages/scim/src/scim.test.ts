@@ -531,6 +531,9 @@ describe("SCIM", () => {
 				        "resourceType": "Schema",
 				      },
 				      "name": "User",
+				      "schemas": [
+				        "urn:ietf:params:scim:schemas:core:2.0:Schema",
+				      ],
 				    },
 				  ],
 				  "itemsPerPage": 1,
@@ -678,6 +681,9 @@ describe("SCIM", () => {
 				    "resourceType": "Schema",
 				  },
 				  "name": "User",
+				  "schemas": [
+				    "urn:ietf:params:scim:schemas:core:2.0:Schema",
+				  ],
 				}
 			`);
 		});
