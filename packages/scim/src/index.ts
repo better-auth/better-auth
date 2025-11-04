@@ -246,7 +246,10 @@ export const scim = () => {
 
 							const updatedAccount = await ctx.context.adapter.update<Account>({
 								model: "account",
-								where: [{ field: "userId", value: userId }],
+								where: [
+									{ field: "userId", value: userId },
+									{ field: "providerId", value: providerId },
+								],
 								update: {
 									accountId,
 									updatedAt: new Date(),
@@ -470,7 +473,10 @@ export const scim = () => {
 						Object.keys(accountPatch).length > 0
 							? ctx.context.adapter.update<Account>({
 									model: "account",
-									where: [{ field: "userId", value: userId }],
+									where: [
+										{ field: "userId", value: userId },
+										{ field: "providerId", value: providerId },
+									],
 									update: {
 										...accountPatch,
 										updatedAt: new Date(),
