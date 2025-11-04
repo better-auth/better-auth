@@ -487,8 +487,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 							organizationId,
 						},
 						ctx,
-					))) ||
-				member;
+					)));
 			if (!canUpdateOrg) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -514,7 +513,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					await options.organizationHooks.beforeUpdateOrganization({
 						organization: ctx.body.data,
 						user: session.user,
-						member: member as Member,
+						member: member,
 					});
 				if (response && typeof response === "object" && "data" in response) {
 					ctx.body.data = {
@@ -531,7 +530,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				await options.organizationHooks.afterUpdateOrganization({
 					organization: updatedOrg,
 					user: session.user,
-					member: member as Member,
+					member: member,
 				});
 			}
 			return ctx.json(updatedOrg);
