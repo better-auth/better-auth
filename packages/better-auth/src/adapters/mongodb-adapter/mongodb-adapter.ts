@@ -4,6 +4,7 @@ import type {
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createLogger } from "@better-auth/core/env";
 import { ClientSession, type Db, type MongoClient, ObjectId } from "mongodb";
 import {
 	type AdapterFactoryCustomizeAdapterCreator,
@@ -45,12 +46,24 @@ export const mongodbAdapter = (
 ) => {
 	let lazyOptions: BetterAuthOptions | null;
 
+	const getCustomIdGenerator = (options: BetterAuthOptions) => {
+		const generator =
+			options.advanced?.database?.generateId || options.advanced?.generateId;
+		if (typeof generator === "function") {
+			return generator;
+		}
+		return undefined;
+	};
+
 	const createCustomAdapter =
 		(
 			db: Db,
 			session?: ClientSession | undefined,
 		): AdapterFactoryCustomizeAdapterCreator =>
 		({ options, getFieldName, schema, getDefaultModelName }) => {
+			const customIdGen = getCustomIdGenerator(options);
+			const logger = createLogger(options.logger);
+
 			function serializeID({
 				field,
 				value,
@@ -60,6 +73,9 @@ export const mongodbAdapter = (
 				value: any;
 				model: string;
 			}) {
+				if (customIdGen) {
+					return value;
+				}
 				model = getDefaultModelName(model);
 				if (
 					field === "id" ||
@@ -379,28 +395,16 @@ export const mongodbAdapter = (
 				model,
 				options,
 			}) {
+				const customIdGen = getCustomIdGenerator(options);
 				if (field === "_id" || fieldAttributes.references?.field === "id") {
+					if (customIdGen) {
+						return data;
+					}
 					if (action === "update") {
-						if (typeof data === "string") {
-							try {
-								return new ObjectId(data);
-							} catch (error) {
-								return data;
-							}
-						}
 						return data;
 					}
 					if (Array.isArray(data)) {
-						return data.map((v) => {
-							if (typeof v === "string") {
-								try {
-									return new ObjectId(v);
-								} catch (error) {
-									return v;
-								}
-							}
-							return v;
-						});
+						return data.map((v) => new ObjectId());
 					}
 					if (typeof data === "string") {
 						try {
@@ -409,7 +413,11 @@ export const mongodbAdapter = (
 							return new ObjectId();
 						}
 					}
-					if (data === null && fieldAttributes.references?.field === "id") {
+					if (
+						fieldAttributes?.references?.field === "id" &&
+						!fieldAttributes?.required &&
+						data === null
+					) {
 						return null;
 					}
 					return new ObjectId();
@@ -433,7 +441,7 @@ export const mongodbAdapter = (
 				}
 				return data;
 			},
-			customIdGenerator(props) {
+			customIdGenerator() {
 				return new ObjectId().toString();
 			},
 		},
