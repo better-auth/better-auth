@@ -7,19 +7,15 @@ import {
 import { APIError } from "better-auth/api";
 import { createAuthEndpoint, type Member } from "better-auth/plugins";
 import * as z from "zod/v4";
+import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
 import { authMiddleware } from "./middlewares";
-import {
-	createUserResource,
-	getUserFullName,
-	getUserPrimaryEmail,
-	getUserResourceLocation,
-} from "./normalizers";
 import { buildUserPatch } from "./patch-operations";
 import {
 	type DBFilter,
 	parseSCIMUserFilter,
 	SCIMParseError,
 } from "./scim-filters";
+import { createUserResource, getUserResourceLocation } from "./scim-resources";
 import {
 	APIUserSchema,
 	OpenAPIUserResourceSchema,
@@ -113,7 +109,7 @@ export const scim = () => {
 				},
 				async (ctx) => {
 					const body = ctx.body;
-					const accountId = body.externalId ?? body.userName;
+					const accountId = getAccountId(body.userName, body.externalId);
 					const providerId = ctx.context.scimProvider.providerId;
 
 					const existingAccount = await ctx.context.adapter.findOne<Account>({
@@ -134,8 +130,7 @@ export const scim = () => {
 					const [newUser, newAccount] = await ctx.context.adapter.transaction<
 						[User, Account]
 					>(async () => {
-						const primaryEmail = getUserPrimaryEmail(body.emails);
-						const email = primaryEmail ?? body.userName;
+						const email = getUserPrimaryEmail(body.userName, body.emails);
 						const name = getUserFullName(email, body.name);
 
 						const user = await ctx.context.adapter.create<User>({
@@ -226,7 +221,7 @@ export const scim = () => {
 					const userId = ctx.params.userId;
 					const organizationId = ctx.context.scimProvider.organizationId;
 					const providerId = ctx.context.scimProvider.providerId;
-					const accountId = body.externalId ?? body.userName;
+					const accountId = getAccountId(body.userName, body.externalId);
 
 					const { user } = await findUserById(ctx.context.adapter, {
 						userId,
@@ -242,8 +237,7 @@ export const scim = () => {
 						await ctx.context.adapter.transaction<
 							[User | null, Account | null]
 						>(async () => {
-							const primaryEmail = getUserPrimaryEmail(body.emails);
-							const email = primaryEmail ?? body.userName;
+							const email = getUserPrimaryEmail(body.userName, body.emails);
 							const name = getUserFullName(email, body.name);
 
 							const updatedUser = await ctx.context.adapter.update<User>({

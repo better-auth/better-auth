@@ -1,6 +1,9 @@
 import type { Account, User } from "better-auth";
-import type { SCIMEmail, SCIMName } from "./types";
 import { SCIMUserResourceSchema } from "./user-schemas";
+
+export const getUserResourceLocation = (baseURL: string, userId: string) => {
+	return new URL(`/scim/v2/Users/${userId}`, baseURL).toString();
+};
 
 export const createUserResource = (
 	baseURL: string,
@@ -32,28 +35,4 @@ export const createUserResource = (
 		emails: [{ primary: true, value: user.email }],
 		schemas: [SCIMUserResourceSchema.id],
 	};
-};
-
-export const getUserResourceLocation = (baseURL: string, userId: string) => {
-	return new URL(`/scim/v2/Users/${userId}`, baseURL).toString();
-};
-
-export const getFormattedName = (name: SCIMName) => {
-	if (name.givenName && name.familyName) {
-		return `${name.givenName} ${name.familyName}`;
-	}
-
-	if (name.givenName) {
-		return name.givenName;
-	}
-
-	return name.familyName ?? "";
-};
-
-export const getUserFullName = (email: string, name?: SCIMName) => {
-	return name ? (name.formatted ?? getFormattedName(name)) : email;
-};
-
-export const getUserPrimaryEmail = (emails?: SCIMEmail[]) => {
-	return emails?.find((email) => email.primary)?.value ?? emails?.[0]?.value;
 };

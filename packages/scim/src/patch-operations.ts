@@ -1,5 +1,5 @@
 import { type User } from "better-auth";
-import { getUserFullName } from "./normalizers";
+import { getUserFullName } from "./mappings";
 
 type Operation = {
 	op: "add" | "remove" | "replace";
@@ -7,10 +7,10 @@ type Operation = {
 	path?: string;
 };
 
-type Normalizer = {
+type Mapping = {
 	target: string;
 	resource: "user" | "account";
-	normalize: (user: User, op: Operation) => any;
+	map: (user: User, op: Operation) => any;
 };
 
 const identity = (user: User, op: Operation) => {
@@ -22,8 +22,8 @@ const givenName = (user: User, op: Operation) => {
 	const givenName = op.value;
 
 	return getUserFullName(user.email, {
-		familyName,
 		givenName,
+		familyName,
 	});
 };
 
@@ -33,25 +33,25 @@ const familyName = (user: User, op: Operation) => {
 	).trim();
 	const familyName = op.value;
 	return getUserFullName(user.email, {
-		familyName,
 		givenName,
+		familyName,
 	});
 };
 
-const userNormalizers: Record<string, Normalizer> = {
-	"/name/formatted": { resource: "user", target: "name", normalize: identity },
-	"/name/givenName": { resource: "user", target: "name", normalize: givenName },
+const userPatchMappings: Record<string, Mapping> = {
+	"/name/formatted": { resource: "user", target: "name", map: identity },
+	"/name/givenName": { resource: "user", target: "name", map: givenName },
 	"/name/familyName": {
 		resource: "user",
 		target: "name",
-		normalize: familyName,
+		map: familyName,
 	},
 	"/externalId": {
 		resource: "account",
 		target: "accountId",
-		normalize: identity,
+		map: identity,
 	},
-	"/userName": { resource: "user", target: "email", normalize: identity },
+	"/userName": { resource: "user", target: "email", map: identity },
 };
 
 export const buildUserPatch = (user: User, operations: Operation[]) => {
@@ -65,10 +65,10 @@ export const buildUserPatch = (user: User, operations: Operation[]) => {
 			continue;
 		}
 
-		const normalizer = userNormalizers[operation.path];
-		if (normalizer) {
-			const resource = resources[normalizer.resource];
-			resource[normalizer.target] = normalizer.normalize(user, operation);
+		const mapping = userPatchMappings[operation.path];
+		if (mapping) {
+			const resource = resources[mapping.resource];
+			resource[mapping.target] = mapping.map(user, operation);
 		}
 	}
 
