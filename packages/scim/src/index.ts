@@ -15,7 +15,7 @@ import {
 	parseSCIMUserFilter,
 	SCIMParseError,
 } from "./scim-filters";
-import { createUserResource, getUserResourceLocation } from "./scim-resources";
+import { createUserResource } from "./scim-resources";
 import {
 	APIUserSchema,
 	OpenAPIUserResourceSchema,
@@ -109,8 +109,8 @@ export const scim = () => {
 				},
 				async (ctx) => {
 					const body = ctx.body;
-					const accountId = getAccountId(body.userName, body.externalId);
 					const providerId = ctx.context.scimProvider.providerId;
+					const accountId = getAccountId(body.userName, body.externalId);
 
 					const existingAccount = await ctx.context.adapter.findOne<Account>({
 						model: "account",
@@ -148,7 +148,7 @@ export const scim = () => {
 							model: "account",
 							data: {
 								userId: user.id,
-								providerId: ctx.context.scimProvider.providerId,
+								providerId: providerId,
 								accountId: accountId,
 								createdAt: new Date(),
 								updatedAt: new Date(),
@@ -168,8 +168,6 @@ export const scim = () => {
 									organizationId,
 								},
 							});
-
-							return [user, account];
 						}
 
 						return [user, account];
@@ -184,10 +182,7 @@ export const scim = () => {
 					return ctx.json(userResource, {
 						status: 201,
 						headers: {
-							location: getUserResourceLocation(
-								ctx.context.baseURL,
-								newUser.id,
-							),
+							location: userResource.meta.location,
 						},
 					});
 				},
@@ -219,8 +214,7 @@ export const scim = () => {
 				async (ctx) => {
 					const body = ctx.body;
 					const userId = ctx.params.userId;
-					const organizationId = ctx.context.scimProvider.organizationId;
-					const providerId = ctx.context.scimProvider.providerId;
+					const { organizationId, providerId } = ctx.context.scimProvider;
 					const accountId = getAccountId(body.userName, body.externalId);
 
 					const { user } = await findUserById(ctx.context.adapter, {

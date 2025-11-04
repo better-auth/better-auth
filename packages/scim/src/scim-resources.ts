@@ -1,8 +1,8 @@
 import type { Account, User } from "better-auth";
 import { SCIMUserResourceSchema } from "./user-schemas";
 
-export const getUserResourceLocation = (baseURL: string, userId: string) => {
-	return new URL(`/scim/v2/Users/${userId}`, baseURL).toString();
+const getUserResourceLocation = (baseURL: string, userId: string) => {
+	return;
 };
 
 export const createUserResource = (
@@ -20,7 +20,7 @@ export const createUserResource = (
 			resourceType: "User",
 			created: user.createdAt,
 			lastModified: user.updatedAt,
-			location: getUserResourceLocation(baseURL, user.id),
+			location: new URL(`/scim/v2/Users/${user.id}`, baseURL).toString(),
 		},
 
 		// SCIM user resource
