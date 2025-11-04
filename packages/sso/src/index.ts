@@ -260,6 +260,12 @@ export interface SSOOptions {
 		| undefined;
 	/**
 	 * Trust the email verified flag from the provider.
+	 *
+	 * ⚠️ Use this with caution — it can lead to account takeover if misused. Only enable it if users **cannot freely register new providers**. You can
+	 * prevent that by using `disabledPaths` or other safeguards to block provider registration from the client.
+	 *
+	 * If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those
+	 * providers in the `trustedProviders` list.
 	 * @default false
 	 */
 	trustEmailVerified?: boolean | undefined;
