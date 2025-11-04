@@ -129,7 +129,7 @@ describe("lastLoginMethod custom cookie prefix", async () => {
 				onResponse(context) {
 					const setCookie = context.response.headers.get("set-cookie");
 					expect(setCookie).toContain("Domain=example.com");
-					expect(setCookie).toContain("SameSite=None");
+					expect(setCookie).toContain("SameSite=Lax");
 					// Uses exact cookie name from config, not affected by cookiePrefix
 					expect(setCookie).toContain(
 						"better-auth.last_used_login_method=email",

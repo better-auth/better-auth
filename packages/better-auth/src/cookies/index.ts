@@ -60,7 +60,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 			name: `${secureCookiePrefix}${name}`,
 			attributes: {
 				secure: !!secureCookiePrefix,
-				sameSite: !!secureCookiePrefix ? "none" : "lax",
+				sameSite: "lax",
 				path: "/",
 				httpOnly: true,
 				...(crossSubdomainEnabled ? { domain } : {}),

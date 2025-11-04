@@ -116,7 +116,9 @@ export async function parseState(c: GenericEndpointContext) {
 
 	if (storeStateStrategy === "cookie") {
 		// Retrieve state data from encrypted cookie
-		const stateCookie = c.context.createAuthCookie("oauth_state");
+		const stateCookie = c.context.createAuthCookie("oauth_state", {
+			sameSite: "none",
+		});
 		const encryptedData = await c.getCookie(stateCookie.name);
 
 		if (!encryptedData) {
