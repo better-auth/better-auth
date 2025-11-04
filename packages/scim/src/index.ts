@@ -234,26 +234,24 @@ export const scim = () => {
 							const email = getUserPrimaryEmail(body.userName, body.emails);
 							const name = getUserFullName(email, body.name);
 
-							const [updatedUser, updatedAccount] = await Promise.all([
-								ctx.context.adapter.update<User>({
-									model: "user",
-									where: [{ field: "id", value: userId }],
-									update: {
-										email,
-										name,
-										updatedAt: new Date(),
-									},
-								}),
-								ctx.context.adapter.update<Account>({
-									model: "account",
-									where: [{ field: "userId", value: userId }],
-									update: {
-										accountId,
-										updatedAt: new Date(),
-									},
-								}),
-							]);
+							const updatedUser = await ctx.context.adapter.update<User>({
+								model: "user",
+								where: [{ field: "id", value: userId }],
+								update: {
+									email,
+									name,
+									updatedAt: new Date(),
+								},
+							});
 
+							const updatedAccount = await ctx.context.adapter.update<Account>({
+								model: "account",
+								where: [{ field: "userId", value: userId }],
+								update: {
+									accountId,
+									updatedAt: new Date(),
+								},
+							});
 							return [updatedUser, updatedAccount];
 						});
 
