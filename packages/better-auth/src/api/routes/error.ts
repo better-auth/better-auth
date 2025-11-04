@@ -59,19 +59,6 @@ const html = (
         --muted-foreground: ${custom?.colors?.mutedForeground || "oklch(0.545 0 0)"};
         --corner-border: ${custom?.colors?.cornerBorder || "#404040"};
       }
-      @media (prefers-color-scheme: dark) {
-        :root,
-        :host {
-          --primary: ${custom?.colors?.primary || "white"};
-          --primary-foreground: ${custom?.colors?.primaryForeground || "black"};
-          --background: ${custom?.colors?.background || "black"};
-          --foreground: ${custom?.colors?.foreground || "oklch(0.985 0 0)"};
-          --border: ${custom?.colors?.border || "oklch(0.269 0 0)"};
-          --destructive: ${custom?.colors?.destructive || "oklch(0.396 0.141 25.723)"};
-          --muted-foreground: ${custom?.colors?.mutedForeground || "oklch(0.708 0 0)"};
-          --corner-border: ${custom?.colors?.cornerBorder || "#BFBFBF"};
-        }
-      }
 
       button, .btn {
         cursor: pointer;
