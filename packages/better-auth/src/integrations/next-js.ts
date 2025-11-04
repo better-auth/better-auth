@@ -15,9 +15,6 @@ export function toNextJsHandler(
 	return {
 		GET: handler,
 		POST: handler,
-		PATCH: handler,
-		PUT: handler,
-		DELETE: handler,
 	};
 }
 
