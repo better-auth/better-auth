@@ -4,12 +4,14 @@ import { isProduction } from "@better-auth/core/env";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 
 function sanitize(input: string): string {
+	// Replace & last to avoid double-encoding existing HTML entities
+	// Match & only when it's not already part of an HTML entity
 	return input
-		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;")
 		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&#39;");
+		.replace(/'/g, "&#39;")
+		.replace(/&(?!amp;|lt;|gt;|quot;|#39;|#x[0-9a-fA-F]+;|#[0-9]+;)/g, "&amp;");
 }
 
 const html = (
@@ -257,7 +259,7 @@ ${
 							!description
 								? "We encountered an unexpected error. Please try again or return to the home page. If you're a developer, you can find more information about the error " +
 									`<a href='https://better-auth.com/docs/errors/${encodeURIComponent(code)}' target='_blank' rel="noopener noreferrer" style='color: var(--foreground); text-decoration: underline;'>here</a>.`
-								: sanitize(description)
+								: description
 						}
           </p>
         </div>
@@ -344,15 +346,19 @@ export const error = createAuthEndpoint(
 	async (c) => {
 		const url = new URL(c.request?.url || "");
 		const unsanitizedCode = url.searchParams.get("error") || "UNKNOWN";
-		const description = url.searchParams.get("error_description") || null;
+		const unsanitizedDescription =
+			url.searchParams.get("error_description") || null;
 
 		const isValid = /^[\'A-Za-z0-9_-]+$/.test(unsanitizedCode || "");
 		const safeCode = isValid ? unsanitizedCode : "UNKNOWN";
+		const safeDescription = unsanitizedDescription
+			? sanitize(unsanitizedDescription)
+			: null;
 
 		const queryParams = new URLSearchParams();
 		queryParams.set("error", safeCode);
-		if (description) {
-			queryParams.set("error_description", description);
+		if (unsanitizedDescription) {
+			queryParams.set("error_description", unsanitizedDescription);
 		}
 
 		const options = c.context.options;
@@ -376,7 +382,7 @@ export const error = createAuthEndpoint(
 			});
 		}
 
-		return new Response(html(c.context.options, safeCode, description), {
+		return new Response(html(c.context.options, safeCode, safeDescription), {
 			headers: {
 				"Content-Type": "text/html",
 			},
