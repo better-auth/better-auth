@@ -456,7 +456,10 @@ export const scim = () => {
 						ctx.body.Operations,
 					);
 
-					if (Object.keys(userPatch).length === 0) {
+					if (
+						Object.keys(userPatch).length === 0 &&
+						Object.keys(accountPatch).length === 0
+					) {
 						return ctx.json(
 							{ error: "No valid fields to update" },
 							{ status: 400 },
@@ -464,11 +467,13 @@ export const scim = () => {
 					}
 
 					await Promise.all([
-						ctx.context.adapter.update<User>({
-							model: "user",
-							where: [{ field: "id", value: userId }],
-							update: { ...userPatch, updatedAt: new Date() },
-						}),
+						Object.keys(userPatch).length > 0
+							? ctx.context.adapter.update<User>({
+									model: "user",
+									where: [{ field: "id", value: userId }],
+									update: { ...userPatch, updatedAt: new Date() },
+								})
+							: Promise.resolve(),
 						Object.keys(accountPatch).length > 0
 							? ctx.context.adapter.update<Account>({
 									model: "account",
