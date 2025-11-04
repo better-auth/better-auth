@@ -1253,6 +1253,42 @@ export type BetterAuthOptions = {
 				 * @default - "/api/auth/error"
 				 */
 				errorURL?: string;
+				/**
+				 * Configure the default error page provided by Better-Auth
+				 * Start your dev server and go to /api/auth/error to see the error page.
+				 */
+				customizeDefaultErrorPage?: {
+					colors?: {
+						background?: string;
+						foreground?: string;
+						primary?: string;
+						primaryForeground?: string;
+						mutedForeground?: string;
+						border?: string;
+						destructive?: string;
+						titleBorder?: string;
+						titleColor?: string;
+						gridColor?: string;
+						cardBackground?: string;
+						cornerBorder?: string;
+					};
+					size?: {
+						radiusSm?: string;
+						radiusMd?: string;
+						radiusLg?: string;
+						textSm?: string;
+						text2xl?: string;
+						text4xl?: string;
+						text6xl?: string;
+					};
+					font?: {
+						defaultFamily?: string;
+						monoFamily?: string;
+					};
+					disableTitleBorder?: boolean;
+					disableCornerDecorations?: boolean;
+					disableBackgroundGrid?: boolean;
+				};
 		  }
 		| undefined;
 	/**
