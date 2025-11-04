@@ -246,6 +246,14 @@ export const auth = betterAuth({
                 return null
             },
             
+            // GDPR compliance hook
+            beforeStoreCookie: async (ctx, lastUsedLoginMethod) => {
+                // Check if user has given consent for non-essential cookies
+                // Return false to prevent cookie storage
+                const hasConsent = await checkUserCookieConsent(ctx)
+                return hasConsent
+            },
+            
             // Schema customization (when storeInDatabase is true)
             schema: {
                 user: {
@@ -275,6 +283,31 @@ export const auth = betterAuth({
 - Custom function to determine the login method from the request context
 - Return `null` to use the default resolution logic
 - Useful for custom OAuth providers or authentication flows
+
+**beforeStoreCookie**: `(ctx: GenericEndpointContext, lastUsedLoginMethod: string) => Promise<boolean> | boolean`
+- Hook function that runs before storing the last login method cookie
+- Return `true` to allow the cookie to be set, `false` to prevent it
+- Useful for GDPR compliance or other regulations where cookie storage requires user consent
+- If the function throws an error, the cookie will not be set (error is logged but doesn't break authentication)
+- **Example**: Check user consent before storing the cookie
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { lastLoginMethod } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        lastLoginMethod({
+            beforeStoreCookie: async (ctx, lastUsedLoginMethod) => {
+                // Check if user has given consent for non-essential cookies
+                // This is important for GDPR compliance
+                const hasConsent = await checkUserCookieConsent(ctx)
+                return hasConsent
+            }
+        })
+    ]
+})
+```
 
 **schema**: `object`
 - Customize database field names when `storeInDatabase` is enabled
@@ -323,6 +356,46 @@ The plugin automatically inherits cookie settings from Better Auth's centralized
 - **Cross-origin setups**: `api.company.com` → `app.different.com`
 
 When you enable `crossSubDomainCookies` or `crossOriginCookies` in your Better Auth config, the plugin will automatically use the same domain, secure, and sameSite settings as your session cookies, ensuring consistent behavior across your application.
+
+## GDPR Compliance
+
+The last login method cookie is considered a non-essential cookie under GDPR regulations.
+To comply with GDPR and similar privacy laws, you should only store this cookie if the user has given explicit consent.
+
+The `beforeStoreCookie` hook allows you to implement consent checks before storing the cookie:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { lastLoginMethod } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        lastLoginMethod({
+            beforeStoreCookie: async (ctx, lastUsedLoginMethod) => {
+                // Example 1: Check consent from session or database
+                const session = await getSessionFromCtx(ctx)
+                if (session?.user) {
+                    // custom function which hits your database to check if the user has given consent
+                    const userConsent = await checkUserConsent(session.user.id)
+                    return userConsent?.allowsNonEssentialCookies ?? false
+                }
+                
+                // Example 2: Check consent from request headers (cookie banner)
+                const consentCookie = ctx.request?.headers?.get("cookie")
+                const hasConsent = parseConsentCookie(consentCookie)
+                return hasConsent
+                
+                // Default: don't store cookie if consent cannot be determined
+                return false
+            }
+        })
+    ]
+})
+```
+
+<Callout type="warn">
+When `beforeStoreCookie` returns `false` or throws an error, the cookie will not be set. Authentication will still succeed normally - only the cookie storage is prevented.
+</Callout>
 
 ## Advanced Examples
 
