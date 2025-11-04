@@ -148,7 +148,7 @@ describe("cookie configuration", () => {
 
 		expect(cookies.sessionToken.options.secure).toBe(true);
 		expect(cookies.sessionToken.name).toContain("test-prefix.session_token");
-		expect(cookies.sessionData.options.sameSite).toBe("lax");
+		expect(cookies.sessionData.options.sameSite).toBe("none");
 		expect(cookies.sessionData.options.domain).toBe("example.com");
 	});
 });
