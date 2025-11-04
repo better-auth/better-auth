@@ -1,9 +1,9 @@
 import type { AuthContext, HookEndpointContext } from "@better-auth/core";
 import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
 import {
-	hasRequestStore,
+	hasRequestState,
 	runWithEndpointContext,
-	runWithRequestStore,
+	runWithRequestState,
 } from "@better-auth/core/context";
 import { shouldPublishLog } from "@better-auth/core/env";
 import {
@@ -166,11 +166,11 @@ export function toAuthEndpoints<
 					return response;
 				});
 			};
-			if (await hasRequestStore()) {
+			if (await hasRequestState()) {
 				return run();
 			} else {
 				const store = new WeakMap();
-				return runWithRequestStore(store, run);
+				return runWithRequestState(store, run);
 			}
 		};
 		api[key].path = endpoint.path;
