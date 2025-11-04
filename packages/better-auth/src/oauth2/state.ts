@@ -49,7 +49,6 @@ export async function generateState(
 		});
 
 		const stateCookie = c.context.createAuthCookie("oauth_state", {
-			sameSite: "none",
 			maxAge: 10 * 60 * 1000, // 10 minutes
 		});
 
@@ -63,7 +62,6 @@ export async function generateState(
 
 	// Default: database strategy
 	const stateCookie = c.context.createAuthCookie("state", {
-		sameSite: "none",
 		maxAge: 5 * 60 * 1000, // 5 minutes
 	});
 	await c.setSignedCookie(
@@ -118,9 +116,7 @@ export async function parseState(c: GenericEndpointContext) {
 
 	if (storeStateStrategy === "cookie") {
 		// Retrieve state data from encrypted cookie
-		const stateCookie = c.context.createAuthCookie("oauth_state", {
-			sameSite: "none",
-		});
+		const stateCookie = c.context.createAuthCookie("oauth_state");
 		const encryptedData = await c.getCookie(stateCookie.name);
 
 		if (!encryptedData) {
@@ -166,9 +162,7 @@ export async function parseState(c: GenericEndpointContext) {
 
 		parsedData = stateDataSchema.parse(JSON.parse(data.value));
 
-		const stateCookie = c.context.createAuthCookie("state", {
-			sameSite: "none",
-		});
+		const stateCookie = c.context.createAuthCookie("state");
 		const stateCookieValue = await c.getSignedCookie(
 			stateCookie.name,
 			c.context.secret,
