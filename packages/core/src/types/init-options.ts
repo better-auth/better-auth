@@ -697,6 +697,8 @@ export type BetterAuthOptions = {
 				 */
 				disableSessionRefresh?: boolean;
 				/**
+				 * Hook that is called before an account is deleted.
+				 * if this returns false, the account will not be deleted.
 				 * Additional fields for the session
 				 */
 				additionalFields?: {
@@ -1229,6 +1231,38 @@ export type BetterAuthOptions = {
 	/**
 	 * API error handling
 	 */
+	onAPIError?: {
+		/**
+		 * Throw an error on API error
+		 *
+		 * @default false
+		 */
+		throw?: boolean;
+		/**
+		 * Custom error handler
+		 *
+		 * @param error
+		 * @param ctx - Auth context
+		 */
+		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
+		/**
+		 * The URL to redirect to on error
+		 *
+		 * When errorURL is provided, the error will be added to the URL as a query parameter
+		 * and the user will be redirected to the errorURL.
+		 *
+		 * @default - "/api/auth/error"
+		 */
+		errorURL?: string;
+	};
+
+	/**
+	 * Optional whitelist of origins that are allowed as per-flow error redirect targets.
+	 * Example: ["https://app.example.com", "myapp://host"]
+	 * If omitted or empty, parsed per-flow errorCallbackURL will NOT be used on state-mismatch.
+	 */
+	trustedErrorRedirectOrigins?: string[];
+
 	onAPIError?:
 		| {
 				/**

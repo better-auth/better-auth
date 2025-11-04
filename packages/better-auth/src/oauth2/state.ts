@@ -177,28 +177,59 @@ export async function parseState(c: GenericEndpointContext) {
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)
 		) {
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=state_mismatch`);
+			const finalErrorURL = computeFinalErrorURL(parsedData.errorURL);
+			throw c.redirect(`${finalErrorURL}?error=state_mismatch`);
 		}
 		c.setCookie(stateCookie.name, "", {
 			maxAge: 0,
 		});
-
-		// Delete verification value after retrieval
-		await c.context.internalAdapter.deleteVerificationValue(data.id);
+		if (parsedData.expiresAt < Date.now()) {
+			await c.context.internalAdapter.deleteVerificationValue(data.id);
+			const finalErrorURL = computeFinalErrorURL(parsedData.errorURL);
+			throw c.redirect(`${finalErrorURL}?error=please_restart_the_process`);
+		}
 	}
 
+	// Helper to decide which error URL to use safely.
+	function computeFinalErrorURL(parsedErrorURL?: string) {
+		const defaultErrorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+
+		// If no per-flow URL provided, return default.
+		if (!parsedErrorURL) return defaultErrorURL;
+
+		// Read whitelist from config (opt-in). This prevents open redirects.
+		const trustedOrigins: string[] =
+			(c.context.options as any).trustedErrorRedirectOrigins ?? [];
+
+		// If no whitelist configured, do NOT use parsedErrorURL for security.
+		if (!Array.isArray(trustedOrigins) || trustedOrigins.length === 0) {
+			return defaultErrorURL;
+		}
+
+		try {
+			const parsed = new URL(parsedErrorURL, c.context.baseURL);
+			const parsedOrigin = parsed.origin;
+
+			for (const origin of trustedOrigins) {
+				try {
+					if (new URL(origin).origin === parsedOrigin) {
+						return parsed.toString();
+					}
+				} catch {
+					// ignore invalid whitelist entry
+				}
+			}
+		} catch {
+			// invalid parsedErrorURL -> fallback
+		}
+		return defaultErrorURL;
+	}
+
+	// Ensure there's always a fallback value on the parsed data (used later)
 	if (!parsedData.errorURL) {
 		parsedData.errorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-	}
-
-	// Check expiration
-	if (parsedData.expiresAt < Date.now()) {
-		const errorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 	}
 
 	return parsedData;
