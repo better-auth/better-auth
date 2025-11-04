@@ -245,7 +245,7 @@ export const auth = betterAuth({
           // This hook is called by BOTH `removeMember` (admin action)
           // and `leaveOrganization` (self-leave action)
           // You can differentiate them by checking the request URL in the context:
-          if (ctx.request.url.includes("/organization/leave")) {
+          if (ctx.request?.url.includes("/organization/leave")) {
             console.log("User is leaving the organization themselves.");
           } else {
             console.log("User is being removed by an admin.");
