@@ -32,9 +32,6 @@
     "*": {
       "*": [
         "./dist/index.d.ts"
-      ],
-      "client": [
-        "./dist/client.d.ts"
       ]
     }
   },
