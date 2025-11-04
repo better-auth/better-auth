@@ -610,7 +610,7 @@ describe("leaveOrganization", async () => {
 	it("should allow differentiation via ctx in beforeRemoveMember hook", async () => {
 		const hookLog: string[] = [];
 		const beforeRemoveMock = vi.fn().mockImplementation((data, ctx) => {
-			if (ctx.request?.url.includes("/organization/leave")) { 
+			if (ctx.request?.url.includes("/organization/leave")) {
 				hookLog.push("self-leave");
 			} else {
 				hookLog.push("admin-remove");
