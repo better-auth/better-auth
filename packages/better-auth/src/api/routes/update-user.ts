@@ -1,19 +1,19 @@
-import * as z from "zod";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "better-call";
+import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto";
+import { parseUserInput } from "../../db/schema";
+import type { AdditionalUserFieldsInput } from "../../types";
+import { originCheck } from "../middlewares";
+import { createEmailVerificationToken } from "./email-verification";
 import {
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
 	sessionMiddleware,
 } from "./session";
-import { APIError } from "better-call";
-import { createEmailVerificationToken } from "./email-verification";
-import type { AdditionalUserFieldsInput } from "../../types";
-import type { BetterAuthOptions } from "@better-auth/core";
-import { generateRandomString } from "../../crypto";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { originCheck } from "../middlewares";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -30,8 +30,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			metadata: {
 				$Infer: {
 					body: {} as Partial<AdditionalUserFieldsInput<O>> & {
-						name?: string;
-						image?: string;
+						name?: string | undefined;
+						image?: string | undefined;
 					},
 				},
 				openapi: {
@@ -78,8 +78,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		},
 		async (ctx) => {
 			const body = ctx.body as {
-				name?: string;
-				image?: string;
+				name?: string | undefined;
+				image?: string | undefined;
 				[key: string]: any;
 			};
 
@@ -90,13 +90,18 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			}
 			const { name, image, ...rest } = body;
 			const session = ctx.context.session;
+			const additionalFields = parseUserInput(
+				ctx.context.options,
+				rest,
+				"update",
+			);
 			if (
 				image === undefined &&
 				name === undefined &&
-				Object.keys(rest).length === 0
+				Object.keys(additionalFields).length === 0
 			) {
-				return ctx.json({
-					status: true,
+				throw new APIError("BAD_REQUEST", {
+					message: "No fields to update",
 				});
 			}
 			const user = await ctx.context.internalAdapter.updateUser(
@@ -104,7 +109,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				{
 					name,
 					image,
-					...rest,
+					...additionalFields,
 				},
 			);
 			/**
@@ -433,9 +438,6 @@ export const deleteUser = createAuthEndpoint(
 		if (!ctx.context.options.user?.deleteUser?.enabled) {
 			ctx.context.logger.error(
 				"Delete user is disabled. Enable it in the options",
-				{
-					session: ctx.context.session,
-				},
 			);
 			throw new APIError("NOT_FOUND");
 		}
@@ -526,7 +528,6 @@ export const deleteUser = createAuthEndpoint(
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
-		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		deleteSessionCookie(ctx);
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
 		if (afterDelete) {
@@ -719,21 +720,14 @@ export const changeEmail = createAuthEndpoint(
 			await ctx.context.internalAdapter.findUserByEmail(newEmail);
 		if (existingUser) {
 			ctx.context.logger.error("Email already exists");
-			throw new APIError("BAD_REQUEST", {
-				message: "Couldn't update your email",
+			throw new APIError("UNPROCESSABLE_ENTITY", {
+				message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 			});
 		}
 		/**
 		 * If the email is not verified, we can update the email
 		 */
 		if (ctx.context.session.user.emailVerified !== true) {
-			const existing =
-				await ctx.context.internalAdapter.findUserByEmail(newEmail);
-			if (existing) {
-				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
-				});
-			}
 			await ctx.context.internalAdapter.updateUserByEmail(
 				ctx.context.session.user.email,
 				{

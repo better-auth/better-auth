@@ -6,11 +6,11 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
-interface LinearUser {
+export interface LinearUser {
 	id: string;
 	name: string;
 	email: string;
-	avatarUrl?: string;
+	avatarUrl?: string | undefined;
 	active: boolean;
 	createdAt: string;
 	updatedAt: string;
@@ -33,8 +33,8 @@ export const linear = (options: LinearOptions) => {
 		name: "Linear",
 		createAuthorizationURL({ state, scopes, loginHint, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["read"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "linear",
 				options,

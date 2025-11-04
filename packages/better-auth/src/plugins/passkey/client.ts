@@ -1,18 +1,18 @@
+import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
-import {
-	WebAuthnError,
-	startAuthentication,
-	startRegistration,
-} from "@simplewebauthn/browser";
 import type {
 	PublicKeyCredentialCreationOptionsJSON,
 	PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
-import type { User, Session } from "../../types";
-import type { passkey as passkeyPl, Passkey } from ".";
-import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
-import { useAuthQuery } from "../../client";
+import {
+	startAuthentication,
+	startRegistration,
+	WebAuthnError,
+} from "@simplewebauthn/browser";
 import { atom } from "nanostores";
+import { useAuthQuery } from "../../client";
+import type { Session, User } from "../../types";
+import type { Passkey, passkey as passkeyPl } from ".";
 
 export const getPasskeyActions = (
 	$fetch: BetterFetch,
@@ -25,11 +25,13 @@ export const getPasskeyActions = (
 	},
 ) => {
 	const signInPasskey = async (
-		opts?: {
-			autoFill?: boolean;
-			fetchOptions?: BetterFetchOption;
-		},
-		options?: BetterFetchOption,
+		opts?:
+			| {
+					autoFill?: boolean;
+					fetchOptions?: BetterFetchOption;
+			  }
+			| undefined,
+		options?: BetterFetchOption | undefined,
 	) => {
 		const response = await $fetch<PublicKeyCredentialRequestOptionsJSON>(
 			"/passkey/generate-authenticate-options",
@@ -76,28 +78,30 @@ export const getPasskeyActions = (
 	};
 
 	const registerPasskey = async (
-		opts?: {
-			fetchOptions?: BetterFetchOption;
-			/**
-			 * The name of the passkey. This is used to
-			 * identify the passkey in the UI.
-			 */
-			name?: string;
+		opts?:
+			| {
+					fetchOptions?: BetterFetchOption;
+					/**
+					 * The name of the passkey. This is used to
+					 * identify the passkey in the UI.
+					 */
+					name?: string;
 
-			/**
-			 * The type of attachment for the passkey. Defaults to both
-			 * platform and cross-platform allowed, with platform preferred.
-			 */
-			authenticatorAttachment?: "platform" | "cross-platform";
+					/**
+					 * The type of attachment for the passkey. Defaults to both
+					 * platform and cross-platform allowed, with platform preferred.
+					 */
+					authenticatorAttachment?: "platform" | "cross-platform";
 
-			/**
-			 * Try to silently create a passkey with the password manager that the user just signed
-			 * in with.
-			 * @default false
-			 */
-			useAutoRegister?: boolean;
-		},
-		fetchOpts?: BetterFetchOption,
+					/**
+					 * Try to silently create a passkey with the password manager that the user just signed
+					 * in with.
+					 * @default false
+					 */
+					useAutoRegister?: boolean;
+			  }
+			| undefined,
+		fetchOpts?: BetterFetchOption | undefined,
 	) => {
 		const options = await $fetch<PublicKeyCredentialCreationOptionsJSON>(
 			"/passkey/generate-register-options",

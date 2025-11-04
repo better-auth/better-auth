@@ -1,5 +1,5 @@
-import { betterAuth } from "better-auth";
 import Database from "bun:sqlite";
+import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
 
 const database = new Database(":memory:");

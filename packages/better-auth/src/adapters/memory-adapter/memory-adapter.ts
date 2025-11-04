@@ -1,20 +1,23 @@
-import { logger } from "@better-auth/core/env";
-import { createAdapterFactory } from "../adapter-factory";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
-	DBAdapterDebugLogOption,
 	CleanedWhere,
+	DBAdapterDebugLogOption,
 } from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
+import { createAdapterFactory } from "../adapter-factory";
 
 export interface MemoryDB {
 	[key: string]: any[];
 }
 
 export interface MemoryAdapterConfig {
-	debugLogs?: DBAdapterDebugLogOption;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 }
 
-export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) => {
+export const memoryAdapter = (
+	db: MemoryDB,
+	config?: MemoryAdapterConfig | undefined,
+) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let adapterCreator = createAdapterFactory({
 		config: {

@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
 import { Slot } from "@radix-ui/react-slot";
+import type { ReactNode } from "react";
 
 export interface BaseLayoutProps {
 	children?: ReactNode;

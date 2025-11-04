@@ -1,34 +1,35 @@
-import { ClientSession, ObjectId, type Db, type MongoClient } from "mongodb";
 import type { BetterAuthOptions } from "@better-auth/core";
-import {
-	createAdapterFactory,
-	type AdapterFactoryOptions,
-	type AdapterFactoryCustomizeAdapterCreator,
-} from "../adapter-factory";
 import type {
-	DBAdapterDebugLogOption,
 	DBAdapter,
+	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createLogger } from "@better-auth/core/env";
+import { ClientSession, type Db, type MongoClient, ObjectId } from "mongodb";
+import {
+	type AdapterFactoryCustomizeAdapterCreator,
+	type AdapterFactoryOptions,
+	createAdapterFactory,
+} from "../adapter-factory";
 
 export interface MongoDBAdapterConfig {
 	/**
 	 * MongoDB client instance
 	 * If not provided, Database transactions won't be enabled.
 	 */
-	client?: MongoClient;
+	client?: MongoClient | undefined;
 	/**
 	 * Enable debug logs for the adapter
 	 *
 	 * @default false
 	 */
-	debugLogs?: DBAdapterDebugLogOption;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 	/**
 	 * Use plural table names
 	 *
 	 * @default false
 	 */
-	usePlural?: boolean;
+	usePlural?: boolean | undefined;
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
@@ -36,15 +37,33 @@ export interface MongoDBAdapterConfig {
 	 * set this to `false` and operations will be executed sequentially.
 	 * @default false
 	 */
-	transaction?: boolean;
+	transaction?: boolean | undefined;
 }
 
-export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
+export const mongodbAdapter = (
+	db: Db,
+	config?: MongoDBAdapterConfig | undefined,
+) => {
 	let lazyOptions: BetterAuthOptions | null;
 
+	const getCustomIdGenerator = (options: BetterAuthOptions) => {
+		const generator =
+			options.advanced?.database?.generateId || options.advanced?.generateId;
+		if (typeof generator === "function") {
+			return generator;
+		}
+		return undefined;
+	};
+
 	const createCustomAdapter =
-		(db: Db, session?: ClientSession): AdapterFactoryCustomizeAdapterCreator =>
+		(
+			db: Db,
+			session?: ClientSession | undefined,
+		): AdapterFactoryCustomizeAdapterCreator =>
 		({ options, getFieldName, schema, getDefaultModelName }) => {
+			const customIdGen = getCustomIdGenerator(options);
+			const logger = createLogger(options.logger);
+
 			function serializeID({
 				field,
 				value,
@@ -54,18 +73,27 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				value: any;
 				model: string;
 			}) {
+				if (customIdGen) {
+					return value;
+				}
 				model = getDefaultModelName(model);
 				if (
 					field === "id" ||
 					field === "_id" ||
 					schema[model]!.fields[field]?.references?.field === "id"
 				) {
+					if (value === null || value === undefined) {
+						return value;
+					}
 					if (typeof value !== "string") {
 						if (value instanceof ObjectId) {
 							return value;
 						}
 						if (Array.isArray(value)) {
 							return value.map((v) => {
+								if (v === null || v === undefined) {
+									return v;
+								}
 								if (typeof v === "string") {
 									try {
 										return new ObjectId(v);
@@ -137,19 +165,59 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 							};
 							break;
 						case "gt":
-							condition = { [field]: { $gt: value } };
+							condition = {
+								[field]: {
+									$gt: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "gte":
-							condition = { [field]: { $gte: value } };
+							condition = {
+								[field]: {
+									$gte: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "lt":
-							condition = { [field]: { $lt: value } };
+							condition = {
+								[field]: {
+									$lt: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "lte":
-							condition = { [field]: { $lte: value } };
+							condition = {
+								[field]: {
+									$lte: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "ne":
-							condition = { [field]: { $ne: value } };
+							condition = {
+								[field]: {
+									$ne: serializeID({
+										field,
+										value,
+										model,
+									}),
+								},
+							};
 							break;
 						case "contains":
 							condition = {
@@ -327,28 +395,16 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				model,
 				options,
 			}) {
+				const customIdGen = getCustomIdGenerator(options);
 				if (field === "_id" || fieldAttributes.references?.field === "id") {
+					if (customIdGen) {
+						return data;
+					}
 					if (action === "update") {
-						if (typeof data === "string") {
-							try {
-								return new ObjectId(data);
-							} catch (error) {
-								return data;
-							}
-						}
 						return data;
 					}
 					if (Array.isArray(data)) {
-						return data.map((v) => {
-							if (typeof v === "string") {
-								try {
-									return new ObjectId(v);
-								} catch (error) {
-									return v;
-								}
-							}
-							return v;
-						});
+						return data.map((v) => new ObjectId());
 					}
 					if (typeof data === "string") {
 						try {
@@ -357,7 +413,11 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 							return new ObjectId();
 						}
 					}
-					if (data === null && fieldAttributes.references?.field === "id") {
+					if (
+						fieldAttributes?.references?.field === "id" &&
+						!fieldAttributes?.required &&
+						data === null
+					) {
 						return null;
 					}
 					return new ObjectId();
@@ -381,7 +441,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				}
 				return data;
 			},
-			customIdGenerator(props) {
+			customIdGenerator() {
 				return new ObjectId().toString();
 			},
 		},

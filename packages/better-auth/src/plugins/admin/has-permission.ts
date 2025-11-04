@@ -7,18 +7,18 @@ type PermissionExclusive =
 			 * @deprecated Use `permissions` instead
 			 */
 			permission: { [key: string]: string[] };
-			permissions?: never;
+			permissions?: never | undefined;
 	  }
 	| {
 			permissions: { [key: string]: string[] };
-			permission?: never;
+			permission?: never | undefined;
 	  };
 
 export const hasPermission = (
 	input: {
-		userId?: string;
-		role?: string;
-		options?: AdminOptions;
+		userId?: string | undefined;
+		role?: string | undefined;
+		options?: AdminOptions | undefined;
 	} & PermissionExclusive,
 ) => {
 	if (input.userId && input.options?.adminUserIds?.includes(input.userId)) {

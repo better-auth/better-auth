@@ -1,5 +1,5 @@
-import type { genericOAuth } from ".";
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { genericOAuth } from ".";
 
 export const genericOAuthClient = () => {
 	return {

@@ -1,10 +1,10 @@
+import { createLocalJWKSet, type JSONWebKeySet, jwtVerify } from "jose";
 import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
-import { jwtClient } from "./client";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from ".";
-import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
-import type { JwtOptions, JWKOptions } from "./types";
+import { jwtClient } from "./client";
+import type { JWKOptions, JwtOptions } from "./types";
 import { generateExportedKeyPair } from "./utils";
 
 describe("jwt", async () => {
@@ -100,7 +100,12 @@ describe("jwt", async () => {
 
 	const algorithmsToTest: {
 		keyPairConfig: JWKOptions;
-		expectedOutcome: { ec: string; length: number; crv?: string; alg: string };
+		expectedOutcome: {
+			ec: string;
+			length: number;
+			crv?: string | undefined;
+			alg: string;
+		};
 	}[] = [
 		{
 			keyPairConfig: {

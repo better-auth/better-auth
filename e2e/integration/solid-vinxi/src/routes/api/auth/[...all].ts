@@ -1,5 +1,5 @@
-import { auth } from "../../../lib/auth";
 import type { APIEvent } from "@solidjs/start/server";
+import { auth } from "../../../lib/auth";
 
 export async function GET(event: APIEvent) {
 	return auth.handler(event.request);

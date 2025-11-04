@@ -1,5 +1,5 @@
-import { betterAuth } from "better-auth";
 import { DatabaseSync } from "node:sqlite";
+import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
 
 const database = new DatabaseSync(":memory:");

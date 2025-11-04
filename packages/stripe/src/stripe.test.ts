@@ -1,16 +1,15 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
 import { type Auth, betterAuth, type User } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import Stripe from "stripe";
-import { vi } from "vitest";
-import { stripe, type StripePlugin } from ".";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { type StripePlugin, stripe } from ".";
 import { stripeClient } from "./client";
 import type { StripeOptions, Subscription } from "./types";
-import { expect, describe, it, beforeEach, expectTypeOf } from "vitest";
-import { runWithEndpointContext } from "@better-auth/core/context";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 describe("stripe type", () => {
 	it("should api endpoint exists", () => {

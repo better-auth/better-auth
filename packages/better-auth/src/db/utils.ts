@@ -1,12 +1,10 @@
-import { getAuthTables } from ".";
-import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterAuthOptions } from "@better-auth/core";
-import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
-import { kyselyAdapter } from "../adapters/kysely-adapter";
-import { memoryAdapter, type MemoryDB } from "../adapters/memory-adapter";
-import { logger } from "@better-auth/core/env";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { MemoryDB } from "../adapters/memory-adapter";
+import { getAuthTables } from ".";
 
 export async function getAdapter(
 	options: BetterAuthOptions,
@@ -21,15 +19,18 @@ export async function getAdapter(
 		logger.warn(
 			"No database configuration provided. Using memory adapter in development",
 		);
+		const { memoryAdapter } = await import("../adapters/memory-adapter");
 		adapter = memoryAdapter(memoryDB)(options);
 	} else if (typeof options.database === "function") {
 		adapter = options.database(options);
 	} else {
+		const { createKyselyAdapter } = await import("../adapters/kysely-adapter");
 		const { kysely, databaseType, transaction } =
 			await createKyselyAdapter(options);
 		if (!kysely) {
 			throw new BetterAuthError("Failed to initialize database adapter");
 		}
+		const { kyselyAdapter } = await import("../adapters/kysely-adapter");
 		adapter = kyselyAdapter(kysely, {
 			type: databaseType || "sqlite",
 			debugLogs:

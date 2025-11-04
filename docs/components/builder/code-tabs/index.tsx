@@ -1,11 +1,11 @@
-import { useState } from "react";
-import { TabBar } from "./tab-bar";
-import { CodeEditor } from "./code-editor";
 import { useAtom } from "jotai";
-import { optionsAtom } from "../store";
 import { js_beautify } from "js-beautify";
-import { signUpString } from "../sign-up";
+import { useState } from "react";
 import { signInString } from "../sign-in";
+import { signUpString } from "../sign-up";
+import { optionsAtom } from "../store";
+import { CodeEditor } from "./code-editor";
+import { TabBar } from "./tab-bar";
 
 export default function CodeTabs() {
 	const [options] = useAtom(optionsAtom);
@@ -72,7 +72,7 @@ ${
 			content: `import { createAuthClient } from "better-auth/react";
 			${
 				options.magicLink || options.passkey
-					? `import { ${options.magicLink ? "magicLinkClient, " : ""}, ${
+					? `import { ${options.magicLink ? "magicLinkClient," : ""} ${
 							options.passkey ? "passkeyClient" : ""
 						} } from "better-auth/client/plugins";`
 					: ""
@@ -102,7 +102,7 @@ ${
 		initialFiles.push({
 			id: "4",
 			name: "sign-up.tsx",
-			content: signUpString,
+			content: signUpString(options),
 		});
 	}
 

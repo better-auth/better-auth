@@ -1,21 +1,21 @@
-import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../api";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { type Session } from "../../types";
-import type { BetterAuthPlugin } from "@better-auth/core";
 import type { Where } from "@better-auth/core/db/adapter";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import * as z from "zod";
+import { APIError, getSessionFromCtx } from "../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { type Session } from "../../types";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import { mergeSchema, parseUserOutput } from "../../db/schema";
 import { type AccessControl } from "../access";
-import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
+import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { schema } from "./schema";
 import type {
 	AdminOptions,
@@ -28,7 +28,7 @@ function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
 }
 
-export const admin = <O extends AdminOptions>(options?: O) => {
+export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 	const opts = {
 		defaultRole: options?.defaultRole ?? "user",
 		adminRoles: options?.adminRoles ?? ["admin"],
@@ -55,11 +55,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				 * @deprecated Use `permissions` instead
 				 */
 				permission: PermissionType;
-				permissions?: never;
+				permissions?: never | undefined;
 		  }
 		| {
 				permissions: PermissionType;
-				permission?: never;
+				permission?: never | undefined;
 		  };
 
 	/**
@@ -434,9 +434,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								password: string;
 								name: string;
 								role?:
-									| InferAdminRolesFromOption<O>
-									| InferAdminRolesFromOption<O>[];
-								data?: Record<string, any>;
+									| (
+											| InferAdminRolesFromOption<O>
+											| InferAdminRolesFromOption<O>[]
+									  )
+									| undefined;
+								data?: Record<string, any> | undefined;
 							},
 						},
 					},
@@ -461,9 +464,17 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							});
 						}
 					}
-					const existUser = await ctx.context.internalAdapter.findUserByEmail(
-						ctx.body.email,
-					);
+
+					const email = ctx.body.email.toLowerCase();
+					const isValidEmail = z.string().email().safeParse(email);
+					if (!isValidEmail.success) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.INVALID_EMAIL,
+						});
+					}
+
+					const existUser =
+						await ctx.context.internalAdapter.findUserByEmail(email);
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {
 							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
@@ -471,7 +482,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const user =
 						await ctx.context.internalAdapter.createUser<UserWithRole>({
-							email: ctx.body.email,
+							email: email,
 							name: ctx.body.name,
 							role:
 								(ctx.body.role && parseRoles(ctx.body.role)) ??
@@ -1653,8 +1664,8 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						},
 						$Infer: {
 							body: {} as PermissionExclusive & {
-								userId?: string;
-								role?: InferAdminRolesFromOption<O>;
+								userId?: string | undefined;
+								role?: InferAdminRolesFromOption<O> | undefined;
 							},
 						},
 					},
@@ -1683,7 +1694,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							: null) ||
 						((await ctx.context.internalAdapter.findUserById(
 							ctx.body.userId as string,
-						)) as { role?: string; id: string });
+						)) as { role?: string | undefined; id: string });
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: "user not found",

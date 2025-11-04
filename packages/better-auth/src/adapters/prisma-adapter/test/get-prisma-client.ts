@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+
 type PC = InstanceType<typeof PrismaClient>;
 
 let migrationCount = 0;

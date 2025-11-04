@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { type Passkey, passkey } from ".";
-import { createAuthClient } from "../../client";
 import { passkeyClient } from "./client";
 
 describe("passkey", async () => {

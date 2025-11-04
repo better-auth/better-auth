@@ -1,15 +1,15 @@
-import { Command } from "commander";
-import { getConfig } from "../utils/get-config";
-import * as z from "zod/v4";
-import { existsSync } from "fs";
-import path from "path";
-import { logger, createTelemetry, getTelemetryAuthConfig } from "better-auth";
-import yoctoSpinner from "yocto-spinner";
-import prompts from "prompts";
-import fs from "fs/promises";
-import chalk from "chalk";
+import { createTelemetry, getTelemetryAuthConfig, logger } from "better-auth";
 import { getAdapter } from "better-auth/db";
+import chalk from "chalk";
+import { Command } from "commander";
+import { existsSync } from "fs";
+import fs from "fs/promises";
+import path from "path";
+import prompts from "prompts";
+import yoctoSpinner from "yocto-spinner";
+import * as z from "zod/v4";
 import { generateSchema } from "../generators";
+import { getConfig } from "../utils/get-config";
 
 export async function generateAction(opts: any) {
 	const options = z

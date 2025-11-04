@@ -1,18 +1,25 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { organization } from "./organization";
-import { createAuthClient } from "../../client";
-import { inferOrgAdditionalFields, organizationClient } from "./client";
-import { createAccessControl } from "../access";
-import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { APIError, type Prettify } from "better-call";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { memoryAdapter } from "../../adapters/memory-adapter";
-import type { OrganizationOptions } from "./types";
+import { createAuthClient } from "../../client";
+import { nextCookies } from "../../integrations/next-js";
+import { getTestInstance } from "../../test-utils/test-instance";
 import type { PrettifyDeep } from "../../types/helper";
-import type { InvitationStatus } from "./schema";
+import { createAccessControl } from "../access";
 import { admin } from "../admin";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
-import { nextCookies } from "../../integrations/next-js";
+import { inferOrgAdditionalFields, organizationClient } from "./client";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
+import { organization } from "./organization";
+import type { InvitationStatus } from "./schema";
+import type { OrganizationOptions } from "./types";
+
+describe("organization type", () => {
+	it("empty org type should works", () => {
+		expectTypeOf({} satisfies OrganizationOptions);
+		expectTypeOf({ schema: {} } satisfies OrganizationOptions);
+	});
+});
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
@@ -52,6 +59,25 @@ describe("organization", async (it) => {
 				return auth.handler(new Request(url, init));
 			},
 		},
+	});
+
+	it("should have correct schema order when dynamicAccessControl is enabled", () => {
+		const orgPlugin = organization({
+			dynamicAccessControl: {
+				enabled: true,
+			},
+		});
+
+		const schema = orgPlugin.schema;
+
+		// Check that organization table is defined before organizationRole table
+		const organizationIndex = Object.keys(schema).indexOf("organization");
+		const organizationRoleIndex =
+			Object.keys(schema).indexOf("organizationRole");
+
+		expect(organizationIndex).toBeLessThan(organizationRoleIndex);
+		expect(organizationIndex).not.toBe(-1);
+		expect(organizationRoleIndex).not.toBe(-1);
 	});
 
 	let organizationId: string;
@@ -1663,17 +1689,17 @@ describe("Additional Fields", async () => {
 		invitation: [] as {
 			id: string;
 			invitationRequiredField: string;
-			invitationOptionalField?: string;
+			invitationOptionalField?: string | undefined;
 		}[],
 		member: [] as {
 			id: string;
 			memberRequiredField: string;
-			memberOptionalField?: string;
+			memberOptionalField?: string | undefined;
 		}[],
 		team: [] as {
 			id: string;
 			teamRequiredField: string;
-			teamOptionalField?: string;
+			teamOptionalField?: string | undefined;
 		}[],
 		teamMember: [] as {
 			id: string;

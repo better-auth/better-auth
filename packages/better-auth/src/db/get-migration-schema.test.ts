@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { Pool } from "pg";
-import { getMigrations } from "./get-migration";
 import type { BetterAuthOptions } from "@better-auth/core";
+import { Pool } from "pg";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { getMigrations } from "./get-migration";
 
 // Check if PostgreSQL is available
 let isPostgresAvailable = false;

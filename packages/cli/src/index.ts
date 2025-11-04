@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-
-import { init } from "./commands/init";
-import { migrate } from "./commands/migrate";
 import { generate } from "./commands/generate";
-import { generateSecret } from "./commands/secret";
-import { login } from "./commands/login";
 import { info } from "./commands/info";
+import { init } from "./commands/init";
+import { login } from "./commands/login";
 import { mcp } from "./commands/mcp";
+import { migrate } from "./commands/migrate";
+import { generateSecret } from "./commands/secret";
 import { getPackageInfo } from "./utils/get-package-info";
 
 import "dotenv/config";

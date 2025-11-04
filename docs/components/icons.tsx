@@ -1,5 +1,5 @@
-import { cn } from "@/lib/utils";
 import { SVGProps } from "react";
+import { cn } from "@/lib/utils";
 
 export const Icons = {
 	nextJS: (props?: SVGProps<any>) => (

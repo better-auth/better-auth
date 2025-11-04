@@ -1,3 +1,7 @@
+import Icons from "@expo/vector-icons/AntDesign";
+import { router } from "expo-router";
+import { useState } from "react";
+import { View } from "react-native";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -9,10 +13,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
 import { authClient } from "@/lib/auth-client";
-import { useState } from "react";
-import { View } from "react-native";
-import Icons from "@expo/vector-icons/AntDesign";
-import { router } from "expo-router";
 
 export default function ForgetPassword() {
 	const [email, setEmail] = useState("");

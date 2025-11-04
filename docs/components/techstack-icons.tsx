@@ -1,4 +1,5 @@
 import { Icons } from "./icons";
+
 type TechStackIconType = {
 	[key: string]: {
 		name: string;

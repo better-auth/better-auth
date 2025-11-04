@@ -1,18 +1,18 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { setupServer } from "msw/node";
-import { http, HttpResponse } from "msw";
-import { getTestInstance } from "./test-utils/test-instance";
-import { DEFAULT_SECRET } from "./utils/constants";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { parseSetCookieHeader } from "./cookies";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
 import { refreshAccessToken } from "@better-auth/core/oauth2";
-import { signJWT } from "./crypto";
-import { OAuth2Server } from "oauth2-mock-server";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
 import Database from "better-sqlite3";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import { OAuth2Server } from "oauth2-mock-server";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { parseSetCookieHeader } from "./cookies";
+import { signJWT } from "./crypto";
 import { getMigrations } from "./db";
-import { runWithEndpointContext } from "@better-auth/core/context";
-import type { GenericEndpointContext } from "@better-auth/core";
+import { getTestInstance } from "./test-utils/test-instance";
+import { DEFAULT_SECRET } from "./utils/constants";
 
 let server = new OAuth2Server();
 let port = 8005;
@@ -180,7 +180,7 @@ describe("Social Providers", async (c) => {
 	async function simulateOAuthFlowRefresh(
 		authUrl: string,
 		headers: Headers,
-		fetchImpl?: (...args: any) => any,
+		fetchImpl?: ((...args: any) => any) | undefined,
 	) {
 		let location: string | null = null;
 		await betterFetch(authUrl, {

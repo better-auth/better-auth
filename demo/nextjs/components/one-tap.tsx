@@ -1,7 +1,13 @@
 "use client";
 
-import { client, signIn } from "@/lib/auth-client";
+import { Key, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { client, signIn } from "@/lib/auth-client";
+import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -10,14 +16,8 @@ import {
 	DialogTitle,
 } from "./ui/dialog";
 import { Input } from "./ui/input";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { PasswordInput } from "./ui/password-input";
-import { Checkbox } from "./ui/checkbox";
-import { Button } from "./ui/button";
-import { Key, Loader2 } from "lucide-react";
-import { toast } from "sonner";
 import { Label } from "./ui/label";
+import { PasswordInput } from "./ui/password-input";
 
 export function OneTap() {
 	const [isOpen, setIsOpen] = useState(false);
@@ -123,7 +123,7 @@ function SignInBox() {
 			</Button>
 			<Button
 				variant="outline"
-				className=" gap-2"
+				className="gap-2"
 				onClick={async () => {
 					await signIn.social({
 						provider: "google",

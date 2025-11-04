@@ -1,5 +1,8 @@
 "use client";
 
+import { AlertCircle, CheckCircle2, Mail } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -11,9 +14,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { client } from "@/lib/auth-client";
-import { AlertCircle, CheckCircle2, Mail } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 
 export default function Component() {
 	const [otp, setOtp] = useState("");

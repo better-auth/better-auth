@@ -1,8 +1,8 @@
-import { describe, it } from "node:test";
-import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { join } from "node:path";
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { join } from "node:path";
+import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 

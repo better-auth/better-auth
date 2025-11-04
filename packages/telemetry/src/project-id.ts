@@ -1,5 +1,5 @@
-import { generateId } from "./utils/id";
 import { hashToBase64 } from "./utils/hash";
+import { generateId } from "./utils/id";
 import { getNameFromLocalPackageJson } from "./utils/package-json";
 
 let projectIdCached: string | null = null;

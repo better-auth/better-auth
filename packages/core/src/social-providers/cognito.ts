@@ -1,24 +1,27 @@
 import { betterFetch } from "@better-fetch/fetch";
+import { APIError } from "better-call";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
-import { logger } from "../env";
-import { refreshAccessToken } from "../oauth2";
-import { APIError } from "better-call";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export interface CognitoProfile {
 	sub: string;
 	email: string;
 	email_verified: boolean;
 	name: string;
-	given_name?: string;
-	family_name?: string;
-	picture?: string;
-	username?: string;
-	locale?: string;
-	phone_number?: string;
-	phone_number_verified?: boolean;
+	given_name?: string | undefined;
+	family_name?: string | undefined;
+	picture?: string | undefined;
+	username?: string | undefined;
+	locale?: string | undefined;
+	phone_number?: string | undefined;
+	phone_number_verified?: boolean | undefined;
 	aud: string;
 	iss: string;
 	exp: number;
@@ -38,7 +41,7 @@ export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
 	 */
 	region: string;
 	userPoolId: string;
-	requireClientSecret?: boolean;
+	requireClientSecret?: boolean | undefined;
 }
 
 export const cognito = (options: CognitoOptions) => {
@@ -74,8 +77,8 @@ export const cognito = (options: CognitoOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 
 			const url = await createAuthorizationURL({
 				id: "cognito",

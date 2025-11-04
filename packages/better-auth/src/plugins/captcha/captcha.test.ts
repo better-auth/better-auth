@@ -1,7 +1,7 @@
+import * as betterFetchModule from "@better-fetch/fetch";
 import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { captcha } from ".";
-import * as betterFetchModule from "@better-fetch/fetch";
 
 vi.mock("@better-fetch/fetch", async (importOriginal) => {
 	const actual = (await importOriginal()) as typeof betterFetchModule;
@@ -121,9 +121,9 @@ describe("captcha", async (it) => {
 				}),
 			],
 		});
-		const headers = new Headers();
 
 		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
+			mockBetterFetch.mockClear();
 			mockBetterFetch.mockResolvedValue({
 				data: {
 					success: true,
@@ -143,11 +143,14 @@ describe("captcha", async (it) => {
 				fetchOptions: {
 					headers: {
 						"x-captcha-response": "captcha-token",
+						"x-forwarded-for": "127.0.0.1",
 					},
 				},
 			});
 
 			expect(res.data?.user).toBeDefined();
+			// Verify the auto-detected IP was sent to the provider
+			expect(mockBetterFetch).toHaveBeenCalled();
 		});
 
 		it("Should return 500 if the call to /siteverify fails", async () => {
@@ -194,9 +197,9 @@ describe("captcha", async (it) => {
 				captcha({ provider: "google-recaptcha", secretKey: "xx-secret-key" }),
 			],
 		});
-		const headers = new Headers();
 
 		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
+			mockBetterFetch.mockClear();
 			mockBetterFetch.mockResolvedValue({
 				data: {
 					success: true,
@@ -210,11 +213,18 @@ describe("captcha", async (it) => {
 				fetchOptions: {
 					headers: {
 						"x-captcha-response": "captcha-token",
+						"x-forwarded-for": "127.0.0.1",
 					},
 				},
 			});
 
 			expect(res.data?.user).toBeDefined();
+
+			// Verify the auto-detected IP was sent to the provider
+			expect(mockBetterFetch).toHaveBeenCalled();
+			const fetchOptions = mockBetterFetch.mock.calls[0]![1];
+			const body = new URLSearchParams(fetchOptions.body as string);
+			expect(body.get("remoteip")).toBe("127.0.0.1");
 		});
 
 		it("Should return 500 if the call to /siteverify fails", async () => {
@@ -276,8 +286,6 @@ describe("captcha", async (it) => {
 
 			expect(res.error?.status).toBe(403);
 		});
-
-		// TODO: Adding tests for hCaptcha
 	});
 	describe("hcaptcha", async (it) => {
 		const { client } = await getTestInstance({
@@ -289,9 +297,9 @@ describe("captcha", async (it) => {
 				}),
 			],
 		});
-		const headers = new Headers();
 
 		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
+			mockBetterFetch.mockClear();
 			mockBetterFetch.mockResolvedValue({
 				data: {
 					success: true,
@@ -305,11 +313,18 @@ describe("captcha", async (it) => {
 				fetchOptions: {
 					headers: {
 						"x-captcha-response": "captcha-token",
+						"x-forwarded-for": "127.0.0.1",
 					},
 				},
 			});
 
 			expect(res.data?.user).toBeDefined();
+
+			// Verify the auto-detected IP was sent to the provider
+			expect(mockBetterFetch).toHaveBeenCalled();
+			const fetchOptions = mockBetterFetch.mock.calls[0]![1];
+			const body = new URLSearchParams(fetchOptions.body as string);
+			expect(body.get("remoteip")).toBe("127.0.0.1");
 		});
 
 		it("Should return 500 if the call to /siteverify fails", async () => {
@@ -348,8 +363,6 @@ describe("captcha", async (it) => {
 
 			expect(res.error?.status).toBe(403);
 		});
-
-		// TODO: Adding tests for hCaptcha
 	});
 
 	describe("captchafox", async (it) => {
@@ -364,6 +377,7 @@ describe("captcha", async (it) => {
 		});
 
 		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
+			mockBetterFetch.mockClear();
 			mockBetterFetch.mockResolvedValue({
 				data: {
 					success: true,
@@ -377,11 +391,15 @@ describe("captcha", async (it) => {
 				fetchOptions: {
 					headers: {
 						"x-captcha-response": "captcha-token",
+						"x-forwarded-for": "127.0.0.1",
 					},
 				},
 			});
 
 			expect(res.data?.user).toBeDefined();
+
+			// Verify the auto-detected IP was sent to the provider
+			expect(mockBetterFetch).toHaveBeenCalled();
 		});
 
 		it("Should return 500 if the call to /siteverify fails", async () => {

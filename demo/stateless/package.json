@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/demo-stateless",
+  "name": "@better-auth/stateless-demo",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "next": "16.0.0-beta.0",
+    "next": "16.0.1",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },

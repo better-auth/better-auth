@@ -1,6 +1,6 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import type { StripeOptions } from "./types";
 import { mergeSchema } from "better-auth/db";
+import type { StripeOptions } from "./types";
 
 export const subscriptions = {
 	subscription: {

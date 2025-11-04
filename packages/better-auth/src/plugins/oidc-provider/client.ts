@@ -1,5 +1,5 @@
-import type { oidcProvider } from ".";
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { oidcProvider } from ".";
 
 export const oidcClient = () => {
 	return {

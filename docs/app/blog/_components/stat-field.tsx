@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
 import clsx from "clsx";
 import { animate, Segment } from "motion/react";
+import { useEffect, useId, useRef } from "react";
 
 type Star = [x: number, y: number, dim?: boolean, blur?: boolean];
 
@@ -146,7 +146,7 @@ function Constellation({
 		let sequence: Array<Segment> = [
 			[
 				ref.current,
-				{ strokeDashoffset: 0, visibility: "visible" },
+				{ strokeDashoffset: 0, opacity: 1 },
 				{ duration: 5, delay: Math.random() * 3 + 2 },
 			],
 		];
@@ -177,7 +177,7 @@ function Constellation({
 				pathLength={1}
 				fill="transparent"
 				d={`M ${points.join("L")}`}
-				className="invisible"
+				style={{ opacity: 0 }}
 			/>
 			{uniquePoints.map((point, pointIndex) => (
 				<Star key={pointIndex} point={point} blurId={blurId} />

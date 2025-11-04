@@ -39,7 +39,24 @@ When contributing to Better Auth:
    cd better-auth
    ```
 3. Install Node.js (LTS version recommended)
-4. Install pnpm if you haven't already:
+
+   > **Note**: This project is configured to use [nvm](https://github.com/nvm-sh/nvm) to manage the local Node.js version, as such this is simplest way to get you up and running.
+
+   Once installed, use:
+
+   ```bash
+   $ nvm install
+   $ nvm use
+   ```
+
+   Alternatively, see Node.js [installation](https://nodejs.org/en/download) for other supported methods.
+
+4. Install `pnpm` if you haven't already:
+
+   > **Note:** This project is configured to manage [pnpm](https://pnpm.io/) via [corepack](https://github.com/nodejs/corepack). Once installed, upon usage you'll be prompted to install the correct pnpm version
+
+   Alternatively, use `npm` to install it:
+
    ```bash
    npm install -g pnpm
    ```
@@ -106,6 +123,9 @@ pnpm lint:fix
    ```bash
    docker compose up -d
    ```
+
+   > Note: On MacOS, the **mssql** container will likely require Rosetta emulation and at least 2GB of RAM of allocated memory. See their [container requirements](https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker?view=sql-server-ver17&tabs=cli&pivots=cs1-bash#prerequisites).
+
 5. Run the test suite:
    ```bash
    # Run all tests

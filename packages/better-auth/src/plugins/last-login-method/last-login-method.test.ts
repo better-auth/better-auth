@@ -1,13 +1,13 @@
-import { describe, expect, it, beforeAll, afterAll, afterEach } from "vitest";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import { http, HttpResponse } from "msw";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { parseCookies, parseSetCookieHeader } from "../../cookies";
+import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { DEFAULT_SECRET } from "../../utils/constants";
 import { lastLoginMethod } from ".";
 import { lastLoginMethodClient } from "./client";
-import { parseCookies, parseSetCookieHeader } from "../../cookies";
-import { DEFAULT_SECRET } from "../../utils/constants";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { signJWT } from "../../crypto";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];

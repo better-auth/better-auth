@@ -37,6 +37,10 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
   <Step>
     ### Add the captcha token to your request headers
 
+    <Callout type="warning">
+      The `x-captcha-user-remote-ip` header is no longer required—IP is now auto-detected server-side.
+    </Callout>
+
     Add the captcha token to your request headers for all protected endpoints. This example shows how to include it in a `signIn` request:
 
     ```ts
@@ -46,7 +50,6 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
         fetchOptions: { // [!code highlight]
             headers: { // [!code highlight]
                 "x-captcha-response": turnstileToken, // [!code highlight]
-                "x-captcha-user-remote-ip": userIp, // optional: forwards the user's IP address to the captcha service // [!code highlight]
             }, // [!code highlight]
         }, // [!code highlight]
     });

@@ -1,5 +1,5 @@
-import type { multiSession } from ".";
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { multiSession } from ".";
 
 export const multiSessionClient = () => {
 	return {

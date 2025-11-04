@@ -100,6 +100,6 @@ export function getHost(url: string) {
 		const parsedUrl = new URL(url);
 		return parsedUrl.host;
 	} catch (error) {
-		return url;
+		return null;
 	}
 }

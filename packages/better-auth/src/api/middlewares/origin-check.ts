@@ -1,8 +1,8 @@
-import { APIError } from "better-call";
-import { createAuthMiddleware } from "@better-auth/core/api";
-import { wildcardMatch } from "../../utils/wildcard";
-import { getHost, getOrigin, getProtocol } from "../../utils/url";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
+import { APIError } from "better-call";
+import { getHost, getOrigin, getProtocol } from "../../utils/url";
+import { wildcardMatch } from "../../utils/wildcard";
 
 /**
  * A middleware to validate callbackURL and origin against
@@ -46,8 +46,11 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			if (pattern.includes("://")) {
 				return wildcardMatch(pattern)(getOrigin(url) || url);
 			}
-			// For host-only wildcards, match just the host
-			return wildcardMatch(pattern)(getHost(url));
+			const host = getHost(url);
+			if (!host) {
+				return false;
+			}
+			return wildcardMatch(pattern)(host);
 		}
 
 		const protocol = getProtocol(url);
@@ -118,8 +121,12 @@ export const originCheck = (
 				if (pattern.includes("://")) {
 					return wildcardMatch(pattern)(getOrigin(url) || url);
 				}
+				const host = getHost(url);
+				if (!host) {
+					return false;
+				}
 				// For host-only wildcards, match just the host
-				return wildcardMatch(pattern)(getHost(url));
+				return wildcardMatch(pattern)(host);
 			}
 			const protocol = getProtocol(url);
 			return protocol === "http:" || protocol === "https:" || !protocol
