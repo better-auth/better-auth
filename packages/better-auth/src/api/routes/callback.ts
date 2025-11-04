@@ -38,7 +38,8 @@ export const callbackOAuth = createAuthEndpoint(
 			if (postData.code) params.set("code", postData.code);
 			if (postData.error) params.set("error", postData.error);
 			if (postData.device_id) params.set("device_id", postData.device_id);
-			if (postData.error_description) params.set("error_description", postData.error_description);
+			if (postData.error_description)
+				params.set("error_description", postData.error_description);
 			if (postData.state) params.set("state", postData.state);
 			if (postData.user) params.set("user", postData.user);
 
