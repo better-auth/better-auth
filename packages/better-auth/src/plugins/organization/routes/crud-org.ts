@@ -212,30 +212,32 @@ export const createOrganization = <O extends OrganizationOptions>(
 				organizationId: organization.id,
 				role: ctx.context.orgOptions.creatorRole || "owner",
 			};
-			if (options?.organizationHooks?.beforeAddMember) {
-				const response = await options?.organizationHooks.beforeAddMember({
-					member: {
-						userId: user.id,
-						organizationId: organization.id,
-						role: ctx.context.orgOptions.creatorRole || "owner",
-					},
-					user,
-					organization,
-				});
-				if (response && typeof response === "object" && "data" in response) {
-					data = {
-						...data,
-						...response.data,
-					};
+			if (!isSuperAdmin(options, ctx)) {
+				if (options?.organizationHooks?.beforeAddMember) {
+					const response = await options?.organizationHooks.beforeAddMember({
+						member: {
+							userId: user.id,
+							organizationId: organization.id,
+							role: ctx.context.orgOptions.creatorRole || "owner",
+						},
+						user,
+						organization,
+					});
+					if (response && typeof response === "object" && "data" in response) {
+						data = {
+							...data,
+							...response.data,
+						};
+					}
 				}
-			}
-			member = await adapter.createMember(data);
-			if (options?.organizationHooks?.afterAddMember) {
-				await options?.organizationHooks.afterAddMember({
-					member,
-					user,
-					organization,
-				});
+				member = await adapter.createMember(data);
+				if (options?.organizationHooks?.afterAddMember) {
+					await options?.organizationHooks.afterAddMember({
+						member,
+						user,
+						organization,
+					});
+				}
 			}
 			if (
 				options?.teams?.enabled &&
@@ -268,10 +270,12 @@ export const createOrganization = <O extends OrganizationOptions>(
 						ctx.request,
 					)) || (await adapter.createTeam(teamData));
 
-				teamMember = await adapter.findOrCreateTeamMember({
-					teamId: defaultTeam.id,
-					userId: user.id,
-				});
+				if (!isSuperAdmin(options, ctx)) {
+					teamMember = await adapter.findOrCreateTeamMember({
+						teamId: defaultTeam.id,
+						userId: user.id,
+					});
+				}
 
 				if (options?.organizationHooks?.afterCreateTeam) {
 					await options?.organizationHooks.afterCreateTeam({
@@ -280,12 +284,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 						organization,
 					});
 				}
-			} else if (!isSuperAdmin(options, ctx)) {
-				member = await adapter.createMember({
-					userId: user.id,
-					organizationId: organization.id,
-					role: ctx.context.orgOptions.creatorRole || "owner",
-				});
 			}
 
 			if (options.organizationCreation?.afterCreate) {

@@ -11,8 +11,9 @@ import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { organization } from "./organization";
-import type { InvitationStatus } from "./schema";
+import type {InvitationStatus, Member} from "./schema";
 import type { OrganizationOptions } from "./types";
+import {getOrgAdapter} from "./adapter";
 
 describe("organization type", () => {
 	it("empty org type should works", () => {
@@ -79,7 +80,6 @@ describe("organization", async (it) => {
 		expect(organizationIndex).not.toBe(-1);
 		expect(organizationRoleIndex).not.toBe(-1);
 	});
-
 	let organizationId: string;
 	let organization2Id: string;
 	it("create organization", async () => {
