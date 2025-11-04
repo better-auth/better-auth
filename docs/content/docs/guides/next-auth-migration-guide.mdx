@@ -97,6 +97,21 @@ Make sure to have `createdAt` and `updatedAt` fields on your account schema.
 </Step>
 <Step>
 
+### Email Verified Column Migration (PostgreSQL/MySQL/SQLite/MSSQL)
+
+If you're migrating from NextAuth v4 where `emailVerified` was a `timestamp` column and need to convert it to `boolean`, follow these steps:
+
+Manually convert the column in your database before updating your schema. Connect to your PostgreSQL database and run:
+
+```sql
+-- Convert timestamp to boolean: true if emailVerified is not null, false otherwise
+ALTER TABLE "user" 
+  ALTER COLUMN "emailVerified" TYPE boolean 
+  USING ("emailVerified" IS NOT NULL);
+```
+
+If you're using an ORM, you can map the `emailVerified` column to a boolean column.
+
 ### Update the Route Handler
 
 In the `app/api/auth` folder, rename the `[...nextauth]` file to `[...all]` to avoid confusion. Then, update the `route.ts` file as follows:
