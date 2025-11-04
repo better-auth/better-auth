@@ -41,7 +41,7 @@ export async function generateState(
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
-		additionalData,
+		additionalData: !!additionalData ? additionalData : undefined,
 	};
 
 	if (additionalData) {
