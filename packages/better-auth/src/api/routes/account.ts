@@ -47,6 +47,9 @@ export const listUserAccounts = createAuthEndpoint(
 											accountId: {
 												type: "string",
 											},
+											userId: {
+												type: "string",
+											},
 											scopes: {
 												type: "array",
 												items: {
@@ -60,6 +63,7 @@ export const listUserAccounts = createAuthEndpoint(
 											"createdAt",
 											"updatedAt",
 											"accountId",
+											"userId",
 											"scopes",
 										],
 									},
@@ -83,6 +87,7 @@ export const listUserAccounts = createAuthEndpoint(
 				createdAt: a.createdAt,
 				updatedAt: a.updatedAt,
 				accountId: a.accountId,
+				userId: a.userId,
 				scopes: a.scope?.split(",") || [],
 			})),
 		);
