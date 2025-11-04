@@ -356,11 +356,11 @@ export const error = createAuthEndpoint(
 	},
 	async (c) => {
 		const url = new URL(c.request?.url || "");
-		const unsaitizedCode = url.searchParams.get("error") || "UNKNOWN";
+		const unsanitizedCode = url.searchParams.get("error") || "UNKNOWN";
 		const description = url.searchParams.get("error_description") || null;
 
-		const isValid = /^[\'A-Za-z0-9_-]+$/.test(unsaitizedCode || "");
-		const safeCode = isValid ? unsaitizedCode : "UNKNOWN";
+		const isValid = /^[\'A-Za-z0-9_-]+$/.test(unsanitizedCode || "");
+		const safeCode = isValid ? unsanitizedCode : "UNKNOWN";
 
 		const queryParams = new URLSearchParams();
 		queryParams.set("error", safeCode);
