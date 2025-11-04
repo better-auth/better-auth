@@ -1,7 +1,7 @@
 import { expect } from "vitest";
-import { createTestSuite } from "../create-test-suite";
 import { setCookieToHeader } from "../../cookies";
 import type { Session, User } from "../../types";
+import { createTestSuite } from "../create-test-suite";
 
 /**
  * This test suite tests basic authentication flow using the adapter.
@@ -29,7 +29,7 @@ export const authFlowTestSuite = createTestSuite(
 			tryCatch,
 			getBetterAuthOptions,
 		},
-		debug?: { showDB?: () => Promise<void> } | undefined,,
+		debug?: { showDB?: () => Promise<void> } | undefined,
 	) => ({
 		"should successfully sign up": async () => {
 			const auth = await getAuth();
