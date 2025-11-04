@@ -106,6 +106,10 @@ export const auth = betterAuth({
 		},
 	},
 	socialProviders: {
+		apple: {
+			clientId: process.env.APPLE_CLIENT_ID || "",
+			clientSecret: process.env.APPLE_CLIENT_SECRET || "",
+		},
 		facebook: {
 			clientId: process.env.FACEBOOK_CLIENT_ID || "",
 			clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "",
