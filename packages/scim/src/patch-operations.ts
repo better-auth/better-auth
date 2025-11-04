@@ -9,6 +9,7 @@ type Operation = {
 
 type Normalizer = {
 	target: string;
+	resource: "user" | "account";
 	normalize: (user: User, op: Operation) => any;
 };
 
@@ -38,17 +39,38 @@ const familyName = (user: User, op: Operation) => {
 };
 
 const userNormalizers: Record<string, Normalizer> = {
-	"name.formatted": { target: "name", normalize: identity },
-	"name.givenName": { target: "name", normalize: givenName },
-	"name.familyName": { target: "name", normalize: familyName },
-	active: { target: "active", normalize: identity },
-	userName: { target: "email", normalize: identity },
+	"/name/formatted": { resource: "user", target: "name", normalize: identity },
+	"/name/givenName": { resource: "user", target: "name", normalize: givenName },
+	"/name/familyName": {
+		resource: "user",
+		target: "name",
+		normalize: familyName,
+	},
+	"/externalId": {
+		resource: "account",
+		target: "accountId",
+		normalize: identity,
+	},
+	"/userName": { resource: "user", target: "email", normalize: identity },
 };
 
-export const applyUserPatch = (user: User, op: Operation) => {
-	const normalizer = userNormalizers[op.path ?? "unknown"];
+export const buildUserPatch = (user: User, operations: Operation[]) => {
+	const userPatch: Record<string, any> = {};
+	const accountPatch: Record<string, any> = {};
 
-	if (normalizer) {
-		return { target: normalizer.target, value: normalizer.normalize(user, op) };
+	const resources = { user: userPatch, account: accountPatch };
+
+	for (const operation of operations) {
+		if (operation.op !== "replace" || !operation.path) {
+			continue;
+		}
+
+		const normalizer = userNormalizers[operation.path];
+		if (normalizer) {
+			const resource = resources[normalizer.resource];
+			resource[normalizer.target] = normalizer.normalize(user, operation);
+		}
 	}
+
+	return resources;
 };

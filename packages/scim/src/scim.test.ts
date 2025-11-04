@@ -1179,6 +1179,169 @@ describe("SCIM", () => {
 		});
 	});
 
+	describe("PATCH /scim/v2/users", () => {
+		it("should partially update a user resource", async () => {
+			const { auth, authClient } = createTestInstance();
+			const { scimToken } = await registerSSOProvider(auth, authClient);
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "the-username",
+					name: {
+						formatted: "Juan Perez",
+					},
+					emails: [{ value: "primary-email@test.com", primary: true }],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(user).toBeTruthy();
+			expect(user.externalId).toBe("the-username");
+			expect(user.userName).toBe("primary-email@test.com");
+			expect(user.name.formatted).toBe("Juan Perez");
+			expect(user.emails[0]?.value).toBe("primary-email@test.com");
+
+			const patchResult = await auth.api.patchSCIMUser({
+				params: {
+					userId: user.id,
+				},
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [
+						{ op: "replace", path: "/externalId", value: "external-username" },
+						{ op: "replace", path: "/userName", value: "other-username" },
+						{ op: "replace", path: "/name/formatted", value: "Daniel Lopez" },
+					],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(patchResult).toBe(null);
+
+			const updatedUser = await auth.api.getSCIMUser({
+				params: {
+					userId: user.id,
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(updatedUser).toMatchObject({
+				active: true,
+				displayName: "Daniel Lopez",
+				emails: [
+					{
+						primary: true,
+						value: "other-username",
+					},
+				],
+				externalId: "external-username",
+				id: expect.any(String),
+				meta: expect.objectContaining({
+					created: expect.any(Date),
+					lastModified: expect.any(Date),
+					location: expect.stringContaining("/scim/v2/Users/"),
+					resourceType: "User",
+				}),
+				name: {
+					formatted: "Daniel Lopez",
+				},
+				schemas: expect.arrayContaining([
+					"urn:ietf:params:scim:schemas:core:2.0:User",
+				]),
+				userName: "other-username",
+			});
+		});
+
+		it("should return not found for missing users", async () => {
+			const { auth, authClient } = createTestInstance();
+			const { scimToken } = await registerSSOProvider(auth, authClient);
+
+			const result = await auth.api.patchSCIMUser({
+				params: {
+					userId: "missing",
+				},
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [
+						{ op: "replace", path: "/externalId", value: "external-username" },
+					],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(result).toMatchInlineSnapshot(`
+              {
+                "error": "User not found",
+              }
+            `);
+		});
+
+		it("should fail on invalid updates", async () => {
+			const { auth, authClient } = createTestInstance();
+			const { scimToken } = await registerSSOProvider(auth, authClient);
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "the-username",
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			const result = await auth.api.patchSCIMUser({
+				params: {
+					userId: user.id,
+				},
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(result).toMatchInlineSnapshot(`
+              {
+                "error": "No valid fields to update",
+              }
+            `);
+		});
+
+		it("should not allow anonymous access", async () => {
+			const { auth } = createTestInstance();
+
+			const patchUser = async () => {
+				await auth.api.patchSCIMUser({
+					params: {
+						userId: "missing",
+					},
+					body: {
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+						Operations: [
+							{
+								op: "replace",
+								path: "/externalId",
+								value: "external-username",
+							},
+						],
+					},
+				});
+			};
+
+			await expect(patchUser()).rejects.toThrow(/SCIM token is required/);
+		});
+	});
+
 	describe("GET /scim/v2/Users", () => {
 		it("should return the list of users", async () => {
 			const { auth, authClient } = createTestInstance();

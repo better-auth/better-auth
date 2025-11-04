@@ -14,7 +14,7 @@ import {
 	getUserPrimaryEmail,
 	getUserResourceLocation,
 } from "./normalizers";
-import { applyUserPatch } from "./patch-operations";
+import { buildUserPatch } from "./patch-operations";
 import {
 	type DBFilter,
 	parseSCIMUserFilter,
@@ -457,28 +457,35 @@ export const scim = () => {
 						return ctx.json({ error: "User not found" }, { status: 404 });
 					}
 
-					const updates: Record<string, any> = {};
-					for (const op of ctx.body.Operations) {
-						if (op.op !== "replace") continue;
+					const { user: userPatch, account: accountPatch } = buildUserPatch(
+						user,
+						ctx.body.Operations,
+					);
 
-						const result = applyUserPatch(user, op);
-						if (result) {
-							updates[result.target] = result.value;
-						}
-					}
-
-					if (Object.keys(updates).length === 0) {
+					if (Object.keys(userPatch).length === 0) {
 						return ctx.json(
 							{ error: "No valid fields to update" },
 							{ status: 400 },
 						);
 					}
 
-					await ctx.context.adapter.update<User>({
-						model: "user",
-						where: [{ field: "id", value: userId }],
-						update: { ...updates, updatedAt: new Date() },
-					});
+					await Promise.all([
+						ctx.context.adapter.update<User>({
+							model: "user",
+							where: [{ field: "id", value: userId }],
+							update: { ...userPatch, updatedAt: new Date() },
+						}),
+						Object.keys(accountPatch).length > 0
+							? ctx.context.adapter.update<Account>({
+									model: "account",
+									where: [{ field: "userId", value: userId }],
+									update: {
+										...accountPatch,
+										updatedAt: new Date(),
+									},
+								})
+							: Promise.resolve(),
+					]);
 
 					return ctx.json(null, { status: 204 });
 				},
