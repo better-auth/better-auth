@@ -106,6 +106,7 @@ export const expo = (options?: ExpoOptions | undefined) => {
 						});
 					}
 					const stateCookie = ctx.context.createAuthCookie("state", {
+						sameSite: "none",
 						maxAge: 5 * 60 * 1000, // 5 minutes
 					});
 					await ctx.setSignedCookie(
