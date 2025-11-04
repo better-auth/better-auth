@@ -1,15 +1,15 @@
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { APIError } from "../../../api";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
-import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
-import { isRateLimited } from "../rate-limit";
-import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
-import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import { isRateLimited } from "../rate-limit";
+import type { apiKeySchema } from "../schema";
+import type { ApiKey } from "../types";
+import type { PredefinedApiKeyOptions } from ".";
 
 export async function validateApiKey({
 	hashedKey,
@@ -21,7 +21,7 @@ export async function validateApiKey({
 	hashedKey: string;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
-	permissions?: Record<string, string[]>;
+	permissions?: Record<string, string[]> | undefined;
 	ctx: GenericEndpointContext;
 }) {
 	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
@@ -191,7 +191,7 @@ export function verifyApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
 	return createAuthEndpoint(

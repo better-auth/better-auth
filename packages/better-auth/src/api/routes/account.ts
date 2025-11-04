@@ -1,16 +1,16 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { APIError } from "better-call";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { SocialProviderListEnum } from "@better-auth/core/social-providers";
+import { APIError } from "better-call";
+import * as z from "zod";
+import { generateState } from "../../oauth2/state";
+import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "./session";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { SocialProviderListEnum } from "@better-auth/core/social-providers";
-import { generateState } from "../../oauth2/state";
-import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -47,6 +47,9 @@ export const listUserAccounts = createAuthEndpoint(
 											accountId: {
 												type: "string",
 											},
+											userId: {
+												type: "string",
+											},
 											scopes: {
 												type: "array",
 												items: {
@@ -60,6 +63,7 @@ export const listUserAccounts = createAuthEndpoint(
 											"createdAt",
 											"updatedAt",
 											"accountId",
+											"userId",
 											"scopes",
 										],
 									},
@@ -83,6 +87,7 @@ export const listUserAccounts = createAuthEndpoint(
 				createdAt: a.createdAt,
 				updatedAt: a.updatedAt,
 				accountId: a.accountId,
+				userId: a.userId,
 				scopes: a.scope?.split(",") || [],
 			})),
 		);
@@ -303,18 +308,15 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			try {
-				await c.context.internalAdapter.createAccount(
-					{
-						userId: session.user.id,
-						providerId: provider.id,
-						accountId: linkingUserId,
-						accessToken: c.body.idToken.accessToken,
-						idToken: token,
-						refreshToken: c.body.idToken.refreshToken,
-						scope: c.body.idToken.scopes?.join(","),
-					},
-					c,
-				);
+				await c.context.internalAdapter.createAccount({
+					userId: session.user.id,
+					providerId: provider.id,
+					accountId: linkingUserId,
+					accessToken: c.body.idToken.accessToken,
+					idToken: token,
+					refreshToken: c.body.idToken.refreshToken,
+					scope: c.body.idToken.scopes?.join(","),
+				});
 			} catch (e: any) {
 				throw new APIError("EXPECTATION_FAILED", {
 					message: "Account not linked - unable to create account",

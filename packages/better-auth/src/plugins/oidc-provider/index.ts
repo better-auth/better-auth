@@ -1,16 +1,26 @@
-import * as z from "zod";
-import { SignJWT } from "jose";
-import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
-import type { BetterAuthPlugin } from "@better-auth/core";
+} from "@better-auth/core/api";
+import { base64 } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
+import { SignJWT } from "jose";
+import * as z from "zod";
+import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
+import { parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
+import { mergeSchema } from "../../db";
+import type { jwt } from "../jwt";
+import { getJwtToken } from "../jwt/sign";
+import { authorize } from "./authorize";
 import { schema } from "./schema";
 import type {
 	Client,
@@ -19,15 +29,7 @@ import type {
 	OIDCMetadata,
 	OIDCOptions,
 } from "./types";
-import { authorize } from "./authorize";
-import { parseSetCookieHeader } from "../../cookies";
-import { createHash } from "@better-auth/utils/hash";
-import { base64 } from "@better-auth/utils/base64";
-import { getJwtToken } from "../jwt/sign";
-import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
-import { mergeSchema } from "../../db";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -41,8 +43,8 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
 export async function getClient(
 	clientId: string,
 	adapter: any,
-	trustedClients: (Client & { skipConsent?: boolean })[] = [],
-): Promise<(Client & { skipConsent?: boolean }) | null> {
+	trustedClients: (Client & { skipConsent?: boolean | undefined })[] = [],
+): Promise<(Client & { skipConsent?: boolean | undefined }) | null> {
 	const trustedClient = trustedClients.find(
 		(client) => client.clientId === clientId,
 	);
@@ -70,7 +72,7 @@ export async function getClient(
 
 export const getMetadata = (
 	ctx: GenericEndpointContext,
-	options?: OIDCOptions,
+	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
 	const jwtPlugin = getJwtPlugin(ctx);
 	const issuer =
@@ -808,7 +810,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const payload = {
 						sub: user.id,
 						aud: client_id.toString(),
-						iat: Date.now(),
+						iat: iat,
 						auth_time: ctx.context.session
 							? new Date(ctx.context.session.session.createdAt).getTime()
 							: undefined,
@@ -859,7 +861,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 									...jwtPlugin.options?.jwt,
 									getSubject: () => user.id,
 									audience: client_id.toString(),
-									issuer: ctx.context.options.baseURL,
+									issuer:
+										jwtPlugin.options?.jwt?.issuer ??
+										ctx.context.options.baseURL,
 									expirationTime,
 									definePayload: () => payload,
 								},

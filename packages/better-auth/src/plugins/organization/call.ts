@@ -1,10 +1,10 @@
-import type { Session, User } from "../../types";
-import { createAuthMiddleware } from "@better-auth/core/middleware";
-import { sessionMiddleware } from "../../api";
-import type { Role } from "../access";
-import type { OrganizationOptions } from "./types";
-import type { defaultRoles } from "./access/statement";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
+import { sessionMiddleware } from "../../api";
+import type { Session, User } from "../../types";
+import type { Role } from "../access";
+import type { defaultRoles } from "./access/statement";
+import type { OrganizationOptions } from "./types";
 
 export const orgMiddleware = createAuthMiddleware(async () => {
 	return {} as {
@@ -14,8 +14,8 @@ export const orgMiddleware = createAuthMiddleware(async () => {
 		};
 		getSession: (context: GenericEndpointContext) => Promise<{
 			session: Session & {
-				activeTeamId?: string;
-				activeOrganizationId?: string;
+				activeTeamId?: string | undefined;
+				activeOrganizationId?: string | undefined;
 			};
 			user: User;
 		}>;
@@ -33,8 +33,8 @@ export const orgSessionMiddleware = createAuthMiddleware(
 	async (ctx) => {
 		const session = ctx.context.session as {
 			session: Session & {
-				activeTeamId?: string;
-				activeOrganizationId?: string;
+				activeTeamId?: string | undefined;
+				activeOrganizationId?: string | undefined;
 			};
 			user: User;
 		};

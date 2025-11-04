@@ -1,9 +1,15 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.4.0-beta.10",
+  "version": "1.4.0-beta.15",
   "type": "module",
   "main": "dist/index.js",
+  "homepage": "https://www.better-auth.com/docs/plugins/sso",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/sso"
+  },
   "license": "MIT",
   "keywords": [
     "sso",
@@ -30,14 +36,14 @@
   },
   "exports": {
     ".": {
+      "better-auth-dev-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "default": "./dist/index.js"
     },
     "./client": {
+      "better-auth-dev-source": "./src/client.ts",
       "types": "./dist/client.d.ts",
-      "import": "./dist/client.js",
-      "require": "./dist/client.cjs"
+      "default": "./dist/client.js"
     }
   },
   "typesVersions": {
@@ -54,17 +60,17 @@
     "@better-fetch/fetch": "catalog:",
     "fast-xml-parser": "^5.2.5",
     "jose": "^6.1.0",
-    "oauth2-mock-server": "^7.2.1",
     "samlify": "^2.10.1",
     "zod": "^4.1.5"
   },
   "devDependencies": {
     "@types/body-parser": "^1.19.6",
-    "@types/express": "^5.0.3",
+    "@types/express": "^5.0.5",
     "better-auth": "workspace:^",
     "better-call": "catalog:",
     "body-parser": "^2.2.0",
     "express": "^5.1.0",
+    "oauth2-mock-server": "^7.2.1",
     "tsdown": "catalog:"
   },
   "peerDependencies": {

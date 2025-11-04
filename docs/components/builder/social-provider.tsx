@@ -208,7 +208,7 @@ export const socialProviders = {
 				xmlns="http://www.w3.org/2000/svg"
 				width="1em"
 				height="1em"
-				viewBox="0 0 24 24"
+				viewBox="0 0 100 100"
 				{...props}
 			>
 				<path
@@ -222,7 +222,7 @@ export const socialProviders = {
 				fill="none"
 				width="1em"
 				height="1em"
-				viewBox="0 0 24 24"
+				viewBox="0 0 100 100"
 			>
 				<path
 					fill="currentColor"

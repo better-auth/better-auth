@@ -1,33 +1,34 @@
-import { generateRandomString } from "../../crypto/random";
-import * as z from "zod";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
+} from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { createHMAC } from "@better-auth/utils/hmac";
+import { createOTP } from "@better-auth/utils/otp";
+import { APIError } from "better-call";
+import * as z from "zod";
 import { sessionMiddleware } from "../../api";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "@better-auth/core";
+import { generateRandomString } from "../../crypto/random";
+import { mergeSchema } from "../../db/schema";
+import { validatePassword } from "../../utils/password";
 import {
+	type BackupCodeOptions,
 	backupCode2fa,
 	generateBackupCodes,
-	type BackupCodeOptions,
 } from "./backup-codes";
+import { TRUST_DEVICE_COOKIE_NAME, TWO_FACTOR_COOKIE_NAME } from "./constant";
+import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
+import { schema } from "./schema";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
-import { mergeSchema } from "../../db/schema";
-import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
-import { validatePassword } from "../../utils/password";
-import { APIError } from "better-call";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import { schema } from "./schema";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { createOTP } from "@better-auth/utils/otp";
-import { createHMAC } from "@better-auth/utils/hmac";
-import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+
 export * from "./error-code";
 
-export const twoFactor = (options?: TwoFactorOptions) => {
+export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
 	};
@@ -136,11 +137,9 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							{
 								twoFactorEnabled: true,
 							},
-							ctx,
 						);
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
-							ctx,
 							false,
 							ctx.context.session.session,
 						);
@@ -250,7 +249,6 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						{
 							twoFactorEnabled: false,
 						},
-						ctx,
 					);
 					await ctx.context.adapter.delete({
 						model: opts.twoFactorTable,
@@ -263,7 +261,6 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					const newSession = await ctx.context.internalAdapter.createSession(
 						updatedUser.id,
-						ctx,
 						false,
 						ctx.context.session.session,
 					);
@@ -346,14 +343,11 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							},
 						);
 						const identifier = `2fa-${generateRandomString(20)}`;
-						await ctx.context.internalAdapter.createVerificationValue(
-							{
-								value: data.user.id,
-								identifier,
-								expiresAt: new Date(Date.now() + maxAge * 1000),
-							},
-							ctx,
-						);
+						await ctx.context.internalAdapter.createVerificationValue({
+							value: data.user.id,
+							identifier,
+							expiresAt: new Date(Date.now() + maxAge * 1000),
+						});
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
 							identifier,

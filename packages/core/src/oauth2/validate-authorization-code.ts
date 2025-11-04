@@ -1,8 +1,8 @@
+import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { jwtVerify } from "jose";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
-import { base64 } from "@better-auth/utils/base64";
 
 export function createAuthorizationCodeRequest({
 	code,
@@ -18,18 +18,17 @@ export function createAuthorizationCodeRequest({
 	code: string;
 	redirectURI: string;
 	options: Partial<ProviderOptions>;
-	codeVerifier?: string;
-	deviceId?: string;
-	authentication?: "basic" | "post";
-	headers?: Record<string, string>;
-	additionalParams?: Record<string, string>;
-	resource?: string | string[];
+	codeVerifier?: string | undefined;
+	deviceId?: string | undefined;
+	authentication?: ("basic" | "post") | undefined;
+	headers?: Record<string, string> | undefined;
+	additionalParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
 }) {
 	const body = new URLSearchParams();
 	const requestHeaders: Record<string, any> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
-		"user-agent": "better-auth",
 		...headers,
 	};
 	body.set("grant_type", "authorization_code");
@@ -92,13 +91,13 @@ export async function validateAuthorizationCode({
 	code: string;
 	redirectURI: string;
 	options: Partial<ProviderOptions>;
-	codeVerifier?: string;
-	deviceId?: string;
+	codeVerifier?: string | undefined;
+	deviceId?: string | undefined;
 	tokenEndpoint: string;
-	authentication?: "basic" | "post";
-	headers?: Record<string, string>;
-	additionalParams?: Record<string, string>;
-	resource?: string | string[];
+	authentication?: ("basic" | "post") | undefined;
+	headers?: Record<string, string> | undefined;
+	additionalParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
 }) {
 	const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
 		code,
@@ -139,7 +138,6 @@ export async function validateToken(token: string, jwksEndpoint: string) {
 		method: "GET",
 		headers: {
 			accept: "application/json",
-			"user-agent": "better-auth",
 		},
 	});
 	if (error) {

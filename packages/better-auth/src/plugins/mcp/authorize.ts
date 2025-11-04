@@ -1,12 +1,12 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
+import { generateRandomString } from "../../crypto";
 import type {
 	AuthorizationQuery,
 	Client,
 	OIDCOptions,
 } from "../oidc-provider/types";
-import { generateRandomString } from "../../crypto";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 function redirectErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -61,7 +61,6 @@ export async function authorizeMCPOAuth(
 	}
 
 	const query = ctx.query as AuthorizationQuery;
-	console.log(query);
 	if (!query.client_id) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
@@ -96,7 +95,6 @@ export async function authorizeMCPOAuth(
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
 			} as Client;
 		});
-	console.log(client);
 	if (!client) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
@@ -176,37 +174,34 @@ export async function authorizeMCPOAuth(
 		/**
 		 * Save the code in the database
 		 */
-		await ctx.context.internalAdapter.createVerificationValue(
-			{
-				value: JSON.stringify({
-					clientId: client.clientId,
-					redirectURI: query.redirect_uri,
-					scope: requestScope,
-					userId: session.user.id,
-					authTime: new Date(session.session.createdAt).getTime(),
-					/**
-					 * If the prompt is set to `consent`, then we need
-					 * to require the user to consent to the scopes.
-					 *
-					 * This means the code now needs to be treated as a
-					 * consent request.
-					 *
-					 * once the user consents, the code will be updated
-					 * with the actual code. This is to prevent the
-					 * client from using the code before the user
-					 * consents.
-					 */
-					requireConsent: query.prompt === "consent",
-					state: query.prompt === "consent" ? query.state : null,
-					codeChallenge: query.code_challenge,
-					codeChallengeMethod: query.code_challenge_method,
-					nonce: query.nonce,
-				}),
-				identifier: code,
-				expiresAt,
-			},
-			ctx,
-		);
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: JSON.stringify({
+				clientId: client.clientId,
+				redirectURI: query.redirect_uri,
+				scope: requestScope,
+				userId: session.user.id,
+				authTime: new Date(session.session.createdAt).getTime(),
+				/**
+				 * If the prompt is set to `consent`, then we need
+				 * to require the user to consent to the scopes.
+				 *
+				 * This means the code now needs to be treated as a
+				 * consent request.
+				 *
+				 * once the user consents, the code will be updated
+				 * with the actual code. This is to prevent the
+				 * client from using the code before the user
+				 * consents.
+				 */
+				requireConsent: query.prompt === "consent",
+				state: query.prompt === "consent" ? query.state : null,
+				codeChallenge: query.code_challenge,
+				codeChallengeMethod: query.code_challenge_method,
+				nonce: query.nonce,
+			}),
+			identifier: code,
+			expiresAt,
+		});
 	} catch (e) {
 		throw ctx.redirect(
 			redirectErrorURL(
@@ -217,13 +212,36 @@ export async function authorizeMCPOAuth(
 		);
 	}
 
-	const redirectURIWithCode = new URL(redirectURI);
-	redirectURIWithCode.searchParams.set("code", code);
-	redirectURIWithCode.searchParams.set("state", ctx.query.state);
-
+	// Consent is NOT required - redirect with the code immediately
 	if (query.prompt !== "consent") {
+		const redirectURIWithCode = new URL(redirectURI);
+		redirectURIWithCode.searchParams.set("code", code);
+		redirectURIWithCode.searchParams.set("state", ctx.query.state);
 		throw ctx.redirect(redirectURIWithCode.toString());
 	}
 
+	// Consent is REQUIRED - redirect to consent page or show consent HTML
+	if (options?.consentPage) {
+		// Set cookie to support cookie-based consent flows
+		await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
+			maxAge: 600,
+			path: "/",
+			sameSite: "lax",
+		});
+
+		// Pass the consent code as a URL parameter to support URL-BASED consent flows
+		const urlParams = new URLSearchParams();
+		urlParams.set("consent_code", code);
+		urlParams.set("client_id", client.clientId);
+		urlParams.set("scope", requestScope.join(" "));
+		const consentURI = `${options.consentPage}?${urlParams.toString()}`;
+
+		throw ctx.redirect(consentURI);
+	}
+
+	// No consent page configured - fall back to direct redirect with code
+	const redirectURIWithCode = new URL(redirectURI);
+	redirectURIWithCode.searchParams.set("code", code);
+	redirectURIWithCode.searchParams.set("state", ctx.query.state);
 	throw ctx.redirect(redirectURIWithCode.toString());
 }
