@@ -115,6 +115,7 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	listMembers: ReturnType<typeof listMembers<O>>;
 	getActiveMemberRole: ReturnType<typeof getActiveMemberRole<O>>;
 	hasPermission: ReturnType<typeof createHasPermission<O>>;
+	listAllOrganizations: ReturnType<typeof listAllOrganizations<O>>;
 };
 
 const createHasPermission = <O extends OrganizationOptions>(options: O) => {

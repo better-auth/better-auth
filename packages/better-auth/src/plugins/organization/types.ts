@@ -396,7 +396,7 @@ export interface OrganizationOptions {
 				afterCreate?: (
 					data: {
 						organization: Organization & Record<string, any>;
-						member: Member & Record<string, any> | undefined;
+						member: (Member & Record<string, any>) | undefined;
 						user: User & Record<string, any>;
 					},
 					request?: Request,
@@ -451,7 +451,7 @@ export interface OrganizationOptions {
 				 */
 				afterCreateOrganization?: (data: {
 					organization: Organization & Record<string, any>;
-					member: Member & Record<string, any> | undefined;
+					member: (Member & Record<string, any>) | undefined;
 					user: User & Record<string, any>;
 				}) => Promise<void>;
 				/**
