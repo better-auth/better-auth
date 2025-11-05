@@ -37,6 +37,8 @@
     }
   },
   "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
     "tsdown": "catalog:"
   },
   "dependencies": {
