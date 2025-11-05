@@ -80,7 +80,9 @@ export const getClientConfig = (
 					path.startsWith("/sign-in") ||
 					path.startsWith("/sign-up") ||
 					path === "/delete-user" ||
-					path.startsWith("/verify-email")
+					path.startsWith("/verify-email") ||
+					path === "/revoke-sessions" ||
+					path === "/revoke-session"
 				);
 			},
 		},
