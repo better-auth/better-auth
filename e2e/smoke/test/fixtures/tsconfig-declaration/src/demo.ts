@@ -1,3 +1,4 @@
+import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
 import { betterAuth } from "better-auth";
@@ -15,7 +16,6 @@ import {
 	organization,
 	twoFactor,
 } from "better-auth/plugins";
-import { passkey } from "better-auth/plugins/passkey";
 import { Stripe } from "stripe";
 
 export const auth = betterAuth({
