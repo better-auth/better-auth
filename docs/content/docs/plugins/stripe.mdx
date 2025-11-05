@@ -137,11 +137,11 @@ You can customize the customer creation process:
 stripe({
     // ... other options
     createCustomerOnSignUp: true,
-    onCustomerCreate: async ({ customer, stripeCustomer, user }, request) => {
+    onCustomerCreate: async ({ stripeCustomer, user }, ctx) => {
         // Do something with the newly created customer
-        console.log(`Customer ${customer.id} created for user ${user.id}`);
+        console.log(`Customer ${stripeCustomer.id} created for user ${user.id}`);
     },
-    getCustomerCreateParams: async ({ user, session }, request) => {
+    getCustomerCreateParams: async (user, ctx) => {
         // Customize the Stripe customer creation parameters
         return {
             metadata: {
@@ -570,11 +570,11 @@ You can configure trial periods for your plans:
             // Called when a trial starts
             await sendTrialStartEmail(subscription.referenceId);
         },
-        onTrialEnd: async ({ subscription, user }, request) => {
+        onTrialEnd: async ({ subscription }, ctx) => {
             // Called when a trial ends
-            await sendTrialEndEmail(user.email);
+            await sendTrialEndEmail(subscription.referenceId);
         },
-        onTrialExpired: async (subscription) => {
+        onTrialExpired: async (subscription, ctx) => {
             // Called when a trial expires without conversion
             await sendTrialExpiredEmail(subscription.referenceId);
         }
@@ -711,9 +711,9 @@ stripe({
 
 **createCustomerOnSignUp**: `boolean` - Whether to automatically create a Stripe customer when a user signs up. Default: `false`.
 
-**onCustomerCreate**: `(data: { customer: Customer, stripeCustomer: Stripe.Customer, user: User }, request?: Request) => Promise<void>` - A function called after a customer is created.
+**onCustomerCreate**: `(data: { stripeCustomer: Stripe.Customer, user: User }, ctx: GenericEndpointContext) => Promise<void>` - A function called after a customer is created.
 
-**getCustomerCreateParams**: `(data: { user: User, session: Session }, request?: Request) => Promise<{}>` - A function to customize the Stripe customer creation parameters.
+**getCustomerCreateParams**: `(user: User, ctx: GenericEndpointContext) => Promise<{}>` - A function to customize the Stripe customer creation parameters.
 
 **onEvent**: `(event: Stripe.Event) => Promise<void>` - A function called for any Stripe webhook event.
 
@@ -725,7 +725,7 @@ stripe({
 
 **requireEmailVerification**: `boolean` - Whether to require email verification before allowing subscription upgrades. Default: `false`.
 
-**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "restore-subscription"}, request?: Request) => Promise<boolean>` - A function to authorize reference IDs.
+**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "restore-subscription"}, ctx: GenericEndpointContext) => Promise<boolean>` - A function to authorize reference IDs.
 
 ### Plan Configuration
 
@@ -748,8 +748,8 @@ Each plan can have the following properties:
 **freeTrial**: Object containing trial configuration:
   - **days**: `number` - Number of trial days.
   - **onTrialStart**: `(subscription: Subscription) => Promise<void>` - Called when a trial starts.
-  - **onTrialEnd**: `(data: { subscription: Subscription, user: User }, request?: Request) => Promise<void>` - Called when a trial ends.
-  - **onTrialExpired**: `(subscription: Subscription) => Promise<void>` - Called when a trial expires without conversion.
+  - **onTrialEnd**: `(data: { subscription: Subscription }, ctx: GenericEndpointContext) => Promise<void>` - Called when a trial ends.
+  - **onTrialExpired**: `(subscription: Subscription, ctx: GenericEndpointContext) => Promise<void>` - Called when a trial expires without conversion.
 
 ## Advanced Usage
 
@@ -795,7 +795,7 @@ subscription: {
 You can customize the Stripe Checkout session with additional parameters:
 
 ```ts title="auth.ts"
-getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
     return {
         params: {
             allow_promotion_codes: true,
@@ -827,7 +827,7 @@ To collect tax IDs from the customer, set `tax_id_collection` to true:
 ```ts title="auth.ts"
 subscription: {
     // ... other options
-    getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+    getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
         return {
             params: {
                 tax_id_collection: {
@@ -846,7 +846,7 @@ To enable automatic tax calculation using the customer's location, set `automati
 ```ts title="auth.ts"
 subscription: {
     // ... other options
-    getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+    getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
         return {
             params: {
                 automatic_tax: {
