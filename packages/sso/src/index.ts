@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import dns from "node:dns/promises";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import {
 	type Account,
@@ -6,6 +8,7 @@ import {
 	type OAuth2Tokens,
 	type Session,
 	type User,
+	type Verification,
 } from "better-auth";
 import { APIError, sessionMiddleware } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
@@ -153,6 +156,8 @@ export interface SSOProvider {
 	userId: string;
 	providerId: string;
 	organizationId?: string | undefined;
+	domain: string;
+	domainVerified: boolean;
 }
 
 export interface SSOOptions {
@@ -269,12 +274,201 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	trustEmailVerified?: boolean | undefined;
+
+	/**
+	 * Enable domain verification on SSO providers
+	 *
+	 * When this option is enabled, new SSO providers will require the associated domain to be verified by the owner
+	 * prior to allowing sign-ins.
+	 */
+	domainVerification?: {
+		enabled?: boolean;
+	};
 }
 
 export const sso = (options?: SSOOptions | undefined) => {
 	return {
 		id: "sso",
 		endpoints: {
+			submitDomainVerification: createAuthEndpoint(
+				"/sso/domain-verification",
+				{
+					method: "POST",
+					body: z.object({
+						providerId: z.string(),
+					}),
+					metadata: {
+						openapi: {
+							summary: "Submit a domain for verification",
+							description: "Submit a provider domain for owning verification",
+							responses: {
+								"201": {
+									description: "Domain submitted for verification",
+								},
+							},
+						},
+					},
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					const body = ctx.body;
+					const provider = await ctx.context.adapter.findOne<SSOProvider>({
+						model: "ssoProvider",
+						where: [{ field: "providerId", value: body.providerId }],
+					});
+
+					if (!provider) {
+						return Response.json(
+							{ message: "Provider not found" },
+							{ status: 404 },
+						);
+					}
+
+					if (provider.domainVerified) {
+						return Response.json(
+							{ message: "Domain has already been verified" },
+							{ status: 409 },
+						);
+					}
+
+					const verification = await ctx.context.adapter.findOne<Verification>({
+						model: "verification",
+						where: [
+							{
+								field: "identifier",
+								value: `ba-domain-verification-${provider.providerId}`,
+							},
+							{ field: "expiresAt", value: new Date(), operator: "lt" },
+						],
+					});
+
+					if (verification) {
+						return Response.json(
+							{ message: "Current verification token is still valid" },
+							{ status: 409 },
+						);
+					}
+
+					let domainVerificationToken: string | undefined;
+
+					if (options?.domainVerification?.enabled) {
+						domainVerificationToken = randomBytes(24).toString("hex");
+
+						await ctx.context.adapter.create<Verification>({
+							model: "verification",
+							data: {
+								identifier: `ba-domain-verification-${provider.providerId}`,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								value: domainVerificationToken,
+								expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
+							},
+						});
+					}
+
+					return Response.json(
+						{
+							domainVerificationToken,
+						},
+						{ status: 201 },
+					);
+				},
+			),
+			verifyDomain: createAuthEndpoint(
+				"/sso/domain-verification/verify",
+				{
+					method: "POST",
+					body: z.object({
+						providerId: z.string(),
+					}),
+					metadata: {
+						openapi: {
+							summary: "Verify the provider domain ownership",
+							description:
+								"Verify the provider domain ownership via DNS records",
+							responses: {
+								"200": {
+									description: "Domain ownership was verified",
+								},
+							},
+						},
+					},
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					const body = ctx.body;
+					const provider = await ctx.context.adapter.findOne<SSOProvider>({
+						model: "ssoProvider",
+						where: [{ field: "providerId", value: body.providerId }],
+					});
+
+					if (!provider) {
+						return Response.json(
+							{ message: "Provider not found" },
+							{ status: 404 },
+						);
+					}
+
+					if (provider.domainVerified) {
+						return Response.json(
+							{ message: "Domain has already been verified" },
+							{ status: 409 },
+						);
+					}
+
+					const verification = await ctx.context.adapter.findOne<Verification>({
+						model: "verification",
+						where: [
+							{
+								field: "identifier",
+								value: `ba-domain-verification-${provider.providerId}`,
+							},
+							{ field: "expiresAt", value: new Date(), operator: "gt" },
+						],
+					});
+
+					if (!verification) {
+						return Response.json(
+							{ message: "No pending domain verification exists" },
+							{ status: 404 },
+						);
+					}
+
+					let records: string[];
+					try {
+						const dnsRecords = await dns.resolveTxt(
+							new URL(provider.domain).hostname,
+						);
+						records = dnsRecords.flat();
+					} catch (error) {
+						ctx.context.logger.warn(
+							"DNS resolution failure while validating domain ownership",
+							error,
+						);
+						records = [];
+					}
+
+					const record = records.find((record) =>
+						record.includes(`${verification.identifier}=${verification.value}`),
+					);
+					if (!record) {
+						return Response.json(
+							{ message: "Unable to verify domain ownership. Try again later" },
+							{ status: 404 },
+						);
+					}
+
+					await ctx.context.adapter.update<SSOProvider>({
+						model: "ssoProvider",
+						where: [{ field: "providerId", value: provider.providerId }],
+						update: {
+							domainVerified: true,
+						},
+					});
+
+					return Response.json({ ok: true }, { status: 200 });
+				},
+			),
 			spMetadata: createAuthEndpoint(
 				"/sso/saml2/sp/metadata",
 				{
@@ -586,6 +780,16 @@ export const sso = (options?: SSOOptions | undefined) => {
 														description:
 															"The domain of the provider, used for email matching",
 													},
+													domainVerified: {
+														type: "boolean",
+														description:
+															"A boolean indicating whether the domain has been verified or not",
+													},
+													domainVerificationToken: {
+														type: "string",
+														description:
+															"Domain verification token. It can be used to prove ownership over the SSO domain",
+													},
 													oidcConfig: {
 														type: "object",
 														properties: {
@@ -825,6 +1029,7 @@ export const sso = (options?: SSOOptions | undefined) => {
 						data: {
 							issuer: body.issuer,
 							domain: body.domain,
+							domainVerified: false,
 							oidcConfig: body.oidcConfig
 								? JSON.stringify({
 										issuer: body.issuer,
@@ -874,6 +1079,25 @@ export const sso = (options?: SSOOptions | undefined) => {
 						},
 					});
 
+					let domainVerificationToken: string | undefined;
+					let domainVerified: boolean | undefined;
+
+					if (options?.domainVerification?.enabled) {
+						domainVerified = false;
+						domainVerificationToken = randomBytes(24).toString("hex");
+
+						await ctx.context.adapter.create<Verification>({
+							model: "verification",
+							data: {
+								identifier: `ba-domain-verification-${provider.providerId}`,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								value: domainVerificationToken,
+								expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
+							},
+						});
+					}
+
 					return ctx.json({
 						...provider,
 						oidcConfig: JSON.parse(
@@ -883,6 +1107,8 @@ export const sso = (options?: SSOOptions | undefined) => {
 							provider.samlConfig as unknown as string,
 						) as SAMLConfig,
 						redirectURI: `${ctx.context.baseURL}/sso/callback/${provider.providerId}`,
+						...(domainVerified ? { domainVerified } : {}),
+						...(domainVerificationToken ? { domainVerificationToken } : {}),
 					});
 				},
 			),
@@ -1093,6 +1319,8 @@ export const sso = (options?: SSOOptions | undefined) => {
 								userId: "default",
 								oidcConfig: matchingDefault.oidcConfig,
 								samlConfig: matchingDefault.samlConfig,
+								domain: matchingDefault.domain,
+								domainVerified: true,
 							};
 						}
 					}
@@ -1142,6 +1370,7 @@ export const sso = (options?: SSOOptions | undefined) => {
 							message: "No provider found for the issuer",
 						});
 					}
+
 					if (body.providerType) {
 						if (body.providerType === "oidc" && !provider.oidcConfig) {
 							throw new APIError("BAD_REQUEST", {
@@ -1281,6 +1510,7 @@ export const sso = (options?: SSOOptions | undefined) => {
 								...matchingDefault,
 								issuer: matchingDefault.oidcConfig?.issuer || "",
 								userId: "default",
+								domainVerified: true,
 							};
 						}
 					}
@@ -1617,6 +1847,7 @@ export const sso = (options?: SSOOptions | undefined) => {
 								...matchingDefault,
 								userId: "default",
 								issuer: matchingDefault.samlConfig?.issuer || "",
+								domainVerified: true,
 							};
 						}
 					}
@@ -1952,6 +2183,8 @@ export const sso = (options?: SSOOptions | undefined) => {
 								providerId: matchingDefault.providerId,
 								userId: "default",
 								samlConfig: matchingDefault.samlConfig,
+								domain: matchingDefault.domain,
+								domainVerified: true,
 							};
 						}
 					} else {
@@ -2159,7 +2392,7 @@ export const sso = (options?: SSOOptions | undefined) => {
 								ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
 									provider.providerId,
 								);
-							if (!isTrustedProvider) {
+							if (!(isTrustedProvider || provider.domainVerified)) {
 								throw ctx.redirect(
 									`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
 								);
@@ -2298,6 +2531,9 @@ export const sso = (options?: SSOOptions | undefined) => {
 						type: "string",
 						required: true,
 					},
+					...(options?.domainVerification?.enabled
+						? { domainVerified: { type: "boolean", required: false } }
+						: {}),
 				},
 			},
 		},

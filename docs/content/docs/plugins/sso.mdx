@@ -704,12 +704,94 @@ mapping: {
 }
 ```
 
+### Domain verification
+
+You can automatically trust a new domain by enabling the domain verification feature:
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [
+        sso({
+            domainVerification: {
+                enabled: true
+            }
+        })
+    ]
+});
+```
+
+Once enabled, make sure you migrate the database schema (again).
+
+<Tabs items={["migrate", "generate"]}>
+    <Tab value="migrate">
+    ```bash
+    npx @better-auth/cli migrate
+    ```
+    </Tab>
+    <Tab value="generate">
+    ```bash
+    npx @better-auth/cli generate
+    ```
+    </Tab>
+</Tabs>
+
+See the [Schema](#schema) section to add the fields manually.
+
+#### Verify your domain
+
+When domain verification is enabled, every new SSO provider domain will be marked as unverified at first.
+Upon registration, a **verification token** will be issued to the provider,
+which you need to verify it to prove that you own it. To do this, you'll need to add a `TXT` record to your domain's DNS settings.
+
+1.  **You will be provided with a verification token.** This token is a unique string that you'll need to add to your DNS records.
+2.  **Create a new `TXT` record in your DNS provider's dashboard.**
+    *   **Host:** `ba-domain-verification-{your-provider-id}`
+    *   **Value:** The verification token you were given.
+3.  **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
+4.  **Once the record has propagated, you can submit a validation request
+
+#### Domain validation request
+
+Once you have configured your domain, you can use your `auth` instance to submit a validation request.
+This request will either result in a rejection (could not your ownership over the domain)
+or if the verification is successful, your SSO provider domain will be validated as verified.
+
+```ts title="domain-validation-request.ts"
+const response = await auth.api.verifyDomain({
+    body: {
+        providerId: "acme-corp",
+    },
+    headers,
+});
+```
+
+#### Creating a new verification token
+
+Every domain verification token will have a default expiry of 1 week since the moment it was issued
+or the moment when the SSO provider was registered.
+
+After that time, the token will expire cannot longer be used. When that happens,
+you can create a new verification token:
+
+```ts title="create-domain-verification-token.ts"
+const response = await auth.api.submitDomainVerification({
+    body: {
+        providerId: "acme-corp",
+    },
+    headers,
+});
+
+console.log("Token: ", response.domainVerificationToken);
+```
+
 ### SAML Endpoints
 
 The plugin automatically creates the following SAML endpoints:
 
 - **SP Metadata**: `/api/auth/sso/saml2/sp/metadata?providerId={providerId}`
 - **SAML Callback**: `/api/auth/sso/saml2/callback/{providerId}`
+- **Domain verification submission**: `/api/auth/sso/domain-verfication`
+- **Domain verification validation**: `/api/auth/sso/domain-verfication/verify`
 
 ## Schema
 
@@ -727,6 +809,7 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
         { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
         { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
         { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false },
+        { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified. Only available when domain verification is enabled", isRequired: false },
     ]}
 />
 
@@ -789,6 +872,17 @@ If you want to allow account linking for specific trusted providers, enable the 
         description: "Configure the maximum number of SSO providers a user can register. Set to 0 to disable SSO provider registration.",
         type: "number | function",
         default: 10,
+    },
+    domainVerification: {
+        description: "Configure the domain verification feature",
+        type: "object",
+        properties: {
+            enabled: {
+                description: "Enables or disables the domain verification feature",
+                type: "boolean",
+                required: false
+            },
+        },
     },
     defaultSSO: {
         description: "Configure a default SSO provider for testing and development. This provider will be used when no matching provider is found in the database.",
