@@ -350,7 +350,7 @@ export const auth = betterAuth({
 		}),
 		lastLoginMethod(),
 	],
-	trustedOrigins: ["exp://"],
+	trustedOrigins: ["exp://", "https://appleid.apple.com"],
 	advanced: {
 		crossSubDomainCookies: {
 			enabled: process.env.NODE_ENV === "production",
