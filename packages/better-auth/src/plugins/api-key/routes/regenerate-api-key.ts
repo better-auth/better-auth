@@ -23,8 +23,8 @@ export function regenerateApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+		byPassLastCheckTime?: boolean | undefined,
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/regenerate",
@@ -273,7 +273,7 @@ export function regenerateApiKey({
 				});
 			}
 
-			await deleteAllExpiredApiKeys(ctx.context);
+			deleteAllExpiredApiKeys(ctx.context);
 
 			return ctx.json({
 				...(updatedApiKey as ApiKey),
