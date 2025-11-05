@@ -123,7 +123,7 @@ export const mcp = (options: MCPOptions) => {
 			"offline_access",
 			...(options.oidcConfig?.scopes || []),
 		],
-	};
+	} satisfies OIDCOptions;
 	const modelName = {
 		oauthClient: "oauthApplication",
 		oauthAccessToken: "oauthAccessToken",
@@ -185,7 +185,7 @@ export const mcp = (options: MCPOptions) => {
 				},
 				async (c) => {
 					try {
-						const metadata = getMCPProviderMetadata(c, options);
+						const metadata = getMCPProviderMetadata(c, opts);
 						return c.json(metadata);
 					} catch (e) {
 						console.log(e);
