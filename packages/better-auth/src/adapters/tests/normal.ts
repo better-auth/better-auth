@@ -113,6 +113,54 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(nullableReference).toBeNull();
 		},
+
+		"create - should apply default values to fields": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							testField: {
+								type: "string",
+								defaultValue: "test-value",
+							},
+						}
+					},
+					plugins: [
+						{
+							id: "default-fields-test",
+							schema: {
+								testModel: {
+									fields: {
+										testField: {
+											type: "string",
+											defaultValue: "test-value",
+										},
+									},
+								},
+							},
+						},
+					],
+				},
+				true,
+			);
+			const result = await adapter.create<{ testField?: string; id: string }>({
+				model: "testModel",
+				data: {},
+			});
+			expect(result.id).toBeDefined();
+			expect(result.id).toBeTypeOf("string");
+			expect(result.testField).toBe("test-value");
+
+			const userResult = await adapter.create<User & { testField?: string }>({
+				model: "user",
+				data: {
+					...(await generate("user")),
+				},
+				forceAllowId: true,
+			});
+			expect(userResult).toBeDefined();
+			expect(userResult?.testField).toBe("test-value");
+		},
 		"findOne - should find a model": async () => {
 			const [user] = await insertRandom("user");
 			const result = await adapter.findOne<User>({
