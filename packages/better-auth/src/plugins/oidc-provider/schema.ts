@@ -23,7 +23,7 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
-			redirectURLs: {
+			redirectUrls: {
 				type: "string",
 			},
 			type: {
