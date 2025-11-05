@@ -192,6 +192,34 @@ describe("additionalFields", async () => {
 		} | null>;
 	});
 
+	it("should correctly infer string[] types with input: false (issue #5774)", async () => {
+		const { auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					roles: {
+						type: "string[]",
+						input: false,
+					},
+				},
+			},
+		});
+
+		const client = createAuthClient({
+			plugins: [inferAdditionalFields<typeof auth>()],
+		});
+
+		type SessionData = Awaited<ReturnType<typeof client.getSession>>["data"];
+
+		expectTypeOf<SessionData>()
+			.toHaveProperty("user")
+			.toHaveProperty("roles")
+			.toEqualTypeOf<string[]>();
+
+		type UserRoles = NonNullable<SessionData>["user"]["roles"];
+		type IncludesParam = Parameters<UserRoles["includes"]>[0];
+		expectTypeOf<IncludesParam>().toEqualTypeOf<string>();
+	});
+
 	it("should infer it on the client without direct import", async () => {
 		const client = createAuthClient({
 			plugins: [
