@@ -76,16 +76,19 @@ export const getClientConfig = (
 				const matchesCommonPaths =
 					path === "/sign-out" ||
 					path === "/update-user" ||
-					path.startsWith("/sign-in") ||
-					path.startsWith("/sign-up") ||
+					path === "/sign-up/email" ||
+					path === "/sign-in/email" ||
+					path === "/sign-in/username" ||
+					path === "/sign-in/anonymous" ||
+					path === "/sign-in/phone-number" ||
+					path === "/sign-in/email-otp" ||
+					path === "/sign-in/passkey" ||
 					path === "/delete-user" ||
-          path === "/verify-email" ||
+					path === "/verify-email" ||
 					path === "/revoke-sessions" ||
 					path === "/revoke-session";
 
-				const explicitlyIgnoredPaths = ["/sign-in/magic-link"];
-
-				return matchesCommonPaths && !explicitlyIgnoredPaths.includes(path);
+				return matchesCommonPaths;
 			},
 		},
 	];
