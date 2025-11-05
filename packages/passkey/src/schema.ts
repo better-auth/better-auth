@@ -18,6 +18,7 @@ export const schema = {
 					field: "id",
 				},
 				required: true,
+				index: true,
 			},
 			credentialID: {
 				type: "string",
