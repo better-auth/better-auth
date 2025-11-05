@@ -219,6 +219,7 @@ describe("call", async () => {
 			],
 		},
 	} satisfies BetterAuthPlugin;
+	let latestOauthStore: Record<string, any> | undefined = {};
 	const options = {
 		baseURL: "http://localhost:3000",
 		plugins: [testPlugin, testPlugin2, bearer()],
@@ -264,7 +265,7 @@ describe("call", async () => {
 				}
 				if (ctx.path === "/callback/:id" && ctx.params.id === "google") {
 					const store = await getOauthState();
-					console.log("store", store);
+					latestOauthStore = store;
 				}
 			}),
 		},
@@ -330,6 +331,9 @@ describe("call", async () => {
 				expect(location).toBeDefined();
 				expect(location).toContain("/callback");
 			},
+		});
+		expect(latestOauthStore).toEqual({
+			invitedBy: "user-123",
 		});
 	});
 
