@@ -347,7 +347,7 @@ export const createAdapterFactory =
 				) {
 					continue;
 				}
-				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
+
 				let newValue = withApplyDefault(value, fieldAttributes!, action);
 
 				// If the field attr provides a custom transform input, then we'll let it handle the value transformation.

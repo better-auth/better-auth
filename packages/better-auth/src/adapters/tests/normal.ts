@@ -189,6 +189,103 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(result).toEqual(user);
 		},
+		"findOne - should not apply defaultValue if value not found": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							testField: {
+								type: "string",
+								required: false,
+								defaultValue: "test-value",
+							},
+							cbDefaultValueField: {
+								type: "string",
+								required: false,
+								defaultValue: () => {
+									return "advanced-test-value";
+								},
+							},
+						},
+					},
+					plugins: [
+						{
+							id: "default-fields-test",
+							schema: {
+								testModel: {
+									fields: {
+										testField: {
+											type: "string",
+											required: false,
+											defaultValue: "test-value",
+										},
+										cbDefaultValueField: {
+											type: "string",
+											required: false,
+											defaultValue: () => {
+												return "advanced-test-value";
+											},
+										},
+									},
+								},
+							},
+						},
+					],
+				},
+				true,
+			);
+			const first = await adapter.create<{
+				testField?: string | null;
+				id: string;
+				cbDefaultValueField?: string | null;
+			}>({
+				model: "testModel",
+				data: {
+					testField: null,
+					cbDefaultValueField: null,
+				},
+			});
+			const second = await adapter.create<
+				User & {
+					testField?: string | null;
+					cbDefaultValueField?: string | null;
+				}
+			>({
+				model: "user",
+				data: {
+					...(await generate("user")),
+					testField: null,
+					cbDefaultValueField: null,
+				},
+				forceAllowId: true,
+			});
+
+			const result = await adapter.findOne<{
+				testField?: string;
+				id: string;
+				cbDefaultValueField?: string;
+			}>({
+				model: "testModel",
+				where: [{ field: "id", value: first.id }],
+			});
+			expect(result).not.toBeNull();
+			expect(result?.testField).toBeNull();
+			expect(result?.cbDefaultValueField).toBeNull();
+
+			const resultTwo = await adapter.findMany<
+				User & {
+					testField?: string | null;
+					cbDefaultValueField?: string | null;
+				}
+			>({
+				model: "user",
+				where: [{ field: "id", value: second.id }],
+			});
+			expect(resultTwo).not.toBeNull();
+			expect(resultTwo.length).toBe(1);
+			expect(resultTwo[0]?.testField).toBeNull();
+			expect(resultTwo[0]?.cbDefaultValueField).toBeNull();
+		},
 		"findOne - should find a model using a reference field": async () => {
 			const [user, session] = await insertRandom("session");
 			const result = await adapter.findOne<User>({
