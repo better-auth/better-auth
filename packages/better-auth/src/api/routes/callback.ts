@@ -31,17 +31,18 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 
 		// Handle POST requests by redirecting to GET to ensure cookies are sent
-		if (c.method === "POST" && c.body) {
-			const postData = schema.parse(c.body);
+		if (c.method === "POST") {
+			const postData = c.body ? schema.parse(c.body) : {};
+			const queryData = c.query ? schema.parse(c.query) : {};
+
+			const mergedData = schema.parse({ ...postData, ...queryData });
 			const params = new URLSearchParams();
 
-			if (postData.code) params.set("code", postData.code);
-			if (postData.error) params.set("error", postData.error);
-			if (postData.device_id) params.set("device_id", postData.device_id);
-			if (postData.error_description)
-				params.set("error_description", postData.error_description);
-			if (postData.state) params.set("state", postData.state);
-			if (postData.user) params.set("user", postData.user);
+			for (const [key, value] of Object.entries(mergedData)) {
+				if (value !== undefined && value !== null) {
+					params.set(key, String(value));
+				}
+			}
 
 			const redirectURL = `${c.context.baseURL}/callback/${c.params.id}?${params.toString()}`;
 			throw c.redirect(redirectURL);
