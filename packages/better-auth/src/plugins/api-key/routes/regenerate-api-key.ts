@@ -1,13 +1,13 @@
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import { z } from "zod";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
+import type { AuthContext } from "../../../types";
+import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import type { AuthContext } from "../../../types";
-import { createHash } from "@better-auth/utils/hash";
-import { base64Url } from "@better-auth/utils/base64";
 import type { PredefinedApiKeyOptions } from ".";
-import { safeJSONParse } from "../../../utils/json";
 
 export function regenerateApiKey({
 	keyGenerator,
@@ -15,9 +15,10 @@ export function regenerateApiKey({
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	keyGenerator: (options: { length: number; prefix: string | undefined }) =>
-		| Promise<string>
-		| string;
+	keyGenerator: (options: {
+		length: number;
+		prefix: string | undefined;
+	}) => Promise<string> | string;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
@@ -274,20 +275,20 @@ export function regenerateApiKey({
 				});
 			}
 
-			deleteAllExpiredApiKeys(ctx.context);
+			await deleteAllExpiredApiKeys(ctx.context);
 
 			return ctx.json({
 				...(updatedApiKey as ApiKey),
 				key: key,
 				metadata: updatedApiKey.metadata
 					? safeJSONParse(
-							//@ts-ignore - from DB, this value is always a string
+							//@ts-expect-error - from DB, this value is always a string
 							updatedApiKey.metadata,
 						)
 					: null,
 				permissions: updatedApiKey.permissions
 					? safeJSONParse(
-							//@ts-ignore - from DB, this value is always a string
+							//@ts-expect-error - from DB, this value is always a string
 							updatedApiKey.permissions,
 						)
 					: null,

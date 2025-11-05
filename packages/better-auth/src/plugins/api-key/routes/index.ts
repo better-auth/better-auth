@@ -7,9 +7,9 @@ import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
 import { deleteApiKey } from "./delete-api-key";
 import { getApiKey } from "./get-api-key";
 import { listApiKeys } from "./list-api-keys";
+import { regenerateApiKey } from "./regenerate-api-key";
 import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
-import { regenerateApiKey } from "./regenerate-api-key";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
 	Required<
