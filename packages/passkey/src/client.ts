@@ -9,10 +9,11 @@ import {
 	startRegistration,
 	WebAuthnError,
 } from "@simplewebauthn/browser";
+import { useAuthQuery } from "better-auth/client";
+import type { Session, User } from "better-auth/types";
 import { atom } from "nanostores";
-import { useAuthQuery } from "../../client";
-import type { Session, User } from "../../types";
-import type { Passkey, passkey as passkeyPl } from ".";
+import type { passkey } from ".";
+import type { Passkey } from "./types";
 
 export const getPasskeyActions = (
 	$fetch: BetterFetch,
@@ -216,7 +217,7 @@ export const passkeyClient = () => {
 	const $listPasskeys = atom<any>();
 	return {
 		id: "passkey",
-		$InferServerPlugin: {} as ReturnType<typeof passkeyPl>,
+		$InferServerPlugin: {} as ReturnType<typeof passkey>,
 		getActions: ($fetch, $store) =>
 			getPasskeyActions($fetch, {
 				$listPasskeys,
