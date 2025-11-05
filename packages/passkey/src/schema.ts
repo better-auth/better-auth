@@ -23,6 +23,7 @@ export const schema = {
 			credentialID: {
 				type: "string",
 				required: true,
+				index: true,
 			},
 			counter: {
 				type: "number",
