@@ -1868,7 +1868,7 @@ describe("Additional Fields", async () => {
 			  })
 			| undefined
 		)[];
-	}> ;
+	}>;
 	let org: NonNullable<ExpectedResult>;
 	it("create organization", async () => {
 		try {
@@ -1909,8 +1909,8 @@ describe("Additional Fields", async () => {
 			headers,
 		});
 
-	 expect(updatedOrg).not.toBeNull();
-    if (!updatedOrg) throw new Error("Updated organization is null");
+		expect(updatedOrg).not.toBeNull();
+		if (!updatedOrg) throw new Error("Updated organization is null");
 
 		type Result = PrettifyDeep<typeof updatedOrg>;
 		expect(updatedOrg?.someRequiredField).toBe("hey2");
@@ -1924,7 +1924,7 @@ describe("Additional Fields", async () => {
 			logo?: string | null | undefined;
 			someRequiredField: string;
 			someOptionalField?: string | undefined;
-			lastUsed: boolean; 
+			lastUsed: boolean;
 			metadata: any;
 		}>();
 	});
