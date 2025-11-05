@@ -2139,7 +2139,6 @@ describe("organization hooks", async (it) => {
 });
 
 describe("global organization access", async (it) => {
-	// Test with globalOrganizationAccess set to true (admin role)
 	it("should allow admin user to update organization without membership when globalOrganizationAccess is true", async () => {
 		const { auth, signInWithUser } = await getTestInstance({
 			plugins: [
@@ -2148,6 +2147,22 @@ describe("global organization access", async (it) => {
 					globalOrganizationAccess: true,
 				}),
 			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin User") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
+						},
+					},
+				},
+			},
 		});
 
 		const client = createAuthClient({
@@ -2160,7 +2175,6 @@ describe("global organization access", async (it) => {
 			},
 		});
 
-		// Create a regular user who will own the organization
 		const regularUser = {
 			email: "regular@test.com",
 			password: "password123",
@@ -2172,7 +2186,6 @@ describe("global organization access", async (it) => {
 			regularUser.password,
 		);
 
-		// Create an organization as regular user
 		const org = await client.organization.create({
 			name: "Test Org",
 			slug: "test-org-global-access",
@@ -2180,24 +2193,17 @@ describe("global organization access", async (it) => {
 		});
 		expect(org.data).toBeDefined();
 
-		// Create an admin user (not a member of the organization)
-		await auth.api.signUpEmail({
-			body: {
-				email: "admin@test.com",
-				password: "password123",
-				name: "Admin User",
-			},
-		});
-		// Set the user role to admin
-		await auth.context.internalAdapter.updateUser("admin@test.com", {
-			role: "admin",
-		});
+		const adminUser = {
+			email: "admin@test.com",
+			password: "password123",
+			name: "Admin User",
+		};
+		await client.signUp.email(adminUser);
 		const { headers: adminHeaders } = await signInWithUser(
-			"admin@test.com",
-			"password123",
+			adminUser.email,
+			adminUser.password,
 		);
 
-		// Admin should be able to update the organization without being a member
 		const updateResult = await client.organization.update({
 			organizationId: org.data?.id,
 			data: { name: "Updated by Admin" },
@@ -2217,6 +2223,22 @@ describe("global organization access", async (it) => {
 					globalOrganizationAccess: true,
 				}),
 			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin User 2") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
+						},
+					},
+				},
+			},
 		});
 
 		const client = createAuthClient({
@@ -2229,7 +2251,6 @@ describe("global organization access", async (it) => {
 			},
 		});
 
-		// Create a regular user who will own the organization
 		const regularUser = {
 			email: "regular2@test.com",
 			password: "password123",
@@ -2241,7 +2262,6 @@ describe("global organization access", async (it) => {
 			regularUser.password,
 		);
 
-		// Create an organization as regular user
 		const org = await client.organization.create({
 			name: "Test Org To Delete",
 			slug: "test-org-to-delete",
@@ -2249,24 +2269,17 @@ describe("global organization access", async (it) => {
 		});
 		expect(org.data).toBeDefined();
 
-		// Create an admin user (not a member of the organization)
-		await auth.api.signUpEmail({
-			body: {
-				email: "admin2@test.com",
-				password: "password123",
-				name: "Admin User 2",
-			},
-		});
-		// Set the user role to admin
-		await auth.context.internalAdapter.updateUser("admin2@test.com", {
-			role: "admin",
-		});
+		const adminUser = {
+			email: "admin2@test.com",
+			password: "password123",
+			name: "Admin User 2",
+		};
+		await client.signUp.email(adminUser);
 		const { headers: adminHeaders } = await signInWithUser(
-			"admin2@test.com",
-			"password123",
+			adminUser.email,
+			adminUser.password,
 		);
 
-		// Admin should be able to delete the organization without being a member
 		const deleteResult = await client.organization.delete({
 			organizationId: org.data?.id as string,
 			fetchOptions: { headers: adminHeaders },
@@ -2275,7 +2288,6 @@ describe("global organization access", async (it) => {
 		expect(deleteResult.data).toBeDefined();
 		expect(deleteResult.error).toBeUndefined();
 
-		// Verify organization is deleted
 		const getResult = await client.organization.getFullOrganization({
 			query: { organizationId: org.data?.id },
 			fetchOptions: { headers: adminHeaders },
@@ -2283,7 +2295,6 @@ describe("global organization access", async (it) => {
 		expect(getResult.error).toBeDefined();
 	});
 
-	// Test with custom roles array
 	it("should allow specified roles to manage organizations when globalOrganizationAccess is an array", async () => {
 		const { auth, signInWithUser } = await getTestInstance({
 			plugins: [
@@ -2292,6 +2303,22 @@ describe("global organization access", async (it) => {
 					globalOrganizationAccess: ["superadmin", "moderator"],
 				}),
 			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Moderator User") {
+								return {
+									data: {
+										...user,
+										role: "moderator",
+									},
+								};
+							}
+						},
+					},
+				},
+			},
 		});
 
 		const client = createAuthClient({
@@ -2304,7 +2331,6 @@ describe("global organization access", async (it) => {
 			},
 		});
 
-		// Create a regular user who will own the organization
 		const regularUser = {
 			email: "regular3@test.com",
 			password: "password123",
@@ -2316,7 +2342,6 @@ describe("global organization access", async (it) => {
 			regularUser.password,
 		);
 
-		// Create an organization as regular user
 		const org = await client.organization.create({
 			name: "Test Org Custom Roles",
 			slug: "test-org-custom-roles",
@@ -2324,24 +2349,17 @@ describe("global organization access", async (it) => {
 		});
 		expect(org.data).toBeDefined();
 
-		// Create a moderator user (not a member of the organization)
-		await auth.api.signUpEmail({
-			body: {
-				email: "moderator@test.com",
-				password: "password123",
-				name: "Moderator User",
-			},
-		});
-		// Set the user role to moderator
-		await auth.context.internalAdapter.updateUser("moderator@test.com", {
-			role: "moderator",
-		});
+		const moderatorUser = {
+			email: "moderator@test.com",
+			password: "password123",
+			name: "Moderator User",
+		};
+		await client.signUp.email(moderatorUser);
 		const { headers: moderatorHeaders } = await signInWithUser(
-			"moderator@test.com",
-			"password123",
+			moderatorUser.email,
+			moderatorUser.password,
 		);
 
-		// Moderator should be able to update the organization
 		const updateResult = await client.organization.update({
 			organizationId: org.data?.id,
 			data: { name: "Updated by Moderator" },
@@ -2353,14 +2371,12 @@ describe("global organization access", async (it) => {
 		expect(updateResult.error).toBeUndefined();
 	});
 
-	// Test with custom function
 	it("should allow custom function to determine global access", async () => {
 		const { auth, signInWithUser } = await getTestInstance({
 			plugins: [
 				admin(),
 				organization({
 					globalOrganizationAccess: async ({ user }) => {
-						// Custom logic: allow users with email ending in @admin.com
 						return user.email.endsWith("@admin.com");
 					},
 				}),
@@ -2377,7 +2393,6 @@ describe("global organization access", async (it) => {
 			},
 		});
 
-		// Create a regular user who will own the organization
 		const regularUser = {
 			email: "regular4@test.com",
 			password: "password123",
@@ -2389,7 +2404,6 @@ describe("global organization access", async (it) => {
 			regularUser.password,
 		);
 
-		// Create an organization as regular user
 		const org = await client.organization.create({
 			name: "Test Org Custom Function",
 			slug: "test-org-custom-function",
@@ -2397,7 +2411,6 @@ describe("global organization access", async (it) => {
 		});
 		expect(org.data).toBeDefined();
 
-		// Create a user with @admin.com email (should have global access)
 		const customAdminUser = {
 			email: "custom@admin.com",
 			password: "password123",
@@ -2409,7 +2422,6 @@ describe("global organization access", async (it) => {
 			customAdminUser.password,
 		);
 
-		// Custom admin should be able to delete the organization
 		const deleteResult = await client.organization.delete({
 			organizationId: org.data?.id as string,
 			fetchOptions: { headers: customAdminHeaders },
@@ -2419,13 +2431,12 @@ describe("global organization access", async (it) => {
 		expect(deleteResult.error).toBeUndefined();
 	});
 
-	// Test that regular users still cannot access without membership
 	it("should still prevent non-admin users from managing organizations without membership", async () => {
 		const { auth, signInWithUser } = await getTestInstance({
 			plugins: [
 				admin(),
 				organization({
-					globalOrganizationAccess: true, // Only admin role has access
+					globalOrganizationAccess: true,
 				}),
 			],
 		});
@@ -2440,7 +2451,6 @@ describe("global organization access", async (it) => {
 			},
 		});
 
-		// Create a regular user who will own the organization
 		const ownerUser = {
 			email: "owner@test.com",
 			password: "password123",
@@ -2452,7 +2462,6 @@ describe("global organization access", async (it) => {
 			ownerUser.password,
 		);
 
-		// Create an organization as owner
 		const org = await client.organization.create({
 			name: "Test Org No Access",
 			slug: "test-org-no-access",
@@ -2460,7 +2469,6 @@ describe("global organization access", async (it) => {
 		});
 		expect(org.data).toBeDefined();
 
-		// Create another regular user (not admin, not a member)
 		const regularUser = {
 			email: "regular5@test.com",
 			password: "password123",
@@ -2472,7 +2480,6 @@ describe("global organization access", async (it) => {
 			regularUser.password,
 		);
 
-		// Regular user should NOT be able to update the organization
 		const updateResult = await client.organization.update({
 			organizationId: org.data?.id,
 			data: { name: "Should Fail" },
