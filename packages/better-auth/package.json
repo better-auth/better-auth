@@ -435,6 +435,7 @@
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.0.0",
     "@noble/hashes": "^2.0.0",
+    "@standard-schema/spec": "^1.0.0",
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^6.1.0",
