@@ -486,7 +486,7 @@ export interface OrganizationOptions {
 						[key: string]: any;
 					};
 					user: User & Record<string, any>;
-					member: Member & Record<string, any>;
+					member: (Member & Record<string, any>) | null;
 				}) => Promise<void | {
 					data: {
 						name?: string;
@@ -514,7 +514,7 @@ export interface OrganizationOptions {
 					 */
 					organization: (Organization & Record<string, any>) | null;
 					user: User & Record<string, any>;
-					member: Member & Record<string, any>;
+					member: (Member & Record<string, any>) | null;
 				}) => Promise<void>;
 				/**
 				 * A callback that runs before the organization is deleted

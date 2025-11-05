@@ -550,7 +550,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				});
 			}
 
-			if (member && options?.organizationHooks?.beforeUpdateOrganization) {
+			if (options?.organizationHooks?.beforeUpdateOrganization) {
 				const response =
 					await options.organizationHooks.beforeUpdateOrganization({
 						organization: ctx.body.data,
@@ -568,7 +568,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				organizationId,
 				ctx.body.data,
 			);
-			if (member && options?.organizationHooks?.afterUpdateOrganization) {
+			if (options?.organizationHooks?.afterUpdateOrganization) {
 				await options.organizationHooks.afterUpdateOrganization({
 					organization: updatedOrg,
 					user: session.user,
