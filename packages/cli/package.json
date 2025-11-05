@@ -34,6 +34,7 @@
   "exports": "./dist/index.js",
   "bin": "./dist/index.js",
   "devDependencies": {
+    "@better-auth/passkey": "workspace:*",
     "@types/semver": "^7.7.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/prompts": "^2.4.9",

@@ -161,15 +161,18 @@ const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
         enabled: true,
     },
 	plugins: [
-	  organization(),
-      twoFactor(),
+		organization(),
+    	twoFactor(),
 	]
 })`,
 	},
 	{
 		name: "client.ts",
 		code: `const client = createAuthClient({
-    plugins: [passkeyClient()]
+    plugins: [
+		organizationClient(),
+		twoFactorClient(),
+	]
 });`,
 	},
 ];

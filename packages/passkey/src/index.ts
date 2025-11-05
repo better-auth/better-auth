@@ -1,12 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { defineErrorCodes } from "@better-auth/core/utils";
 import { base64 } from "@better-auth/utils/base64";
 import type {
 	AuthenticationResponseJSON,
 	AuthenticatorTransportFuture,
-	CredentialDeviceType,
 	PublicKeyCredentialCreationOptionsJSON,
 } from "@simplewebauthn/server";
 import {
@@ -15,97 +12,21 @@ import {
 	verifyAuthenticationResponse,
 	verifyRegistrationResponse,
 } from "@simplewebauthn/server";
+import { generateId } from "better-auth";
+import {
+	freshSessionMiddleware,
+	getSessionFromCtx,
+	sessionMiddleware,
+} from "better-auth/api";
+import { setSessionCookie } from "better-auth/cookies";
+import { generateRandomString } from "better-auth/crypto";
+import { mergeSchema } from "better-auth/db";
 import { APIError } from "better-call";
 import * as z from "zod";
-import { sessionMiddleware } from "../../api";
-import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
-import { setSessionCookie } from "../../cookies";
-import { generateRandomString } from "../../crypto/random";
-import { mergeSchema } from "../../db/schema";
-import type { InferOptionSchema } from "../../types/plugins";
-import { generateId } from "../../utils";
-
-interface WebAuthnChallengeValue {
-	expectedChallenge: string;
-	userData: {
-		id: string;
-	};
-}
-
-const ERROR_CODES = defineErrorCodes({
-	CHALLENGE_NOT_FOUND: "Challenge not found",
-	YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY:
-		"You are not allowed to register this passkey",
-	FAILED_TO_VERIFY_REGISTRATION: "Failed to verify registration",
-	PASSKEY_NOT_FOUND: "Passkey not found",
-	AUTHENTICATION_FAILED: "Authentication failed",
-	UNABLE_TO_CREATE_SESSION: "Unable to create session",
-	FAILED_TO_UPDATE_PASSKEY: "Failed to update passkey",
-});
-
-function getRpID(options: PasskeyOptions, baseURL?: string | undefined) {
-	return (
-		options.rpID || (baseURL ? new URL(baseURL).hostname : "localhost") // default rpID
-	);
-}
-
-export interface PasskeyOptions {
-	/**
-	 * A unique identifier for your website. 'localhost' is okay for
-	 * local dev
-	 *
-	 * @default "localhost"
-	 */
-	rpID?: string | undefined;
-	/**
-	 * Human-readable title for your website
-	 *
-	 * @default "Better Auth"
-	 */
-	rpName?: string | undefined;
-	/**
-	 * The URL at which registrations and authentications should occur.
-	 * `http://localhost` and `http://localhost:PORT` are also valid.
-	 * Do NOT include any trailing /
-	 *
-	 * if this isn't provided. The client itself will
-	 * pass this value.
-	 */
-	origin?: (string | string[] | null) | undefined;
-
-	/**
-	 * Allow customization of the authenticatorSelection options
-	 * during passkey registration.
-	 */
-	authenticatorSelection?: AuthenticatorSelectionCriteria | undefined;
-
-	/**
-	 * Advanced options
-	 */
-	advanced?:
-		| {
-				webAuthnChallengeCookie?: string;
-		  }
-		| undefined;
-	/**
-	 * Schema for the passkey model
-	 */
-	schema?: InferOptionSchema<typeof schema> | undefined;
-}
-
-export type Passkey = {
-	id: string;
-	name?: string | undefined;
-	publicKey: string;
-	userId: string;
-	credentialID: string;
-	counter: number;
-	deviceType: CredentialDeviceType;
-	backedUp: boolean;
-	transports?: string | undefined;
-	createdAt: Date;
-	aaguid?: string | undefined;
-};
+import { PASSKEY_ERROR_CODES } from "./error-codes";
+import { schema } from "./schema";
+import type { Passkey, PasskeyOptions, WebAuthnChallengeValue } from "./types";
+import { getRpID } from "./utils";
 
 export const passkey = (options?: PasskeyOptions | undefined) => {
 	const opts = {
@@ -531,7 +452,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 					);
 					if (!challengeId) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.CHALLENGE_NOT_FOUND,
+							message: PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 						});
 					}
 
@@ -550,7 +471,8 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 
 					if (userData.id !== ctx.context.session.user.id) {
 						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
+							message:
+								PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
 						});
 					}
 
@@ -604,7 +526,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 					} catch (e) {
 						console.log(e);
 						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+							message: PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
 						});
 					}
 				},
@@ -664,7 +586,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 					);
 					if (!challengeId) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.CHALLENGE_NOT_FOUND,
+							message: PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 						});
 					}
 
@@ -674,7 +596,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 						);
 					if (!data) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.CHALLENGE_NOT_FOUND,
+							message: PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 						});
 					}
 					const { expectedChallenge } = JSON.parse(
@@ -691,7 +613,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 					});
 					if (!passkey) {
 						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.PASSKEY_NOT_FOUND,
+							message: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
 						});
 					}
 					try {
@@ -713,7 +635,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 						const { verified } = verification;
 						if (!verified)
 							throw new APIError("UNAUTHORIZED", {
-								message: ERROR_CODES.AUTHENTICATION_FAILED,
+								message: PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
 							});
 
 						await ctx.context.adapter.update<Passkey>({
@@ -733,7 +655,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 						);
 						if (!s) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
-								message: ERROR_CODES.UNABLE_TO_CREATE_SESSION,
+								message: PASSKEY_ERROR_CODES.UNABLE_TO_CREATE_SESSION,
 							});
 						}
 						const user = await ctx.context.internalAdapter.findUserById(
@@ -759,7 +681,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 					} catch (e) {
 						ctx.context.logger.error("Failed to verify authentication", e);
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.AUTHENTICATION_FAILED,
+							message: PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
 						});
 					}
 				},
@@ -956,13 +878,14 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 
 					if (!passkey) {
 						throw new APIError("NOT_FOUND", {
-							message: ERROR_CODES.PASSKEY_NOT_FOUND,
+							message: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
 						});
 					}
 
 					if (passkey.userId !== ctx.context.session.user.id) {
 						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
+							message:
+								PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
 						});
 					}
 
@@ -981,7 +904,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 
 					if (!updatedPasskey) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: ERROR_CODES.FAILED_TO_UPDATE_PASSKEY,
+							message: PASSKEY_ERROR_CODES.FAILED_TO_UPDATE_PASSKEY,
 						});
 					}
 					return ctx.json(
@@ -996,57 +919,8 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
-		$ERROR_CODES: ERROR_CODES,
+		$ERROR_CODES: PASSKEY_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
 
-const schema = {
-	passkey: {
-		fields: {
-			name: {
-				type: "string",
-				required: false,
-			},
-			publicKey: {
-				type: "string",
-				required: true,
-			},
-			userId: {
-				type: "string",
-				references: {
-					model: "user",
-					field: "id",
-				},
-				required: true,
-			},
-			credentialID: {
-				type: "string",
-				required: true,
-			},
-			counter: {
-				type: "number",
-				required: true,
-			},
-			deviceType: {
-				type: "string",
-				required: true,
-			},
-			backedUp: {
-				type: "boolean",
-				required: true,
-			},
-			transports: {
-				type: "string",
-				required: false,
-			},
-			createdAt: {
-				type: "date",
-				required: false,
-			},
-			aaguid: {
-				type: "string",
-				required: false,
-			},
-		},
-	},
-} satisfies BetterAuthPluginDBSchema;
+export type { Passkey, PasskeyOptions };

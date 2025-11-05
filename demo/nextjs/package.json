@@ -13,6 +13,7 @@
   "dependencies": {
     "@better-auth/sso": "workspace:*",
     "@better-auth/stripe": "workspace:*",
+    "@better-auth/passkey": "workspace:*",
     "@hookform/resolvers": "^5.2.1",
     "@libsql/client": "^0.8.1",
     "@libsql/kysely-libsql": "^0.4.1",

@@ -1,7 +1,7 @@
+import { passkey } from "@better-auth/passkey";
 import type { BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor, username } from "better-auth/plugins";
-import { passkey } from "better-auth/plugins/passkey";
 import { describe, expect, it } from "vitest";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
 
