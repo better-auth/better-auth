@@ -168,6 +168,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 						organization: {
 							...orgData,
 							createdAt: new Date(),
+							lastUsed: false,
 						},
 						user,
 					},
