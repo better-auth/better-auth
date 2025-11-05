@@ -78,14 +78,24 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 		}
 	};
+	const isSimple = isSimpleRequest(headers);
 	if (
 		useCookies &&
+		isSimple &&
 		!ctx.context.skipCSRFCheck &&
 		!ctx.context.skipOriginCheck
 	) {
 		if (!originHeader || originHeader === "null") {
 			throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
 		}
+		validateURL(originHeader, "origin");
+	} else if (
+		useCookies &&
+		!isSimple &&
+		!ctx.context.skipOriginCheck &&
+		originHeader &&
+		originHeader !== "null"
+	) {
 		validateURL(originHeader, "origin");
 	}
 	callbackURL && validateURL(callbackURL, "callbackURL");
