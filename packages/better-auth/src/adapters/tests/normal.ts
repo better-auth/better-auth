@@ -123,7 +123,7 @@ export const getNormalTestSuiteTests = ({
 								type: "string",
 								defaultValue: "test-value",
 							},
-						}
+						},
 					},
 					plugins: [
 						{
