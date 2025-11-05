@@ -1,0 +1,71 @@
+{
+  "name": "@better-auth/passkey",
+  "version": "1.4.0-beta.15",
+  "type": "module",
+  "description": "Passkey plugin for Better Auth",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "vitest",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "exports": {
+    ".": {
+      "better-auth-dev-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "better-auth-dev-source": "./src/client.ts",
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.ts"
+      ],
+      "client": [
+        "./dist/client.d.ts"
+      ]
+    }
+  },
+  "devDependencies": {
+    "tsdown": "catalog:"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "^13.1.2",
+    "@simplewebauthn/server": "^13.1.2",
+    "zod": "^4.1.5"
+  },
+  "peerDependencies": {
+    "nanostores": "^1.0.1",
+    "@better-auth/utils": "0.3.0",
+    "better-call": "catalog:",
+    "@better-fetch/fetch": "catalog:",
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/passkey"
+  },
+  "homepage": "https://www.better-auth.com/docs/plugins/passkey",
+  "keywords": [
+    "auth",
+    "passkey",
+    "typescript",
+    "better-auth"
+  ],
+  "license": "MIT"
+}
