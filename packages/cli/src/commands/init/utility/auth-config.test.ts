@@ -15,6 +15,7 @@ describe("Init CLI - auth config generation", () => {
 	it("should just generate the database code", async () => {
 		const authConfig = await generateInnerAuthConfigCode({
 			database: getDatabaseCode("prisma-sqlite"),
+			getArguments: async () => undefined,
 		});
 		const formattedAuthConfig = await formatConfigCode(authConfig);
 		const expectedCode = `database: prismaAdapter(client, { provider: "sqlite" })`;
@@ -25,6 +26,7 @@ describe("Init CLI - auth config generation", () => {
 		const authConfig = await generateInnerAuthConfigCode({
 			database: getDatabaseCode("prisma-sqlite"),
 			appName: "My App \test",
+			getArguments: async () => undefined,
 		});
 		const formattedAuthConfig = await formatConfigCode(authConfig);
 		const expectedCode = await formatConfigCode(
@@ -41,6 +43,7 @@ describe("Init CLI - auth config generation", () => {
 			database: getDatabaseCode("prisma-sqlite"),
 			appName: "My App \test",
 			baseURL: "https://my-app.com",
+			getArguments: async () => undefined,
 		});
 		const formattedAuthConfig = await formatConfigCode(authConfig);
 		const expectedCode = await formatConfigCode(
@@ -59,6 +62,7 @@ describe("Init CLI - auth config generation", () => {
 			appName: "My App \test",
 			baseURL: "https://my-app.com",
 			plugins: [pluginsConfig["username"], pluginsConfig["twoFactor"]],
+			getArguments: async () => undefined,
 		});
 		const formattedAuthConfig = await formatConfigCode(authConfig);
 		const expectedCode = await formatConfigCode(

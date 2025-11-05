@@ -20,9 +20,13 @@ export type GetArgumentsOptions = {
 	 */
 	flag: string;
 	/**
+	 * Description of this argument. Used to display documentation in the CLI --help flag.
+	 */
+	description: string;
+	/**
 	 * The question to ask the user.
 	 */
-	question: string;
+	question?: string;
 	/**
 	 * The options for the multiselect question.
 	 */
@@ -53,10 +57,19 @@ export type GetArgumentsOptions = {
 	 */
 	isRequired?: boolean;
 	/**
+	 * Whether the argument is a nested object, thus meaning this specific argument
+	 * cannot be prompted for, but rather the arguments for the nested object should be prompted for.
+	 */
+	isNestedObject?: false | GetArgumentsOptions[] | undefined;
+	/**
 	 * Whether to skip the question prompt for the argument, however still check the CLI flag for the argument.
 	 * Useful for arguments that *could* be provided by CLI flags but shouldn't be prompted for.
 	 */
 	skipPrompt?: boolean;
+	/**
+	 * Default value for the argument of no value is provided.
+	 */
+	defaultValue?: any;
 	/**
 	 * Argument details
 	 */
@@ -73,7 +86,7 @@ export type GetArgumentsOptions = {
 		/**
 		 * Zod schema for validation and transformation of the argument value.
 		 */
-		schema: ZodSchema;
+		schema?: ZodSchema;
 	};
 };
 

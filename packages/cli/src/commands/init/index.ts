@@ -1,16 +1,13 @@
 import path from "node:path";
-import {
-	cancel,
-	confirm,
-	intro,
-	isCancel,
-	multiselect,
-	select,
-	text,
-} from "@clack/prompts";
+import { intro } from "@clack/prompts";
 import { Command } from "commander";
 import z from "zod";
-import { generateAuthConfigCode } from "./generate-auth";
+import {
+	generateAuthConfigCode,
+	type GetArgumentsOptions,
+} from "./generate-auth";
+import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
+import { pluginsConfig, type PluginsConfig } from "./configs/plugins.config";
 
 // Goals:
 // 1. init `auth.ts` file
@@ -19,21 +16,10 @@ import { generateAuthConfigCode } from "./generate-auth";
 // 4. init endpoints file (e.g. `route.ts`)
 // 5. install dependencies
 
-const processCancelAction = <T extends any | symbol>(val: T) => {
-	if (isCancel(val)) {
-		cancel("✋ Operation cancelled.");
-		process.exit(0);
-	}
-	return val as T extends symbol ? never : T;
-};
-
 export async function initAction(opts: any) {
-	const options = z
-		.object({
-			cwd: z.string().transform((val) => path.resolve(val)),
-			config: z.string().optional(),
-		})
-		.parse(opts);
+	console.log(1, opts);
+	const options = initActionOptionsSchema.parse(opts);
+	console.log(2, options);
 
 	intro("👋 Better Auth CLI");
 
@@ -42,88 +28,80 @@ export async function initAction(opts: any) {
 		database: "kysely-mssql",
 		appName: "My App",
 		baseURL: "https://my-app.com",
-		getArguments: async ({
-			flag,
-			isConformation,
-			isMultiselectOptions,
-			isSelectOptions,
-			question,
-			isRequired,
-			isNumber,
-			skipPrompt,
-		}) => {
-			const flagVariable = flag.replace(/-([a-z])/g, (_, letter) =>
-				letter.toUpperCase(),
-			);
-
-			if (options[flagVariable as keyof typeof options]) {
-				return options[flagVariable as keyof typeof options];
-			}
-
-			if (skipPrompt) return;
-
-			if (isMultiselectOptions) {
-				let result = await multiselect({
-					message: question,
-					options: isMultiselectOptions,
-					required: isRequired ?? false,
-				});
-				result = processCancelAction(result);
-				return result.join(", ");
-			}
-
-			if (isSelectOptions) {
-				let result = await select({
-					message: question,
-					options: isSelectOptions,
-				});
-				result = processCancelAction(result);
-				return result;
-			}
-
-			if (isConformation) {
-				let result = await confirm({
-					message: question,
-				});
-				result = processCancelAction(result);
-				return result;
-			}
-
-			if (isNumber) {
-				let result = await text({
-					message: question,
-					validate(value) {
-						if (isNaN(Number(value))) {
-							return "This field must be a number";
-						}
-						if (isRequired && (!value || !value.trim())) {
-							return "This field is required";
-						}
-					},
-				});
-				result = processCancelAction(result);
-				return Number(result);
-			}
-
-			let result = await text({
-				message: question,
-				validate(value) {
-					if (isRequired && (!value || !value.trim())) {
-						return "This field is required";
-					}
-				},
-			});
-			result = processCancelAction(result);
-			return result;
-		},
+		getArguments: getArgumentsPrompt(options),
 	});
 	console.log(authConfigCode);
 }
 
-export const init = new Command("init")
+let initBuilder = new Command("init")
 	.option("-c, --cwd <cwd>", "The working directory.", process.cwd())
 	.option(
 		"--config <config>",
 		"The path to the auth configuration file. defaults to the first `auth.ts` file found.",
-	)
-	.action(initAction);
+	);
+
+/**
+ * Track used flags to ensure uniqueness
+ */
+const usedFlags = new Set<string>();
+
+/**
+ * Recursively process arguments and nested objects to add CLI options
+ * Each flag is unique and not compound (no parent prefix)
+ */
+const processArguments = (
+	args: GetArgumentsOptions[],
+	pluginDisplayName: string,
+) => {
+	if (!args) return;
+
+	for (const argument of args) {
+		// Skip if it's a nested object container (we'll process its children instead)
+		if (argument.isNestedObject && Array.isArray(argument.isNestedObject)) {
+			// Recursively process nested arguments (without prefix)
+			processArguments(argument.isNestedObject, pluginDisplayName);
+		} else {
+			// Process regular argument with its original flag (no prefix)
+			const flag = argument.flag;
+
+			// Ensure flag uniqueness
+			if (usedFlags.has(flag)) {
+				console.warn(
+					`Warning: Flag "${flag}" is already used. Skipping duplicate.`,
+				);
+				continue;
+			}
+			usedFlags.add(flag);
+
+			initBuilder.option(
+				`--${flag} <${flag}>`,
+				`[${pluginDisplayName}] ${argument.description}`,
+			);
+			pluginArgumentOptionsSchema[getFlagVariable(flag)] = z.coerce
+				.string()
+				.optional();
+		}
+	}
+};
+
+let pluginArgumentOptionsSchema: Record<string, z.ZodType<any>> = {};
+
+for (const plugin of Object.values(pluginsConfig as never as PluginsConfig)) {
+	if (plugin.auth.arguments) {
+		processArguments(plugin.auth.arguments, plugin.displayName);
+	}
+
+	if (plugin.authClient && plugin.authClient.arguments) {
+		processArguments(plugin.authClient.arguments, plugin.displayName);
+	}
+}
+
+export const init = initBuilder.action(initAction);
+
+export const initActionOptionsSchema = z.object({
+	cwd: z.string().transform((val) => path.resolve(val)),
+	config: z.string().optional(),
+	...pluginArgumentOptionsSchema,
+});
+
+export type InitActionOptions = z.infer<typeof initActionOptionsSchema>;

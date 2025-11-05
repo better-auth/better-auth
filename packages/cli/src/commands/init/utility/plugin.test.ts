@@ -100,6 +100,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "test-arg",
 							question: "Test question",
+							description: "Test description",
 							argument: {
 								index: 0,
 								isProperty: false,
@@ -136,6 +137,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "test-arg",
 							question: "Test question",
+							description: "Test description",
 							argument: {
 								index: 0,
 								isProperty: false,
@@ -172,6 +174,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "test-arg",
 							question: "Test question",
+							description: "Test description",
 							argument: {
 								index: 0,
 								isProperty: false,
@@ -210,6 +213,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "test-arg",
 							question: "Test question",
+							description: "Test description",
 							argument: {
 								index: 0,
 								isProperty: "testProperty",
@@ -251,6 +255,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "prop1",
 							question: "Property 1",
+							description: "Property 1 description",
 							argument: {
 								index: 0,
 								isProperty: "prop1",
@@ -260,6 +265,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "prop2",
 							question: "Property 2",
+							description: "Property 2 description",
 							argument: {
 								index: 0,
 								isProperty: "prop2",
@@ -300,6 +306,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "name",
 							question: "Name",
+							description: "Name description",
 							argument: {
 								index: 0,
 								isProperty: "name",
@@ -309,6 +316,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "age",
 							question: "Age",
+							description: "Age description",
 							argument: {
 								index: 0,
 								isProperty: "age",
@@ -318,6 +326,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "enabled",
 							question: "Enabled",
+							description: "Enabled description",
 							argument: {
 								index: 0,
 								isProperty: "enabled",
@@ -359,6 +368,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "prop1",
 							question: "Property 1",
+							description: "Property 1 description",
 							argument: {
 								index: 0,
 								isProperty: "prop1",
@@ -368,6 +378,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "non-prop",
 							question: "Non-property",
+							description: "Non-property description",
 							argument: {
 								index: 1,
 								isProperty: false,
@@ -407,6 +418,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "non-prop",
 							question: "Non-property",
+							description: "Non-property description",
 							argument: {
 								index: 0,
 								isProperty: false,
@@ -416,6 +428,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "prop1",
 							question: "Property 1",
+							description: "Property 1 description",
 							argument: {
 								index: 1,
 								isProperty: "prop1",
@@ -456,6 +469,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "arg0",
 							question: "Argument 0",
+							description: "Argument 0 description",
 							argument: {
 								index: 0,
 								isProperty: false,
@@ -465,6 +479,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "arg2",
 							question: "Argument 2",
+							description: "Argument 2 description",
 							argument: {
 								index: 2,
 								isProperty: false,
@@ -474,6 +489,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "arg4",
 							question: "Argument 4",
+							description: "Argument 4 description",
 							argument: {
 								index: 4,
 								isProperty: false,
@@ -514,6 +530,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "arg0",
 							question: "Argument 0",
+							description: "Argument 0 description",
 							argument: {
 								index: 0,
 								isProperty: false,
@@ -523,6 +540,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "arg1",
 							question: "Argument 1",
+							description: "Argument 1 description",
 							argument: {
 								index: 1,
 								isProperty: false,
@@ -532,6 +550,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "arg2",
 							question: "Argument 2",
+							description: "Argument 2 description",
 							argument: {
 								index: 2,
 								isProperty: false,
@@ -568,6 +587,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "prop1",
 							question: "Property 1",
+							description: "Property 1 description",
 							argument: {
 								index: 0,
 								isProperty: "prop1",
@@ -577,6 +597,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "prop2",
 							question: "Property 2",
+							description: "Property 2 description",
 							argument: {
 								index: 0,
 								isProperty: "prop2",
@@ -586,6 +607,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "prop3",
 							question: "Property 3",
+							description: "Property 3 description",
 							argument: {
 								index: 0,
 								isProperty: "prop3",
@@ -619,6 +641,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "prop1",
 							question: "Property 1",
+							description: "Property 1 description",
 							argument: {
 								index: 0,
 								isProperty: "prop1",
@@ -628,6 +651,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "prop2",
 							question: "Property 2",
+							description: "Property 2 description",
 							argument: {
 								index: 0,
 								isProperty: "prop2",
@@ -665,6 +689,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "arg0",
 							question: "Argument 0",
+							description: "Argument 0 description",
 							argument: {
 								index: 0,
 								isProperty: false,
@@ -674,6 +699,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "arg1",
 							question: "Argument 1",
+							description: "Argument 1 description",
 							argument: {
 								index: 1,
 								isProperty: false,
@@ -683,6 +709,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "arg2",
 							question: "Argument 2",
+							description: "Argument 2 description",
 							argument: {
 								index: 2,
 								isProperty: false,
@@ -722,6 +749,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "test-arg",
 							question: "Test question",
+							description: "Test description",
 							argument: {
 								index: 0,
 								isProperty: false,
@@ -756,6 +784,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "test-arg",
 							question: "Test question",
+							description: "Test description",
 							argument: {
 								index: 0,
 								isProperty: false,
@@ -794,6 +823,7 @@ describe("Init CLI - plugin utility", () => {
 							{
 								flag: "plugin1-arg",
 								question: "Plugin 1 arg",
+								description: "Plugin 1 arg description",
 								argument: {
 									index: 0,
 									isProperty: false,
@@ -813,6 +843,7 @@ describe("Init CLI - plugin utility", () => {
 							{
 								flag: "plugin2-arg",
 								question: "Plugin 2 arg",
+								description: "Plugin 2 arg description",
 								argument: {
 									index: 0,
 									isProperty: false,
@@ -853,6 +884,7 @@ describe("Init CLI - plugin utility", () => {
 							{
 								flag: "plugin1-arg",
 								question: "Plugin 1 arg",
+								description: "Plugin 1 arg description",
 								argument: {
 									index: 0,
 									isProperty: false,
@@ -889,7 +921,6 @@ describe("Init CLI - plugin utility", () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "max-username-length") return 50;
 				if (options.flag === "min-username-length") return 3;
-				if (options.flag === "testing") return "test-value";
 				return undefined;
 			};
 
@@ -901,7 +932,6 @@ describe("Init CLI - plugin utility", () => {
 			expect(result).toContain("username(");
 			expect(result).toContain("maxUsernameLength");
 			expect(result).toContain("minUsernameLength");
-			expect(result).toContain("test-value");
 		});
 
 		it("should generate code for twoFactor plugin without arguments", async () => {
@@ -952,6 +982,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "config1",
 							question: "Config 1",
+							description: "Config 1 description",
 							argument: {
 								index: 0,
 								isProperty: "config1",
@@ -961,6 +992,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "config2",
 							question: "Config 2",
+							description: "Config 2 description",
 							argument: {
 								index: 0,
 								isProperty: "config2",
@@ -970,6 +1002,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "other",
 							question: "Other",
+							description: "Other description",
 							argument: {
 								index: 1,
 								isProperty: false,
@@ -1007,6 +1040,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "number-arg",
 							question: "Number arg",
+							description: "Number arg description",
 							argument: {
 								index: 0,
 								isProperty: false,
@@ -1042,6 +1076,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "optional-arg",
 							question: "Optional arg",
+							description: "Optional arg description",
 							argument: {
 								index: 0,
 								isProperty: false,
@@ -1063,6 +1098,601 @@ describe("Init CLI - plugin utility", () => {
 		});
 	});
 
+	describe("nested objects", () => {
+		it("should handle nested object with single property", async () => {
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "digits") return 6;
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "totp",
+							description: "TOTP configuration",
+							skipPrompt: true,
+							isNestedObject: [
+								{
+									flag: "digits",
+									question: "Number of digits",
+									description: "Number of digits for TOTP",
+									defaultValue: 6,
+									skipPrompt: true,
+									argument: {
+										index: 0,
+										isProperty: "digits",
+										schema: z.coerce.number().min(6).max(8).optional(),
+									},
+								},
+							],
+							argument: {
+								index: 0,
+								isProperty: "totp",
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			const expected = await formatPluginCode(
+				'testPlugin({"totp":{"digits":6}})',
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle nested object with multiple properties", async () => {
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "digits") return 6;
+				if (options.flag === "issuer") return "MyApp";
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "totp",
+							description: "TOTP configuration",
+							skipPrompt: true,
+							isNestedObject: [
+								{
+									flag: "digits",
+									question: "Number of digits",
+									description: "Number of digits for TOTP",
+									defaultValue: 6,
+									skipPrompt: true,
+									argument: {
+										index: 0,
+										isProperty: "digits",
+										schema: z.coerce.number().min(6).max(8).optional(),
+									},
+								},
+								{
+									flag: "issuer",
+									question: "Issuer name",
+									description: "TOTP issuer name",
+									skipPrompt: true,
+									argument: {
+										index: 0,
+										isProperty: "issuer",
+										schema: z.string().optional(),
+									},
+								},
+							],
+							argument: {
+								index: 0,
+								isProperty: "totp",
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			const expected = await formatPluginCode(
+				'testPlugin({"totp":{"digits":6,"issuer":"MyApp"}})',
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle empty nested object when all properties are undefined", async () => {
+			const getArguments: GetArgumentsFn = async () => undefined;
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "totp",
+							description: "TOTP configuration",
+							skipPrompt: true,
+							isNestedObject: [
+								{
+									flag: "digits",
+									question: "Number of digits",
+									description: "Number of digits for TOTP",
+									defaultValue: 6,
+									skipPrompt: true,
+									argument: {
+										index: 0,
+										isProperty: "digits",
+										schema: z.coerce.number().min(6).max(8).optional(),
+									},
+								},
+							],
+							argument: {
+								index: 0,
+								isProperty: "totp",
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			const expected = await formatPluginCode("testPlugin()");
+			expect(result).toBe(expected);
+		});
+
+		it("should handle nested object with partially undefined properties", async () => {
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "digits") return 6;
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "totp",
+							description: "TOTP configuration",
+							skipPrompt: true,
+							isNestedObject: [
+								{
+									flag: "digits",
+									question: "Number of digits",
+									description: "Number of digits for TOTP",
+									defaultValue: 6,
+									skipPrompt: true,
+									argument: {
+										index: 0,
+										isProperty: "digits",
+										schema: z.coerce.number().min(6).max(8).optional(),
+									},
+								},
+								{
+									flag: "issuer",
+									question: "Issuer name",
+									description: "TOTP issuer name",
+									skipPrompt: true,
+									argument: {
+										index: 0,
+										isProperty: "issuer",
+										schema: z.string().optional(),
+									},
+								},
+							],
+							argument: {
+								index: 0,
+								isProperty: "totp",
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			const expected = await formatPluginCode(
+				'testPlugin({"totp":{"digits":6}})',
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle deeply nested objects", async () => {
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "nested-prop") return "nested-value";
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "outer",
+							description: "Outer configuration",
+							skipPrompt: true,
+							isNestedObject: [
+								{
+									flag: "inner",
+									description: "Inner configuration",
+									skipPrompt: true,
+									isNestedObject: [
+										{
+											flag: "nested-prop",
+											question: "Nested property",
+											description: "Nested property description",
+											skipPrompt: true,
+											argument: {
+												index: 0,
+												isProperty: "nestedProp",
+												schema: z.string().optional(),
+											},
+										},
+									],
+									argument: {
+										index: 0,
+										isProperty: "inner",
+									},
+								},
+							],
+							argument: {
+								index: 0,
+								isProperty: "outer",
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			const expected = await formatPluginCode(
+				'testPlugin({"outer":{"inner":{"nestedProp":"nested-value"}}})',
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle deeply nested empty objects", async () => {
+			const getArguments: GetArgumentsFn = async () => undefined;
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "outer",
+							description: "Outer configuration",
+							skipPrompt: true,
+							isNestedObject: [
+								{
+									flag: "inner",
+									description: "Inner configuration",
+									skipPrompt: true,
+									isNestedObject: [
+										{
+											flag: "nested-prop",
+											question: "Nested property",
+											description: "Nested property description",
+											skipPrompt: true,
+											argument: {
+												index: 0,
+												isProperty: "nestedProp",
+												schema: z.string().optional(),
+											},
+										},
+									],
+									argument: {
+										index: 0,
+										isProperty: "inner",
+									},
+								},
+							],
+							argument: {
+								index: 0,
+								isProperty: "outer",
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			const expected = await formatPluginCode("testPlugin()");
+			expect(result).toBe(expected);
+		});
+
+		it("should handle nested object merged with other properties", async () => {
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "digits") return 6;
+				if (options.flag === "other-prop") return "other-value";
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "totp",
+							description: "TOTP configuration",
+							skipPrompt: true,
+							isNestedObject: [
+								{
+									flag: "digits",
+									question: "Number of digits",
+									description: "Number of digits for TOTP",
+									defaultValue: 6,
+									skipPrompt: true,
+									argument: {
+										index: 0,
+										isProperty: "digits",
+										schema: z.coerce.number().min(6).max(8).optional(),
+									},
+								},
+							],
+							argument: {
+								index: 0,
+								isProperty: "totp",
+							},
+						},
+						{
+							flag: "other-prop",
+							question: "Other property",
+							description: "Other property description",
+							skipPrompt: true,
+							argument: {
+								index: 0,
+								isProperty: "otherProp",
+								schema: z.string().optional(),
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			const expected = await formatPluginCode(
+				'testPlugin({"totp":{"digits":6},"otherProp":"other-value"})',
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle nested object with schema validation", async () => {
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "digits") return 6;
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "totp",
+							description: "TOTP configuration",
+							skipPrompt: true,
+							isNestedObject: [
+								{
+									flag: "digits",
+									question: "Number of digits",
+									description: "Number of digits for TOTP",
+									defaultValue: 6,
+									skipPrompt: true,
+									argument: {
+										index: 0,
+										isProperty: "digits",
+										schema: z.coerce.number().min(6).max(8).optional(),
+									},
+								},
+							],
+							argument: {
+								index: 0,
+								isProperty: "totp",
+								schema: z
+									.object({
+										digits: z.number().optional(),
+									})
+									.optional(),
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			const expected = await formatPluginCode(
+				'testPlugin({"totp":{"digits":6}})',
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle nested object where inner object becomes empty", async () => {
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "outer-prop") return "outer-value";
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "outer",
+							description: "Outer configuration",
+							skipPrompt: true,
+							isNestedObject: [
+								{
+									flag: "outer-prop",
+									question: "Outer property",
+									description: "Outer property description",
+									skipPrompt: true,
+									argument: {
+										index: 0,
+										isProperty: "outerProp",
+										schema: z.string().optional(),
+									},
+								},
+								{
+									flag: "inner",
+									description: "Inner configuration",
+									skipPrompt: true,
+									isNestedObject: [
+										{
+											flag: "nested-prop",
+											question: "Nested property",
+											description: "Nested property description",
+											skipPrompt: true,
+											argument: {
+												index: 0,
+												isProperty: "nestedProp",
+												schema: z.string().optional(),
+											},
+										},
+									],
+									argument: {
+										index: 0,
+										isProperty: "inner",
+									},
+								},
+							],
+							argument: {
+								index: 0,
+								isProperty: "outer",
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			const expected = await formatPluginCode(
+				'testPlugin({"outer":{"outerProp":"outer-value"}})',
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle nested object with non-property argument after", async () => {
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "digits") return 6;
+				if (options.flag === "other-arg") return "other-value";
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "totp",
+							description: "TOTP configuration",
+							skipPrompt: true,
+							isNestedObject: [
+								{
+									flag: "digits",
+									question: "Number of digits",
+									description: "Number of digits for TOTP",
+									defaultValue: 6,
+									skipPrompt: true,
+									argument: {
+										index: 0,
+										isProperty: "digits",
+										schema: z.coerce.number().min(6).max(8).optional(),
+									},
+								},
+							],
+							argument: {
+								index: 0,
+								isProperty: "totp",
+							},
+						},
+						{
+							flag: "other-arg",
+							question: "Other argument",
+							description: "Other argument description",
+							skipPrompt: true,
+							argument: {
+								index: 1,
+								isProperty: false,
+								schema: z.string().optional(),
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			const expected = await formatPluginCode(
+				'testPlugin({"totp":{"digits":6}}, "other-value")',
+			);
+			expect(result).toBe(expected);
+		});
+	});
+
 	describe("edge cases", () => {
 		it("should handle very large argument values", async () => {
 			const largeValue = "a".repeat(1000);
@@ -1080,6 +1710,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "large-arg",
 							question: "Large arg",
+							description: "Large arg description",
 							argument: {
 								index: 0,
 								isProperty: false,
@@ -1116,6 +1747,7 @@ describe("Init CLI - plugin utility", () => {
 						{
 							flag: "null-arg",
 							question: "Null arg",
+							description: "Null arg description",
 							argument: {
 								index: 0,
 								isProperty: false,
