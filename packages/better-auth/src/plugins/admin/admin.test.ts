@@ -69,7 +69,7 @@ describe("Admin plugin", async () => {
 	const {
 		auth,
 		signInWithTestUser,
-		signInWithUser,
+		runWithUser,
 		cookieSetter,
 		customFetchImpl,
 	} = await getTestInstance(
@@ -121,10 +121,6 @@ describe("Admin plugin", async () => {
 	const { data: testNonAdminUserRes } =
 		await client.signUp.email(testNonAdminUser);
 	testNonAdminUser.id = testNonAdminUserRes?.user.id || "";
-	const { headers: userHeaders } = await signInWithUser(
-		testNonAdminUser.email,
-		testNonAdminUser.password,
-	);
 
 	it("should allow admin to get user", async () => {
 		const res = await client.admin.getUser(
@@ -142,18 +138,24 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow non-admin to get user", async () => {
-		const res = await client.admin.getUser(
-			{
-				query: {
-					id: testNonAdminUser.id,
-				},
-			},
-			{
-				headers: userHeaders,
+		await runWithUser(
+			testNonAdminUser.email,
+			testNonAdminUser.password,
+			async (userHeaders) => {
+				const res = await client.admin.getUser(
+					{
+						query: {
+							id: testNonAdminUser.id,
+						},
+					},
+					{
+						headers: userHeaders,
+					},
+				);
+				expect(res.error?.status).toBe(403);
+				expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_GET_USER");
 			},
 		);
-		expect(res.error?.status).toBe(403);
-		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_GET_USER");
 	});
 
 	it("should allow admin to create users", async () => {
@@ -207,18 +209,24 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow non-admin to create users", async () => {
-		const res = await client.admin.createUser(
-			{
-				name: "Test User",
-				email: "test2@test.com",
-				password: "test",
-				role: "user",
-			},
-			{
-				headers: userHeaders,
+		await runWithUser(
+			testNonAdminUser.email,
+			testNonAdminUser.password,
+			async (userHeaders) => {
+				const res = await client.admin.createUser(
+					{
+						name: "Test User",
+						email: "test2@test.com",
+						password: "test",
+						role: "user",
+					},
+					{
+						headers: userHeaders,
+					},
+				);
+				expect(res.error?.status).toBe(403);
 			},
 		);
-		expect(res.error?.status).toBe(403);
 	});
 	it("should allow admin to list users", async () => {
 		const res = await client.admin.listUsers({
@@ -247,15 +255,21 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow non-admin to list users", async () => {
-		const res = await client.admin.listUsers({
-			query: {
-				limit: 2,
+		await runWithUser(
+			testNonAdminUser.email,
+			testNonAdminUser.password,
+			async (userHeaders) => {
+				const res = await client.admin.listUsers({
+					query: {
+						limit: 2,
+					},
+					fetchOptions: {
+						headers: userHeaders,
+					},
+				});
+				expect(res.error?.status).toBe(403);
 			},
-			fetchOptions: {
-				headers: userHeaders,
-			},
-		});
-		expect(res.error?.status).toBe(403);
+		);
 	});
 
 	it("should allow admin to count users", async () => {
@@ -450,16 +464,22 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow non-admin to set user role", async () => {
-		const res = await client.admin.setRole(
-			{
-				userId: newUser?.id || "",
-				role: "admin",
-			},
-			{
-				headers: userHeaders,
+		await runWithUser(
+			testNonAdminUser.email,
+			testNonAdminUser.password,
+			async (userHeaders) => {
+				const res = await client.admin.setRole(
+					{
+						userId: newUser?.id || "",
+						role: "admin",
+					},
+					{
+						headers: userHeaders,
+					},
+				);
+				expect(res.error?.status).toBe(403);
 			},
 		);
-		expect(res.error?.status).toBe(403);
 	});
 
 	it("should allow to ban user", async () => {
@@ -475,15 +495,21 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow non-admin to ban user", async () => {
-		const res = await client.admin.banUser(
-			{
-				userId: newUser?.id || "",
-			},
-			{
-				headers: userHeaders,
+		await runWithUser(
+			testNonAdminUser.email,
+			testNonAdminUser.password,
+			async (userHeaders) => {
+				const res = await client.admin.banUser(
+					{
+						userId: newUser?.id || "",
+					},
+					{
+						headers: userHeaders,
+					},
+				);
+				expect(res.error?.status).toBe(403);
 			},
 		);
-		expect(res.error?.status).toBe(403);
 	});
 
 	it("should allow to ban user with reason and expiration", async () => {
@@ -575,15 +601,21 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow non-admin to unban user", async () => {
-		const res = await client.admin.unbanUser(
-			{
-				userId: newUser?.id || "",
-			},
-			{
-				headers: userHeaders,
+		await runWithUser(
+			testNonAdminUser.email,
+			testNonAdminUser.password,
+			async (userHeaders) => {
+				const res = await client.admin.unbanUser(
+					{
+						userId: newUser?.id || "",
+					},
+					{
+						headers: userHeaders,
+					},
+				);
+				expect(res.error?.status).toBe(403);
 			},
 		);
-		expect(res.error?.status).toBe(403);
 	});
 
 	it("should allow admin to list user sessions", async () => {
@@ -599,15 +631,21 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow non-admin to list user sessions", async () => {
-		const res = await client.admin.listUserSessions(
-			{
-				userId: newUser?.id || "",
-			},
-			{
-				headers: userHeaders,
+		await runWithUser(
+			testNonAdminUser.email,
+			testNonAdminUser.password,
+			async (userHeaders) => {
+				const res = await client.admin.listUserSessions(
+					{
+						userId: newUser?.id || "",
+					},
+					{
+						headers: userHeaders,
+					},
+				);
+				expect(res.error?.status).toBe(403);
 			},
 		);
-		expect(res.error?.status).toBe(403);
 	});
 
 	const data = {
@@ -642,25 +680,32 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow non-admin to impersonate user", async () => {
-		const res = await client.admin.impersonateUser(
-			{
-				userId: newUser?.id || "",
-			},
-			{
-				headers: userHeaders,
+		await runWithUser(
+			testNonAdminUser.email,
+			testNonAdminUser.password,
+			async (userHeaders) => {
+				const res = await client.admin.impersonateUser(
+					{
+						userId: newUser?.id || "",
+					},
+					{
+						headers: userHeaders,
+					},
+				);
+				expect(res.error?.status).toBe(403);
 			},
 		);
-		expect(res.error?.status).toBe(403);
 	});
 
 	it("should filter impersonated sessions", async () => {
-		const { headers } = await signInWithUser(data.email, data.password);
-		const res = await client.listSessions({
-			fetchOptions: {
-				headers,
-			},
+		await runWithUser(data.email, data.password, async (headers) => {
+			const res = await client.listSessions({
+				fetchOptions: {
+					headers,
+				},
+			});
+			expect(res.data?.length).toBe(2);
 		});
-		expect(res.data?.length).toBe(2);
 	});
 
 	it("should allow admin to stop impersonating", async () => {
@@ -689,12 +734,18 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should allow admin to revoke user session", async () => {
-		const {
-			res: { user },
-		} = await signInWithUser(data.email, data.password);
+		let userId: string = "";
+		await runWithUser(data.email, data.password, async (headers) => {
+			const session = await client.getSession({
+				fetchOptions: {
+					headers,
+				},
+			});
+			userId = session.data?.user.id || "";
+		});
 		const sessions = await client.admin.listUserSessions(
 			{
-				userId: user.id,
+				userId,
 			},
 			{
 				headers: adminHeaders,
@@ -707,18 +758,24 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.data?.success).toBe(true);
 		const sessions2 = await client.admin.listUserSessions(
-			{ userId: user?.id || "" },
+			{ userId },
 			{ headers: adminHeaders },
 		);
 		expect(sessions2.data?.sessions.length).toBe(2);
 	});
 
 	it("should not allow non-admin to revoke user sessions", async () => {
-		const res = await client.admin.revokeUserSessions(
-			{ userId: newUser?.id || "" },
-			{ headers: userHeaders },
+		await runWithUser(
+			testNonAdminUser.email,
+			testNonAdminUser.password,
+			async (userHeaders) => {
+				const res = await client.admin.revokeUserSessions(
+					{ userId: newUser?.id || "" },
+					{ headers: userHeaders },
+				);
+				expect(res.error?.status).toBe(403);
+			},
 		);
-		expect(res.error?.status).toBe(403);
 	});
 
 	it("should allow admin to revoke user sessions", async () => {
@@ -827,16 +884,22 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow non-admin to set user password", async () => {
-		const res = await client.admin.setUserPassword(
-			{
-				userId: newUser?.id || "",
-				newPassword: "newPassword",
-			},
-			{
-				headers: userHeaders,
+		await runWithUser(
+			testNonAdminUser.email,
+			testNonAdminUser.password,
+			async (userHeaders) => {
+				const res = await client.admin.setUserPassword(
+					{
+						userId: newUser?.id || "",
+						newPassword: "newPassword",
+					},
+					{
+						headers: userHeaders,
+					},
+				);
+				expect(res.error?.status).toBe(403);
 			},
 		);
-		expect(res.error?.status).toBe(403);
 	});
 
 	it("should allow admin to delete user", async () => {
@@ -853,11 +916,17 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow non-admin to delete user", async () => {
-		const res = await client.admin.removeUser(
-			{ userId: newUser?.id || "" },
-			{ headers: userHeaders },
+		await runWithUser(
+			testNonAdminUser.email,
+			testNonAdminUser.password,
+			async (userHeaders) => {
+				const res = await client.admin.removeUser(
+					{ userId: newUser?.id || "" },
+					{ headers: userHeaders },
+				);
+				expect(res.error?.status).toBe(403);
+			},
 		);
-		expect(res.error?.status).toBe(403);
 	});
 
 	it("should allow creating users from server", async () => {
@@ -894,19 +963,25 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow non-admin to update user", async () => {
-		const res = await client.admin.updateUser(
-			{
-				userId: testNonAdminUser.id,
-				data: {
-					name: "Unauthorized Update",
-				},
-			},
-			{
-				headers: userHeaders,
+		await runWithUser(
+			testNonAdminUser.email,
+			testNonAdminUser.password,
+			async (userHeaders) => {
+				const res = await client.admin.updateUser(
+					{
+						userId: testNonAdminUser.id,
+						data: {
+							name: "Unauthorized Update",
+						},
+					},
+					{
+						headers: userHeaders,
+					},
+				);
+				expect(res.error?.status).toBe(403);
+				expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS");
 			},
 		);
-		expect(res.error?.status).toBe(403);
-		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS");
 	});
 });
 
@@ -935,7 +1010,7 @@ describe("access control", async (it) => {
 
 	const {
 		signInWithTestUser,
-		signInWithUser,
+		runWithUser,
 		cookieSetter,
 		auth,
 		customFetchImpl,
@@ -1221,26 +1296,22 @@ describe("access control", async (it) => {
 		const adminCount = adminRes.data?.users.length || 0;
 		expect(adminCount).toBeGreaterThan(0); // Should have at least the admin user
 
-		const userHeaders = new Headers();
-		await client.signUp.email(
-			{
-				email: "test2@test.com",
-				password: "password",
-				name: "Test User",
-			},
-			{
-				onSuccess: cookieSetter(userHeaders),
-			},
-		);
-		const userRes = await client.admin.listUsers({
-			query: {
-				limit: 2,
-			},
-			fetchOptions: {
-				headers: userHeaders,
-			},
+		await client.signUp.email({
+			email: "test2@test.com",
+			password: "password",
+			name: "Test User",
 		});
-		expect(userRes.error?.status).toBe(403);
+		await runWithUser("test2@test.com", "password", async (userHeaders) => {
+			const userRes = await client.admin.listUsers({
+				query: {
+					limit: 2,
+				},
+				fetchOptions: {
+					headers: userHeaders,
+				},
+			});
+			expect(userRes.error?.status).toBe(403);
+		});
 	});
 
 	it("should not allow to set multiple non existent user role", async () => {

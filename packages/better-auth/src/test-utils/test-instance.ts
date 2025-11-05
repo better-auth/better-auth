@@ -293,7 +293,6 @@ export async function getTestInstance<
 		client,
 		testUser,
 		signInWithTestUser,
-		signInWithUser,
 		cookieSetter: setCookieToHeader,
 		customFetchImpl,
 		sessionSetter,

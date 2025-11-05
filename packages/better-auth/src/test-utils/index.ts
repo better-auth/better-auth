@@ -248,10 +248,17 @@ export async function getTestInstanceMemory<
 		client,
 		testUser,
 		signInWithTestUser,
-		signInWithUser,
 		cookieSetter: setCookieToHeader,
 		customFetchImpl,
 		sessionSetter,
 		db: await getAdapter(auth.options),
+		runWithUser: async (
+			email: string,
+			password: string,
+			fn: (headers: Headers) => Promise<void> | void,
+		) => {
+			const { headers } = await signInWithUser(email, password);
+			await fn(headers);
+		},
 	};
 }

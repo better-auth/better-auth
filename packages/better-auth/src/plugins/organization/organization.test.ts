@@ -22,7 +22,7 @@ describe("organization type", () => {
 });
 
 describe("organization", async (it) => {
-	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
+	const { auth, signInWithTestUser, runWithUser, cookieSetter } =
 		await getTestInstance({
 			user: {
 				modelName: "users",
@@ -356,42 +356,39 @@ describe("organization", async (it) => {
 			password: newUser.password,
 			name: newUser.name,
 		});
-		const { headers: headers2 } = await signInWithUser(
-			newUser.email,
-			newUser.password,
-		);
+		await runWithUser(newUser.email, newUser.password, async (headers2) => {
+			const wrongInvitation = await client.organization.acceptInvitation({
+				invitationId: "123",
+				fetchOptions: {
+					headers: headers2,
+				},
+			});
+			expect(wrongInvitation.error?.status).toBe(400);
 
-		const wrongInvitation = await client.organization.acceptInvitation({
-			invitationId: "123",
-			fetchOptions: {
-				headers: headers2,
-			},
-		});
-		expect(wrongInvitation.error?.status).toBe(400);
+			const wrongPerson = await client.organization.acceptInvitation({
+				invitationId: invite.data!.id!,
+				fetchOptions: {
+					headers,
+				},
+			});
+			expect(wrongPerson.error?.status).toBe(403);
 
-		const wrongPerson = await client.organization.acceptInvitation({
-			invitationId: invite.data!.id!,
-			fetchOptions: {
-				headers,
-			},
+			const invitation = await client.organization.acceptInvitation({
+				invitationId: invite.data!.id!,
+				fetchOptions: {
+					headers: headers2,
+				},
+			});
+			expect(invitation.data?.invitation.status).toBe("accepted");
+			const invitedUserSession = await client.getSession({
+				fetchOptions: {
+					headers: headers2,
+				},
+			});
+			expect(
+				(invitedUserSession.data?.session as any).activeOrganizationId,
+			).toBe(organizationId);
 		});
-		expect(wrongPerson.error?.status).toBe(403);
-
-		const invitation = await client.organization.acceptInvitation({
-			invitationId: invite.data!.id!,
-			fetchOptions: {
-				headers: headers2,
-			},
-		});
-		expect(invitation.data?.invitation.status).toBe("accepted");
-		const invitedUserSession = await client.getSession({
-			fetchOptions: {
-				headers: headers2,
-			},
-		});
-		expect((invitedUserSession.data?.session as any).activeOrganizationId).toBe(
-			organizationId,
-		);
 	});
 
 	it("should create invitation with multiple roles", async () => {
@@ -456,17 +453,15 @@ describe("organization", async (it) => {
 			password: user.password,
 			name: user.name,
 		});
-		const { headers: userHeaders } = await signInWithUser(
-			user.email,
-			user.password,
-		);
-		const acceptRes = await client.organization.acceptInvitation({
-			invitationId: invite.data!.id!,
-			fetchOptions: {
-				headers: userHeaders,
-			},
+		await runWithUser(user.email, user.password, async (userHeaders) => {
+			const acceptRes = await client.organization.acceptInvitation({
+				invitationId: invite.data!.id!,
+				fetchOptions: {
+					headers: userHeaders,
+				},
+			});
+			expect(acceptRes.data?.invitation.status).toBe("accepted");
 		});
-		expect(acceptRes.data?.invitation.status).toBe("accepted");
 
 		const inviteMemberAgain = await client.organization.inviteMember({
 			organizationId,
@@ -600,21 +595,19 @@ describe("organization", async (it) => {
 	};
 
 	it("should not allow inviting member with a creator role unless they are creator", async () => {
-		const { headers } = await signInWithUser(
-			adminUser.email,
-			adminUser.password,
-		);
-		const invite = await client.organization.inviteMember({
-			organizationId: organizationId,
-			email: adminUser.email,
-			role: "owner",
-			fetchOptions: {
-				headers,
-			},
+		await runWithUser(adminUser.email, adminUser.password, async (headers) => {
+			const invite = await client.organization.inviteMember({
+				organizationId: organizationId,
+				email: adminUser.email,
+				role: "owner",
+				fetchOptions: {
+					headers,
+				},
+			});
+			expect(invite.error?.message).toBe(
+				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE,
+			);
 		});
-		expect(invite.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE,
-		);
 	});
 
 	it("should allow leaving organization", async () => {
@@ -658,20 +651,21 @@ describe("organization", async (it) => {
 				throw: true,
 			},
 		});
-		const { headers: adminHeaders } = await signInWithUser(
+		await runWithUser(
 			adminUser.email,
 			adminUser.password,
-		);
-
-		const res = await client.organization.updateMemberRole({
-			organizationId: organizationId,
-			role: "admin",
-			memberId: members.find((m) => m.role === "owner")?.id!,
-			fetchOptions: {
-				headers: adminHeaders,
+			async (adminHeaders) => {
+				const res = await client.organization.updateMemberRole({
+					organizationId: organizationId,
+					role: "admin",
+					memberId: members.find((m) => m.role === "owner")?.id!,
+					fetchOptions: {
+						headers: adminHeaders,
+					},
+				});
+				expect(res.error?.status).toBe(403);
 			},
-		});
-		expect(res.error?.status).toBe(403);
+		);
 	});
 
 	it("should allow removing member from organization", async () => {
@@ -791,46 +785,48 @@ describe("organization", async (it) => {
 		};
 
 		await client.signUp.email(nonMemberUser);
-		const { headers: nonMemberHeaders } = await signInWithUser(
+		await runWithUser(
 			nonMemberUser.email,
 			nonMemberUser.password,
-		);
+			async (nonMemberHeaders) => {
+				// Try to delete an organization they're not a member of
+				const deleteResult = await client.organization.delete({
+					organizationId: testOrg.data?.id as string,
+					fetchOptions: {
+						headers: nonMemberHeaders,
+					},
+				});
 
-		// Try to delete an organization they're not a member of
-		const deleteResult = await client.organization.delete({
-			organizationId: testOrg.data?.id as string,
-			fetchOptions: {
-				headers: nonMemberHeaders,
+				expect(deleteResult.error?.status).toBe(400);
+				expect(deleteResult.error?.message).toBe(
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
 			},
-		});
-
-		expect(deleteResult.error?.status).toBe(400);
-		expect(deleteResult.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 		);
 	});
 
 	it("should allow deleting organization", async () => {
-		const { headers: adminHeaders } = await signInWithUser(
+		await runWithUser(
 			adminUser.email,
 			adminUser.password,
+			async (adminHeaders) => {
+				await client.organization.delete({
+					organizationId,
+					fetchOptions: {
+						headers: adminHeaders,
+					},
+				});
+				const org = await client.organization.getFullOrganization({
+					query: {
+						organizationId,
+					},
+					fetchOptions: {
+						headers: adminHeaders,
+					},
+				});
+				expect(org.error?.status).toBe(403);
+			},
 		);
-
-		const r = await client.organization.delete({
-			organizationId,
-			fetchOptions: {
-				headers: adminHeaders,
-			},
-		});
-		const org = await client.organization.getFullOrganization({
-			query: {
-				organizationId,
-			},
-			fetchOptions: {
-				headers: adminHeaders,
-			},
-		});
-		expect(org.error?.status).toBe(403);
 	});
 
 	it("should have server side methods", async () => {
@@ -989,30 +985,27 @@ describe("organization", async (it) => {
 			password: userOverLimit.password,
 			name: userOverLimit.name,
 		});
-		const { headers: headers2 } = await signInWithUser(
+
+		await client.signUp.email({
+			email: userOverLimit2.email,
+			password: userOverLimit2.password,
+			name: userOverLimit2.name,
+		});
+
+		await runWithUser(
 			userOverLimit2.email,
 			userOverLimit2.password,
-		);
-
-		await client.signUp.email(
-			{
-				email: userOverLimit2.email,
-				password: userOverLimit2.password,
-				name: userOverLimit2.name,
+			async (headers2) => {
+				const invitation = await client.organization.acceptInvitation({
+					invitationId: invite.data!.id!,
+					fetchOptions: {
+						headers: headers2,
+					},
+				});
+				expect(invitation.error?.message).toBe(
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+				);
 			},
-			{
-				onSuccess: cookieSetter(headers2),
-			},
-		);
-
-		const invitation = await client.organization.acceptInvitation({
-			invitationId: invite.data!.id!,
-			fetchOptions: {
-				headers: headers2,
-			},
-		});
-		expect(invitation.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 		);
 
 		const getFullOrganization = await client.organization.getFullOrganization({
@@ -1057,37 +1050,39 @@ describe("organization", async (it) => {
 		await auth.api.signUpEmail({
 			body: orgAdminUser,
 		});
-		const { headers: headers2, res: session } = await signInWithUser(
-			user.email,
-			user.password,
-		);
-		const { headers: adminHeaders, res: adminSession } = await signInWithUser(
+		const orgRng = crypto.randomUUID();
+		let invitationId: string | undefined;
+		await runWithUser(
 			orgAdminUser.email,
 			orgAdminUser.password,
+			async (adminHeaders) => {
+				const org = await auth.api.createOrganization({
+					body: {
+						name: orgRng,
+						slug: orgRng,
+					},
+					headers: adminHeaders,
+				});
+				const invitation = await client.organization.inviteMember({
+					organizationId: org?.id,
+					email: user.email,
+					role: "member",
+					fetchOptions: {
+						headers: adminHeaders,
+					},
+				});
+				invitationId = invitation.data?.id;
+			},
 		);
-		const orgRng = crypto.randomUUID();
-		const org = await auth.api.createOrganization({
-			body: {
-				name: orgRng,
-				slug: orgRng,
-			},
-			headers: adminHeaders,
+		await runWithUser(user.email, user.password, async (headers2) => {
+			const userInvitations = await client.organization.listUserInvitations({
+				fetchOptions: {
+					headers: headers2,
+				},
+			});
+			expect(userInvitations.data?.[0]!.id).toBe(invitationId);
+			expect(userInvitations.data?.length).toBe(1);
 		});
-		const invitation = await client.organization.inviteMember({
-			organizationId: org?.id,
-			email: user.email,
-			role: "member",
-			fetchOptions: {
-				headers: adminHeaders,
-			},
-		});
-		const userInvitations = await client.organization.listUserInvitations({
-			fetchOptions: {
-				headers: headers2,
-			},
-		});
-		expect(userInvitations.data?.[0]!.id).toBe(invitation.data?.id);
-		expect(userInvitations.data?.length).toBe(1);
 	});
 
 	it("should allow listing invitations for a user using server", async () => {
@@ -1764,7 +1759,7 @@ describe("Additional Fields", async () => {
 		invitationLimit: 3,
 	} satisfies OrganizationOptions;
 
-	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
+	const { auth, signInWithTestUser, cookieSetter } =
 		await getTestInstance({
 			database: memoryAdapter(db, {
 				debugLogs: false,
