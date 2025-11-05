@@ -306,6 +306,17 @@ export const createOrganization = <O extends OrganizationOptions>(
 					organization.id,
 					ctx,
 				);
+				// Track lastUsed if the option is enabled
+				if (options?.trackLastUsedOrganization) {
+					// Reset all other members' lastUsed to false
+					await adapter.resetLastUsedForUser(user.id);
+					// Set this member's lastUsed to true
+					await adapter.updateMemberLastUsed({
+						userId: user.id,
+						organizationId: organization.id,
+						lastUsed: true,
+					});
+				}
 			}
 
 			if (
@@ -820,9 +831,20 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			if (!organizationId && !organizationSlug) {
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
-					return ctx.json(null);
+					if (options?.trackLastUsedOrganization) {
+						const organizations = await adapter.listOrganizations(
+							session.user.id,
+						);
+						if (organizations.length > 0) {
+							organizationId = organizations[0]?.id;
+						}
+					}
+					if (!organizationId) {
+						return ctx.json(null);
+					}
+				} else {
+					organizationId = sessionOrgId;
 				}
-				organizationId = sessionOrgId;
 			}
 
 			if (organizationSlug && !organizationId) {
@@ -865,6 +887,16 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				organization.id,
 				ctx,
 			);
+
+			if (options?.trackLastUsedOrganization) {
+				await adapter.resetLastUsedForUser(session.user.id);
+				await adapter.updateMemberLastUsed({
+					userId: session.user.id,
+					organizationId: organization.id,
+					lastUsed: true,
+				});
+			}
+
 			await setSessionCookie(ctx, {
 				session: updatedSession,
 				user: session.user,

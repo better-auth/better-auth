@@ -637,6 +637,16 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation.organizationId,
 				ctx,
 			);
+
+			if (options?.trackLastUsedOrganization) {
+				await adapter.resetLastUsedForUser(session.user.id);
+				await adapter.updateMemberLastUsed({
+					userId: session.user.id,
+					organizationId: invitation.organizationId,
+					lastUsed: true,
+				});
+			}
+
 			if (!acceptedI) {
 				return ctx.json(null, {
 					status: 400,

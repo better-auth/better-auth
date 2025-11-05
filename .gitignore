@@ -98,6 +98,8 @@ web_modules/
 
 .yarn-integrity
 
+demo/tracklastused
+
 # dotenv environment variable files
 
 .env

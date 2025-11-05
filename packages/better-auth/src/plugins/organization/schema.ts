@@ -142,6 +142,10 @@ interface MemberDefaultFields {
 		required: true;
 		defaultValue: "member";
 	};
+	lastUsed: {
+		type: "boolean";
+		required: false;
+	};
 	createdAt: {
 		type: "date";
 		required: true;
@@ -294,6 +298,7 @@ export const memberSchema = z.object({
 	organizationId: z.string(),
 	userId: z.coerce.string(),
 	role,
+	lastUsed: z.boolean().optional(),
 	createdAt: z.date().default(() => new Date()),
 });
 

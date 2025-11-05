@@ -191,6 +191,15 @@ export interface OrganizationOptions {
 	 */
 	cancelPendingInvitationsOnReInvite?: boolean | undefined;
 	/**
+	 * track the last used organization for each user.
+	 * When enabled, the system will automatically track which organization
+	 * a user last interacted with and prioritize it when listing organizations
+	 * or setting the active orgaznization.
+	 *
+	 * @default false
+	 */
+	trackLastUsedOrganization?: boolean | undefined;
+	/**
 	 * Require email verification on accepting or rejecting an invitation
 	 *
 	 * @default false
