@@ -1,8 +1,8 @@
+import type { AuthContext } from "@better-auth/core";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { z } from "zod";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
-import type { AuthContext } from "../../../types";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { apiKeySchema } from "../schema";
@@ -31,9 +31,7 @@ export function regenerateApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				keyId: z.string({
-					description: "The id of the Api Key to regenerate",
-				}),
+				keyId: z.string().describe("The id of the Api Key to regenerate"),
 			}),
 			use: [sessionMiddleware],
 			metadata: {
@@ -281,16 +279,10 @@ export function regenerateApiKey({
 				...(updatedApiKey as ApiKey),
 				key: key,
 				metadata: updatedApiKey.metadata
-					? safeJSONParse(
-							//@ts-expect-error - from DB, this value is always a string
-							updatedApiKey.metadata,
-						)
+					? safeJSONParse(updatedApiKey.metadata)
 					: null,
 				permissions: updatedApiKey.permissions
-					? safeJSONParse(
-							//@ts-expect-error - from DB, this value is always a string
-							updatedApiKey.permissions,
-						)
+					? safeJSONParse(updatedApiKey.permissions)
 					: null,
 			});
 		},
