@@ -78,26 +78,24 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 		}
 	};
-	const isSimple = isSimpleRequest(headers);
-	if (
+
+	const shouldValidateOrigin =
 		useCookies &&
-		isSimple &&
-		!ctx.context.skipCSRFCheck &&
-		!ctx.context.skipOriginCheck
-	) {
-		if (!originHeader || originHeader === "null") {
-			throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
-		}
-		validateURL(originHeader, "origin");
-	} else if (
-		useCookies &&
-		!isSimple &&
 		!ctx.context.skipOriginCheck &&
 		originHeader &&
-		originHeader !== "null"
-	) {
+		originHeader !== "null";
+
+	const isSimple = isSimpleRequest(headers);
+	const requiresOrigin = isSimple && !ctx.context.skipCSRFCheck;
+
+	if (useCookies && requiresOrigin && !shouldValidateOrigin) {
+		throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
+	}
+
+	if (shouldValidateOrigin) {
 		validateURL(originHeader, "origin");
 	}
+
 	callbackURL && validateURL(callbackURL, "callbackURL");
 	redirectURL && validateURL(redirectURL, "redirectURL");
 	errorCallbackURL && validateURL(errorCallbackURL, "errorCallbackURL");
