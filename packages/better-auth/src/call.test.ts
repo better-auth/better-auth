@@ -11,8 +11,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as z from "zod";
 import { getEndpoints, getOauthState, router } from "./api";
 import { createAuthClient } from "./client";
+import { init } from "./context";
 import { signJWT } from "./crypto";
-import { init } from "./init";
 import { bearer } from "./plugins";
 import { DEFAULT_SECRET } from "./utils/constants";
 
