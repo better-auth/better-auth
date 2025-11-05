@@ -79,7 +79,9 @@ export const getClientConfig = (
 					path.startsWith("/sign-in") ||
 					path.startsWith("/sign-up") ||
 					path === "/delete-user" ||
-					path === "/verify-email";
+          path === "/verify-email" ||
+					path === "/revoke-sessions" ||
+					path === "/revoke-session";
 
 				const explicitlyIgnoredPaths = ["/sign-in/magic-link"];
 
