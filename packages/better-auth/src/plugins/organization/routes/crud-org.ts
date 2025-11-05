@@ -3,11 +3,11 @@ import { APIError } from "better-call";
 import * as z from "zod";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
-import type { Session, User } from "../../../types";
 import {
 	type InferAdditionalFieldsFromPluginOptions,
 	toZodSchema,
 } from "../../../db";
+import type { Session, User } from "../../../types";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -550,7 +550,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				});
 			}
 
-			if (options?.organizationHooks?.beforeUpdateOrganization) {
+			if (member && options?.organizationHooks?.beforeUpdateOrganization) {
 				const response =
 					await options.organizationHooks.beforeUpdateOrganization({
 						organization: ctx.body.data,
@@ -568,7 +568,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				organizationId,
 				ctx.body.data,
 			);
-			if (options?.organizationHooks?.afterUpdateOrganization) {
+			if (member && options?.organizationHooks?.afterUpdateOrganization) {
 				await options.organizationHooks.afterUpdateOrganization({
 					organization: updatedOrg,
 					user: session.user,

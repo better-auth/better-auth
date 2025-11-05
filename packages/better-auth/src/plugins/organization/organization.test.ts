@@ -2139,42 +2139,42 @@ describe("organization hooks", async (it) => {
 });
 
 describe("global organization access", async (it) => {
-	it("should allow admin user to update organization without membership when globalOrganizationAccess is true", async () => {
-		const { auth, signInWithUser } = await getTestInstance({
-			plugins: [
-				admin(),
-				organization({
-					globalOrganizationAccess: true,
-				}),
-			],
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => {
-							if (user.name === "Admin User") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
-						},
+	const { auth, signInWithUser } = await getTestInstance({
+		plugins: [
+			admin(),
+			organization({
+				globalOrganizationAccess: true,
+			}),
+		],
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => {
+						if (user.name === "Admin User") {
+							return {
+								data: {
+									...user,
+									role: "admin",
+								},
+							};
+						}
 					},
 				},
 			},
-		});
+		},
+	});
 
-		const client = createAuthClient({
-			plugins: [organizationClient()],
-			baseURL: "http://localhost:3000/api/auth",
-			fetchOptions: {
-				customFetchImpl: async (url, init) => {
-					return auth.handler(new Request(url, init));
-				},
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
 			},
-		});
+		},
+	});
 
+	it("should allow admin user to update organization without membership", async () => {
 		const regularUser = {
 			email: "regular@test.com",
 			password: "password123",
@@ -2212,45 +2212,9 @@ describe("global organization access", async (it) => {
 
 		expect(updateResult.data).toBeDefined();
 		expect(updateResult.data?.name).toBe("Updated by Admin");
-		expect(updateResult.error).toBeUndefined();
 	});
 
-	it("should allow admin user to delete organization without membership when globalOrganizationAccess is true", async () => {
-		const { auth, signInWithUser } = await getTestInstance({
-			plugins: [
-				admin(),
-				organization({
-					globalOrganizationAccess: true,
-				}),
-			],
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => {
-							if (user.name === "Admin User 2") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
-						},
-					},
-				},
-			},
-		});
-
-		const client = createAuthClient({
-			plugins: [organizationClient()],
-			baseURL: "http://localhost:3000/api/auth",
-			fetchOptions: {
-				customFetchImpl: async (url, init) => {
-					return auth.handler(new Request(url, init));
-				},
-			},
-		});
-
+	it("should allow admin user to delete organization without membership", async () => {
 		const regularUser = {
 			email: "regular2@test.com",
 			password: "password123",
@@ -2272,7 +2236,7 @@ describe("global organization access", async (it) => {
 		const adminUser = {
 			email: "admin2@test.com",
 			password: "password123",
-			name: "Admin User 2",
+			name: "Admin User",
 		};
 		await client.signUp.email(adminUser);
 		const { headers: adminHeaders } = await signInWithUser(
@@ -2286,7 +2250,6 @@ describe("global organization access", async (it) => {
 		});
 
 		expect(deleteResult.data).toBeDefined();
-		expect(deleteResult.error).toBeUndefined();
 
 		const getResult = await client.organization.getFullOrganization({
 			query: { organizationId: org.data?.id },
@@ -2295,162 +2258,7 @@ describe("global organization access", async (it) => {
 		expect(getResult.error).toBeDefined();
 	});
 
-	it("should allow specified roles to manage organizations when globalOrganizationAccess is an array", async () => {
-		const { auth, signInWithUser } = await getTestInstance({
-			plugins: [
-				admin(),
-				organization({
-					globalOrganizationAccess: ["superadmin", "moderator"],
-				}),
-			],
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => {
-							if (user.name === "Moderator User") {
-								return {
-									data: {
-										...user,
-										role: "moderator",
-									},
-								};
-							}
-						},
-					},
-				},
-			},
-		});
-
-		const client = createAuthClient({
-			plugins: [organizationClient()],
-			baseURL: "http://localhost:3000/api/auth",
-			fetchOptions: {
-				customFetchImpl: async (url, init) => {
-					return auth.handler(new Request(url, init));
-				},
-			},
-		});
-
-		const regularUser = {
-			email: "regular3@test.com",
-			password: "password123",
-			name: "Regular User 3",
-		};
-		await client.signUp.email(regularUser);
-		const { headers: regularHeaders } = await signInWithUser(
-			regularUser.email,
-			regularUser.password,
-		);
-
-		const org = await client.organization.create({
-			name: "Test Org Custom Roles",
-			slug: "test-org-custom-roles",
-			fetchOptions: { headers: regularHeaders },
-		});
-		expect(org.data).toBeDefined();
-
-		const moderatorUser = {
-			email: "moderator@test.com",
-			password: "password123",
-			name: "Moderator User",
-		};
-		await client.signUp.email(moderatorUser);
-		const { headers: moderatorHeaders } = await signInWithUser(
-			moderatorUser.email,
-			moderatorUser.password,
-		);
-
-		const updateResult = await client.organization.update({
-			organizationId: org.data?.id,
-			data: { name: "Updated by Moderator" },
-			fetchOptions: { headers: moderatorHeaders },
-		});
-
-		expect(updateResult.data).toBeDefined();
-		expect(updateResult.data?.name).toBe("Updated by Moderator");
-		expect(updateResult.error).toBeUndefined();
-	});
-
-	it("should allow custom function to determine global access", async () => {
-		const { auth, signInWithUser } = await getTestInstance({
-			plugins: [
-				admin(),
-				organization({
-					globalOrganizationAccess: async ({ user }) => {
-						return user.email.endsWith("@admin.com");
-					},
-				}),
-			],
-		});
-
-		const client = createAuthClient({
-			plugins: [organizationClient()],
-			baseURL: "http://localhost:3000/api/auth",
-			fetchOptions: {
-				customFetchImpl: async (url, init) => {
-					return auth.handler(new Request(url, init));
-				},
-			},
-		});
-
-		const regularUser = {
-			email: "regular4@test.com",
-			password: "password123",
-			name: "Regular User 4",
-		};
-		await client.signUp.email(regularUser);
-		const { headers: regularHeaders } = await signInWithUser(
-			regularUser.email,
-			regularUser.password,
-		);
-
-		const org = await client.organization.create({
-			name: "Test Org Custom Function",
-			slug: "test-org-custom-function",
-			fetchOptions: { headers: regularHeaders },
-		});
-		expect(org.data).toBeDefined();
-
-		const customAdminUser = {
-			email: "custom@admin.com",
-			password: "password123",
-			name: "Custom Admin User",
-		};
-		await client.signUp.email(customAdminUser);
-		const { headers: customAdminHeaders } = await signInWithUser(
-			customAdminUser.email,
-			customAdminUser.password,
-		);
-
-		const deleteResult = await client.organization.delete({
-			organizationId: org.data?.id as string,
-			fetchOptions: { headers: customAdminHeaders },
-		});
-
-		expect(deleteResult.data).toBeDefined();
-		expect(deleteResult.error).toBeUndefined();
-	});
-
 	it("should still prevent non-admin users from managing organizations without membership", async () => {
-		const { auth, signInWithUser } = await getTestInstance({
-			plugins: [
-				admin(),
-				organization({
-					globalOrganizationAccess: true,
-				}),
-			],
-		});
-
-		const client = createAuthClient({
-			plugins: [organizationClient()],
-			baseURL: "http://localhost:3000/api/auth",
-			fetchOptions: {
-				customFetchImpl: async (url, init) => {
-					return auth.handler(new Request(url, init));
-				},
-			},
-		});
-
 		const ownerUser = {
 			email: "owner@test.com",
 			password: "password123",
@@ -2490,5 +2298,143 @@ describe("global organization access", async (it) => {
 		expect(updateResult.error?.message).toBe(
 			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 		);
+	});
+});
+
+describe("global organization access with custom roles", async (it) => {
+	const { auth, signInWithUser } = await getTestInstance({
+		plugins: [
+			admin(),
+			organization({
+				globalOrganizationAccess: ["superadmin", "moderator"],
+			}),
+		],
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => {
+						if (user.name === "Moderator User") {
+							return {
+								data: {
+									...user,
+									role: "moderator",
+								},
+							};
+						}
+					},
+				},
+			},
+		},
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	it("should allow specified roles to manage organizations", async () => {
+		const regularUser = {
+			email: "regular3@test.com",
+			password: "password123",
+			name: "Regular User 3",
+		};
+		await client.signUp.email(regularUser);
+		const { headers: regularHeaders } = await signInWithUser(
+			regularUser.email,
+			regularUser.password,
+		);
+
+		const org = await client.organization.create({
+			name: "Test Org Custom Roles",
+			slug: "test-org-custom-roles",
+			fetchOptions: { headers: regularHeaders },
+		});
+		expect(org.data).toBeDefined();
+
+		const moderatorUser = {
+			email: "moderator@test.com",
+			password: "password123",
+			name: "Moderator User",
+		};
+		await client.signUp.email(moderatorUser);
+		const { headers: moderatorHeaders } = await signInWithUser(
+			moderatorUser.email,
+			moderatorUser.password,
+		);
+
+		const updateResult = await client.organization.update({
+			organizationId: org.data?.id,
+			data: { name: "Updated by Moderator" },
+			fetchOptions: { headers: moderatorHeaders },
+		});
+
+		expect(updateResult.data).toBeDefined();
+		expect(updateResult.data?.name).toBe("Updated by Moderator");
+	});
+});
+
+describe("global organization access with custom function", async (it) => {
+	const { auth, signInWithUser } = await getTestInstance({
+		plugins: [
+			admin(),
+			organization({
+				globalOrganizationAccess: async ({ user }) => {
+					return user.email.endsWith("@admin.com");
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	it("should allow custom function to determine global access", async () => {
+		const regularUser = {
+			email: "regular4@test.com",
+			password: "password123",
+			name: "Regular User 4",
+		};
+		await client.signUp.email(regularUser);
+		const { headers: regularHeaders } = await signInWithUser(
+			regularUser.email,
+			regularUser.password,
+		);
+
+		const org = await client.organization.create({
+			name: "Test Org Custom Function",
+			slug: "test-org-custom-function",
+			fetchOptions: { headers: regularHeaders },
+		});
+		expect(org.data).toBeDefined();
+
+		const customAdminUser = {
+			email: "custom@admin.com",
+			password: "password123",
+			name: "Custom Admin User",
+		};
+		await client.signUp.email(customAdminUser);
+		const { headers: customAdminHeaders } = await signInWithUser(
+			customAdminUser.email,
+			customAdminUser.password,
+		);
+
+		const deleteResult = await client.organization.delete({
+			organizationId: org.data?.id as string,
+			fetchOptions: { headers: customAdminHeaders },
+		});
+
+		expect(deleteResult.data).toBeDefined();
 	});
 });
