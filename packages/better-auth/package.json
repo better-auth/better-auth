@@ -445,6 +445,7 @@
     "@noble/hashes": "^2.0.0",
     "@simplewebauthn/browser": "^13.1.2",
     "@simplewebauthn/server": "^13.1.2",
+    "@standard-schema/spec": "^1.0.0",
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^6.1.0",
