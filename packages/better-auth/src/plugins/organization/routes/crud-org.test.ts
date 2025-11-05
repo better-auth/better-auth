@@ -445,3 +445,202 @@ describe("organization hooks", async () => {
 		expect(afterCreateTeam).toHaveBeenCalled();
 	});
 });
+
+describe("setActiveOrganization - lastUsed field", async () => {
+	const { auth, signInWithTestUser, db } = await getTestInstance({
+		plugins: [organization()],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	it("should set lastUsed to true for the active organization and false for others", async () => {
+		// Create two organizations
+		const org1 = await client.organization.create({
+			name: "Org 1",
+			slug: "org-1-lastused",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const org2 = await client.organization.create({
+			name: "Org 2",
+			slug: "org-2-lastused",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Initially, both should have lastUsed = false (default)
+		const org1Before = (await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org1.data?.id as string }],
+		})) as { id: string; lastUsed: boolean };
+
+		const org2Before = (await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org2.data?.id as string }],
+		})) as { id: string; lastUsed: boolean };
+
+		expect(org1Before?.lastUsed).toBe(false);
+		expect(org2Before?.lastUsed).toBe(false);
+
+		// Set org1 as active
+		await client.organization.setActive({
+			organizationId: org1.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// After setting org1 as active, org1 should have lastUsed = true, org2 should be false
+		const org1After = (await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org1.data?.id as string }],
+		})) as { id: string; lastUsed: boolean };
+		const org2After = (await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org2.data?.id as string }],
+		})) as { id: string; lastUsed: boolean };
+
+		expect(org1After?.lastUsed).toBe(true);
+		expect(org2After?.lastUsed).toBe(false);
+
+		// Now switch to org2
+		await client.organization.setActive({
+			organizationId: org2.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// After switching to org2, org2 should have lastUsed = true, org1 should be false
+		const org1AfterSwitch = (await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org1.data?.id as string }],
+		})) as { id: string; lastUsed: boolean };
+		const org2AfterSwitch = (await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org2.data?.id as string }],
+		})) as { id: string; lastUsed: boolean };
+
+		expect(org1AfterSwitch?.lastUsed).toBe(false);
+		expect(org2AfterSwitch?.lastUsed).toBe(true);
+	});
+
+	it("should update lastUsed when switching between multiple organizations", async () => {
+		const { headers: newHeaders } = await signInWithTestUser();
+
+		// Create three organizations
+		const org1 = await client.organization.create({
+			name: "Org A",
+			slug: "org-a-lastused",
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		const org2 = await client.organization.create({
+			name: "Org B",
+			slug: "org-b-lastused",
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		const org3 = await client.organization.create({
+			name: "Org C",
+			slug: "org-c-lastused",
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		// Switch to org1
+		await client.organization.setActive({
+			organizationId: org1.data?.id as string,
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		// Verify only org1 has lastUsed = true
+		const allOrgsAfter1 = (await db.findMany({
+			model: "organization",
+			where: [
+				{
+					field: "id",
+					value: [
+						org1.data?.id as string,
+						org2.data?.id as string,
+						org3.data?.id as string,
+					],
+					operator: "in",
+				},
+			],
+		})) as { id: string; lastUsed: boolean }[];
+
+		const org1Found = allOrgsAfter1.find((o) => o?.id === org1.data?.id) as {
+			id: string;
+			lastUsed: boolean;
+		};
+		const org2Found = allOrgsAfter1.find((o) => o?.id === org2.data?.id) as {
+			id: string;
+			lastUsed: boolean;
+		};
+		const org3Found = allOrgsAfter1.find((o) => o?.id === org3.data?.id) as {
+			id: string;
+			lastUsed: boolean;
+		};
+
+		expect(org1Found?.lastUsed).toBe(true);
+		expect(org2Found?.lastUsed).toBe(false);
+		expect(org3Found?.lastUsed).toBe(false);
+
+		// Switch to org3
+		await client.organization.setActive({
+			organizationId: org3.data?.id as string,
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		// Verify only org3 has lastUsed = true now
+		const allOrgsAfter3 = (await db.findMany({
+			model: "organization",
+			where: [
+				{
+					field: "id",
+					value: [
+						org1.data?.id as string,
+						org2.data?.id as string,
+						org3.data?.id as string,
+					],
+					operator: "in",
+				},
+			],
+		})) as { id: string; lastUsed: boolean }[];
+
+		const org1FoundAfter3 = allOrgsAfter3.find(
+			(o) => o.id === org1.data?.id,
+		) as { id: string; lastUsed: boolean };
+		const org2FoundAfter3 = allOrgsAfter3.find(
+			(o) => o.id === org2.data?.id,
+		) as { id: string; lastUsed: boolean };
+		const org3FoundAfter3 = allOrgsAfter3.find(
+			(o) => o.id === org3.data?.id,
+		) as { id: string; lastUsed: boolean };
+
+		expect(org1FoundAfter3?.lastUsed).toBe(false);
+		expect(org2FoundAfter3?.lastUsed).toBe(false);
+		expect(org3FoundAfter3?.lastUsed).toBe(true);
+	});
+});

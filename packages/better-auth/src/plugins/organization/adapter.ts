@@ -535,6 +535,40 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return organizations;
 		},
+		findLastUsedOrganization: async (userId: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const members = await adapter.findMany<InferMember<O>>({
+				model: "member",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			});
+
+			if (!members || members.length === 0) {
+				return null;
+			}
+
+			const organizationIds = members.map((member) => member.organizationId);
+
+			const lastUsedOrg = await adapter.findOne<InferOrganization<O>>({
+				model: "organization",
+				where: [
+					{
+						field: "id",
+						value: organizationIds,
+						operator: "in",
+					},
+					{
+						field: "lastUsed",
+						value: true,
+					},
+				],
+			});
+			return lastUsedOrg;
+		},
 		createTeam: async (data: Omit<TeamInput, "id">) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const team = await adapter.create<Omit<TeamInput, "id">, InferTeam<O>>({

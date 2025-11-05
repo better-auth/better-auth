@@ -860,6 +860,15 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
+
+			// Update lastUsed: set the new organization to true and all others to false
+			const allUserOrgs = await adapter.listOrganizations(session.user.id);
+			for (const org of allUserOrgs) {
+				await adapter.updateOrganization(org.id, {
+					lastUsed: org.id === organizationId,
+				});
+			}
+
 			const updatedSession = await adapter.setActiveOrganization(
 				session.session.token,
 				organization.id,

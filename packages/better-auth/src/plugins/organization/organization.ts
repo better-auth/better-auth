@@ -1024,6 +1024,12 @@ export function organization<O extends OrganizationOptions>(
 						required: false,
 						fieldName: options?.schema?.organization?.fields?.logo,
 					},
+					lastUsed: {
+						type: "boolean",
+						required: false,
+						defaultValue: false,
+						fieldName: options?.schema?.organization?.fields?.lastUsed,
+					},
 					createdAt: {
 						type: "date",
 						required: true,
