@@ -327,6 +327,23 @@ export interface OrganizationOptions {
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
 	/**
+	 * Allow certain users to manage all organizations without being a member.
+	 * If `true`, users with 'admin' role can manage all organizations.
+	 * If an array, users with any of those roles can manage all organizations.
+	 * If a function, custom logic determines access.
+	 *
+	 * @default false
+	 */
+	globalOrganizationAccess?:
+		| boolean
+		| string[]
+		| ((data: {
+				user: User & Record<string, any>;
+				organizationId: string;
+				session: Session;
+		  }) => Promise<boolean> | boolean)
+		| undefined;
+	/**
 	 * Configure how organization deletion is handled
 	 *
 	 * @deprecated Use `organizationHooks` instead
