@@ -20,7 +20,11 @@ import { generateId } from "../utils";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
-import { parseSessionOutput, parseUserOutput } from "./schema";
+import {
+	parseSessionInput,
+	parseSessionOutput,
+	parseUserOutput,
+} from "./schema";
 import { getWithHooks } from "./with-hooks";
 
 export const createInternalAdapter = (
@@ -272,6 +276,11 @@ export const createInternalAdapter = (
 			const ctx = await getCurrentAuthContext();
 			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
+			//we're parsing default values for session additional fields
+			const defaultAdditionalFields = parseSessionInput(
+				ctx.context.options,
+				{},
+			);
 			const data: Omit<Session, "id"> = {
 				ipAddress:
 					ctx.request || ctx.headers
@@ -292,6 +301,7 @@ export const createInternalAdapter = (
 				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			};
 			const res = await createWithHooks(
