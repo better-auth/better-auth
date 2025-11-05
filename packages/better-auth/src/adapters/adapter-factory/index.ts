@@ -194,7 +194,7 @@ export const createAdapterFactory =
 				});
 			}
 			for (const field in fields) {
-				const value = data[field];
+				let value = data[field];
 				const fieldAttributes = fields[field];
 
 				let newFieldName: string =
@@ -208,6 +208,26 @@ export const createAdapterFactory =
 				) {
 					continue;
 				}
+
+				// In some endpoints (like signUpEmail) where there isn't proper Zod validation,
+				// we might recieve a date as a string (this is because of the client converting the Date to a string
+				// when sending to the server). Because of this, we'll convert the string to a Date.
+				if (
+					fieldAttributes &&
+					fieldAttributes.type === "date" &&
+					!(value instanceof Date) &&
+					typeof value === "string"
+				) {
+					try {
+						value = new Date(value);
+					} catch {
+						logger.error("[Adapter Factory] Failed to convert string to date", {
+							value,
+							field,
+						});
+					}
+				}
+
 				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
 				let newValue = withApplyDefault(value, fieldAttributes!, action);
 
