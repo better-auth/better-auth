@@ -89,13 +89,19 @@ export const getClientConfig = (
 
 	for (const plugin of plugins) {
 		if (plugin.getAtoms) {
-			Object.assign(pluginsAtoms, plugin.getAtoms?.($fetch));
+			Object.assign(pluginsAtoms, plugin.getAtoms?.($fetch, options));
 		}
 		if (plugin.pathMethods) {
 			Object.assign(pluginPathMethods, plugin.pathMethods);
 		}
 		if (plugin.atomListeners) {
-			atomListeners.push(...plugin.atomListeners);
+			const listeners =
+				typeof plugin.atomListeners === "function"
+					? plugin.atomListeners()
+					: plugin.atomListeners;
+			if (listeners?.length) {
+				atomListeners.push(...listeners);
+			}
 		}
 	}
 
