@@ -11,13 +11,12 @@ export default defineConfig({
 	},
 	entry: ["./src/index.ts", "./src/client.ts"],
 	external: [
-		"better-auth",
+		"nanostores",
+		"@better-auth/utils",
 		"better-call",
 		"@better-fetch/fetch",
-		"react-native",
-		"expo-web-browser",
-		"expo-linking",
-		"expo-constants",
+		"@better-auth/core",
+		"better-auth",
 	],
 	treeshake: true,
 });
