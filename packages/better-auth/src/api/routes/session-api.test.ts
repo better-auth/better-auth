@@ -1381,7 +1381,7 @@ describe("cookie cache versioning", async () => {
 			},
 		);
 
-		// First call - should hit database
+		// First call - should use cookie cache (set during sign-in)
 		const firstCall = fn.mock.calls.length;
 		const session1 = await client.getSession({
 			fetchOptions: {
@@ -1400,8 +1400,8 @@ describe("cookie cache versioning", async () => {
 			},
 		});
 
-		// Verify cache was used (no additional DB calls)
-		expect(fn.mock.calls.length).toBe(firstCall + 1);
+		// Verify cache was used (no additional DB calls - both calls use cache set during sign-in)
+		expect(fn.mock.calls.length).toBe(firstCall);
 
 		// ? THIS IS THE KEY TEST - additionalFields should be present from cache
 		expect(session2.data?.session).toHaveProperty("role");

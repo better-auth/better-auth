@@ -3,7 +3,7 @@ import {
 	getCurrentAuthContext,
 } from "@better-auth/core/context";
 import { APIError } from "better-call";
-import z from "zod";
+import * as z from "zod";
 
 type OauthState = Record<string, any>;
 
