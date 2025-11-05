@@ -45,20 +45,7 @@ export async function generateState(
 	};
 
 	if (additionalData) {
-		const additionalDataConfig =
-			c.context.options.advanced?.oauthConfig?.additionalData;
-		if (additionalDataConfig?.enabled) {
-			const schema = additionalDataConfig.schema;
-			if (schema) {
-				const result = await schema["~standard"].validate(additionalData);
-				if (result.issues !== undefined) {
-					throw new APIError("BAD_REQUEST", {
-						message: `Invalid oauth additional data`,
-					});
-				}
-			}
-			await setOauthState(additionalData);
-		}
+		await setOauthState(additionalData);
 	}
 
 	if (storeStateStrategy === "cookie") {
@@ -229,22 +216,7 @@ export async function parseState(c: GenericEndpointContext) {
 	}
 
 	if (parsedData.additionalData) {
-		const additionalDataConfig =
-			c.context.options.advanced?.oauthConfig?.additionalData;
-		if (additionalDataConfig?.enabled) {
-			const schema = additionalDataConfig.schema;
-			if (schema) {
-				const result = await schema["~standard"].validate(
-					parsedData.additionalData,
-				);
-				if (result.issues !== undefined) {
-					throw new APIError("BAD_REQUEST", {
-						message: `Invalid oauth additional data`,
-					});
-				}
-			}
-			await setOauthState(parsedData.additionalData);
-		}
+		await setOauthState(parsedData.additionalData);
 	}
 
 	return parsedData;
