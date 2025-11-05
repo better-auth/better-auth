@@ -2,6 +2,8 @@
 
 export * from "@better-auth/core";
 //#endregion
+export type * from "better-call";
+export type { StandardSchemaV1 } from "@better-auth/core";
 export { getCurrentAdapter } from "@better-auth/core/context";
 export * from "@better-auth/core/env";
 export * from "@better-auth/core/error";
