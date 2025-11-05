@@ -18,21 +18,27 @@ export const createFieldAttribute = <
 	} satisfies DBFieldAttribute<T>;
 };
 
-export type InferValueType<T extends DBFieldType> = T extends "string"
-	? string
-	: T extends "number"
-		? number
-		: T extends "boolean"
-			? boolean
-			: T extends "date"
-				? Date
-				: T extends `${infer T}[]`
-					? T extends "string"
-						? string[]
-						: number[]
-					: T extends Array<any>
-						? T[number]
-						: never;
+export type InferValueType<T extends DBFieldType> =
+  T extends `${infer U}[]`
+    ? U extends "string"
+      ? string[]
+      : U extends "number"
+      ? number[]
+      : U extends "boolean"
+      ? boolean[]
+      : U extends "date"
+      ? Date[]
+      : unknown[]
+    : T extends "string"
+    ? string
+    : T extends "number"
+    ? number
+    : T extends "boolean"
+    ? boolean
+    : T extends "date"
+    ? Date
+    : never;
+
 
 export type InferFieldsOutput<Field> = Field extends Record<
 	infer Key,
