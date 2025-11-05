@@ -3,13 +3,53 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
-import { describe, expect, it } from "vitest";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as z from "zod";
-import { getEndpoints, router } from "./api";
+import { getEndpoints, getOauthState, router } from "./api";
 import { createAuthClient } from "./client";
-import { init } from "./context";
+import { signJWT } from "./crypto";
+import { init } from "./init";
 import { bearer } from "./plugins";
+import { DEFAULT_SECRET } from "./utils/constants";
+
+const mswServer = setupServer();
+
+beforeAll(async () => {
+	mswServer.listen({ onUnhandledRequest: "bypass" });
+	mswServer.use(
+		http.post("https://oauth2.googleapis.com/token", async () => {
+			const data: GoogleProfile = {
+				email: "user@email.com",
+				email_verified: true,
+				name: "Test User",
+				picture: "https://lh3.googleusercontent.com/a-/test",
+				exp: 1234567890,
+				sub: "1234567890",
+				iat: 1234567890,
+				aud: "test",
+				azp: "test",
+				nbf: 1234567890,
+				iss: "test",
+				locale: "en",
+				jti: "test",
+				given_name: "Test",
+				family_name: "User",
+			};
+			const testIdToken = await signJWT(data, DEFAULT_SECRET);
+			return HttpResponse.json({
+				access_token: "test-access-token",
+				refresh_token: "test-refresh-token",
+				id_token: testIdToken,
+			});
+		}),
+	);
+});
+
+afterAll(() => mswServer.close());
 
 describe("call", async () => {
 	const q = z.optional(
@@ -179,11 +219,29 @@ describe("call", async () => {
 			],
 		},
 	} satisfies BetterAuthPlugin;
+	let latestOauthStore: Record<string, any> | undefined = {};
 	const options = {
 		baseURL: "http://localhost:3000",
 		plugins: [testPlugin, testPlugin2, bearer()],
 		emailAndPassword: {
 			enabled: true,
+		},
+		socialProviders: {
+			google: {
+				clientId: "test-client-id",
+				clientSecret: "test-client-secret",
+				enabled: true,
+			},
+		},
+		advanced: {
+			oauthConfig: {
+				additionalData: {
+					enabled: true,
+					schema: z.object({
+						invitedBy: z.string().optional(),
+					}),
+				},
+			},
 		},
 		hooks: {
 			before: createAuthMiddleware(async (ctx) => {
@@ -205,6 +263,10 @@ describe("call", async () => {
 				if (ctx.query?.testAfterGlobal) {
 					return ctx.json({ after: "global" });
 				}
+				if (ctx.path === "/callback/:id" && ctx.params.id === "google") {
+					const store = await getOauthState();
+					latestOauthStore = store;
+				}
 			}),
 		},
 	} satisfies BetterAuthOptions;
@@ -225,6 +287,53 @@ describe("call", async () => {
 		const response = await api.test();
 		expect(response).toMatchObject({
 			success: "true",
+		});
+	});
+
+	it("should include additional data in oauth sign in", async () => {
+		const headers = new Headers();
+
+		const signInRes = await client.signIn.social(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+				additionalData: {
+					invitedBy: "user-123",
+				},
+			},
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					if (setCookie) {
+						headers.set("cookie", setCookie);
+					}
+				},
+			},
+		);
+
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test-authorization-code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/callback");
+			},
+		});
+		expect(latestOauthStore).toEqual({
+			invitedBy: "user-123",
 		});
 	});
 
