@@ -179,8 +179,9 @@ export const scim = () => {
 						newAccount,
 					);
 
+					ctx.setStatus(201);
+
 					return ctx.json(userResource, {
-						status: 201,
 						headers: {
 							location: userResource.meta.location,
 						},

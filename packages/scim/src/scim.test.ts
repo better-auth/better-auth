@@ -697,10 +697,10 @@ describe("SCIM", () => {
 			});
 
 			expect(schema).toMatchInlineSnapshot(`
-              {
-                "error": "Schema not found",
-              }
-            `);
+				{
+				  "error": "Schema not found",
+				}
+			`);
 		});
 	});
 
@@ -710,31 +710,31 @@ describe("SCIM", () => {
 			const resourceTypes = await auth.api.getSCIMResourceTypes();
 
 			expect(resourceTypes).toMatchInlineSnapshot(`
-              {
-                "Resources": [
-                  {
-                    "description": "User Account",
-                    "endpoint": "/Users",
-                    "id": "User",
-                    "meta": {
-                      "location": "http://localhost:3000/scim/v2/ResourceTypes/User",
-                      "resourceType": "ResourceType",
-                    },
-                    "name": "User",
-                    "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
-                    "schemas": [
-                      "urn:ietf:params:scim:schemas:core:2.0:ResourceType",
-                    ],
-                  },
-                ],
-                "itemsPerPage": 1,
-                "schemas": [
-                  "urn:ietf:params:scim:api:messages:2.0:ListResponse",
-                ],
-                "startIndex": 1,
-                "totalResults": 1,
-              }
-            `);
+				{
+				  "Resources": [
+				    {
+				      "description": "User Account",
+				      "endpoint": "/Users",
+				      "id": "User",
+				      "meta": {
+				        "location": "http://localhost:3000/scim/v2/ResourceTypes/User",
+				        "resourceType": "ResourceType",
+				      },
+				      "name": "User",
+				      "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+				      "schemas": [
+				        "urn:ietf:params:scim:schemas:core:2.0:ResourceType",
+				      ],
+				    },
+				  ],
+				  "itemsPerPage": 1,
+				  "schemas": [
+				    "urn:ietf:params:scim:api:messages:2.0:ListResponse",
+				  ],
+				  "startIndex": 1,
+				  "totalResults": 1,
+				}
+			`);
 		});
 
 		it("should fetch a single resource type", async () => {
@@ -746,21 +746,21 @@ describe("SCIM", () => {
 			});
 
 			expect(resourceType).toMatchInlineSnapshot(`
-              {
-                "description": "User Account",
-                "endpoint": "/Users",
-                "id": "User",
-                "meta": {
-                  "location": "http://localhost:3000/scim/v2/ResourceTypes/User",
-                  "resourceType": "ResourceType",
-                },
-                "name": "User",
-                "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
-                "schemas": [
-                  "urn:ietf:params:scim:schemas:core:2.0:ResourceType",
-                ],
-              }
-            `);
+				{
+				  "description": "User Account",
+				  "endpoint": "/Users",
+				  "id": "User",
+				  "meta": {
+				    "location": "http://localhost:3000/scim/v2/ResourceTypes/User",
+				    "resourceType": "ResourceType",
+				  },
+				  "name": "User",
+				  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+				  "schemas": [
+				    "urn:ietf:params:scim:schemas:core:2.0:ResourceType",
+				  ],
+				}
+			`);
 		});
 
 		it("should return not found for unsupported resource types", async () => {
@@ -772,10 +772,10 @@ describe("SCIM", () => {
 			});
 
 			expect(resourceType).toMatchInlineSnapshot(`
-              {
-                "error": "Resource type not found",
-              }
-            `);
+				{
+				  "error": "Resource type not found",
+				}
+			`);
 		});
 	});
 
@@ -784,15 +784,20 @@ describe("SCIM", () => {
 			const { auth, authClient } = createTestInstance();
 			const { scimToken } = await registerSSOProvider(auth, authClient);
 
-			const user = await auth.api.createSCIMUser({
+			const response = await auth.api.createSCIMUser({
 				body: {
 					userName: "the-username",
 				},
 				headers: {
 					authorization: `Bearer ${scimToken}`,
 				},
+				asResponse: true,
 			});
 
+			expect(response.status).toBe(201);
+			expect(response.headers.get('location')).toBe(expect.stringContaining("/scim/v2/Users/"));
+
+			const user = await response.json();
 			expect(user).toMatchObject({
 				active: true,
 				displayName: "the-username",
