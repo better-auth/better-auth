@@ -46,7 +46,7 @@ const STRIPE_ERROR_CODES = defineErrorCodes({
 });
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
-	if (url.startsWith("http")) {
+	if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(url)) {
 		return url;
 	}
 	return `${ctx.context.options.baseURL}${
