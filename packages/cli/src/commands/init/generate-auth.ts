@@ -1,5 +1,6 @@
+import type { ZodSchema } from "zod";
 import type { DatabaseAdapter } from "./configs/databases.config";
-import type { PluginsConfig } from "./configs/plugins.config";
+import type { Plugin } from "./configs/plugins.config";
 import {
 	formatCode,
 	generateInnerAuthConfigCode,
@@ -10,17 +11,97 @@ import {
 	getImportString,
 	type ImportGroup,
 } from "./utility/imports";
+import { getPluginConfigs } from "./utility/plugin";
+
+export type GetArgumentsOptions = {
+	/**
+	 * Unique flag identifier for the question.
+	 * Allows for CLIs to override the question based on provided CLI flags.
+	 */
+	flag: string;
+	/**
+	 * The question to ask the user.
+	 */
+	question: string;
+	/**
+	 * The options for the multiselect question.
+	 */
+	isMultiselectOptions?: {
+		value: any;
+		label?: string;
+		hint?: string;
+	}[];
+	/**
+	 * The options for the select question.
+	 */
+	isSelectOptions?: {
+		value: any;
+		label?: string;
+		hint?: string;
+	}[];
+	/**
+	 * Whether the argument is a confirmation question.
+	 */
+	isConformation?: boolean;
+	/**
+	 * Whether the argument is a number question.
+	 */
+	isNumber?: boolean;
+	/**
+	 * Whether the argument is required.
+	 * If not provided, the argument is optional.
+	 */
+	isRequired?: boolean;
+	/**
+	 * Whether to skip the question prompt for the argument, however still check the CLI flag for the argument.
+	 * Useful for arguments that *could* be provided by CLI flags but shouldn't be prompted for.
+	 */
+	skipPrompt?: boolean;
+	/**
+	 * Argument details
+	 */
+	argument: {
+		/**
+		 * The index of the argument in the function.
+		 */
+		index: number;
+		/**
+		 * If it's a property, this means that this index is an object and the property name is this string value.
+		 * Else if `false`, it means this index is an entire value represented by this argument value.
+		 */
+		isProperty: false | string;
+		/**
+		 * Zod schema for validation and transformation of the argument value.
+		 */
+		schema: ZodSchema;
+	};
+};
+
+export type GetArgumentsFn = (
+	options: GetArgumentsOptions,
+) => any | Promise<any>;
 
 export type GenerateAuthFileOptions = {
-	plugins: PluginsConfig;
+	plugins: Plugin[];
 	database: DatabaseAdapter;
+	appName?: string;
+	baseURL?: string;
+	/**
+	 * A callback function that allows for the retrieval of arguments for the auth config.
+	 * For example, certain plugins may require additional arguments to be passed to the plugin options.
+	 */
+	getArguments: GetArgumentsFn;
 };
 
 export const generateAuthConfigCode = async ({
-	plugins,
-	database: databaseAdapter,
+	plugins: pluginsConfig,
+	database: databaseConfig,
+	appName,
+	baseURL,
+	getArguments,
 }: GenerateAuthFileOptions) => {
-	const database = getDatabaseCode(databaseAdapter);
+	const database = getDatabaseCode(databaseConfig);
+	const plugins = getPluginConfigs(pluginsConfig);
 
 	let imports: ImportGroup[] = [
 		{
@@ -34,11 +115,19 @@ export const generateAuthConfigCode = async ({
 		...database.imports,
 	];
 
+	const authConfigCode = await generateInnerAuthConfigCode({
+		plugins,
+		database,
+		appName,
+		baseURL,
+		getArguments,
+	});
+
 	const segmentedCode = {
 		imports: await getImportString(imports),
 		exports: "",
 		preAuthConfig: database.preCode ?? "",
-		authConfig: generateInnerAuthConfigCode({ plugins, database }),
+		authConfig: authConfigCode,
 		postAuthConfig: "",
 	};
 

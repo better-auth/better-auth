@@ -6,7 +6,7 @@ import {
 	type ImportGroup,
 } from "./imports";
 
-describe("Init CLI imports utility", () => {
+describe("Init CLI - imports utility", () => {
 	it("should create an import object", () => {
 		const import_ = createImport({ name: "username" });
 		expect(import_).toEqual({
@@ -65,6 +65,34 @@ describe("Init CLI imports utility", () => {
 				isNamedImport: false,
 			},
 		]);
+	});
+
+	it("should sort named imports to the end", async () => {
+		const imports = [
+			{
+				path: "better-auth/plugins",
+				imports: createImport({ name: "test" }),
+				isNamedImport: true,
+			},
+			{
+				path: "better-auth",
+				imports: [createImport({ name: "betterAuth" })],
+				isNamedImport: false,
+			},
+			{
+				path: "better-auth/plugins",
+				imports: [createImport({ name: "username" })],
+				isNamedImport: false,
+			},
+		] satisfies ImportGroup[];
+
+		const result = await getImportString(imports);
+		const expected = [
+			'import { betterAuth } from "better-auth";',
+			'import { username } from "better-auth/plugins";',
+			'import test from "better-auth/plugins";',
+		].join("\n");
+		expect(result).toEqual(expected);
 	});
 
 	it("should group imports except for named imports", () => {
@@ -149,10 +177,12 @@ describe("Init CLI imports utility", () => {
 		const imports = [
 			{
 				path: "better-auth/plugins",
-				imports: [
-					createImport({ name: "username" }),
-					createImport({ name: "organization" }),
-				],
+				imports: [createImport({ name: "username" })],
+				isNamedImport: false,
+			},
+			{
+				path: "better-auth/plugins",
+				imports: [createImport({ name: "organization" })],
 				isNamedImport: false,
 			},
 			{
@@ -187,8 +217,8 @@ describe("Init CLI imports utility", () => {
 		] satisfies ImportGroup[];
 		const result = await getImportString(imports);
 		const expected = [
-			'import usernameClient from "better-auth/client/plugins";',
 			'import { username, organization } from "better-auth/plugins";',
+			'import usernameClient from "better-auth/client/plugins";',
 		].join("\n");
 		expect(result).toEqual(expected);
 	});

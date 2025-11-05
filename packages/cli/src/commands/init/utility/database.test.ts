@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getDatabaseCode } from "./database";
 import { formatCode } from ".";
+import { getDatabaseCode } from "./database";
 
 describe("init CLI - database generation", () => {
 	describe("prisma", () => {
@@ -190,17 +190,15 @@ describe("init CLI - database generation", () => {
 	describe("mongodb", () => {
 		it("should generate the right mongodb database code", async () => {
 			const database = getDatabaseCode("mongodb");
-			const expectedCode = await formatCode(
-				`mongodbAdapter(db)`,
-			);
-            const code = await formatCode(database.code({}));
-            expect(code).toEqual(expectedCode);
+			const expectedCode = await formatCode(`mongodbAdapter(db)`);
+			const code = await formatCode(database.code({}));
+			expect(code).toEqual(expectedCode);
 
-            const expectedPreCode = await formatCode(
-                `const client = new MongoClient(process.env.DATABASE_URL);\nconst db = client.db();`,
-            );
-            const preCode = await formatCode(database.preCode ?? "");
-            expect(preCode).toEqual(expectedPreCode);
+			const expectedPreCode = await formatCode(
+				`const client = new MongoClient(process.env.DATABASE_URL);\nconst db = client.db();`,
+			);
+			const preCode = await formatCode(database.preCode ?? "");
+			expect(preCode).toEqual(expectedPreCode);
 		});
 	});
 });

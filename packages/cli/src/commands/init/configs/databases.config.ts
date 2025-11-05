@@ -81,11 +81,11 @@ const mongodbCode = ({
 	additionalOptions?: Record<string, any>;
 }) => {
 	let optsString = "";
-	if(additionalOptions){
+	if (additionalOptions) {
 		optsString = ", {";
 		optsString = Object.entries(additionalOptions)
-					.map(([key, value]) => `${key}: ${value}`)
-					.join(", ");
+			.map(([key, value]) => `${key}: ${value}`)
+			.join(", ");
 		optsString += "}";
 	}
 	return `mongodbAdapter(db${optsString})`;

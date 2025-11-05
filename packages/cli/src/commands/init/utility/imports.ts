@@ -1,4 +1,4 @@
-import { formatCode } from ".";
+import { formatCode } from "./format";
 
 export type NamedImportGroup = {
 	/**
@@ -116,6 +116,10 @@ export const groupImports = (imports: ImportGroup[]) => {
 		result.push(import_);
 	}
 
-	// Sort the result by path.
-	return result.sort((a, b) => a.path.localeCompare(b.path));
+	// Sort the result by path, with named imports at the end.
+	return result.sort((a, b) => {
+		if (a.isNamedImport && !b.isNamedImport) return 1;
+		if (!a.isNamedImport && b.isNamedImport) return -1;
+		return a.path.localeCompare(b.path);
+	});
 };
