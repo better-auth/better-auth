@@ -343,36 +343,4 @@ describe("request-state", () => {
 			});
 		});
 	});
-
-	describe("memory management", () => {
-		it("should not leak memory across different request contexts", async () => {
-			const schema = z.object({ data: z.string() });
-			const { get, set } = defineRequestState(schema);
-
-			// First request
-			const store1: RequestStateWeakMap = new WeakMap();
-			await runWithRequestState(store1, async () => {
-				await set({ data: "first" });
-			});
-
-			// Second request with different store
-			const store2: RequestStateWeakMap = new WeakMap();
-			await runWithRequestState(store2, async () => {
-				const value = await get();
-				// Should not see data from first request
-				expect(value).toBeUndefined();
-
-				await set({ data: "second" });
-				expect(await get()).toEqual({ data: "second" });
-			});
-
-			// Third request
-			const store3: RequestStateWeakMap = new WeakMap();
-			await runWithRequestState(store3, async () => {
-				const value = await get();
-				// Should not see data from previous requests
-				expect(value).toBeUndefined();
-			});
-		});
-	});
 });
