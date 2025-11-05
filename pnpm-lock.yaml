@@ -952,6 +952,9 @@ importers:
       '@noble/hashes':
         specifier: ^2.0.0
         version: 2.0.0
+      '@standard-schema/spec':
+        specifier: ^1.0.0
+        version: 1.0.0
       better-call:
         specifier: 'catalog:'
         version: 1.0.24
