@@ -3,17 +3,17 @@
   "version": "1.4.0-beta.16",
   "type": "module",
   "description": "The CLI for Better Auth",
-  "module": "dist/index.js",
+  "module": "dist/index.mjs",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",
     "directory": "packages/cli"
   },
   "homepage": "https://www.better-auth.com/docs/concepts/cli",
-  "main": "./dist/index.js",
+  "main": "./dist/index.mjs",
   "scripts": {
     "build": "tsdown",
-    "start": "node ./dist/index.js",
+    "start": "node ./dist/index.mjs",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
     "typecheck": "tsc --project tsconfig.json"
@@ -21,7 +21,7 @@
   "publishConfig": {
     "access": "public",
     "executableFiles": [
-      "./dist/index.js"
+      "./dist/index.mjs"
     ]
   },
   "license": "MIT",
@@ -31,8 +31,8 @@
     "typescript",
     "better-auth"
   ],
-  "exports": "./dist/index.js",
-  "bin": "./dist/index.js",
+  "exports": "./dist/index.mjs",
+  "bin": "./dist/index.mjs",
   "devDependencies": {
     "@better-auth/passkey": "workspace:*",
     "@types/semver": "^7.7.1",
