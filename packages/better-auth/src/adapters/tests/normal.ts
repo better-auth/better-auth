@@ -123,6 +123,12 @@ export const getNormalTestSuiteTests = ({
 								type: "string",
 								defaultValue: "test-value",
 							},
+							cbDefaultValueField: {
+								type: "string",
+								defaultValue: () => {
+									return "advanced-test-value";
+								},
+							},
 						},
 					},
 					plugins: [
@@ -135,6 +141,12 @@ export const getNormalTestSuiteTests = ({
 											type: "string",
 											defaultValue: "test-value",
 										},
+										cbDefaultValueField: {
+											type: "string",
+											defaultValue: () => {
+												return "advanced-test-value";
+											},
+										},
 									},
 								},
 							},
@@ -143,15 +155,22 @@ export const getNormalTestSuiteTests = ({
 				},
 				true,
 			);
-			const result = await adapter.create<{ testField?: string; id: string }>({
+			const result = await adapter.create<{
+				testField?: string;
+				id: string;
+				cbDefaultValueField?: string;
+			}>({
 				model: "testModel",
 				data: {},
 			});
 			expect(result.id).toBeDefined();
 			expect(result.id).toBeTypeOf("string");
 			expect(result.testField).toBe("test-value");
+			expect(result.cbDefaultValueField).toBe("advanced-test-value");
 
-			const userResult = await adapter.create<User & { testField?: string }>({
+			const userResult = await adapter.create<
+				User & { testField?: string; cbDefaultValueField?: string }
+			>({
 				model: "user",
 				data: {
 					...(await generate("user")),
@@ -160,6 +179,7 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(userResult).toBeDefined();
 			expect(userResult?.testField).toBe("test-value");
+			expect(userResult?.cbDefaultValueField).toBe("advanced-test-value");
 		},
 		"findOne - should find a model": async () => {
 			const [user] = await insertRandom("user");
