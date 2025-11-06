@@ -1,10 +1,10 @@
 {
   "name": "@better-auth/passkey",
-  "version": "1.4.0-beta.15",
+  "version": "1.4.0-beta.16",
   "type": "module",
   "description": "Passkey plugin for Better Auth",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
+  "main": "dist/index.mjs",
+  "module": "dist/index.mjs",
   "publishConfig": {
     "access": "public"
   },
@@ -17,22 +17,22 @@
   "exports": {
     ".": {
       "better-auth-dev-source": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
     },
     "./client": {
       "better-auth-dev-source": "./src/client.ts",
-      "types": "./dist/client.d.ts",
-      "default": "./dist/client.js"
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
-        "./dist/index.d.ts"
+        "./dist/index.d.mts"
       ],
       "client": [
-        "./dist/client.d.ts"
+        "./dist/client.d.mts"
       ]
     }
   },
