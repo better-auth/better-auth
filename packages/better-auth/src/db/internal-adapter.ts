@@ -59,6 +59,7 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
+	const pluginSessionFields = getPluginSessionFields(options.plugins);
 	const {
 		createWithHooks,
 		updateWithHooks,
@@ -293,7 +294,6 @@ export const createInternalAdapter = (
 			overrideAll?: boolean | undefined,
 		) => {
 			const ctx = await getCurrentAuthContext();
-			const pluginFields = getPluginSessionFields(options.plugins);
 			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
 			const data: Omit<Session, "id"> = {
@@ -302,7 +302,7 @@ export const createInternalAdapter = (
 						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
 						: "",
 				userAgent: headers?.get("user-agent") || "",
-				...pluginFields,
+				...pluginSessionFields,
 				...rest,
 				/**
 				 * If the user doesn't want to be remembered
