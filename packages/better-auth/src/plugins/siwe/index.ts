@@ -23,7 +23,7 @@ export interface SIWEPluginOptions {
 	 * @type string
 	 * @question What is the domain name of your application?
 	 * @example https://example.com
-	*/
+	 */
 	domain: string;
 	/**
 	 * The email domain name for creating user accounts when not using anonymous mode. Defaults to base URL.
@@ -35,12 +35,12 @@ export interface SIWEPluginOptions {
 	emailDomainName?: string | undefined;
 	/**
 	 * Whether to allow anonymous sign-ins without requiring an email. Default is true
-	 * 
+	 *
 	 * @cli optional
 	 * @type boolean
 	 * @question Would you like to allow anonymous sign-ins without requiring an email?
 	 * @default true
-	*/
+	 */
 	anonymous?: boolean | undefined;
 	/**
 	 * Function to generate a unique nonce for each sign-in attempt.

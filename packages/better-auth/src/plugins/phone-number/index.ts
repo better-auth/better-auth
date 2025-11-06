@@ -36,7 +36,7 @@ export interface PhoneNumberOptions {
 	 *
 	 * @param phoneNumber
 	 * @param code
-	 * 
+	 *
 	 * @cli example
 	 * @cli required
 	 * @type function

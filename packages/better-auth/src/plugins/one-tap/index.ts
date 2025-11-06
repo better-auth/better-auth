@@ -21,7 +21,7 @@ interface OneTapOptions {
 	 *
 	 * If a client ID is provided in the social provider configuration,
 	 * it will be used.
-	 * 
+	 *
 	 * @cli
 	 * @question What is the Google Client ID?
 	 * @type string

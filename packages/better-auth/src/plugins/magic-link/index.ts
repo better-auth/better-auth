@@ -23,7 +23,7 @@ interface MagicLinkopts {
 	expiresIn?: number | undefined;
 	/**
 	 * Send magic link implementation.
-	 * 
+	 *
 	 * @cli example
 	 * @cli required
 	 * @type function

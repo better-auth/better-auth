@@ -24,9 +24,9 @@ const pluginPath = (path: string) => `better-auth/src/plugins/${path}`;
 
 /**
  * Mapping of plugin names to their type file locations
- * 
+ *
  * # THIS IS THE CORE OF WHERE PLUGINS ARE AUTOMATICALLY GENERATED
- * 
+ *
  * Please update this list if plugins are added moved, or removed.
  */
 const PLUGIN_TYPE_MAP: Record<

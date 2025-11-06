@@ -141,7 +141,9 @@ describe("generate-plugin-config", () => {
 				 */`),
 			];
 			const result = extractJSDocTags(jsDoc);
-			expect(result.exampleValue).toBe("async (data) => { console.log(data); }");
+			expect(result.exampleValue).toBe(
+				"async (data) => { console.log(data); }",
+			);
 		});
 
 		it("should extract @example tag (multi-line code block)", () => {
@@ -156,7 +158,9 @@ describe("generate-plugin-config", () => {
 				 */`),
 			];
 			const result = extractJSDocTags(jsDoc);
-			expect(result.exampleValue).toBe("async (data) => {\n  console.log(data);\n  return true;\n}");
+			expect(result.exampleValue).toBe(
+				"async (data) => {\n  console.log(data);\n  return true;\n}",
+			);
 		});
 
 		it("should extract @example tag with JSDoc asterisks", () => {
@@ -171,7 +175,9 @@ describe("generate-plugin-config", () => {
 				 */`),
 			];
 			const result = extractJSDocTags(jsDoc);
-			expect(result.exampleValue).toBe("async (data) => {\n  console.log(data);\n  return true;\n}");
+			expect(result.exampleValue).toBe(
+				"async (data) => {\n  console.log(data);\n  return true;\n}",
+			);
 		});
 
 		it("should extract @example tag before other @ tags", () => {
@@ -202,7 +208,9 @@ describe("generate-plugin-config", () => {
 				 */`),
 			];
 			const result = extractJSDocTags(jsDoc);
-			expect(result.exampleValue).toBe("async (data) => {\n  console.log(data);\n  return true;\n}");
+			expect(result.exampleValue).toBe(
+				"async (data) => {\n  console.log(data);\n  return true;\n}",
+			);
 		});
 
 		it("should extract @example tag with markdown code fence (```js)", () => {
@@ -249,7 +257,9 @@ describe("generate-plugin-config", () => {
 			];
 			const result = extractJSDocTags(jsDoc);
 			// Code fence content should have JSDoc asterisks removed but code preserved
-			expect(result.exampleValue).toBe("async (data) => {\n  console.log(data);\n}");
+			expect(result.exampleValue).toBe(
+				"async (data) => {\n  console.log(data);\n}",
+			);
 		});
 
 		it("should extract @default value", () => {
@@ -559,7 +569,13 @@ describe("generate-plugin-config", () => {
 				isUnion: () => false,
 				getSymbol: () => ({ getName: () => "String" }),
 			};
-			const result = generateZodSchema(mockType, undefined, undefined, true, false);
+			const result = generateZodSchema(
+				mockType,
+				undefined,
+				undefined,
+				true,
+				false,
+			);
 			expect(result).toBe("z.coerce.string()");
 		});
 
@@ -571,7 +587,13 @@ describe("generate-plugin-config", () => {
 				isUnion: () => false,
 				getSymbol: () => ({ getName: () => "String" }),
 			};
-			const result = generateZodSchema(mockType, undefined, undefined, false, true);
+			const result = generateZodSchema(
+				mockType,
+				undefined,
+				undefined,
+				false,
+				true,
+			);
 			expect(result).toBe("z.coerce.string().optional()");
 		});
 
@@ -583,7 +605,13 @@ describe("generate-plugin-config", () => {
 				isUnion: () => false,
 				getSymbol: () => ({ getName: () => "String" }),
 			};
-			const result = generateZodSchema(mockType, undefined, undefined, true, true);
+			const result = generateZodSchema(
+				mockType,
+				undefined,
+				undefined,
+				true,
+				true,
+			);
 			expect(result).toBe("z.coerce.string()");
 		});
 	});
@@ -783,7 +811,8 @@ describe("generate-plugin-config", () => {
 				flag: "test-plugin-send-email",
 				description: "Function to send email",
 				skipPrompt: true,
-				defaultValue: "async (data) => {\n  console.log(data);\n  return true;\n}",
+				defaultValue:
+					"async (data) => {\n  console.log(data);\n  return true;\n}",
 				argument: {
 					index: 0,
 					isProperty: "sendEmail",
@@ -1222,7 +1251,10 @@ export interface TestPluginNestedOptions {
 		});
 
 		it("should use custom select options over automatic enum extraction", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-custom-select-override.ts");
+			const testFile = path.join(
+				TEST_DIR,
+				"test-plugin-custom-select-override.ts",
+			);
 			const testContent = `export interface TestPluginCustomSelectOverrideOptions {
 	/**
 	 * Select mode with custom labels
@@ -1311,7 +1343,9 @@ export interface TestPluginNestedOptions {
 				(c) => c.flag === "test-plugin-optional-field",
 			);
 			expect(optionalConfig).toBeDefined();
-			expect(optionalConfig?.argument.schema).toBe("z.coerce.string().optional()");
+			expect(optionalConfig?.argument.schema).toBe(
+				"z.coerce.string().optional()",
+			);
 
 			const normalOptionalConfig = result.pluginConfig.find(
 				(c) => c.flag === "test-plugin-normal-optional",
@@ -1359,7 +1393,7 @@ export interface TestPluginNestedOptions {
 			expect(sendEmailConfig).toBeDefined();
 			expect(sendEmailConfig?.skipPrompt).toBe(true);
 			expect(sendEmailConfig?.defaultValue).toBe(
-				"async (data) => {\n  console.log(\"Sending email:\", data);\n  return true;\n}",
+				'async (data) => {\n  console.log("Sending email:", data);\n  return true;\n}',
 			);
 			expect(sendEmailConfig?.argument.schema).toBe("z.coerce.string()");
 		});
@@ -1397,7 +1431,9 @@ export interface TestPluginNestedOptions {
 				(c) => c.flag === "test-plugin-my-function",
 			);
 			expect(myFunctionConfig).toBeDefined();
-			expect(myFunctionConfig?.defaultValue).toBe("async () => { return \"example\"; }");
+			expect(myFunctionConfig?.defaultValue).toBe(
+				'async () => { return "example"; }',
+			);
 		});
 
 		it("should work with @cli example and @cli required together", () => {
@@ -1434,7 +1470,9 @@ export interface TestPluginNestedOptions {
 			);
 			expect(requiredFunctionConfig).toBeDefined();
 			expect(requiredFunctionConfig?.skipPrompt).toBe(true);
-			expect(requiredFunctionConfig?.defaultValue).toBe("async () => { return true; }");
+			expect(requiredFunctionConfig?.defaultValue).toBe(
+				"async () => { return true; }",
+			);
 			expect(requiredFunctionConfig?.argument.schema).toBe("z.coerce.string()");
 		});
 
@@ -1477,7 +1515,7 @@ export interface TestPluginNestedOptions {
 			expect(sendEmailConfig).toBeDefined();
 			expect(sendEmailConfig?.skipPrompt).toBe(true);
 			expect(sendEmailConfig?.defaultValue).toBe(
-				"async (data) => {\n  console.log(\"Sending email:\", data.email);\n  return true;\n}",
+				'async (data) => {\n  console.log("Sending email:", data.email);\n  return true;\n}',
 			);
 			expect(sendEmailConfig?.argument.schema).toBe("z.coerce.string()");
 		});
@@ -1523,14 +1561,18 @@ export interface TestPluginNestedOptions {
 				(c) => c.flag === "test-plugin-api-key",
 			);
 			expect(apiKeyConfig).toBeDefined();
-			expect(apiKeyConfig?.argument.schema).toBe("z.coerce.string().optional()");
+			expect(apiKeyConfig?.argument.schema).toBe(
+				"z.coerce.string().optional()",
+			);
 			expect(apiKeyConfig?.defaultValue).toBe("process.env.API_KEY");
 
 			const timeoutConfig = result.pluginConfig.find(
 				(c) => c.flag === "test-plugin-timeout",
 			);
 			expect(timeoutConfig).toBeDefined();
-			expect(timeoutConfig?.argument.schema).toBe("z.coerce.number().optional()");
+			expect(timeoutConfig?.argument.schema).toBe(
+				"z.coerce.number().optional()",
+			);
 			// defaultValue is stored as string from JSDoc, so it will be "42" not 42
 			expect(timeoutConfig?.defaultValue).toBe("42");
 		});
@@ -1611,12 +1653,19 @@ export interface TestPluginNestedOptions {
 				importPath: "better-auth/plugins",
 			};
 
-			const pluginData = generatePluginConfig("testPlugin", pluginInfo, project);
-			const generatedCode = generateIndividualPluginFile("testPlugin", pluginData);
+			const pluginData = generatePluginConfig(
+				"testPlugin",
+				pluginInfo,
+				project,
+			);
+			const generatedCode = generateIndividualPluginFile(
+				"testPlugin",
+				pluginData,
+			);
 
 			// Verify that skipPrompt: false appears in the generated code
 			expect(generatedCode).toContain("skipPrompt: false");
-			
+
 			// Verify the config object has skipPrompt: false
 			const apiKeyConfig = pluginData.pluginConfig.find(
 				(c) => c.flag === "test-plugin-api-key",
@@ -1626,7 +1675,10 @@ export interface TestPluginNestedOptions {
 		});
 
 		it("should set skipPrompt to true when @cli example overrides @prompt", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-example-overrides-prompt.ts");
+			const testFile = path.join(
+				TEST_DIR,
+				"test-plugin-example-overrides-prompt.ts",
+			);
 			const testContent = `export interface TestPluginExampleOverridesPromptOptions {
 	/**
 	 * Function with both @cli example and @prompt
@@ -1687,8 +1739,15 @@ export interface TestPluginNestedOptions {
 				importPath: "better-auth/plugins",
 			};
 
-			const pluginData = generatePluginConfig("testPlugin", pluginInfo, project);
-			const generatedCode = generateIndividualPluginFile("testPlugin", pluginData);
+			const pluginData = generatePluginConfig(
+				"testPlugin",
+				pluginInfo,
+				project,
+			);
+			const generatedCode = generateIndividualPluginFile(
+				"testPlugin",
+				pluginData,
+			);
 
 			// When skipPrompt is true (default without @prompt), it should be included
 			const fieldConfig = pluginData.pluginConfig.find(

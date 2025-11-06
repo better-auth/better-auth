@@ -23,7 +23,7 @@ import { defaultKeyHasher, splitAtLastColon } from "./utils";
 export interface EmailOTPOptions {
 	/**
 	 * Function to send email verification
-	 * 
+	 *
 	 * @cli example
 	 * @cli required
 	 * @type function
@@ -89,7 +89,7 @@ export interface EmailOTPOptions {
 	disableSignUp?: boolean | undefined;
 	/**
 	 * Allowed attempts for the OTP code
-	 * 
+	 *
 	 * @cli
 	 * @question What is the allowed attempts for the OTP code?
 	 * @type number

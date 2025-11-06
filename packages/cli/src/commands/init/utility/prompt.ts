@@ -54,7 +54,7 @@ export const getArgumentsPrompt: (
 		// 	isConformation,
 		// 	isNumber,
 		// });
-		
+
 		if (skipPrompt) {
 			if (isRequired && defaultValue) {
 				return defaultValue;

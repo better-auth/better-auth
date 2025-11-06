@@ -35,7 +35,7 @@ export async function initAction(opts: any) {
 			"passkey",
 			"genericOAuth",
 			"oneTap",
-			"siwe"
+			"siwe",
 		],
 		database: "prisma-sqlite",
 		appName: "My App",
