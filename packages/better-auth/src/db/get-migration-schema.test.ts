@@ -1,10 +1,9 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import Database from "better-sqlite3";
+import { Kysely, sql as kyselySql, SqliteDialect } from "kysely";
 import { Pool } from "pg";
-import { Kysely, SqliteDialect } from "kysely";
-import { sql as kyselySql } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getMigrations, type FieldTypeOverride } from "./get-migration";
+import { type FieldTypeOverride, getMigrations } from "./get-migration";
 
 // Check if PostgreSQL is available
 let isPostgresAvailable = false;

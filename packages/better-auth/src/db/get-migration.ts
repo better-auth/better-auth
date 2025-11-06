@@ -150,10 +150,7 @@ export type FieldTypeOverride = (
 	dbType: KyselyDatabaseType,
 	config: BetterAuthOptions,
 	defaultType: string | RawBuilder<unknown>,
-) =>
-	| FieldOverride
-	| undefined
-	| Promise<FieldOverride | undefined>;
+) => FieldOverride | undefined | Promise<FieldOverride | undefined>;
 
 export async function getMigrations(
 	config: BetterAuthOptions,
