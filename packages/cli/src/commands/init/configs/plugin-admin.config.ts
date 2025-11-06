@@ -61,6 +61,88 @@ export const adminPluginConfig = {
 					schema: z.coerce.string().array().optional(),
 				},
 			},
+			{
+				flag: "admin-default-ban-reason",
+				description: "A default ban reason By default, no reason is provided",
+				question: "[Admin] What is the default ban reason?",
+				skipPrompt: true,
+				argument: {
+					index: 0,
+					isProperty: "defaultBanReason",
+					schema: z.coerce.string().optional(),
+				},
+			},
+			{
+				flag: "admin-default-ban-expires-in",
+				description:
+					"Number of seconds until the ban expires By default, the ban never expires",
+				question: "[Admin] When does the ban expire by default?",
+				skipPrompt: true,
+				isNumber: true,
+				argument: {
+					index: 0,
+					isProperty: "defaultBanExpiresIn",
+					schema: z.coerce.number().optional(),
+				},
+			},
+			{
+				flag: "admin-impersonation-session-duration",
+				description:
+					"Duration of the impersonation session in seconds By default, the impersonation session lasts 1 hour",
+				question:
+					"[Admin] How long does the impersonation session last by default?",
+				skipPrompt: true,
+				isNumber: true,
+				argument: {
+					index: 0,
+					isProperty: "impersonationSessionDuration",
+					schema: z.coerce.number().optional(),
+				},
+			},
+			{
+				flag: "admin-admin-user-ids",
+				description:
+					"List of user ids that should have admin access If this is set, the `adminRole` option is ignored",
+				question:
+					"[Admin] What are the user ids that should have hard-coded admin access?",
+				skipPrompt: true,
+				cliTransform: (value) => {
+					if (typeof value === "string") {
+						try {
+							const parsed = JSON.parse(value);
+							if (Array.isArray(parsed)) {
+								return parsed;
+							}
+						} catch {
+							return value
+								.split(",")
+								.map((v) => v.trim())
+								.filter((v) => v.length > 0);
+						}
+					}
+					if (Array.isArray(value)) {
+						return value;
+					}
+					return value;
+				},
+				argument: {
+					index: 0,
+					isProperty: "adminUserIds",
+					schema: z.coerce.string().array().optional(),
+				},
+			},
+			{
+				flag: "admin-banned-user-message",
+				description:
+					'Message to show when a user is banned By default, the message is "You have been banned from this application"',
+				question: "[Admin] What is the message to show when a user is banned?",
+				skipPrompt: true,
+				argument: {
+					index: 0,
+					isProperty: "bannedUserMessage",
+					schema: z.coerce.string().optional(),
+				},
+			},
 		],
 	},
 	authClient: {
