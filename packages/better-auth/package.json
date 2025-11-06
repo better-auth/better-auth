@@ -505,6 +505,7 @@
     "mysql2": "^3.14.4",
     "next": "^16.0.1",
     "oauth2-mock-server": "^7.2.1",
+    "openid-client": "^6.8.1",
     "pg": "^8.16.3",
     "prisma": "^5.22.0",
     "react": "^19.2.0",

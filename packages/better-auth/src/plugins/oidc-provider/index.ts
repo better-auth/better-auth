@@ -31,6 +31,7 @@ import type {
 	OIDCOptions,
 } from "./types";
 import { defaultClientSecretHasher } from "./utils";
+import { defu } from 'defu'
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -84,7 +85,7 @@ export const getMetadata = (
 	const supportedAlgs = options?.useJWTPlugin
 		? ["RS256", "EdDSA", "none"]
 		: ["HS256", "none"];
-	return {
+	const defaultMetadata = {
 		issuer,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
 		token_endpoint: `${baseURL}/oauth2/token`,
@@ -119,8 +120,8 @@ export const getMetadata = (
 			"email_verified",
 			"name",
 		],
-		...options?.metadata,
-	};
+	} satisfies OIDCMetadata
+	return defu<OIDCMetadata, [OIDCMetadata]>(options?.metadata, defaultMetadata)
 };
 
 /**
