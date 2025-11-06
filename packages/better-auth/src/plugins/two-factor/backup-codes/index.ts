@@ -454,9 +454,6 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			 * **server:**
 			 * `auth.api.viewBackupCodes`
 			 *
-			 * **client:**
-			 * `authClient.twoFactor.viewBackupCodes`
-			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-view-backup-codes)
 			 */
 			viewBackupCodes: createAuthEndpoint(
