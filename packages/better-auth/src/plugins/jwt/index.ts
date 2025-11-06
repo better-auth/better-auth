@@ -131,9 +131,9 @@ export const jwt = (options?: JwtOptions | undefined) => {
 						throw new APIError("NOT_FOUND");
 					}
 
-					const adapter = getJwksAdapter(ctx.context.adapter);
+					const adapter = getJwksAdapter(ctx.context.adapter, options);
 
-					const keySets = await adapter.getAllKeys();
+					const keySets = await adapter.getAllKeys(ctx);
 
 					if (keySets.length === 0) {
 						const key = await createJwk(ctx, options);
