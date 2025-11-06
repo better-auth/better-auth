@@ -1152,7 +1152,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					matcher(context) {
 						return !!(
 							context.path?.startsWith("/sign-up") &&
-							opts.sendVerificationOnSignUp
+							opts.sendVerificationOnSignUp &&
+							!opts.overrideDefaultEmailVerification
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
