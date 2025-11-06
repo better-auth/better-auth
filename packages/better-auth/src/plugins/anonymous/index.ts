@@ -48,7 +48,7 @@ export interface AnonymousOptions {
 		| undefined;
 	/**
 	 * Disable deleting the anonymous user after linking
-	 * 
+	 *
 	 * @cli
 	 * @type boolean
 	 * @default false
