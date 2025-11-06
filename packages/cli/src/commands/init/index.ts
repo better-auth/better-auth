@@ -25,7 +25,7 @@ export async function initAction(opts: any) {
 	intro("👋 Better Auth CLI");
 
 	const authConfigCode = await generateAuthConfigCode({
-		plugins: ["username", "twoFactor"],
+		plugins: ["username", "twoFactor", "anonymous", "magicLink", "phoneNumber"],
 		database: "prisma-sqlite",
 		appName: "My App",
 		baseURL: "https://my-app.com",

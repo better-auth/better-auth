@@ -59,6 +59,12 @@ const PLUGIN_TYPE_MAP: Record<
 		clientTypeFile: pluginPath("phone-number/client.ts"),
 		clientTypeName: undefined,
 	},
+	magicLink: {
+		serverTypeFile: pluginPath("magic-link/index.ts"),
+		serverTypeName: "MagicLinkopts",
+		clientTypeFile: pluginPath("magic-link/client.ts"),
+		clientTypeName: undefined,
+	},
 };
 
 const ROOT_DIR = path.resolve(__dirname, "../..");
@@ -626,6 +632,33 @@ function processProperty(
 	let isMultiselectOptions: { value: any; label?: string }[] | undefined =
 		undefined;
 
+	// Extract enum values from z.enum schema if no custom select options are provided
+	if (schema && schema.startsWith("z.enum([")) {
+		// Extract enum values from schema string: z.enum(["value1", "value2", ...]) or z.enum(["value1", "value2", ...]).optional()
+		const enumMatch = schema.match(/z\.enum\(\[(.*?)\]\)/);
+		if (enumMatch && enumMatch[1]) {
+			// Parse the enum values (they're quoted strings separated by commas)
+			const enumValues = enumMatch[1]
+				.split(",")
+				.map((v) => v.trim().replace(/^["']|["']$/g, ""))
+				.filter((v) => v.length > 0);
+
+			if (enumValues.length > 0 && !tags.selectOptions) {
+				// Convert enum values to select options
+				const options = enumValues.map((v: string) => ({
+					value: v,
+					label: toTitleCase(v),
+				}));
+				// Use multi-select if explicitly requested, otherwise use regular select
+				if (tags.isMultiSelect) {
+					isMultiselectOptions = options;
+				} else {
+					isSelectOptions = options;
+				}
+			}
+		}
+	}
+
 	// Use custom select options if provided in JSDoc
 	if (tags.selectOptions && tags.selectOptions.length > 0) {
 		const options = tags.selectOptions;
@@ -704,7 +737,6 @@ function processProperty(
 	const option: GetArgumentsOption = {
 		flag,
 		description: tags.description || propertyName,
-		question,
 		skipPrompt: !tags.hasPrompt, // Default: skip prompt unless @prompt tag is present
 		argument: {
 			index: 0,
@@ -712,6 +744,12 @@ function processProperty(
 			...(schema !== undefined && { schema }),
 		},
 	};
+
+	// Only set question if this is NOT a nested object
+	// Nested objects don't need questions as they're composite types
+	if (!nestedOptions || nestedOptions.length === 0) {
+		option.question = question;
+	}
 
 	// Only set defaultValue if this is NOT a nested object
 	// Nested objects should have their defaults set on individual properties, not the parent

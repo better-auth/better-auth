@@ -20,7 +20,7 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, "../..");
 
 // Create a temporary directory for test files
-const TEST_DIR = path.join(ROOT_DIR, "packages/cli/scripts/.tmp");
+const TEST_DIR = path.join(__dirname, ".tmp");
 
 // Helper to create mock JSDoc nodes
 function createMockJsDocNode(text: string): any {
@@ -551,7 +551,6 @@ describe("generate-plugin-config", () => {
 			const arg = {
 				flag: "test-plugin-config",
 				description: "Configuration object",
-				question: "[Test Plugin] Configure settings",
 				skipPrompt: true,
 				isNestedObject: [
 					{
@@ -574,6 +573,14 @@ describe("generate-plugin-config", () => {
 			const result = generateArgumentCode(arg);
 			expect(result).toContain("isNestedObject:");
 			expect(result).toContain("test-plugin-config-timeout");
+			// Nested object parent should not have question in generated code
+			// Check that question is not present in the parent object section (before isNestedObject)
+			const parentSection = result.split("isNestedObject:")[0];
+			expect(parentSection).not.toContain("question:");
+			// But nested object properties should have questions
+			expect(result).toContain(
+				'question: "[Test Plugin] What is the timeout?"',
+			);
 		});
 
 		it("should handle string defaultValue correctly", () => {
@@ -865,11 +872,15 @@ export interface TestPluginNestedOptions {
 			expect(configProperty).toBeDefined();
 			expect(configProperty?.isNestedObject).toBeDefined();
 			expect(configProperty?.isNestedObject).toHaveLength(1);
+			// Nested objects should not have a question property
+			expect(configProperty?.question).toBeUndefined();
 
 			const nestedTimeout = configProperty?.isNestedObject?.[0];
 			expect(nestedTimeout).toBeDefined();
 			expect(nestedTimeout?.flag).toBe("test-plugin-config-timeout");
 			expect(nestedTimeout?.defaultValue).toBe(30);
+			// Nested object properties should have questions
+			expect(nestedTimeout?.question).toBeDefined();
 		});
 
 		it("should parse plugin with @question and @prompt tags", () => {
@@ -959,6 +970,95 @@ export interface TestPluginNestedOptions {
 			expect(categoryConfig?.argument.schema).toBe(
 				'z.enum(["category1", "category2", "category3"]).optional()',
 			);
+			// Should automatically set isSelectOptions from z.enum schema
+			expect(categoryConfig?.isSelectOptions).toEqual([
+				{ value: "category1", label: "Category1" },
+				{ value: "category2", label: "Category2" },
+				{ value: "category3", label: "Category3" },
+			]);
+		});
+
+		it("should automatically set isSelectOptions for union type enums", () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-union-enum.ts");
+			const testContent = `export interface TestPluginUnionEnumOptions {
+	/**
+	 * Select status
+	 * @cli
+	 */
+	status: "active" | "inactive" | "pending";
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginUnionEnumOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+			const statusConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-status",
+			);
+			expect(statusConfig).toBeDefined();
+			expect(statusConfig?.argument.schema).toBe(
+				'z.enum(["active", "inactive", "pending"])',
+			);
+			// Should automatically set isSelectOptions from z.enum schema
+			expect(statusConfig?.isSelectOptions).toEqual([
+				{ value: "active", label: "Active" },
+				{ value: "inactive", label: "Inactive" },
+				{ value: "pending", label: "Pending" },
+			]);
+		});
+
+		it("should use custom select options over automatic enum extraction", () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-custom-select-override.ts");
+			const testContent = `export interface TestPluginCustomSelectOverrideOptions {
+	/**
+	 * Select mode with custom labels
+	 * @cli select development:Development production:Production
+	 */
+	mode: "development" | "production";
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginCustomSelectOverrideOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+			const modeConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-mode",
+			);
+			expect(modeConfig).toBeDefined();
+			expect(modeConfig?.argument.schema).toBe(
+				'z.enum(["development", "production"])',
+			);
+			// Should use custom select options instead of automatic extraction
+			expect(modeConfig?.isSelectOptions).toEqual([
+				{ value: "development", label: "Development" },
+				{ value: "production", label: "Production" },
+			]);
 		});
 
 		it("should handle plugin with no @cli tags", () => {

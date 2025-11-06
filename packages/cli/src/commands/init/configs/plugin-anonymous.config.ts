@@ -6,53 +6,53 @@ import type { PluginConfig } from "./plugins-index.config";
 // Read more about the script at /packages/cli/scripts/README.md
 
 export const anonymousPluginConfig = {
-	displayName: "Anonymous",
-	auth: {
-		function: "anonymous",
-		imports: [
-			{
-				path: "better-auth/plugins",
-				imports: [createImport({ name: "anonymous" })],
-				isNamedImport: false,
-			},
-		],
-		arguments: [
-			{
-				flag: "anonymous-email-domain-name",
-				description:
-					"Configure the domain name of the temporary email address for anonymous users in the database.",
-				question: "[Anonymous] What is the email domain name?",
-				defaultValue: "baseURL",
-				skipPrompt: true,
-				argument: {
-					index: 0,
-					isProperty: "emailDomainName",
-					schema: z.coerce.string().optional(),
-				},
-			},
-			{
-				flag: "anonymous-disable-delete-anonymous-user",
-				description: "Disable deleting the anonymous user after linking",
-				question:
-					"[Anonymous] Would you like to disable delete anonymous user?",
-				defaultValue: false,
-				skipPrompt: true,
-				argument: {
-					index: 0,
-					isProperty: "disableDeleteAnonymousUser",
-					schema: z.coerce.boolean().optional(),
-				},
-			},
-		],
-	},
-	authClient: {
-		function: "anonymousClient",
-		imports: [
-			{
-				path: "better-auth/client/plugins",
-				imports: [createImport({ name: "anonymousClient" })],
-				isNamedImport: false,
-			},
-		],
-	},
+  displayName: "Anonymous",
+  auth: {
+    function: "anonymous",
+    imports: [
+      {
+        path: "better-auth/plugins",
+        imports: [createImport({ name: "anonymous" })],
+        isNamedImport: false,
+      },
+    ],
+    arguments: [
+      {
+        flag: "anonymous-email-domain-name",
+        description:
+          "Configure the domain name of the temporary email address for anonymous users in the database.",
+        question: "[Anonymous] What is the email domain name?",
+        defaultValue: "baseURL",
+        skipPrompt: true,
+        argument: {
+          index: 0,
+          isProperty: "emailDomainName",
+          schema: z.coerce.string().optional(),
+        },
+      },
+      {
+        flag: "anonymous-disable-delete-anonymous-user",
+        description: "Disable deleting the anonymous user after linking",
+        question:
+          "[Anonymous] Would you like to disable delete anonymous user?",
+        defaultValue: false,
+        skipPrompt: true,
+        argument: {
+          index: 0,
+          isProperty: "disableDeleteAnonymousUser",
+          schema: z.coerce.boolean().optional(),
+        },
+      },
+    ],
+  },
+  authClient: {
+    function: "anonymousClient",
+    imports: [
+      {
+        path: "better-auth/client/plugins",
+        imports: [createImport({ name: "anonymousClient" })],
+        isNamedImport: false,
+      },
+    ],
+  },
 } as const satisfies PluginConfig;

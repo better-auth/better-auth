@@ -13,8 +13,12 @@ import { defaultKeyHasher } from "./utils";
 
 interface MagicLinkopts {
 	/**
-	 * Time in seconds until the magic link expires.
-	 * @default (60 * 5) // 5 minutes
+	 * Time in seconds until the magic link expires. Default is (60 * 5) 5 minutes
+	 * @default 300
+	 *
+	 * @cli
+	 * @question What is the expiration time for the magic link in seconds?
+	 * @type number
 	 */
 	expiresIn?: number | undefined;
 	/**
@@ -35,16 +39,27 @@ interface MagicLinkopts {
 	 */
 	disableSignUp?: boolean | undefined;
 	/**
-	 * Rate limit configuration.
+	 * Rate limit configuration. Default window is 60 seconds and max is 5 requests.
 	 *
-	 * @default {
-	 *  window: 60,
-	 *  max: 5,
-	 * }
+	 * @cli
 	 */
 	rateLimit?:
 		| {
+				/**
+				 * Window in seconds. Default is 60 seconds.
+				 * @default 60
+				 * @cli
+				 * @question What is the window in seconds?
+				 * @type number
+				 */
 				window: number;
+				/**
+				 * Max requests. Default is 5 requests.
+				 * @default 5
+				 * @cli
+				 * @question What is the max requests?
+				 * @type number
+				 */
 				max: number;
 		  }
 		| undefined;
@@ -58,6 +73,9 @@ interface MagicLinkopts {
 	 * Note: This will not affect the token that's sent, it will only affect the token stored in your database.
 	 *
 	 * @default "plain"
+	 * @cli
+	 * @question How would you like to store the token?
+	 * @type enum plain hashed
 	 */
 	storeToken?:
 		| (

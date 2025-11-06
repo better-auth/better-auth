@@ -6,282 +6,278 @@ import type { PluginConfig } from "./plugins-index.config";
 // Read more about the script at /packages/cli/scripts/README.md
 
 export const twoFactorPluginConfig = {
-	displayName: "Two Factor",
-	auth: {
-		function: "twoFactor",
-		imports: [
-			{
-				path: "better-auth/plugins",
-				imports: [createImport({ name: "twoFactor" })],
-				isNamedImport: false,
-			},
-		],
-		arguments: [
-			{
-				flag: "two-factor-issuer",
-				description:
-					"The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.",
-				question: "[Two Factor] What is the issuer?",
-				defaultValue: "My App",
-				skipPrompt: true,
-				argument: {
-					index: 0,
-					isProperty: "issuer",
-					schema: z.coerce.string().optional(),
-				},
-			},
-			{
-				flag: "two-factor-totp-options",
-				description: "The options for the TOTP authentication.",
-				question: "[Two Factor] What is the totp options?",
-				skipPrompt: true,
-				isNestedObject: [
-					{
-						flag: "two-factor-totp-options-digits",
-						description: "How many digits the otp to be",
-						question: "[Two Factor] How many digits should the totp be?",
-						defaultValue: 6,
-						skipPrompt: true,
-						isNumber: true,
-						argument: {
-							index: 0,
-							isProperty: "digits",
-							schema: z.coerce.number().optional(),
-						},
-					},
-					{
-						flag: "two-factor-totp-options-period",
-						description: "Period for otp in seconds.",
-						question: "[Two Factor] What is the period for the totp?",
-						defaultValue: 30,
-						skipPrompt: true,
-						isNumber: true,
-						argument: {
-							index: 0,
-							isProperty: "period",
-							schema: z.coerce.number().optional(),
-						},
-					},
-					{
-						flag: "two-factor-totp-options-backup-codes",
-						description: "Backup codes configuration",
-						question: "[Two Factor] What is the backup codes?",
-						skipPrompt: true,
-						isNestedObject: [
-							{
-								flag: "two-factor-backup-codes-amount",
-								description: "The amount of backup codes to generate",
-								question:
-									"[Two Factor] What is the amount of backup codes to generate?",
-								defaultValue: 10,
-								skipPrompt: true,
-								isNumber: true,
-								argument: {
-									index: 0,
-									isProperty: "amount",
-									schema: z.coerce.number().optional(),
-								},
-							},
-							{
-								flag: "two-factor-backup-codes-length",
-								description: "The length of the backup codes",
-								question:
-									"[Two Factor] What is the length of the backup codes?",
-								defaultValue: 10,
-								skipPrompt: true,
-								isNumber: true,
-								argument: {
-									index: 0,
-									isProperty: "length",
-									schema: z.coerce.number().optional(),
-								},
-							},
-							{
-								flag: "two-factor-backup-codes-store-backup-codes",
-								description:
-									"How to store the backup codes in the database, whether encrypted or plain.",
-								question:
-									"[Two Factor] How to store the backup codes in the database, whether encrypted or plain?",
-								skipPrompt: true,
-								isSelectOptions: [
-									{ value: "plain", label: "Plain" },
-									{ value: "encrypted", label: "Encrypted" },
-								],
-								argument: {
-									index: 0,
-									isProperty: "storeBackupCodes",
-									schema: z.coerce.string().optional(),
-								},
-							},
-						],
-						argument: {
-							index: 0,
-							isProperty: "backupCodes",
-						},
-					},
-					{
-						flag: "two-factor-totp-options-disable",
-						description: "Disable totp",
-						question: "[Two Factor] Would you like to disable?",
-						defaultValue: false,
-						skipPrompt: true,
-						argument: {
-							index: 0,
-							isProperty: "disable",
-							schema: z.coerce.boolean().optional(),
-						},
-					},
-				],
-				argument: {
-					index: 0,
-					isProperty: "totpOptions",
-				},
-			},
-			{
-				flag: "two-factor-otp-options",
-				description: "The options for the OTP authentication.",
-				question: "[Two Factor] What is the otp options?",
-				skipPrompt: true,
-				isNestedObject: [
-					{
-						flag: "two-factor-otp-options-period",
-						description: "How long the opt will be valid for in minutes",
-						question: "[Two Factor] What is the period for the otp?",
-						defaultValue: 3,
-						skipPrompt: true,
-						argument: {
-							index: 0,
-							isProperty: "period",
-							schema: z.coerce.string().optional(),
-						},
-					},
-					{
-						flag: "two-factor-otp-options-digits",
-						description: "Number of digits for the OTP code",
-						question: "[Two Factor] What is the number of digits for the otp?",
-						defaultValue: 6,
-						skipPrompt: true,
-						argument: {
-							index: 0,
-							isProperty: "digits",
-							schema: z.coerce.string().optional(),
-						},
-					},
-					{
-						flag: "two-factor-otp-options-allowed-attempts",
-						description: "The number of allowed attempts for the OTP",
-						question:
-							"[Two Factor] What is the number of allowed attempts for the otp?",
-						defaultValue: 5,
-						skipPrompt: true,
-						isNumber: true,
-						argument: {
-							index: 0,
-							isProperty: "allowedAttempts",
-							schema: z.coerce.number().optional(),
-						},
-					},
-					{
-						flag: "two-factor-otp-options-store-otp",
-						description: "How do you want to store the OTP code?",
-						question: "[Two Factor] How do you want to store the OTP code?",
-						defaultValue: "plain",
-						skipPrompt: true,
-						isSelectOptions: [
-							{ value: "plain", label: "Plain" },
-							{ value: "encrypted", label: "Encrypted" },
-							{ value: "hashed", label: "Hashed" },
-						],
-						argument: {
-							index: 0,
-							isProperty: "storeOTP",
-							schema: z.coerce.string().optional(),
-						},
-					},
-				],
-				argument: {
-					index: 0,
-					isProperty: "otpOptions",
-				},
-			},
-			{
-				flag: "two-factor-backup-code-options",
-				description: "The options for the backup code authentication.",
-				question: "[Two Factor] What is the backup code options?",
-				skipPrompt: true,
-				isNestedObject: [
-					{
-						flag: "two-factor-backup-code-options-amount",
-						description: "The amount of backup codes to generate",
-						question:
-							"[Two Factor] What is the amount of backup codes to generate?",
-						defaultValue: 10,
-						skipPrompt: true,
-						isNumber: true,
-						argument: {
-							index: 0,
-							isProperty: "amount",
-							schema: z.coerce.number().optional(),
-						},
-					},
-					{
-						flag: "two-factor-backup-code-options-length",
-						description: "The length of the backup codes",
-						question: "[Two Factor] What is the length of the backup codes?",
-						defaultValue: 10,
-						skipPrompt: true,
-						isNumber: true,
-						argument: {
-							index: 0,
-							isProperty: "length",
-							schema: z.coerce.number().optional(),
-						},
-					},
-					{
-						flag: "two-factor-backup-code-options-store-backup-codes",
-						description:
-							"How to store the backup codes in the database, whether encrypted or plain.",
-						question:
-							"[Two Factor] How to store the backup codes in the database, whether encrypted or plain?",
-						skipPrompt: true,
-						isSelectOptions: [
-							{ value: "plain", label: "Plain" },
-							{ value: "encrypted", label: "Encrypted" },
-						],
-						argument: {
-							index: 0,
-							isProperty: "storeBackupCodes",
-							schema: z.coerce.string().optional(),
-						},
-					},
-				],
-				argument: {
-					index: 0,
-					isProperty: "backupCodeOptions",
-				},
-			},
-			{
-				flag: "two-factor-skip-verification-on-enable",
-				description: "Skip verification on enabling two factor authentication.",
-				question: "[Two Factor] Would you like to skip verification on enable?",
-				defaultValue: false,
-				skipPrompt: true,
-				argument: {
-					index: 0,
-					isProperty: "skipVerificationOnEnable",
-					schema: z.coerce.boolean().optional(),
-				},
-			},
-		],
-	},
-	authClient: {
-		function: "twoFactorClient",
-		imports: [
-			{
-				path: "better-auth/client/plugins",
-				imports: [createImport({ name: "twoFactorClient" })],
-				isNamedImport: false,
-			},
-		],
-	},
+  displayName: "Two Factor",
+  auth: {
+    function: "twoFactor",
+    imports: [
+      {
+        path: "better-auth/plugins",
+        imports: [createImport({ name: "twoFactor" })],
+        isNamedImport: false,
+      },
+    ],
+    arguments: [
+      {
+        flag: "two-factor-issuer",
+        description:
+          "The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.",
+        question: "[Two Factor] What is the issuer?",
+        defaultValue: "My App",
+        skipPrompt: true,
+        argument: {
+          index: 0,
+          isProperty: "issuer",
+          schema: z.coerce.string().optional(),
+        },
+      },
+      {
+        flag: "two-factor-totp-options",
+        description: "The options for the TOTP authentication.",
+        skipPrompt: true,
+        isNestedObject: [
+          {
+            flag: "two-factor-totp-options-digits",
+            description: "How many digits the otp to be",
+            question: "[Two Factor] How many digits should the totp be?",
+            defaultValue: 6,
+            skipPrompt: true,
+            isNumber: true,
+            argument: {
+              index: 0,
+              isProperty: "digits",
+              schema: z.coerce.number().optional(),
+            },
+          },
+          {
+            flag: "two-factor-totp-options-period",
+            description: "Period for otp in seconds.",
+            question: "[Two Factor] What is the period for the totp?",
+            defaultValue: 30,
+            skipPrompt: true,
+            isNumber: true,
+            argument: {
+              index: 0,
+              isProperty: "period",
+              schema: z.coerce.number().optional(),
+            },
+          },
+          {
+            flag: "two-factor-totp-options-backup-codes",
+            description: "Backup codes configuration",
+            skipPrompt: true,
+            isNestedObject: [
+              {
+                flag: "two-factor-backup-codes-amount",
+                description: "The amount of backup codes to generate",
+                question:
+                  "[Two Factor] What is the amount of backup codes to generate?",
+                defaultValue: 10,
+                skipPrompt: true,
+                isNumber: true,
+                argument: {
+                  index: 0,
+                  isProperty: "amount",
+                  schema: z.coerce.number().optional(),
+                },
+              },
+              {
+                flag: "two-factor-backup-codes-length",
+                description: "The length of the backup codes",
+                question:
+                  "[Two Factor] What is the length of the backup codes?",
+                defaultValue: 10,
+                skipPrompt: true,
+                isNumber: true,
+                argument: {
+                  index: 0,
+                  isProperty: "length",
+                  schema: z.coerce.number().optional(),
+                },
+              },
+              {
+                flag: "two-factor-backup-codes-store-backup-codes",
+                description:
+                  "How to store the backup codes in the database, whether encrypted or plain.",
+                question:
+                  "[Two Factor] How to store the backup codes in the database, whether encrypted or plain?",
+                skipPrompt: true,
+                isSelectOptions: [
+                  { value: "plain", label: "Plain" },
+                  { value: "encrypted", label: "Encrypted" },
+                ],
+                argument: {
+                  index: 0,
+                  isProperty: "storeBackupCodes",
+                  schema: z.coerce.string().optional(),
+                },
+              },
+            ],
+            argument: {
+              index: 0,
+              isProperty: "backupCodes",
+            },
+          },
+          {
+            flag: "two-factor-totp-options-disable",
+            description: "Disable totp",
+            question: "[Two Factor] Would you like to disable?",
+            defaultValue: false,
+            skipPrompt: true,
+            argument: {
+              index: 0,
+              isProperty: "disable",
+              schema: z.coerce.boolean().optional(),
+            },
+          },
+        ],
+        argument: {
+          index: 0,
+          isProperty: "totpOptions",
+        },
+      },
+      {
+        flag: "two-factor-otp-options",
+        description: "The options for the OTP authentication.",
+        skipPrompt: true,
+        isNestedObject: [
+          {
+            flag: "two-factor-otp-options-period",
+            description: "How long the opt will be valid for in minutes",
+            question: "[Two Factor] What is the period for the otp?",
+            defaultValue: 3,
+            skipPrompt: true,
+            argument: {
+              index: 0,
+              isProperty: "period",
+              schema: z.coerce.string().optional(),
+            },
+          },
+          {
+            flag: "two-factor-otp-options-digits",
+            description: "Number of digits for the OTP code",
+            question: "[Two Factor] What is the number of digits for the otp?",
+            defaultValue: 6,
+            skipPrompt: true,
+            argument: {
+              index: 0,
+              isProperty: "digits",
+              schema: z.coerce.string().optional(),
+            },
+          },
+          {
+            flag: "two-factor-otp-options-allowed-attempts",
+            description: "The number of allowed attempts for the OTP",
+            question:
+              "[Two Factor] What is the number of allowed attempts for the otp?",
+            defaultValue: 5,
+            skipPrompt: true,
+            isNumber: true,
+            argument: {
+              index: 0,
+              isProperty: "allowedAttempts",
+              schema: z.coerce.number().optional(),
+            },
+          },
+          {
+            flag: "two-factor-otp-options-store-otp",
+            description: "How do you want to store the OTP code?",
+            question: "[Two Factor] How do you want to store the OTP code?",
+            defaultValue: "plain",
+            skipPrompt: true,
+            isSelectOptions: [
+              { value: "plain", label: "Plain" },
+              { value: "encrypted", label: "Encrypted" },
+              { value: "hashed", label: "Hashed" },
+            ],
+            argument: {
+              index: 0,
+              isProperty: "storeOTP",
+              schema: z.coerce.string().optional(),
+            },
+          },
+        ],
+        argument: {
+          index: 0,
+          isProperty: "otpOptions",
+        },
+      },
+      {
+        flag: "two-factor-backup-code-options",
+        description: "The options for the backup code authentication.",
+        skipPrompt: true,
+        isNestedObject: [
+          {
+            flag: "two-factor-backup-code-options-amount",
+            description: "The amount of backup codes to generate",
+            question:
+              "[Two Factor] What is the amount of backup codes to generate?",
+            defaultValue: 10,
+            skipPrompt: true,
+            isNumber: true,
+            argument: {
+              index: 0,
+              isProperty: "amount",
+              schema: z.coerce.number().optional(),
+            },
+          },
+          {
+            flag: "two-factor-backup-code-options-length",
+            description: "The length of the backup codes",
+            question: "[Two Factor] What is the length of the backup codes?",
+            defaultValue: 10,
+            skipPrompt: true,
+            isNumber: true,
+            argument: {
+              index: 0,
+              isProperty: "length",
+              schema: z.coerce.number().optional(),
+            },
+          },
+          {
+            flag: "two-factor-backup-code-options-store-backup-codes",
+            description:
+              "How to store the backup codes in the database, whether encrypted or plain.",
+            question:
+              "[Two Factor] How to store the backup codes in the database, whether encrypted or plain?",
+            skipPrompt: true,
+            isSelectOptions: [
+              { value: "plain", label: "Plain" },
+              { value: "encrypted", label: "Encrypted" },
+            ],
+            argument: {
+              index: 0,
+              isProperty: "storeBackupCodes",
+              schema: z.coerce.string().optional(),
+            },
+          },
+        ],
+        argument: {
+          index: 0,
+          isProperty: "backupCodeOptions",
+        },
+      },
+      {
+        flag: "two-factor-skip-verification-on-enable",
+        description: "Skip verification on enabling two factor authentication.",
+        question: "[Two Factor] Would you like to skip verification on enable?",
+        defaultValue: false,
+        skipPrompt: true,
+        argument: {
+          index: 0,
+          isProperty: "skipVerificationOnEnable",
+          schema: z.coerce.boolean().optional(),
+        },
+      },
+    ],
+  },
+  authClient: {
+    function: "twoFactorClient",
+    imports: [
+      {
+        path: "better-auth/client/plugins",
+        imports: [createImport({ name: "twoFactorClient" })],
+        isNamedImport: false,
+      },
+    ],
+  },
 } as const satisfies PluginConfig;
