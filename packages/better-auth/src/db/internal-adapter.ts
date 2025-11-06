@@ -36,7 +36,10 @@ function getPluginSessionFields(
 			if (!field) continue;
 
 			if (field.defaultValue !== undefined) {
-				pluginFields[fieldName] = field.defaultValue;
+				pluginFields[fieldName] =
+					typeof field.defaultValue === "function"
+						? field.defaultValue()
+						: field.defaultValue;
 			} else if (!field.required) {
 				pluginFields[fieldName] = null;
 			}
