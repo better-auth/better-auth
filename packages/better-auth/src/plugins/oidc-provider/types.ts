@@ -1,5 +1,6 @@
 import type { InferOptionSchema, User } from "../../types";
 import type { schema } from "./schema";
+import type { AuthorizePrompt } from "./utils/prompt";
 
 export interface OIDCOptions {
 	/**
@@ -169,6 +170,11 @@ export interface OIDCOptions {
 	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
+/**
+ * Request parameters for the authorization endpoint.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+ */
 export interface AuthorizationQuery {
 	/**
 	 * The response type. Must be 'code' or 'token'. Code is for authorization code flow, token is
@@ -204,7 +210,7 @@ export interface AuthorizationQuery {
 	/**
 	 * The prompt parameter is used to specify the type of user interaction that is required.
 	 */
-	prompt?: ("none" | "consent" | "login" | "select_account") | undefined;
+	prompt?: AuthorizePrompt | (string & {}) | undefined;
 	/**
 	 * The display parameter is used to specify how the authorization server displays the
 	 * authentication and consent user interface pages to the end user.

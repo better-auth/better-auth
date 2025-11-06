@@ -21,6 +21,7 @@ import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
 import { getJwtToken } from "../jwt/sign";
 import { authorize } from "./authorize";
+import { checkPromptMiddleware } from "./middlewares/check-prompt";
 import { schema } from "./schema";
 import type {
 	Client,
@@ -291,6 +292,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "GET",
 					query: z.record(z.string(), z.any()),
+					middleware: [checkPromptMiddleware],
 					metadata: {
 						openapi: {
 							description: "Authorize an OAuth2 request",
