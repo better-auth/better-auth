@@ -455,7 +455,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			/**
 			 * ### Endpoint
 			 *
-			 * GET `/two-factor/view-backup-codes`
+			 * POST `/two-factor/view-backup-codes`
 			 *
 			 * ### API Methods
 			 *
@@ -470,7 +470,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			viewBackupCodes: createAuthEndpoint(
 				"/two-factor/view-backup-codes",
 				{
-					method: "GET",
+					method: "POST",
 					body: z.object({
 						userId: z.coerce.string().meta({
 							description: `The user ID to view all backup codes. Eg: "user-id"`,
