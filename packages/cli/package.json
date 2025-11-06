@@ -35,11 +35,12 @@
   "bin": "./dist/index.mjs",
   "devDependencies": {
     "@better-auth/passkey": "workspace:*",
-    "@types/semver": "^7.7.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/prompts": "^2.4.9",
+    "@types/semver": "^7.7.1",
     "tsdown": "catalog:",
     "tsx": "^4.20.6",
+    "type-fest": "^5.2.0",
     "typescript": "catalog:"
   },
   "dependencies": {
