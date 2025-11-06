@@ -50,7 +50,8 @@ export async function initAction(opts: any) {
 			"multiSession",
 			"oauthProxy",
 			"oneTimeToken",
-			"openAPI"
+			"openAPI",
+			"jwt"
 		],
 		database: "prisma-sqlite",
 		appName: "My App",

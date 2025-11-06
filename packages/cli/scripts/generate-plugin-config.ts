@@ -194,6 +194,12 @@ const PLUGIN_TYPE_MAP: Record<
 		clientTypeFile: undefined,
 		clientTypeName: undefined,
 	},
+	jwt: {
+		serverTypeFile: pluginPath("jwt/types.ts"),
+		serverTypeName: "JwtOptions",
+		clientTypeFile: undefined,
+		clientTypeName: undefined,
+	}
 };
 
 const ROOT_DIR = path.resolve(__dirname, "../..");

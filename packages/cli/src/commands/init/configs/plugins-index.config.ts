@@ -9,6 +9,7 @@ import { deviceAuthorizationPluginConfig } from "./plugin-device-authorization.c
 import { emailOTPPluginConfig } from "./plugin-email-otp.config";
 import { genericOAuthPluginConfig } from "./plugin-generic-oauth.config";
 import { haveIBeenPwnedPluginConfig } from "./plugin-have-ibeen-pwned.config";
+import { jwtPluginConfig } from "./plugin-jwt.config";
 import { lastLoginMethodPluginConfig } from "./plugin-last-login-method.config";
 import { magicLinkPluginConfig } from "./plugin-magic-link.config";
 import { mcpPluginConfig } from "./plugin-mcp.config";
@@ -72,4 +73,5 @@ export const pluginsConfig = {
 	oauthProxy: oauthProxyPluginConfig,
 	oneTimeToken: oneTimeTokenPluginConfig,
 	openAPI: openAPIPluginConfig,
+	jwt: jwtPluginConfig,
 } as const satisfies Record<string, PluginConfig>;
