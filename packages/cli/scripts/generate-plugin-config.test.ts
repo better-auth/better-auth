@@ -110,6 +110,148 @@ describe("generate-plugin-config", () => {
 			expect(result.isRequired).toBe(true);
 		});
 
+		it("should detect @cli optional", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * Description here
+				 * @cli optional
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.isOptional).toBe(true);
+		});
+
+		it("should detect @cli example tag", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * Description here
+				 * @cli example
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.isExample).toBe(true);
+		});
+
+		it("should extract @example tag (single line)", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * Description here
+				 * @cli example
+				 * @example async (data) => { console.log(data); }
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.exampleValue).toBe("async (data) => { console.log(data); }");
+		});
+
+		it("should extract @example tag (multi-line code block)", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * Description here
+				 * @cli example
+				 * @example async (data) => {
+				 *   console.log(data);
+				 *   return true;
+				 * }
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.exampleValue).toBe("async (data) => {\n  console.log(data);\n  return true;\n}");
+		});
+
+		it("should extract @example tag with JSDoc asterisks", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * Description here
+				 * @cli example
+				 * @example async (data) => {
+				 * *   console.log(data);
+				 * *   return true;
+				 * * }
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.exampleValue).toBe("async (data) => {\n  console.log(data);\n  return true;\n}");
+		});
+
+		it("should extract @example tag before other @ tags", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * Description here
+				 * @cli example
+				 * @example async (data) => { return true; }
+				 * @default "test"
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.exampleValue).toBe("async (data) => { return true; }");
+			expect(result.defaultValue).toBe("test");
+		});
+
+		it("should extract @example tag with markdown code fence (```ts)", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * Description here
+				 * @cli example
+				 * @example \`\`\`ts
+				 * async (data) => {
+				 *   console.log(data);
+				 *   return true;
+				 * }
+				 * \`\`\`
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.exampleValue).toBe("async (data) => {\n  console.log(data);\n  return true;\n}");
+		});
+
+		it("should extract @example tag with markdown code fence (```js)", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * Description here
+				 * @cli example
+				 * @example \`\`\`js
+				 * async () => { return "test"; }
+				 * \`\`\`
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.exampleValue).toBe('async () => { return "test"; }');
+		});
+
+		it("should extract @example tag with markdown code fence (no language)", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * Description here
+				 * @cli example
+				 * @example \`\`\`
+				 * async (data) => {
+				 *   return data;
+				 * }
+				 * \`\`\`
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.exampleValue).toBe("async (data) => {\n  return data;\n}");
+		});
+
+		it("should extract @example tag with markdown code fence and JSDoc asterisks", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * Description here
+				 * @cli example
+				 * @example \`\`\`ts
+				 * async (data) => {
+				 *   console.log(data);
+				 * }
+				 * \`\`\`
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			// Code fence content should have JSDoc asterisks removed but code preserved
+			expect(result.exampleValue).toBe("async (data) => {\n  console.log(data);\n}");
+		});
+
 		it("should extract @default value", () => {
 			const jsDoc = [
 				createMockJsDocNode(`/**
@@ -408,6 +550,42 @@ describe("generate-plugin-config", () => {
 			]);
 			expect(result).toBe('z.enum(["value1", "value2", "value3"])');
 		});
+
+		it("should respect @cli required tag", () => {
+			const mockType = {
+				getText: () => "string | undefined",
+				isNullable: () => false,
+				isUndefined: () => true,
+				isUnion: () => false,
+				getSymbol: () => ({ getName: () => "String" }),
+			};
+			const result = generateZodSchema(mockType, undefined, undefined, true, false);
+			expect(result).toBe("z.coerce.string()");
+		});
+
+		it("should respect @cli optional tag", () => {
+			const mockType = {
+				getText: () => "string",
+				isNullable: () => false,
+				isUndefined: () => false,
+				isUnion: () => false,
+				getSymbol: () => ({ getName: () => "String" }),
+			};
+			const result = generateZodSchema(mockType, undefined, undefined, false, true);
+			expect(result).toBe("z.coerce.string().optional()");
+		});
+
+		it("should prioritize @cli required over @cli optional", () => {
+			const mockType = {
+				getText: () => "string | undefined",
+				isNullable: () => false,
+				isUndefined: () => true,
+				isUnion: () => false,
+				getSymbol: () => ({ getName: () => "String" }),
+			};
+			const result = generateZodSchema(mockType, undefined, undefined, true, true);
+			expect(result).toBe("z.coerce.string()");
+		});
 	});
 
 	describe("generateQuestion", () => {
@@ -599,6 +777,26 @@ describe("generate-plugin-config", () => {
 			const result = generateArgumentCode(arg);
 			expect(result).toContain('defaultValue: "default-key"');
 		});
+
+		it("should handle multi-line function defaultValue correctly", () => {
+			const arg = {
+				flag: "test-plugin-send-email",
+				description: "Function to send email",
+				skipPrompt: true,
+				defaultValue: "async (data) => {\n  console.log(data);\n  return true;\n}",
+				argument: {
+					index: 0,
+					isProperty: "sendEmail",
+					schema: "z.coerce.string()",
+				},
+			};
+			const result = generateArgumentCode(arg);
+			// Should use template literal for multi-line code
+			expect(result).toContain("defaultValue: `");
+			expect(result).toContain("async (data) => {");
+			expect(result).toContain("console.log(data);");
+			expect(result).toContain("return true;");
+		});
 	});
 
 	describe("generateIndexFile", () => {
@@ -642,6 +840,7 @@ describe("generate-plugin-config", () => {
 						},
 					},
 				],
+				clientConfig: [],
 				displayName: "Test Plugin",
 				importPath: "better-auth/plugins",
 				functionName: "testPlugin",
@@ -657,6 +856,7 @@ describe("generate-plugin-config", () => {
 		it("should generate plugin file with client", () => {
 			const pluginData = {
 				pluginConfig: [],
+				clientConfig: [],
 				displayName: "Test Plugin",
 				importPath: "better-auth/plugins",
 				functionName: "testPlugin",
@@ -683,6 +883,7 @@ describe("generate-plugin-config", () => {
 						},
 					},
 				],
+				clientConfig: [],
 				displayName: "Test Plugin",
 				importPath: "better-auth/plugins",
 				functionName: "testPlugin",
@@ -1059,6 +1260,444 @@ export interface TestPluginNestedOptions {
 				{ value: "development", label: "Development" },
 				{ value: "production", label: "Production" },
 			]);
+		});
+
+		it("should parse plugin with @cli optional tag", () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-optional.ts");
+			const testContent = `export interface TestPluginOptionalOptions {
+	/**
+	 * Required field
+	 * @cli required
+	 */
+	requiredField: string;
+
+	/**
+	 * Optional field (type is required but @cli optional makes it optional)
+	 * @cli optional
+	 */
+	optionalField: string;
+
+	/**
+	 * Normal optional field (type is optional)
+	 * @cli
+	 */
+	normalOptional?: string;
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginOptionalOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+			const requiredConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-required-field",
+			);
+			expect(requiredConfig).toBeDefined();
+			expect(requiredConfig?.argument.schema).toBe("z.coerce.string()");
+
+			const optionalConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-optional-field",
+			);
+			expect(optionalConfig).toBeDefined();
+			expect(optionalConfig?.argument.schema).toBe("z.coerce.string().optional()");
+
+			const normalOptionalConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-normal-optional",
+			);
+			expect(normalOptionalConfig).toBeDefined();
+			expect(normalOptionalConfig?.argument.schema).toBe(
+				"z.coerce.string().optional()",
+			);
+		});
+
+		it("should parse plugin with @cli example and @example tag", () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-example.ts");
+			const testContent = `export interface TestPluginExampleOptions {
+	/**
+	 * Function to send email
+	 * @cli example
+	 * @example async (data) => {
+	 *   console.log("Sending email:", data);
+	 *   return true;
+	 * }
+	 */
+	sendEmail: (data: { email: string }) => Promise<boolean>;
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginExampleOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+			const sendEmailConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-send-email",
+			);
+			expect(sendEmailConfig).toBeDefined();
+			expect(sendEmailConfig?.skipPrompt).toBe(true);
+			expect(sendEmailConfig?.defaultValue).toBe(
+				"async (data) => {\n  console.log(\"Sending email:\", data);\n  return true;\n}",
+			);
+			expect(sendEmailConfig?.argument.schema).toBe("z.coerce.string()");
+		});
+
+		it("should prioritize @example over @default when @cli example is present", () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-example-priority.ts");
+			const testContent = `export interface TestPluginExamplePriorityOptions {
+	/**
+	 * Function with both @example and @default
+	 * @cli example
+	 * @example async () => { return "example"; }
+	 * @default "default-value"
+	 */
+	myFunction: () => Promise<string>;
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginExamplePriorityOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+			const myFunctionConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-my-function",
+			);
+			expect(myFunctionConfig).toBeDefined();
+			expect(myFunctionConfig?.defaultValue).toBe("async () => { return \"example\"; }");
+		});
+
+		it("should work with @cli example and @cli required together", () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-example-required.ts");
+			const testContent = `export interface TestPluginExampleRequiredOptions {
+	/**
+	 * Required function
+	 * @cli example
+	 * @cli required
+	 * @example async () => { return true; }
+	 */
+	requiredFunction: () => Promise<boolean>;
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginExampleRequiredOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+			const requiredFunctionConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-required-function",
+			);
+			expect(requiredFunctionConfig).toBeDefined();
+			expect(requiredFunctionConfig?.skipPrompt).toBe(true);
+			expect(requiredFunctionConfig?.defaultValue).toBe("async () => { return true; }");
+			expect(requiredFunctionConfig?.argument.schema).toBe("z.coerce.string()");
+		});
+
+		it("should parse plugin with @cli example and @example tag using markdown code fence", () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-example-markdown.ts");
+			const testContent = `export interface TestPluginExampleMarkdownOptions {
+	/**
+	 * Function to send email
+	 * @cli example
+	 * @example \`\`\`ts
+	 * async (data) => {
+	 *   console.log("Sending email:", data.email);
+	 *   return true;
+	 * }
+	 * \`\`\`
+	 */
+	sendEmail: (data: { email: string }) => Promise<boolean>;
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginExampleMarkdownOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+			const sendEmailConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-send-email",
+			);
+			expect(sendEmailConfig).toBeDefined();
+			expect(sendEmailConfig?.skipPrompt).toBe(true);
+			expect(sendEmailConfig?.defaultValue).toBe(
+				"async (data) => {\n  console.log(\"Sending email:\", data.email);\n  return true;\n}",
+			);
+			expect(sendEmailConfig?.argument.schema).toBe("z.coerce.string()");
+		});
+
+		it("should infer schema type from @type tag when @cli example is present", () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-example-type.ts");
+			const testContent = `export interface TestPluginExampleTypeOptions {
+	/**
+	 * Custom example value with type inference
+	 * @cli example
+	 * @type string
+	 * @example process.env.API_KEY
+	 */
+	apiKey?: string;
+	
+	/**
+	 * Number example with type inference
+	 * @cli example
+	 * @type number
+	 * @example 42
+	 */
+	timeout?: number;
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginExampleTypeOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+			const apiKeyConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-api-key",
+			);
+			expect(apiKeyConfig).toBeDefined();
+			expect(apiKeyConfig?.argument.schema).toBe("z.coerce.string().optional()");
+			expect(apiKeyConfig?.defaultValue).toBe("process.env.API_KEY");
+
+			const timeoutConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-timeout",
+			);
+			expect(timeoutConfig).toBeDefined();
+			expect(timeoutConfig?.argument.schema).toBe("z.coerce.number().optional()");
+			// defaultValue is stored as string from JSDoc, so it will be "42" not 42
+			expect(timeoutConfig?.defaultValue).toBe("42");
+		});
+
+		it("should set skipPrompt to false when @prompt tag is present", () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-prompt-skip.ts");
+			const testContent = `export interface TestPluginPromptSkipOptions {
+	/**
+	 * API key with prompt
+	 * @cli
+	 * @prompt
+	 * @question What is your API key?
+	 */
+	apiKey: string;
+	
+	/**
+	 * Secret without prompt (should skip)
+	 * @cli
+	 * @default "secret"
+	 */
+	secret?: string;
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginPromptSkipOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+			const apiKeyConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-api-key",
+			);
+			expect(apiKeyConfig).toBeDefined();
+			expect(apiKeyConfig?.skipPrompt).toBe(false); // @prompt tag present, should be false
+
+			const secretConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-secret",
+			);
+			expect(secretConfig).toBeDefined();
+			expect(secretConfig?.skipPrompt).toBe(true); // No @prompt tag, should skip
+		});
+
+		it("should generate code with skipPrompt: false when @prompt is present", () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-prompt-output.ts");
+			const testContent = `export interface TestPluginPromptOutputOptions {
+	/**
+	 * API key with prompt
+	 * @cli
+	 * @prompt
+	 * @question What is your API key?
+	 */
+	apiKey: string;
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginPromptOutputOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const pluginData = generatePluginConfig("testPlugin", pluginInfo, project);
+			const generatedCode = generateIndividualPluginFile("testPlugin", pluginData);
+
+			// Verify that skipPrompt: false appears in the generated code
+			expect(generatedCode).toContain("skipPrompt: false");
+			
+			// Verify the config object has skipPrompt: false
+			const apiKeyConfig = pluginData.pluginConfig.find(
+				(c) => c.flag === "test-plugin-api-key",
+			);
+			expect(apiKeyConfig).toBeDefined();
+			expect(apiKeyConfig?.skipPrompt).toBe(false);
+		});
+
+		it("should set skipPrompt to true when @cli example overrides @prompt", () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-example-overrides-prompt.ts");
+			const testContent = `export interface TestPluginExampleOverridesPromptOptions {
+	/**
+	 * Function with both @cli example and @prompt
+	 * @cli example
+	 * @prompt
+	 * @example async () => { return "test"; }
+	 */
+	myFunction: () => Promise<string>;
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginExampleOverridesPromptOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+			const myFunctionConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-my-function",
+			);
+			expect(myFunctionConfig).toBeDefined();
+			// @cli example should override @prompt and force skipPrompt to true
+			expect(myFunctionConfig?.skipPrompt).toBe(true);
+		});
+
+		it("should not include skipPrompt in output when undefined", () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-no-skip-prompt.ts");
+			const testContent = `export interface TestPluginNoSkipPromptOptions {
+	/**
+	 * Regular field
+	 * @cli
+	 */
+	field?: string;
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginNoSkipPromptOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const pluginData = generatePluginConfig("testPlugin", pluginInfo, project);
+			const generatedCode = generateIndividualPluginFile("testPlugin", pluginData);
+
+			// When skipPrompt is true (default without @prompt), it should be included
+			const fieldConfig = pluginData.pluginConfig.find(
+				(c) => c.flag === "test-plugin-field",
+			);
+			expect(fieldConfig).toBeDefined();
+			expect(fieldConfig?.skipPrompt).toBe(true);
+			// skipPrompt: true should be in the generated code
+			expect(generatedCode).toContain("skipPrompt: true");
 		});
 
 		it("should handle plugin with no @cli tags", () => {

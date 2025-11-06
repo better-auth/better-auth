@@ -33,6 +33,22 @@ export const magicLinkPluginConfig = {
         },
       },
       {
+        flag: "magic-link-send-magic-link",
+        description:
+          "Send magic link implementation. async ({ email, url, token }, request) => { // Send magic link to the user } ```",
+        question: "[Magic Link] What is the send magic link?",
+        defaultValue: `async ({ email, url, token }, request) => {
+ // Send magic link to the user
+}`,
+        skipPrompt: true,
+        isRequired: true,
+        argument: {
+          index: 0,
+          isProperty: "sendMagicLink",
+          schema: z.coerce.string(),
+        },
+      },
+      {
         flag: "magic-link-rate-limit",
         description:
           "Rate limit configuration. Default window is 60 seconds and max is 5 requests.",
@@ -48,7 +64,7 @@ export const magicLinkPluginConfig = {
             argument: {
               index: 0,
               isProperty: "window",
-              schema: z.coerce.number(),
+              schema: z.coerce.number().optional(),
             },
           },
           {
@@ -61,7 +77,7 @@ export const magicLinkPluginConfig = {
             argument: {
               index: 0,
               isProperty: "max",
-              schema: z.coerce.number(),
+              schema: z.coerce.number().optional(),
             },
           },
         ],

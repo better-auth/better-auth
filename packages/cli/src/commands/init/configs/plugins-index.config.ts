@@ -5,6 +5,11 @@ import { usernamePluginConfig } from "./plugin-username.config";
 import { anonymousPluginConfig } from "./plugin-anonymous.config";
 import { phoneNumberPluginConfig } from "./plugin-phone-number.config";
 import { magicLinkPluginConfig } from "./plugin-magic-link.config";
+import { emailOTPPluginConfig } from "./plugin-email-otp.config";
+import { passkeyPluginConfig } from "./plugin-passkey.config";
+import { genericOAuthPluginConfig } from "./plugin-generic-oauth.config";
+import { oneTapPluginConfig } from "./plugin-one-tap.config";
+import { siwePluginConfig } from "./plugin-siwe.config";
 
 export type Plugin = keyof typeof pluginsConfig;
 
@@ -32,4 +37,9 @@ export const pluginsConfig = {
   anonymous: anonymousPluginConfig,
   phoneNumber: phoneNumberPluginConfig,
   magicLink: magicLinkPluginConfig,
+  emailOTP: emailOTPPluginConfig,
+  passkey: passkeyPluginConfig,
+  genericOAuth: genericOAuthPluginConfig,
+  oneTap: oneTapPluginConfig,
+  siwe: siwePluginConfig,
 } as const satisfies Record<string, PluginConfig>;

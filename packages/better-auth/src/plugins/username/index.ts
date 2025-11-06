@@ -23,6 +23,7 @@ export type UsernameOptions = {
 	 *
 	 * @default 3
 	 * @cli
+	 * @prompt
 	 * @type number
 	 */
 	minUsernameLength?: number | undefined;

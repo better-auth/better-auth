@@ -49,6 +49,7 @@ export type TOTPOptions = {
 	 * @cli
 	 * @type boolean
 	 * @default false
+	 * @question Would you like to disable totp?
 	 */
 	disable?: boolean | undefined;
 };

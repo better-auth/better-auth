@@ -31,6 +31,22 @@ export const phoneNumberPluginConfig = {
         },
       },
       {
+        flag: "phone-number-send-otp",
+        description:
+          "Send OTP code to the user async ({ phoneNumber, code }, request) => { // Send OTP code to the user } ```",
+        question: "[Phone Number] What is the send o t p?",
+        defaultValue: `async ({ phoneNumber, code }, request) => {
+ // Send OTP code to the user
+}`,
+        skipPrompt: true,
+        isRequired: true,
+        argument: {
+          index: 0,
+          isProperty: "sendOTP",
+          schema: z.coerce.string(),
+        },
+      },
+      {
         flag: "phone-number-require-verification",
         description: "Require a phone number verification before signing in",
         question:

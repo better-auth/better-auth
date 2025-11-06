@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import * as z from "zod/v4";
-import { type PluginConfig, pluginsConfig } from "../configs/plugins.config";
+import {
+	type PluginConfig,
+	pluginsConfig,
+} from "../configs/plugins-index.config";
 import type { GetArgumentsFn } from "../generate-auth";
 import { formatCode } from "./format";
 import { getAuthPluginsCode } from "./plugin";
@@ -88,7 +91,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should generate code for plugin with single string argument", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "test-arg") return "test-value";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -125,7 +130,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should generate code for plugin with single number argument", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "test-arg") return 42;
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -162,7 +169,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should generate code for plugin with single boolean argument", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "test-arg") return true;
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -201,7 +210,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should generate code for plugin with single property argument", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "test-arg") return "test-value";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -243,7 +254,9 @@ describe("Init CLI - plugin utility", () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "prop1") return "value1";
 				if (options.flag === "prop2") return "value2";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -294,7 +307,9 @@ describe("Init CLI - plugin utility", () => {
 				if (options.flag === "name") return "test";
 				if (options.flag === "age") return 25;
 				if (options.flag === "enabled") return true;
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -356,7 +371,9 @@ describe("Init CLI - plugin utility", () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "prop1") return "value1";
 				if (options.flag === "non-prop") return "value2";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -406,7 +423,9 @@ describe("Init CLI - plugin utility", () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "non-prop") return "value1";
 				if (options.flag === "prop1") return "value2";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -457,7 +476,9 @@ describe("Init CLI - plugin utility", () => {
 				if (options.flag === "arg0") return "value0";
 				if (options.flag === "arg2") return "value2";
 				if (options.flag === "arg4") return "value4";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -518,7 +539,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should remove trailing undefined values", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "arg0") return "value0";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -575,7 +598,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should remove trailing undefined values in property objects", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "prop1") return "value1";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -630,7 +655,11 @@ describe("Init CLI - plugin utility", () => {
 		});
 
 		it("should handle empty object when all properties are undefined", async () => {
-			const getArguments: GetArgumentsFn = async () => undefined;
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
+			};
 
 			const plugin: PluginConfig = {
 				displayName: "Test Plugin",
@@ -677,7 +706,9 @@ describe("Init CLI - plugin utility", () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "arg0") return "value0";
 				if (options.flag === "arg2") return "value2";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -737,7 +768,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should throw error for invalid schema validation", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "test-arg") return "invalid";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -772,7 +805,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should throw error with descriptive message for invalid schema", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "test-arg") return "not-a-number";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -810,7 +845,9 @@ describe("Init CLI - plugin utility", () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "plugin1-arg") return "value1";
 				if (options.flag === "plugin2-arg") return "value2";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugins: PluginConfig[] = [
@@ -871,7 +908,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should handle mix of plugins with and without arguments", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "plugin1-arg") return "value1";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugins: PluginConfig[] = [
@@ -921,7 +960,9 @@ describe("Init CLI - plugin utility", () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "max-username-length") return 50;
 				if (options.flag === "min-username-length") return 3;
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const result = await getAuthPluginsCode({
@@ -935,7 +976,11 @@ describe("Init CLI - plugin utility", () => {
 		});
 
 		it("should generate code for twoFactor plugin without arguments", async () => {
-			const getArguments: GetArgumentsFn = async () => undefined;
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
+			};
 
 			const result = await getAuthPluginsCode({
 				plugins: [pluginsConfig.twoFactor],
@@ -946,7 +991,11 @@ describe("Init CLI - plugin utility", () => {
 		});
 
 		it("should generate code for multiple real plugins", async () => {
-			const getArguments: GetArgumentsFn = async () => undefined;
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
+			};
 
 			const result = await getAuthPluginsCode({
 				plugins: [
@@ -958,7 +1007,7 @@ describe("Init CLI - plugin utility", () => {
 			});
 
 			const expected = await formatPluginCode(
-				"twoFactor(), magicLink(), emailOTP()",
+				"twoFactor(), magicLink(), emailOTP({ sendVerificationOTP: async ({ email, otp, type }, request) => {\n // Send email with OTP\n} })",
 			);
 			expect(result).toBe(expected);
 		});
@@ -970,7 +1019,9 @@ describe("Init CLI - plugin utility", () => {
 				if (options.flag === "config1") return "value1";
 				if (options.flag === "config2") return "value2";
 				if (options.flag === "other") return "other-value";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -1028,7 +1079,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should handle arguments with coerce transformations", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "number-arg") return "42"; // string that should be coerced
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -1064,7 +1117,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should handle optional arguments that are provided", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "optional-arg") return "provided-value";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -1102,7 +1157,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should handle nested object with single property", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "digits") return 6;
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -1154,7 +1211,9 @@ describe("Init CLI - plugin utility", () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "digits") return 6;
 				if (options.flag === "issuer") return "MyApp";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -1214,7 +1273,11 @@ describe("Init CLI - plugin utility", () => {
 		});
 
 		it("should handle empty nested object when all properties are undefined", async () => {
-			const getArguments: GetArgumentsFn = async () => undefined;
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
+			};
 
 			const plugin: PluginConfig = {
 				displayName: "Test Plugin",
@@ -1262,7 +1325,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should handle nested object with partially undefined properties", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "digits") return 6;
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -1324,7 +1389,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should handle deeply nested objects", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "nested-prop") return "nested-value";
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -1383,7 +1450,11 @@ describe("Init CLI - plugin utility", () => {
 		});
 
 		it("should handle deeply nested empty objects", async () => {
-			const getArguments: GetArgumentsFn = async () => undefined;
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
+			};
 
 			const plugin: PluginConfig = {
 				displayName: "Test Plugin",
@@ -1693,12 +1764,388 @@ describe("Init CLI - plugin utility", () => {
 		});
 	});
 
+	describe("function string handling", () => {
+		it("should output function string as actual function, not string", async () => {
+			const functionString = "async (data) => { return data; }";
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "send-email") return functionString;
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "send-email",
+							description: "Function to send email",
+							skipPrompt: true,
+							defaultValue: functionString,
+							argument: {
+								index: 0,
+								isProperty: "sendEmail",
+								schema: z.coerce.string(),
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			// Function should be output directly, not as a template literal string
+			const expected = await formatPluginCode(
+				`testPlugin({ sendEmail: ${functionString} })`,
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle multi-line function string as actual function", async () => {
+			const functionString =
+				"async (data) => {\n  console.log(data);\n  return true;\n}";
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "send-email") return functionString;
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "send-email",
+							description: "Function to send email",
+							skipPrompt: true,
+							defaultValue: functionString,
+							argument: {
+								index: 0,
+								isProperty: "sendEmail",
+								schema: z.coerce.string(),
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			// Multi-line function should be output directly as a function
+			const expected = await formatPluginCode(
+				`testPlugin({ sendEmail: ${functionString} })`,
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should return defaultValue when skipPrompt is true and output as function", async () => {
+			const functionString = "async (data) => { return data; }";
+			const getArguments: GetArgumentsFn = async (options) => {
+				// When skipPrompt is true, getArguments should return defaultValue
+				if (options.flag === "send-email" && options.skipPrompt) {
+					return options.defaultValue;
+				}
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "send-email",
+							description: "Function to send email",
+							skipPrompt: true,
+							defaultValue: functionString,
+							argument: {
+								index: 0,
+								isProperty: "sendEmail",
+								schema: z.coerce.string(),
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			// Function should be output directly, not as a string
+			const expected = await formatPluginCode(
+				`testPlugin({ sendEmail: ${functionString} })`,
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle function string in nested object as actual function", async () => {
+			const functionString = "async (data) => { return data; }";
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "send-email") return functionString;
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "email-config",
+							description: "Email configuration",
+							skipPrompt: true,
+							isNestedObject: [
+								{
+									flag: "send-email",
+									description: "Function to send email",
+									skipPrompt: true,
+									defaultValue: functionString,
+									argument: {
+										index: 0,
+										isProperty: "sendEmail",
+										schema: z.coerce.string(),
+									},
+								},
+							],
+							argument: {
+								index: 0,
+								isProperty: "emailConfig",
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			// Function in nested object should be output directly as a function
+			const expected = await formatPluginCode(
+				`testPlugin({ emailConfig: { sendEmail: ${functionString} } })`,
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle function string mixed with other properties", async () => {
+			const functionString = "async (data) => { return data; }";
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "send-email") return functionString;
+				if (options.flag === "api-key") return "test-key";
+				return undefined;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "send-email",
+							description: "Function to send email",
+							skipPrompt: true,
+							defaultValue: functionString,
+							argument: {
+								index: 0,
+								isProperty: "sendEmail",
+								schema: z.coerce.string(),
+							},
+						},
+						{
+							flag: "api-key",
+							description: "API key",
+							skipPrompt: true,
+							defaultValue: "test-key",
+							argument: {
+								index: 0,
+								isProperty: "apiKey",
+								schema: z.coerce.string(),
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			// Function should be output as function, other properties as strings
+			const expected = await formatPluginCode(
+				`testPlugin({ sendEmail: ${functionString}, apiKey: "test-key" })`,
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle function string as direct argument (not property)", async () => {
+			const functionString = "(email) => email.toLowerCase()";
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "transform") return functionString;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "transform",
+							description: "Transform function",
+							skipPrompt: true,
+							defaultValue: functionString,
+							argument: {
+								index: 0,
+								isProperty: false,
+								schema: z.coerce.string(),
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			// Function should be output directly as a function argument
+			const expected = await formatPluginCode(`testPlugin(${functionString})`);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle multiple function strings in same object", async () => {
+			const functionString1 = "async (data) => { return data; }";
+			const functionString2 = "(email) => email.toLowerCase()";
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "send-email") return functionString1;
+				if (options.flag === "transform") return functionString2;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "send-email",
+							description: "Function to send email",
+							skipPrompt: true,
+							defaultValue: functionString1,
+							argument: {
+								index: 0,
+								isProperty: "sendEmail",
+								schema: z.coerce.string(),
+							},
+						},
+						{
+							flag: "transform",
+							description: "Transform function",
+							skipPrompt: true,
+							defaultValue: functionString2,
+							argument: {
+								index: 0,
+								isProperty: "transform",
+								schema: z.coerce.string(),
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			// Both functions should be output directly as functions
+			const expected = await formatPluginCode(
+				`testPlugin({ sendEmail: ${functionString1}, transform: ${functionString2} })`,
+			);
+			expect(result).toBe(expected);
+		});
+
+		it("should handle function string with template literals inside", async () => {
+			const functionString = "async (data) => { return `Hello ${data.name}`; }";
+			const getArguments: GetArgumentsFn = async (options) => {
+				if (options.flag === "send-email") return functionString;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
+			};
+
+			const plugin: PluginConfig = {
+				displayName: "Test Plugin",
+				auth: {
+					function: "testPlugin",
+					imports: [],
+					arguments: [
+						{
+							flag: "send-email",
+							description: "Function to send email",
+							skipPrompt: true,
+							defaultValue: functionString,
+							argument: {
+								index: 0,
+								isProperty: "sendEmail",
+								schema: z.coerce.string(),
+							},
+						},
+					],
+				},
+				authClient: null,
+			};
+
+			const result = await getAuthPluginsCode({
+				plugins: [plugin],
+				getArguments,
+			});
+
+			// Function with template literals should be output directly as a function
+			const expected = await formatPluginCode(
+				`testPlugin({ sendEmail: ${functionString} })`,
+			);
+			expect(result).toBe(expected);
+		});
+	});
+
 	describe("edge cases", () => {
 		it("should handle very large argument values", async () => {
 			const largeValue = "a".repeat(1000);
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "large-arg") return largeValue;
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {
@@ -1735,7 +2182,9 @@ describe("Init CLI - plugin utility", () => {
 		it("should handle null values", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
 				if (options.flag === "null-arg") return null;
-				return undefined;
+				if (options.isRequired && options.defaultValue)
+					return options.defaultValue;
+				return;
 			};
 
 			const plugin: PluginConfig = {

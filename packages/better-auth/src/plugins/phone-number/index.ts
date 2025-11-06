@@ -36,7 +36,15 @@ export interface PhoneNumberOptions {
 	 *
 	 * @param phoneNumber
 	 * @param code
-	 * @returns
+	 * 
+	 * @cli example
+	 * @cli required
+	 * @type function
+	 * @example ```ts
+	 * async ({ phoneNumber, code }, request) => {
+	 *  // Send OTP code to the user
+	 * }
+	 * ```
 	 */
 	sendOTP: (
 		data: { phoneNumber: string; code: string },

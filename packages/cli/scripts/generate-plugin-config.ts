@@ -24,6 +24,10 @@ const pluginPath = (path: string) => `better-auth/src/plugins/${path}`;
 
 /**
  * Mapping of plugin names to their type file locations
+ * 
+ * # THIS IS THE CORE OF WHERE PLUGINS ARE AUTOMATICALLY GENERATED
+ * 
+ * Please update this list if plugins are added moved, or removed.
  */
 const PLUGIN_TYPE_MAP: Record<
 	string,
@@ -65,6 +69,36 @@ const PLUGIN_TYPE_MAP: Record<
 		clientTypeFile: pluginPath("magic-link/client.ts"),
 		clientTypeName: undefined,
 	},
+	emailOTP: {
+		serverTypeFile: pluginPath("email-otp/index.ts"),
+		serverTypeName: "EmailOTPOptions",
+		clientTypeFile: pluginPath("email-otp/client.ts"),
+		clientTypeName: undefined,
+	},
+	passkey: {
+		serverTypeFile: pluginPath("passkey/index.ts"),
+		serverTypeName: "PasskeyOptions",
+		clientTypeFile: pluginPath("passkey/client.ts"),
+		clientTypeName: undefined,
+	},
+	genericOAuth: {
+		serverTypeFile: pluginPath("generic-oauth/index.ts"),
+		serverTypeName: "GenericOAuthOptions",
+		clientTypeFile: pluginPath("generic-oauth/client.ts"),
+		clientTypeName: undefined,
+	},
+	oneTap: {
+		serverTypeFile: pluginPath("one-tap/index.ts"),
+		serverTypeName: "OneTapOptions",
+		clientTypeFile: pluginPath("one-tap/client.ts"),
+		clientTypeName: "GoogleOneTapOptions",
+	},
+	siwe: {
+		serverTypeFile: pluginPath("siwe/index.ts"),
+		serverTypeName: "SIWEPluginOptions",
+		clientTypeFile: pluginPath("siwe/client.ts"),
+		clientTypeName: undefined,
+	},
 };
 
 const ROOT_DIR = path.resolve(__dirname, "../..");
@@ -89,11 +123,14 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 	hasCliTag: boolean;
 	shouldSkip: boolean;
 	isRequired: boolean;
+	isOptional: boolean;
 	isSelect: boolean;
 	isMultiSelect: boolean;
+	isExample: boolean;
 	hasPrompt: boolean;
 	defaultValue?: any;
 	question?: string;
+	exampleValue?: string;
 	description: string;
 	selectOptions?: { value: string; label: string }[];
 	type?: string;
@@ -105,6 +142,8 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 	const hasCliTag = /@cli\b/.test(allJsDocText);
 	const shouldSkip = /@cli\s+skip/.test(allJsDocText);
 	const isRequired = /@cli\s+required/.test(allJsDocText);
+	const isOptional = /@cli\s+optional/.test(allJsDocText);
+	const isExample = /@cli\s+example/.test(allJsDocText);
 	const isMultiSelect = /@cli\s+multi-select/.test(allJsDocText);
 	const hasPrompt = /@prompt\b/.test(allJsDocText);
 
@@ -201,6 +240,73 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 		question = questionMatch[1]!.trim();
 	}
 
+	// Extract @example tag value (multi-line support)
+	let exampleValue: string | undefined = undefined;
+	// Match @example followed by content until next @ tag or end of JSDoc
+	// Use a more precise pattern that stops at the next @ tag or closing comment
+	// Ensure @example is at the start of a line (after newline and optional JSDoc prefix)
+	const exampleMatch = allJsDocText.match(
+		/(?:^|\n)\s*\*\s*@example\s+([\s\S]*?)(?=\n\s*\*\s*@|\n\s*\*\/|$)/,
+	);
+	if (exampleMatch && exampleMatch[1]) {
+		// Extract the example content
+		let exampleContent = exampleMatch[1];
+
+		// Check if content is wrapped in markdown code fences (```ts, ```js, ```, etc.)
+		// Code fences in JSDoc will have asterisks before each line:
+		//  * ```ts
+		//  * code here
+		//  * ```
+		// Pattern: optional asterisk+space, then ```, optional language, newline, content (with asterisks), newline, asterisk+space, ```
+		const codeFenceMatch = exampleContent.match(
+			/(?:^\s*\*\s*)?```(?:\w+)?\s*\n([\s\S]*?)\n\s*\*\s*```/,
+		);
+		if (codeFenceMatch && codeFenceMatch[1]) {
+			// Extract content from code fence and remove JSDoc asterisks
+			exampleContent = codeFenceMatch[1];
+			// Remove JSDoc asterisks from each line while preserving indentation
+			exampleContent = exampleContent
+				.split("\n")
+				.map((line) => {
+					// Remove JSDoc prefix pattern while preserving code indentation
+					let cleaned = line;
+					cleaned = cleaned.replace(/^\s*\*\s/, "");
+					cleaned = cleaned.replace(/^\s*\*+\s(?=\S)/, "");
+					cleaned = cleaned.replace(/^\s*\*+\s(?=\s)/, "");
+					return cleaned;
+				})
+				.join("\n");
+		} else {
+			// Remove leading asterisks and whitespace from each line, but preserve indentation
+			exampleContent = exampleContent
+				.split("\n")
+				.map((line) => {
+					// Remove JSDoc prefix pattern while preserving code indentation
+					// Standard JSDoc format: " * " (space asterisk space)
+					// Handle variations: "* ", " * ", " * * ", etc.
+					let cleaned = line;
+					// Remove the standard JSDoc prefix " * " (space asterisk space)
+					cleaned = cleaned.replace(/^\s*\*\s/, "");
+					// If there are still leading asterisks (like "* " after removing " * "), remove them
+					// But only remove asterisk followed by exactly one space to preserve code indentation
+					cleaned = cleaned.replace(/^\s*\*+\s(?=\S)/, ""); // Match asterisk(s) + one space before non-whitespace
+					// Handle case where there are multiple asterisks in a row: " * * "
+					// After removing " * ", we might have "*   " - remove "* " but keep the extra spaces
+					cleaned = cleaned.replace(/^\s*\*+\s(?=\s)/, ""); // Match asterisk(s) + one space before whitespace (code indentation)
+					return cleaned;
+				})
+				.join("\n");
+		}
+
+		// Trim the final result
+		exampleContent = exampleContent.trim();
+
+		// Only set if we have content
+		if (exampleContent.length > 0) {
+			exampleValue = exampleContent;
+		}
+	}
+
 	// Extract @type override
 	let typeOverride: string | undefined = undefined;
 	let enumValues: string[] | undefined = undefined;
@@ -248,11 +354,14 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 		hasCliTag,
 		shouldSkip,
 		isRequired,
+		isOptional,
 		isSelect,
 		isMultiSelect,
+		isExample,
 		hasPrompt,
 		defaultValue,
 		question,
+		exampleValue,
 		description: description || "",
 		selectOptions,
 		type: typeOverride,
@@ -267,6 +376,8 @@ export function generateZodSchema(
 	type: any,
 	typeOverride?: string,
 	enumValues?: string[],
+	isRequired?: boolean,
+	isOptional?: boolean,
 ): string {
 	// If type override is provided, use it directly
 	if (typeOverride) {
@@ -293,8 +404,16 @@ export function generateZodSchema(
 
 		// Check if the original type is optional
 		const typeText = type.getText();
-		const isOptional = type.isNullable() || type.isUndefined();
-		if (isOptional && !typeText.includes("required")) {
+		const typeIsOptional = type.isNullable() || type.isUndefined();
+
+		// @cli required overrides type optionality
+		if (isRequired) {
+			// Don't add .optional() even if type is optional
+		} else if (isOptional) {
+			// @cli optional forces optional
+			schema += ".optional()";
+		} else if (typeIsOptional && !typeText.includes("required")) {
+			// Default behavior: respect type optionality
 			schema += ".optional()";
 		}
 
@@ -302,7 +421,7 @@ export function generateZodSchema(
 	}
 
 	const typeText = type.getText();
-	const isOptional = type.isNullable() || type.isUndefined();
+	const typeIsOptional = type.isNullable() || type.isUndefined();
 
 	let schema = "";
 
@@ -346,7 +465,14 @@ export function generateZodSchema(
 		schema = "z.coerce.string()";
 	}
 
-	if (isOptional && !typeText.includes("required")) {
+	// @cli required overrides type optionality
+	if (isRequired) {
+		// Don't add .optional() even if type is optional
+	} else if (isOptional) {
+		// @cli optional forces optional
+		schema += ".optional()";
+	} else if (typeIsOptional && !typeText.includes("required")) {
+		// Default behavior: respect type optionality
 		schema += ".optional()";
 	}
 
@@ -622,10 +748,53 @@ function processProperty(
 
 	// Generate schema only if there are no nested objects
 	// Nested objects don't need schemas as they're structured objects, not primitive values
-	const schema =
+	let schema =
 		nestedOptions && nestedOptions.length > 0
 			? undefined
-			: generateZodSchema(type, tags.type, tags.enumValues);
+			: generateZodSchema(
+					type,
+					tags.type,
+					tags.enumValues,
+					tags.isRequired,
+					tags.isOptional,
+				);
+
+	// If @cli example is present, infer schema type from @type tag if available
+	// Otherwise, default to string for function examples
+	if (tags.isExample && schema && !schema.startsWith("z.enum")) {
+		if (tags.type) {
+			// Use the type override from @type tag
+			switch (tags.type) {
+				case "string":
+					schema = "z.coerce.string()";
+					break;
+				case "number":
+					schema = "z.coerce.number()";
+					break;
+				case "boolean":
+					schema = "z.coerce.boolean()";
+					break;
+				default:
+					schema = "z.coerce.string()";
+			}
+		} else {
+			// Default to string for function examples when no @type is specified
+			schema = "z.coerce.string()";
+		}
+		// Apply optional/required modifiers
+		if (tags.isRequired) {
+			// Keep as required (no .optional())
+		} else if (tags.isOptional) {
+			schema += ".optional()";
+		} else {
+			// Check type optionality
+			const typeText = type.getText();
+			const typeIsOptional = type.isNullable() || type.isUndefined();
+			if (typeIsOptional && !typeText.includes("required")) {
+				schema += ".optional()";
+			}
+		}
+	}
 
 	// Check if this is a select/enum type
 	let isSelectOptions: { value: any; label?: string }[] | undefined = undefined;
@@ -737,7 +906,8 @@ function processProperty(
 	const option: GetArgumentsOption = {
 		flag,
 		description: tags.description || propertyName,
-		skipPrompt: !tags.hasPrompt, // Default: skip prompt unless @prompt tag is present
+		skipPrompt: tags.isExample ? true : !tags.hasPrompt, // @cli example forces skipPrompt, otherwise default: skip prompt unless @prompt tag is present
+		...(tags.isRequired && { isRequired: true }),
 		argument: {
 			index: 0,
 			isProperty: propertyName,
@@ -753,11 +923,23 @@ function processProperty(
 
 	// Only set defaultValue if this is NOT a nested object
 	// Nested objects should have their defaults set on individual properties, not the parent
-	if (
-		tags.defaultValue !== undefined &&
-		(!nestedOptions || nestedOptions.length === 0)
-	) {
-		option.defaultValue = tags.defaultValue;
+	if (!nestedOptions || nestedOptions.length === 0) {
+		// Priority: @example (when @cli example) > @default > type-based defaults
+		// @cli example expects an @example tag which will be used as defaultValue
+		if (tags.isExample) {
+			if (tags.exampleValue !== undefined) {
+				// Remove code fence markers if present (they might have been included in extraction)
+				let exampleValue = tags.exampleValue;
+				// Remove any leading/trailing code fence markers that might have been missed
+				exampleValue = exampleValue
+					.replace(/^```\w*\s*\n?/g, "")
+					.replace(/\n?\s*```$/g, "");
+				option.defaultValue = exampleValue.trim();
+			}
+			// If no @example tag is present but @cli example is set, that's okay - defaultValue will be undefined
+		} else if (tags.defaultValue !== undefined) {
+			option.defaultValue = tags.defaultValue;
+		}
 	}
 
 	if (isSelectOptions) {
@@ -789,6 +971,7 @@ export function generatePluginConfig(
 	project: Project,
 ): {
 	pluginConfig: GetArgumentsOption[];
+	clientConfig: GetArgumentsOption[];
 	displayName: string;
 	importPath: string;
 	functionName: string;
@@ -836,12 +1019,59 @@ export function generatePluginConfig(
 		})
 		.filter((opt): opt is GetArgumentsOption => opt !== null);
 
+	// Process client type file if it exists
+	let clientArgumentsList: GetArgumentsOption[] = [];
+	if (pluginInfo.clientTypeFile && pluginInfo.clientTypeName) {
+		const clientTypeFile = project.addSourceFileAtPath(
+			path.resolve(ROOT_DIR, pluginInfo.clientTypeFile),
+		);
+
+		// Find the client type - try interface first, then type alias
+		let clientTypeNode:
+			| ReturnType<typeof clientTypeFile.getInterfaces>[number]
+			| ReturnType<typeof clientTypeFile.getTypeAliases>[number]
+			| undefined;
+
+		const clientInterfaceNode = clientTypeFile
+			.getInterfaces()
+			.find((iface) => iface.getName() === pluginInfo.clientTypeName);
+		if (clientInterfaceNode) {
+			clientTypeNode = clientInterfaceNode;
+		} else {
+			clientTypeNode = clientTypeFile
+				.getTypeAliases()
+				.find((alias) => alias.getName() === pluginInfo.clientTypeName);
+		}
+
+		if (clientTypeNode) {
+			const clientType = clientTypeNode.getType();
+
+			// Process client properties - only those with @cli tag
+			const clientProperties = clientType.getProperties();
+			clientArgumentsList = clientProperties
+				.map((prop) => {
+					const declarations = prop.getDeclarations();
+					if (declarations.length === 0) return null;
+					// Use pluginName + "Client" as prefix for client properties
+					return processProperty(
+						declarations[0],
+						`${pluginName}Client`,
+						"",
+						project,
+						0,
+					);
+				})
+				.filter((opt): opt is GetArgumentsOption => opt !== null);
+		}
+	}
+
 	// Generate import path
 	const importPath = pluginInfo.importPath || "better-auth/plugins";
 	const functionName = pluginName;
 
 	return {
 		pluginConfig: argumentsList,
+		clientConfig: clientArgumentsList,
 		displayName,
 		importPath,
 		functionName,
@@ -863,6 +1093,13 @@ export function generateIndividualPluginFile(
 					.join(",\n")}\n\t\t],`
 			: "";
 
+	const clientArgumentsCode =
+		pluginData.hasClient && pluginData.clientConfig.length > 0
+			? `arguments: [\n${pluginData.clientConfig
+					.map((arg) => generateArgumentCode(arg))
+					.join(",\n")}\n\t\t],`
+			: "";
+
 	const authClientCode = pluginData.hasClient
 		? `{
 		function: "${pluginData.functionName}Client",
@@ -873,6 +1110,7 @@ export function generateIndividualPluginFile(
 				isNamedImport: false,
 			},
 		],
+		${clientArgumentsCode}
 }`
 		: "null";
 
@@ -956,24 +1194,33 @@ export function generateArgumentCode(
 
 	parts.push(`${indent}\tflag: "${arg.flag}",`);
 	if (arg.description) {
-		parts.push(`${indent}\tdescription: "${arg.description}",`);
+		// Use JSON.stringify to properly escape quotes and other special characters
+		parts.push(`${indent}\tdescription: ${JSON.stringify(arg.description)},`);
 	}
 	if (arg.question) {
-		parts.push(`${indent}\tquestion: "${arg.question}",`);
+		// Use JSON.stringify to properly escape quotes and other special characters
+		parts.push(`${indent}\tquestion: ${JSON.stringify(arg.question)},`);
 	}
-	// Skip defaultValue if this is a nested object (nested objects use defaults on child properties)
 	if (
 		arg.defaultValue !== undefined &&
 		(!arg.isNestedObject || arg.isNestedObject.length === 0)
 	) {
 		let defaultValueStr: string;
 		if (typeof arg.defaultValue === "string") {
-			// Check if it looks like an object literal (starts with { and ends with })
-			if (
+			// Check if it's a multi-line code block (contains newlines)
+			if (arg.defaultValue.includes("\n")) {
+				// For multi-line code blocks, use template literal with proper escaping
+				// Escape backticks and ${} in the code
+				const escapedCode = arg.defaultValue
+					.replace(/\\/g, "\\\\")
+					.replace(/`/g, "\\`")
+					.replace(/\${/g, "\\${");
+				defaultValueStr = "`" + escapedCode + "`";
+			} else if (
 				arg.defaultValue.trim().startsWith("{") &&
 				arg.defaultValue.trim().endsWith("}")
 			) {
-				// Try to parse it as JSON to validate, then stringify it properly
+				// Try to parse as JSON to validate, then stringify it properly
 				try {
 					const parsed = JSON.parse(arg.defaultValue);
 					defaultValueStr = JSON.stringify(parsed);
@@ -997,6 +1244,9 @@ export function generateArgumentCode(
 	if (arg.skipPrompt !== undefined) {
 		parts.push(`${indent}\tskipPrompt: ${arg.skipPrompt},`);
 	}
+	if (arg.isRequired !== undefined) {
+		parts.push(`${indent}\tisRequired: ${arg.isRequired},`);
+	}
 	if (arg.isNumber) {
 		parts.push(`${indent}\tisNumber: true,`);
 	}
@@ -1005,7 +1255,7 @@ export function generateArgumentCode(
 			`${indent}\tisSelectOptions: [\n${arg.isSelectOptions
 				.map(
 					(opt) =>
-						`${indent}\t\t{ value: "${opt.value}", label: "${opt.label || toTitleCase(opt.value)}" }`,
+						`${indent}\t\t{ value: ${JSON.stringify(opt.value)}, label: ${JSON.stringify(opt.label || toTitleCase(opt.value))} }`,
 				)
 				.join(",\n")}\n${indent}\t],`,
 		);
@@ -1015,7 +1265,7 @@ export function generateArgumentCode(
 			`${indent}\tisMultiselectOptions: [\n${arg.isMultiselectOptions
 				.map(
 					(opt) =>
-						`${indent}\t\t{ value: "${opt.value}", label: "${opt.label || toTitleCase(opt.value)}" }`,
+						`${indent}\t\t{ value: ${JSON.stringify(opt.value)}, label: ${JSON.stringify(opt.label || toTitleCase(opt.value))} }`,
 				)
 				.join(",\n")}\n${indent}\t],`,
 		);

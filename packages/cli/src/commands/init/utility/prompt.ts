@@ -43,7 +43,22 @@ export const getArgumentsPrompt: (
 			return options[flagVariable as keyof typeof options];
 		}
 
+		// console.log({
+		// 	flag,
+		// 	skipPrompt,
+		// 	isRequired,
+		// 	defaultValue,
+		// 	isMultiselectOptions,
+		// 	isSelectOptions,
+		// 	question,
+		// 	isConformation,
+		// 	isNumber,
+		// });
+		
 		if (skipPrompt) {
+			if (isRequired && defaultValue) {
+				return defaultValue;
+			}
 			return;
 		}
 
@@ -87,7 +102,7 @@ export const getArgumentsPrompt: (
 					}
 				},
 				defaultValue,
-				placeholder: defaultValue ? defaultValue : undefined,
+				placeholder: defaultValue ? String(defaultValue) : undefined,
 			});
 			result = processCancelAction(result);
 			return Number(result);
@@ -101,7 +116,7 @@ export const getArgumentsPrompt: (
 				}
 			},
 			defaultValue,
-			placeholder: defaultValue ? defaultValue : undefined,
+			placeholder: defaultValue ? String(defaultValue) : undefined,
 		});
 		result = processCancelAction(result);
 		return result;

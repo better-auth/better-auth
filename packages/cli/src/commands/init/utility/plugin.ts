@@ -57,7 +57,8 @@ const processNestedArguments = async (
 					nestedObject[propertyName] &&
 					typeof nestedObject[propertyName] === "object" &&
 					typeof nestedValue === "object" &&
-					nestedValue !== null
+					nestedValue !== null &&
+					!(typeof nestedValue === "string" && nestedValue.includes("=>"))
 				) {
 					nestedObject[propertyName] = {
 						...nestedObject[propertyName],
@@ -117,7 +118,7 @@ export const getAuthPluginsCode = async ({
 					};
 					if (!schema.success) {
 						throw new Error(
-							`Invalid argument for ${plugin.auth.function}: ${schema.error.message}`,
+							`Invalid argument for ${plugin.auth.function} on flag "${argument.flag}": ${schema.error.message}`,
 						);
 					}
 					value = schema.data;
@@ -152,6 +153,10 @@ export const getAuthPluginsCode = async ({
 			if (typeof value === "undefined") {
 				return undefined;
 			}
+			// Don't process function strings - they should be preserved as-is
+			if (typeof value === "string" && value.includes("=>")) {
+				return value;
+			}
 			if (
 				typeof value === "object" &&
 				value !== null &&
@@ -177,6 +182,56 @@ export const getAuthPluginsCode = async ({
 		let args: string[] = Array.from(argumentsCode.values()).map((value) => {
 			const cleaned = cleanNestedObjects(value);
 			if (typeof cleaned === "undefined") return "undefined";
+			// Handle function strings - they should be output as actual functions, not strings
+			if (typeof cleaned === "string" && cleaned.includes("=>")) {
+				// Check if it's a function string (contains arrow function syntax)
+				// Output it directly as a function, not as a string
+				return cleaned;
+			}
+			// For objects, check if any property contains a function string (recursively)
+			if (
+				typeof cleaned === "object" &&
+				cleaned !== null &&
+				!Array.isArray(cleaned)
+			) {
+				const hasFunctionString = (obj: any): boolean => {
+					for (const val of Object.values(obj)) {
+						if (typeof val === "string" && val.includes("=>")) {
+							return true;
+						}
+						if (
+							typeof val === "object" &&
+							val !== null &&
+							!Array.isArray(val)
+						) {
+							if (hasFunctionString(val)) return true;
+						}
+					}
+					return false;
+				};
+
+				if (hasFunctionString(cleaned)) {
+					// Build object with functions output directly (recursively)
+					const buildObjectString = (obj: any): string => {
+						const entries = Object.entries(obj).map(([key, val]) => {
+							if (typeof val === "string" && val.includes("=>")) {
+								// Output function directly, not as a string
+								return `${key}: ${val}`;
+							}
+							if (
+								typeof val === "object" &&
+								val !== null &&
+								!Array.isArray(val)
+							) {
+								return `${key}: ${buildObjectString(val)}`;
+							}
+							return `${key}: ${JSON.stringify(val)}`;
+						});
+						return `{${entries.join(", ")}}`;
+					};
+					return buildObjectString(cleaned);
+				}
+			}
 			return JSON.stringify(cleaned);
 		});
 

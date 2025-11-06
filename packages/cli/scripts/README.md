@@ -50,7 +50,7 @@ internal?: string;
 
 ### `@cli required`
 
-Marks a property as required in the CLI.
+Marks a property as required in the CLI, overriding the TypeScript type's optionality.
 
 ```typescript
 /**
@@ -59,6 +59,116 @@ Marks a property as required in the CLI.
  */
 apiKey: string;
 ```
+
+Even if the TypeScript type is optional (`apiKey?: string`), `@cli required` will generate a schema without `.optional()`.
+
+### `@cli optional`
+
+Marks a property as optional in the CLI, overriding the TypeScript type's required status.
+
+```typescript
+/**
+ * Optional configuration option (even though type is required)
+ * @cli optional
+ */
+apiKey: string;
+```
+
+Even if the TypeScript type is required (`apiKey: string`), `@cli optional` will generate a schema with `.optional()`.
+
+**Priority rules:**
+- `@cli required` takes precedence over `@cli optional` if both are present
+- If neither tag is present, the schema respects the TypeScript type's optionality
+- `@cli required` overrides type optionality (makes optional types required)
+- `@cli optional` overrides type optionality (makes required types optional)
+
+### `@cli example`
+
+Marks a property that should use an `@example` tag value as its default. Properties with `@cli example` automatically have `skipPrompt: true` set, meaning they won't prompt the user for input.
+
+**Requirements:**
+- Should be used with an `@example` tag (the `@example` value becomes the `defaultValue`)
+- Automatically sets `skipPrompt: true` (cannot be overridden with `@prompt`)
+- Schema type is inferred from the `@type` tag if present, otherwise defaults to `string`
+
+**Single-line example:**
+```typescript
+/**
+ * Function to send email
+ * @cli example
+ * @example async (data) => { console.log(data); }
+ */
+sendEmail: (data: { email: string }) => Promise<void>;
+```
+
+**Multi-line code block example:**
+```typescript
+/**
+ * Function to send email verification
+ * @cli example
+ * @example async (data) => {
+ *   console.log("Sending email:", data.email);
+ *   await sendEmail(data.email, data.otp);
+ *   return true;
+ * }
+ */
+sendVerificationOTP: (data: { email: string; otp: string }) => Promise<boolean>;
+```
+
+**Markdown code fence example:**
+You can also use markdown code fences (```ts, ```js, ```, etc.) for better formatting:
+
+```typescript
+/**
+ * Function to send email verification
+ * @cli example
+ * @example ```ts
+ * async (data) => {
+ *   console.log("Sending email:", data.email);
+ *   await sendEmail(data.email, data.otp);
+ *   return true;
+ * }
+ * ```
+ */
+sendVerificationOTP: (data: { email: string; otp: string }) => Promise<boolean>;
+```
+
+The code fence syntax is supported with any language identifier (```ts, ```js, ```typescript, etc.) or without one (```). JSDoc asterisks are automatically removed from code fence content.
+
+**Type inference with `@type` tag:**
+The schema type for `@cli example` properties is inferred from the `@type` tag if present:
+
+```typescript
+/**
+ * Custom example value
+ * @cli example
+ * @type string
+ * @example process.env.API_KEY
+ */
+apiKey?: string;
+```
+
+If no `@type` tag is provided, the schema defaults to `z.coerce.string()`.
+
+**Output behavior:**
+When a function string is detected (contains `=>`), it is output as an actual function in the generated code, not as a string literal. This means:
+
+- **Input**: `@example async (data) => { return data; }`
+- **Generated output**: `plugin({ sendEmail: async (data) => { return data; } })`
+- **Not**: `plugin({ sendEmail: "async (data) => { return data; }" })`
+
+This applies to:
+- Function strings in object properties
+- Function strings in nested objects
+- Function strings as direct arguments
+- Multi-line function strings
+- Functions containing template literals
+
+**Priority with other tags:**
+- `@example` value takes precedence over `@default` when `@cli example` is present
+- Can be combined with `@cli required` or `@cli optional` for schema generation
+- Schema type is inferred from `@type` tag if present, otherwise defaults to `string`
+- Functions are typically validated as strings during input, but output as actual functions
 
 ### `@cli select`
 

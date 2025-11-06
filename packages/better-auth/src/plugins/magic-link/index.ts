@@ -23,6 +23,15 @@ interface MagicLinkopts {
 	expiresIn?: number | undefined;
 	/**
 	 * Send magic link implementation.
+	 * 
+	 * @cli example
+	 * @cli required
+	 * @type function
+	 * @example ```ts
+	 * async ({ email, url, token }, request) => {
+	 *  // Send magic link to the user
+	 * }
+	 * ```
 	 */
 	sendMagicLink: (
 		data: {
@@ -48,7 +57,7 @@ interface MagicLinkopts {
 				/**
 				 * Window in seconds. Default is 60 seconds.
 				 * @default 60
-				 * @cli
+				 * @cli optional
 				 * @question What is the window in seconds?
 				 * @type number
 				 */
@@ -56,7 +65,7 @@ interface MagicLinkopts {
 				/**
 				 * Max requests. Default is 5 requests.
 				 * @default 5
-				 * @cli
+				 * @cli optional
 				 * @question What is the max requests?
 				 * @type number
 				 */

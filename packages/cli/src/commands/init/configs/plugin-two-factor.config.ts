@@ -120,7 +120,7 @@ export const twoFactorPluginConfig = {
           {
             flag: "two-factor-totp-options-disable",
             description: "Disable totp",
-            question: "[Two Factor] Would you like to disable?",
+            question: "[Two Factor] Would you like to disable totp?",
             defaultValue: false,
             skipPrompt: true,
             argument: {

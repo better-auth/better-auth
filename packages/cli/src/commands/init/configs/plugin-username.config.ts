@@ -22,7 +22,7 @@ export const usernamePluginConfig = {
         description: "The minimum length of the username",
         question: "[Username] What is the min username length?",
         defaultValue: 3,
-        skipPrompt: true,
+        skipPrompt: false,
         isNumber: true,
         argument: {
           index: 0,
