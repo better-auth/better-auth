@@ -76,9 +76,9 @@ const PLUGIN_TYPE_MAP: Record<
 		clientTypeName: undefined,
 	},
 	passkey: {
-		serverTypeFile: pluginPath("passkey/index.ts"),
+		serverTypeFile: "passkey/src/types.ts",
 		serverTypeName: "PasskeyOptions",
-		clientTypeFile: pluginPath("passkey/client.ts"),
+		clientTypeFile: "passkey/src/client.ts",
 		clientTypeName: undefined,
 	},
 	genericOAuth: {
