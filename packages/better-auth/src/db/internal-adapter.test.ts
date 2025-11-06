@@ -617,4 +617,241 @@ describe("adapter test", async () => {
 		accounts = await internalAdapter.findAccounts(user.id);
 		expect(accounts.length).toBe(0);
 	});
+
+	it("should initialize plugin session fields with null in secondary storage", async () => {
+		// Create a new test instance with a plugin that adds session fields
+		const testMap = new Map();
+		const pluginWithSessionFields = {
+			id: "test-plugin-with-session-fields",
+			schema: {
+				session: {
+					fields: {
+						customField: {
+							type: "string",
+							required: false,
+						},
+						anotherField: {
+							type: "number",
+							required: false,
+						},
+						fieldWithDefault: {
+							type: "string",
+							required: false,
+							defaultValue: "default-value",
+						},
+					},
+				},
+			},
+		} satisfies BetterAuthPlugin;
+
+		const testOpts = {
+			database: {
+				dialect: new SqliteDialect({
+					database: new Database(":memory:"),
+				}),
+				type: "sqlite",
+			},
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					testMap.set(key, value);
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+				},
+			},
+			plugins: [pluginWithSessionFields],
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testAuthContext = await init(testOpts);
+		const testCtx = {
+			context: testAuthContext,
+		} as GenericEndpointContext;
+
+		// Create user
+		const user = await runWithEndpointContext(testCtx, () =>
+			testAuthContext.internalAdapter.createUser({
+				name: "Plugin Field Test User",
+				email: "plugin.field@example.com",
+			}),
+		);
+
+		// Create session
+		const session = await runWithEndpointContext(testCtx, () =>
+			testAuthContext.internalAdapter.createSession(user.id),
+		);
+
+		// Get session from secondary storage
+		const storedSessionData = testMap.get(session.token);
+		expect(storedSessionData).toBeDefined();
+
+		const parsedData = safeJSONParse<{
+			session: Session & Record<string, any>;
+			user: User;
+		}>(storedSessionData);
+
+		// Assert plugin fields are initialized
+		expect(parsedData?.session.customField).toBe(null);
+		expect(parsedData?.session.anotherField).toBe(null);
+		expect(parsedData?.session.fieldWithDefault).toBe("default-value");
+
+		// Assert core fields are present
+		expect(parsedData?.session.token).toBe(session.token);
+		expect(parsedData?.session.userId).toBe(user.id);
+	});
+
+	it("should preserve plugin session fields when updating in secondary storage", async () => {
+		// Create test instance with plugin fields
+		const testMap = new Map();
+		const pluginWithSessionFields = {
+			id: "test-plugin-update-fields",
+			schema: {
+				session: {
+					fields: {
+						activeOrganizationId: {
+							type: "string",
+							required: false,
+						},
+					},
+				},
+			},
+		} satisfies BetterAuthPlugin;
+
+		const testOpts = {
+			database: {
+				dialect: new SqliteDialect({
+					database: new Database(":memory:"),
+				}),
+				type: "sqlite",
+			},
+			secondaryStorage: {
+				set(key: string, value: string) {
+					testMap.set(key, value);
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+				},
+			},
+			plugins: [pluginWithSessionFields],
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+		const testAuthContext = await init(testOpts);
+		const testCtx = {
+			context: testAuthContext,
+		} as GenericEndpointContext;
+
+		// Create user and session
+		const user = await runWithEndpointContext(testCtx, () =>
+			testAuthContext.internalAdapter.createUser({
+				name: "Update Field Test User",
+				email: "update.field@example.com",
+			}),
+		);
+
+		const session = await runWithEndpointContext(testCtx, () =>
+			testAuthContext.internalAdapter.createSession(user.id),
+		);
+
+		// Verify initial state
+		let storedData = safeJSONParse<{
+			session: Session & Record<string, any>;
+			user: User;
+		}>(testMap.get(session.token));
+		expect(storedData?.session.activeOrganizationId).toBe(null);
+
+		// Update the plugin field
+		await runWithEndpointContext(testCtx, () =>
+			testAuthContext.internalAdapter.updateSession(session.token, {
+				activeOrganizationId: "org_123",
+			}),
+		);
+
+		// Verify field was updated
+		storedData = safeJSONParse<{
+			session: Session & Record<string, any>;
+			user: User;
+		}>(testMap.get(session.token));
+		expect(storedData?.session.activeOrganizationId).toBe("org_123");
+
+		// Verify other fields are preserved
+		expect(storedData?.session.userId).toBe(user.id);
+		expect(storedData?.session.token).toBe(session.token);
+	});
+
+	it("should retrieve plugin session fields from secondary storage via findSession", async () => {
+		const testMap = new Map();
+		const pluginWithSessionFields = {
+			id: "test-plugin-find-fields",
+			schema: {
+				session: {
+					fields: {
+						customData: {
+							type: "string",
+							required: false,
+						},
+					},
+				},
+			},
+		} satisfies BetterAuthPlugin;
+
+		const testOpts = {
+			database: {
+				dialect: new SqliteDialect({
+					database: new Database(":memory:"),
+				}),
+				type: "sqlite",
+			},
+			secondaryStorage: {
+				set(key: string, value: string) {
+					testMap.set(key, value);
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+				},
+			},
+			session: {
+				storeSessionInDatabase: false, // Only use secondary storage
+			},
+			plugins: [pluginWithSessionFields],
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+		const testAuthContext = await init(testOpts);
+		const testCtx = {
+			context: testAuthContext,
+		} as GenericEndpointContext;
+
+		// Create user and session
+		const user = await runWithEndpointContext(testCtx, () =>
+			testAuthContext.internalAdapter.createUser({
+				name: "Find Field Test User",
+				email: "find.field@example.com",
+			}),
+		);
+
+		const session = await runWithEndpointContext(testCtx, () =>
+			testAuthContext.internalAdapter.createSession(user.id),
+		);
+
+		// Find session using findSession
+		const foundSession = await runWithEndpointContext(testCtx, () =>
+			testAuthContext.internalAdapter.findSession(session.token),
+		);
+
+		// Verify plugin field is present in found session
+		expect(foundSession).toBeDefined();
+		expect(foundSession?.session.customData).toBe(null);
+		expect(foundSession?.session.userId).toBe(user.id);
+	});
 });
