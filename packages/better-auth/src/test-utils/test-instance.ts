@@ -4,18 +4,12 @@ import type {
 	BetterAuthOptions,
 } from "@better-auth/core";
 import type { SuccessContext } from "@better-fetch/fetch";
-import Database from "better-sqlite3";
-import { Kysely, MysqlDialect, PostgresDialect, sql } from "kysely";
-import { MongoClient } from "mongodb";
-import { createPool } from "mysql2/promise";
-import { Pool } from "pg";
+import { sql } from "kysely";
 import { afterAll } from "vitest";
-import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { betterAuth } from "../auth";
-import { createAuthClient } from "../client/vanilla";
+import { createAuthClient } from "../client";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
-import { getAdapter } from "../db";
-import { getMigrations } from "../db/get-migration";
+import { getAdapter, getMigrations } from "../db";
 import { bearer } from "../plugins";
 import type { Session, User } from "../types";
 import { getBaseURL } from "../utils/url";
@@ -35,7 +29,7 @@ afterAll(async () => {
 });
 
 export async function getTestInstance<
-	O extends Partial<BetterAuthOptions>,
+	O extends Omit<Partial<BetterAuthOptions>, "database">,
 	C extends BetterAuthClientOptions,
 >(
 	options?: O | undefined,
@@ -51,23 +45,36 @@ export async function getTestInstance<
 ) {
 	const testWith = config?.testWith || "sqlite";
 
-	const postgres = new Kysely({
-		dialect: new PostgresDialect({
-			pool: new Pool({
-				connectionString: "postgres://user:password@localhost:5432/better_auth",
+	async function getPostgres() {
+		const { Kysely, PostgresDialect } = await import("kysely");
+		const { Pool } = await import("pg");
+		return new Kysely({
+			dialect: new PostgresDialect({
+				pool: new Pool({
+					connectionString:
+						"postgres://user:password@localhost:5432/better_auth",
+				}),
 			}),
-		}),
-	});
+		});
+	}
 
-	const sqlite = new Database(":memory:");
+	async function getSqlite() {
+		const { default: Database } = await import("better-sqlite3");
+		return new Database(":memory:");
+	}
 
-	const mysql = new Kysely({
-		dialect: new MysqlDialect(
-			createPool("mysql://user:password@localhost:3306/better_auth"),
-		),
-	});
+	async function getMysql() {
+		const { Kysely, MysqlDialect } = await import("kysely");
+		const { createPool } = await import("mysql2/promise");
+		return new Kysely({
+			dialect: new MysqlDialect(
+				createPool("mysql://user:password@localhost:3306/better_auth"),
+			),
+		});
+	}
 
 	async function mongodbClient() {
+		const { MongoClient } = await import("mongodb");
 		const dbClient = async (connectionString: string, dbName: string) => {
 			const client = new MongoClient(connectionString);
 			await client.connect();
@@ -92,12 +99,15 @@ export async function getTestInstance<
 		secret: "better-auth.secret",
 		database:
 			testWith === "postgres"
-				? { db: postgres, type: "postgres" }
+				? { db: await getPostgres(), type: "postgres" }
 				: testWith === "mongodb"
-					? mongodbAdapter(await mongodbClient())
+					? await Promise.all([
+							mongodbClient(),
+							await import("../adapters/mongodb-adapter"),
+						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
 					: testWith === "mysql"
-						? { db: mysql, type: "mysql" }
-						: sqlite,
+						? { db: await getMysql(), type: "mysql" }
+						: await getSqlite(),
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -152,6 +162,7 @@ export async function getTestInstance<
 			return;
 		}
 		if (testWith === "postgres") {
+			const postgres = await getPostgres();
 			await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
 				postgres,
 			);
@@ -160,6 +171,7 @@ export async function getTestInstance<
 		}
 
 		if (testWith === "mysql") {
+			const mysql = await getMysql();
 			await sql`SET FOREIGN_KEY_CHECKS = 0;`.execute(mysql);
 			const tables = await mysql.introspection.getTables();
 			for (const table of tables) {
@@ -170,6 +182,7 @@ export async function getTestInstance<
 			return;
 		}
 		if (testWith === "sqlite") {
+			const sqlite = await getSqlite();
 			sqlite.close();
 			return;
 		}
