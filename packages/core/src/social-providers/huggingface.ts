@@ -41,6 +41,7 @@ export interface HuggingFaceOptions
 }
 
 export const huggingface = (options: HuggingFaceOptions) => {
+	const tokenEndpoint = "https://huggingface.co/oauth/token";
 	return {
 		id: "huggingface",
 		name: "Hugging Face",
@@ -51,7 +52,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
 			return createAuthorizationURL({
-				id: "huggingface",
+				id: this.id,
 				options,
 				authorizationEndpoint: "https://huggingface.co/oauth/authorize",
 				scopes: _scopes,
@@ -66,7 +67,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://huggingface.co/oauth/token",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -79,7 +80,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://huggingface.co/oauth/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

@@ -102,6 +102,7 @@ export interface KakaoOptions extends ProviderOptions<KakaoProfile> {
 }
 
 export const kakao = (options: KakaoOptions) => {
+	const tokenEndpoint = "https://kauth.kakao.com/oauth/token";
 	return {
 		id: "kakao",
 		name: "Kakao",
@@ -125,7 +126,7 @@ export const kakao = (options: KakaoOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://kauth.kakao.com/oauth/token",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -138,7 +139,7 @@ export const kakao = (options: KakaoOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://kauth.kakao.com/oauth/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

@@ -41,6 +41,7 @@ export interface SlackOptions extends ProviderOptions<SlackProfile> {
 }
 
 export const slack = (options: SlackOptions) => {
+	const tokenEndpoint = "https://slack.com/api/openid.connect.token"
 	return {
 		id: "slack",
 		name: "Slack",
@@ -63,7 +64,7 @@ export const slack = (options: SlackOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://slack.com/api/openid.connect.token",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -76,7 +77,7 @@ export const slack = (options: SlackOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://slack.com/api/openid.connect.token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
