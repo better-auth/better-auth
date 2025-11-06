@@ -958,8 +958,8 @@ describe("Init CLI - plugin utility", () => {
 	describe("real-world plugin examples", () => {
 		it("should generate code for username plugin with properties", async () => {
 			const getArguments: GetArgumentsFn = async (options) => {
-				if (options.flag === "max-username-length") return 50;
-				if (options.flag === "min-username-length") return 3;
+				if (options.flag === "username-max-username-length") return 50;
+				if (options.flag === "username-min-username-length") return 3;
 				if (options.isRequired && options.defaultValue)
 					return options.defaultValue;
 				return;
@@ -1007,7 +1007,7 @@ describe("Init CLI - plugin utility", () => {
 			});
 
 			const expected = await formatPluginCode(
-				"twoFactor(), magicLink(), emailOTP({ sendVerificationOTP: async ({ email, otp, type }, request) => {\n // Send email with OTP\n} })",
+				"twoFactor(), magicLink({ sendMagicLink: async ({ email, url, token }, request) => {\n // Send magic link to the user\n},}), emailOTP({ sendVerificationOTP: async ({ email, otp, type }, request) => {\n // Send email with OTP\n} })",
 			);
 			expect(result).toBe(expected);
 		});

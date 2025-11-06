@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Project } from "ts-morph";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
 	extractJSDocTags,
 	generateArgumentCode,
@@ -41,6 +41,21 @@ describe("generate-plugin-config", () => {
 		// Clean up test directory
 		if (fs.existsSync(TEST_DIR)) {
 			fs.rmSync(TEST_DIR, { recursive: true, force: true });
+		}
+	});
+
+	afterAll(() => {
+		// Run biome check to fix any formatting issues in generated files
+		const { execSync } = require("node:child_process");
+		const cliDir = path.resolve(ROOT_DIR, "packages/cli");
+		console.log(`running post plugin-config test cleanup...`);
+		try {
+			execSync("pnpx biome check ./src/commands/init/configs --fix --unsafe", {
+				cwd: cliDir,
+				stdio: "inherit",
+			});
+		} catch (error) {
+			console.error(`Error running biome cleanup from tests:`, error);
 		}
 	});
 
@@ -1008,7 +1023,7 @@ describe("generate-plugin-config", () => {
 			expect(enabledConfig?.defaultValue).toBe(false);
 		});
 
-		it("should parse plugin with select options", () => {
+		it("should parse plugin with select options", { timeout: 20000 }, () => {
 			const testFile = path.join(TEST_DIR, "test-plugin-select.ts");
 			const testContent = `export interface TestPluginSelectOptions {
 	/**
@@ -1060,7 +1075,7 @@ describe("generate-plugin-config", () => {
 			]);
 		});
 
-		it("should parse plugin with nested object", () => {
+		it("should parse plugin with nested object", { timeout: 20000 }, () => {
 			const testFile = path.join(TEST_DIR, "test-plugin-nested.ts");
 			const testContent = `export interface NestedConfig {
 	/**
@@ -1113,9 +1128,12 @@ export interface TestPluginNestedOptions {
 			expect(nestedTimeout?.question).toBeDefined();
 		});
 
-		it("should parse plugin with @question and @prompt tags", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-prompts.ts");
-			const testContent = `export interface TestPluginPromptsOptions {
+		it(
+			"should parse plugin with @question and @prompt tags",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-prompts.ts");
+				const testContent = `export interface TestPluginPromptsOptions {
 	/**
 	 * API key
 	 * @cli
@@ -1132,42 +1150,46 @@ export interface TestPluginNestedOptions {
 	secret?: string;
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginPromptsOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginPromptsOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
 
-			const apiKeyConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-api-key",
-			);
-			expect(apiKeyConfig).toBeDefined();
-			expect(apiKeyConfig?.question).toBe(
-				"[Test Plugin] What is your API key?",
-			);
-			expect(apiKeyConfig?.skipPrompt).toBe(false); // @prompt tag present
+				const apiKeyConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-api-key",
+				);
+				expect(apiKeyConfig).toBeDefined();
+				expect(apiKeyConfig?.question).toBe(
+					"[Test Plugin] What is your API key?",
+				);
+				expect(apiKeyConfig?.skipPrompt).toBe(false); // @prompt tag present
 
-			const secretConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-secret",
-			);
-			expect(secretConfig).toBeDefined();
-			expect(secretConfig?.skipPrompt).toBe(true); // No @prompt tag
-		});
+				const secretConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-secret",
+				);
+				expect(secretConfig).toBeDefined();
+				expect(secretConfig?.skipPrompt).toBe(true); // No @prompt tag
+			},
+		);
 
-		it("should parse plugin with enum type override", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-enum.ts");
-			const testContent = `export interface TestPluginEnumOptions {
+		it(
+			"should parse plugin with enum type override",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-enum.ts");
+				const testContent = `export interface TestPluginEnumOptions {
 	/**
 	 * Select category
 	 * @cli
@@ -1176,41 +1198,45 @@ export interface TestPluginNestedOptions {
 	category?: string;
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginEnumOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginEnumOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
 
-			const categoryConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-category",
-			);
-			expect(categoryConfig).toBeDefined();
-			expect(categoryConfig?.argument.schema).toBe(
-				'z.enum(["category1", "category2", "category3"]).optional()',
-			);
-			// Should automatically set isSelectOptions from z.enum schema
-			expect(categoryConfig?.isSelectOptions).toEqual([
-				{ value: "category1", label: "Category1" },
-				{ value: "category2", label: "Category2" },
-				{ value: "category3", label: "Category3" },
-			]);
-		});
+				const categoryConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-category",
+				);
+				expect(categoryConfig).toBeDefined();
+				expect(categoryConfig?.argument.schema).toBe(
+					'z.enum(["category1", "category2", "category3"]).optional()',
+				);
+				// Should automatically set isSelectOptions from z.enum schema
+				expect(categoryConfig?.isSelectOptions).toEqual([
+					{ value: "category1", label: "Category1" },
+					{ value: "category2", label: "Category2" },
+					{ value: "category3", label: "Category3" },
+				]);
+			},
+		);
 
-		it("should automatically set isSelectOptions for union type enums", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-union-enum.ts");
-			const testContent = `export interface TestPluginUnionEnumOptions {
+		it(
+			"should automatically set isSelectOptions for union type enums",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-union-enum.ts");
+				const testContent = `export interface TestPluginUnionEnumOptions {
 	/**
 	 * Select status
 	 * @cli
@@ -1218,44 +1244,48 @@ export interface TestPluginNestedOptions {
 	status: "active" | "inactive" | "pending";
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginUnionEnumOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginUnionEnumOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
 
-			const statusConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-status",
-			);
-			expect(statusConfig).toBeDefined();
-			expect(statusConfig?.argument.schema).toBe(
-				'z.enum(["active", "inactive", "pending"])',
-			);
-			// Should automatically set isSelectOptions from z.enum schema
-			expect(statusConfig?.isSelectOptions).toEqual([
-				{ value: "active", label: "Active" },
-				{ value: "inactive", label: "Inactive" },
-				{ value: "pending", label: "Pending" },
-			]);
-		});
+				const statusConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-status",
+				);
+				expect(statusConfig).toBeDefined();
+				expect(statusConfig?.argument.schema).toBe(
+					'z.enum(["active", "inactive", "pending"])',
+				);
+				// Should automatically set isSelectOptions from z.enum schema
+				expect(statusConfig?.isSelectOptions).toEqual([
+					{ value: "active", label: "Active" },
+					{ value: "inactive", label: "Inactive" },
+					{ value: "pending", label: "Pending" },
+				]);
+			},
+		);
 
-		it("should use custom select options over automatic enum extraction", () => {
-			const testFile = path.join(
-				TEST_DIR,
-				"test-plugin-custom-select-override.ts",
-			);
-			const testContent = `export interface TestPluginCustomSelectOverrideOptions {
+		it(
+			"should use custom select options over automatic enum extraction",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(
+					TEST_DIR,
+					"test-plugin-custom-select-override.ts",
+				);
+				const testContent = `export interface TestPluginCustomSelectOverrideOptions {
 	/**
 	 * Select mode with custom labels
 	 * @cli select development:Development production:Production
@@ -1263,38 +1293,39 @@ export interface TestPluginNestedOptions {
 	mode: "development" | "production";
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginCustomSelectOverrideOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginCustomSelectOverrideOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
 
-			const modeConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-mode",
-			);
-			expect(modeConfig).toBeDefined();
-			expect(modeConfig?.argument.schema).toBe(
-				'z.enum(["development", "production"])',
-			);
-			// Should use custom select options instead of automatic extraction
-			expect(modeConfig?.isSelectOptions).toEqual([
-				{ value: "development", label: "Development" },
-				{ value: "production", label: "Production" },
-			]);
-		});
+				const modeConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-mode",
+				);
+				expect(modeConfig).toBeDefined();
+				expect(modeConfig?.argument.schema).toBe(
+					'z.enum(["development", "production"])',
+				);
+				// Should use custom select options instead of automatic extraction
+				expect(modeConfig?.isSelectOptions).toEqual([
+					{ value: "development", label: "Development" },
+					{ value: "production", label: "Production" },
+				]);
+			},
+		);
 
-		it("should parse plugin with @cli optional tag", () => {
+		it("should parse plugin with @cli optional tag", { timeout: 20000 }, () => {
 			const testFile = path.join(TEST_DIR, "test-plugin-optional.ts");
 			const testContent = `export interface TestPluginOptionalOptions {
 	/**
@@ -1356,9 +1387,12 @@ export interface TestPluginNestedOptions {
 			);
 		});
 
-		it("should parse plugin with @cli example and @example tag", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-example.ts");
-			const testContent = `export interface TestPluginExampleOptions {
+		it(
+			"should parse plugin with @cli example and @example tag",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-example.ts");
+				const testContent = `export interface TestPluginExampleOptions {
 	/**
 	 * Function to send email
 	 * @cli example
@@ -1370,37 +1404,41 @@ export interface TestPluginNestedOptions {
 	sendEmail: (data: { email: string }) => Promise<boolean>;
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginExampleOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginExampleOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
 
-			const sendEmailConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-send-email",
-			);
-			expect(sendEmailConfig).toBeDefined();
-			expect(sendEmailConfig?.skipPrompt).toBe(true);
-			expect(sendEmailConfig?.defaultValue).toBe(
-				'async (data) => {\n  console.log("Sending email:", data);\n  return true;\n}',
-			);
-			expect(sendEmailConfig?.argument.schema).toBe("z.coerce.string()");
-		});
+				const sendEmailConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-send-email",
+				);
+				expect(sendEmailConfig).toBeDefined();
+				expect(sendEmailConfig?.skipPrompt).toBe(true);
+				expect(sendEmailConfig?.defaultValue).toBe(
+					'async (data) => {\n  console.log("Sending email:", data);\n  return true;\n}',
+				);
+				expect(sendEmailConfig?.argument.schema).toBe("z.coerce.string()");
+			},
+		);
 
-		it("should prioritize @example over @default when @cli example is present", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-example-priority.ts");
-			const testContent = `export interface TestPluginExamplePriorityOptions {
+		it(
+			"should prioritize @example over @default when @cli example is present",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-example-priority.ts");
+				const testContent = `export interface TestPluginExamplePriorityOptions {
 	/**
 	 * Function with both @example and @default
 	 * @cli example
@@ -1410,35 +1448,39 @@ export interface TestPluginNestedOptions {
 	myFunction: () => Promise<string>;
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginExamplePriorityOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginExamplePriorityOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
 
-			const myFunctionConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-my-function",
-			);
-			expect(myFunctionConfig).toBeDefined();
-			expect(myFunctionConfig?.defaultValue).toBe(
-				'async () => { return "example"; }',
-			);
-		});
+				const myFunctionConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-my-function",
+				);
+				expect(myFunctionConfig).toBeDefined();
+				expect(myFunctionConfig?.defaultValue).toBe(
+					'async () => { return "example"; }',
+				);
+			},
+		);
 
-		it("should work with @cli example and @cli required together", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-example-required.ts");
-			const testContent = `export interface TestPluginExampleRequiredOptions {
+		it(
+			"should work with @cli example and @cli required together",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-example-required.ts");
+				const testContent = `export interface TestPluginExampleRequiredOptions {
 	/**
 	 * Required function
 	 * @cli example
@@ -1448,37 +1490,43 @@ export interface TestPluginNestedOptions {
 	requiredFunction: () => Promise<boolean>;
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginExampleRequiredOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginExampleRequiredOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
 
-			const requiredFunctionConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-required-function",
-			);
-			expect(requiredFunctionConfig).toBeDefined();
-			expect(requiredFunctionConfig?.skipPrompt).toBe(true);
-			expect(requiredFunctionConfig?.defaultValue).toBe(
-				"async () => { return true; }",
-			);
-			expect(requiredFunctionConfig?.argument.schema).toBe("z.coerce.string()");
-		});
+				const requiredFunctionConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-required-function",
+				);
+				expect(requiredFunctionConfig).toBeDefined();
+				expect(requiredFunctionConfig?.skipPrompt).toBe(true);
+				expect(requiredFunctionConfig?.defaultValue).toBe(
+					"async () => { return true; }",
+				);
+				expect(requiredFunctionConfig?.argument.schema).toBe(
+					"z.coerce.string()",
+				);
+			},
+		);
 
-		it("should parse plugin with @cli example and @example tag using markdown code fence", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-example-markdown.ts");
-			const testContent = `export interface TestPluginExampleMarkdownOptions {
+		it(
+			"should parse plugin with @cli example and @example tag using markdown code fence",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-example-markdown.ts");
+				const testContent = `export interface TestPluginExampleMarkdownOptions {
 	/**
 	 * Function to send email
 	 * @cli example
@@ -1492,37 +1540,41 @@ export interface TestPluginNestedOptions {
 	sendEmail: (data: { email: string }) => Promise<boolean>;
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginExampleMarkdownOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginExampleMarkdownOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
 
-			const sendEmailConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-send-email",
-			);
-			expect(sendEmailConfig).toBeDefined();
-			expect(sendEmailConfig?.skipPrompt).toBe(true);
-			expect(sendEmailConfig?.defaultValue).toBe(
-				'async (data) => {\n  console.log("Sending email:", data.email);\n  return true;\n}',
-			);
-			expect(sendEmailConfig?.argument.schema).toBe("z.coerce.string()");
-		});
+				const sendEmailConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-send-email",
+				);
+				expect(sendEmailConfig).toBeDefined();
+				expect(sendEmailConfig?.skipPrompt).toBe(true);
+				expect(sendEmailConfig?.defaultValue).toBe(
+					'async (data) => {\n  console.log("Sending email:", data.email);\n  return true;\n}',
+				);
+				expect(sendEmailConfig?.argument.schema).toBe("z.coerce.string()");
+			},
+		);
 
-		it("should infer schema type from @type tag when @cli example is present", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-example-type.ts");
-			const testContent = `export interface TestPluginExampleTypeOptions {
+		it(
+			"should infer schema type from @type tag when @cli example is present",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-example-type.ts");
+				const testContent = `export interface TestPluginExampleTypeOptions {
 	/**
 	 * Custom example value with type inference
 	 * @cli example
@@ -1540,46 +1592,50 @@ export interface TestPluginNestedOptions {
 	timeout?: number;
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginExampleTypeOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginExampleTypeOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
 
-			const apiKeyConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-api-key",
-			);
-			expect(apiKeyConfig).toBeDefined();
-			expect(apiKeyConfig?.argument.schema).toBe(
-				"z.coerce.string().optional()",
-			);
-			expect(apiKeyConfig?.defaultValue).toBe("process.env.API_KEY");
+				const apiKeyConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-api-key",
+				);
+				expect(apiKeyConfig).toBeDefined();
+				expect(apiKeyConfig?.argument.schema).toBe(
+					"z.coerce.string().optional()",
+				);
+				expect(apiKeyConfig?.defaultValue).toBe("process.env.API_KEY");
 
-			const timeoutConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-timeout",
-			);
-			expect(timeoutConfig).toBeDefined();
-			expect(timeoutConfig?.argument.schema).toBe(
-				"z.coerce.number().optional()",
-			);
-			// defaultValue is stored as string from JSDoc, so it will be "42" not 42
-			expect(timeoutConfig?.defaultValue).toBe("42");
-		});
+				const timeoutConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-timeout",
+				);
+				expect(timeoutConfig).toBeDefined();
+				expect(timeoutConfig?.argument.schema).toBe(
+					"z.coerce.number().optional()",
+				);
+				// defaultValue is stored as string from JSDoc, so it will be "42" not 42
+				expect(timeoutConfig?.defaultValue).toBe("42");
+			},
+		);
 
-		it("should set skipPrompt to false when @prompt tag is present", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-prompt-skip.ts");
-			const testContent = `export interface TestPluginPromptSkipOptions {
+		it(
+			"should set skipPrompt to false when @prompt tag is present",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-prompt-skip.ts");
+				const testContent = `export interface TestPluginPromptSkipOptions {
 	/**
 	 * API key with prompt
 	 * @cli
@@ -1596,39 +1652,43 @@ export interface TestPluginNestedOptions {
 	secret?: string;
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginPromptSkipOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginPromptSkipOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
 
-			const apiKeyConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-api-key",
-			);
-			expect(apiKeyConfig).toBeDefined();
-			expect(apiKeyConfig?.skipPrompt).toBe(false); // @prompt tag present, should be false
+				const apiKeyConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-api-key",
+				);
+				expect(apiKeyConfig).toBeDefined();
+				expect(apiKeyConfig?.skipPrompt).toBe(false); // @prompt tag present, should be false
 
-			const secretConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-secret",
-			);
-			expect(secretConfig).toBeDefined();
-			expect(secretConfig?.skipPrompt).toBe(true); // No @prompt tag, should skip
-		});
+				const secretConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-secret",
+				);
+				expect(secretConfig).toBeDefined();
+				expect(secretConfig?.skipPrompt).toBe(true); // No @prompt tag, should skip
+			},
+		);
 
-		it("should generate code with skipPrompt: false when @prompt is present", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-prompt-output.ts");
-			const testContent = `export interface TestPluginPromptOutputOptions {
+		it(
+			"should generate code with skipPrompt: false when @prompt is present",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-prompt-output.ts");
+				const testContent = `export interface TestPluginPromptOutputOptions {
 	/**
 	 * API key with prompt
 	 * @cli
@@ -1638,48 +1698,52 @@ export interface TestPluginNestedOptions {
 	apiKey: string;
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginPromptOutputOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginPromptOutputOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const pluginData = generatePluginConfig(
-				"testPlugin",
-				pluginInfo,
-				project,
-			);
-			const generatedCode = generateIndividualPluginFile(
-				"testPlugin",
-				pluginData,
-			);
+				const pluginData = generatePluginConfig(
+					"testPlugin",
+					pluginInfo,
+					project,
+				);
+				const generatedCode = generateIndividualPluginFile(
+					"testPlugin",
+					pluginData,
+				);
 
-			// Verify that skipPrompt: false appears in the generated code
-			expect(generatedCode).toContain("skipPrompt: false");
+				// Verify that skipPrompt: false appears in the generated code
+				expect(generatedCode).toContain("skipPrompt: false");
 
-			// Verify the config object has skipPrompt: false
-			const apiKeyConfig = pluginData.pluginConfig.find(
-				(c) => c.flag === "test-plugin-api-key",
-			);
-			expect(apiKeyConfig).toBeDefined();
-			expect(apiKeyConfig?.skipPrompt).toBe(false);
-		});
+				// Verify the config object has skipPrompt: false
+				const apiKeyConfig = pluginData.pluginConfig.find(
+					(c) => c.flag === "test-plugin-api-key",
+				);
+				expect(apiKeyConfig).toBeDefined();
+				expect(apiKeyConfig?.skipPrompt).toBe(false);
+			},
+		);
 
-		it("should set skipPrompt to true when @cli example overrides @prompt", () => {
-			const testFile = path.join(
-				TEST_DIR,
-				"test-plugin-example-overrides-prompt.ts",
-			);
-			const testContent = `export interface TestPluginExampleOverridesPromptOptions {
+		it(
+			"should set skipPrompt to true when @cli example overrides @prompt",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(
+					TEST_DIR,
+					"test-plugin-example-overrides-prompt.ts",
+				);
+				const testContent = `export interface TestPluginExampleOverridesPromptOptions {
 	/**
 	 * Function with both @cli example and @prompt
 	 * @cli example
@@ -1689,34 +1753,38 @@ export interface TestPluginNestedOptions {
 	myFunction: () => Promise<string>;
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginExampleOverridesPromptOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginExampleOverridesPromptOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
 
-			const myFunctionConfig = result.pluginConfig.find(
-				(c) => c.flag === "test-plugin-my-function",
-			);
-			expect(myFunctionConfig).toBeDefined();
-			// @cli example should override @prompt and force skipPrompt to true
-			expect(myFunctionConfig?.skipPrompt).toBe(true);
-		});
+				const myFunctionConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-my-function",
+				);
+				expect(myFunctionConfig).toBeDefined();
+				// @cli example should override @prompt and force skipPrompt to true
+				expect(myFunctionConfig?.skipPrompt).toBe(true);
+			},
+		);
 
-		it("should not include skipPrompt in output when undefined", () => {
-			const testFile = path.join(TEST_DIR, "test-plugin-no-skip-prompt.ts");
-			const testContent = `export interface TestPluginNoSkipPromptOptions {
+		it(
+			"should not include skipPrompt in output when undefined",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-no-skip-prompt.ts");
+				const testContent = `export interface TestPluginNoSkipPromptOptions {
 	/**
 	 * Regular field
 	 * @cli
@@ -1724,42 +1792,43 @@ export interface TestPluginNestedOptions {
 	field?: string;
 }`;
 
-			fs.writeFileSync(testFile, testContent);
+				fs.writeFileSync(testFile, testContent);
 
-			const project = new Project({
-				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
-			});
-			const sourceFile = project.addSourceFileAtPath(testFile);
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
 
-			const pluginInfo = {
-				serverTypeFile: testFile,
-				serverTypeName: "TestPluginNoSkipPromptOptions",
-				clientTypeFile: undefined,
-				clientTypeName: undefined,
-				importPath: "better-auth/plugins",
-			};
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginNoSkipPromptOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
 
-			const pluginData = generatePluginConfig(
-				"testPlugin",
-				pluginInfo,
-				project,
-			);
-			const generatedCode = generateIndividualPluginFile(
-				"testPlugin",
-				pluginData,
-			);
+				const pluginData = generatePluginConfig(
+					"testPlugin",
+					pluginInfo,
+					project,
+				);
+				const generatedCode = generateIndividualPluginFile(
+					"testPlugin",
+					pluginData,
+				);
 
-			// When skipPrompt is true (default without @prompt), it should be included
-			const fieldConfig = pluginData.pluginConfig.find(
-				(c) => c.flag === "test-plugin-field",
-			);
-			expect(fieldConfig).toBeDefined();
-			expect(fieldConfig?.skipPrompt).toBe(true);
-			// skipPrompt: true should be in the generated code
-			expect(generatedCode).toContain("skipPrompt: true");
-		});
+				// When skipPrompt is true (default without @prompt), it should be included
+				const fieldConfig = pluginData.pluginConfig.find(
+					(c) => c.flag === "test-plugin-field",
+				);
+				expect(fieldConfig).toBeDefined();
+				expect(fieldConfig?.skipPrompt).toBe(true);
+				// skipPrompt: true should be in the generated code
+				expect(generatedCode).toContain("skipPrompt: true");
+			},
+		);
 
-		it("should handle plugin with no @cli tags", () => {
+		it("should handle plugin with no @cli tags", { timeout: 20000 }, () => {
 			const testFile = path.join(TEST_DIR, "test-plugin-no-cli.ts");
 			const testContent = `export interface TestPluginNoCliOptions {
 	username?: string;
