@@ -6,7 +6,6 @@ import type {
 import type { SuccessContext } from "@better-fetch/fetch";
 import { sql } from "kysely";
 import { afterAll } from "vitest";
-import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
@@ -102,7 +101,10 @@ export async function getTestInstance<
 			testWith === "postgres"
 				? { db: await getPostgres(), type: "postgres" }
 				: testWith === "mongodb"
-					? mongodbAdapter(await mongodbClient())
+					? await Promise.all([
+							mongodbClient(),
+							await import("../adapters/mongodb-adapter"),
+						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
 					: testWith === "mysql"
 						? { db: await getMysql(), type: "mysql" }
 						: await getSqlite(),
