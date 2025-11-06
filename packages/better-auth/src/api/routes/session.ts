@@ -467,6 +467,7 @@ export const getSessionFromCtx = async <
 		asResponse: false,
 		headers: ctx.headers!,
 		returnHeaders: false,
+		returnStatus: false,
 		query: {
 			...config,
 			...ctx.query,
