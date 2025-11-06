@@ -6,8 +6,8 @@ import {
 	select,
 	text,
 } from "@clack/prompts";
-import type { GetArgumentsFn } from "../generate-auth";
 import type { InitActionOptions } from "..";
+import type { GetArgumentsFn } from "../generate-auth";
 
 const processCancelAction = <T extends any | symbol>(val: T) => {
 	if (isCancel(val)) {

@@ -186,7 +186,6 @@ export const getAuthPluginsCode = async ({
 			args.pop();
 		}
 
-
 		pluginsCode.push(`${plugin.auth.function}(${args.join(", ")})`);
 	}
 	return (await formatCode(`[${pluginsCode.join(", ")}]`)).trim().slice(0, -1);

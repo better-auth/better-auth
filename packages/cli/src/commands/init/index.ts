@@ -3,11 +3,14 @@ import { intro } from "@clack/prompts";
 import { Command } from "commander";
 import z from "zod";
 import {
-	generateAuthConfigCode,
+	type PluginsConfig,
+	pluginsConfig,
+} from "./configs/plugins-index.config";
+import {
 	type GetArgumentsOptions,
+	generateAuthConfigCode,
 } from "./generate-auth";
 import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
-import { pluginsConfig, type PluginsConfig } from "./configs/plugins-index.config";
 
 // Goals:
 // 1. init `auth.ts` file

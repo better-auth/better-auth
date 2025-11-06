@@ -1,10 +1,10 @@
-import { Project, SyntaxKind } from "ts-morph";
-import * as path from "node:path";
 import * as fs from "node:fs";
+import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { formatCode } from "../src/commands/init/utility/format";
-import type { GetArgumentsOptions } from "../src/commands/init/generate-auth";
+import { Project, SyntaxKind } from "ts-morph";
 import type { PrettifyDeep } from "../../better-auth/src/types/helper";
+import type { GetArgumentsOptions } from "../src/commands/init/generate-auth";
+import { formatCode } from "../src/commands/init/utility/format";
 
 export type GetArgumentsOption = PrettifyDeep<
 	Omit<GetArgumentsOptions, "argument" | "isNestedObject"> & {
@@ -41,24 +41,24 @@ const PLUGIN_TYPE_MAP: Record<
 		clientTypeFile: pluginPath("two-factor/client.ts"),
 		clientTypeName: undefined,
 	},
-    username: {
-        serverTypeFile: pluginPath("username/index.ts"),
-        serverTypeName: "UsernameOptions",
-        clientTypeFile: pluginPath("username/client.ts"),
-        clientTypeName: undefined,
-    },
-    anonymous: {
-        serverTypeFile: pluginPath("anonymous/index.ts"),
-        serverTypeName: "AnonymousOptions",
-        clientTypeFile: pluginPath("anonymous/client.ts"),
-        clientTypeName: undefined,
-    },
-    phoneNumber: {
-        serverTypeFile: pluginPath("phone-number/index.ts"),
-        serverTypeName: "PhoneNumberOptions",
-        clientTypeFile: pluginPath("phone-number/client.ts"),
-        clientTypeName: undefined,
-    },
+	username: {
+		serverTypeFile: pluginPath("username/index.ts"),
+		serverTypeName: "UsernameOptions",
+		clientTypeFile: pluginPath("username/client.ts"),
+		clientTypeName: undefined,
+	},
+	anonymous: {
+		serverTypeFile: pluginPath("anonymous/index.ts"),
+		serverTypeName: "AnonymousOptions",
+		clientTypeFile: pluginPath("anonymous/client.ts"),
+		clientTypeName: undefined,
+	},
+	phoneNumber: {
+		serverTypeFile: pluginPath("phone-number/index.ts"),
+		serverTypeName: "PhoneNumberOptions",
+		clientTypeFile: pluginPath("phone-number/client.ts"),
+		clientTypeName: undefined,
+	},
 };
 
 const ROOT_DIR = path.resolve(__dirname, "../..");
@@ -114,7 +114,9 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 			// Parse custom options: "value1:Label1 value2:Label2" or "value1 value2"
 			// Handle multiline by removing newlines and extra whitespace
 			const normalizedText = optionsText.replace(/\s+/g, " ").trim();
-			const optionParts = normalizedText.split(/\s+/).filter((part) => part.length > 0);
+			const optionParts = normalizedText
+				.split(/\s+/)
+				.filter((part) => part.length > 0);
 			selectOptions = optionParts.map((part) => {
 				const colonIndex = part.indexOf(":");
 				if (colonIndex > 0) {
@@ -132,13 +134,17 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 
 	// Extract @cli multi-select with optional custom options
 	if (isMultiSelect && !selectOptions) {
-		const multiSelectMatch = allJsDocText.match(/@cli\s+multi-select(?:\s+([^\n@]+))?/);
+		const multiSelectMatch = allJsDocText.match(
+			/@cli\s+multi-select(?:\s+([^\n@]+))?/,
+		);
 		if (multiSelectMatch) {
 			const optionsText = multiSelectMatch[1]?.trim();
 			if (optionsText) {
 				// Parse custom options: "value1:Label1 value2:Label2" or "value1 value2"
 				const normalizedText = optionsText.replace(/\s+/g, " ").trim();
-				const optionParts = normalizedText.split(/\s+/).filter((part) => part.length > 0);
+				const optionParts = normalizedText
+					.split(/\s+/)
+					.filter((part) => part.length > 0);
 				selectOptions = optionParts.map((part) => {
 					const colonIndex = part.indexOf(":");
 					if (colonIndex > 0) {
@@ -192,7 +198,9 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 	// Extract @type override
 	let typeOverride: string | undefined = undefined;
 	let enumValues: string[] | undefined = undefined;
-	const typeMatch = allJsDocText.match(/@type\s+(\w+)(?:\s+([^\n@]+))?(?:\n|$)/);
+	const typeMatch = allJsDocText.match(
+		/@type\s+(\w+)(?:\s+([^\n@]+))?(?:\n|$)/,
+	);
 	if (typeMatch) {
 		const typeValue = typeMatch[1]!.trim().toLowerCase();
 		// Check for enum type with values
@@ -249,11 +257,15 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 /**
  * Generate Zod schema from TypeScript type
  */
-export function generateZodSchema(type: any, typeOverride?: string, enumValues?: string[]): string {
+export function generateZodSchema(
+	type: any,
+	typeOverride?: string,
+	enumValues?: string[],
+): string {
 	// If type override is provided, use it directly
 	if (typeOverride) {
 		let schema = "";
-		
+
 		// Handle enum type
 		if (typeOverride === "enum" && enumValues && enumValues.length > 0) {
 			schema = `z.enum([${enumValues.map((v) => `"${v}"`).join(", ")}])`;
@@ -272,14 +284,14 @@ export function generateZodSchema(type: any, typeOverride?: string, enumValues?:
 					schema = "z.coerce.string()";
 			}
 		}
-		
+
 		// Check if the original type is optional
 		const typeText = type.getText();
 		const isOptional = type.isNullable() || type.isUndefined();
 		if (isOptional && !typeText.includes("required")) {
 			schema += ".optional()";
 		}
-		
+
 		return schema;
 	}
 
@@ -346,13 +358,18 @@ export function generateQuestion(
 ): string {
 	const formattedName = propertyName.replace(/([A-Z])/g, " $1").toLowerCase();
 	const pluginDisplayName = toTitleCase(pluginName);
-	
+
 	// Determine the actual type to use
-	const actualType = typeOverride || 
-		(type.getText().includes("boolean") || type.getSymbol()?.getName() === "Boolean" ? "boolean" : 
-		type.getText().includes("number") || type.getSymbol()?.getName() === "Number" ? "number" :
-		"string");
-	
+	const actualType =
+		typeOverride ||
+		(type.getText().includes("boolean") ||
+		type.getSymbol()?.getName() === "Boolean"
+			? "boolean"
+			: type.getText().includes("number") ||
+					type.getSymbol()?.getName() === "Number"
+				? "number"
+				: "string");
+
 	// Generate question based on type
 	let baseQuestion: string;
 	switch (actualType) {
@@ -365,7 +382,7 @@ export function generateQuestion(
 		default:
 			baseQuestion = `What is the ${formattedName}?`;
 	}
-	
+
 	return `[${pluginDisplayName}] ${baseQuestion}`;
 }
 
@@ -404,10 +421,9 @@ function processProperty(
 		: `${toKebabCase(pluginName)}-${toKebabCase(propertyName)}`;
 
 	// Generate question - use custom question or generate based on type
-	const question =
-		tags.question 
-			? `[${toTitleCase(pluginName)}] ${tags.question}`
-			: generateQuestion(propertyName, type, tags.type, pluginName);
+	const question = tags.question
+		? `[${toTitleCase(pluginName)}] ${tags.question}`
+		: generateQuestion(propertyName, type, tags.type, pluginName);
 
 	// Check if this is a nested type reference
 	let nestedOptions: GetArgumentsOption[] | undefined = undefined;
@@ -559,14 +575,16 @@ function processProperty(
 			// Inline object types either:
 			// 1. Don't have a typeSymbol with declarations, OR
 			// 2. Have a typeSymbol but it's not a TypeAlias or Interface
-			const isInlineObjectType = 
-				!typeSymbol || 
-				!typeSymbol.getDeclarations().some((d: any) =>
-					[
-						SyntaxKind.TypeAliasDeclaration,
-						SyntaxKind.InterfaceDeclaration,
-					].includes(d.getKind())
-				);
+			const isInlineObjectType =
+				!typeSymbol ||
+				!typeSymbol
+					.getDeclarations()
+					.some((d: any) =>
+						[
+							SyntaxKind.TypeAliasDeclaration,
+							SyntaxKind.InterfaceDeclaration,
+						].includes(d.getKind()),
+					);
 
 			if (isInlineObjectType) {
 				// This is likely an inline object type
@@ -598,13 +616,15 @@ function processProperty(
 
 	// Generate schema only if there are no nested objects
 	// Nested objects don't need schemas as they're structured objects, not primitive values
-	const schema = (nestedOptions && nestedOptions.length > 0) 
-		? undefined 
-		: generateZodSchema(type, tags.type, tags.enumValues);
+	const schema =
+		nestedOptions && nestedOptions.length > 0
+			? undefined
+			: generateZodSchema(type, tags.type, tags.enumValues);
 
 	// Check if this is a select/enum type
 	let isSelectOptions: { value: any; label?: string }[] | undefined = undefined;
-	let isMultiselectOptions: { value: any; label?: string }[] | undefined = undefined;
+	let isMultiselectOptions: { value: any; label?: string }[] | undefined =
+		undefined;
 
 	// Use custom select options if provided in JSDoc
 	if (tags.selectOptions && tags.selectOptions.length > 0) {
@@ -623,17 +643,17 @@ function processProperty(
 					// Check if this is a string literal type using multiple methods
 					try {
 						// Method 1: Check if it's a string literal type directly
-						const isStringLiteralType = 
-							t.isStringLiteral() || 
+						const isStringLiteralType =
+							t.isStringLiteral() ||
 							(t.getFlags && (t.getFlags() & 256) === 256); // StringLiteral flag
-						
+
 						if (!isStringLiteralType) {
 							return null;
 						}
-						
+
 						// Try to get the text representation of the type
 						const text = t.getText();
-						
+
 						// Only extract string literal types (wrapped in quotes)
 						if (
 							typeof text === "string" &&
@@ -661,7 +681,7 @@ function processProperty(
 						// If any error occurs, skip this type
 						return null;
 					}
-					
+
 					return null;
 				})
 				.filter((v: string | null): v is string => v !== null && v.length > 0);
@@ -695,7 +715,10 @@ function processProperty(
 
 	// Only set defaultValue if this is NOT a nested object
 	// Nested objects should have their defaults set on individual properties, not the parent
-	if (tags.defaultValue !== undefined && (!nestedOptions || nestedOptions.length === 0)) {
+	if (
+		tags.defaultValue !== undefined &&
+		(!nestedOptions || nestedOptions.length === 0)
+	) {
 		option.defaultValue = tags.defaultValue;
 	}
 
@@ -901,11 +924,17 @@ export function generateArgumentCode(
 		parts.push(`${indent}\tquestion: "${arg.question}",`);
 	}
 	// Skip defaultValue if this is a nested object (nested objects use defaults on child properties)
-	if (arg.defaultValue !== undefined && (!arg.isNestedObject || arg.isNestedObject.length === 0)) {
+	if (
+		arg.defaultValue !== undefined &&
+		(!arg.isNestedObject || arg.isNestedObject.length === 0)
+	) {
 		let defaultValueStr: string;
 		if (typeof arg.defaultValue === "string") {
 			// Check if it looks like an object literal (starts with { and ends with })
-			if (arg.defaultValue.trim().startsWith("{") && arg.defaultValue.trim().endsWith("}")) {
+			if (
+				arg.defaultValue.trim().startsWith("{") &&
+				arg.defaultValue.trim().endsWith("}")
+			) {
 				// Try to parse it as JSON to validate, then stringify it properly
 				try {
 					const parsed = JSON.parse(arg.defaultValue);

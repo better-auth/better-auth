@@ -36,7 +36,7 @@ export interface BackupCodeOptions {
 	customBackupCodesGenerate?: (() => string[]) | undefined;
 	/**
 	 * How to store the backup codes in the database, whether encrypted or plain.
-	 * 
+	 *
 	 * @cli select plain:Plain encrypted:Encrypted
 	 * @type string
 	 * @question How to store the backup codes in the database, whether encrypted or plain?

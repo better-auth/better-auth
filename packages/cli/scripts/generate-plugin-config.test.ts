@@ -1,16 +1,16 @@
-import { Project } from "ts-morph";
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Project } from "ts-morph";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-	generatePluginConfig,
-	generateIndividualPluginFile,
-	generateIndexFile,
-	generateArgumentCode,
 	extractJSDocTags,
-	generateZodSchema,
+	generateArgumentCode,
+	generateIndexFile,
+	generateIndividualPluginFile,
+	generatePluginConfig,
 	generateQuestion,
+	generateZodSchema,
 	toKebabCase,
 	toTitleCase,
 } from "./generate-plugin-config";
@@ -416,7 +416,12 @@ describe("generate-plugin-config", () => {
 				getText: () => "string",
 				getSymbol: () => ({ getName: () => "String" }),
 			};
-			const result = generateQuestion("userName", mockType, undefined, "testPlugin");
+			const result = generateQuestion(
+				"userName",
+				mockType,
+				undefined,
+				"testPlugin",
+			);
 			expect(result).toBe("[Test Plugin] What is the user name?");
 		});
 
@@ -425,7 +430,12 @@ describe("generate-plugin-config", () => {
 				getText: () => "boolean",
 				getSymbol: () => ({ getName: () => "Boolean" }),
 			};
-			const result = generateQuestion("isEnabled", mockType, undefined, "testPlugin");
+			const result = generateQuestion(
+				"isEnabled",
+				mockType,
+				undefined,
+				"testPlugin",
+			);
 			expect(result).toBe("[Test Plugin] Would you like to is enabled?");
 		});
 
@@ -434,7 +444,12 @@ describe("generate-plugin-config", () => {
 				getText: () => "number",
 				getSymbol: () => ({ getName: () => "Number" }),
 			};
-			const result = generateQuestion("maxRetries", mockType, undefined, "testPlugin");
+			const result = generateQuestion(
+				"maxRetries",
+				mockType,
+				undefined,
+				"testPlugin",
+			);
 			expect(result).toBe("[Test Plugin] What is the max retries?");
 		});
 
@@ -443,7 +458,12 @@ describe("generate-plugin-config", () => {
 				getText: () => "string",
 				getSymbol: () => ({ getName: () => "String" }),
 			};
-			const result = generateQuestion("count", mockType, "number", "testPlugin");
+			const result = generateQuestion(
+				"count",
+				mockType,
+				"number",
+				"testPlugin",
+			);
 			expect(result).toBe("[Test Plugin] What is the count?");
 		});
 	});
@@ -464,7 +484,7 @@ describe("generate-plugin-config", () => {
 			const result = generateArgumentCode(arg);
 			expect(result).toContain('flag: "test-plugin-username"');
 			expect(result).toContain('description: "Username property"');
-			expect(result).toContain('schema: z.coerce.string()');
+			expect(result).toContain("schema: z.coerce.string()");
 		});
 
 		it("should generate code with defaultValue", () => {
@@ -497,7 +517,7 @@ describe("generate-plugin-config", () => {
 				argument: {
 					index: 0,
 					isProperty: "mode",
-					schema: "z.enum([\"development\", \"production\"])",
+					schema: 'z.enum(["development", "production"])',
 				},
 			};
 			const result = generateArgumentCode(arg);
@@ -591,7 +611,9 @@ describe("generate-plugin-config", () => {
 		it("should generate proper TypeScript types", () => {
 			const pluginNames = ["testPlugin"];
 			const result = generateIndexFile(pluginNames);
-			expect(result).toContain("export type Plugin = keyof typeof pluginsConfig");
+			expect(result).toContain(
+				"export type Plugin = keyof typeof pluginsConfig",
+			);
 			expect(result).toContain("export type PluginConfig");
 			expect(result).toContain("export type PluginsConfig");
 		});
@@ -728,7 +750,9 @@ describe("generate-plugin-config", () => {
 			);
 			expect(usernameConfig).toBeDefined();
 			expect(usernameConfig?.defaultValue).toBe("admin");
-			expect(usernameConfig?.argument.schema).toBe("z.coerce.string().optional()");
+			expect(usernameConfig?.argument.schema).toBe(
+				"z.coerce.string().optional()",
+			);
 
 			// Check timeout property
 			const timeoutConfig = result.pluginConfig.find(
@@ -888,7 +912,9 @@ export interface TestPluginNestedOptions {
 				(c) => c.flag === "test-plugin-api-key",
 			);
 			expect(apiKeyConfig).toBeDefined();
-			expect(apiKeyConfig?.question).toBe("[Test Plugin] What is your API key?");
+			expect(apiKeyConfig?.question).toBe(
+				"[Test Plugin] What is your API key?",
+			);
 			expect(apiKeyConfig?.skipPrompt).toBe(false); // @prompt tag present
 
 			const secretConfig = result.pluginConfig.find(
@@ -964,4 +990,3 @@ export interface TestPluginNestedOptions {
 		});
 	});
 });
-
