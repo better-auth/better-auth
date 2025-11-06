@@ -8,7 +8,7 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import { twoFactorClient } from "../plugins";
 import type { Session, SessionQueryParams } from "../types";
-import { organizationClient, passkeyClient } from "./plugins";
+import { emailOTPClient, organizationClient } from "./plugins";
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createSvelteClient } from "./svelte";
@@ -278,7 +278,7 @@ describe("type", () => {
 
 	it("should infer session react", () => {
 		const client = createReactClient({
-			plugins: [organizationClient(), twoFactorClient(), passkeyClient()],
+			plugins: [organizationClient(), twoFactorClient(), emailOTPClient()],
 		});
 		const $infer = client.$Infer.Session;
 		expectTypeOf<typeof $infer.user>().toEqualTypeOf<{
@@ -378,7 +378,9 @@ describe("type", () => {
 			} | null;
 			isPending: boolean;
 			error: BetterFetchError | null;
-			refetch: (queryParams?: { query?: SessionQueryParams }) => void;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => void;
 		}>();
 	});
 });

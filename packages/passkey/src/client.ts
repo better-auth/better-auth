@@ -9,10 +9,11 @@ import {
 	startRegistration,
 	WebAuthnError,
 } from "@simplewebauthn/browser";
+import { useAuthQuery } from "better-auth/client";
+import type { Session, User } from "better-auth/types";
 import { atom } from "nanostores";
-import { useAuthQuery } from "../../client";
-import type { Session, User } from "../../types";
-import type { Passkey, passkey as passkeyPl } from ".";
+import type { passkey } from ".";
+import type { Passkey } from "./types";
 
 export const getPasskeyActions = (
 	$fetch: BetterFetch,
@@ -25,11 +26,13 @@ export const getPasskeyActions = (
 	},
 ) => {
 	const signInPasskey = async (
-		opts?: {
-			autoFill?: boolean;
-			fetchOptions?: BetterFetchOption;
-		},
-		options?: BetterFetchOption,
+		opts?:
+			| {
+					autoFill?: boolean;
+					fetchOptions?: BetterFetchOption;
+			  }
+			| undefined,
+		options?: BetterFetchOption | undefined,
 	) => {
 		const response = await $fetch<PublicKeyCredentialRequestOptionsJSON>(
 			"/passkey/generate-authenticate-options",
@@ -76,28 +79,30 @@ export const getPasskeyActions = (
 	};
 
 	const registerPasskey = async (
-		opts?: {
-			fetchOptions?: BetterFetchOption;
-			/**
-			 * The name of the passkey. This is used to
-			 * identify the passkey in the UI.
-			 */
-			name?: string;
+		opts?:
+			| {
+					fetchOptions?: BetterFetchOption;
+					/**
+					 * The name of the passkey. This is used to
+					 * identify the passkey in the UI.
+					 */
+					name?: string;
 
-			/**
-			 * The type of attachment for the passkey. Defaults to both
-			 * platform and cross-platform allowed, with platform preferred.
-			 */
-			authenticatorAttachment?: "platform" | "cross-platform";
+					/**
+					 * The type of attachment for the passkey. Defaults to both
+					 * platform and cross-platform allowed, with platform preferred.
+					 */
+					authenticatorAttachment?: "platform" | "cross-platform";
 
-			/**
-			 * Try to silently create a passkey with the password manager that the user just signed
-			 * in with.
-			 * @default false
-			 */
-			useAutoRegister?: boolean;
-		},
-		fetchOpts?: BetterFetchOption,
+					/**
+					 * Try to silently create a passkey with the password manager that the user just signed
+					 * in with.
+					 * @default false
+					 */
+					useAutoRegister?: boolean;
+			  }
+			| undefined,
+		fetchOpts?: BetterFetchOption | undefined,
 	) => {
 		const options = await $fetch<PublicKeyCredentialCreationOptionsJSON>(
 			"/passkey/generate-register-options",
@@ -212,7 +217,7 @@ export const passkeyClient = () => {
 	const $listPasskeys = atom<any>();
 	return {
 		id: "passkey",
-		$InferServerPlugin: {} as ReturnType<typeof passkeyPl>,
+		$InferServerPlugin: {} as ReturnType<typeof passkey>,
 		getActions: ($fetch, $store) =>
 			getPasskeyActions($fetch, {
 				$listPasskeys,

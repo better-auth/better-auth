@@ -43,8 +43,8 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
 export async function getClient(
 	clientId: string,
 	adapter: any,
-	trustedClients: (Client & { skipConsent?: boolean })[] = [],
-): Promise<(Client & { skipConsent?: boolean }) | null> {
+	trustedClients: (Client & { skipConsent?: boolean | undefined })[] = [],
+): Promise<(Client & { skipConsent?: boolean | undefined }) | null> {
 	const trustedClient = trustedClients.find(
 		(client) => client.clientId === clientId,
 	);
@@ -62,7 +62,7 @@ export async function getClient(
 			}
 			return {
 				...res,
-				redirectURLs: (res.redirectURLs ?? "").split(","),
+				redirectUrls: (res.redirectUrls ?? "").split(","),
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
 			} as Client;
 		});
@@ -72,7 +72,7 @@ export async function getClient(
 
 export const getMetadata = (
 	ctx: GenericEndpointContext,
-	options?: OIDCOptions,
+	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
 	const jwtPlugin = getJwtPlugin(ctx);
 	const issuer =
@@ -1369,7 +1369,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
 							clientSecret: storedClientSecret,
-							redirectURLs: body.redirect_uris.join(","),
+							redirectUrls: body.redirect_uris.join(","),
 							type: "web",
 							authenticationScheme:
 								body.token_endpoint_auth_method || "client_secret_basic",

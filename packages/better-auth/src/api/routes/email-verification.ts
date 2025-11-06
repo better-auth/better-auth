@@ -18,7 +18,7 @@ export async function createEmailVerificationToken(
 	/**
 	 * The email to update from
 	 */
-	updateTo?: string,
+	updateTo?: string | undefined,
 	/**
 	 * The time in seconds for the token to expire
 	 */

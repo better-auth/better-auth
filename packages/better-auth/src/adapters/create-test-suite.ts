@@ -51,7 +51,7 @@ export type InsertRandomFn = <
 	Count extends number = 1,
 >(
 	model: M,
-	count?: Count,
+	count?: Count | undefined,
 ) => Promise<
 	Count extends 1
 		? M extends "user"
@@ -76,6 +76,24 @@ export type InsertRandomFn = <
 			>
 >;
 
+export const createTestSuite2 = <
+	Tests extends Record<
+		string,
+		(context: {
+			/**
+			 * Mark tests as skipped. All execution after this call will be skipped.
+			 * This function throws an error, so make sure you are not catching it accidentally.
+			 * @see {@link https://vitest.dev/guide/test-context#skip}
+			 */
+			readonly skip: {
+				(note?: string | undefined): never;
+				(condition: boolean, note?: string | undefined): void;
+			};
+		}) => Promise<void>
+	>,
+	AdditionalOptions extends Record<string, any> = {},
+>() => {};
+
 export const createTestSuite = <
 	Tests extends Record<
 		string,
@@ -86,8 +104,8 @@ export const createTestSuite = <
 			 * @see {@link https://vitest.dev/guide/test-context#skip}
 			 */
 			readonly skip: {
-				(note?: string): never;
-				(condition: boolean, note?: string): void;
+				(note?: string | undefined): never;
+				(condition: boolean, note?: string | undefined): void;
 			};
 		}) => Promise<void>
 	>,
@@ -95,12 +113,12 @@ export const createTestSuite = <
 >(
 	suiteName: string,
 	config: {
-		defaultBetterAuthOptions?: BetterAuthOptions;
+		defaultBetterAuthOptions?: BetterAuthOptions | undefined;
 		/**
 		 * Helpful if the default better auth options require migrations to be run.
 		 */
-		alwaysMigrate?: boolean;
-		prefixTests?: string;
+		alwaysMigrate?: boolean | undefined;
+		prefixTests?: string | undefined;
 	},
 	tests: (
 		helpers: {
@@ -127,21 +145,39 @@ export const createTestSuite = <
 						id: string;
 					}
 				>,
-				by?: "id" | "createdAt",
+				by?: ("id" | "createdAt") | undefined,
 			) => (Record<string, any> & {
 				id: string;
 			})[];
 			getAuth: () => Promise<ReturnType<typeof betterAuth>>;
 			tryCatch<T, E = Error>(promise: Promise<T>): Promise<Result<T, E>>;
-			customIdGenerator?: () => string | Promise<string>;
+			customIdGenerator?: () => any | Promise<any> | undefined;
+			transformIdOutput?: (id: any) => string | undefined;
+			/**
+			 * Some adapters may change the ID type, this function allows you to pass the entire model
+			 * data and it will return the correct better-auth-expected transformed data.
+			 *
+			 * Eg:
+			 * MongoDB uses ObjectId for IDs, but it's possible the user can disable that option in the adapter config.
+			 * Because of this, the expected data would be a string.
+			 * These sorts of conversions will cause issues with the test when you use the `generate` function.
+			 * This is because the `generate` function will return the raw data expected to be saved in DB, not the excpected BA output.
+			 */
+			transformGeneratedModel: (
+				data: Record<string, any>,
+			) => Record<string, any>;
 		},
-		additionalOptions?: AdditionalOptions,
+		additionalOptions?: AdditionalOptions | undefined,
 	) => Tests,
 ) => {
 	return (
-		options?: {
-			disableTests?: Partial<Record<keyof Tests, boolean> & { ALL?: boolean }>;
-		} & AdditionalOptions,
+		options?:
+			| ({
+					disableTests?: Partial<
+						Record<keyof Tests, boolean> & { ALL?: boolean }
+					>;
+			  } & AdditionalOptions)
+			| undefined,
 	) => {
 		return async (helpers: {
 			adapter: () => Promise<DBAdapter<BetterAuthOptions>>;
@@ -153,14 +189,17 @@ export const createTestSuite = <
 			) => Promise<BetterAuthOptions>;
 			cleanup: () => Promise<void>;
 			runMigrations: () => Promise<void>;
-			prefixTests?: string;
+			prefixTests?: string | undefined;
 			onTestFinish: () => Promise<void>;
-			customIdGenerator?: () => string | Promise<string>;
+			customIdGenerator?: () => any | Promise<any> | undefined;
+			transformIdOutput?: (id: any) => string | undefined;
 		}) => {
 			const createdRows: Record<string, any[]> = {};
 
 			let adapter = await helpers.adapter();
-			const wrapperAdapter = (overrideOptions?: BetterAuthOptions) => {
+			const wrapperAdapter = (
+				overrideOptions?: BetterAuthOptions | undefined,
+			) => {
 				const options = deepmerge(
 					deepmerge(
 						helpers.getBetterAuthOptions(),
@@ -258,6 +297,14 @@ export const createTestSuite = <
 				}
 			};
 
+			const transformGeneratedModel = (data: Record<string, any>) => {
+				let newData = { ...data };
+				if (helpers.transformIdOutput) {
+					newData.id = helpers.transformIdOutput(newData.id);
+				}
+				return newData;
+			};
+
 			const generateModel: GenerateFn = async (model: string) => {
 				const id = (await helpers.customIdGenerator?.()) || generateId();
 				const randomDate = new Date(
@@ -268,9 +315,10 @@ export const createTestSuite = <
 						id,
 						createdAt: randomDate,
 						updatedAt: new Date(),
-						email: `user-${id}@email.com`.toLowerCase(),
+						email:
+							`user-${helpers.transformIdOutput?.(id) ?? id}@email.com`.toLowerCase(),
 						emailVerified: true,
-						name: `user-${id}`,
+						name: `user-${helpers.transformIdOutput?.(id) ?? id}`,
 						image: null,
 					};
 					return user as any;
@@ -458,6 +506,8 @@ export const createTestSuite = <
 					sortModels,
 					tryCatch,
 					customIdGenerator: helpers.customIdGenerator,
+					transformGeneratedModel,
+					transformIdOutput: helpers.transformIdOutput,
 				},
 				additionalOptions as AdditionalOptions,
 			);

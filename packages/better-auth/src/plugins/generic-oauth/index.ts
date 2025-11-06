@@ -35,112 +35,122 @@ export interface GenericOAuthConfig {
 	 * URL to fetch OAuth 2.0 configuration.
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
 	 */
-	discoveryUrl?: string;
+	discoveryUrl?: string | undefined;
 	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
 	 */
-	authorizationUrl?: string;
+	authorizationUrl?: string | undefined;
 	/**
 	 * URL for the token endpoint.
 	 * Optional if using discoveryUrl.
 	 */
-	tokenUrl?: string;
+	tokenUrl?: string | undefined;
 	/**
 	 * URL for the user info endpoint.
 	 * Optional if using discoveryUrl.
 	 */
-	userInfoUrl?: string;
+	userInfoUrl?: string | undefined;
 	/** OAuth client ID */
 	clientId: string;
 	/** OAuth client secret */
-	clientSecret?: string;
+	clientSecret?: string | undefined;
 	/**
 	 * Array of OAuth scopes to request.
 	 * @default []
 	 */
-	scopes?: string[];
+	scopes?: string[] | undefined;
 	/**
 	 * Custom redirect URI.
 	 * If not provided, a default URI will be constructed.
 	 */
-	redirectURI?: string;
+	redirectURI?: string | undefined;
 	/**
 	 * OAuth response type.
 	 * @default "code"
 	 */
-	responseType?: string;
+	responseType?: string | undefined;
 	/**
 	 * The response mode to use for the authorization code request.
 
 	 */
-	responseMode?: "query" | "form_post";
+	responseMode?: ("query" | "form_post") | undefined;
 	/**
 	 * Prompt parameter for the authorization request.
 	 * Controls the authentication experience for the user.
 	 */
-	prompt?: "none" | "login" | "consent" | "select_account";
+	prompt?: ("none" | "login" | "consent" | "select_account") | undefined;
 	/**
 	 * Whether to use PKCE (Proof Key for Code Exchange)
 	 * @default false
 	 */
-	pkce?: boolean;
+	pkce?: boolean | undefined;
 	/**
 	 * Access type for the authorization request.
 	 * Use "offline" to request a refresh token.
 	 */
-	accessType?: string;
+	accessType?: string | undefined;
 	/**
 	 * Custom function to fetch user info.
 	 * If provided, this function will be used instead of the default user info fetching logic.
 	 * @param tokens - The OAuth tokens received after successful authentication
 	 * @returns A promise that resolves to a User object or null
 	 */
-	getUserInfo?: (tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>;
+	getUserInfo?:
+		| ((tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>)
+		| undefined;
 	/**
 	 * Custom function to map the user profile to a User object.
 	 */
-	mapProfileToUser?: (
-		profile: Record<string, any>,
-	) => Partial<Partial<User>> | Promise<Partial<User>>;
+	mapProfileToUser?:
+		| ((
+				profile: Record<string, any>,
+		  ) => Partial<Partial<User>> | Promise<Partial<User>>)
+		| undefined;
 	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
 	authorizationUrlParams?:
-		| Record<string, string>
-		| ((ctx: GenericEndpointContext) => Record<string, string>);
+		| (
+				| Record<string, string>
+				| ((ctx: GenericEndpointContext) => Record<string, string>)
+		  )
+		| undefined;
 	/**
 	 * Additional search-params to add to the tokenUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
 	tokenUrlParams?:
-		| Record<string, string>
-		| ((ctx: GenericEndpointContext) => Record<string, string>);
+		| (
+				| Record<string, string>
+				| ((ctx: GenericEndpointContext) => Record<string, string>)
+		  )
+		| undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */
-	disableImplicitSignUp?: boolean;
+	disableImplicitSignUp?: boolean | undefined;
 	/**
 	 * Disable sign up for new users.
 	 */
-	disableSignUp?: boolean;
+	disableSignUp?: boolean | undefined;
 	/**
 	 * Authentication method for token requests.
 	 * @default "post"
 	 */
-	authentication?: "basic" | "post";
+	authentication?: ("basic" | "post") | undefined;
 	/**
 	 * Custom headers to include in the discovery request.
 	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
 	 */
-	discoveryHeaders?: Record<string, string>;
+	discoveryHeaders?: Record<string, string> | undefined;
 	/**
 	 * Custom headers to include in the authorization request.
 	 * Useful for providers like Qonto that require specific headers (e.g., X-Qonto-Staging-Token for local development).
 	 */
-	authorizationHeaders?: Record<string, string>;
+	authorizationHeaders?: Record<string, string> | undefined;
 	/**
 	 * Override user info with the provider info.
 	 *
@@ -148,7 +158,7 @@ export interface GenericOAuthConfig {
 	 * when the user signs in with the provider.
 	 * @default false
 	 */
-	overrideUserInfo?: boolean;
+	overrideUserInfo?: boolean | undefined;
 }
 
 interface GenericOAuthOptions {
@@ -188,7 +198,7 @@ async function getUserInfo(
 
 	const userInfo = await betterFetch<{
 		email: string;
-		sub?: string;
+		sub?: string | undefined;
 		name: string;
 		email_verified: boolean;
 		picture: string;
@@ -304,7 +314,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: finalTokenUrl,
 						});
 					},
-
 					async getUserInfo(tokens) {
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
@@ -323,6 +332,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							data: userInfo,
 						};
+					},
+					options: {
+						overrideUserInfoOnSignIn: c.overrideUserInfo,
 					},
 				} as OAuthProvider;
 			});
@@ -395,6 +407,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: false",
 							})
 							.optional(),
+						/**
+						 * Any additional data to pass through the oauth flow.
+						 */
+						additionalData: z.record(z.string(), z.any()).optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -487,7 +503,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? authorizationUrlParams(ctx)
 							: authorizationUrlParams;
 
-					const { state, codeVerifier } = await generateState(ctx);
+					const { state, codeVerifier } = await generateState(
+						ctx,
+						undefined,
+						ctx.body.additionalData,
+					);
 					const authUrl = await createAuthorizationURL({
 						id: providerId,
 						options: {
@@ -936,10 +956,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						});
 					}
 
-					const state = await generateState(c, {
-						userId: session.user.id,
-						email: session.user.email,
-					});
+					const state = await generateState(
+						c,
+						{
+							userId: session.user.id,
+							email: session.user.email,
+						},
+						undefined,
+					);
 
 					const additionalParams =
 						typeof authorizationUrlParams === "function"

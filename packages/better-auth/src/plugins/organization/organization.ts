@@ -133,11 +133,11 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				 * @deprecated Use `permissions` instead
 				 */
 				permission: PermissionType;
-				permissions?: never;
+				permissions?: never | undefined;
 		  }
 		| {
 				permissions: PermissionType;
-				permission?: never;
+				permission?: never | undefined;
 		  };
 
 	return createAuthEndpoint(
@@ -165,7 +165,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					body: {} as PermissionExclusive & {
-						organizationId?: string;
+						organizationId?: string | undefined;
 					},
 				},
 				openapi: {
@@ -295,7 +295,7 @@ export function organization<
 		teams: { enabled: true };
 	},
 >(
-	options?: O,
+	options?: O | undefined,
 ): {
 	id: "organization";
 	endpoints: OrganizationEndpoints<O> & TeamEndpoints<O>;
@@ -319,7 +319,7 @@ export function organization<
 		dynamicAccessControl: { enabled: true };
 	},
 >(
-	options?: O,
+	options?: O | undefined,
 ): {
 	id: "organization";
 	endpoints: OrganizationEndpoints<O> &
@@ -344,7 +344,7 @@ export function organization<
 		dynamicAccessControl: { enabled: true };
 	},
 >(
-	options?: O,
+	options?: O | undefined,
 ): {
 	id: "organization";
 	endpoints: OrganizationEndpoints<O> & DynamicAccessControlEndpoints<O>;
@@ -363,7 +363,7 @@ export function organization<
 	options: O;
 };
 export function organization<O extends OrganizationOptions>(
-	options?: O,
+	options?: O | undefined,
 ): {
 	id: "organization";
 	endpoints: OrganizationEndpoints<O>;
@@ -381,7 +381,9 @@ export function organization<O extends OrganizationOptions>(
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: O;
 };
-export function organization<O extends OrganizationOptions>(options?: O): any {
+export function organization<O extends OrganizationOptions>(
+	options?: O | undefined,
+): any {
 	let endpoints = {
 		/**
 		 * ### Endpoint
@@ -616,9 +618,6 @@ export function organization<O extends OrganizationOptions>(options?: O): any {
 		 *
 		 * **server:**
 		 * `auth.api.addMember`
-		 *
-		 * **client:**
-		 * `authClient.organization.addMember`
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-add-member)
 		 */
