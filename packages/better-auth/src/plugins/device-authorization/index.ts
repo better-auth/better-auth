@@ -108,7 +108,7 @@ export const $deviceAuthorizationOptionsSchema = z.object({
 export type DeviceAuthorizationOptions = {
 	/**
 	 * Time in seconds until the device code expires. Use formats like '30m', '5s', '1h', etc.
-	 * 
+	 *
 	 * @cli required
 	 * @type string
 	 * @question When should device codes expire?
@@ -117,7 +117,7 @@ export type DeviceAuthorizationOptions = {
 	expiresIn: MSStringValue;
 	/**
 	 * Time in seconds between polling attempts. Use formats like '30m', '5s', '1h', etc.
-	 * 
+	 *
 	 * @cli required
 	 * @type string
 	 * @question What is the polling interval?
@@ -126,7 +126,7 @@ export type DeviceAuthorizationOptions = {
 	interval: MSStringValue;
 	/**
 	 * Length of the device code to be generated. Default is 40 characters.
-	 * 
+	 *
 	 * @cli required
 	 * @type number
 	 * @question What is the length of the device code?
@@ -135,7 +135,7 @@ export type DeviceAuthorizationOptions = {
 	deviceCodeLength: number;
 	/**
 	 * Length of the user code to be generated. Default is 8 characters.
-	 * 
+	 *
 	 * @cli required
 	 * @type number
 	 * @question What is the length of the user code?

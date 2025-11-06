@@ -51,7 +51,7 @@ export async function initAction(opts: any) {
 			"oauthProxy",
 			"oneTimeToken",
 			"openAPI",
-			"jwt"
+			"jwt",
 		],
 		database: "prisma-sqlite",
 		appName: "My App",

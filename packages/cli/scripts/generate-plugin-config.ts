@@ -199,7 +199,7 @@ const PLUGIN_TYPE_MAP: Record<
 		serverTypeName: "JwtOptions",
 		clientTypeFile: undefined,
 		clientTypeName: undefined,
-	}
+	},
 };
 
 const ROOT_DIR = path.resolve(__dirname, "../..");
