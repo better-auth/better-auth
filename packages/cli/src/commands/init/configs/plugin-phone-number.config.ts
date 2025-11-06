@@ -52,6 +52,7 @@ export const phoneNumberPluginConfig = {
 					"[Phone Number] Would you like to require phone number verification?",
 				defaultValue: false,
 				skipPrompt: true,
+				isConformation: true,
 				argument: {
 					index: 0,
 					isProperty: "requireVerification",

@@ -52,6 +52,7 @@ export const siwePluginConfig = {
 					"[Siwe] Would you like to allow anonymous sign-ins without requiring an email?",
 				defaultValue: true,
 				skipPrompt: true,
+				isConformation: true,
 				argument: {
 					index: 0,
 					isProperty: "anonymous",

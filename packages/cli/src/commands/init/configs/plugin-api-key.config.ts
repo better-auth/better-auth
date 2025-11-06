@@ -62,6 +62,7 @@ export const apiKeyPluginConfig = {
 							"[Api Key] Whether to store the starting characters in the database?",
 						defaultValue: true,
 						skipPrompt: true,
+						isConformation: true,
 						argument: {
 							index: 0,
 							isProperty: "shouldStore",
@@ -134,6 +135,7 @@ export const apiKeyPluginConfig = {
 				question: "[Api Key] Whether to require a name for the API key?",
 				defaultValue: false,
 				skipPrompt: true,
+				isConformation: true,
 				argument: {
 					index: 0,
 					isProperty: "requireName",
@@ -185,6 +187,7 @@ export const apiKeyPluginConfig = {
 				question: "[Api Key] Whether to enable metadata for an API key?",
 				defaultValue: false,
 				skipPrompt: true,
+				isConformation: true,
 				argument: {
 					index: 0,
 					isProperty: "enableMetadata",
@@ -219,6 +222,7 @@ export const apiKeyPluginConfig = {
 							"[Api Key] Whether to disable the expires time passed from the client?",
 						defaultValue: false,
 						skipPrompt: true,
+						isConformation: true,
 						argument: {
 							index: 0,
 							isProperty: "disableCustomExpiresTime",
@@ -272,6 +276,7 @@ export const apiKeyPluginConfig = {
 						question: "[Api Key] Whether to enable rate limiting?",
 						defaultValue: true,
 						skipPrompt: true,
+						isConformation: true,
 						argument: {
 							index: 0,
 							isProperty: "enabled",

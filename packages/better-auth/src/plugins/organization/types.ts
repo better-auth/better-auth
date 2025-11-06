@@ -24,6 +24,9 @@ export interface OrganizationOptions {
 	 * }
 	 * ```
 	 * @default true
+	 * @cli optional
+	 * @type boolean
+	 * @question Are users allowed to create organizations?
 	 */
 	allowUserToCreateOrganization?:
 		| (
@@ -35,6 +38,10 @@ export interface OrganizationOptions {
 	 * The maximum number of organizations a user can create.
 	 *
 	 * You can also pass a function that returns a boolean
+	 *
+	 * @cli optional
+	 * @type number
+	 * @question What is the maximum number of organizations a user can create?
 	 */
 	organizationLimit?:
 		| (number | ((user: User) => Promise<boolean> | boolean))
@@ -44,12 +51,18 @@ export interface OrganizationOptions {
 	 * organization.
 	 *
 	 * @default "owner"
+	 * @cli optional
+	 * @type string
+	 * @question What is the role that is assigned to the creator of the organization?
 	 */
 	creatorRole?: string | undefined;
 	/**
 	 * The maximum number of members allowed in an organization.
 	 *
 	 * @default 100
+	 * @cli optional
+	 * @type number
+	 * @question What is the maximum number of members allowed in an organization?
 	 */
 	membershipLimit?: number | undefined;
 	/**
@@ -88,10 +101,17 @@ export interface OrganizationOptions {
 		| undefined;
 	/**
 	 * Support for team.
+	 *
+	 * @cli
 	 */
 	teams?: {
 		/**
 		 * Enable team features.
+		 *
+		 * @cli required
+		 * @prompt
+		 * @type boolean
+		 * @question Would you like to support teams in organizations?
 		 */
 		enabled: boolean;
 		/**
@@ -115,13 +135,11 @@ export interface OrganizationOptions {
 		/**
 		 * Maximum number of teams an organization can have.
 		 *
-		 * You can pass a number or a function that returns a number
+		 * You can pass a number or a function that returns a number.
 		 *
-		 * @default "unlimited"
-		 *
-		 * @param organization
-		 * @param request
-		 * @returns
+		 * @cli optional
+		 * @type number
+		 * @question What is the maximum number of teams an organization can have?
 		 */
 		maximumTeams?:
 			| ((
@@ -141,7 +159,9 @@ export interface OrganizationOptions {
 		 *
 		 * if `undefined`, there is no limit.
 		 *
-		 * @default undefined
+		 * @cli optional
+		 * @type number
+		 * @question What is the maximum number of members per team?
 		 */
 		maximumMembersPerTeam?:
 			| number
@@ -156,20 +176,29 @@ export interface OrganizationOptions {
 		 *
 		 * You can disable this behavior by setting this to `false.
 		 *
+		 * @cli optional
+		 * @type boolean
+		 * @question Allow removing all teams?
 		 * @default false
 		 */
 		allowRemovingAllTeams?: boolean;
 	};
 	/**
-	 * The expiration time for the invitation link.
+	 * The expiration time for the invitation link. In hours.
 	 *
-	 * @default 48 hours
+	 * @default 48
+	 * @cli optional
+	 * @type number
+	 * @question What is the expiration time for the invitation link in hours?
 	 */
 	invitationExpiresIn?: number | undefined;
 	/**
 	 * The maximum invitation a user can send.
 	 *
 	 * @default 100
+	 * @cli optional
+	 * @type number
+	 * @question What is the maximum number of invitations a user can send?
 	 */
 	invitationLimit?:
 		| (
@@ -188,12 +217,18 @@ export interface OrganizationOptions {
 	 * Cancel pending invitations on re-invite.
 	 *
 	 * @default false
+	 * @cli optional
+	 * @type boolean
+	 * @question Cancel pending invitations on re-invite?
 	 */
 	cancelPendingInvitationsOnReInvite?: boolean | undefined;
 	/**
 	 * Require email verification on accepting or rejecting an invitation
 	 *
 	 * @default false
+	 * @cli optional
+	 * @type boolean
+	 * @question Require email verification on accepting or rejecting an invitation?
 	 */
 	requireEmailVerificationOnInvitation?: boolean | undefined;
 	/**
@@ -324,6 +359,9 @@ export interface OrganizationOptions {
 	 * Disable organization deletion
 	 *
 	 * @default false
+	 * @cli optional
+	 * @type boolean
+	 * @question Disable organization deletion?
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
 	/**

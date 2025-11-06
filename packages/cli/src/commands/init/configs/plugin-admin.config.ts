@@ -35,7 +35,7 @@ export const adminPluginConfig = {
 					"Roles that are considered admin roles. Any user role that isn't in this list, even if they have the permission, will not be considered an admin.",
 				question: "[Admin] What is the admin roles?",
 				defaultValue: '["admin"]',
-				skipPrompt: false,
+				skipPrompt: true,
 				cliTransform: (value) => {
 					if (typeof value === "string") {
 						try {

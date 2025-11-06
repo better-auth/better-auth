@@ -2266,5 +2266,154 @@ export interface TestPluginNestedOptions {
 			// Should have no config items since no @cli tags
 			expect(result.pluginConfig).toHaveLength(0);
 		});
+
+		it(
+			"should set isConformation for boolean type properties",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-boolean.ts");
+				const testContent = `export interface TestPluginBooleanOptions {
+	/**
+	 * Enable feature
+	 * @cli
+	 */
+	enabled?: boolean;
+
+	/**
+	 * Disable feature
+	 * @cli
+	 * @type boolean
+	 */
+	disabled?: string;
+}`;
+
+				fs.writeFileSync(testFile, testContent);
+
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
+
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginBooleanOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
+
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+				const enabledConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-enabled",
+				);
+				expect(enabledConfig).toBeDefined();
+				expect(enabledConfig?.isConformation).toBe(true);
+				expect(enabledConfig?.argument.schema).toBe(
+					"z.coerce.boolean().optional()",
+				);
+
+				const disabledConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-disabled",
+				);
+				expect(disabledConfig).toBeDefined();
+				expect(disabledConfig?.isConformation).toBe(true);
+				expect(disabledConfig?.argument.schema).toBe(
+					"z.coerce.boolean().optional()",
+				);
+			},
+		);
+
+		it(
+			"should generate code with isConformation for boolean types",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-boolean-output.ts");
+				const testContent = `export interface TestPluginBooleanOutputOptions {
+	/**
+	 * Enable feature
+	 * @cli
+	 */
+	enabled?: boolean;
+}`;
+
+				fs.writeFileSync(testFile, testContent);
+
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
+
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginBooleanOutputOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
+
+				const pluginData = generatePluginConfig(
+					"testPlugin",
+					pluginInfo,
+					project,
+				);
+				const generatedCode = generateIndividualPluginFile(
+					"testPlugin",
+					pluginData,
+				);
+
+				// Verify that isConformation: true appears in the generated code
+				expect(generatedCode).toContain("isConformation: true");
+
+				// Verify the config object has isConformation: true
+				const enabledConfig = pluginData.pluginConfig.find(
+					(c) => c.flag === "test-plugin-enabled",
+				);
+				expect(enabledConfig).toBeDefined();
+				expect(enabledConfig?.isConformation).toBe(true);
+			},
+		);
+
+		it(
+			"should not set isConformation for function types even if they return boolean",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-function-boolean.ts");
+				const testContent = `export interface TestPluginFunctionBooleanOptions {
+	/**
+	 * Function that returns boolean
+	 * @cli example
+	 * @type function
+	 * @example async () => { return true; }
+	 */
+	verifyFunction: (args: any) => Promise<boolean>;
+}`;
+
+				fs.writeFileSync(testFile, testContent);
+
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
+
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginFunctionBooleanOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
+
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+				const verifyFunctionConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-verify-function",
+				);
+				expect(verifyFunctionConfig).toBeDefined();
+				// Function types should not have isConformation even if they return boolean
+				expect(verifyFunctionConfig?.isConformation).toBeUndefined();
+				expect(verifyFunctionConfig?.argument.schema).toBe("z.coerce.string()");
+			},
+		);
 	});
 });

@@ -123,6 +123,7 @@ export const twoFactorPluginConfig = {
 						question: "[Two Factor] Would you like to disable totp?",
 						defaultValue: false,
 						skipPrompt: true,
+						isConformation: true,
 						argument: {
 							index: 0,
 							isProperty: "disable",
@@ -262,6 +263,7 @@ export const twoFactorPluginConfig = {
 				question: "[Two Factor] Would you like to skip verification on enable?",
 				defaultValue: false,
 				skipPrompt: true,
+				isConformation: true,
 				argument: {
 					index: 0,
 					isProperty: "skipVerificationOnEnable",

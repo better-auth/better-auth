@@ -31,7 +31,6 @@ export interface AdminOptions {
 	 * @default ["admin"]
 	 * @cli optional
 	 * @type string[]
-	 * @prompt
 	 */
 	adminRoles?: (string | string[]) | undefined;
 	/**

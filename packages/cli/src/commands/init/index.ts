@@ -37,7 +37,11 @@ export async function initAction(opts: any) {
 			"oneTap",
 			"siwe",
 			"admin",
-			"apiKey"
+			"apiKey",
+			"mcp",
+			"organization",
+			"oidcProvider",
+			"sso",
 		],
 		database: "prisma-sqlite",
 		appName: "My App",

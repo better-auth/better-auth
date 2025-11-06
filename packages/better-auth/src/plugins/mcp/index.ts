@@ -29,8 +29,23 @@ import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
 
 interface MCPOptions {
+	/**
+	 * The login page URL
+	 *
+	 * @cli required
+	 * @cli example
+	 * @type string
+	 * @question What is the login page URL?
+	 * @example /login
+	 */
 	loginPage: string;
+	/**
+	 * The resource that should be returned by the protected resource metadata endpoint
+	 */
 	resource?: string | undefined;
+	/**
+	 * The OIDC configuration options
+	 */
 	oidcConfig?: OIDCOptions | undefined;
 }
 

@@ -64,6 +64,7 @@ export const emailOTPPluginConfig = {
 				question: "[Email OTP] Would you like to send the OTP on sign-up?",
 				defaultValue: false,
 				skipPrompt: true,
+				isConformation: true,
 				argument: {
 					index: 0,
 					isProperty: "sendVerificationOnSignUp",
@@ -77,6 +78,7 @@ export const emailOTPPluginConfig = {
 				question: "[Email OTP] Would you like to disable sign-up?",
 				defaultValue: false,
 				skipPrompt: true,
+				isConformation: true,
 				argument: {
 					index: 0,
 					isProperty: "disableSignUp",
@@ -122,6 +124,7 @@ export const emailOTPPluginConfig = {
 					"[Email OTP] Would you like to override the default email verification?",
 				defaultValue: false,
 				skipPrompt: true,
+				isConformation: true,
 				argument: {
 					index: 0,
 					isProperty: "overrideDefaultEmailVerification",

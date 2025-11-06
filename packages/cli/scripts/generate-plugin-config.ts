@@ -37,6 +37,7 @@ const PLUGIN_TYPE_MAP: Record<
 		clientTypeFile?: string;
 		clientTypeName?: string;
 		importPath?: string;
+		clientImportPath?: string;
 	}
 > = {
 	twoFactor: {
@@ -80,6 +81,8 @@ const PLUGIN_TYPE_MAP: Record<
 		serverTypeName: "PasskeyOptions",
 		clientTypeFile: "passkey/src/client.ts",
 		clientTypeName: undefined,
+		importPath: "@better-auth/passkey",
+		clientImportPath: "@better-auth/passkey/client",
 	},
 	genericOAuth: {
 		serverTypeFile: pluginPath("generic-oauth/index.ts"),
@@ -111,6 +114,32 @@ const PLUGIN_TYPE_MAP: Record<
 		clientTypeFile: pluginPath("api-key/client.ts"),
 		clientTypeName: undefined,
 	},
+	mcp: {
+		serverTypeFile: pluginPath("mcp/index.ts"),
+		serverTypeName: "MCPOptions",
+		clientTypeFile: undefined,
+		clientTypeName: undefined,
+	},
+	organization: {
+		serverTypeFile: pluginPath("organization/types.ts"),
+		serverTypeName: "OrganizationOptions",
+		clientTypeFile: pluginPath("organization/client.ts"),
+		clientTypeName: "OrganizationClientOptions",
+	},
+	oidcProvider: {
+		serverTypeFile: pluginPath("oidc-provider/types.ts"),
+		serverTypeName: "OIDCOptions",
+		clientTypeFile: pluginPath("oidc-provider/client.ts"),
+		clientTypeName: undefined,
+	},
+	sso: {
+		serverTypeFile: "sso/src/index.ts",
+		serverTypeName: "SSOOptions",
+		clientTypeFile: "sso/src/client.ts",
+		clientTypeName: undefined,
+		importPath: "@better-auth/sso",
+		clientImportPath: "@better-auth/sso/client",
+	},
 };
 
 const ROOT_DIR = path.resolve(__dirname, "../..");
@@ -138,6 +167,7 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 	isOptional: boolean;
 	isSelect: boolean;
 	isMultiSelect: boolean;
+	isConformation: boolean;
 	isExample: boolean;
 	hasPrompt: boolean;
 	defaultValue?: any;
@@ -159,6 +189,7 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 	const isMultiSelect = /@cli\s+multi-select/.test(allJsDocText);
 	const hasPrompt = /@prompt\b/.test(allJsDocText);
 
+	let isConformation = false;
 	// Extract @cli select with optional custom options
 	let isSelect = false;
 	let selectOptions: { value: string; label: string }[] | undefined;
@@ -363,6 +394,9 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 			const allowedTypes = ["string", "number", "boolean"];
 			if (allowedTypes.includes(typeValue)) {
 				typeOverride = typeValue;
+				if (typeValue === "boolean") {
+					isConformation = true;
+				}
 			}
 		}
 	}
@@ -410,6 +444,7 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 		selectOptions,
 		type: typeOverride,
 		enumValues,
+		isConformation,
 	};
 }
 
@@ -518,7 +553,17 @@ export function generateZodSchema(
 			})
 			.filter((v: string | null): v is string => v !== null);
 
-		if (
+		// Check if union contains boolean types
+		const hasBoolean = unionTypes.some(
+			(t: any) =>
+				t.getText().includes("boolean") ||
+				t.getSymbol()?.getName() === "Boolean",
+		);
+
+		if (hasBoolean) {
+			// If union contains boolean, treat as boolean (e.g., "boolean | undefined")
+			schema = "z.coerce.boolean()";
+		} else if (
 			stringLiterals.length > 0 &&
 			stringLiterals.length === unionTypes.length
 		) {
@@ -526,6 +571,12 @@ export function generateZodSchema(
 		} else {
 			schema = "z.coerce.string()";
 		}
+	} else if (
+		elementTypeText.includes("boolean") ||
+		elementType.getSymbol()?.getName() === "Boolean" ||
+		(typeOverride && typeOverride === "boolean")
+	) {
+		schema = "z.coerce.boolean()";
 	} else if (
 		elementTypeText.includes("string") ||
 		elementType.getSymbol()?.getName() === "String"
@@ -536,11 +587,6 @@ export function generateZodSchema(
 		elementType.getSymbol()?.getName() === "Number"
 	) {
 		schema = "z.coerce.number()";
-	} else if (
-		elementTypeText.includes("boolean") ||
-		elementType.getSymbol()?.getName() === "Boolean"
-	) {
-		schema = "z.coerce.boolean()";
 	} else {
 		schema = "z.coerce.string()";
 	}
@@ -1136,6 +1182,41 @@ function processProperty(
 		option.isNumber = true;
 	}
 
+	// Check if it's a boolean type - set isConformation for boolean prompts
+	// Check both schema string and type text to detect boolean types
+	// Only set for non-nested objects (nested objects shouldn't have confirmation prompts)
+	// Don't set for @cli example with @type function (those are function examples, not booleans)
+	// Also check that the actual property type is boolean, not just that "boolean" appears in the type text
+	// (e.g., Promise<boolean> should not set isConformation)
+	if (!nestedOptions && !(tags.isExample && tags.type === "function")) {
+		// Check if the schema explicitly includes boolean (most reliable)
+		// Check for "z.coerce.boolean()" which may be followed by .optional() or .array()
+		const schemaIsBoolean = schema?.includes("z.coerce.boolean()");
+		// Check if tags.type override is boolean
+		const typeOverrideIsBoolean = tags.type === "boolean";
+		// Check if the type symbol is Boolean (but not Promise<Boolean>)
+		const typeSymbolIsBoolean = type.getSymbol()?.getName() === "Boolean";
+		// Check typeText but exclude Promise<boolean> patterns
+		const typeTextIsBoolean =
+			typeText.includes("boolean") &&
+			!typeText.includes("Promise") &&
+			!typeText.includes("=>");
+
+		const isBooleanType =
+			schemaIsBoolean ||
+			typeOverrideIsBoolean ||
+			(typeSymbolIsBoolean && !typeText.includes("Promise")) ||
+			typeTextIsBoolean;
+
+		if (isBooleanType) {
+			option.isConformation = true;
+		}
+	}
+
+	if (tags.isConformation) {
+		option.isConformation = true;
+	}
+
 	return option;
 }
 
@@ -1151,6 +1232,7 @@ export function generatePluginConfig(
 	clientConfig: GetArgumentsOption[];
 	displayName: string;
 	importPath: string;
+	clientImportPath: string;
 	functionName: string;
 	hasClient: boolean;
 } {
@@ -1245,12 +1327,15 @@ export function generatePluginConfig(
 	// Generate import path
 	const importPath = pluginInfo.importPath || "better-auth/plugins";
 	const functionName = pluginName;
+	const clientImportPath =
+		pluginInfo.clientImportPath || "better-auth/client/plugins";
 
 	return {
 		pluginConfig: argumentsList,
 		clientConfig: clientArgumentsList,
 		displayName,
 		importPath,
+		clientImportPath,
 		functionName,
 		hasClient: !!pluginInfo.clientTypeFile,
 	};
@@ -1282,7 +1367,7 @@ export function generateIndividualPluginFile(
 		function: "${pluginData.functionName}Client",
 		imports: [
 			{
-				path: "better-auth/client/plugins",
+				path: "${pluginData.clientImportPath}",
 				imports: [createImport({ name: "${pluginData.functionName}Client" })],
 				isNamedImport: false,
 			},
@@ -1431,6 +1516,9 @@ export function generateArgumentCode(
 	}
 	if (arg.isNumber) {
 		parts.push(`${indent}\tisNumber: true,`);
+	}
+	if (arg.isConformation !== undefined) {
+		parts.push(`${indent}\tisConformation: ${arg.isConformation},`);
 	}
 	if (arg.isSelectOptions) {
 		parts.push(

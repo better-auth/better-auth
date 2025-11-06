@@ -11,7 +11,7 @@ export const passkeyPluginConfig = {
 		function: "passkey",
 		imports: [
 			{
-				path: "better-auth/plugins",
+				path: "@better-auth/passkey",
 				imports: [createImport({ name: "passkey" })],
 				isNamedImport: false,
 			},
@@ -74,7 +74,7 @@ export const passkeyPluginConfig = {
 		function: "passkeyClient",
 		imports: [
 			{
-				path: "better-auth/client/plugins",
+				path: "@better-auth/passkey/client",
 				imports: [createImport({ name: "passkeyClient" })],
 				isNamedImport: false,
 			},

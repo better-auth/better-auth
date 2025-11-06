@@ -37,6 +37,7 @@ export const anonymousPluginConfig = {
 					"[Anonymous] Would you like to disable delete anonymous user?",
 				defaultValue: false,
 				skipPrompt: true,
+				isConformation: true,
 				argument: {
 					index: 0,
 					isProperty: "disableDeleteAnonymousUser",

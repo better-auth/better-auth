@@ -24,6 +24,7 @@ export const oneTapPluginConfig = {
 					"[One Tap] Would you like to disable the signup flow for one-tap?",
 				defaultValue: false,
 				skipPrompt: true,
+				isConformation: true,
 				argument: {
 					index: 0,
 					isProperty: "disableSignup",
@@ -74,6 +75,7 @@ export const oneTapPluginConfig = {
 					"[One Tap Client] Would you like to auto select the account if the user is already signed in?",
 				defaultValue: false,
 				skipPrompt: true,
+				isConformation: true,
 				argument: {
 					index: 0,
 					isProperty: "autoSelect",
@@ -87,6 +89,7 @@ export const oneTapPluginConfig = {
 					"[One Tap Client] Would you like to cancel the flow when the user taps outside the prompt?",
 				defaultValue: true,
 				skipPrompt: true,
+				isConformation: true,
 				argument: {
 					index: 0,
 					isProperty: "cancelOnTapOutside",
