@@ -1,4 +1,3 @@
-import * as z from "zod/v4";
 import { createImport } from "../utility/imports";
 import type { PluginConfig } from "./plugins-index.config";
 
@@ -6,25 +5,25 @@ import type { PluginConfig } from "./plugins-index.config";
 // Read more about the script at /packages/cli/scripts/README.md
 
 export const genericOAuthPluginConfig = {
-  displayName: "Generic OAuth",
-  auth: {
-    function: "genericOAuth",
-    imports: [
-      {
-        path: "better-auth/plugins",
-        imports: [createImport({ name: "genericOAuth" })],
-        isNamedImport: false,
-      },
-    ],
-  },
-  authClient: {
-    function: "genericOAuthClient",
-    imports: [
-      {
-        path: "better-auth/client/plugins",
-        imports: [createImport({ name: "genericOAuthClient" })],
-        isNamedImport: false,
-      },
-    ],
-  },
+	displayName: "Generic OAuth",
+	auth: {
+		function: "genericOAuth",
+		imports: [
+			{
+				path: "better-auth/plugins",
+				imports: [createImport({ name: "genericOAuth" })],
+				isNamedImport: false,
+			},
+		],
+	},
+	authClient: {
+		function: "genericOAuthClient",
+		imports: [
+			{
+				path: "better-auth/client/plugins",
+				imports: [createImport({ name: "genericOAuthClient" })],
+				isNamedImport: false,
+			},
+		],
+	},
 } as const satisfies PluginConfig;

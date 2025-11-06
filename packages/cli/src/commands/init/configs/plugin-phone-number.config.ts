@@ -6,83 +6,83 @@ import type { PluginConfig } from "./plugins-index.config";
 // Read more about the script at /packages/cli/scripts/README.md
 
 export const phoneNumberPluginConfig = {
-  displayName: "Phone Number",
-  auth: {
-    function: "phoneNumber",
-    imports: [
-      {
-        path: "better-auth/plugins",
-        imports: [createImport({ name: "phoneNumber" })],
-        isNamedImport: false,
-      },
-    ],
-    arguments: [
-      {
-        flag: "phone-number-otp-length",
-        description: "Length of the OTP code",
-        question: "[Phone Number] What is the length of the OTP code?",
-        defaultValue: 6,
-        skipPrompt: true,
-        isNumber: true,
-        argument: {
-          index: 0,
-          isProperty: "otpLength",
-          schema: z.coerce.number().optional(),
-        },
-      },
-      {
-        flag: "phone-number-send-otp",
-        description:
-          "Send OTP code to the user async ({ phoneNumber, code }, request) => { // Send OTP code to the user } ```",
-        question: "[Phone Number] What is the send o t p?",
-        defaultValue: `async ({ phoneNumber, code }, request) => {
+	displayName: "Phone Number",
+	auth: {
+		function: "phoneNumber",
+		imports: [
+			{
+				path: "better-auth/plugins",
+				imports: [createImport({ name: "phoneNumber" })],
+				isNamedImport: false,
+			},
+		],
+		arguments: [
+			{
+				flag: "phone-number-otp-length",
+				description: "Length of the OTP code",
+				question: "[Phone Number] What is the length of the OTP code?",
+				defaultValue: 6,
+				skipPrompt: true,
+				isNumber: true,
+				argument: {
+					index: 0,
+					isProperty: "otpLength",
+					schema: z.coerce.number().optional(),
+				},
+			},
+			{
+				flag: "phone-number-send-otp",
+				description:
+					"Send OTP code to the user async ({ phoneNumber, code }, request) => { // Send OTP code to the user } ```",
+				question: "[Phone Number] What is the send o t p?",
+				defaultValue: `async ({ phoneNumber, code }, request) => {
  // Send OTP code to the user
 }`,
-        skipPrompt: true,
-        isRequired: true,
-        argument: {
-          index: 0,
-          isProperty: "sendOTP",
-          schema: z.coerce.string(),
-        },
-      },
-      {
-        flag: "phone-number-require-verification",
-        description: "Require a phone number verification before signing in",
-        question:
-          "[Phone Number] Would you like to require phone number verification?",
-        defaultValue: false,
-        skipPrompt: true,
-        argument: {
-          index: 0,
-          isProperty: "requireVerification",
-          schema: z.coerce.boolean().optional(),
-        },
-      },
-      {
-        flag: "phone-number-allowed-attempts",
-        description: "Allowed attempts for the OTP code",
-        question:
-          "[Phone Number] What is the allowed attempts for the OTP code?",
-        defaultValue: 3,
-        skipPrompt: true,
-        isNumber: true,
-        argument: {
-          index: 0,
-          isProperty: "allowedAttempts",
-          schema: z.coerce.number().optional(),
-        },
-      },
-    ],
-  },
-  authClient: {
-    function: "phoneNumberClient",
-    imports: [
-      {
-        path: "better-auth/client/plugins",
-        imports: [createImport({ name: "phoneNumberClient" })],
-        isNamedImport: false,
-      },
-    ],
-  },
+				skipPrompt: true,
+				isRequired: true,
+				argument: {
+					index: 0,
+					isProperty: "sendOTP",
+					schema: z.coerce.string(),
+				},
+			},
+			{
+				flag: "phone-number-require-verification",
+				description: "Require a phone number verification before signing in",
+				question:
+					"[Phone Number] Would you like to require phone number verification?",
+				defaultValue: false,
+				skipPrompt: true,
+				argument: {
+					index: 0,
+					isProperty: "requireVerification",
+					schema: z.coerce.boolean().optional(),
+				},
+			},
+			{
+				flag: "phone-number-allowed-attempts",
+				description: "Allowed attempts for the OTP code",
+				question:
+					"[Phone Number] What is the allowed attempts for the OTP code?",
+				defaultValue: 3,
+				skipPrompt: true,
+				isNumber: true,
+				argument: {
+					index: 0,
+					isProperty: "allowedAttempts",
+					schema: z.coerce.number().optional(),
+				},
+			},
+		],
+	},
+	authClient: {
+		function: "phoneNumberClient",
+		imports: [
+			{
+				path: "better-auth/client/plugins",
+				imports: [createImport({ name: "phoneNumberClient" })],
+				isNamedImport: false,
+			},
+		],
+	},
 } as const satisfies PluginConfig;

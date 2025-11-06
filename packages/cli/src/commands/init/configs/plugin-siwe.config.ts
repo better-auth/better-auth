@@ -6,115 +6,115 @@ import type { PluginConfig } from "./plugins-index.config";
 // Read more about the script at /packages/cli/scripts/README.md
 
 export const siwePluginConfig = {
-  displayName: "Siwe",
-  auth: {
-    function: "siwe",
-    imports: [
-      {
-        path: "better-auth/plugins",
-        imports: [createImport({ name: "siwe" })],
-        isNamedImport: false,
-      },
-    ],
-    arguments: [
-      {
-        flag: "siwe-domain",
-        description:
-          "The domain name of your application (required for SIWE message generation)",
-        question: "[Siwe] What is the domain name of your application?",
-        defaultValue: "https://example.com",
-        skipPrompt: true,
-        isRequired: true,
-        argument: {
-          index: 0,
-          isProperty: "domain",
-          schema: z.coerce.string(),
-        },
-      },
-      {
-        flag: "siwe-email-domain-name",
-        description:
-          "The email domain name for creating user accounts when not using anonymous mode. Defaults to base URL.",
-        question:
-          "[Siwe] What is the email domain name for creating user accounts when not using anonymous mode?",
-        skipPrompt: true,
-        argument: {
-          index: 0,
-          isProperty: "emailDomainName",
-          schema: z.coerce.string().optional(),
-        },
-      },
-      {
-        flag: "siwe-anonymous",
-        description:
-          "Whether to allow anonymous sign-ins without requiring an email. Default is true",
-        question:
-          "[Siwe] Would you like to allow anonymous sign-ins without requiring an email?",
-        defaultValue: true,
-        skipPrompt: true,
-        argument: {
-          index: 0,
-          isProperty: "anonymous",
-          schema: z.coerce.boolean().optional(),
-        },
-      },
-      {
-        flag: "siwe-get-nonce",
-        description:
-          'Function to generate a unique nonce for each sign-in attempt. return "your-secure-random-nonce"; }',
-        question:
-          "[Siwe] What is the function to generate a unique nonce for each sign-in attempt?",
-        defaultValue: `async () => {
+	displayName: "Siwe",
+	auth: {
+		function: "siwe",
+		imports: [
+			{
+				path: "better-auth/plugins",
+				imports: [createImport({ name: "siwe" })],
+				isNamedImport: false,
+			},
+		],
+		arguments: [
+			{
+				flag: "siwe-domain",
+				description:
+					"The domain name of your application (required for SIWE message generation)",
+				question: "[Siwe] What is the domain name of your application?",
+				defaultValue: "https://example.com",
+				skipPrompt: true,
+				isRequired: true,
+				argument: {
+					index: 0,
+					isProperty: "domain",
+					schema: z.coerce.string(),
+				},
+			},
+			{
+				flag: "siwe-email-domain-name",
+				description:
+					"The email domain name for creating user accounts when not using anonymous mode. Defaults to base URL.",
+				question:
+					"[Siwe] What is the email domain name for creating user accounts when not using anonymous mode?",
+				skipPrompt: true,
+				argument: {
+					index: 0,
+					isProperty: "emailDomainName",
+					schema: z.coerce.string().optional(),
+				},
+			},
+			{
+				flag: "siwe-anonymous",
+				description:
+					"Whether to allow anonymous sign-ins without requiring an email. Default is true",
+				question:
+					"[Siwe] Would you like to allow anonymous sign-ins without requiring an email?",
+				defaultValue: true,
+				skipPrompt: true,
+				argument: {
+					index: 0,
+					isProperty: "anonymous",
+					schema: z.coerce.boolean().optional(),
+				},
+			},
+			{
+				flag: "siwe-get-nonce",
+				description:
+					'Function to generate a unique nonce for each sign-in attempt. return "your-secure-random-nonce"; }',
+				question:
+					"[Siwe] What is the function to generate a unique nonce for each sign-in attempt?",
+				defaultValue: `async () => {
   return "your-secure-random-nonce";
 }`,
-        skipPrompt: true,
-        isRequired: true,
-        argument: {
-          index: 0,
-          isProperty: "getNonce",
-          schema: z.coerce.string(),
-        },
-      },
-      {
-        flag: "siwe-verify-message",
-        description:
-          "Function to verify the signed SIWE message. return true; }",
-        question:
-          "[Siwe] What is the function to verify the signed SIWE message?",
-        defaultValue: `async (args) => {
+				skipPrompt: true,
+				isRequired: true,
+				argument: {
+					index: 0,
+					isProperty: "getNonce",
+					schema: z.coerce.string(),
+				},
+			},
+			{
+				flag: "siwe-verify-message",
+				description:
+					"Function to verify the signed SIWE message. return true; }",
+				question:
+					"[Siwe] What is the function to verify the signed SIWE message?",
+				defaultValue: `async (args) => {
   return true;
 }`,
-        skipPrompt: true,
-        isRequired: true,
-        argument: {
-          index: 0,
-          isProperty: "verifyMessage",
-          schema: z.coerce.string(),
-        },
-      },
-      {
-        flag: "siwe-ens-lookup",
-        description:
-          'Function to lookup ENS names and avatars for Ethereum addresses. return { name: "user.eth", avatar: "https://example.com/avatar.png", }; }',
-        question:
-          "[Siwe] What is the function to lookup ENS names and avatars for Ethereum addresses?",
-        skipPrompt: true,
-        argument: {
-          index: 0,
-          isProperty: "ensLookup",
-          schema: z.coerce.string().optional(),
-        },
-      },
-    ],
-  },
-  authClient: {
-    function: "siweClient",
-    imports: [
-      {
-        path: "better-auth/client/plugins",
-        imports: [createImport({ name: "siweClient" })],
-        isNamedImport: false,
-      },
-    ],
-  },
+				skipPrompt: true,
+				isRequired: true,
+				argument: {
+					index: 0,
+					isProperty: "verifyMessage",
+					schema: z.coerce.string(),
+				},
+			},
+			{
+				flag: "siwe-ens-lookup",
+				description:
+					'Function to lookup ENS names and avatars for Ethereum addresses. return { name: "user.eth", avatar: "https://example.com/avatar.png", }; }',
+				question:
+					"[Siwe] What is the function to lookup ENS names and avatars for Ethereum addresses?",
+				skipPrompt: true,
+				argument: {
+					index: 0,
+					isProperty: "ensLookup",
+					schema: z.coerce.string().optional(),
+				},
+			},
+		],
+	},
+	authClient: {
+		function: "siweClient",
+		imports: [
+			{
+				path: "better-auth/client/plugins",
+				imports: [createImport({ name: "siweClient" })],
+				isNamedImport: false,
+			},
+		],
+	},
 } as const satisfies PluginConfig;

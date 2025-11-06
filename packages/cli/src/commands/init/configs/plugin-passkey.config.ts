@@ -6,78 +6,78 @@ import type { PluginConfig } from "./plugins-index.config";
 // Read more about the script at /packages/cli/scripts/README.md
 
 export const passkeyPluginConfig = {
-  displayName: "Passkey",
-  auth: {
-    function: "passkey",
-    imports: [
-      {
-        path: "better-auth/plugins",
-        imports: [createImport({ name: "passkey" })],
-        isNamedImport: false,
-      },
-    ],
-    arguments: [
-      {
-        flag: "passkey-rp-id",
-        description:
-          "A unique identifier for your website. 'localhost' is okay for local dev",
-        question:
-          "[Passkey] What is a unique identifier for your website? 'localhost' is okay for local dev",
-        defaultValue: "localhost",
-        skipPrompt: true,
-        argument: {
-          index: 0,
-          isProperty: "rpID",
-          schema: z.coerce.string().optional(),
-        },
-      },
-      {
-        flag: "passkey-rp-name",
-        description: "Human-readable title for your website",
-        question: "[Passkey] What is a human-readable title for your website?",
-        defaultValue: "Better Auth",
-        skipPrompt: true,
-        argument: {
-          index: 0,
-          isProperty: "rpName",
-          schema: z.coerce.string().optional(),
-        },
-      },
-      {
-        flag: "passkey-origin",
-        description:
-          "The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do NOT include any trailing / if this isn't provided. The client itself will pass this value.",
-        question:
-          "[Passkey] What is the origin URL at which your better-auth server is hosted?",
-        skipPrompt: true,
-        argument: {
-          index: 0,
-          isProperty: "origin",
-          schema: z.coerce.string().optional(),
-        },
-      },
-      {
-        flag: "passkey-authenticator-selection",
-        description:
-          "Allow customization of the authenticatorSelection options during passkey registration.",
-        question: "[Passkey] What is the authenticator selection?",
-        skipPrompt: true,
-        argument: {
-          index: 0,
-          isProperty: "authenticatorSelection",
-          schema: z.coerce.string().optional(),
-        },
-      },
-    ],
-  },
-  authClient: {
-    function: "passkeyClient",
-    imports: [
-      {
-        path: "better-auth/client/plugins",
-        imports: [createImport({ name: "passkeyClient" })],
-        isNamedImport: false,
-      },
-    ],
-  },
+	displayName: "Passkey",
+	auth: {
+		function: "passkey",
+		imports: [
+			{
+				path: "better-auth/plugins",
+				imports: [createImport({ name: "passkey" })],
+				isNamedImport: false,
+			},
+		],
+		arguments: [
+			{
+				flag: "passkey-rp-id",
+				description:
+					"A unique identifier for your website. 'localhost' is okay for local dev",
+				question:
+					"[Passkey] What is a unique identifier for your website? 'localhost' is okay for local dev",
+				defaultValue: "localhost",
+				skipPrompt: true,
+				argument: {
+					index: 0,
+					isProperty: "rpID",
+					schema: z.coerce.string().optional(),
+				},
+			},
+			{
+				flag: "passkey-rp-name",
+				description: "Human-readable title for your website",
+				question: "[Passkey] What is a human-readable title for your website?",
+				defaultValue: "Better Auth",
+				skipPrompt: true,
+				argument: {
+					index: 0,
+					isProperty: "rpName",
+					schema: z.coerce.string().optional(),
+				},
+			},
+			{
+				flag: "passkey-origin",
+				description:
+					"The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do NOT include any trailing / if this isn't provided. The client itself will pass this value.",
+				question:
+					"[Passkey] What is the origin URL at which your better-auth server is hosted?",
+				skipPrompt: true,
+				argument: {
+					index: 0,
+					isProperty: "origin",
+					schema: z.coerce.string().optional(),
+				},
+			},
+			{
+				flag: "passkey-authenticator-selection",
+				description:
+					"Allow customization of the authenticatorSelection options during passkey registration.",
+				question: "[Passkey] What is the authenticator selection?",
+				skipPrompt: true,
+				argument: {
+					index: 0,
+					isProperty: "authenticatorSelection",
+					schema: z.coerce.string().optional(),
+				},
+			},
+		],
+	},
+	authClient: {
+		function: "passkeyClient",
+		imports: [
+			{
+				path: "better-auth/client/plugins",
+				imports: [createImport({ name: "passkeyClient" })],
+				isNamedImport: false,
+			},
+		],
+	},
 } as const satisfies PluginConfig;

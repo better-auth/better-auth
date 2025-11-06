@@ -2,13 +2,13 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { base64 } from "@better-auth/utils/base64";
 import {
-	generateAuthenticationOptions,
-	generateRegistrationOptions,
-	verifyAuthenticationResponse,
-	verifyRegistrationResponse,
 	type AuthenticationResponseJSON,
 	type AuthenticatorTransportFuture,
+	generateAuthenticationOptions,
+	generateRegistrationOptions,
 	type PublicKeyCredentialCreationOptionsJSON,
+	verifyAuthenticationResponse,
+	verifyRegistrationResponse,
 } from "@simplewebauthn/server";
 import { generateId } from "better-auth";
 import {
