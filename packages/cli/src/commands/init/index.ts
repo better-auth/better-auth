@@ -42,6 +42,8 @@ export async function initAction(opts: any) {
 			"organization",
 			"oidcProvider",
 			"sso",
+			"bearer",
+			"deviceAuthorization",
 		],
 		database: "prisma-sqlite",
 		appName: "My App",

@@ -3,6 +3,8 @@ import { type ImportGroup } from "../utility/imports";
 import { adminPluginConfig } from "./plugin-admin.config";
 import { anonymousPluginConfig } from "./plugin-anonymous.config";
 import { apiKeyPluginConfig } from "./plugin-api-key.config";
+import { bearerPluginConfig } from "./plugin-bearer.config";
+import { deviceAuthorizationPluginConfig } from "./plugin-device-authorization.config";
 import { emailOTPPluginConfig } from "./plugin-email-otp.config";
 import { genericOAuthPluginConfig } from "./plugin-generic-oauth.config";
 import { magicLinkPluginConfig } from "./plugin-magic-link.config";
@@ -54,4 +56,6 @@ export const pluginsConfig = {
 	organization: organizationPluginConfig,
 	oidcProvider: oidcProviderPluginConfig,
 	sso: ssoPluginConfig,
+	bearer: bearerPluginConfig,
+	deviceAuthorization: deviceAuthorizationPluginConfig,
 } as const satisfies Record<string, PluginConfig>;

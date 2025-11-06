@@ -140,6 +140,18 @@ const PLUGIN_TYPE_MAP: Record<
 		importPath: "@better-auth/sso",
 		clientImportPath: "@better-auth/sso/client",
 	},
+	bearer: {
+		serverTypeFile: pluginPath("bearer/index.ts"),
+		serverTypeName: "BearerOptions",
+		clientTypeFile: undefined,
+		clientTypeName: undefined,
+	},
+	deviceAuthorization: {
+		serverTypeFile: pluginPath("device-authorization/index.ts"),
+		serverTypeName: "DeviceAuthorizationOptions",
+		clientTypeFile: pluginPath("device-authorization/client.ts"),
+		clientTypeName: undefined,
+	}
 };
 
 const ROOT_DIR = path.resolve(__dirname, "../..");
