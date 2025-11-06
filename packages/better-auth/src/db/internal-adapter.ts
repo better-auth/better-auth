@@ -36,10 +36,7 @@ function getPluginSessionFields(
 			if (!field) continue;
 
 			if (field.defaultValue !== undefined) {
-				pluginFields[fieldName] =
-					typeof field.defaultValue === "function"
-						? field.defaultValue()
-						: field.defaultValue;
+				pluginFields[fieldName] = field.defaultValue; // could be a function
 			} else if (!field.required) {
 				pluginFields[fieldName] = null;
 			}
@@ -47,6 +44,16 @@ function getPluginSessionFields(
 	}
 
 	return pluginFields;
+}
+
+function resolveFunctionValues(
+	fields: Record<string, any>,
+): Record<string, any> {
+	const result: Record<string, any> = {};
+	for (const [key, value] of Object.entries(fields)) {
+		result[key] = typeof value === "function" ? value() : value;
+	}
+	return result;
 }
 
 export const createInternalAdapter = (
@@ -297,6 +304,7 @@ export const createInternalAdapter = (
 			overrideAll?: boolean | undefined,
 		) => {
 			const ctx = await getCurrentAuthContext();
+			const resolvedPluginFields = resolveFunctionValues(pluginSessionFields);
 			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
 			const data: Omit<Session, "id"> = {
@@ -305,7 +313,7 @@ export const createInternalAdapter = (
 						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
 						: "",
 				userAgent: headers?.get("user-agent") || "",
-				...pluginSessionFields,
+				...resolvedPluginFields,
 				...rest,
 				/**
 				 * If the user doesn't want to be remembered
