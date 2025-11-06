@@ -131,15 +131,20 @@ export const jwt = (options?: JwtOptions | undefined) => {
 						throw new APIError("NOT_FOUND");
 					}
 
-					const adapter = getJwksAdapter(ctx.context.adapter, options);
+					const adapter = getJwksAdapter(ctx.context.adapter);
 
-					const keySets = await adapter.getAllKeys(ctx);
+					let keySets = await adapter.getAllKeys(ctx);
 
-					if (keySets.length === 0) {
+					if (!keySets || keySets?.length === 0) {
 						const key = await createJwk(ctx, options);
-						keySets.push(key);
+						keySets = [key];
 					}
 
+					if (!keySets?.length) {
+						throw new BetterAuthError(
+							"No key sets found. Make sure you have a key in your database.",
+						);
+					}
 					const keyPairConfig = options?.jwks?.keyPairConfig;
 					const defaultCrv = keyPairConfig
 						? "crv" in keyPairConfig

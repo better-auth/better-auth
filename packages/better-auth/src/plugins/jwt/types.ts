@@ -127,7 +127,9 @@ export interface JwtOptions {
 		 * @param ctx - The context of the request
 		 * @returns The JWKS
 		 */
-		getJwks?: (ctx: GenericEndpointContext) => Promise<Jwk[]>;
+		getJwks?: (
+			ctx: GenericEndpointContext,
+		) => Promise<Jwk[] | null | undefined>;
 		/**
 		 * A custom function to get the latest key from the database or
 		 * other source
@@ -137,19 +139,21 @@ export interface JwtOptions {
 		 * @param ctx - The context of the request
 		 * @returns The latest key
 		 */
-		getLatestKey?: (ctx: GenericEndpointContext) => Promise<Jwk>;
+		getLatestKey?: (
+			ctx: GenericEndpointContext,
+		) => Promise<Jwk | null | undefined>;
 		/**
 		 * A custom function to create a new key in the database or
 		 * other source
 		 *
 		 * This will override the default createJwk from the database
 		 *
-		 * @param webKey - The web key to create
+		 * @param data - The key to create
 		 * @returns The created key
 		 */
 		createJwk?: (
-			ctx: GenericEndpointContext,
 			data: Omit<Jwk, "id">,
+			ctx: GenericEndpointContext,
 		) => Promise<Jwk>;
 	};
 }

@@ -35,7 +35,7 @@ export const getJwksAdapter = (
 		},
 		createJwk: async (ctx: GenericEndpointContext, webKey: Omit<Jwk, "id">) => {
 			if (options?.adapter?.createJwk) {
-				return await options.adapter.createJwk(ctx, webKey);
+				return await options.adapter.createJwk(webKey, ctx);
 			}
 			const jwk = await adapter.create<Omit<Jwk, "id">, Jwk>({
 				model: "jwks",
