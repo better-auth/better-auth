@@ -7,17 +7,18 @@ import { BetterAuthError } from "@better-auth/core/error";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
+import { symmetricEncrypt } from "../../crypto";
 import { mergeSchema } from "../../db/schema";
 import { getJwksAdapter } from "./adapter";
 import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
 import type { JwtOptions } from "./types";
-import { createJwk } from "./utils";
+import { generateExportedKeyPair } from "./utils";
 
 export type * from "./types";
 export { createJwk, generateExportedKeyPair } from "./utils";
 
-export const jwt = (options?: JwtOptions | undefined) => {
+export const jwt = (options?: JwtOptions) => {
 	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
 		throw new BetterAuthError(
@@ -36,6 +37,25 @@ export const jwt = (options?: JwtOptions | undefined) => {
 
 	return {
 		id: "jwt",
+		async init(ctx) {
+			const adapter = getJwksAdapter(ctx.adapter);
+			if (!(await adapter.getLatestKey())) {
+				const { privateWebKey, publicWebKey } =
+					await generateExportedKeyPair(options);
+				await adapter.createJwk({
+					privateKey: !options?.jwks?.disablePrivateKeyEncryption
+						? JSON.stringify(
+								await symmetricEncrypt({
+									key: ctx.secret,
+									data: JSON.stringify(privateWebKey),
+								}),
+							)
+						: JSON.stringify(privateWebKey),
+					publicKey: JSON.stringify(publicWebKey),
+					createdAt: new Date(),
+				});
+			}
+		},
 		options,
 		endpoints: {
 			getJwks: createAuthEndpoint(
@@ -135,10 +155,8 @@ export const jwt = (options?: JwtOptions | undefined) => {
 
 					const keySets = await adapter.getAllKeys();
 
-					if (keySets.length === 0) {
-						const key = await createJwk(ctx, options);
-						keySets.push(key);
-					}
+					if (keySets.length === 0)
+						throw new BetterAuthError("There is no key available");
 
 					const keyPairConfig = options?.jwks?.keyPairConfig;
 					const defaultCrv = keyPairConfig
@@ -204,7 +222,7 @@ export const jwt = (options?: JwtOptions | undefined) => {
 						$Infer: {
 							body: {} as {
 								payload: JWTPayload;
-								overrideOptions?: JwtOptions | undefined;
+								overrideOptions?: JwtOptions;
 							},
 						},
 					},
