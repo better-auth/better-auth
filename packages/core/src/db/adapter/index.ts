@@ -1,4 +1,4 @@
-import type { BetterAuthOptions } from "../../types";
+import type { Awaitable, BetterAuthOptions } from "../../types";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 
 export type DBAdapterDebugLogOption =
@@ -202,7 +202,7 @@ export interface DBAdapterFactoryConfig<
 				 * The options of the user's Better-Auth instance.
 				 */
 				options: Options;
-		  }) => any | Promise<any>)
+		  }) => Awaitable<any>)
 		| undefined;
 	/**
 	 * Custom transform output function.
@@ -236,7 +236,7 @@ export interface DBAdapterFactoryConfig<
 				 * The options of the user's Better-Auth instance.
 				 */
 				options: Options;
-		  }) => any | Promise<any>)
+		  }) => Awaitable<any>)
 		| undefined;
 	/**
 	 * Custom ID generator function.
