@@ -23,6 +23,29 @@ import { safeJSONParse } from "../utils/json";
 import { parseSessionOutput, parseUserOutput } from "./schema";
 import { getWithHooks } from "./with-hooks";
 
+function getPluginSessionFields(
+	plugins: BetterAuthOptions["plugins"],
+): Record<string, any> {
+	const pluginFields: Record<string, any> = {};
+
+	for (const plugin of plugins || []) {
+		const sessionFields = plugin.schema?.session?.fields;
+		if (!sessionFields) continue;
+
+		for (const [fieldName, field] of Object.entries(sessionFields)) {
+			if (!field) continue;
+
+			if (field.defaultValue !== undefined) {
+				pluginFields[fieldName] = field.defaultValue;
+			} else if (!field.required) {
+				pluginFields[fieldName] = null;
+			}
+		}
+	}
+
+	return pluginFields;
+}
+
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -270,6 +293,7 @@ export const createInternalAdapter = (
 			overrideAll?: boolean | undefined,
 		) => {
 			const ctx = await getCurrentAuthContext();
+			const pluginFields = getPluginSessionFields(options.plugins);
 			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
 			const data: Omit<Session, "id"> = {
@@ -278,6 +302,7 @@ export const createInternalAdapter = (
 						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
 						: "",
 				userAgent: headers?.get("user-agent") || "",
+				...pluginFields,
 				...rest,
 				/**
 				 * If the user doesn't want to be remembered
@@ -539,6 +564,26 @@ export const createInternalAdapter = (
 										...parsedSession.session,
 										...data,
 									};
+
+									const now = Date.now();
+									const expiresAt = new Date(
+										updatedSession.expiresAt,
+									).getTime();
+									const sessionTTL = Math.max(
+										Math.floor((expiresAt - now) / 1000),
+										0,
+									);
+									if (sessionTTL > 0) {
+										await secondaryStorage.set(
+											sessionToken,
+											JSON.stringify({
+												session: updatedSession,
+												user: parsedSession.user,
+											}),
+											sessionTTL,
+										);
+									}
+
 									return updatedSession;
 								} else {
 									return null;
