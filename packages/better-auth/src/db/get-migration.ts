@@ -494,29 +494,38 @@ export async function getMigrations(
 	}
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
+			let defaultIdType = config.advanced?.database?.useNumberId
+				? dbType === "postgres"
+					? "serial"
+					: "integer"
+				: dbType === "mysql" || dbType === "mssql"
+					? "varchar(36)"
+					: "text";
+
+			let idOverride = fieldTypeOverride
+				? await fieldTypeOverride(
+						{ type: "string", unique: true, required: true },
+						"id",
+						table.table,
+						dbType,
+						config,
+						defaultIdType,
+					)
+				: null;
+
 			let dbT = db.schema
 				.createTable(table.table)
-				.addColumn(
-					"id",
-					config.advanced?.database?.useNumberId
-						? dbType === "postgres"
-							? "serial"
-							: "integer"
-						: dbType === "mysql" || dbType === "mssql"
-							? "varchar(36)"
-							: "text",
-					(col) => {
-						if (config.advanced?.database?.useNumberId) {
-							if (dbType === "postgres" || dbType === "sqlite") {
-								return col.primaryKey().notNull();
-							} else if (dbType === "mssql") {
-								return col.identity().primaryKey().notNull();
-							}
-							return col.autoIncrement().primaryKey().notNull();
+				.addColumn("id", (idOverride?.type as any) ?? defaultIdType, (col) => {
+					if (config.advanced?.database?.useNumberId) {
+						if (dbType === "postgres" || dbType === "sqlite") {
+							return col.primaryKey().notNull();
+						} else if (dbType === "mssql") {
+							return col.identity().primaryKey().notNull();
 						}
-						return col.primaryKey().notNull();
-					},
-				);
+						return col.autoIncrement().primaryKey().notNull();
+					}
+					return col.primaryKey().notNull();
+				});
 
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const { type, mergedField } = await getType(

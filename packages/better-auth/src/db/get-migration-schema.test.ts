@@ -141,8 +141,6 @@ describe.runIf(isPostgresAvailable)(
 
 			// Session, account, verification tables should need to be created
 			const sessionTable = toBeCreated.find((t) => t.table === "session");
-			console.log(toBeCreated, toBeAdded);
-			console.log(await compileMigrations());
 			expect(sessionTable).toBeDefined();
 		});
 
@@ -243,7 +241,7 @@ describe("Field Type Override API", () => {
 			defaultType,
 		) => {
 			if (fieldName === "name") {
-				return { type: "text" }; // Override all name fields
+				return { type: "varchar(123)" }; // Override all name fields
 			}
 			return undefined;
 		};
@@ -265,7 +263,7 @@ describe("Field Type Override API", () => {
 		const sql = await compileMigrations();
 
 		// Verify name field uses text
-		expect(sql).toContain('"name" text');
+		expect(sql).toContain('"name" varchar(123)');
 	});
 
 	it("should override field type based on table name only", async () => {
@@ -280,7 +278,7 @@ describe("Field Type Override API", () => {
 			if (tableName === "session") {
 				// Override all string fields in session table
 				if (field.type === "string") {
-					return { type: "text" };
+					return { type: "varchar(123)" };
 				}
 			}
 			return undefined;
@@ -308,7 +306,7 @@ describe("Field Type Override API", () => {
 		const sessionTableMatch = sql.match(/create table "session"[\s\S]*?;/);
 		expect(sessionTableMatch).toBeTruthy();
 		if (sessionTableMatch) {
-			expect(sessionTableMatch[0]).toContain("text");
+			expect(sessionTableMatch[0]).toContain("varchar(123)");
 		}
 	});
 
@@ -323,7 +321,7 @@ describe("Field Type Override API", () => {
 		) => {
 			// Only override specific field, return undefined for others
 			if (tableName === "user" && fieldName === "email") {
-				return { type: "text" };
+				return { type: "varchar(123)" };
 			}
 			return undefined; // Use default for everything else
 		};
@@ -345,7 +343,7 @@ describe("Field Type Override API", () => {
 		const sql = await compileMigrations();
 
 		// Email should be overridden (though default is also text for SQLite)
-		expect(sql).toContain('"email" text');
+		expect(sql).toContain('"email" varchar(123)');
 		// Other fields should use defaults (text for sqlite)
 		expect(sql).toContain('"name" text');
 	});
@@ -506,7 +504,7 @@ describe("Field Type Override API", () => {
 			defaultType,
 		) => {
 			if (fieldName === "id") {
-				return { type: "text" }; // Override id to text (SQLite default is also text)
+				return { type: "varchar(123)" }; // Override id to varchar(123) (SQLite default is text)
 			}
 			return undefined;
 		};
@@ -527,8 +525,8 @@ describe("Field Type Override API", () => {
 		);
 		const sql = await compileMigrations();
 
-		// Verify id fields use text (SQLite default is also text)
-		expect(sql).toContain('"id" text');
+		// Verify id fields use varchar(123) (SQLite default is text)
+		expect(sql).toContain('"id" varchar(123)');
 	});
 
 	it("should override foreign key field types", async () => {
@@ -541,7 +539,7 @@ describe("Field Type Override API", () => {
 			defaultType,
 		) => {
 			if (field.references) {
-				return { type: "text" }; // Override all foreign keys to text (SQLite default is also text)
+				return { type: "varchar(123)" }; // Override all foreign keys to varchar(123) (SQLite default is text)
 			}
 			return undefined;
 		};
@@ -566,7 +564,7 @@ describe("Field Type Override API", () => {
 		// session table has userId which references user.id
 		const sessionTableMatch = sql.match(/CREATE TABLE "session"[\s\S]*?;/);
 		if (sessionTableMatch) {
-			expect(sessionTableMatch[0]).toContain('"userId" text');
+			expect(sessionTableMatch[0]).toContain('"userId" varchar(123)');
 		}
 	});
 
@@ -748,7 +746,7 @@ describe("Field Type Override API", () => {
 			configReceived = config;
 			// Use config to determine override
 			if (config.advanced?.database?.useNumberId && fieldName === "id") {
-				return { type: "INTEGER" };
+				return { type: "integer" };
 			}
 			return undefined;
 		};
