@@ -194,11 +194,11 @@ await authClient.linkSocial({
 
 ### Accessing Data in Hooks
 
-The additional data is available in your hooks through the `getOauthState` function:
+The additional data is available in your hooks through the `getOAuthState` function:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { getOauthState } from "better-auth/api/middlewares";
+import { getOAuthState } from "better-auth/api/middlewares";
 
 export const auth = betterAuth({
   // Other configurations...
@@ -209,7 +209,7 @@ export const auth = betterAuth({
         handler: async (ctx) => {
           // Only available during OAuth callback
           if (ctx.path === "/callback/:id") {
-            const additionalData = await getOauthState();
+            const additionalData = await getOAuthState();
 
             if (additionalData) {
               // IMPORTANT: Validate and sanitize the data before using it
@@ -241,31 +241,32 @@ export const auth = betterAuth({
       },
     ],
   },
+  /**
+   * You can also use the database hooks to access the additional data.
+   * For example, you can set the referredFrom field based on the additional data passed through the OAuth flow.
+  */
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user, ctx) => {
+          if (ctx.path === "/callback/:id") {
+            const additionalData = await getOAuthState<{ referredFrom: string }>();
+            return {
+              data: {
+               referredFrom: additionalData.referredFrom;
+              }
+            }
+          }
+        },
+      }
+    }
+  }
 });
 ```
 
 <Callout type="info">
 The additional data is **not** stored in the database. It's only available during the OAuth flow through request state. This makes it perfect for passing temporary data that should be processed in hooks but not persisted.
 </Callout>
-
-### Use Cases
-
-Some common use cases for passing additional data:
-
-**Safe Use Cases** (low security risk):
-1. **Analytics**: Track the source or campaign that led to the OAuth sign-in - this is typically used for non-critical analytics
-2. **UI State**: Pass UI preferences or display settings that don't affect security
-
-**Use Cases Requiring Validation** (must verify on server):
-1. **Referral Tracking**: Pass referral codes - **must verify the code exists in your database before crediting**
-2. **User Preferences**: Pass initial preferences - **validate against allowed values before storing**
-3. **Custom Metadata**: Any temporary data - **always validate and sanitize before use**
-
-**Never Use For** (security risk):
-- Authorization decisions (e.g., granting admin rights)
-- Bypassing authentication or verification
-- Directly setting sensitive user fields without verification
-- Financial transactions or calculations
 
 ### Server-Side Usage
 

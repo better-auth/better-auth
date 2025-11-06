@@ -8,14 +8,14 @@ import z from "zod";
 type OauthState = Record<string, any>;
 
 const {
-	get: getOauthState,
+	get: getOAuthState,
 	/**
 	 * @internal This is unsafe to be used directly. Use setOauthState instead.
 	 */
 	set: __internal__setOauthState,
 } = defineRequestState<OauthState>(z.record(z.string(), z.any()));
 
-export { getOauthState };
+export { getOAuthState };
 
 export async function setOauthState(state: OauthState) {
 	const { context } = await getCurrentAuthContext();
