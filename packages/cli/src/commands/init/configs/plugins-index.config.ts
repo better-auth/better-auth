@@ -2,6 +2,7 @@ import type { GetArgumentsOptions } from "../generate-auth";
 import { type ImportGroup } from "../utility/imports";
 import { adminPluginConfig } from "./plugin-admin.config";
 import { anonymousPluginConfig } from "./plugin-anonymous.config";
+import { apiKeyPluginConfig } from "./plugin-api-key.config";
 import { emailOTPPluginConfig } from "./plugin-email-otp.config";
 import { genericOAuthPluginConfig } from "./plugin-generic-oauth.config";
 import { magicLinkPluginConfig } from "./plugin-magic-link.config";
@@ -44,4 +45,5 @@ export const pluginsConfig = {
 	oneTap: oneTapPluginConfig,
 	siwe: siwePluginConfig,
 	admin: adminPluginConfig,
+	apiKey: apiKeyPluginConfig,
 } as const satisfies Record<string, PluginConfig>;

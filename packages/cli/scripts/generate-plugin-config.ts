@@ -105,6 +105,12 @@ const PLUGIN_TYPE_MAP: Record<
 		clientTypeFile: pluginPath("admin/client.ts"),
 		clientTypeName: "AdminClientOptions",
 	},
+	apiKey: {
+		serverTypeFile: pluginPath("api-key/types.ts"),
+		serverTypeName: "ApiKeyOptions",
+		clientTypeFile: pluginPath("api-key/client.ts"),
+		clientTypeName: undefined,
+	},
 };
 
 const ROOT_DIR = path.resolve(__dirname, "../..");
