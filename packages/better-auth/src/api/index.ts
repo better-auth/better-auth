@@ -368,4 +368,4 @@ export {
 export { APIError } from "better-call";
 export * from "./middlewares";
 export * from "./routes";
-export { getIp, isValidIP } from "../utils/get-request-ip"
+export { getIp } from "../utils/get-request-ip"
