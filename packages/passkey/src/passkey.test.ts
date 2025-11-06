@@ -1,5 +1,5 @@
 import { createAuthClient } from "better-auth/client";
-import { getTestInstanceMemory as getTestInstance } from "better-auth/test";
+import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { type Passkey, passkey } from ".";
 import { passkeyClient } from "./client";
