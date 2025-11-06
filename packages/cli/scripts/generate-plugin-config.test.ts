@@ -1032,6 +1032,7 @@ describe("generate-plugin-config", () => {
 				displayName: "Test Plugin",
 				importPath: "better-auth/plugins",
 				functionName: "testPlugin",
+				clientImportPath: "better-auth/client/plugins",
 				hasClient: false,
 			};
 			const result = generateIndividualPluginFile("testPlugin", pluginData);
@@ -1048,6 +1049,7 @@ describe("generate-plugin-config", () => {
 				displayName: "Test Plugin",
 				importPath: "better-auth/plugins",
 				functionName: "testPlugin",
+				clientImportPath: "better-auth/client/plugins",
 				hasClient: true,
 			};
 			const result = generateIndividualPluginFile("testPlugin", pluginData);
@@ -1075,6 +1077,7 @@ describe("generate-plugin-config", () => {
 				displayName: "Test Plugin",
 				importPath: "better-auth/plugins",
 				functionName: "testPlugin",
+				clientImportPath: "better-auth/client/plugins",
 				hasClient: false,
 			};
 			const result = generateIndividualPluginFile("testPlugin", pluginData);
