@@ -29,12 +29,20 @@ export interface OAuthProxyOptions {
 	 * from the request URL if invoked by a client,
 	 * or as a fallback, from the `baseURL` in your auth config.
 	 * If the URL is not inferred correctly, you can provide a value here."
+	 * @cli optional
+	 * @type string
+	 * @question What is the current URL of the application?
+	 * @example http://localhost:3000
 	 */
 	currentURL?: string | undefined;
 	/**
 	 * If a request in a production url it won't be proxied.
 	 *
 	 * default to `BETTER_AUTH_URL`
+	 * @cli optional
+	 * @type string
+	 * @question What is the production URL of the application?
+	 * @example https://my-main-app.com
 	 */
 	productionURL?: string | undefined;
 }

@@ -8,10 +8,16 @@ import { captchaPluginConfig } from "./plugin-captcha.config";
 import { deviceAuthorizationPluginConfig } from "./plugin-device-authorization.config";
 import { emailOTPPluginConfig } from "./plugin-email-otp.config";
 import { genericOAuthPluginConfig } from "./plugin-generic-oauth.config";
+import { haveIBeenPwnedPluginConfig } from "./plugin-have-ibeen-pwned.config";
+import { lastLoginMethodPluginConfig } from "./plugin-last-login-method.config";
 import { magicLinkPluginConfig } from "./plugin-magic-link.config";
 import { mcpPluginConfig } from "./plugin-mcp.config";
+import { multiSessionPluginConfig } from "./plugin-multi-session.config";
+import { oauthProxyPluginConfig } from "./plugin-oauth-proxy.config";
 import { oidcProviderPluginConfig } from "./plugin-oidc-provider.config";
 import { oneTapPluginConfig } from "./plugin-one-tap.config";
+import { oneTimeTokenPluginConfig } from "./plugin-one-time-token.config";
+import { openAPIPluginConfig } from "./plugin-open-api.config";
 import { organizationPluginConfig } from "./plugin-organization.config";
 import { passkeyPluginConfig } from "./plugin-passkey.config";
 import { phoneNumberPluginConfig } from "./plugin-phone-number.config";
@@ -60,4 +66,10 @@ export const pluginsConfig = {
 	bearer: bearerPluginConfig,
 	deviceAuthorization: deviceAuthorizationPluginConfig,
 	captcha: captchaPluginConfig,
+	haveIBeenPwned: haveIBeenPwnedPluginConfig,
+	lastLoginMethod: lastLoginMethodPluginConfig,
+	multiSession: multiSessionPluginConfig,
+	oauthProxy: oauthProxyPluginConfig,
+	oneTimeToken: oneTimeTokenPluginConfig,
+	openAPI: openAPIPluginConfig,
 } as const satisfies Record<string, PluginConfig>;

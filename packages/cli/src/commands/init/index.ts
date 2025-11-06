@@ -44,7 +44,13 @@ export async function initAction(opts: any) {
 			"sso",
 			"bearer",
 			"deviceAuthorization",
-			"captcha"
+			"captcha",
+			"haveIBeenPwned",
+			"lastLoginMethod",
+			"multiSession",
+			"oauthProxy",
+			"oneTimeToken",
+			"openAPI"
 		],
 		database: "prisma-sqlite",
 		appName: "My App",

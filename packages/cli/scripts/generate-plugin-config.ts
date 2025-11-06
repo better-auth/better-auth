@@ -158,6 +158,42 @@ const PLUGIN_TYPE_MAP: Record<
 		clientTypeFile: undefined,
 		clientTypeName: undefined,
 	},
+	haveIBeenPwned: {
+		serverTypeFile: pluginPath("haveibeenpwned/index.ts"),
+		serverTypeName: "HaveIBeenPwnedOptions",
+		clientTypeFile: undefined,
+		clientTypeName: undefined,
+	},
+	lastLoginMethod: {
+		serverTypeFile: pluginPath("last-login-method/index.ts"),
+		serverTypeName: "LastLoginMethodOptions",
+		clientTypeFile: pluginPath("last-login-method/client.ts"),
+		clientTypeName: "LastLoginMethodClientConfig",
+	},
+	multiSession: {
+		serverTypeFile: pluginPath("multi-session/index.ts"),
+		serverTypeName: "MultiSessionConfig",
+		clientTypeFile: pluginPath("multi-session/client.ts"),
+		clientTypeName: undefined,
+	},
+	oauthProxy: {
+		serverTypeFile: pluginPath("oauth-proxy/index.ts"),
+		serverTypeName: "OAuthProxyOptions",
+		clientTypeFile: pluginPath("oauth-proxy/client.ts"),
+		clientTypeName: undefined,
+	},
+	oneTimeToken: {
+		serverTypeFile: pluginPath("one-time-token/index.ts"),
+		serverTypeName: "OneTimeTokenOptions",
+		clientTypeFile: pluginPath("one-time-token/client.ts"),
+		clientTypeName: undefined,
+	},
+	openAPI: {
+		serverTypeFile: pluginPath("open-api/index.ts"),
+		serverTypeName: "OpenAPIOptions",
+		clientTypeFile: undefined,
+		clientTypeName: undefined,
+	},
 };
 
 const ROOT_DIR = path.resolve(__dirname, "../..");
