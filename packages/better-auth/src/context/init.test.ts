@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { init } from "./init";
 
-describe("init (with Kysely)", async () => {
+describe("init (with Kysely)", () => {
 	const database = new Database(":memory:");
 
 	it("should initialize with Kysely adapter", async () => {
