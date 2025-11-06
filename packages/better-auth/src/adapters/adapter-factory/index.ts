@@ -405,7 +405,7 @@ export const createAdapterFactory =
 				}
 
 				if (config.customTransformInput) {
-					newValue = config.customTransformInput({
+					newValue = await config.customTransformInput({
 						data: newValue,
 						action,
 						field: newFieldName,
@@ -485,7 +485,7 @@ export const createAdapterFactory =
 					}
 
 					if (config.customTransformOutput) {
-						newValue = config.customTransformOutput({
+						newValue = await config.customTransformOutput({
 							data: newValue,
 							field: newFieldName,
 							fieldAttributes: field,

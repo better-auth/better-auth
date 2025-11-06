@@ -202,7 +202,7 @@ export interface DBAdapterFactoryConfig<
 				 * The options of the user's Better-Auth instance.
 				 */
 				options: Options;
-		  }) => any)
+		  }) => any | Promise<any>)
 		| undefined;
 	/**
 	 * Custom transform output function.
@@ -236,7 +236,7 @@ export interface DBAdapterFactoryConfig<
 				 * The options of the user's Better-Auth instance.
 				 */
 				options: Options;
-		  }) => any)
+		  }) => any | Promise<any>)
 		| undefined;
 	/**
 	 * Custom ID generator function.
