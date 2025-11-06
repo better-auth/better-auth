@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { generateDrizzleSchema } from "../src/generators/drizzle";
+import { passkey } from "@better-auth/passkey";
+import type { BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor, username } from "better-auth/plugins";
-import { passkey } from "better-auth/plugins/passkey";
-import type { BetterAuthOptions } from "better-auth";
+import { describe, expect, it } from "vitest";
+import { generateDrizzleSchema } from "../src/generators/drizzle";
 
 describe("generate drizzle schema for all databases", async () => {
 	it("should generate drizzle schema for MySQL", async () => {

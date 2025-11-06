@@ -1,15 +1,22 @@
-import * as z from "zod";
-import { APIError } from "better-call";
-import { generateRandomString } from "../crypto";
-import { symmetricEncrypt, symmetricDecrypt } from "../crypto";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { APIError } from "better-call";
+import * as z from "zod";
+import { setOauthState } from "../api/middlewares/oauth";
+import {
+	generateRandomString,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "../crypto";
 
 export async function generateState(
 	c: GenericEndpointContext,
-	link?: {
-		email: string;
-		userId: string;
-	},
+	link:
+		| {
+				email: string;
+				userId: string;
+		  }
+		| undefined,
+	additionalData: Record<string, any> | false | undefined,
 ) {
 	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
 	if (!callbackURL) {
@@ -34,7 +41,12 @@ export async function generateState(
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
+		additionalData: !!additionalData ? additionalData : undefined,
 	};
+
+	if (additionalData) {
+		await setOauthState(additionalData);
+	}
 
 	if (storeStateStrategy === "cookie") {
 		// Store state data in an encrypted cookie
@@ -105,6 +117,7 @@ export async function parseState(c: GenericEndpointContext) {
 			})
 			.optional(),
 		requestSignUp: z.boolean().optional(),
+		additionalData: z.record(z.string(), z.any()).optional(),
 	});
 
 	let parsedData: z.infer<typeof stateDataSchema>;
@@ -194,6 +207,10 @@ export async function parseState(c: GenericEndpointContext) {
 		const errorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+	}
+
+	if (parsedData.additionalData) {
+		await setOauthState(parsedData.additionalData);
 	}
 
 	return parsedData;

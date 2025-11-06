@@ -1,46 +1,48 @@
+import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
+import { decodeJwt } from "jose";
+import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL } from "../oauth2";
-import { logger } from "../env";
-import { decodeJwt } from "jose";
-import { base64 } from "@better-auth/utils/base64";
 
 export interface PayPalProfile {
 	user_id: string;
 	name: string;
 	given_name: string;
 	family_name: string;
-	middle_name?: string;
-	picture?: string;
+	middle_name?: string | undefined;
+	picture?: string | undefined;
 	email: string;
 	email_verified: boolean;
-	gender?: string;
-	birthdate?: string;
-	zoneinfo?: string;
-	locale?: string;
-	phone_number?: string;
-	address?: {
-		street_address?: string;
-		locality?: string;
-		region?: string;
-		postal_code?: string;
-		country?: string;
-	};
-	verified_account?: boolean;
-	account_type?: string;
-	age_range?: string;
-	payer_id?: string;
+	gender?: string | undefined;
+	birthdate?: string | undefined;
+	zoneinfo?: string | undefined;
+	locale?: string | undefined;
+	phone_number?: string | undefined;
+	address?:
+		| {
+				street_address?: string;
+				locality?: string;
+				region?: string;
+				postal_code?: string;
+				country?: string;
+		  }
+		| undefined;
+	verified_account?: boolean | undefined;
+	account_type?: string | undefined;
+	age_range?: string | undefined;
+	payer_id?: string | undefined;
 }
 
 export interface PayPalTokenResponse {
-	scope?: string;
+	scope?: string | undefined;
 	access_token: string;
-	refresh_token?: string;
+	refresh_token?: string | undefined;
 	token_type: "Bearer";
-	id_token?: string;
+	id_token?: string | undefined;
 	expires_in: number;
-	nonce?: string;
+	nonce?: string | undefined;
 }
 
 export interface PayPalOptions extends ProviderOptions<PayPalProfile> {
@@ -49,12 +51,12 @@ export interface PayPalOptions extends ProviderOptions<PayPalProfile> {
 	 * PayPal environment - 'sandbox' for testing, 'live' for production
 	 * @default 'sandbox'
 	 */
-	environment?: "sandbox" | "live";
+	environment?: ("sandbox" | "live") | undefined;
 	/**
 	 * Whether to request shipping address information
 	 * @default false
 	 */
-	requestShippingAddress?: boolean;
+	requestShippingAddress?: boolean | undefined;
 }
 
 export const paypal = (options: PayPalOptions) => {

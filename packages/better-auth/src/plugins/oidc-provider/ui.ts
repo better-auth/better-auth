@@ -6,11 +6,11 @@ export const authorizeHTML = ({
 	cancelURI,
 }: {
 	scopes: string[];
-	clientIcon?: string;
+	clientIcon?: string | undefined;
 	clientName: string;
 	redirectURI: string;
 	cancelURI: string;
-	clientMetadata?: Record<string, any>;
+	clientMetadata?: Record<string, any> | undefined;
 }) => `<!DOCTYPE html>
   <html lang="en">
   <head>

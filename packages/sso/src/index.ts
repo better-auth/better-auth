@@ -1,12 +1,14 @@
+import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import {
-	generateState,
 	type Account,
 	type BetterAuthPlugin,
+	generateState,
 	type OAuth2Tokens,
 	type Session,
 	type User,
 } from "better-auth";
 import { APIError, sessionMiddleware } from "better-auth/api";
+import { setSessionCookie } from "better-auth/cookies";
 import {
 	createAuthorizationURL,
 	handleOAuthUserInfo,
@@ -14,17 +16,14 @@ import {
 	validateAuthorizationCode,
 	validateToken,
 } from "better-auth/oauth2";
-
 import { createAuthEndpoint } from "better-auth/plugins";
-import * as z from "zod/v4";
+import { XMLValidator } from "fast-xml-parser";
+import { decodeJwt } from "jose";
 import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
-import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
-import { decodeJwt } from "jose";
-import { setSessionCookie } from "better-auth/cookies";
-import type { FlowResult } from "samlify/types/src/flow";
-import { XMLValidator } from "fast-xml-parser";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
+import type { FlowResult } from "samlify/types/src/flow";
+import * as z from "zod/v4";
 
 const fastValidator = {
 	async validate(xml: string) {
@@ -67,22 +66,22 @@ function safeJsonParse<T>(value: string | T | null | undefined): T | null {
 }
 
 export interface OIDCMapping {
-	id?: string;
-	email?: string;
-	emailVerified?: string;
-	name?: string;
-	image?: string;
-	extraFields?: Record<string, string>;
+	id?: string | undefined;
+	email?: string | undefined;
+	emailVerified?: string | undefined;
+	name?: string | undefined;
+	image?: string | undefined;
+	extraFields?: Record<string, string> | undefined;
 }
 
 export interface SAMLMapping {
-	id?: string;
-	email?: string;
-	emailVerified?: string;
-	name?: string;
-	firstName?: string;
-	lastName?: string;
-	extraFields?: Record<string, string>;
+	id?: string | undefined;
+	email?: string | undefined;
+	emailVerified?: string | undefined;
+	name?: string | undefined;
+	firstName?: string | undefined;
+	lastName?: string | undefined;
+	extraFields?: Record<string, string> | undefined;
 }
 
 export interface OIDCConfig {
@@ -90,15 +89,17 @@ export interface OIDCConfig {
 	pkce: boolean;
 	clientId: string;
 	clientSecret: string;
-	authorizationEndpoint?: string;
+	authorizationEndpoint?: string | undefined;
 	discoveryEndpoint: string;
-	userInfoEndpoint?: string;
-	scopes?: string[];
-	overrideUserInfo?: boolean;
-	tokenEndpoint?: string;
-	tokenEndpointAuthentication?: "client_secret_post" | "client_secret_basic";
-	jwksEndpoint?: string;
-	mapping?: OIDCMapping;
+	userInfoEndpoint?: string | undefined;
+	scopes?: string[] | undefined;
+	overrideUserInfo?: boolean | undefined;
+	tokenEndpoint?: string | undefined;
+	tokenEndpointAuthentication?:
+		| ("client_secret_post" | "client_secret_basic")
+		| undefined;
+	jwksEndpoint?: string | undefined;
+	mapping?: OIDCMapping | undefined;
 }
 
 export interface SAMLConfig {
@@ -106,132 +107,140 @@ export interface SAMLConfig {
 	entryPoint: string;
 	cert: string;
 	callbackUrl: string;
-	audience?: string;
-	idpMetadata?: {
-		metadata?: string;
-		entityID?: string;
-		entityURL?: string;
-		redirectURL?: string;
-		cert?: string;
-		privateKey?: string;
-		privateKeyPass?: string;
-		isAssertionEncrypted?: boolean;
-		encPrivateKey?: string;
-		encPrivateKeyPass?: string;
-		singleSignOnService?: Array<{
-			Binding: string;
-			Location: string;
-		}>;
-	};
+	audience?: string | undefined;
+	idpMetadata?:
+		| {
+				metadata?: string;
+				entityID?: string;
+				entityURL?: string;
+				redirectURL?: string;
+				cert?: string;
+				privateKey?: string;
+				privateKeyPass?: string;
+				isAssertionEncrypted?: boolean;
+				encPrivateKey?: string;
+				encPrivateKeyPass?: string;
+				singleSignOnService?: Array<{
+					Binding: string;
+					Location: string;
+				}>;
+		  }
+		| undefined;
 	spMetadata: {
-		metadata?: string;
-		entityID?: string;
-		binding?: string;
-		privateKey?: string;
-		privateKeyPass?: string;
-		isAssertionEncrypted?: boolean;
-		encPrivateKey?: string;
-		encPrivateKeyPass?: string;
+		metadata?: string | undefined;
+		entityID?: string | undefined;
+		binding?: string | undefined;
+		privateKey?: string | undefined;
+		privateKeyPass?: string | undefined;
+		isAssertionEncrypted?: boolean | undefined;
+		encPrivateKey?: string | undefined;
+		encPrivateKeyPass?: string | undefined;
 	};
-	wantAssertionsSigned?: boolean;
-	signatureAlgorithm?: string;
-	digestAlgorithm?: string;
-	identifierFormat?: string;
-	privateKey?: string;
-	decryptionPvk?: string;
-	additionalParams?: Record<string, any>;
-	mapping?: SAMLMapping;
+	wantAssertionsSigned?: boolean | undefined;
+	signatureAlgorithm?: string | undefined;
+	digestAlgorithm?: string | undefined;
+	identifierFormat?: string | undefined;
+	privateKey?: string | undefined;
+	decryptionPvk?: string | undefined;
+	additionalParams?: Record<string, any> | undefined;
+	mapping?: SAMLMapping | undefined;
 }
 
 export interface SSOProvider {
 	issuer: string;
-	oidcConfig?: OIDCConfig;
-	samlConfig?: SAMLConfig;
+	oidcConfig?: OIDCConfig | undefined;
+	samlConfig?: SAMLConfig | undefined;
 	userId: string;
 	providerId: string;
-	organizationId?: string;
+	organizationId?: string | undefined;
 }
 
 export interface SSOOptions {
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
 	 */
-	provisionUser?: (data: {
-		/**
-		 * The user object from the database
-		 */
-		user: User & Record<string, any>;
-		/**
-		 * The user info object from the provider
-		 */
-		userInfo: Record<string, any>;
-		/**
-		 * The OAuth2 tokens from the provider
-		 */
-		token?: OAuth2Tokens;
-		/**
-		 * The SSO provider
-		 */
-		provider: SSOProvider;
-	}) => Promise<void>;
+	provisionUser?:
+		| ((data: {
+				/**
+				 * The user object from the database
+				 */
+				user: User & Record<string, any>;
+				/**
+				 * The user info object from the provider
+				 */
+				userInfo: Record<string, any>;
+				/**
+				 * The OAuth2 tokens from the provider
+				 */
+				token?: OAuth2Tokens;
+				/**
+				 * The SSO provider
+				 */
+				provider: SSOProvider;
+		  }) => Promise<void>)
+		| undefined;
 	/**
 	 * Organization provisioning options
 	 */
-	organizationProvisioning?: {
-		disabled?: boolean;
-		defaultRole?: "member" | "admin";
-		getRole?: (data: {
-			/**
-			 * The user object from the database
-			 */
-			user: User & Record<string, any>;
-			/**
-			 * The user info object from the provider
-			 */
-			userInfo: Record<string, any>;
-			/**
-			 * The OAuth2 tokens from the provider
-			 */
-			token?: OAuth2Tokens;
-			/**
-			 * The SSO provider
-			 */
-			provider: SSOProvider;
-		}) => Promise<"member" | "admin">;
-	};
+	organizationProvisioning?:
+		| {
+				disabled?: boolean;
+				defaultRole?: "member" | "admin";
+				getRole?: (data: {
+					/**
+					 * The user object from the database
+					 */
+					user: User & Record<string, any>;
+					/**
+					 * The user info object from the provider
+					 */
+					userInfo: Record<string, any>;
+					/**
+					 * The OAuth2 tokens from the provider
+					 */
+					token?: OAuth2Tokens;
+					/**
+					 * The SSO provider
+					 */
+					provider: SSOProvider;
+				}) => Promise<"member" | "admin">;
+		  }
+		| undefined;
 	/**
 	 * Default SSO provider configurations for testing.
 	 * These will take the precedence over the database providers.
 	 */
-	defaultSSO?: Array<{
-		/**
-		 * The domain to match for this default provider.
-		 * This is only used to match incoming requests to this default provider.
-		 */
-		domain: string;
-		/**
-		 * The provider ID to use
-		 */
-		providerId: string;
-		/**
-		 * SAML configuration
-		 */
-		samlConfig?: SAMLConfig;
-		/**
-		 * OIDC configuration
-		 */
-		oidcConfig?: OIDCConfig;
-	}>;
+	defaultSSO?:
+		| Array<{
+				/**
+				 * The domain to match for this default provider.
+				 * This is only used to match incoming requests to this default provider.
+				 */
+				domain: string;
+				/**
+				 * The provider ID to use
+				 */
+				providerId: string;
+				/**
+				 * SAML configuration
+				 */
+				samlConfig?: SAMLConfig;
+				/**
+				 * OIDC configuration
+				 */
+				oidcConfig?: OIDCConfig;
+		  }>
+		| undefined;
 	/**
 	 * Override user info with the provider info.
 	 * @default false
 	 */
-	defaultOverrideUserInfo?: boolean;
+	defaultOverrideUserInfo?: boolean | undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */
-	disableImplicitSignUp?: boolean;
+	disableImplicitSignUp?: boolean | undefined;
 	/**
 	 * Configure the maximum number of SSO providers a user can register.
 	 * You can also pass a function that returns a number.
@@ -246,15 +255,23 @@ export interface SSOOptions {
 	 * ```
 	 * @default 10
 	 */
-	providersLimit?: number | ((user: User) => Promise<number> | number);
+	providersLimit?:
+		| (number | ((user: User) => Promise<number> | number))
+		| undefined;
 	/**
 	 * Trust the email verified flag from the provider.
+	 *
+	 * ⚠️ Use this with caution — it can lead to account takeover if misused. Only enable it if users **cannot freely register new providers**. You can
+	 * prevent that by using `disabledPaths` or other safeguards to block provider registration from the client.
+	 *
+	 * If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those
+	 * providers in the `trustedProviders` list.
 	 * @default false
 	 */
-	trustEmailVerified?: boolean;
+	trustEmailVerified?: boolean | undefined;
 }
 
-export const sso = (options?: SSOOptions) => {
+export const sso = (options?: SSOOptions | undefined) => {
 	return {
 		id: "sso",
 		endpoints: {
@@ -1138,7 +1155,7 @@ export const sso = (options?: SSOOptions) => {
 						}
 					}
 					if (provider.oidcConfig && body.providerType !== "saml") {
-						const state = await generateState(ctx);
+						const state = await generateState(ctx, undefined, false);
 						const redirectURI = `${ctx.context.baseURL}/sso/callback/${provider.providerId}`;
 						const authorizationURL = await createAuthorizationURL({
 							id: provider.issuer,

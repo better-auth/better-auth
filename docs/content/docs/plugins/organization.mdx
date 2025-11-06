@@ -891,7 +891,7 @@ type createInvitation = {
      */
     email: string = "example@gmail.com"
     /**
-     * The role(s) to assign to the user. It can be `admin`, `member`, or `guest`.  
+     * The role(s) to assign to the user. It can be `admin`, `member`, `owner`
      */
     role: string | string[] = "member"
     /**
@@ -1489,7 +1489,7 @@ const canCreateProjectAndCreateSale =
 ```
 
 <Callout type="warn">
-  This will not include any dynamic roles as everything is ran syncronously on the client side.
+  This will not include any dynamic roles as everything is ran synchronously on the client side.
   Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles & permissions.
 </Callout>
 
@@ -1545,7 +1545,7 @@ export const authClient = createAuthClient({
 
 
 <Callout type="warn">
-  The `authClient.organization.checkRolePermission` function will not include any dynamic roles as everything is ran syncronously on the client side.
+  The `authClient.organization.checkRolePermission` function will not include any dynamic roles as everything is ran synchronously on the client side.
   Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles.
 </Callout>
 

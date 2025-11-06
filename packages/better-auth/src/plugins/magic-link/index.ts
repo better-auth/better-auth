@@ -1,20 +1,22 @@
-import * as z from "zod";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import type { BetterAuthPlugin } from "@better-auth/core";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
+import * as z from "zod";
+import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { originCheck } from "../../api";
 import { defaultKeyHasher } from "./utils";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 interface MagicLinkopts {
 	/**
 	 * Time in seconds until the magic link expires.
 	 * @default (60 * 5) // 5 minutes
 	 */
-	expiresIn?: number;
+	expiresIn?: number | undefined;
 	/**
 	 * Send magic link implementation.
 	 */
@@ -24,14 +26,14 @@ interface MagicLinkopts {
 			url: string;
 			token: string;
 		},
-		request?: Request,
+		request?: Request | undefined,
 	) => Promise<void> | void;
 	/**
 	 * Disable sign up if user is not found.
 	 *
 	 * @default false
 	 */
-	disableSignUp?: boolean;
+	disableSignUp?: boolean | undefined;
 	/**
 	 * Rate limit configuration.
 	 *
@@ -40,14 +42,16 @@ interface MagicLinkopts {
 	 *  max: 5,
 	 * }
 	 */
-	rateLimit?: {
-		window: number;
-		max: number;
-	};
+	rateLimit?:
+		| {
+				window: number;
+				max: number;
+		  }
+		| undefined;
 	/**
 	 * Custom function to generate a token
 	 */
-	generateToken?: (email: string) => Promise<string> | string;
+	generateToken?: ((email: string) => Promise<string> | string) | undefined;
 
 	/**
 	 * This option allows you to configure how the token is stored in your database.
@@ -56,9 +60,12 @@ interface MagicLinkopts {
 	 * @default "plain"
 	 */
 	storeToken?:
-		| "plain"
-		| "hashed"
-		| { type: "custom-hasher"; hash: (token: string) => Promise<string> };
+		| (
+				| "plain"
+				| "hashed"
+				| { type: "custom-hasher"; hash: (token: string) => Promise<string> }
+		  )
+		| undefined;
 }
 
 export const magicLink = (options: MagicLinkopts) => {
@@ -351,7 +358,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					);
 					const { email, name } = JSON.parse(tokenValue.value) as {
 						email: string;
-						name?: string;
+						name?: string | undefined;
 					};
 					let isNewUser = false;
 					let user = await ctx.context.internalAdapter

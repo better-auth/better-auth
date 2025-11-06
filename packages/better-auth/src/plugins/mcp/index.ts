@@ -1,40 +1,42 @@
-import * as z from "zod";
+import type {
+	BetterAuthOptions,
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { BetterAuthPlugin, BetterAuthOptions } from "@better-auth/core";
+import { isProduction, logger } from "@better-auth/core/env";
+import { getWebcryptoSubtle } from "@better-auth/utils";
+import { base64 } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
+import { SignJWT } from "jose";
+import * as z from "zod";
+import { APIError, getSessionFromCtx } from "../../api";
+import { parseSetCookieHeader } from "../../cookies";
+import { generateRandomString } from "../../crypto";
+import { getBaseURL } from "../../utils/url";
 import {
-	oidcProvider,
 	type Client,
 	type CodeVerificationValue,
 	type OAuthAccessToken,
 	type OIDCMetadata,
 	type OIDCOptions,
+	oidcProvider,
 } from "../oidc-provider";
-import { APIError, getSessionFromCtx } from "../../api";
-import { base64 } from "@better-auth/utils/base64";
-import { generateRandomString } from "../../crypto";
-import { createHash } from "@better-auth/utils/hash";
-import { getWebcryptoSubtle } from "@better-auth/utils";
-import { SignJWT } from "jose";
-import { parseSetCookieHeader } from "../../cookies";
 import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
-import { getBaseURL } from "../../utils/url";
-import { isProduction } from "@better-auth/core/env";
-import { logger } from "@better-auth/core/env";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 interface MCPOptions {
 	loginPage: string;
-	resource?: string;
-	oidcConfig?: OIDCOptions;
+	resource?: string | undefined;
+	oidcConfig?: OIDCOptions | undefined;
 }
 
 export const getMCPProviderMetadata = (
 	ctx: GenericEndpointContext,
-	options?: OIDCOptions,
+	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
 	const issuer = ctx.context.options.baseURL as string;
 	const baseURL = ctx.context.baseURL;
@@ -86,7 +88,7 @@ export const getMCPProviderMetadata = (
 
 export const getMCPProtectedResourceMetadata = (
 	ctx: GenericEndpointContext,
-	options?: MCPOptions,
+	options?: MCPOptions | undefined,
 ) => {
 	const baseURL = ctx.context.baseURL;
 
@@ -451,7 +453,7 @@ export const mcp = (options: MCPOptions) => {
 							}
 							return {
 								...res,
-								redirectURLs: res.redirectURLs.split(","),
+								redirectUrls: res.redirectUrls.split(","),
 								metadata: res.metadata ? JSON.parse(res.metadata) : {},
 							} as Client;
 						});
@@ -720,7 +722,7 @@ export const mcp = (options: MCPOptions) => {
 														description:
 															"Secret key for the client. Not included for public clients.",
 													},
-													redirectURLs: {
+													redirectUrls: {
 														type: "array",
 														items: { type: "string", format: "uri" },
 														description: "List of allowed redirect URLs",
@@ -761,7 +763,7 @@ export const mcp = (options: MCPOptions) => {
 												required: [
 													"name",
 													"clientId",
-													"redirectURLs",
+													"redirectUrls",
 													"type",
 													"authenticationScheme",
 													"disabled",
@@ -842,7 +844,7 @@ export const mcp = (options: MCPOptions) => {
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
 							clientSecret: finalClientSecret,
-							redirectURLs: body.redirect_uris.join(","),
+							redirectUrls: body.redirect_uris.join(","),
 							type: clientType,
 							authenticationScheme:
 								body.token_endpoint_auth_method || "client_secret_basic",

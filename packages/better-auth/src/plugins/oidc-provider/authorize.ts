@@ -1,9 +1,9 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
-import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { AuthorizationQuery, OIDCOptions } from "./types";
 
 function formatErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -110,7 +110,7 @@ export async function authorize(
 		);
 		throw ctx.redirect(errorURL);
 	}
-	const redirectURI = client.redirectURLs.find(
+	const redirectURI = client.redirectUrls.find(
 		(url) => url === ctx.query.redirect_uri,
 	);
 

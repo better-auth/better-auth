@@ -1,10 +1,10 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.4.0-beta.13",
+  "version": "1.4.0-beta.16",
   "type": "module",
   "description": "Better Auth integration for Expo and React Native applications.",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
+  "main": "dist/index.mjs",
+  "module": "dist/index.mjs",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",
@@ -20,24 +20,22 @@
   "exports": {
     ".": {
       "better-auth-dev-source": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
     },
     "./client": {
       "better-auth-dev-source": "./src/client.ts",
-      "types": "./dist/client.d.ts",
-      "import": "./dist/client.js",
-      "require": "./dist/client.cjs"
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
-        "./dist/index.d.ts"
+        "./dist/index.d.mts"
       ],
       "client": [
-        "./dist/client.d.ts"
+        "./dist/client.d.mts"
       ]
     }
   },

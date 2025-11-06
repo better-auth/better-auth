@@ -1,22 +1,23 @@
-import { safeJSONParse } from "../../utils/json";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import type {
+	CleanedWhere,
+	DBAdapter,
+	DBTransactionAdapter,
+	Where,
+} from "@better-auth/core/db/adapter";
+import { getColorDepth, logger, TTY_COLORS } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import type { BetterAuthOptions } from "@better-auth/core";
 import { generateId as defaultGenerateId } from "../../utils";
+import { safeJSONParse } from "../../utils/json";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 } from "./types";
-import type { DBFieldAttribute } from "@better-auth/core/db";
-import { logger, TTY_COLORS, getColorDepth } from "@better-auth/core/env";
-import type {
-	DBAdapter,
-	DBTransactionAdapter,
-	Where,
-	CleanedWhere,
-} from "@better-auth/core/db/adapter";
-import { BetterAuthError } from "@better-auth/core/error";
+
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
@@ -332,7 +333,7 @@ export const createAdapterFactory =
 				});
 			}
 			for (const field in fields) {
-				const value = data[field];
+				let value = data[field];
 				const fieldAttributes = fields[field];
 
 				let newFieldName: string =
@@ -346,6 +347,26 @@ export const createAdapterFactory =
 				) {
 					continue;
 				}
+
+				// In some endpoints (like signUpEmail) where there isn't proper Zod validation,
+				// we might recieve a date as a string (this is because of the client converting the Date to a string
+				// when sending to the server). Because of this, we'll convert the string to a Date.
+				if (
+					fieldAttributes &&
+					fieldAttributes.type === "date" &&
+					!(value instanceof Date) &&
+					typeof value === "string"
+				) {
+					try {
+						value = new Date(value);
+					} catch {
+						logger.error("[Adapter Factory] Failed to convert string to date", {
+							value,
+							field,
+						});
+					}
+				}
+
 				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
 				let newValue = withApplyDefault(value, fieldAttributes!, action);
 
@@ -598,17 +619,6 @@ export const createAdapterFactory =
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
-						if (
-							typeof config.debugLogs === "object" &&
-							"isRunningAdapterTests" in config.debugLogs &&
-							config.debugLogs.isRunningAdapterTests
-						) {
-							// hide warning in adapter tests
-						} else {
-							logger.warn(
-								`[${config.adapterName}] - Transactions are not supported. Executing operations sequentially.`,
-							);
-						}
 						lazyLoadTransaction = createAsIsTransaction(adapter);
 					} else {
 						logger.debug(
