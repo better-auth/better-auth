@@ -439,6 +439,85 @@ describe("generate-plugin-config", () => {
 			expect(result.hasPrompt).toBe(true);
 		});
 
+		it("should extract @description tag and override auto-extracted description", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * This is the auto-extracted description
+				 * @cli
+				 * @description This is the custom description that overrides
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.description).toBe(
+				"This is the custom description that overrides",
+			);
+		});
+
+		it("should extract multi-line @description tag", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * Auto-extracted description
+				 * @cli
+				 * @description This is a multi-line
+				 * description that spans
+				 * multiple lines
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.description).toBe(
+				"This is a multi-line\ndescription that spans\nmultiple lines",
+			);
+		});
+
+		it("should use auto-extracted description when @description is not present", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * This is the auto-extracted description
+				 * @cli
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.description).toBe("This is the auto-extracted description");
+		});
+
+		it("should not include multi-line @example content in description", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * This is the description
+				 * @cli
+				 * @example async () => {
+				 *   return true;
+				 *   console.log("test");
+				 * }
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.description).toBe("This is the description");
+			expect(result.description).not.toContain("return true");
+			expect(result.description).not.toContain("console.log");
+			expect(result.exampleValue).toBe(
+				'async () => {\n  return true;\n  console.log("test");\n}',
+			);
+		});
+
+		it("should not include multi-line @example content in description even with other tags", () => {
+			const jsDoc = [
+				createMockJsDocNode(`/**
+				 * This is the description
+				 * @cli
+				 * @example async () => {
+				 *   return true;
+				 * }
+				 * @default "test"
+				 */`),
+			];
+			const result = extractJSDocTags(jsDoc);
+			expect(result.description).toBe("This is the description");
+			expect(result.description).not.toContain("return true");
+			expect(result.exampleValue).toBe("async () => {\n  return true;\n}");
+			expect(result.defaultValue).toBe("test");
+		});
+
 		it("should extract description", () => {
 			const jsDoc = [
 				createMockJsDocNode(`/**
@@ -485,6 +564,71 @@ describe("generate-plugin-config", () => {
 	});
 
 	describe("generateZodSchema", () => {
+		it("should generate array schema for string[]", () => {
+			const mockType = {
+				getText: () => "string[]",
+				isNullable: () => false,
+				isUndefined: () => false,
+				isUnion: () => false,
+				isArray: () => true,
+				getSymbol: () => ({ getName: () => "String" }),
+			};
+			const result = generateZodSchema(mockType);
+			expect(result).toBe("z.coerce.string().array()");
+		});
+
+		it("should generate array schema for number[]", () => {
+			const mockType = {
+				getText: () => "number[]",
+				isNullable: () => false,
+				isUndefined: () => false,
+				isUnion: () => false,
+				isArray: () => true,
+				getSymbol: () => ({ getName: () => "Number" }),
+			};
+			const result = generateZodSchema(mockType);
+			expect(result).toBe("z.coerce.number().array()");
+		});
+
+		it("should generate optional array schema for string[] | undefined", () => {
+			const mockType = {
+				getText: () => "string[] | undefined",
+				isNullable: () => false,
+				isUndefined: () => true,
+				isUnion: () => false,
+				isArray: () => true,
+				getSymbol: () => ({ getName: () => "String" }),
+			};
+			const result = generateZodSchema(mockType);
+			expect(result).toBe("z.coerce.string().array().optional()");
+		});
+
+		it("should generate array schema using type override string[]", () => {
+			const mockType = {
+				getText: () => "any[]",
+				isNullable: () => false,
+				isUndefined: () => false,
+				isUnion: () => false,
+				isArray: () => false,
+				getSymbol: () => null,
+			};
+			const result = generateZodSchema(mockType, "string[]");
+			expect(result).toBe("z.coerce.string().array()");
+		});
+
+		it("should generate array schema using type override number[]", () => {
+			const mockType = {
+				getText: () => "any[]",
+				isNullable: () => false,
+				isUndefined: () => false,
+				isUnion: () => false,
+				isArray: () => false,
+				getSymbol: () => null,
+			};
+			const result = generateZodSchema(mockType, "number[]");
+			expect(result).toBe("z.coerce.number().array()");
+		});
+
 		it("should generate string schema", () => {
 			const mockType = {
 				getText: () => "string",
@@ -1325,6 +1469,157 @@ export interface TestPluginNestedOptions {
 			},
 		);
 
+		it("should parse plugin with array types", { timeout: 20000 }, () => {
+			const testFile = path.join(TEST_DIR, "test-plugin-array.ts");
+			const testContent = `export interface TestPluginArrayOptions {
+	/**
+	 * Array of strings
+	 * @cli
+	 */
+	tags?: string[];
+	
+	/**
+	 * Array of numbers
+	 * @cli
+	 */
+	ids?: number[];
+	
+	/**
+	 * Required array of strings
+	 * @cli required
+	 */
+	requiredTags: string[];
+}`;
+
+			fs.writeFileSync(testFile, testContent);
+
+			const project = new Project({
+				tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+			});
+			const sourceFile = project.addSourceFileAtPath(testFile);
+
+			const pluginInfo = {
+				serverTypeFile: testFile,
+				serverTypeName: "TestPluginArrayOptions",
+				clientTypeFile: undefined,
+				clientTypeName: undefined,
+				importPath: "better-auth/plugins",
+			};
+
+			const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+			const tagsConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-tags",
+			);
+			expect(tagsConfig).toBeDefined();
+			expect(tagsConfig?.argument.schema).toBe(
+				"z.coerce.string().array().optional()",
+			);
+
+			const idsConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-ids",
+			);
+			expect(idsConfig).toBeDefined();
+			expect(idsConfig?.argument.schema).toBe(
+				"z.coerce.number().array().optional()",
+			);
+
+			const requiredTagsConfig = result.pluginConfig.find(
+				(c) => c.flag === "test-plugin-required-tags",
+			);
+			expect(requiredTagsConfig).toBeDefined();
+			expect(requiredTagsConfig?.argument.schema).toBe(
+				"z.coerce.string().array()",
+			);
+			expect(requiredTagsConfig?.isRequired).toBe(true);
+		});
+
+		it(
+			"should generate cliTransform for array types",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(TEST_DIR, "test-plugin-array-transform.ts");
+				const testContent = `export interface TestPluginArrayTransformOptions {
+	/**
+	 * Array of strings
+	 * @cli
+	 */
+	tags?: string[];
+	
+	/**
+	 * Array of numbers
+	 * @cli
+	 */
+	ids?: number[];
+}`;
+
+				fs.writeFileSync(testFile, testContent);
+
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
+
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginArrayTransformOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
+
+				const pluginData = generatePluginConfig(
+					"testPlugin",
+					pluginInfo,
+					project,
+				);
+				const generatedCode = generateIndividualPluginFile(
+					"testPlugin",
+					pluginData,
+				);
+
+				// Verify that cliTransform is present for array types
+				expect(generatedCode).toContain("cliTransform:");
+
+				// Verify the config objects have cliTransform
+				const tagsConfig = pluginData.pluginConfig.find(
+					(c) => c.flag === "test-plugin-tags",
+				);
+				expect(tagsConfig).toBeDefined();
+				expect(tagsConfig?.cliTransform).toBeDefined();
+				expect(typeof tagsConfig?.cliTransform).toBe("function");
+
+				// Test the transform function
+				if (tagsConfig?.cliTransform) {
+					// Test JSON.parse for JSON array strings
+					expect(tagsConfig.cliTransform('["a", "b", "c"]')).toEqual([
+						"a",
+						"b",
+						"c",
+					]);
+					// Test fallback to comma-separated format
+					expect(tagsConfig.cliTransform("a, b, c")).toEqual(["a", "b", "c"]);
+					expect(tagsConfig.cliTransform(["a", "b"])).toEqual(["a", "b"]);
+				}
+
+				const idsConfig = pluginData.pluginConfig.find(
+					(c) => c.flag === "test-plugin-ids",
+				);
+				expect(idsConfig).toBeDefined();
+				expect(idsConfig?.cliTransform).toBeDefined();
+				expect(typeof idsConfig?.cliTransform).toBe("function");
+
+				// Test the number array transform function
+				if (idsConfig?.cliTransform) {
+					// Test JSON.parse for JSON array strings
+					expect(idsConfig.cliTransform("[1, 2, 3]")).toEqual([1, 2, 3]);
+					// Test fallback to comma-separated format
+					expect(idsConfig.cliTransform("1, 2, 3")).toEqual([1, 2, 3]);
+					expect(idsConfig.cliTransform([1, 2])).toEqual([1, 2]);
+				}
+			},
+		);
+
 		it("should parse plugin with @cli optional tag", { timeout: 20000 }, () => {
 			const testFile = path.join(TEST_DIR, "test-plugin-optional.ts");
 			const testContent = `export interface TestPluginOptionalOptions {
@@ -1825,6 +2120,122 @@ export interface TestPluginNestedOptions {
 				expect(fieldConfig?.skipPrompt).toBe(true);
 				// skipPrompt: true should be in the generated code
 				expect(generatedCode).toContain("skipPrompt: true");
+			},
+		);
+
+		it(
+			"should use @description tag to override auto-extracted description in generated config",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(
+					TEST_DIR,
+					"test-plugin-description-override.ts",
+				);
+				const testContent = `export interface TestPluginDescriptionOverrideOptions {
+	/**
+	 * This is the auto-extracted description that should be ignored
+	 * @cli
+	 * @description This is the custom description that should be used
+	 */
+	apiKey: string;
+	
+	/**
+	 * This description should be used since no @description tag
+	 * @cli
+	 */
+	secret?: string;
+}`;
+
+				fs.writeFileSync(testFile, testContent);
+
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
+
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginDescriptionOverrideOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
+
+				const result = generatePluginConfig("testPlugin", pluginInfo, project);
+
+				const apiKeyConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-api-key",
+				);
+				expect(apiKeyConfig).toBeDefined();
+				expect(apiKeyConfig?.description).toBe(
+					"This is the custom description that should be used",
+				);
+
+				const secretConfig = result.pluginConfig.find(
+					(c) => c.flag === "test-plugin-secret",
+				);
+				expect(secretConfig).toBeDefined();
+				expect(secretConfig?.description).toBe(
+					"This description should be used since no @description tag",
+				);
+			},
+		);
+
+		it(
+			"should generate code with @description override in output",
+			{ timeout: 20000 },
+			() => {
+				const testFile = path.join(
+					TEST_DIR,
+					"test-plugin-description-output.ts",
+				);
+				const testContent = `export interface TestPluginDescriptionOutputOptions {
+	/**
+	 * Auto-extracted description
+	 * @cli
+	 * @description Custom description with "quotes" and special chars
+	 */
+	apiKey: string;
+}`;
+
+				fs.writeFileSync(testFile, testContent);
+
+				const project = new Project({
+					tsConfigFilePath: path.resolve(ROOT_DIR, "better-auth/tsconfig.json"),
+				});
+				const sourceFile = project.addSourceFileAtPath(testFile);
+
+				const pluginInfo = {
+					serverTypeFile: testFile,
+					serverTypeName: "TestPluginDescriptionOutputOptions",
+					clientTypeFile: undefined,
+					clientTypeName: undefined,
+					importPath: "better-auth/plugins",
+				};
+
+				const pluginData = generatePluginConfig(
+					"testPlugin",
+					pluginInfo,
+					project,
+				);
+				const generatedCode = generateIndividualPluginFile(
+					"testPlugin",
+					pluginData,
+				);
+
+				// Verify that the custom description appears in the generated code
+				expect(generatedCode).toContain(
+					'description: "Custom description with \\"quotes\\" and special chars"',
+				);
+
+				// Verify the config object has the custom description
+				const apiKeyConfig = pluginData.pluginConfig.find(
+					(c) => c.flag === "test-plugin-api-key",
+				);
+				expect(apiKeyConfig).toBeDefined();
+				expect(apiKeyConfig?.description).toBe(
+					'Custom description with "quotes" and special chars',
+				);
 			},
 		);
 

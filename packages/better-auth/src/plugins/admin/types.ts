@@ -15,9 +15,11 @@ export interface SessionWithImpersonatedBy extends Session {
 
 export interface AdminOptions {
 	/**
-	 * The default role for a user
+	 * The default role for a user.
 	 *
 	 * @default "user"
+	 * @cli optional
+	 * @type string
 	 */
 	defaultRole?: string | undefined;
 	/**
@@ -27,6 +29,9 @@ export interface AdminOptions {
 	 * will not be considered an admin.
 	 *
 	 * @default ["admin"]
+	 * @cli optional
+	 * @type string[]
+	 * @prompt
 	 */
 	adminRoles?: (string | string[]) | undefined;
 	/**

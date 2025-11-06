@@ -36,11 +36,18 @@ export const getArgumentsPrompt: (
 		skipPrompt,
 		defaultValue,
 		description,
+		cliTransform,
+		argument,
 	}) => {
 		const flagVariable = getFlagVariable(flag);
 
 		if (options[flagVariable as keyof typeof options]) {
-			return options[flagVariable as keyof typeof options];
+			let value = options[flagVariable as keyof typeof options];
+			// Apply cliTransform if provided
+			if (cliTransform) {
+				value = cliTransform(value);
+			}
+			return value;
 		}
 
 		// console.log({
@@ -114,10 +121,25 @@ export const getArgumentsPrompt: (
 				if (isRequired && (!value || !value.trim())) {
 					return "This field is required";
 				}
+				// Apply cliTransform before schema validation
+				let transformedValue = value;
+				if (cliTransform) {
+					transformedValue = cliTransform(value);
+				}
+				if (argument.schema) {
+					const schema = argument.schema.safeParse(transformedValue);
+					if (!schema.success) {
+						return schema.error.message;
+					}
+				}
 			},
 			defaultValue,
 			placeholder: defaultValue ? String(defaultValue) : undefined,
 		});
 		result = processCancelAction(result);
+		// Apply cliTransform to the result before returning
+		if (cliTransform) {
+			result = cliTransform(result);
+		}
 		return result;
 	};

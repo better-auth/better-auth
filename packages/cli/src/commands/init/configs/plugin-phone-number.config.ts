@@ -32,8 +32,7 @@ export const phoneNumberPluginConfig = {
 			},
 			{
 				flag: "phone-number-send-otp",
-				description:
-					"Send OTP code to the user async ({ phoneNumber, code }, request) => { // Send OTP code to the user } ```",
+				description: "Send OTP code to the user",
 				question: "[Phone Number] What is the send o t p?",
 				defaultValue: `async ({ phoneNumber, code }, request) => {
  // Send OTP code to the user

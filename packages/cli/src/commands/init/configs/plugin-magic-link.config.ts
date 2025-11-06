@@ -34,8 +34,7 @@ export const magicLinkPluginConfig = {
 			},
 			{
 				flag: "magic-link-send-magic-link",
-				description:
-					"Send magic link implementation. async ({ email, url, token }, request) => { // Send magic link to the user } ```",
+				description: "Send magic link implementation.",
 				question: "[Magic Link] What is the send magic link?",
 				defaultValue: `async ({ email, url, token }, request) => {
  // Send magic link to the user

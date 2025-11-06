@@ -1,5 +1,6 @@
 import type { GetArgumentsOptions } from "../generate-auth";
 import { type ImportGroup } from "../utility/imports";
+import { adminPluginConfig } from "./plugin-admin.config";
 import { anonymousPluginConfig } from "./plugin-anonymous.config";
 import { emailOTPPluginConfig } from "./plugin-email-otp.config";
 import { genericOAuthPluginConfig } from "./plugin-generic-oauth.config";
@@ -42,4 +43,5 @@ export const pluginsConfig = {
 	genericOAuth: genericOAuthPluginConfig,
 	oneTap: oneTapPluginConfig,
 	siwe: siwePluginConfig,
+	admin: adminPluginConfig,
 } as const satisfies Record<string, PluginConfig>;

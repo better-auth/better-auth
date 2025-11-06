@@ -19,8 +19,7 @@ export const emailOTPPluginConfig = {
 		arguments: [
 			{
 				flag: "email-otp-send-verification-otp",
-				description:
-					"Function to send email verification async ({ email, otp, type }, request) => { // Send email with OTP }",
+				description: "Function to send email verification",
 				question: "[Email OTP] What is the send verification o t p?",
 				defaultValue: `async ({ email, otp, type }, request) => {
  // Send email with OTP

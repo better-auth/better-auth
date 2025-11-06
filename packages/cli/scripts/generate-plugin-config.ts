@@ -99,6 +99,12 @@ const PLUGIN_TYPE_MAP: Record<
 		clientTypeFile: pluginPath("siwe/client.ts"),
 		clientTypeName: undefined,
 	},
+	admin: {
+		serverTypeFile: pluginPath("admin/types.ts"),
+		serverTypeName: "AdminOptions",
+		clientTypeFile: pluginPath("admin/client.ts"),
+		clientTypeName: "AdminClientOptions",
+	},
 };
 
 const ROOT_DIR = path.resolve(__dirname, "../..");
@@ -240,6 +246,28 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 		question = questionMatch[1]?.trim();
 	}
 
+	// Extract @description tag value (overrides auto-extracted description)
+	let descriptionOverride: string | undefined = undefined;
+	const descriptionTagMatch = allJsDocText.match(
+		/(?:^|\n)\s*\*\s*@description\s+([\s\S]*?)(?=\n\s*\*\s*@|\n\s*\*\/|$)/,
+	);
+	if (descriptionTagMatch && descriptionTagMatch[1]) {
+		// Extract the description content
+		let descriptionContent = descriptionTagMatch[1];
+		// Remove JSDoc asterisks and whitespace from each line
+		descriptionContent = descriptionContent
+			.split("\n")
+			.map((line) => {
+				let cleaned = line;
+				cleaned = cleaned.replace(/^\s*\*\s/, "");
+				cleaned = cleaned.replace(/^\s*\*+\s(?=\S)/, "");
+				cleaned = cleaned.replace(/^\s*\*+\s(?=\s)/, "");
+				return cleaned;
+			})
+			.join("\n");
+		descriptionOverride = descriptionContent.trim();
+	}
+
 	// Extract @example tag value (multi-line support)
 	let exampleValue: string | undefined;
 	// Match @example followed by content until next @ tag or end of JSDoc
@@ -333,9 +361,16 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 		}
 	}
 
-	// Extract description (everything before @ tags)
+	// Extract description (everything before first @ tag)
+	// Stop at the first @ tag to avoid including multi-line @example content
+	const firstAtTagIndex = allJsDocText.search(/(?:^|\n)\s*\*\s*@/);
+	let descriptionText = allJsDocText;
+	if (firstAtTagIndex !== -1) {
+		descriptionText = allJsDocText.substring(0, firstAtTagIndex);
+	}
+
 	// Remove JSDoc comment markers and tags
-	const descriptionLines = allJsDocText
+	const descriptionLines = descriptionText
 		.split("\n")
 		.map((line) => line.trim())
 		.map((line) => line.replace(/^\s*\*\s*/, "")) // Remove leading "* " or " * "
@@ -350,6 +385,9 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 		);
 	const description = descriptionLines.join(" ").trim();
 
+	// Use @description override if present, otherwise use auto-extracted description
+	const finalDescription = descriptionOverride || description || "";
+
 	return {
 		hasCliTag,
 		shouldSkip,
@@ -362,7 +400,7 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 		defaultValue,
 		question,
 		exampleValue,
-		description: description || "",
+		description: finalDescription,
 		selectOptions,
 		type: typeOverride,
 		enumValues,
@@ -383,11 +421,17 @@ export function generateZodSchema(
 	if (typeOverride) {
 		let schema = "";
 
+		// Check if type override includes array syntax (e.g., "string[]", "number[]")
+		const isArrayOverride = typeOverride.endsWith("[]");
+		const baseTypeOverride = isArrayOverride
+			? typeOverride.slice(0, -2)
+			: typeOverride;
+
 		// Handle enum type
-		if (typeOverride === "enum" && enumValues && enumValues.length > 0) {
+		if (baseTypeOverride === "enum" && enumValues && enumValues.length > 0) {
 			schema = `z.enum([${enumValues.map((v) => `"${v}"`).join(", ")}])`;
 		} else {
-			switch (typeOverride) {
+			switch (baseTypeOverride) {
 				case "string":
 					schema = "z.coerce.string()";
 					break;
@@ -400,6 +444,11 @@ export function generateZodSchema(
 				default:
 					schema = "z.coerce.string()";
 			}
+		}
+
+		// Wrap in array if override specified array
+		if (isArrayOverride) {
+			schema = `${schema}.array()`;
 		}
 
 		// Check if the original type is optional
@@ -425,8 +474,33 @@ export function generateZodSchema(
 
 	let schema = "";
 
-	// Check for union types (enums)
-	if (type.isUnion()) {
+	// Check if this is an array type
+	const isArrayType =
+		(typeof type.isArray === "function" && type.isArray()) ||
+		typeText.includes("[]");
+	let elementType = type;
+	let elementTypeText = typeText;
+
+	if (isArrayType) {
+		// Extract element type from array
+		if (typeof type.isArray === "function" && type.isArray()) {
+			// Use ts-morph's array element type if available
+			const arrayElementType = (type as any).getArrayElementType?.();
+			if (arrayElementType) {
+				elementType = arrayElementType;
+				elementTypeText = elementType.getText();
+			} else {
+				// Fallback: extract from type text (e.g., "string[]" -> "string")
+				elementTypeText = typeText.replace(/\[\]$/, "").trim();
+			}
+		} else {
+			// Extract from type text (e.g., "string[]" -> "string")
+			elementTypeText = typeText.replace(/\[\]$/, "").trim();
+		}
+	}
+
+	// Check for union types (enums) - but only if not an array
+	if (!isArrayType && type.isUnion()) {
 		const unionTypes = type.getUnionTypes();
 		const stringLiterals = unionTypes
 			.map((t: any) => {
@@ -447,22 +521,27 @@ export function generateZodSchema(
 			schema = "z.coerce.string()";
 		}
 	} else if (
-		typeText.includes("string") ||
-		type.getSymbol()?.getName() === "String"
+		elementTypeText.includes("string") ||
+		elementType.getSymbol()?.getName() === "String"
 	) {
 		schema = "z.coerce.string()";
 	} else if (
-		typeText.includes("number") ||
-		type.getSymbol()?.getName() === "Number"
+		elementTypeText.includes("number") ||
+		elementType.getSymbol()?.getName() === "Number"
 	) {
 		schema = "z.coerce.number()";
 	} else if (
-		typeText.includes("boolean") ||
-		type.getSymbol()?.getName() === "Boolean"
+		elementTypeText.includes("boolean") ||
+		elementType.getSymbol()?.getName() === "Boolean"
 	) {
 		schema = "z.coerce.boolean()";
 	} else {
 		schema = "z.coerce.string()";
+	}
+
+	// Wrap in array if needed
+	if (isArrayType) {
+		schema = `${schema}.array()`;
 	}
 
 	// @cli required overrides type optionality
@@ -914,6 +993,99 @@ function processProperty(
 		},
 	};
 
+	// Add cliTransform for array types to convert string input into arrays before schema validation
+	if (schema && schema.includes(".array()")) {
+		// Extract the element type from the schema to determine conversion
+		const isStringArray = schema.includes("z.coerce.string().array()");
+		const isNumberArray = schema.includes("z.coerce.number().array()");
+		const isBooleanArray = schema.includes("z.coerce.boolean().array()");
+
+		// Use JSON.parse to handle array input from CLI
+		// This supports both JSON array strings like "[1,2,3]" and comma-separated strings like "1,2,3"
+		if (isStringArray) {
+			option.cliTransform = (value: any) => {
+				if (typeof value === "string") {
+					try {
+						const parsed = JSON.parse(value);
+						if (Array.isArray(parsed)) {
+							return parsed;
+						}
+					} catch {
+						return value
+							.split(",")
+							.map((v) => v.trim())
+							.filter((v) => v.length > 0);
+					}
+				}
+				if (Array.isArray(value)) {
+					return value;
+				}
+				return value;
+			};
+		} else if (isNumberArray) {
+			option.cliTransform = (value: any) => {
+				if (typeof value === "string") {
+					try {
+						const parsed = JSON.parse(value);
+						if (Array.isArray(parsed)) {
+							return parsed;
+						}
+					} catch {
+						return value
+							.split(",")
+							.map((v) => Number(v.trim()))
+							.filter((v) => !isNaN(v));
+					}
+				}
+				if (Array.isArray(value)) {
+					return value;
+				}
+				return value;
+			};
+		} else if (isBooleanArray) {
+			option.cliTransform = (value: any) => {
+				if (typeof value === "string") {
+					try {
+						const parsed = JSON.parse(value);
+						if (Array.isArray(parsed)) {
+							return parsed;
+						}
+					} catch {
+						return value.split(",").map((v) => {
+							const trimmed = v.trim().toLowerCase();
+							return trimmed === "true" || trimmed === "1";
+						});
+					}
+				}
+				if (Array.isArray(value)) {
+					return value;
+				}
+				return value;
+			};
+		} else {
+			// Generic array transform
+			option.cliTransform = (value: any) => {
+				if (typeof value === "string") {
+					try {
+						const parsed = JSON.parse(value);
+						if (Array.isArray(parsed)) {
+							return parsed;
+						}
+					} catch {
+						return value
+							.split(",")
+							.map((v) => v.trim())
+							.filter((v) => v.length > 0);
+					}
+				}
+				if (Array.isArray(value)) {
+					return value;
+				}
+				return value;
+			};
+		}
+	}
+
 	// Only set question if this is NOT a nested object
 	// Nested objects don't need questions as they're composite types
 	if (!nestedOptions || nestedOptions.length === 0) {
@@ -1242,6 +1414,11 @@ export function generateArgumentCode(
 	}
 	if (arg.skipPrompt !== undefined) {
 		parts.push(`${indent}\tskipPrompt: ${arg.skipPrompt},`);
+	}
+	if (arg.cliTransform) {
+		// Output cliTransform as a function string
+		const transformCode = arg.cliTransform.toString();
+		parts.push(`${indent}\tcliTransform: ${transformCode},`);
 	}
 	if (arg.isRequired !== undefined) {
 		parts.push(`${indent}\tisRequired: ${arg.isRequired},`);

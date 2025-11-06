@@ -13,7 +13,7 @@
   "main": "./dist/index.mjs",
   "scripts": {
     "build": "pnpm generate:plugin-config && tsdown",
-    "start": "node ./dist/index.js",
+    "start": "node ./dist/index.mjs",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
     "typecheck": "tsc --project tsconfig.json",

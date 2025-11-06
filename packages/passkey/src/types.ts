@@ -42,6 +42,7 @@ export interface PasskeyOptions {
 	 * if this isn't provided. The client itself will
 	 * pass this value.
 	 *
+	 * @description The URL at which registrations and authentications should occur.
 	 * @cli
 	 * @question What is the origin URL at which your better-auth server is hosted?
 	 * @type string

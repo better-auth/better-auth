@@ -37,7 +37,11 @@ const processNestedArguments = async (
 			);
 		} else {
 			// Process regular nested argument
-			const result = await getArguments(nestedArg);
+			let result = await getArguments(nestedArg);
+			// Apply cliTransform if provided
+			if (nestedArg.cliTransform) {
+				result = nestedArg.cliTransform(result);
+			}
 			const schema = nestedArg.argument.schema?.safeParse(result) ?? {
 				success: true,
 				data: result,
@@ -111,7 +115,11 @@ export const getAuthPluginsCode = async ({
 					}
 				} else {
 					// Process regular argument
-					const result = await getArguments(argument);
+					let result = await getArguments(argument);
+					// Apply cliTransform if provided
+					if (argument.cliTransform) {
+						result = argument.cliTransform(result);
+					}
 					const schema = argument.argument.schema?.safeParse(result) ?? {
 						success: true,
 						data: result,

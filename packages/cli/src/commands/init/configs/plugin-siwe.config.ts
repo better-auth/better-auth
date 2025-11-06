@@ -61,7 +61,7 @@ export const siwePluginConfig = {
 			{
 				flag: "siwe-get-nonce",
 				description:
-					'Function to generate a unique nonce for each sign-in attempt. return "your-secure-random-nonce"; }',
+					"Function to generate a unique nonce for each sign-in attempt.",
 				question:
 					"[Siwe] What is the function to generate a unique nonce for each sign-in attempt?",
 				defaultValue: `async () => {
@@ -77,8 +77,7 @@ export const siwePluginConfig = {
 			},
 			{
 				flag: "siwe-verify-message",
-				description:
-					"Function to verify the signed SIWE message. return true; }",
+				description: "Function to verify the signed SIWE message.",
 				question:
 					"[Siwe] What is the function to verify the signed SIWE message?",
 				defaultValue: `async (args) => {
@@ -95,7 +94,7 @@ export const siwePluginConfig = {
 			{
 				flag: "siwe-ens-lookup",
 				description:
-					'Function to lookup ENS names and avatars for Ethereum addresses. return { name: "user.eth", avatar: "https://example.com/avatar.png", }; }',
+					"Function to lookup ENS names and avatars for Ethereum addresses.",
 				question:
 					"[Siwe] What is the function to lookup ENS names and avatars for Ethereum addresses?",
 				skipPrompt: true,

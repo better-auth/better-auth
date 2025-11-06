@@ -46,7 +46,7 @@ export const passkeyPluginConfig = {
 			{
 				flag: "passkey-origin",
 				description:
-					"The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do NOT include any trailing / if this isn't provided. The client itself will pass this value.",
+					"The URL at which registrations and authentications should occur.",
 				question:
 					"[Passkey] What is the origin URL at which your better-auth server is hosted?",
 				skipPrompt: true,

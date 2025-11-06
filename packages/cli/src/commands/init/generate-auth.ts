@@ -71,6 +71,11 @@ export type GetArgumentsOptions = {
 	 */
 	defaultValue?: any;
 	/**
+	 * Transform function to apply to the CLI input before schema validation.
+	 * Useful for converting string input (e.g., comma-separated) into arrays.
+	 */
+	cliTransform?: (value: any) => any;
+	/**
 	 * Argument details
 	 */
 	argument: {

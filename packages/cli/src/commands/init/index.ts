@@ -36,6 +36,7 @@ export async function initAction(opts: any) {
 			"genericOAuth",
 			"oneTap",
 			"siwe",
+			"admin",
 		],
 		database: "prisma-sqlite",
 		appName: "My App",
