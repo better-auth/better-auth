@@ -257,25 +257,16 @@ export const createAdapterFactory =
 			const useNumberId =
 				options.advanced?.database?.useNumberId ||
 				options.advanced?.database?.generateId === "serial";
-			const useUUIDs = options.advanced?.database?.generateId === "uuid";
 			const shouldGenerateId =
-				!config.disableIdGeneration &&
-				!useNumberId &&
-				!forceAllowId &&
-				!useUUIDs;
+				!config.disableIdGeneration && !useNumberId && !forceAllowId;
 			const model = getDefaultModelName(customModelName ?? "id");
 			return {
-				type: options.advanced?.database?.useNumberId ? "number" : "string",
+				type: useNumberId ? "number" : "string",
 				required: shouldGenerateId ? true : false,
 				...(shouldGenerateId
 					? {
 							defaultValue() {
 								if (config.disableIdGeneration) return undefined;
-								const useNumberId =
-									options.advanced?.database?.useNumberId ||
-									options.advanced?.database?.generateId === "serial";
-								const useUUIDs =
-									options.advanced?.database?.generateId === "uuid";
 								let generateId = options.advanced?.database?.generateId;
 								if (options.advanced?.generateId !== undefined) {
 									logger.warn(
@@ -283,8 +274,7 @@ export const createAdapterFactory =
 									);
 									generateId = options.advanced?.generateId;
 								}
-								if (generateId === false || useNumberId || useUUIDs)
-									return undefined;
+								if (generateId === false || useNumberId) return undefined;
 								if (typeof generateId === "function") {
 									return generateId({
 										model,
