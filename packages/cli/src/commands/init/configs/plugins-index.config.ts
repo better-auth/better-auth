@@ -4,6 +4,7 @@ import { adminPluginConfig } from "./plugin-admin.config";
 import { anonymousPluginConfig } from "./plugin-anonymous.config";
 import { apiKeyPluginConfig } from "./plugin-api-key.config";
 import { bearerPluginConfig } from "./plugin-bearer.config";
+import { captchaPluginConfig } from "./plugin-captcha.config";
 import { deviceAuthorizationPluginConfig } from "./plugin-device-authorization.config";
 import { emailOTPPluginConfig } from "./plugin-email-otp.config";
 import { genericOAuthPluginConfig } from "./plugin-generic-oauth.config";
@@ -58,4 +59,5 @@ export const pluginsConfig = {
 	sso: ssoPluginConfig,
 	bearer: bearerPluginConfig,
 	deviceAuthorization: deviceAuthorizationPluginConfig,
+	captcha: captchaPluginConfig,
 } as const satisfies Record<string, PluginConfig>;

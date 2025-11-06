@@ -44,6 +44,7 @@ export async function initAction(opts: any) {
 			"sso",
 			"bearer",
 			"deviceAuthorization",
+			"captcha"
 		],
 		database: "prisma-sqlite",
 		appName: "My App",

@@ -151,7 +151,13 @@ const PLUGIN_TYPE_MAP: Record<
 		serverTypeName: "DeviceAuthorizationOptions",
 		clientTypeFile: pluginPath("device-authorization/client.ts"),
 		clientTypeName: undefined,
-	}
+	},
+	captcha: {
+		serverTypeFile: pluginPath("captcha/types.ts"),
+		serverTypeName: "SimpleCaptchaOptionsForInitCLI",
+		clientTypeFile: undefined,
+		clientTypeName: undefined,
+	},
 };
 
 const ROOT_DIR = path.resolve(__dirname, "../..");
