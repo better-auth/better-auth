@@ -160,7 +160,6 @@ describe("oidc", async () => {
 		expect(client).toEqual({
 			clientId: application.clientId,
 			name: application.name,
-			// Maybe this is unexpected, we do not expect null when required is false
 			icon: null,
 		});
 	});

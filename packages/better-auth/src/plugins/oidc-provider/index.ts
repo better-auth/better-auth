@@ -1459,7 +1459,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
+				async (
+					ctx,
+				): Promise<{
+					clientId: string;
+					name: string;
+					icon: string | null;
+				}> => {
 					const client = await getClient(ctx.params.id, trustedClients);
 					if (!client) {
 						throw new APIError("NOT_FOUND", {
@@ -1468,9 +1474,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					return ctx.json({
-						clientId: client.clientId as string,
-						name: client.name as string,
-						icon: client.icon as string,
+						clientId: client.clientId,
+						name: client.name,
+						icon: client.icon || null,
 					});
 				},
 			),
