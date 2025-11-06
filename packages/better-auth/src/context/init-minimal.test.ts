@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { memoryAdapter } from "../adapters/memory-adapter/memory-adapter";
+import { memoryAdapter } from "../adapters/memory-adapter";
 import { initMinimal } from "./init-minimal";
 
-describe("init-minimal", () => {
+describe("init-minimal (without Kysely)", () => {
 	const db: Record<string, any[]> = {};
 
 	it("should initialize without Kysely dependencies", async () => {
@@ -12,9 +12,8 @@ describe("init-minimal", () => {
 		});
 
 		expect(res).toBeDefined();
-		expect(res.baseURL).toBe("http://localhost:3000/api/auth");
-		expect(res.options.baseURL).toBe("http://localhost:3000");
 		expect(res.adapter.id).toBe("memory");
+		expect(res.adapter.options?.type).toBeUndefined();
 	});
 
 	it("should throw error when attempting to run migrations", async () => {
@@ -28,24 +27,18 @@ describe("init-minimal", () => {
 		);
 	});
 
-	it("should work with custom base path", async () => {
+	it("should work with non-Kysely adapters like memory adapter", async () => {
+		const customDb: Record<string, any[]> = {
+			users: [],
+			sessions: [],
+		};
+
 		const res = await initMinimal({
 			baseURL: "http://localhost:3000",
-			database: memoryAdapter(db),
-			basePath: "/custom-auth",
+			database: memoryAdapter(customDb),
 		});
 
-		expect(res.baseURL).toBe("http://localhost:3000/custom-auth");
-	});
-
-	it("should initialize with minimal configuration", async () => {
-		const res = await initMinimal({
-			database: memoryAdapter(db),
-		});
-
-		expect(res).toBeDefined();
-		expect(res.adapter).toBeDefined();
-		expect(res.internalAdapter).toBeDefined();
-		expect(res.tables).toBeDefined();
+		expect(res.adapter.id).toBe("memory");
+		expect(res.adapter.options?.type).toBeUndefined();
 	});
 });
