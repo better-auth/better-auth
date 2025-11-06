@@ -25,6 +25,8 @@ export interface AnonymousOptions {
 	 * Configure the domain name of the temporary email
 	 * address for anonymous users in the database.
 	 * @default "baseURL"
+	 * @cli
+	 * @type string
 	 */
 	emailDomainName?: string | undefined;
 	/**
@@ -46,6 +48,10 @@ export interface AnonymousOptions {
 		| undefined;
 	/**
 	 * Disable deleting the anonymous user after linking
+	 * 
+	 * @cli
+	 * @type boolean
+	 * @default false
 	 */
 	disableDeleteAnonymousUser?: boolean | undefined;
 	/**

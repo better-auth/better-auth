@@ -1,5 +1,5 @@
 import type { DatabasesConfig } from "../configs/databases.config";
-import type { PluginConfig } from "../configs/plugins.config";
+import type { PluginConfig } from "../configs/plugins-index.config";
 import type { GetArgumentsFn } from "../generate-auth";
 import { getAuthPluginsCode } from "./plugin";
 

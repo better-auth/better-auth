@@ -7,7 +7,7 @@ import {
 	type GetArgumentsOptions,
 } from "./generate-auth";
 import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
-import { pluginsConfig, type PluginsConfig } from "./configs/plugins.config";
+import { pluginsConfig, type PluginsConfig } from "./configs/plugins-index.config";
 
 // Goals:
 // 1. init `auth.ts` file
@@ -17,15 +17,13 @@ import { pluginsConfig, type PluginsConfig } from "./configs/plugins.config";
 // 5. install dependencies
 
 export async function initAction(opts: any) {
-	console.log(1, opts);
 	const options = initActionOptionsSchema.parse(opts);
-	console.log(2, options);
 
 	intro("👋 Better Auth CLI");
 
 	const authConfigCode = await generateAuthConfigCode({
 		plugins: ["username", "twoFactor"],
-		database: "kysely-mssql",
+		database: "prisma-sqlite",
 		appName: "My App",
 		baseURL: "https://my-app.com",
 		getArguments: getArgumentsPrompt(options),

@@ -2,7 +2,7 @@ import {
 	type Plugin,
 	type PluginConfig,
 	pluginsConfig,
-} from "../configs/plugins.config";
+} from "../configs/plugins-index.config";
 import type { GetArgumentsFn, GetArgumentsOptions } from "../generate-auth";
 import { formatCode } from "./format";
 
@@ -24,10 +24,10 @@ const processNestedArguments = async (
 	getArguments: GetArgumentsFn,
 ): Promise<Record<string, any>> => {
 	const nestedObject: Record<string, any> = {};
-	
+
 	for (const nestedArg of nestedArguments) {
 		let nestedValue: any;
-		
+
 		// Check if this nested argument itself has nested objects
 		if (nestedArg.isNestedObject && Array.isArray(nestedArg.isNestedObject)) {
 			// Recursively process nested objects
@@ -43,19 +43,22 @@ const processNestedArguments = async (
 				data: result,
 			};
 			if (!schema.success) {
-				throw new Error(
-					`Invalid nested argument: ${schema.error.message}`,
-				);
+				throw new Error(`Invalid nested argument: ${schema.error.message}`);
 			}
 			nestedValue = schema.data;
 		}
-		
+
 		// If the nested argument has a property name, merge it with existing properties
 		if (nestedArg.argument.isProperty) {
 			const propertyName = nestedArg.argument.isProperty;
 			if (typeof nestedValue !== "undefined") {
 				// If property already exists and both are objects, merge them
-				if (nestedObject[propertyName] && typeof nestedObject[propertyName] === "object" && typeof nestedValue === "object" && nestedValue !== null) {
+				if (
+					nestedObject[propertyName] &&
+					typeof nestedObject[propertyName] === "object" &&
+					typeof nestedValue === "object" &&
+					nestedValue !== null
+				) {
 					nestedObject[propertyName] = {
 						...nestedObject[propertyName],
 						...nestedValue,
@@ -66,12 +69,10 @@ const processNestedArguments = async (
 			}
 		} else if (typeof nestedValue !== "undefined") {
 			// If no property name, this shouldn't happen in nested objects, but handle it anyway
-			throw new Error(
-				`Nested argument must have isProperty set`,
-			);
+			throw new Error(`Nested argument must have isProperty set`);
 		}
 	}
-	
+
 	return nestedObject;
 };
 
@@ -89,7 +90,7 @@ export const getAuthPluginsCode = async ({
 		if (plugin.auth.arguments) {
 			for (const argument of plugin.auth.arguments) {
 				let value: any;
-				
+
 				// Check if this argument has nested objects
 				if (argument.isNestedObject && Array.isArray(argument.isNestedObject)) {
 					// Process nested arguments recursively
@@ -121,7 +122,7 @@ export const getAuthPluginsCode = async ({
 					}
 					value = schema.data;
 				}
-				
+
 				const index = argument.argument.index;
 				if (argument.argument.isProperty) {
 					if (argumentsCode.has(index)) {
@@ -151,7 +152,11 @@ export const getAuthPluginsCode = async ({
 			if (typeof value === "undefined") {
 				return undefined;
 			}
-			if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+			if (
+				typeof value === "object" &&
+				value !== null &&
+				!Array.isArray(value)
+			) {
 				const cleaned: Record<string, any> = {};
 				for (const [key, val] of Object.entries(value)) {
 					const cleanedValue = cleanNestedObjects(val);
@@ -180,6 +185,7 @@ export const getAuthPluginsCode = async ({
 			if (args[i] !== "undefined") break;
 			args.pop();
 		}
+
 
 		pluginsCode.push(`${plugin.auth.function}(${args.join(", ")})`);
 	}
