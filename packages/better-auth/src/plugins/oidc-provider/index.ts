@@ -63,7 +63,7 @@ export async function getClient(
 			if (!res) {
 				return null;
 			}
-			// omit unused fields to avoid leaking them
+			// omit sensitive fields
 			return {
 				clientId: res.clientId,
 				clientSecret: res.clientSecret,
