@@ -180,6 +180,7 @@ export function TOCItems({ items }: { items: TOCItemType[] }) {
 					<TocThumb
 						containerRef={containerRef}
 						className="mt-(--fd-top) h-(--fd-height) bg-fd-primary transition-all"
+						style={{ willChange: "height, margin-top" }}
 					/>
 				</div>
 			) : null}
