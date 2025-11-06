@@ -382,27 +382,55 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 		}
 	}
+	const useNumberId =
+		config.advanced?.database?.useNumberId ||
+		config.advanced?.database?.generateId === "serial";
+
+	if (config.advanced?.database?.useNumberId) {
+		logger.warn(
+			"`useNumberId` is deprecated. Please use `generateId` with `serial` instead.",
+		);
+	}
+
+	const useUUIDs = config.advanced?.database?.generateId === "uuid";
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
 			let dbT = db.schema
 				.createTable(table.table)
 				.addColumn(
 					"id",
-					config.advanced?.database?.useNumberId
+					useNumberId
 						? dbType === "postgres"
 							? "serial"
 							: "integer"
-						: dbType === "mysql" || dbType === "mssql"
-							? "varchar(36)"
-							: "text",
+						: useUUIDs
+							? dbType === "postgres" ||
+								dbType === "mysql" ||
+								dbType === "mssql"
+								? "uuid"
+								: "text"
+							: dbType === "mysql" || dbType === "mssql"
+								? "varchar(36)"
+								: "text",
 					(col) => {
-						if (config.advanced?.database?.useNumberId) {
+						if (useNumberId) {
 							if (dbType === "postgres" || dbType === "sqlite") {
 								return col.primaryKey().notNull();
 							} else if (dbType === "mssql") {
 								return col.identity().primaryKey().notNull();
 							}
 							return col.autoIncrement().primaryKey().notNull();
+						}
+						if (useUUIDs) {
+							if (dbType === "postgres") {
+								return col
+									.primaryKey()
+									.defaultTo(sql`gen_random_uuid()`)
+									.notNull();
+							} else if (dbType === "mysql" || dbType === "mssql") {
+								return col.primaryKey().defaultTo(sql`uuid()`).notNull();
+							}
+							return col.primaryKey().notNull();
 						}
 						return col.primaryKey().notNull();
 					},

@@ -53,11 +53,10 @@ export const createAdapterFactory =
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
 		} satisfies AdapterFactoryConfig;
-
-		if (
-			options.advanced?.database?.useNumberId === true &&
-			config.supportsNumericIds === false
-		) {
+		const useNumberId =
+			options.advanced?.database?.useNumberId === true ||
+			options.advanced?.database?.generateId === "serial";
+		if (useNumberId && config.supportsNumericIds === false) {
 			throw new BetterAuthError(
 				`[${config.adapterName}] Your database or database adapter does not support numeric ids. Please disable "useNumberId" in your config.`,
 			);
@@ -255,10 +254,15 @@ export const createAdapterFactory =
 			customModelName?: string;
 			forceAllowId?: boolean;
 		}) => {
+			const useNumberId =
+				options.advanced?.database?.useNumberId ||
+				options.advanced?.database?.generateId === "serial";
+			const useUUIDs = options.advanced?.database?.generateId === "uuid";
 			const shouldGenerateId =
 				!config.disableIdGeneration &&
-				!options.advanced?.database?.useNumberId &&
-				!forceAllowId;
+				!useNumberId &&
+				!forceAllowId &&
+				!useUUIDs;
 			const model = getDefaultModelName(customModelName ?? "id");
 			return {
 				type: options.advanced?.database?.useNumberId ? "number" : "string",
@@ -267,7 +271,11 @@ export const createAdapterFactory =
 					? {
 							defaultValue() {
 								if (config.disableIdGeneration) return undefined;
-								const useNumberId = options.advanced?.database?.useNumberId;
+								const useNumberId =
+									options.advanced?.database?.useNumberId ||
+									options.advanced?.database?.generateId === "serial";
+								const useUUIDs =
+									options.advanced?.database?.generateId === "uuid";
 								let generateId = options.advanced?.database?.generateId;
 								if (options.advanced?.generateId !== undefined) {
 									logger.warn(
@@ -275,11 +283,15 @@ export const createAdapterFactory =
 									);
 									generateId = options.advanced?.generateId;
 								}
-								if (generateId === false || useNumberId) return undefined;
-								if (generateId) {
+								if (generateId === false || useNumberId || useUUIDs)
+									return undefined;
+								if (typeof generateId === "function") {
 									return generateId({
 										model,
 									});
+								}
+								if (generateId === "uuid") {
+									return crypto.randomUUID();
 								}
 								if (config.customIdGenerator) {
 									return config.customIdGenerator({ model });
