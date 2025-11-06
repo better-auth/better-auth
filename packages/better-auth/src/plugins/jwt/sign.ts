@@ -51,8 +51,11 @@ export async function signJWT(
 		return options.jwt.sign(jwtPayload);
 	}
 
-	const adapter = getJwksAdapter(ctx.context.adapter);
-	let key = await adapter.getLatestKey();
+	const adapter = getJwksAdapter(ctx.context.adapter, options);
+	let key = await adapter.getLatestKey(ctx);
+	if (!key) {
+		key = await createJwk(ctx, options);
+	}
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
 

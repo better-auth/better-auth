@@ -147,4 +147,12 @@ export type BetterAuthPlugin = {
 	 * The error codes returned by the plugin
 	 */
 	$ERROR_CODES?: Record<string, string> | undefined;
+	/**
+	 * All database operations that are performed by the plugin
+	 *
+	 * This will override the default database operations
+	 */
+	adapter?: {
+		[key: string]: (...args: any[]) => Promise<any> | any;
+	};
 };
