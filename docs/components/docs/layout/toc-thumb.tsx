@@ -66,6 +66,11 @@ export function TocThumb({
 	useOnChange(active, () => {
 		if (!containerRef.current || !thumbRef.current) return;
 
+		// Skip updates during anchor scroll animation to prevent flicker
+		if (document.documentElement.hasAttribute("data-anchor-scrolling")) {
+			return;
+		}
+
 		update(thumbRef.current, calc(containerRef.current, active));
 	});
 
