@@ -366,6 +366,6 @@ export {
 	optionsMiddleware,
 } from "@better-auth/core/api";
 export { APIError } from "better-call";
+export { getIp } from "../utils/get-request-ip";
 export * from "./middlewares";
 export * from "./routes";
-export { getIp } from "../utils/get-request-ip"
