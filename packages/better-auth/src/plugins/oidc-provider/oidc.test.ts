@@ -117,7 +117,6 @@ describe("oidc", async () => {
 		clientSecret: "test-client-secret-oidc",
 		redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
 		metadata: {},
-		icon: "",
 		type: "web",
 		disabled: false,
 		name: "test",
@@ -133,7 +132,6 @@ describe("oidc", async () => {
 			client_id: expect.any(String),
 			client_secret: expect.any(String),
 			client_name: "test",
-			logo_uri: "",
 			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
@@ -147,12 +145,24 @@ describe("oidc", async () => {
 				clientSecret: createdClient.data.client_secret,
 				redirectUrls: createdClient.data.redirect_uris,
 				metadata: {},
-				icon: createdClient.data.logo_uri || "",
+				icon: createdClient.data.logo_uri,
 				type: "web",
 				disabled: false,
-				name: createdClient.data.client_name || "",
+				name: createdClient.data.client_name!,
 			};
 		}
+		const client = await authorizationServer.api.getOAuthClient({
+			params: {
+				id: application.clientId,
+			},
+			headers,
+		});
+		expect(client).toEqual({
+			clientId: application.clientId,
+			name: application.name,
+			// Maybe this is unexpected, we do not expect null when required is false
+			icon: null,
+		});
 	});
 
 	it("should sign in the user with the provider", async ({ expect }) => {
