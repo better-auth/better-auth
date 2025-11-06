@@ -12,12 +12,12 @@
   "homepage": "https://www.better-auth.com/docs/concepts/cli",
   "main": "./dist/index.mjs",
   "scripts": {
-    "build": "tsx ./scripts/generate-plugin-config.ts && tsdown",
+    "build": "pnpm generate:plugin-config && tsdown",
     "start": "node ./dist/index.js",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
     "typecheck": "tsc --project tsconfig.json",
-    "generate:plugin-config": "tsx ./scripts/generate-plugin-config.ts"
+    "generate:plugin-config": "tsx ./scripts/generate-plugin-config.ts && biome check ./src/commands/init/configs --fix --unsafe"
   },
   "publishConfig": {
     "access": "public",

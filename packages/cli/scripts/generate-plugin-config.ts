@@ -149,7 +149,7 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 
 	// Extract @cli select with optional custom options
 	let isSelect = false;
-	let selectOptions: { value: string; label: string }[] | undefined = undefined;
+	let selectOptions: { value: string; label: string }[] | undefined;
 	// Match @cli select with optional options on the same line or next line
 	const selectMatch = allJsDocText.match(/@cli\s+select(?:\s+([^\n@]+))?/);
 	if (selectMatch) {
@@ -207,7 +207,7 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 	}
 
 	// Extract @default value
-	let defaultValue: any = undefined;
+	let defaultValue: any;
 	const defaultMatch = allJsDocText.match(/@default\s+(.+?)(?:\n|$)/);
 	if (defaultMatch) {
 		let value = defaultMatch[1]!.trim();
@@ -234,21 +234,21 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 	}
 
 	// Extract @question text
-	let question: string | undefined = undefined;
+	let question: string | undefined;
 	const questionMatch = allJsDocText.match(/@question\s+(.+?)(?:\n|$)/);
 	if (questionMatch) {
-		question = questionMatch[1]!.trim();
+		question = questionMatch[1]?.trim();
 	}
 
 	// Extract @example tag value (multi-line support)
-	let exampleValue: string | undefined = undefined;
+	let exampleValue: string | undefined;
 	// Match @example followed by content until next @ tag or end of JSDoc
 	// Use a more precise pattern that stops at the next @ tag or closing comment
 	// Ensure @example is at the start of a line (after newline and optional JSDoc prefix)
 	const exampleMatch = allJsDocText.match(
 		/(?:^|\n)\s*\*\s*@example\s+([\s\S]*?)(?=\n\s*\*\s*@|\n\s*\*\/|$)/,
 	);
-	if (exampleMatch && exampleMatch[1]) {
+	if (exampleMatch?.[1]) {
 		// Extract the example content
 		let exampleContent = exampleMatch[1];
 
@@ -261,7 +261,7 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 		const codeFenceMatch = exampleContent.match(
 			/(?:^\s*\*\s*)?```(?:\w+)?\s*\n([\s\S]*?)\n\s*\*\s*```/,
 		);
-		if (codeFenceMatch && codeFenceMatch[1]) {
+		if (codeFenceMatch?.[1]) {
 			// Extract content from code fence and remove JSDoc asterisks
 			exampleContent = codeFenceMatch[1];
 			// Remove JSDoc asterisks from each line while preserving indentation
@@ -308,8 +308,8 @@ export function extractJSDocTags(jsDocNodes: any[]): {
 	}
 
 	// Extract @type override
-	let typeOverride: string | undefined = undefined;
-	let enumValues: string[] | undefined = undefined;
+	let typeOverride: string | undefined;
+	let enumValues: string[] | undefined;
 	const typeMatch = allJsDocText.match(
 		/@type\s+(\w+)(?:\s+([^\n@]+))?(?:\n|$)/,
 	);
@@ -558,17 +558,17 @@ function processProperty(
 		: generateQuestion(propertyName, type, tags.type, pluginName);
 
 	// Check if this is a nested type reference
-	let nestedOptions: GetArgumentsOption[] | undefined = undefined;
+	let nestedOptions: GetArgumentsOption[] | undefined;
 
 	// Extract type name from the type text (handles Omit<>, direct types, etc.)
-	let typeNameToFind: string | undefined = undefined;
-	let omittedProperties: string[] = [];
+	let typeNameToFind: string | undefined;
+	const omittedProperties: string[] = [];
 	const typeSymbol = type.getSymbol();
 
 	// Handle Omit<> utility type - extract the base type name
 	if (typeText.includes("Omit<")) {
 		const omitMatch = typeText.match(/Omit<([^,]+),/);
-		if (omitMatch && omitMatch[1]) {
+		if (omitMatch?.[1]) {
 			typeNameToFind = omitMatch[1].trim();
 			// Extract omitted properties
 			const omitPropsMatch = typeText.match(
@@ -797,15 +797,14 @@ function processProperty(
 	}
 
 	// Check if this is a select/enum type
-	let isSelectOptions: { value: any; label?: string }[] | undefined = undefined;
-	let isMultiselectOptions: { value: any; label?: string }[] | undefined =
-		undefined;
+	let isSelectOptions: { value: any; label?: string }[] | undefined;
+	let isMultiselectOptions: { value: any; label?: string }[] | undefined;
 
 	// Extract enum values from z.enum schema if no custom select options are provided
-	if (schema && schema.startsWith("z.enum([")) {
+	if (schema?.startsWith("z.enum([")) {
 		// Extract enum values from schema string: z.enum(["value1", "value2", ...]) or z.enum(["value1", "value2", ...]).optional()
 		const enumMatch = schema.match(/z\.enum\(\[(.*?)\]\)/);
-		if (enumMatch && enumMatch[1]) {
+		if (enumMatch?.[1]) {
 			// Parse the enum values (they're quoted strings separated by commas)
 			const enumValues = enumMatch[1]
 				.split(",")
@@ -955,7 +954,7 @@ function processProperty(
 	}
 
 	// Check if it's a number type
-	if (schema && schema.includes("number")) {
+	if (schema?.includes("number")) {
 		option.isNumber = true;
 	}
 
@@ -1215,7 +1214,7 @@ export function generateArgumentCode(
 					.replace(/\\/g, "\\\\")
 					.replace(/`/g, "\\`")
 					.replace(/\${/g, "\\${");
-				defaultValueStr = "`" + escapedCode + "`";
+				defaultValueStr = `\`${escapedCode}\``;
 			} else if (
 				arg.defaultValue.trim().startsWith("{") &&
 				arg.defaultValue.trim().endsWith("}")
@@ -1273,7 +1272,7 @@ export function generateArgumentCode(
 	if (arg.isNestedObject && arg.isNestedObject.length > 0) {
 		parts.push(
 			`${indent}\tisNestedObject: [\n${arg.isNestedObject
-				.map((nested) => generateArgumentCode(nested, indent + "\t"))
+				.map((nested) => generateArgumentCode(nested, `${indent}\t`))
 				.join(",\n")}\n${indent}\t],`,
 		);
 	}
