@@ -15,12 +15,15 @@ export function withApplyDefault(
 		}
 		return value;
 	}
-	if (value === undefined || value === null) {
-		if (field.defaultValue !== undefined) {
-			if (typeof field.defaultValue === "function") {
-				return field.defaultValue();
+	if (action === "create") {
+		// we do not want to apply default values if the value is null & not required
+		if (value === undefined || (field.required === true && value === null)) {
+			if (field.defaultValue !== undefined) {
+				if (typeof field.defaultValue === "function") {
+					return field.defaultValue();
+				}
+				return field.defaultValue;
 			}
-			return field.defaultValue;
 		}
 	}
 	return value;
