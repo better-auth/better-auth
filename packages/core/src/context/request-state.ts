@@ -43,7 +43,7 @@ export async function runWithRequestState<T>(
 }
 
 export interface RequestState<T> {
-	get(): Promise<T | undefined>;
+	get<S>(): Promise<S extends Record<string, any> ? S : T>;
 	set(value: T): Promise<void>;
 }
 
