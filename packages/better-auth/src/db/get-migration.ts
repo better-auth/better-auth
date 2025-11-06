@@ -5,6 +5,7 @@ import type {
 	AlterTableColumnAlteringBuilder,
 	CreateTableBuilder,
 	Kysely,
+	RawBuilder,
 } from "kysely";
 import { sql } from "kysely";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
@@ -109,7 +110,55 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	return "public";
 }
 
-export async function getMigrations(config: BetterAuthOptions) {
+/**
+ * Partial field attribute overrides that can be returned from the field override callback.
+ * All properties are optional - only specified properties will override the field's default attributes.
+ */
+export type FieldOverride = {
+	/**
+	 * Override the SQL column type.
+	 * Can be a string (e.g., "uuid", "varchar(255)") or a RawBuilder template literal.
+	 */
+	type?: string | RawBuilder<unknown>;
+	/**
+	 * Override whether the field is required (NOT NULL).
+	 * If undefined, uses the field's default `required` property.
+	 */
+	required?: boolean;
+	/**
+	 * Override whether the field has a UNIQUE constraint.
+	 * If undefined, uses the field's default `unique` property.
+	 */
+	unique?: boolean;
+};
+
+/**
+ * Callback function to override SQL field types and attributes during migration generation.
+ *
+ * @param field - The field definition
+ * @param fieldName - The name of the field
+ * @param tableName - The name of the table
+ * @param dbType - The database type (postgres, mysql, sqlite, mssql)
+ * @param config - The Better Auth configuration
+ * @param defaultType - The default type that would be used if no override is provided
+ * @returns A FieldOverride object with partial field attributes, or undefined to use defaults
+ */
+export type FieldTypeOverride = (
+	field: DBFieldAttribute,
+	fieldName: string,
+	tableName: string,
+	dbType: KyselyDatabaseType,
+	config: BetterAuthOptions,
+	defaultType: string | RawBuilder<unknown>,
+) =>
+	| FieldOverride
+	| undefined
+	| Promise<FieldOverride | undefined>;
+
+export async function getMigrations(
+	config: BetterAuthOptions,
+	fieldTypeOverride?: FieldTypeOverride,
+) {
 	const betterAuthSchema = getSchema(config);
 	const logger = createLogger(config.logger);
 
@@ -262,7 +311,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| CreateTableBuilder<string, string>
 	)[] = [];
 
-	function getType(field: DBFieldAttribute, fieldName: string) {
+	async function computeDefaultType(
+		field: DBFieldAttribute,
+		fieldName: string,
+	): Promise<string | RawBuilder<unknown>> {
 		const type = field.type;
 		const typeMap = {
 			string: {
@@ -328,44 +380,105 @@ export async function getMigrations(config: BetterAuthOptions) {
 				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
 			},
 		} as const;
+
+		// Compute the default type
+		let defaultType: string | RawBuilder<unknown>;
 		if (fieldName === "id" || field.references?.field === "id") {
 			if (fieldName === "id") {
-				return typeMap.id[dbType!];
+				defaultType = typeMap.id[dbType!];
+			} else {
+				defaultType = typeMap.foreignKeyId[dbType!];
 			}
-			return typeMap.foreignKeyId[dbType!];
+		} else if (
+			dbType === "sqlite" &&
+			(type === "string[]" || type === "number[]")
+		) {
+			defaultType = "text";
+		} else if (type === "string[]" || type === "number[]") {
+			defaultType = "jsonb";
+		} else if (Array.isArray(type)) {
+			defaultType = "text";
+		} else {
+			defaultType = typeMap[type]![dbType || "sqlite"] as
+				| string
+				| RawBuilder<unknown>;
 		}
-		if (dbType === "sqlite" && (type === "string[]" || type === "number[]")) {
-			return "text";
+
+		return defaultType;
+	}
+
+	async function getType(
+		field: DBFieldAttribute,
+		fieldName: string,
+		tableName: string,
+	): Promise<{
+		type: string | RawBuilder<unknown>;
+		override: FieldOverride | undefined;
+		mergedField: DBFieldAttribute;
+	}> {
+		// Compute default type first
+		const defaultType = await computeDefaultType(field, fieldName);
+
+		// Call override callback if provided
+		let override: FieldOverride | undefined;
+		if (fieldTypeOverride) {
+			const overrideResult = await fieldTypeOverride(
+				field,
+				fieldName,
+				tableName,
+				dbType!,
+				config,
+				defaultType,
+			);
+			override = overrideResult ?? undefined;
 		}
-		if (type === "string[]" || type === "number[]") {
-			return "jsonb";
-		}
-		if (Array.isArray(type)) {
-			return "text";
-		}
-		return typeMap[type]![dbType || "sqlite"];
+
+		// Create merged field with override attributes applied
+		// Note: We don't override the `type` property because it needs to remain a DBFieldType
+		// for computeDefaultType to work correctly. The override.type is used directly for SQL.
+		const mergedField: DBFieldAttribute = {
+			...field,
+			...(override?.required !== undefined && { required: override.required }),
+			...(override?.unique !== undefined && { unique: override.unique }),
+		};
+
+		// Compute the actual SQL type using merged field (for typeMap logic that depends on field attributes)
+		const computedType = await computeDefaultType(mergedField, fieldName);
+
+		// Use override type if provided, otherwise use computed type
+		const finalType = override?.type ?? computedType;
+
+		return {
+			type: finalType,
+			override,
+			mergedField,
+		};
 	}
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = getType(field, fieldName);
+				const { type, mergedField } = await getType(
+					field,
+					fieldName,
+					table.table,
+				);
 				const exec = db.schema
 					.alterTable(table.table)
-					.addColumn(fieldName, type, (col) => {
-						col = field.required !== false ? col.notNull() : col;
-						if (field.references) {
+					.addColumn(fieldName, type as any, (col) => {
+						col = mergedField.required !== false ? col.notNull() : col;
+						if (mergedField.references) {
 							col = col
 								.references(
-									`${field.references.model}.${field.references.field}`,
+									`${mergedField.references.model}.${mergedField.references.field}`,
 								)
-								.onDelete(field.references.onDelete || "cascade");
+								.onDelete(mergedField.references.onDelete || "cascade");
 						}
-						if (field.unique) {
+						if (mergedField.unique) {
 							col = col.unique();
 						}
 						if (
-							field.type === "date" &&
-							typeof field.defaultValue === "function" &&
+							mergedField.type === "date" &&
+							typeof mergedField.defaultValue === "function" &&
 							(dbType === "postgres" ||
 								dbType === "mysql" ||
 								dbType === "mssql")
@@ -409,21 +522,27 @@ export async function getMigrations(config: BetterAuthOptions) {
 				);
 
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = getType(field, fieldName);
-				dbT = dbT.addColumn(fieldName, type, (col) => {
-					col = field.required !== false ? col.notNull() : col;
-					if (field.references) {
+				const { type, mergedField } = await getType(
+					field,
+					fieldName,
+					table.table,
+				);
+				dbT = dbT.addColumn(fieldName, type as any, (col) => {
+					col = mergedField.required !== false ? col.notNull() : col;
+					if (mergedField.references) {
 						col = col
-							.references(`${field.references.model}.${field.references.field}`)
-							.onDelete(field.references.onDelete || "cascade");
+							.references(
+								`${mergedField.references.model}.${mergedField.references.field}`,
+							)
+							.onDelete(mergedField.references.onDelete || "cascade");
 					}
 
-					if (field.unique) {
+					if (mergedField.unique) {
 						col = col.unique();
 					}
 					if (
-						field.type === "date" &&
-						typeof field.defaultValue === "function" &&
+						mergedField.type === "date" &&
+						typeof mergedField.defaultValue === "function" &&
 						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
 					) {
 						if (dbType === "mysql") {
