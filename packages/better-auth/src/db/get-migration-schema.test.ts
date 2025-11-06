@@ -190,10 +190,13 @@ describe.runIf(isPostgresAvailable)(
 			connectionString: `postgres://user:password@localhost:5433/better_auth?options=-c search_path=${schema}`,
 		});
 
+		beforeAll(async () => {
+			await schemaPool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+			await schemaPool.query(`CREATE SCHEMA ${schema}`);
+		});
+
 		afterAll(async () => {
-			await pool.query(
-				`DROP SCHEMA IF EXISTS ${schema} CASCADE; CREATE SCHEMA ${schema};`,
-			);
+			await schemaPool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
 			await pool.end();
 			await schemaPool.end();
 		});
