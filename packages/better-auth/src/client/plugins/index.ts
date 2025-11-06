@@ -1,3 +1,7 @@
+//#region Necessary re-exports
+export type * from "../../types/helper";
+//#endregion
+
 export * from "../../plugins/additional-fields/client";
 export * from "../../plugins/admin/client";
 export * from "../../plugins/anonymous/client";
