@@ -311,15 +311,27 @@ export async function getMigrations(config: BetterAuthOptions) {
 			},
 			id: {
 				postgres: useNumberId ? "serial" : useUUIDs ? "uuid" : "text",
-				mysql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				mysql: useNumberId
+					? "integer"
+					: useUUIDs
+						? "varchar(36)"
+						: "varchar(36)",
 				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
 
 				sqlite: useNumberId ? "integer" : "text",
 			},
 			foreignKeyId: {
 				postgres: useNumberId ? "integer" : useUUIDs ? "uuid" : "text",
-				mysql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
-				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				mysql: useNumberId
+					? "integer"
+					: useUUIDs
+						? "varchar(36)"
+						: "varchar(36)",
+				mssql: useNumberId
+					? "integer"
+					: useUUIDs
+						? "varchar(36)" /* Should be using `UNIQUEIDENTIFIER` but Kysely doesn't support it */
+						: "varchar(36)",
 				sqlite: useNumberId ? "integer" : "text",
 			},
 		} as const;

@@ -246,7 +246,7 @@ export interface DBAdapterFactoryConfig<
 	 *
 	 *
 	 * Notes:
-	 * - If the user enabled `useNumberId`, then this option will be ignored. Unless this adapter config has `supportsNumericIds` set to `false`.
+	 * - If the user enabled `useNumberId` or `generateId` set to `serial`, then this option will be ignored. Unless this adapter config has `supportsNumericIds` set to `false`.
 	 * - If `generateId` is `false` in the user's Better-Auth config, then this option will be ignored.
 	 * - If `generateId` is a function, then it will override this option.
 	 *

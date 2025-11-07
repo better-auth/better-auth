@@ -140,7 +140,10 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		let id: string = "";
 
-		if (options.advanced?.database?.useNumberId) {
+		const useNumberId =
+			options.advanced?.database?.useNumberId ||
+			options.advanced?.database?.generateId === "serial";
+		if (useNumberId) {
 			if (databaseType === "pg") {
 				id = `serial("id").primaryKey()`;
 			} else if (databaseType === "sqlite") {
@@ -253,7 +256,9 @@ function generateImport({
 		if (hasJson && hasBigint) break;
 	}
 
-	const useNumberId = options.advanced?.database?.useNumberId;
+	const useNumberId =
+		options.advanced?.database?.useNumberId ||
+		options.advanced?.database?.generateId === "serial";
 
 	coreImports.push(`${databaseType}Table`);
 	coreImports.push(
@@ -308,7 +313,9 @@ function generateImport({
 		// handles the references field with useNumberId
 		const needsInteger =
 			hasNonBigintNumber ||
-			(options.advanced?.database?.useNumberId && hasFkToId);
+			((options.advanced?.database?.useNumberId ||
+				options.advanced?.database?.generateId === "serial") &&
+				hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");
 		}

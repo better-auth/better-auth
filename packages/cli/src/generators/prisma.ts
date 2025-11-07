@@ -108,7 +108,10 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.attribute("id")
 						.attribute(`map("_id")`);
 				} else {
-					if (options.advanced?.database?.useNumberId) {
+					if (
+						options.advanced?.database?.useNumberId ||
+						options.advanced?.database?.generateId === "serial"
+					) {
 						builder
 							.model(modelName)
 							.field("id", "Int")
@@ -136,7 +139,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 				const fieldBuilder = builder.model(modelName).field(
 					fieldName,
-					field === "id" && options.advanced?.database?.useNumberId
+					field === "id" &&
+						(options.advanced?.database?.useNumberId ||
+							options.advanced?.database?.generateId === "serial")
 						? getType({
 								isBigint: false,
 								isOptional: false,
@@ -147,7 +152,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								isOptional: !attr?.required,
 								type:
 									attr.references?.field === "id"
-										? options.advanced?.database?.useNumberId
+										? options.advanced?.database?.useNumberId ||
+											options.advanced?.database?.generateId === "serial"
 											? "number"
 											: "string"
 										: attr.type,
