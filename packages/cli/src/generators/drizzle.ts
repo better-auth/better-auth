@@ -153,7 +153,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 		if (useUUIDs && databaseType === "pg") {
-			id = `uuid("id").default(sql\`gen_random_uuid()\`).primaryKey()`;
+			id = `uuid("id").default(sql\`pg_catalog.gen_random_uuid()\`).primaryKey()`;
 		} else if (useNumberId) {
 			if (databaseType === "pg") {
 				id = `serial("id").primaryKey()`;

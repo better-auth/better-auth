@@ -325,10 +325,10 @@ export const createAdapterFactory =
 			const fields = schema[defaultModelName]!.fields;
 
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
-			const useNumberId =
-				options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial";
-			if (!config.disableIdGeneration && !useNumberId) {
+			if (
+				!config.disableIdGeneration &&
+				!options.advanced?.database?.useNumberId
+			) {
 				fields.id = idField({
 					customModelName: defaultModelName,
 					forceAllowId: forceAllowId && "id" in data,
@@ -378,7 +378,10 @@ export const createAdapterFactory =
 					newValue = await fieldAttributes!.transform.input(newValue);
 				}
 
-				if (fieldAttributes!.references?.field === "id" && useNumberId) {
+				if (
+					fieldAttributes!.references?.field === "id" &&
+					options.advanced?.database?.useNumberId
+				) {
 					if (Array.isArray(newValue)) {
 						newValue = newValue.map((x) => (x !== null ? Number(x) : null));
 					} else {
@@ -435,7 +438,7 @@ export const createAdapterFactory =
 				([_, v]) => v === "id",
 			)?.[0];
 			tableSchema[idKey ?? "id"] = {
-				type: useNumberId ? "number" : "string",
+				type: options.advanced?.database?.useNumberId ? "number" : "string",
 			};
 			for (const key in tableSchema) {
 				if (select.length && !select.includes(key)) {

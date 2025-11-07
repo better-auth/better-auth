@@ -108,15 +108,23 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.attribute("id")
 						.attribute(`map("_id")`);
 				} else {
-					if (
+					const useNumberId =
 						options.advanced?.database?.useNumberId ||
-						options.advanced?.database?.generateId === "serial"
-					) {
+						options.advanced?.database?.generateId === "serial";
+					const useUUIDs = options.advanced?.database?.generateId === "uuid";
+					if (useNumberId) {
 						builder
 							.model(modelName)
 							.field("id", "Int")
 							.attribute("id")
 							.attribute("default(autoincrement())");
+					} else if (useUUIDs) {
+						builder
+							.model(modelName)
+							.field("id", "String")
+							.attribute("id")
+							.attribute("db.Uuid")
+							.attribute('default(dbgenerated("pg_catalog.gen_random_uuid()"))');
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
 					}
@@ -136,12 +144,13 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						continue;
 					}
 				}
-
+				const useUUIDs = options.advanced?.database?.generateId === "uuid";
+				const useNumberId =
+					options.advanced?.database?.useNumberId ||
+					options.advanced?.database?.generateId === "serial";
 				const fieldBuilder = builder.model(modelName).field(
 					fieldName,
-					field === "id" &&
-						(options.advanced?.database?.useNumberId ||
-							options.advanced?.database?.generateId === "serial")
+					field === "id" && useNumberId
 						? getType({
 								isBigint: false,
 								isOptional: false,
@@ -152,8 +161,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								isOptional: !attr?.required,
 								type:
 									attr.references?.field === "id"
-										? options.advanced?.database?.useNumberId ||
-											options.advanced?.database?.generateId === "serial"
+										? useNumberId
 											? "number"
 											: "string"
 										: attr.type,
