@@ -1,5 +1,8 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { createAuthEndpoint } from "@better-auth/core/api";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
@@ -137,6 +140,25 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 
 	return {
 		id: "phone-number",
+		hooks: {
+			after: [
+				{
+					// if a request was made to update the user and the phone number is being updated
+					// make sure to set `phoneNumberVerified` to `false`
+					matcher: (ctx) =>
+						ctx.path === "/update-user" &&
+						"phoneNumber" in ctx.body &&
+						ctx.body.phoneNumber,
+					handler: createAuthMiddleware(async (ctx) => {
+						const session = ctx.context.session;
+						if (!session) return;
+						await ctx.context.internalAdapter.updateUser(session.user.id, {
+							phoneNumberVerified: false,
+						});
+					}),
+				},
+			],
+		},
 		endpoints: {
 			/**
 			 * ### Endpoint
