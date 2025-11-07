@@ -193,8 +193,31 @@ describe("two factor", async () => {
 	});
 
 	it("should fail if two factor cookie is missing", async () => {
-		const res = await client.twoFactor.verifyTotp({
-			code: "123456",
+		const headers = new Headers();
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			rememberMe: false,
+			fetchOptions: {
+				onResponse(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					expect(parsed.get("better-auth.session_token")?.value).toBe("");
+					// 2FA Cookie is in response, but we are not setting it in headers
+					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
+					headers.append(
+						"cookie",
+						`better-auth.dont_remember=${
+							parsed.get("better-auth.dont_remember")?.value
+						}`,
+					);
+				},
+			},
+		});
+		expect((res.data as any)?.twoFactorRedirect).toBe(true);
+		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
 			},
