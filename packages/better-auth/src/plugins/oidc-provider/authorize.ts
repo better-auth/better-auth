@@ -99,7 +99,6 @@ export async function authorize(
 
 	const client = await getClient(
 		ctx.query.client_id,
-		ctx.context.adapter,
 		options.trustedClients || [],
 	);
 	if (!client) {
