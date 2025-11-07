@@ -5,6 +5,7 @@ import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
+import type { SSOOptions } from "./types";
 
 const dnsMock = vi.hoisted(() => {
 	return {
@@ -41,7 +42,7 @@ describe("Domain verification", async () => {
 			domainVerification: {
 				enabled: true,
 			},
-		};
+		} satisfies SSOOptions;
 
 		const auth = betterAuth({
 			database: memory,
