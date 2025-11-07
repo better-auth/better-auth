@@ -191,7 +191,7 @@ describe.runIf(isPostgresAvailable)(
 		});
 
 		beforeAll(async () => {
-			await schemaPool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+			await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
 			await schemaPool.query(`CREATE SCHEMA ${schema}`);
 		});
 
