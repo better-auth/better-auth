@@ -32,19 +32,19 @@ export const initGetIdField = ({
 		customModelName?: string;
 		forceAllowId?: boolean;
 	}) => {
+		const useNumberId =
+			options.advanced?.database?.useNumberId ||
+			options.advanced?.database?.generateId === "serial";
 		const shouldGenerateId =
-			!disableIdGeneration &&
-			!options.advanced?.database?.useNumberId &&
-			!forceAllowId;
+			!disableIdGeneration && !useNumberId && !forceAllowId;
 		const model = getDefaultModelName(customModelName ?? "id");
 		return {
-			type: options.advanced?.database?.useNumberId ? "number" : "string",
+			type: useNumberId ? "number" : "string",
 			required: shouldGenerateId ? true : false,
 			...(shouldGenerateId
 				? {
 						defaultValue() {
 							if (disableIdGeneration) return undefined;
-							const useNumberId = options.advanced?.database?.useNumberId;
 							let generateId = options.advanced?.database?.generateId;
 							if (options.advanced?.generateId !== undefined) {
 								logger.warn(
@@ -53,10 +53,13 @@ export const initGetIdField = ({
 								generateId = options.advanced?.generateId;
 							}
 							if (generateId === false || useNumberId) return undefined;
-							if (generateId) {
+							if (typeof generateId === "function") {
 								return generateId({
 									model,
 								});
+							}
+							if (generateId === "uuid") {
+								return crypto.randomUUID();
 							}
 							if (customIdGenerator) {
 								return customIdGenerator({ model });
