@@ -124,7 +124,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							.field("id", "String")
 							.attribute("id")
 							.attribute("db.Uuid")
-							.attribute('default(dbgenerated("pg_catalog.gen_random_uuid()"))');
+							.attribute(
+								'default(dbgenerated("pg_catalog.gen_random_uuid()"))',
+							);
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
 					}
