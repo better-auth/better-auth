@@ -55,7 +55,7 @@ export function defineRequestState<Schema extends StandardSchemaV1>(
 	schema?: Schema,
 ): RequestState<StandardSchemaV1.InferInput<Schema>>;
 export function defineRequestState(
-	schema: StandardSchemaV1 = z.record(z.string(), z.any()),
+	schema: StandardSchemaV1 = z.any(),
 ): RequestState<any> {
 	return {
 		async get() {
@@ -65,7 +65,11 @@ export function defineRequestState(
 
 		async set(value) {
 			const store = await getCurrentRequestState();
-			store.set(schema, value);
+			const parsedValue = await schema["~standard"].validate(value);
+			if (parsedValue.issues) {
+				throw new Error(`Invalid value: ${JSON.stringify(parsedValue.issues)}`);
+			}
+			store.set(schema, parsedValue.value);
 		},
 	};
 }
