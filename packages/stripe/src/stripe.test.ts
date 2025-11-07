@@ -2177,6 +2177,102 @@ describe("stripe", async () => {
 		});
 	});
 
+	it("should support flexible limits types", async () => {
+		const flexiblePlans = [
+			{
+				name: "flexible",
+				priceId: "price_flexible",
+				limits: {
+					// Numbers
+					maxUsers: 100,
+					maxProjects: 10,
+					// Arrays
+					features: ["analytics", "api", "webhooks"],
+					supportedMethods: ["GET", "POST", "PUT", "DELETE"],
+					// Objects
+					rateLimit: { requests: 1000, window: 3600 },
+					permissions: { admin: true, read: true, write: false },
+					// Mixed
+					quotas: {
+						storage: 50,
+						bandwidth: [100, "GB"],
+					},
+				},
+			},
+		];
+
+		const testAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memory,
+			emailAndPassword: { enabled: true },
+			plugins: [
+				stripe({
+					...stripeOptions,
+					subscription: {
+						enabled: true,
+						plans: flexiblePlans,
+					},
+				}),
+			],
+		});
+
+		const testClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [bearer(), stripeClient({ subscription: true })],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return testAuth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		// Create user and sign in
+		const headers = new Headers();
+		const userRes = await testClient.signUp.email(
+			{ email: "limits@test.com", password: "password", name: "Test" },
+			{ throw: true },
+		);
+		const userId = userRes.user.id;
+
+		await testClient.signIn.email(
+			{ email: "limits@test.com", password: "password" },
+			{ throw: true, onSuccess: setCookieToHeader(headers) },
+		);
+
+		// Create subscription
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userId,
+				stripeCustomerId: "cus_limits_test",
+				stripeSubscriptionId: "sub_limits_test",
+				status: "active",
+				plan: "flexible",
+			},
+		});
+
+		// List subscriptions and verify limits structure
+		const result = await testClient.subscription.list({
+			fetchOptions: { headers, throw: true },
+		});
+
+		expect(result.length).toBe(1);
+		const limits = result[0]?.limits;
+
+		// Verify different types are preserved
+		expect(limits).toBeDefined();
+		expect(limits?.maxUsers).toBe(100);
+		expect(limits?.maxProjects).toBe(10);
+		expect(Array.isArray(limits?.features)).toBe(true);
+		expect(limits?.features).toEqual(["analytics", "api", "webhooks"]);
+		expect(Array.isArray(limits?.supportedMethods)).toBe(true);
+		expect(typeof limits?.rateLimit).toBe("object");
+		expect(limits?.rateLimit?.requests).toBe(1000);
+		expect(limits?.permissions?.admin).toBe(true);
+		expect(limits?.quotas?.storage).toBe(50);
+		expect(Array.isArray(limits?.quotas?.bandwidth)).toBe(true);
+	});
+
 	describe("Duplicate customer prevention on signup", () => {
 		it("should NOT create duplicate customer when email already exists in Stripe", async () => {
 			const existingEmail = "duplicate-email@example.com";
