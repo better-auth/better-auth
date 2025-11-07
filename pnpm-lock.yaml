@@ -1125,6 +1125,9 @@ importers:
       '@prisma/client':
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
+      '@types/pg':
+        specifier: ^8.15.5
+        version: 8.15.5
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
@@ -1155,6 +1158,9 @@ importers:
       open:
         specifier: ^10.2.0
         version: 10.2.0
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
       prettier:
         specifier: ^3.6.2
         version: 3.6.2
@@ -19064,7 +19070,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 24.9.0
+      '@types/node': 24.9.2
 
   '@types/cookie@0.6.0': {}
 
@@ -19180,7 +19186,7 @@ snapshots:
 
   '@types/pg@8.15.5':
     dependencies:
-      '@types/node': 24.9.0
+      '@types/node': 24.9.2
       pg-protocol: 1.10.3
       pg-types: 2.2.0
 
@@ -19205,7 +19211,7 @@ snapshots:
 
   '@types/readable-stream@4.0.20':
     dependencies:
-      '@types/node': 24.9.0
+      '@types/node': 24.9.2
 
   '@types/resolve@1.20.2': {}
 
