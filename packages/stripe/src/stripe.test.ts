@@ -2176,4 +2176,218 @@ describe("stripe", async () => {
 			expect(data).toEqual({ success: true });
 		});
 	});
+
+	describe("metadata merge behavior", () => {
+		it("should preserve internal metadata fields when user provides custom metadata via getCheckoutSessionParams", async () => {
+			const customMockStripe = {
+				...mockStripe,
+				checkout: {
+					sessions: {
+						create: vi.fn().mockResolvedValue({
+							url: "https://checkout.stripe.com/mock",
+							id: "cs_test_metadata",
+						}),
+					},
+				},
+			};
+
+			const customStripeOptions = {
+				...stripeOptions,
+				stripeClient: customMockStripe as unknown as Stripe,
+				subscription: {
+					...stripeOptions.subscription,
+					getCheckoutSessionParams: async () => ({
+						params: {
+							metadata: {
+								customField: "custom-value",
+								planType: "business",
+								userId: "custom-user-id",
+								subscriptionId: "custom-subscription-id",
+							},
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+			const customAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(customStripeOptions)],
+			});
+
+			const customAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [
+					bearer(),
+					stripeClient({
+						subscription: true,
+					}),
+				],
+				fetchOptions: {
+					customFetchImpl: async (url, init) => {
+						return customAuth.handler(new Request(url, init));
+					},
+				},
+			});
+
+			const userRes = await customAuthClient.signUp.email(
+				{
+					email: "metadata-test@email.com",
+					password: "password",
+					name: "Metadata Test",
+				},
+				{ throw: true },
+			);
+			const userId = userRes.user.id;
+
+			const customCtx = await customAuth.$context;
+			const { id: subId } = await customCtx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_metadata_test",
+					status: "incomplete",
+					plan: "starter",
+				},
+			});
+
+			const headers = new Headers();
+			await customAuthClient.signIn.email(
+				{ email: "metadata-test@email.com", password: "password" },
+				{
+					throw: true,
+					onSuccess: setCookieToHeader(headers),
+				},
+			);
+
+			await customAuthClient.subscription.upgrade({
+				plan: "premium",
+				successUrl: "/success",
+				cancelUrl: "/cancel",
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			const createCall =
+				customMockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+
+			expect(createCall?.metadata?.customField).toBe("custom-value");
+			expect(createCall?.metadata?.planType).toBe("business");
+			expect(createCall?.metadata?.userId).toBe(userId);
+			expect(createCall?.metadata?.subscriptionId).toBe(subId);
+			expect(createCall?.metadata?.referenceId).toBe(userId);
+		});
+
+		it("should preserve subscription_data metadata when provided via getCheckoutSessionParams", async () => {
+			const customMockStripe = {
+				...mockStripe,
+				checkout: {
+					sessions: {
+						create: vi.fn().mockResolvedValue({
+							url: "https://checkout.stripe.com/mock",
+							id: "cs_test_subscription_metadata",
+						}),
+					},
+				},
+			};
+
+			const customStripeOptions = {
+				...stripeOptions,
+				stripeClient: customMockStripe as unknown as Stripe,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: "price_test",
+							name: "trial-plan",
+							freeTrial: { days: 14 },
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							subscription_data: {
+								metadata: {
+									ga_client_id: "GA123456",
+									campaign: "summer-2024",
+								},
+							},
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const customAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(customStripeOptions)],
+			});
+
+			const customAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [
+					bearer(),
+					stripeClient({
+						subscription: true,
+					}),
+				],
+				fetchOptions: {
+					customFetchImpl: async (url, init) => {
+						return customAuth.handler(new Request(url, init));
+					},
+				},
+			});
+
+			const userRes = await customAuthClient.signUp.email(
+				{
+					email: "sub-metadata-test@email.com",
+					password: "password",
+					name: "Subscription Metadata Test",
+				},
+				{ throw: true },
+			);
+			const userId = userRes.user.id;
+
+			const customCtx = await customAuth.$context;
+			const { id: subId } = await customCtx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_sub_metadata_test",
+					status: "incomplete",
+					plan: "trial-plan",
+				},
+			});
+
+			const headers = new Headers();
+			await customAuthClient.signIn.email(
+				{ email: "sub-metadata-test@email.com", password: "password" },
+				{
+					throw: true,
+					onSuccess: setCookieToHeader(headers),
+				},
+			);
+
+			await customAuthClient.subscription.upgrade({
+				plan: "trial-plan",
+				successUrl: "/success",
+				cancelUrl: "/cancel",
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			const createCall =
+				customMockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+
+			expect(createCall?.subscription_data?.trial_period_days).toBe(14);
+			expect(createCall?.subscription_data?.metadata?.ga_client_id).toBe(
+				"GA123456",
+			);
+			expect(createCall?.subscription_data?.metadata?.campaign).toBe(
+				"summer-2024",
+			);
+		});
+	});
 });
