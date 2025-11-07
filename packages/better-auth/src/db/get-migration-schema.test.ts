@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { betterAuth } from "../auth";
 import { getMigrations } from "./get-migration";
 
 // Check if PostgreSQL is available
@@ -99,7 +100,7 @@ describe.runIf(isPostgresAvailable)(
 
 			// Verify the table in public schema still exists and is not affected
 			const publicTableCheck = await publicPool.query(
-				`SELECT table_name FROM information_schema.tables 
+				`SELECT table_name FROM information_schema.tables
 			 WHERE table_schema = 'public' AND table_name = 'user'`,
 			);
 			expect(publicTableCheck.rows.length).toBe(1);
@@ -160,7 +161,7 @@ describe.runIf(isPostgresAvailable)(
 
 			// Verify tables were created in custom schema
 			const tablesInCustomSchema = await customSchemaPool.query(
-				`SELECT table_name FROM information_schema.tables 
+				`SELECT table_name FROM information_schema.tables
 			 WHERE table_schema = $1 AND table_type = 'BASE TABLE'`,
 				[customSchema],
 			);
@@ -173,6 +174,59 @@ describe.runIf(isPostgresAvailable)(
 			expect(tableNames).toContain("session");
 			expect(tableNames).toContain("account");
 			expect(tableNames).toContain("verification");
+		});
+	},
+);
+
+describe.runIf(isPostgresAvailable)(
+	"PostgreSQL Schema Detection in Migrations",
+	() => {
+		const pool = new Pool({
+			connectionString: "postgres://user:password@localhost:5433/better_auth",
+		});
+		const schema = "uuid_test";
+
+		const schemaPool = new Pool({
+			connectionString: `postgres://user:password@localhost:5433/better_auth?options=-c search_path=${schema}`,
+		});
+
+		beforeAll(async () => {
+			await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+			await schemaPool.query(`CREATE SCHEMA ${schema}`);
+		});
+
+		afterAll(async () => {
+			await schemaPool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+			await pool.end();
+			await schemaPool.end();
+		});
+
+		it("should use uuid for id when `advanced.database.generateId` is set to 'uuid'", async () => {
+			const config: BetterAuthOptions = {
+				database: schemaPool,
+				emailAndPassword: {
+					enabled: true,
+				},
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+			};
+			const { runMigrations } = await getMigrations(config);
+			await runMigrations();
+			const auth = betterAuth(config);
+
+			const user = await auth.api.signUpEmail({
+				body: {
+					email: "test@test.com",
+					password: "test123456",
+					name: "test user",
+				},
+			});
+			const uuidRegex =
+				/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+			expect(user.user.id).toMatch(uuidRegex);
 		});
 	},
 );
