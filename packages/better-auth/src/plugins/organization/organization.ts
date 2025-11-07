@@ -682,9 +682,6 @@ export function organization<O extends OrganizationOptions>(
 		 * **server:**
 		 * `auth.api.addMember`
 		 *
-		 * **client:**
-		 * `authClient.organization.addMember`
-		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-add-member)
 		 */
 
