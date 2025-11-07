@@ -587,6 +587,14 @@ Or alternatively, you can call `organization.list` if you don't want to use a ho
 <APIMethod path="/organization/list" method="GET" requireSession>
   ```ts
   type listOrganizations = {
+    /**
+     * The maximum number of organizations to return.
+     */
+    limit?: number
+    /**
+     * The number of organizations to skip. Default is 0.  
+     */
+    offset?: number = 0
   }
   ```
 </APIMethod>

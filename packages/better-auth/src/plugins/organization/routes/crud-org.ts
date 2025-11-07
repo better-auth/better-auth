@@ -889,6 +889,24 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 		"/organization/list",
 		{
 			method: "GET",
+			query: z
+				.object({
+					limit: z
+						.string()
+						.meta({
+							description: "The number of organizations to return",
+						})
+						.or(z.number())
+						.optional(),
+					offset: z
+						.string()
+						.meta({
+							description: "The offset to start from",
+						})
+						.or(z.number())
+						.optional(),
+				})
+				.optional(),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
@@ -915,6 +933,10 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const organizations = await adapter.listOrganizations(
 				ctx.context.session.user.id,
+				{
+					limit: ctx.query?.limit ? Number(ctx.query.limit) : undefined,
+					offset: ctx.query?.offset ? Number(ctx.query.offset) : undefined,
+				},
 			);
 			return ctx.json(organizations);
 		},
