@@ -16,6 +16,11 @@ import { getSchema, type UsernameSchema } from "./schema";
 
 export { USERNAME_ERROR_CODES } from "./error-codes";
 
+export interface UserWithUsername extends User {
+	username: string;
+	displayUsername: string;
+}
+
 export type UsernameOptions = {
 	schema?: InferOptionSchema<UsernameSchema> | undefined;
 	/**
