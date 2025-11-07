@@ -12,7 +12,7 @@ import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
-	string: ["character varying", "varchar", "text"],
+	string: ["character varying", "varchar", "text", "uuid"],
 	number: [
 		"int4",
 		"integer",
