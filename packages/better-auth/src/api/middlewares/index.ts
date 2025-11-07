@@ -1,2 +1,2 @@
-export { getOauthState } from "./oauth";
+export { getOAuthState } from "./oauth";
 export * from "./origin-check";
