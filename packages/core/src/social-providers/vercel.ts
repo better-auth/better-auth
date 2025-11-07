@@ -95,7 +95,7 @@ export const vercel = (options: VercelOptions) => {
 			if (options.verifyIdToken) {
 				return options.verifyIdToken(token, nonce);
 			}
-			// Decode the ID token to verify issuer and audience
+
 			const decoded = decodeJwt(token) as VercelProfile;
 			const isValid =
 				decoded.aud === options.clientId &&
