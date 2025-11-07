@@ -1,5 +1,5 @@
 import { APIError, type Prettify } from "better-call";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { memoryAdapter } from "../../adapters/memory-adapter";
 import { createAuthClient } from "../../client";
 import { nextCookies } from "../../integrations/next-js";
@@ -645,6 +645,453 @@ describe("organization", async (it) => {
 		expect(leaveRes.data).toMatchObject({
 			userId: res.data?.user.id!,
 		});
+	});
+
+	it("should apply beforeLeaveOrganization hook", async () => {
+		const beforeLeaveOrganization = vi.fn();
+		const hookData: any = { member: null, user: null, organization: null };
+
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						organizationHooks: {
+							beforeLeaveOrganization: async (data) => {
+								beforeLeaveOrganization();
+								hookData.member = data.member;
+								hookData.user = data.user;
+								hookData.organization = data.organization;
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
+
+		const ownerHeaders = new Headers();
+		const owner = await client.signUp.email(
+			{
+				email: "owner@test.com",
+				name: "Owner",
+				password: "password",
+			},
+			{
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		);
+
+		const org = await client.organization.create(
+			{
+				name: "Test Org",
+				slug: "test-org",
+			},
+			{
+				headers: ownerHeaders,
+			},
+		);
+
+		const memberHeaders = new Headers();
+		const memberUser = await client.signUp.email(
+			{
+				email: "member@test.com",
+				name: "Member",
+				password: "password",
+			},
+			{
+				onSuccess: cookieSetter(memberHeaders),
+			},
+		);
+
+		await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id!,
+				userId: memberUser.data?.user.id!,
+				role: "member",
+			},
+		});
+
+		const leaveRes = await client.organization.leave(
+			{
+				organizationId: org.data?.id!,
+			},
+			{
+				headers: memberHeaders,
+			},
+		);
+
+		expect(beforeLeaveOrganization).toHaveBeenCalled();
+		expect(leaveRes.data).toMatchObject({
+			userId: memberUser.data?.user.id!,
+		});
+
+		expect(hookData.member).toMatchObject({
+			userId: memberUser.data?.user.id!,
+			organizationId: org.data?.id!,
+			role: "member",
+		});
+		expect(hookData.user).toMatchObject({
+			id: memberUser.data?.user.id!,
+			email: "member@test.com",
+		});
+		expect(hookData.organization).toMatchObject({
+			id: org.data?.id!,
+			name: "Test Org",
+		});
+	});
+
+	it("should allow beforeLeaveOrganization to abort by throwing", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						organizationHooks: {
+							beforeLeaveOrganization: async () => {
+								throw new APIError("BAD_REQUEST", {
+									message: "Cannot leave: pending tasks",
+								});
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
+
+		const ownerHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: "owner2@test.com",
+				name: "Owner",
+				password: "password",
+			},
+			{
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		);
+
+		const org = await client.organization.create(
+			{
+				name: "Test Org 2",
+				slug: "test-org-2",
+			},
+			{
+				headers: ownerHeaders,
+			},
+		);
+
+		const memberHeaders = new Headers();
+		const memberUser = await client.signUp.email(
+			{
+				email: "member2@test.com",
+				name: "Member",
+				password: "password",
+			},
+			{
+				onSuccess: cookieSetter(memberHeaders),
+			},
+		);
+
+		await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id!,
+				userId: memberUser.data?.user.id!,
+				role: "member",
+			},
+		});
+
+		const leaveRes = await client.organization.leave(
+			{
+				organizationId: org.data?.id!,
+			},
+			{
+				headers: memberHeaders,
+			},
+		);
+
+		expect(leaveRes.error).toBeDefined();
+		expect(leaveRes.error?.message).toBe("Cannot leave: pending tasks");
+
+		const members = await auth.api.listMembers({
+			query: {
+				organizationId: org.data?.id!,
+			},
+			headers: ownerHeaders,
+		});
+		expect(
+			members?.members.some((m) => m.userId === memberUser.data?.user.id),
+		).toBe(true);
+	});
+
+	it("should apply afterLeaveOrganization hook", async () => {
+		const afterLeaveOrganization = vi.fn();
+		const hookData: any = { member: null, user: null, organization: null };
+
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						organizationHooks: {
+							afterLeaveOrganization: async (data) => {
+								afterLeaveOrganization();
+								hookData.member = data.member;
+								hookData.user = data.user;
+								hookData.organization = data.organization;
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
+
+		const ownerHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: "owner3@test.com",
+				name: "Owner",
+				password: "password",
+			},
+			{
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		);
+
+		const org = await client.organization.create(
+			{
+				name: "Test Org 3",
+				slug: "test-org-3",
+			},
+			{
+				headers: ownerHeaders,
+			},
+		);
+
+		const memberHeaders = new Headers();
+		const memberUser = await client.signUp.email(
+			{
+				email: "member3@test.com",
+				name: "Member",
+				password: "password",
+			},
+			{
+				onSuccess: cookieSetter(memberHeaders),
+			},
+		);
+
+		await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id!,
+				userId: memberUser.data?.user.id!,
+				role: "member",
+			},
+		});
+
+		const leaveRes = await client.organization.leave(
+			{
+				organizationId: org.data?.id!,
+			},
+			{
+				headers: memberHeaders,
+			},
+		);
+
+		expect(afterLeaveOrganization).toHaveBeenCalled();
+		expect(leaveRes.data).toMatchObject({
+			userId: memberUser.data?.user.id!,
+		});
+
+		expect(hookData.member).toMatchObject({
+			userId: memberUser.data?.user.id!,
+			organizationId: org.data?.id!,
+			role: "member",
+		});
+		expect(hookData.user).toMatchObject({
+			id: memberUser.data?.user.id!,
+			email: "member3@test.com",
+		});
+		expect(hookData.organization).toMatchObject({
+			id: org.data?.id!,
+			name: "Test Org 3",
+		});
+
+		const members = await auth.api.listMembers({
+			query: {
+				organizationId: org.data?.id!,
+			},
+			headers: ownerHeaders,
+		});
+		expect(
+			members?.members.some((m) => m.userId === memberUser.data?.user.id),
+		).toBe(false);
+	});
+
+	it("should not call hooks if member validation fails", async () => {
+		const beforeLeaveOrganization = vi.fn();
+		const afterLeaveOrganization = vi.fn();
+
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						organizationHooks: {
+							beforeLeaveOrganization: async () => {
+								beforeLeaveOrganization();
+							},
+							afterLeaveOrganization: async () => {
+								afterLeaveOrganization();
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
+
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "nonmember@test.com",
+				name: "Non Member",
+				password: "password",
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const leaveRes = await client.organization.leave(
+			{
+				organizationId: "non-existent-org-id",
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(leaveRes.error).toBeDefined();
+		expect(leaveRes.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+		);
+
+		expect(beforeLeaveOrganization).not.toHaveBeenCalled();
+		expect(afterLeaveOrganization).not.toHaveBeenCalled();
+	});
+
+	it("should handle both hooks together correctly", async () => {
+		const beforeCalled = vi.fn();
+		const afterCalled = vi.fn();
+		let beforeTimestamp = 0;
+		let afterTimestamp = 0;
+
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						organizationHooks: {
+							beforeLeaveOrganization: async (data) => {
+								beforeTimestamp = Date.now();
+								beforeCalled();
+								// Simulate cleanup
+								await new Promise((resolve) => setTimeout(resolve, 10));
+							},
+							afterLeaveOrganization: async (data) => {
+								afterTimestamp = Date.now();
+								afterCalled();
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
+
+		const ownerHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: "owner5@test.com",
+				name: "Owner",
+				password: "password",
+			},
+			{
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		);
+
+		const org = await client.organization.create(
+			{
+				name: "Test Org 5",
+				slug: "test-org-5",
+			},
+			{
+				headers: ownerHeaders,
+			},
+		);
+
+		const memberHeaders = new Headers();
+		const memberUser = await client.signUp.email(
+			{
+				email: "member5@test.com",
+				name: "Member",
+				password: "password",
+			},
+			{
+				onSuccess: cookieSetter(memberHeaders),
+			},
+		);
+
+		await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id!,
+				userId: memberUser.data?.user.id!,
+				role: "member",
+			},
+		});
+
+		const leaveRes = await client.organization.leave(
+			{
+				organizationId: org.data?.id!,
+			},
+			{
+				headers: memberHeaders,
+			},
+		);
+
+		expect(beforeCalled).toHaveBeenCalled();
+		expect(afterCalled).toHaveBeenCalled();
+		expect(leaveRes.data).toBeDefined();
+
+		expect(beforeTimestamp).toBeLessThan(afterTimestamp);
+
+		const members = await auth.api.listMembers({
+			query: {
+				organizationId: org.data?.id!,
+			},
+			headers: ownerHeaders,
+		});
+		expect(
+			members?.members.some((m) => m.userId === memberUser.data?.user.id),
+		).toBe(false);
 	});
 
 	it("shouldn't allow updating owner role if you're not owner", async () => {
