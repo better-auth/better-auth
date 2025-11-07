@@ -146,9 +146,7 @@ export const getPasskeyActions = (
 				return verified;
 			}
 			$listPasskeys.set(Math.random());
-			return {
-				data: verified.data
-			}
+			return verified;
 		} catch (e) {
 			if (e instanceof WebAuthnError) {
 				if (e.code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED") {
