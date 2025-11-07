@@ -117,7 +117,7 @@ export async function parseState(c: GenericEndpointContext) {
 				.optional(),
 			requestSignUp: z.boolean().optional(),
 		})
-		.loose();
+		.passthrough();
 
 	let parsedData: z.infer<typeof stateDataSchema>;
 
