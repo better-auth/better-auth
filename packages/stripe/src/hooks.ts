@@ -159,7 +159,9 @@ export async function onSubscriptionUpdated(
 				periodEnd: new Date(
 					subscriptionUpdated.items.data[0]!.current_period_end * 1000,
 				),
-				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
+				cancelAtPeriodEnd:
+					subscriptionUpdated.cancel_at_period_end ||
+					!!subscriptionUpdated.cancel_at,
 				seats,
 				stripeSubscriptionId: subscriptionUpdated.id,
 			},
@@ -172,7 +174,8 @@ export async function onSubscriptionUpdated(
 		});
 		const subscriptionCanceled =
 			subscriptionUpdated.status === "active" &&
-			subscriptionUpdated.cancel_at_period_end &&
+			(subscriptionUpdated.cancel_at_period_end ||
+				!!subscriptionUpdated.cancel_at) &&
 			!subscription.cancelAtPeriodEnd; //if this is true, it means the subscription was canceled before the event was triggered
 		if (subscriptionCanceled) {
 			await options.subscription.onSubscriptionCancel?.({
