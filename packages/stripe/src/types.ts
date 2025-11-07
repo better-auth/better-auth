@@ -39,8 +39,11 @@ export type StripePlan = {
 	name: string;
 	/**
 	 * Limits for the plan
+	 *
+	 * useful when you want to define plan-specific metadata
+	 * to enforce constraints on the client-side.
 	 */
-	limits?: Record<string, number> | undefined;
+	limits?: Record<string, any> | undefined;
 	/**
 	 * Plan group name
 	 *
