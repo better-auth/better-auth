@@ -180,7 +180,7 @@ export interface OrganizationOptions {
 							organization: Organization;
 							member: Member;
 						},
-						ctx: AuthContext,
+						ctx: AuthContext & { request?: Request },
 				  ) => Promise<number> | number)
 		  )
 		| undefined;
@@ -559,20 +559,26 @@ export interface OrganizationOptions {
 				/**
 				 * A callback that runs before a member is removed from an organization
 				 */
-				beforeRemoveMember?: (data: {
-					member: Member & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				beforeRemoveMember?: (
+					data: {
+						member: Member & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					ctx: AuthContext & { request?: Request },
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs after a member is removed from an organization
 				 */
-				afterRemoveMember?: (data: {
-					member: Member & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterRemoveMember?: (
+					data: {
+						member: Member & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					ctx: AuthContext & { request?: Request },
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs before a member's role is updated
