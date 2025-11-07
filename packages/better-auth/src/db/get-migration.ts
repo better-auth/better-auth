@@ -384,9 +384,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 		}
 	}
-  
+
 	let toBeIndexed: CreateIndexBuilder[] = [];
-  
+
 	const useNumberId =
 		config.advanced?.database?.useNumberId ||
 		config.advanced?.database?.generateId === "serial";
