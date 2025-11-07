@@ -23,4 +23,5 @@ export {
 // re-export third party types
 export type { JSONWebKeySet, JWTPayload } from "jose";
 export type * from "zod";
+export type * from "zod/v4";
 export { APIError } from "./api";
