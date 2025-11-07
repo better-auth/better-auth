@@ -102,7 +102,8 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "typecheck": "tsc --project tsconfig.json"
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest"
   },
   "devDependencies": {
     "@better-auth/utils": "0.3.0",

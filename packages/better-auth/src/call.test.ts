@@ -233,16 +233,6 @@ describe("call", async () => {
 				enabled: true,
 			},
 		},
-		advanced: {
-			oauthConfig: {
-				additionalData: {
-					enabled: true,
-					schema: z.object({
-						invitedBy: z.string().optional(),
-					}),
-				},
-			},
-		},
 		hooks: {
 			before: createAuthMiddleware(async (ctx) => {
 				if (ctx.path === "/sign-up/email") {
@@ -264,7 +254,7 @@ describe("call", async () => {
 					return ctx.json({ after: "global" });
 				}
 				if (ctx.path === "/callback/:id" && ctx.params.id === "google") {
-					const store = await getOAuthState();
+					const store = await getOAuthState<{ invitedBy?: string }>();
 					latestOauthStore = store;
 				}
 			}),
@@ -333,7 +323,11 @@ describe("call", async () => {
 			},
 		});
 		expect(latestOauthStore).toEqual({
+			callbackURL: "/callback",
+			codeVerifier: expect.any(String),
+			expiresAt: expect.any(Number),
 			invitedBy: "user-123",
+			errorURL: "http://localhost:3000/api/auth/error",
 		});
 	});
 
