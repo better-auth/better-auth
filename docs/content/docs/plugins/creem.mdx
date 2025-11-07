@@ -387,7 +387,7 @@ export const auth = betterAuth({
       onRevokeAccess: async ({ reason, product, customer, metadata }) => {
         const userId = metadata?.referenceId as string;
 
-        // Udate your database specific logic
+        // Update your database specific logic
         await db.user.update({
           where: { id: userId },
           data: { 
