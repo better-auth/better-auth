@@ -748,13 +748,13 @@ which you need to verify it to prove that you own it. To do this, you'll need to
     *   **Host:** `ba-domain-verification-{your-provider-id}`
     *   **Value:** The verification token you were given.
 3.  **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
-4.  **Once the record has propagated, you can submit a validation request
+4.  **Once the record has propagated**, you can submit a validation request
 
 #### Domain validation request
 
 Once you have configured your domain, you can use your `auth` instance to submit a validation request.
-This request will either result in a rejection (could not your ownership over the domain)
-or if the verification is successful, your SSO provider domain will be validated as verified.
+This request will either result in a rejection (could not prove your ownership over the domain)
+or if the verification is successful, your SSO provider domain will be marked as verified.
 
 ```ts title="domain-validation-request.ts"
 const response = await auth.api.verifyDomain({
@@ -790,8 +790,8 @@ The plugin automatically creates the following SAML endpoints:
 
 - **SP Metadata**: `/api/auth/sso/saml2/sp/metadata?providerId={providerId}`
 - **SAML Callback**: `/api/auth/sso/saml2/callback/{providerId}`
-- **Domain verification submission**: `/api/auth/sso/domain-verfication`
-- **Domain verification validation**: `/api/auth/sso/domain-verfication/verify`
+- **Domain verification submission**: `/api/auth/sso/domain-verification`
+- **Domain verification validation**: `/api/auth/sso/domain-verification/verify`
 
 ## Schema
 
