@@ -1,6 +1,5 @@
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type { CookieOptions } from "better-call";
 import type {
 	Dialect,
@@ -266,28 +265,6 @@ export type BetterAuthAdvancedOptions = {
 				 * @default "cookie"
 				 */
 				storeStateStrategy?: "database" | "cookie";
-
-				/**
-				 * Additional data to pass through the oauth flow.
-				 *
-				 * @default undefined
-				 */
-				additionalData?:
-					| {
-							/**
-							 * Whether to enable additional data.
-							 *
-							 * @default false
-							 */
-							enabled?: boolean;
-							/**
-							 * Validation schema for the additional data.
-							 *
-							 * @default undefined
-							 */
-							schema?: StandardSchemaV1;
-					  }
-					| undefined;
 		  }
 		| undefined;
 };
