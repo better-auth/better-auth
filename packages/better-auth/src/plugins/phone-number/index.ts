@@ -6,7 +6,7 @@ import {
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { getSessionFromCtx } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";

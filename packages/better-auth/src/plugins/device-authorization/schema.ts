@@ -1,5 +1,5 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import * as z from "zod";
+import { z } from "zod";
 
 export const schema = {
 	deviceCode: {

@@ -8,7 +8,7 @@ import { APIError } from "better-call";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import * as z from "zod";
+import { z } from "zod";
 import { getEndpoints, getOAuthState, router } from "./api";
 import { createAuthClient } from "./client";
 import { signJWT } from "./crypto";

@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import * as z from "zod";
+import { z } from "zod";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";

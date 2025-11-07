@@ -8,7 +8,7 @@ import {
 } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { defineErrorCodes } from "@better-auth/core/utils";
-import * as z from "zod";
+import { z } from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import {

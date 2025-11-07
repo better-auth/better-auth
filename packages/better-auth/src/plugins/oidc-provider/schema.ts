@@ -1,5 +1,5 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import z from "zod";
+import { z } from "zod";
 
 export const oAuthApplicationSchema = z.object({
 	/**

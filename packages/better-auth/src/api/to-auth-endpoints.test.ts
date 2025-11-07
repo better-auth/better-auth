@@ -4,7 +4,7 @@ import {
 } from "@better-auth/core/api";
 import { APIError } from "better-call";
 import { describe, expect, it } from "vitest";
-import * as z from "zod";
+import { z } from "zod";
 import { init } from "../init";
 import { getTestInstance } from "../test-utils/test-instance";
 import { toAuthEndpoints } from "./to-auth-endpoints";

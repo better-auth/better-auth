@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import * as z from "zod";
+import { z } from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db/schema";

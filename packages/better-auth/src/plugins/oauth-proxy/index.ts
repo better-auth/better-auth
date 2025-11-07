@@ -5,7 +5,7 @@ import {
 } from "@better-auth/core/api";
 import { env } from "@better-auth/core/env";
 import type { EndpointContext } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { originCheck } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getOrigin } from "../../utils/url";

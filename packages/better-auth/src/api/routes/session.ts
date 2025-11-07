@@ -11,7 +11,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import {
 	deleteSessionCookie,
 	getChunkedCookie,

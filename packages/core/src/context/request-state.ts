@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import z from "zod";
+import { z } from "zod";
 import { type AsyncLocalStorage, getAsyncLocalStorage } from "../async_hooks";
 
 export type RequestStateWeakMap = WeakMap<StandardSchemaV1, any>;
