@@ -394,7 +394,6 @@ export const getCookieCache = async <
 ) => {
 	const headers = request instanceof Headers ? request : request.headers;
 	const cookies = headers.get("cookie");
-	console.log("getCookieCache cookies:", cookies);
 	if (!cookies) {
 		return null;
 	}
