@@ -2350,7 +2350,7 @@ describe("stripe", async () => {
 			const userId = userRes.user.id;
 
 			const customCtx = await customAuth.$context;
-			const { id: subId } = await customCtx.adapter.create({
+			await customCtx.adapter.create({
 				model: "subscription",
 				data: {
 					referenceId: userId,
