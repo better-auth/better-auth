@@ -416,7 +416,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 						if (dbType === "postgres") {
 							return col
 								.primaryKey()
-								.defaultTo(sql`gen_random_uuid()`)
+								.defaultTo(sql`pg_catalog.gen_random_uuid()`)
 								.notNull();
 						} else if (dbType === "mysql" || dbType === "mssql") {
 							return col.primaryKey().defaultTo(sql`uuid()`).notNull();
