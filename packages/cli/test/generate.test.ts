@@ -52,7 +52,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 				advanced: {
 					database: {
-						useNumberId: true,
+						generateId: "serial",
 					},
 				},
 			},
@@ -204,7 +204,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 				advanced: {
 					database: {
-						useNumberId: true,
+						generateId: "serial",
 					},
 				},
 				user: {
