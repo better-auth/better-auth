@@ -9,22 +9,20 @@ import {
 	it,
 	test,
 } from "vitest";
-import { createAuthClient } from "../../client";
+import { type AuthClient, createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
 import { oidcProvider } from ".";
-import { oidcClient } from "./client";
+import { type OidcClientPlugin, oidcClient } from "./client";
 import type { Client } from "./types";
 
 // Type for the server client with OIDC plugin
-type ServerClient = ReturnType<
-	typeof createAuthClient<{
-		plugins: [ReturnType<typeof oidcClient>];
-	}>
->;
+type ServerClient = AuthClient<{
+	plugins: [OidcClientPlugin];
+}>;
 
 /**
  * Helper to handle OIDC consent flow when required per OIDC spec
@@ -117,7 +115,6 @@ describe("oidc", async () => {
 		clientSecret: "test-client-secret-oidc",
 		redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
 		metadata: {},
-		icon: "",
 		type: "web",
 		disabled: false,
 		name: "test",
@@ -133,7 +130,6 @@ describe("oidc", async () => {
 			client_id: expect.any(String),
 			client_secret: expect.any(String),
 			client_name: "test",
-			logo_uri: "",
 			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
@@ -147,12 +143,23 @@ describe("oidc", async () => {
 				clientSecret: createdClient.data.client_secret,
 				redirectUrls: createdClient.data.redirect_uris,
 				metadata: {},
-				icon: createdClient.data.logo_uri || "",
+				icon: createdClient.data.logo_uri,
 				type: "web",
 				disabled: false,
-				name: createdClient.data.client_name || "",
+				name: createdClient.data.client_name!,
 			};
 		}
+		const client = await authorizationServer.api.getOAuthClient({
+			params: {
+				id: application.clientId,
+			},
+			headers,
+		});
+		expect(client).toEqual({
+			clientId: application.clientId,
+			name: application.name,
+			icon: null,
+		});
 	});
 
 	it("should sign in the user with the provider", async ({ expect }) => {
