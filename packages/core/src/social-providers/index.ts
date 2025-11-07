@@ -29,6 +29,7 @@ import { spotify } from "./spotify";
 import { tiktok } from "./tiktok";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
+import { vercel } from "./vercel";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
 
@@ -56,6 +57,7 @@ export const socialProviders = {
 	reddit,
 	roblox,
 	salesforce,
+	vercel,
 	vk,
 	zoom,
 	notion,
@@ -118,6 +120,7 @@ export * from "./spotify";
 export * from "./tiktok";
 export * from "./twitch";
 export * from "./twitter";
+export * from "./vercel";
 export * from "./vk";
 export * from "./zoom";
 
