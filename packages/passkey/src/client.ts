@@ -17,6 +17,7 @@ import { useAuthQuery } from "better-auth/client";
 import type { Session, User } from "better-auth/types";
 import { atom } from "nanostores";
 import type { passkey } from ".";
+import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type { Passkey } from "./types";
 
 export const getPasskeyActions = (
@@ -74,7 +75,7 @@ export const getPasskeyActions = (
 				data: null,
 				error: {
 					code: "AUTH_CANCELLED",
-					message: "auth cancelled",
+					message: PASSKEY_ERROR_CODES.AUTH_CANCELLED,
 					status: 400,
 					statusText: "BAD_REQUEST",
 				},
@@ -155,7 +156,7 @@ export const getPasskeyActions = (
 						data: null,
 						error: {
 							code: e.code,
-							message: "previously registered",
+							message: PASSKEY_ERROR_CODES.PREVIOUSLY_REGISTERED,
 							status: 400,
 							statusText: "BAD_REQUEST",
 						},
@@ -166,7 +167,7 @@ export const getPasskeyActions = (
 						data: null,
 						error: {
 							code: e.code,
-							message: "registration cancelled",
+							message: PASSKEY_ERROR_CODES.REGISTRATION_CANCELLED,
 							status: 400,
 							statusText: "BAD_REQUEST",
 						},
@@ -186,12 +187,21 @@ export const getPasskeyActions = (
 				data: null,
 				error: {
 					code: "UNKNOWN_ERROR",
-					message: e instanceof Error ? e.message : "unknown error",
+					message: PASSKEY_ERROR_CODES.UNKNOWN_ERROR,
 					status: 500,
 					statusText: "INTERNAL_SERVER_ERROR",
 				},
 			};
 		}
+		return {
+			data: null,
+			error: {
+				code: "UNKNOWN_ERROR",
+				message: PASSKEY_ERROR_CODES.UNKNOWN_ERROR,
+				status: 500,
+				statusText: "INTERNAL_SERVER_ERROR",
+			},
+		};
 	};
 
 	return {
