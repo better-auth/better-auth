@@ -99,7 +99,7 @@ describe("Domain verification", async () => {
 
 	afterEach(() => {
 		vi.clearAllMocks();
-		vi.clearAllTimers();
+		vi.useRealTimers();
 	});
 
 	describe("POST /sso/domain-verification", () => {
@@ -134,7 +134,7 @@ describe("Domain verification", async () => {
 			const headers = await getAuthHeaders();
 			const provider = await registerSSOProvider(headers);
 
-			vi.useFakeTimers();
+			vi.useFakeTimers({ toFake: ["Date"] });
 			vi.advanceTimersByTime(Date.now() - 100);
 
 			const newAuthHeaders = await getAuthHeaders();
@@ -237,7 +237,7 @@ describe("Domain verification", async () => {
 			const headers = await getAuthHeaders();
 			const provider = await registerSSOProvider(headers);
 
-			vi.useFakeTimers();
+			vi.useFakeTimers({ toFake: ["Date"] });
 			vi.advanceTimersByTime(Date.now() + 3600 * 24 * 7 * 1000 + 10); // advance 1 week + 10 seconds
 
 			const newAuthHeaders = await getAuthHeaders();
