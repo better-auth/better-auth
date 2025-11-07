@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
+import type { OAuthApplication } from "../oidc-provider/schema";
 import type {
 	AuthorizationQuery,
 	Client,
@@ -76,7 +77,7 @@ export async function authorizeMCPOAuth(
 	}
 
 	const client = await ctx.context.adapter
-		.findOne<Record<string, any>>({
+		.findOne<OAuthApplication>({
 			model: "oauthApplication",
 			where: [
 				{
