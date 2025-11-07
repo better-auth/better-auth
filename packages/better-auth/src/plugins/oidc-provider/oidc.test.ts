@@ -9,22 +9,20 @@ import {
 	it,
 	test,
 } from "vitest";
-import { createAuthClient } from "../../client";
+import { type AuthClient, createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
 import { oidcProvider } from ".";
-import { oidcClient } from "./client";
+import { type OidcClientPlugin, oidcClient } from "./client";
 import type { Client } from "./types";
 
 // Type for the server client with OIDC plugin
-type ServerClient = ReturnType<
-	typeof createAuthClient<{
-		plugins: [ReturnType<typeof oidcClient>];
-	}>
->;
+type ServerClient = AuthClient<{
+	plugins: [OidcClientPlugin];
+}>;
 
 /**
  * Helper to handle OIDC consent flow when required per OIDC spec
