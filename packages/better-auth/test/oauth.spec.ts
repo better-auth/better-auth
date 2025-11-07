@@ -1,13 +1,11 @@
-import { DatabaseSync } from "node:sqlite";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import z from "zod";
-import { getOauthState } from "../src/api";
+import { getOAuthState } from "../src/api";
 import { signJWT } from "../src/crypto";
-import { getTestInstanceMemory } from "../src/test-utils";
+import { getTestInstance } from "../src/test-utils";
 import { DEFAULT_SECRET } from "../src/utils/constants";
 
 const mswServer = setupServer();
@@ -47,22 +45,11 @@ afterAll(() => mswServer.close());
 
 test("should login with google successfully", async () => {
 	let latestOauthStore: Record<string, any> | undefined = undefined;
-	const { client } = await getTestInstanceMemory({
-		database: new DatabaseSync(":memory:"),
-		advanced: {
-			oauthConfig: {
-				additionalData: {
-					enabled: true,
-					schema: z.object({
-						invitedBy: z.string().optional(),
-					}),
-				},
-			},
-		},
+	const { client } = await getTestInstance({
 		hooks: {
 			after: createAuthMiddleware(async (ctx) => {
 				if (ctx.path === "/callback/:id" && ctx.params.id === "google") {
-					latestOauthStore = await getOauthState();
+					latestOauthStore = await getOAuthState();
 				}
 			}),
 		},
@@ -109,7 +96,11 @@ test("should login with google successfully", async () => {
 			expect(location).toContain("/callback");
 		},
 	});
-	expect(latestOauthStore).toEqual({
+	expect(latestOauthStore).toMatchObject({
+		callbackURL: "/callback",
+		codeVerifier: expect.any(String),
+		errorURL: "http://localhost:3000/api/auth/error",
+		expiresAt: expect.any(Number),
 		invitedBy: "user-123",
 	});
 });
