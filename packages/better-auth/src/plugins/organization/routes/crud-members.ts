@@ -377,8 +377,11 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					organization,
 				});
 			}
-
-			await adapter.deleteMember(toBeRemovedMember.id);
+			await adapter.deleteMember({
+				memberId: toBeRemovedMember.id,
+				organizationId: organizationId,
+				userId: toBeRemovedMember.userId,
+			});
 			if (
 				session.user.id === toBeRemovedMember.userId &&
 				session.session.activeOrganizationId ===
@@ -792,7 +795,11 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 			}
-			await adapter.deleteMember(member.id);
+			await adapter.deleteMember({
+				memberId: member.id,
+				organizationId: ctx.body.organizationId,
+				userId: session.user.id,
+			});
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
