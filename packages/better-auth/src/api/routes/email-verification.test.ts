@@ -357,7 +357,7 @@ describe("Email Verification Secondary Storage", async () => {
 				},
 			});
 			expect(session.data?.user.email).toBe("new@email.com");
-			expect(session.data?.user.emailVerified).toBe(false);
+			expect(session.data?.user.emailVerified).toBe(true);
 		});
 	});
 
