@@ -420,7 +420,7 @@ importers:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       zod:
-        specifier: ^4.1.12
+        specifier: ^4.1.5
         version: 4.1.12
     devDependencies:
       '@tailwindcss/postcss':
@@ -746,7 +746,7 @@ importers:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       zod:
-        specifier: ^4.1.12
+        specifier: ^4.1.5
         version: 4.1.12
     devDependencies:
       '@tailwindcss/postcss':
@@ -971,7 +971,7 @@ importers:
         specifier: ^1.0.1
         version: 1.0.1
       zod:
-        specifier: ^4.1.12
+        specifier: ^4.1.5
         version: 4.1.12
     devDependencies:
       '@lynx-js/react':
@@ -1164,7 +1164,7 @@ importers:
         specifier: ^0.2.3
         version: 0.2.3
       zod:
-        specifier: ^4.1.12
+        specifier: ^4.1.5
         version: 4.1.12
     devDependencies:
       '@better-auth/passkey':
@@ -1198,7 +1198,7 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0
       zod:
-        specifier: ^4.1.12
+        specifier: ^4.1.5
         version: 4.1.12
     devDependencies:
       '@better-auth/utils':
@@ -1238,7 +1238,7 @@ importers:
         specifier: 'catalog:'
         version: 1.0.26
       zod:
-        specifier: ^4.1.12
+        specifier: ^4.1.5
         version: 4.1.12
     devDependencies:
       '@better-auth/core':
@@ -1296,7 +1296,7 @@ importers:
         specifier: ^1.0.1
         version: 1.0.1
       zod:
-        specifier: ^4.1.12
+        specifier: ^4.1.5
         version: 4.1.12
     devDependencies:
       '@better-auth/core':
@@ -1324,7 +1324,7 @@ importers:
         specifier: ^2.10.1
         version: 2.10.1
       zod:
-        specifier: ^4.1.12
+        specifier: ^4.1.5
         version: 4.1.12
     devDependencies:
       '@types/body-parser':
@@ -1358,7 +1358,7 @@ importers:
         specifier: ^6.1.4
         version: 6.1.4
       zod:
-        specifier: ^4.1.12
+        specifier: ^4.1.5
         version: 4.1.12
     devDependencies:
       '@better-auth/core':
