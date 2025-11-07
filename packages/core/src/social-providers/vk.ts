@@ -27,6 +27,7 @@ export interface VkOption extends ProviderOptions {
 }
 
 export const vk = (options: VkOption) => {
+	const tokenEndpoint = "https://id.vk.com/oauth2/auth";
 	return {
 		id: "vk",
 		name: "VK",
@@ -58,7 +59,7 @@ export const vk = (options: VkOption) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				deviceId,
-				tokenEndpoint: "https://id.vk.com/oauth2/auth",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -71,7 +72,7 @@ export const vk = (options: VkOption) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://id.vk.com/oauth2/auth",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(data) {

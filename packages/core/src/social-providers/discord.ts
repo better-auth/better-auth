@@ -80,6 +80,7 @@ export interface DiscordOptions extends ProviderOptions<DiscordProfile> {
 }
 
 export const discord = (options: DiscordOptions) => {
+	const tokenEndpoint = "https://discord.com/api/oauth2/token";
 	return {
 		id: "discord",
 		name: "Discord",
@@ -109,7 +110,7 @@ export const discord = (options: DiscordOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://discord.com/api/oauth2/token",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -122,7 +123,7 @@ export const discord = (options: DiscordOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://discord.com/api/oauth2/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
