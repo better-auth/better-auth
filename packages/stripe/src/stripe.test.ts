@@ -2261,16 +2261,25 @@ describe("stripe", async () => {
 
 		// Verify different types are preserved
 		expect(limits).toBeDefined();
-		expect(limits?.maxUsers).toBe(100);
-		expect(limits?.maxProjects).toBe(10);
-		expect(Array.isArray(limits?.features)).toBe(true);
-		expect(limits?.features).toEqual(["analytics", "api", "webhooks"]);
-		expect(Array.isArray(limits?.supportedMethods)).toBe(true);
-		expect(typeof limits?.rateLimit).toBe("object");
-		expect(limits?.rateLimit?.requests).toBe(1000);
-		expect(limits?.permissions?.admin).toBe(true);
-		expect(limits?.quotas?.storage).toBe(50);
-		expect(Array.isArray(limits?.quotas?.bandwidth)).toBe(true);
+
+		// Type-safe access with unknown (cast once for test convenience)
+		const typedLimits = limits as Record<string, unknown>;
+		expect(typedLimits.maxUsers).toBe(100);
+		expect(typedLimits.maxProjects).toBe(10);
+		expect(typeof typedLimits.rateLimit).toBe("object");
+		expect(typedLimits.features).toEqual(["analytics", "api", "webhooks"]);
+		expect(Array.isArray(typedLimits.features)).toBe(true);
+		expect(Array.isArray(typedLimits.supportedMethods)).toBe(true);
+		expect((typedLimits.quotas as Record<string, unknown>).storage).toBe(50);
+		expect((typedLimits.rateLimit as Record<string, unknown>).requests).toBe(
+			1000,
+		);
+		expect((typedLimits.permissions as Record<string, unknown>).admin).toBe(
+			true,
+		);
+		expect(
+			Array.isArray((typedLimits.quotas as Record<string, unknown>).bandwidth),
+		).toBe(true);
 	});
 
 	describe("Duplicate customer prevention on signup", () => {
