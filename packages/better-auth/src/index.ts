@@ -22,5 +22,5 @@ export {
 } from "@better-auth/telemetry";
 // re-export third party types
 export type { JSONWebKeySet, JWTPayload } from "jose";
-export type * from "zod/v4";
+export type * from "zod";
 export { APIError } from "./api";
