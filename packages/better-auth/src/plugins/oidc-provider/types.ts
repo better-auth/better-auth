@@ -1,5 +1,5 @@
 import type { InferOptionSchema, User } from "../../types";
-import type { schema } from "./schema";
+import type { OAuthApplication, schema } from "./schema";
 
 export interface OIDCOptions {
 	/**
@@ -278,66 +278,24 @@ export interface AuthorizationQuery {
 	nonce?: string | undefined;
 }
 
-export interface Client {
-	/**
-	 * Client ID
-	 *
-	 * size 32
-	 *
-	 * as described on https://www.rfc-editor.org/rfc/rfc6749.html#section-2.2
-	 */
-	clientId: string;
-	/**
-	 * Client Secret
-	 *
-	 * A secret for the client, if required by the authorization server.
-	 * Optional for public clients using PKCE.
-	 *
-	 * size 32
-	 */
-	clientSecret?: string | undefined;
-	/**
-	 * The client type
-	 *
-	 * as described on https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
-	 *
-	 * - web - A web application
-	 * - native - A mobile application
-	 * - user-agent-based - A user-agent-based application
-	 * - public - A public client (PKCE-enabled, no client_secret)
-	 */
-	type: "web" | "native" | "user-agent-based" | "public";
+export type Client = Omit<
+	OAuthApplication,
+	"metadata" | "updatedAt" | "createdAt" | "redirectUrls" | "userId"
+> & {
+	metadata: Record<string, any> | null;
 	/**
 	 * List of registered redirect URLs. Must include the whole URL, including the protocol, port,
 	 * and path.
 	 *
 	 * For example, `https://example.com/auth/callback`
 	 */
-	redirectURLs: string[];
-	/**
-	 * The name of the client.
-	 */
-	name: string;
-	/**
-	 * The icon of the client.
-	 */
-	icon?: string | undefined;
-	/**
-	 * Additional metadata about the client.
-	 */
-	metadata: {
-		[key: string]: any;
-	} | null;
-	/**
-	 * Whether the client is disabled or not.
-	 */
-	disabled: boolean;
+	redirectUrls: string[];
 	/**
 	 * Whether to skip the consent screen for this client.
 	 * Only applies to trusted clients.
 	 */
 	skipConsent?: boolean | undefined;
-}
+};
 
 export interface TokenBody {
 	/**

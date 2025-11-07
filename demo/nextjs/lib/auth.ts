@@ -1,3 +1,4 @@
+import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -16,7 +17,6 @@ import {
 	organization,
 	twoFactor,
 } from "better-auth/plugins";
-import { passkey } from "better-auth/plugins/passkey";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
@@ -350,7 +350,7 @@ export const auth = betterAuth({
 		}),
 		lastLoginMethod(),
 	],
-	trustedOrigins: ["exp://"],
+	trustedOrigins: ["exp://", "https://appleid.apple.com"],
 	advanced: {
 		crossSubDomainCookies: {
 			enabled: process.env.NODE_ENV === "production",

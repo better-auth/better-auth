@@ -12,3 +12,5 @@ export const apiKeyClient = () => {
 		},
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type ApiKeyClientPlugin = ReturnType<typeof apiKeyClient>;

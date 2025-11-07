@@ -26,13 +26,15 @@ export type InferValueType<T extends DBFieldType> = T extends "string"
 			? boolean
 			: T extends "date"
 				? Date
-				: T extends `${infer T}[]`
-					? T extends "string"
-						? string[]
-						: number[]
-					: T extends Array<any>
-						? T[number]
-						: never;
+				: T extends "json"
+					? Record<string, any>
+					: T extends `${infer U}[]`
+						? U extends "string"
+							? string[]
+							: number[]
+						: T extends Array<any>
+							? T[number]
+							: never;
 
 export type InferFieldsOutput<Field> = Field extends Record<
 	infer Key,

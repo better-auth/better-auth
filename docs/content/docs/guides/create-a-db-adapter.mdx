@@ -151,11 +151,7 @@ adapter: ({
 The `create` method is used to create a new record in the database.
 
 <Callout>
-Note:
-If the user has enabled the `useNumberId` option, or if `generateId` is `false` in the user's Better Auth config,
-then it's expected that the `id` is provided in the `data` object. Otherwise, the `id` will be automatically generated.
-
-Additionally, it's possible to pass `forceAllowId` as a parameter to the `create` method, which allows `id` to be provided in the `data` object.
+It's possible to pass `forceAllowId` as a parameter to the `create` method, which allows `id` to be provided in the `data` object.
 We handle `forceAllowId` internally, so you don't need to worry about it.
 </Callout>
 

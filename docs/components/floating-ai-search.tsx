@@ -101,7 +101,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 	return (
 		<div
 			className={cn(
-				"flex flex-col relative bg-fd-background m-[1px] border border-fd-border rounded-lg shadow-2xl shadow-fd-background",
+				"flex relative flex-col rounded-lg border shadow-2xl bg-fd-background m-[1px] border-fd-border shadow-fd-background",
 				isLoading ? "opacity-50" : "",
 			)}
 		>
@@ -132,12 +132,12 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 						className={cn(
 							buttonVariants({
 								color: "secondary",
-								className: "transition-all rounded-full mt-2 gap-2",
+								className: "gap-2 mt-2 rounded-full transition-all",
 							}),
 						)}
 						onClick={stop}
 					>
-						<Loader2 className="size-4 animate-spin text-fd-muted-foreground" />
+						<Loader2 className="animate-spin size-4 text-fd-muted-foreground" />
 					</button>
 				) : (
 					<button
@@ -146,7 +146,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 						className={cn(
 							buttonVariants({
 								color: "secondary",
-								className: "transition-all rounded-full mt-2",
+								className: "mt-2 rounded-full transition-all",
 							}),
 						)}
 						disabled={input.length === 0}
@@ -158,7 +158,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 
 			{showSuggestions && (
 				<div className={cn("mt-3", props.isMobile ? "px-3" : "px-4")}>
-					<p className="text-xs font-medium text-fd-muted-foreground mb-2">
+					<p className="mb-2 text-xs font-medium text-fd-muted-foreground">
 						Try asking:
 					</p>
 					<div
@@ -199,7 +199,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 					<Popover>
 						<PopoverTrigger asChild>
 							<button
-								className="sm:hidden hover:bg-fd-accent/50 rounded transition-colors"
+								className="rounded transition-colors sm:hidden hover:bg-fd-accent/50"
 								aria-label="Show information"
 							>
 								<InfoIcon className="size-3.5" />
@@ -208,7 +208,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 						<PopoverContent
 							side="top"
 							align="end"
-							className="w-auto max-w-44 p-2 text-xs text-pretty"
+							className="p-2 w-auto text-xs max-w-44 text-pretty"
 						>
 							AI can be inaccurate, please verify the information.
 						</PopoverContent>
@@ -216,9 +216,9 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 				</div>
 			)}
 			{!showSuggestions && (
-				<div className="border-t px-4 text-xs text-fd-muted-foreground cursor-pointer bg-fd-accent/40 flex items-center gap-1 mt-2 py-2">
+				<div className="flex gap-1 items-center px-4 py-2 mt-2 text-xs border-t cursor-pointer text-fd-muted-foreground bg-fd-accent/40">
 					<div
-						className="flex items-center gap-1 empty:hidden hover:text-fd-foreground transition-all duration-200 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+						className="flex gap-1 items-center transition-all duration-200 empty:hidden hover:text-fd-foreground aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
 						role="button"
 						aria-disabled={isLoading}
 						tabIndex={0}
@@ -331,11 +331,11 @@ function Input(props: ComponentProps<"textarea">) {
 				id="nd-ai-input"
 				{...props}
 				className={cn(
-					"resize-none bg-transparent placeholder:text-fd-muted-foreground focus-visible:outline-none",
+					"bg-transparent resize-none placeholder:text-fd-muted-foreground focus-visible:outline-none",
 					shared,
 				)}
 			/>
-			<div ref={ref} className={cn(shared, "break-all invisible")}>
+			<div ref={ref} className={cn(shared, "invisible break-all")}>
 				{`${props.value?.toString() ?? ""}\n`}
 			</div>
 		</div>
@@ -353,8 +353,8 @@ function ThinkingIndicator() {
 			<p className="mb-1 text-sm font-medium text-fd-muted-foreground">
 				BA bot
 			</p>
-			<div className="flex items-end gap-1 text-sm text-fd-muted-foreground">
-				<div className="flex items-center gap-1 opacity-70">
+			<div className="flex gap-1 items-end text-sm text-fd-muted-foreground">
+				<div className="flex gap-1 items-center opacity-70">
 					<span className="inline-block size-1 bg-fd-primary rounded-full animate-bounce [animation-delay:0ms]" />
 					<span className="inline-block size-1 opacity-80 bg-fd-primary rounded-full animate-bounce [animation-delay:150ms]" />
 					<span className="inline-block size-1 bg-fd-primary rounded-full animate-bounce [animation-delay:300ms]" />
@@ -413,11 +413,11 @@ function Message({
 			>
 				{roleName[message.role] ?? "unknown"}
 			</p>
-			<div className="prose text-sm">
+			<div className="text-sm prose">
 				<Markdown text={markdown} />
 			</div>
 			{links && links.length > 0 && (
-				<div className="mt-3 flex flex-col gap-2">
+				<div className="flex flex-col gap-2 mt-3">
 					<p className="text-xs font-medium text-fd-muted-foreground">
 						References:
 					</p>
@@ -426,7 +426,7 @@ function Message({
 							<Link
 								key={i}
 								href={item.url}
-								className="flex items-center gap-2 text-xs rounded-lg border p-2 hover:bg-fd-accent hover:text-fd-accent-foreground transition-colors"
+								className="flex gap-2 items-center p-2 text-xs rounded-lg border transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground"
 								target="_blank"
 								rel="noopener noreferrer"
 							>
@@ -561,11 +561,11 @@ export function AISearchTrigger() {
 					>
 						<div
 							className={cn(
-								"sticky top-0 flex gap-2 items-center py-2",
+								"flex sticky top-0 gap-2 items-center py-2",
 								isMobile ? "w-full" : "w-[min(800px,90vw)]",
 							)}
 						>
-							<div className="flex justify-end w-full items-center">
+							<div className="flex justify-end items-center w-full">
 								<button
 									aria-label="Close"
 									tabIndex={-1}
@@ -587,7 +587,7 @@ export function AISearchTrigger() {
 							className={cn(
 								"overscroll-contain",
 								isMobile
-									? "pt-6 pb-28 px-2 w-full"
+									? "px-2 pt-6 pb-28 w-full"
 									: "py-10 pr-2 w-[min(800px,90vw)]",
 							)}
 							style={{

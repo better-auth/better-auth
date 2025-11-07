@@ -162,8 +162,8 @@ export async function createJwk(
 		createdAt: new Date(),
 	};
 
-	const adapter = getJwksAdapter(ctx.context.adapter);
-	const key = await adapter.createJwk(jwk as Jwk);
+	const adapter = getJwksAdapter(ctx.context.adapter, options);
+	const key = await adapter.createJwk(ctx, jwk as Jwk);
 
 	return key;
 }
