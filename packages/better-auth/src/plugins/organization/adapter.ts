@@ -303,8 +303,29 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return member;
 		},
-		deleteMember: async (memberId: string) => {
+		deleteMember: async ({
+			memberId,
+			organizationId,
+			userId: _userId,
+		}: {
+			memberId: string;
+			organizationId: string;
+			userId?: string;
+		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			let userId: string;
+			if (!_userId) {
+				const member = await adapter.findOne<Member>({
+					model: "member",
+					where: [{ field: "id", value: memberId }],
+				});
+				if (!member) {
+					throw new BetterAuthError("Member not found");
+				}
+				userId = member.userId;
+			} else {
+				userId = _userId;
+			}
 			const member = await adapter.delete<InferMember<O>>({
 				model: "member",
 				where: [
@@ -314,6 +335,24 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
+			// remove member from all teams they're part of
+			if (options?.teams?.enabled) {
+				const teams = await adapter.findMany<Team>({
+					model: "team",
+					where: [{ field: "organizationId", value: organizationId }],
+				});
+				await Promise.all(
+					teams.map((team) =>
+						adapter.deleteMany({
+							model: "teamMember",
+							where: [
+								{ field: "teamId", value: team.id },
+								{ field: "userId", value: userId },
+							],
+						}),
+					),
+				);
+			}
 			return member;
 		},
 		updateOrganization: async (
@@ -819,7 +858,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				},
 			});
 		},
-
 		removeTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			// use `deleteMany` instead of `delete` since Prisma requires 1 unique field for normal `delete` operations
@@ -838,7 +876,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 			});
 		},
-
 		findInvitationsByTeamId: async (teamId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const invitations = await adapter.findMany<InferInvitation<O>>({
