@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { google } from "../google";
+import { google } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
 
 // Mock betterFetch
