@@ -16,7 +16,7 @@ const AlertDialogOverlay = ({
 	className,
 	...props
 }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay> & {
-	ref: React.RefObject<React.ElementRef<typeof AlertDialogPrimitive.Overlay>>;
+	ref?: React.RefObject<React.ElementRef<typeof AlertDialogPrimitive.Overlay>>;
 }) => (
 	<AlertDialogPrimitive.Overlay
 		className={cn(
@@ -34,7 +34,7 @@ const AlertDialogContent = ({
 	className,
 	...props
 }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content> & {
-	ref: React.RefObject<React.ElementRef<typeof AlertDialogPrimitive.Content>>;
+	ref?: React.RefObject<React.ElementRef<typeof AlertDialogPrimitive.Content>>;
 }) => (
 	<AlertDialogPortal>
 		<AlertDialogOverlay />
@@ -83,7 +83,7 @@ const AlertDialogTitle = ({
 	className,
 	...props
 }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Title> & {
-	ref: React.RefObject<React.ElementRef<typeof AlertDialogPrimitive.Title>>;
+	ref?: React.RefObject<React.ElementRef<typeof AlertDialogPrimitive.Title>>;
 }) => (
 	<AlertDialogPrimitive.Title
 		ref={ref}
@@ -98,7 +98,7 @@ const AlertDialogDescription = ({
 	className,
 	...props
 }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Description> & {
-	ref: React.RefObject<
+	ref?: React.RefObject<
 		React.ElementRef<typeof AlertDialogPrimitive.Description>
 	>;
 }) => (
@@ -116,7 +116,7 @@ const AlertDialogAction = ({
 	className,
 	...props
 }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action> & {
-	ref: React.RefObject<React.ElementRef<typeof AlertDialogPrimitive.Action>>;
+	ref?: React.RefObject<React.ElementRef<typeof AlertDialogPrimitive.Action>>;
 }) => (
 	<AlertDialogPrimitive.Action
 		ref={ref}
@@ -131,7 +131,7 @@ const AlertDialogCancel = ({
 	className,
 	...props
 }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel> & {
-	ref: React.RefObject<React.ElementRef<typeof AlertDialogPrimitive.Cancel>>;
+	ref?: React.RefObject<React.ElementRef<typeof AlertDialogPrimitive.Cancel>>;
 }) => (
 	<AlertDialogPrimitive.Cancel
 		ref={ref}
