@@ -621,8 +621,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 													user: {
 														$ref: "#/components/schemas/User",
 													},
-													required: ["status", "token", "user"],
 												},
+												required: ["status", "token", "user"],
 											},
 										},
 									},

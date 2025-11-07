@@ -16,6 +16,7 @@ import type {
 	Where,
 	CleanedWhere,
 } from "@better-auth/core/db/adapter";
+
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];

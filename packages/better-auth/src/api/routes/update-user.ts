@@ -14,6 +14,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { originCheck } from "../middlewares";
+import { parseUserInput } from "../../db/schema";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -90,13 +91,18 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			}
 			const { name, image, ...rest } = body;
 			const session = ctx.context.session;
+			const additionalFields = parseUserInput(
+				ctx.context.options,
+				rest,
+				"update",
+			);
 			if (
 				image === undefined &&
 				name === undefined &&
-				Object.keys(rest).length === 0
+				Object.keys(additionalFields).length === 0
 			) {
-				return ctx.json({
-					status: true,
+				throw new APIError("BAD_REQUEST", {
+					message: "No fields to update",
 				});
 			}
 			const user = await ctx.context.internalAdapter.updateUser(
@@ -104,7 +110,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				{
 					name,
 					image,
-					...rest,
+					...additionalFields,
 				},
 				ctx,
 			);
@@ -438,9 +444,6 @@ export const deleteUser = createAuthEndpoint(
 		if (!ctx.context.options.user?.deleteUser?.enabled) {
 			ctx.context.logger.error(
 				"Delete user is disabled. Enable it in the options",
-				{
-					session: ctx.context.session,
-				},
 			);
 			throw new APIError("NOT_FOUND");
 		}

@@ -281,6 +281,16 @@ export const router = <Option extends BetterAuthOptions>(
 					if (response && "response" in response) {
 						return response.response;
 					}
+					if (response && "request" in response) {
+						const rateLimitResponse = await onRequestRateLimit(
+							response.request,
+							ctx,
+						);
+						if (rateLimitResponse) {
+							return rateLimitResponse;
+						}
+						return response.request;
+					}
 				}
 			}
 			return onRequestRateLimit(req, ctx);

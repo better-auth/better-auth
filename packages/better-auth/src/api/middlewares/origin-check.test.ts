@@ -141,6 +141,31 @@ describe("Origin Check", async (it) => {
 		}
 	});
 
+	it("should reject callback url with malicious domain with wildcard trusted origins", async (ctx) => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["*.example.com"],
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword(url, user) {},
+			},
+		});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					cookie: "session=123",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "malicious.com?.example.com",
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should reject untrusted origin headers", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",

@@ -267,7 +267,7 @@ export function Builder() {
 					</DialogDescription>
 				</DialogHeader>
 
-				<div className="flex gap-4 md:gap-12 flex-col md:flex-row items-center md:items-start">
+				<div className="overflow-y-scroll no-scrollbar flex gap-4 md:gap-12 flex-col md:flex-row items-center md:items-start">
 					<div className={cn("w-4/12")}>
 						<div
 							className="overflow-scroll h-[580px] relative"

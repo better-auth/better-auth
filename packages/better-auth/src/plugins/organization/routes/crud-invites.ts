@@ -42,7 +42,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			])
 			.meta({
 				description:
-					'The role(s) to assign to the user. It can be `admin`, `member`, or `guest`. Eg: "member"',
+					'The role(s) to assign to the user. It can be `admin`, `member`, owner. Eg: "member"',
 			}),
 		organizationId: z
 			.string()

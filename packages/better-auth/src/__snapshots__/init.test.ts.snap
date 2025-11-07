@@ -294,6 +294,7 @@ exports[`init > should match config 1`] = `
         "emailVerified": {
           "defaultValue": false,
           "fieldName": "emailVerified",
+          "input": false,
           "required": true,
           "type": "boolean",
         },
