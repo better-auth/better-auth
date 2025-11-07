@@ -437,3 +437,80 @@ describe("phone number verification requirement", async () => {
 		expect(otp).toHaveLength(6);
 	});
 });
+
+describe("updateUser phone number verification reset", async () => {
+	let otp = "";
+
+	const { customFetchImpl, sessionSetter } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				async sendOTP({ code }) {
+					otp = code;
+				},
+				signUpOnVerification: {
+					getTempEmail(phoneNumber) {
+						return `temp-${phoneNumber}`;
+					},
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [phoneNumberClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const headers = new Headers();
+	const initialPhoneNumber = "+251911121314";
+	const newPhoneNumber = "+9876543210";
+
+	it("should reset phoneNumberVerified to false when updating phone number via updateUser", async () => {
+		// First, verify a phone number to set phoneNumberVerified to true
+		await client.phoneNumber.sendOtp({
+			phoneNumber: initialPhoneNumber,
+		});
+		const verifyRes = await client.phoneNumber.verify(
+			{
+				phoneNumber: initialPhoneNumber,
+				code: otp,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		expect(verifyRes.error).toBe(null);
+		expect(verifyRes.data?.status).toBe(true);
+
+		// Verify that phoneNumberVerified is true after verification
+		const sessionBeforeUpdate = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(sessionBeforeUpdate.data?.user.phoneNumberVerified).toBe(true);
+		expect(sessionBeforeUpdate.data?.user.phoneNumber).toBe(initialPhoneNumber);
+
+		// Update the phone number via updateUser with an unverified phone number
+		const updateRes = await client.updateUser({
+			phoneNumber: newPhoneNumber,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(updateRes.error).toBe(null);
+		expect(updateRes.data?.status).toBe(true);
+
+		// Verify that phoneNumberVerified is now false
+		const sessionAfterUpdate = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(sessionAfterUpdate.data?.user.phoneNumberVerified).toBe(false);
+		expect(sessionAfterUpdate.data?.user.phoneNumber).toBe(newPhoneNumber);
+	});
+});
