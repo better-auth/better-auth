@@ -27,7 +27,7 @@ const fastValidator = {
 
 saml.setSchemaValidator(fastValidator);
 
-export type DomainVerificationEndpoints<O extends SSOOptions> = {
+type DomainVerificationEndpoints<O extends SSOOptions> = {
 	submitDomainVerification: ReturnType<typeof submitDomainVerification<O>>;
 	verifyDomain: ReturnType<typeof verifyDomain<O>>;
 };
@@ -74,8 +74,8 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 
 	if (options?.domainVerification?.enabled) {
 		const domainVerificationEndpoints = {
-			submitDomainVerification: submitDomainVerification(options),
-			verifyDomain: verifyDomain(options),
+			submitDomainVerification: submitDomainVerification(options as O),
+			verifyDomain: verifyDomain(options as O),
 		};
 
 		endpoints = {
