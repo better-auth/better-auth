@@ -17,7 +17,7 @@ type OAuthState = {
 const {
 	get: getOAuthState,
 	/**
-	 * @internal This is unsafe to be used directly. Use setOauthState instead.
+	 * @internal This is unsafe to be used directly. Use setOAuthState instead.
 	 */
 	set: setOAuthState,
 } = defineRequestState<OAuthState>();
