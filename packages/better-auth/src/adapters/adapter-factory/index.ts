@@ -69,11 +69,10 @@ export const createAdapterFactory =
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
 			supportsJoin: cfg.supportsJoin ?? false,
 		} satisfies AdapterFactoryConfig;
-
-		if (
-			options.advanced?.database?.useNumberId === true &&
-			config.supportsNumericIds === false
-		) {
+		const useNumberId =
+			options.advanced?.database?.useNumberId === true ||
+			options.advanced?.database?.generateId === "serial";
+		if (useNumberId && config.supportsNumericIds === false) {
 			throw new BetterAuthError(
 				`[${config.adapterName}] Your database or database adapter does not support numeric ids. Please disable "useNumberId" in your config.`,
 			);
