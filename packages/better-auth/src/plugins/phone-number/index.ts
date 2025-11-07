@@ -141,19 +141,14 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 	return {
 		id: "phone-number",
 		hooks: {
-			after: [
+			before: [
 				{
-					// if a request was made to update the user and the phone number is being updated
-					// make sure to set `phoneNumberVerified` to `false`
+					// Stop any requests attempting to update the user's phone number
 					matcher: (ctx) =>
-						ctx.path === "/update-user" &&
-						"phoneNumber" in ctx.body &&
-						ctx.body.phoneNumber,
+						ctx.path === "/update-user" && "phoneNumber" in ctx.body,
 					handler: createAuthMiddleware(async (ctx) => {
-						const session = ctx.context.session;
-						if (!session) return;
-						await ctx.context.internalAdapter.updateUser(session.user.id, {
-							phoneNumberVerified: false,
+						throw new APIError("BAD_REQUEST", {
+							message: "Phone number cannot be updated",
 						});
 					}),
 				},
