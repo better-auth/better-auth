@@ -46,9 +46,17 @@ export type DBFieldAttributeConfig = {
 	returned?: boolean | undefined;
 	/**
 	 * If a value should be provided when creating a new record.
+	 *
+	 * - `true` - The field will be included in the user input.
+	 * - `false` - The field will be excluded from the user input.
+	 * - `"update"` - The field will be included in the user input when updating a record but not when
+	 * creating a new record.
+	 * - `"create"` - The field will be included in the user input when creating a new record but not
+	 * when updating a record.
+	 *
 	 * @default true
 	 */
-	input?: boolean | undefined;
+	input?: boolean | undefined | "update" | "create";
 	/**
 	 * Default value for the field
 	 *

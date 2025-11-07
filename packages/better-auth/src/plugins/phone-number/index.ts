@@ -931,6 +931,8 @@ const schema = {
 				unique: true,
 				sortable: true,
 				returned: true,
+				//only allow to set phone number when creating a new user
+				input: "create",
 			},
 			phoneNumberVerified: {
 				type: "boolean",

@@ -437,3 +437,58 @@ describe("phone number verification requirement", async () => {
 		expect(otp).toHaveLength(6);
 	});
 });
+
+describe("updateUser phone number", async () => {
+	let otp = "";
+
+	const { customFetchImpl, sessionSetter } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				async sendOTP({ code }) {
+					otp = code;
+				},
+				signUpOnVerification: {
+					getTempEmail(phoneNumber) {
+						return `temp-${phoneNumber}`;
+					},
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [phoneNumberClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const headers = new Headers();
+	const initialPhoneNumber = "+251911121314";
+	const newPhoneNumber = "+9876543210";
+
+	it("should not allow to update phone number through `updateUser`", async () => {
+		// First, verify a phone number to set phoneNumberVerified to true
+		await client.phoneNumber.sendOtp({
+			phoneNumber: initialPhoneNumber,
+		});
+		const verifyRes = await client.phoneNumber.verify(
+			{
+				phoneNumber: initialPhoneNumber,
+				code: otp,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const updateRes = await client.updateUser({
+			phoneNumber: newPhoneNumber,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(updateRes.error?.code).toBe("PHONENUMBER_IS_NOT_ALLOWED_TO_BE_SET");
+	});
+});

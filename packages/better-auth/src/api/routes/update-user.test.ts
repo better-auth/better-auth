@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { memoryAdapter } from "../../adapters/memory-adapter";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -382,6 +383,26 @@ describe("updateUser", async () => {
 		);
 		expect(res.error).toBeDefined();
 		expect(res.error?.message).toBe("newField is not allowed to be set");
+	});
+
+	it("should not allow update fields that aren't defined in the user schema", async () => {
+		const { client, signInWithTestUser } = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			}),
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await client.updateUser(
+			{
+				//@ts-expect-error
+				newField: "new",
+			},
+			{ headers },
+		);
+		expect(res.error?.code).toBe("NO_FIELDS_TO_UPDATE");
 	});
 });
 
