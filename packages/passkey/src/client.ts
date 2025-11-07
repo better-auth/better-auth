@@ -146,6 +146,9 @@ export const getPasskeyActions = (
 				return verified;
 			}
 			$listPasskeys.set(Math.random());
+			return {
+				data: verified.data
+			}
 		} catch (e) {
 			if (e instanceof WebAuthnError) {
 				if (e.code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED") {
@@ -190,15 +193,6 @@ export const getPasskeyActions = (
 				},
 			};
 		}
-		return {
-			data: null,
-			error: {
-				code: "UNKNOWN_ERROR",
-				message: PASSKEY_ERROR_CODES.UNKNOWN_ERROR,
-				status: 500,
-				statusText: "INTERNAL_SERVER_ERROR",
-			},
-		};
 	};
 
 	return {
