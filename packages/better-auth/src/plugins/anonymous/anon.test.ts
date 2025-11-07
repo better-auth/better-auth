@@ -10,13 +10,13 @@ import {
 	it,
 	vi,
 } from "vitest";
+import * as apiModule from "../../api";
 import { createAuthClient } from "../../client";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { anonymous } from ".";
 import { anonymousClient } from "./client";
-import * as apiModule from "../../api";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];
