@@ -575,9 +575,20 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				}
 
-				// avoid overwriting
-				const { subscription_data, metadata, ...restParams } =
-					params?.params || {};
+				// Exclude fields from restParams to prevent override
+				const {
+					subscription_data: subscriptionData,
+					metadata,
+					mode,
+					client_reference_id,
+					success_url,
+					cancel_url,
+					line_items,
+					customer,
+					customer_email,
+					customer_update,
+					...restParams
+				} = params?.params || {};
 
 				const checkoutSession = await client.checkout.sessions
 					.create(
@@ -610,11 +621,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							],
 							mode: "subscription",
 							client_reference_id: referenceId,
-							subscription_data: defu(params?.params?.subscription_data, {
+							subscription_data: defu(subscriptionData, {
 								...freeTrial,
 							}),
 							metadata: {
-								...params?.params?.metadata,
+								...metadata,
 								userId: user.id,
 								subscriptionId: subscription.id,
 								referenceId,
