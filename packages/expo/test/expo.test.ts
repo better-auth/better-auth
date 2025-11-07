@@ -332,18 +332,12 @@ describe("expo", async () => {
 		const storedCookieAfter = storage.get("better-auth_cookie");
 		expect(storedCookieAfter).toBeDefined();
 		const parsedCookieAfter = JSON.parse(storedCookieAfter || "");
+		expect(parsedCookieAfter[testCookie]?.value).toBe(testCookieValue);
 		Object.keys(parsedCookieBefore).forEach((key) => {
-			if (key === testCookie) {
-				expect(
-					parsedCookieAfter[key]?.value,
-					`cookie "${key}" value is added`,
-				).toBe(testCookieValue);
-			} else {
-				expect(
-					parsedCookieAfter[key]?.value,
-					`cookie "${key}" value is preserved`,
-				).toBe(parsedCookieBefore[key]?.value);
-			}
+			expect(
+				parsedCookieAfter[key]?.value,
+				`cookie "${key}" value is preserved`,
+			).toBe(parsedCookieBefore[key]?.value);
 		});
 	});
 });
