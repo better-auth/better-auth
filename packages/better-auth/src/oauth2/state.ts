@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import * as z from "zod";
-import { setOauthState } from "../api/middlewares/oauth";
+import { setOAuthState } from "../api/middlewares/oauth";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -31,6 +31,7 @@ export async function generateState(
 		c.context.oauthConfig?.storeStateStrategy || "cookie";
 
 	const stateData = {
+		...(additionalData ? additionalData : {}),
 		callbackURL,
 		codeVerifier,
 		errorURL: c.body?.errorCallbackURL,
@@ -41,12 +42,9 @@ export async function generateState(
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
-		additionalData: !!additionalData ? additionalData : undefined,
 	};
 
-	if (additionalData) {
-		await setOauthState(additionalData);
-	}
+	await setOAuthState(stateData);
 
 	if (storeStateStrategy === "cookie") {
 		// Store state data in an encrypted cookie
@@ -59,7 +57,7 @@ export async function generateState(
 			maxAge: 10 * 60 * 1000, // 10 minutes
 		});
 
-		await c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
+		c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
 
 		return {
 			state,
@@ -104,21 +102,22 @@ export async function parseState(c: GenericEndpointContext) {
 	const storeStateStrategy =
 		c.context.oauthConfig.storeStateStrategy || "cookie";
 
-	const stateDataSchema = z.object({
-		callbackURL: z.string(),
-		codeVerifier: z.string(),
-		errorURL: z.string().optional(),
-		newUserURL: z.string().optional(),
-		expiresAt: z.number(),
-		link: z
-			.object({
-				email: z.string(),
-				userId: z.coerce.string(),
-			})
-			.optional(),
-		requestSignUp: z.boolean().optional(),
-		additionalData: z.record(z.string(), z.any()).optional(),
-	});
+	const stateDataSchema = z
+		.object({
+			callbackURL: z.string(),
+			codeVerifier: z.string(),
+			errorURL: z.string().optional(),
+			newUserURL: z.string().optional(),
+			expiresAt: z.number(),
+			link: z
+				.object({
+					email: z.string(),
+					userId: z.coerce.string(),
+				})
+				.optional(),
+			requestSignUp: z.boolean().optional(),
+		})
+		.loose();
 
 	let parsedData: z.infer<typeof stateDataSchema>;
 
@@ -209,8 +208,8 @@ export async function parseState(c: GenericEndpointContext) {
 		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 	}
 
-	if (parsedData.additionalData) {
-		await setOauthState(parsedData.additionalData);
+	if (parsedData) {
+		await setOAuthState(parsedData);
 	}
 
 	return parsedData;
