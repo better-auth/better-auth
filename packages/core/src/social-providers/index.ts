@@ -1,4 +1,4 @@
-import * as z from "zod";
+import { z } from "zod";
 import { apple } from "./apple";
 import { atlassian } from "./atlassian";
 import { cognito } from "./cognito";
