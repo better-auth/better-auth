@@ -1,4 +1,5 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
+import z from "zod";
 import { type AsyncLocalStorage, getAsyncLocalStorage } from "../async_hooks";
 
 export type RequestStateWeakMap = WeakMap<StandardSchemaV1, any>;
@@ -43,18 +44,18 @@ export async function runWithRequestState<T>(
 }
 
 export interface RequestState<T> {
-	get(): Promise<T | undefined>;
+	get<S>(): Promise<S & T>;
 	set(value: T): Promise<void>;
 }
 
 export function defineRequestState<T>(
-	schema: StandardSchemaV1<T>,
+	schema?: StandardSchemaV1<T>,
 ): RequestState<T>;
 export function defineRequestState<Schema extends StandardSchemaV1>(
-	schema: Schema,
+	schema?: Schema,
 ): RequestState<StandardSchemaV1.InferInput<Schema>>;
 export function defineRequestState(
-	schema: StandardSchemaV1,
+	schema: StandardSchemaV1 = z.any(),
 ): RequestState<any> {
 	return {
 		async get() {
@@ -64,7 +65,11 @@ export function defineRequestState(
 
 		async set(value) {
 			const store = await getCurrentRequestState();
-			store.set(schema, value);
+			const parsedValue = await schema["~standard"].validate(value);
+			if (parsedValue.issues) {
+				throw new Error(`Invalid value: ${JSON.stringify(parsedValue.issues)}`);
+			}
+			store.set(schema, parsedValue.value);
 		},
 	};
 }

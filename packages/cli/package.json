@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.4.0-beta.16",
+  "version": "1.4.0-beta.18",
   "type": "module",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
@@ -53,6 +53,7 @@
     "@clack/prompts": "^0.11.0",
     "@mrleebo/prisma-ast": "^0.13.0",
     "@prisma/client": "^5.22.0",
+    "@types/pg": "^8.15.5",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.2.0",
     "c12": "^3.2.0",
@@ -63,6 +64,7 @@
     "get-tsconfig": "^4.10.1",
     "jiti": "^2.6.0",
     "open": "^10.2.0",
+    "pg": "^8.16.3",
     "prettier": "^3.6.2",
     "prisma": "^5.22.0",
     "prompts": "^2.4.2",
