@@ -574,6 +574,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						);
 					}
 				}
+
+				// avoid overwriting
+				const { subscription_data, metadata, ...restParams } =
+					params?.params || {};
+
 				const checkoutSession = await client.checkout.sessions
 					.create(
 						{
@@ -603,18 +608,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									quantity: ctx.body.seats || 1,
 								},
 							],
-							subscription_data: {
-								...freeTrial,
-							},
 							mode: "subscription",
 							client_reference_id: referenceId,
-							...params?.params,
+							subscription_data: defu(params?.params?.subscription_data, {
+								...freeTrial,
+							}),
 							metadata: {
+								...params?.params?.metadata,
 								userId: user.id,
 								subscriptionId: subscription.id,
 								referenceId,
-								...params?.params?.metadata,
 							},
+							...restParams,
 						},
 						params?.options,
 					)
