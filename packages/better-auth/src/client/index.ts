@@ -21,6 +21,10 @@ export function InferAuth<O extends { options: BetterAuthOptions }>() {
 	return {} as O["options"];
 }
 
+//#region Necessary re-exports
+export type * from "@better-auth/core/db";
 export type * from "@better-fetch/fetch";
 // @ts-expect-error
 export type * from "nanostores";
+export type * from "../plugins/access";
+//#endregion
