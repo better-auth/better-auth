@@ -13,6 +13,8 @@ import {
 import { schema } from "./schema";
 import type { Passkey, PasskeyOptions } from "./types";
 
+export * from "./error-codes";
+
 export const passkey = (options?: PasskeyOptions | undefined) => {
 	const opts = {
 		origin: null,
