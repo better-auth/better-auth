@@ -2,7 +2,7 @@ import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { getSessionFromCtx } from "../../api";
 import { shimContext } from "../../utils/shim";
 import { type AccessControl } from "../access";

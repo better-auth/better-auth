@@ -59,6 +59,13 @@ describe("organization", async (it) => {
 			logger: {
 				level: "error",
 			},
+			databaseHooks: {
+				session: {
+					update: {
+						before: async (data, ctx) => {},
+					},
+				},
+			},
 		});
 
 	const { headers } = await signInWithTestUser();
