@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth";
+  import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
@@ -26,7 +26,7 @@ describe("Domain verification", async () => {
 		name: "Test User",
 	};
 
-	const createTestAuth = () => {
+	const createTestAuth = (options?: SSOOptions) => {
 		const data = {
 			user: [],
 			session: [],
@@ -39,7 +39,9 @@ describe("Domain verification", async () => {
 		const memory = memoryAdapter(data);
 
 		const ssoOptions = {
+			...options,
 			domainVerification: {
+				...options?.domainVerification,
 				enabled: true,
 			},
 		} satisfies SSOOptions;
@@ -293,6 +295,32 @@ describe("Domain verification", async () => {
 				],
 				[
 					`ba-domain-verification-saml-provider-1=${provider.domainVerificationToken}`,
+				],
+			]);
+
+			const response = await auth.api.verifyDomain({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers,
+			});
+
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual({ ok: true });
+		});
+
+		it("should verify a provider domain ownership (custom token verification prefix)", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth({ domainVerification: { verificationTokenPrefix: "auth-prefix" }});
+			const headers = await getAuthHeaders();
+			const provider = await registerSSOProvider(headers);
+
+			dnsMock.resolveTxt.mockResolvedValue([
+				["google-site-verification=the-token"],
+				[
+					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
+				],
+				[
+					`auth-prefix-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 

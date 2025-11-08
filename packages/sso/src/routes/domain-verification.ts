@@ -52,7 +52,7 @@ export const submitDomainVerification = <O extends SSOOptions>(options: O) => {
 				where: [
 					{
 						field: "identifier",
-						value: `ba-domain-verification-${provider.providerId}`,
+						value: options.domainVerification?.verificationTokenPrefix ? `${options.domainVerification?.verificationTokenPrefix}-${provider.providerId}` : `ba-domain-verification-${provider.providerId}`,
 					},
 					{ field: "expiresAt", value: new Date(), operator: "lt" },
 				],
@@ -73,7 +73,7 @@ export const submitDomainVerification = <O extends SSOOptions>(options: O) => {
 				await ctx.context.adapter.create<Verification>({
 					model: "verification",
 					data: {
-						identifier: `ba-domain-verification-${provider.providerId}`,
+						identifier: options.domainVerification?.verificationTokenPrefix ? `${options.domainVerification?.verificationTokenPrefix}-${provider.providerId}` : `ba-domain-verification-${provider.providerId}`,
 						createdAt: new Date(),
 						updatedAt: new Date(),
 						value: domainVerificationToken,
@@ -139,7 +139,7 @@ export const verifyDomain = <O extends SSOOptions>(options: O) => {
 				where: [
 					{
 						field: "identifier",
-						value: `ba-domain-verification-${provider.providerId}`,
+						value: options.domainVerification?.verificationTokenPrefix ? `${options.domainVerification?.verificationTokenPrefix}-${provider.providerId}` : `ba-domain-verification-${provider.providerId}`,
 					},
 					{ field: "expiresAt", value: new Date(), operator: "gt" },
 				],

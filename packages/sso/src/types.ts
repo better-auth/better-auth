@@ -214,6 +214,16 @@ export interface SSOOptions {
 	 * prior to allowing sign-ins.
 	 */
 	domainVerification?: {
+		/**
+		 * Enables or disables the domain verification feature
+		 */
 		enabled?: boolean;
+
+		/**
+		 * Prefix used to generate the domain verification token
+		 * 
+		 * @default "ba-domain-verification-"
+		 */
+		verificationTokenPrefix?: string;
 	};
 }
