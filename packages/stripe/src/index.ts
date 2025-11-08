@@ -575,13 +575,24 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				}
 
-				// Extract only the fields we explicitly want to use
-				const { subscription_data: subscriptionData, metadata } =
-					params?.params || {};
+				// Exclude fields from restParams to prevent override
+				const {
+					subscription_data: subscriptionData,
+					metadata,
+					customer,
+					customer_email,
+					line_items,
+					mode,
+					client_reference_id,
+					success_url,
+					cancel_url,
+					...restParams
+				} = params?.params || {};
 
 				const checkoutSession = await client.checkout.sessions
 					.create(
 						{
+							...restParams,
 							...(customerId
 								? {
 										customer: customerId,
