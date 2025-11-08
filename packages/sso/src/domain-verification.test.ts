@@ -1,4 +1,4 @@
-  import { betterAuth } from "better-auth";
+import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
@@ -310,7 +310,9 @@ describe("Domain verification", async () => {
 		});
 
 		it("should verify a provider domain ownership (custom token verification prefix)", async () => {
-			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth({ domainVerification: { verificationTokenPrefix: "auth-prefix" }});
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth({
+				domainVerification: { verificationTokenPrefix: "auth-prefix" },
+			});
 			const headers = await getAuthHeaders();
 			const provider = await registerSSOProvider(headers);
 
@@ -319,9 +321,7 @@ describe("Domain verification", async () => {
 				[
 					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
 				],
-				[
-					`auth-prefix-saml-provider-1=${provider.domainVerificationToken}`,
-				],
+				[`auth-prefix-saml-provider-1=${provider.domainVerificationToken}`],
 			]);
 
 			const response = await auth.api.verifyDomain({

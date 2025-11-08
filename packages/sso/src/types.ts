@@ -221,7 +221,7 @@ export interface SSOOptions {
 
 		/**
 		 * Prefix used to generate the domain verification token
-		 * 
+		 *
 		 * @default "ba-domain-verification-"
 		 */
 		verificationTokenPrefix?: string;

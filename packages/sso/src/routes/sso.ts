@@ -663,7 +663,9 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				await ctx.context.adapter.create<Verification>({
 					model: "verification",
 					data: {
-						identifier: options.domainVerification?.verificationTokenPrefix ? `${options.domainVerification?.verificationTokenPrefix}-${provider.providerId}` : `ba-domain-verification-${provider.providerId}`,
+						identifier: options.domainVerification?.verificationTokenPrefix
+							? `${options.domainVerification?.verificationTokenPrefix}-${provider.providerId}`
+							: `ba-domain-verification-${provider.providerId}`,
 						createdAt: new Date(),
 						updatedAt: new Date(),
 						value: domainVerificationToken,
