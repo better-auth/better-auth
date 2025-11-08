@@ -882,6 +882,12 @@ If you want to allow account linking for specific trusted providers, enable the 
                 type: "boolean",
                 required: false
             },
+            verificationTokenPrefix: {
+                description: "Prefix to append to the verification token identifier",
+                type: "string",
+                required: false,
+                default: "ba-domain-verification-"
+            },
         },
     },
     defaultSSO: {
