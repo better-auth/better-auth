@@ -334,6 +334,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					},
 					rememberMe === false,
 				);
+				ctx.context.event.emit("signUp", {
+					session,
+					user: createdUser,
+				});
 				return ctx.json({
 					token: session.token,
 					user: {

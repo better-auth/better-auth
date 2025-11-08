@@ -295,6 +295,7 @@ export const resetPassword = createAuthEndpoint(
 		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 			await ctx.context.internalAdapter.deleteSessions(userId);
 		}
+		ctx.context.event.emit("passwordReset", userId);
 		return ctx.json({
 			status: true,
 		});

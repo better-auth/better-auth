@@ -443,6 +443,7 @@ export const verifyEmail = createAuthEndpoint(
 				});
 			}
 		}
+		ctx.context.event.emit("verifyEmail", updatedUser);
 
 		if (ctx.query.callbackURL) {
 			throw ctx.redirect(ctx.query.callbackURL);

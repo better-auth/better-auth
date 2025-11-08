@@ -8,9 +8,17 @@ export type EventsMap = {
 };
 
 export type DefaultEventsMap = {
-	signUp: (session: Session & Record<string, any>) => void;
-	signIn: (session: Session & Record<string, any>) => void;
-	signOut: (user: User & Record<string, any>) => void;
+	signUp: (session: {
+		session: Session & Record<string, any>;
+		user: User & Record<string, any>;
+	}) => void;
+	signIn: (session: {
+		session: Session & Record<string, any>;
+		user: User & Record<string, any>;
+	}) => void;
+	signOut: (user?: (User & Record<string, any>) | undefined) => void;
+	passwordReset: (userId: string) => void;
+	verifyEmail: (user: User & Record<string, any>) => void;
 };
 
 export type UnsubscribeEvent = () => void;

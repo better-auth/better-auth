@@ -567,6 +567,12 @@ export const signInEmail = createAuthEndpoint(
 			},
 			ctx.body.rememberMe === false,
 		);
+
+		ctx.context.event.emit("signIn", {
+			session,
+			user: user.user,
+		});
+
 		return ctx.json({
 			redirect: !!ctx.body.callbackURL,
 			token: session.token,

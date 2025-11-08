@@ -32,6 +32,7 @@ export const signOut = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
+		const user = ctx.context.session?.user;
 		const sessionCookieToken = await ctx.getSignedCookie(
 			ctx.context.authCookies.sessionToken.name,
 			ctx.context.secret,
@@ -44,6 +45,7 @@ export const signOut = createAuthEndpoint(
 		}
 		await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
 		deleteSessionCookie(ctx);
+		ctx.context.event.emit("signOut", user);
 		return ctx.json({
 			success: true,
 		});
