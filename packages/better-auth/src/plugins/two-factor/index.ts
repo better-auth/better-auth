@@ -7,7 +7,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { sessionMiddleware } from "../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";
@@ -241,7 +241,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 					});
 					if (!isPasswordValid) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid password",
+							message: BASE_ERROR_CODES.INVALID_PASSWORD,
 						});
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
