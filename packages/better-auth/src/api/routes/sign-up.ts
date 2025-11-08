@@ -4,7 +4,7 @@ import { runWithTransaction } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
 import type { AdditionalUserFieldsInput, User } from "../../types";
