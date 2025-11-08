@@ -12,6 +12,7 @@ import type { DBAdapter, Where } from "../db/adapter";
 import { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookies } from "./cookie";
+import type { EventEmitter, InferPluginEvents } from "./events";
 import type { LiteralUnion } from "./helper";
 import type {
 	BetterAuthOptions,
@@ -267,4 +268,9 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * @default false
 		 */
 		skipCSRFCheck: boolean;
+		event: EventEmitter<
+			InferPluginEvents<Options> extends {}
+				? Record<string, any>
+				: InferPluginEvents<Options>
+		>;
 	};

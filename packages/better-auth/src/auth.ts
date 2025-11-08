@@ -1,6 +1,10 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
+import type {
+	EventMixin,
+	InferPluginEvents,
+} from "../../core/src/types/events";
 import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type {
@@ -11,6 +15,7 @@ import type {
 	InferUser,
 } from "./types";
 import type { Expand, PrettifyDeep } from "./types/helper";
+import { createEvents } from "./utils/events";
 import { getBaseURL, getOrigin } from "./utils/url";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
@@ -20,7 +25,8 @@ export const betterAuth = <Options extends BetterAuthOptions>(
 		// fixme(alex): do we need Record<never, never> here?
 		Record<never, never>,
 ): Auth<Options> => {
-	const authContext = init(options);
+	const eventEmitter = createEvents<InferPluginEvents<Options>>();
+	const authContext = init(options, eventEmitter);
 	const { api } = getEndpoints(authContext, options);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
 		if (plugin.$ERROR_CODES) {
@@ -59,6 +65,7 @@ export const betterAuth = <Options extends BetterAuthOptions>(
 		},
 		api,
 		options: options,
+		event: eventEmitter,
 		$context: authContext,
 		$ERROR_CODES: {
 			...errorCodes,
@@ -70,6 +77,7 @@ export const betterAuth = <Options extends BetterAuthOptions>(
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	handler: (request: Request) => Promise<Response>;
 	api: InferAPI<ReturnType<typeof router<Options>>["endpoints"]>;
+	event: EventMixin<InferPluginEvents<Options>>;
 	options: Options;
 	$ERROR_CODES: InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES;
 	$context: Promise<AuthContext>;

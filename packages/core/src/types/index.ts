@@ -5,6 +5,11 @@ export type {
 	InternalAdapter,
 } from "./context";
 export type { BetterAuthCookies } from "./cookie";
+export type {
+	EventEmitter,
+	EventsMap,
+	UnsubscribeEvent,
+} from "./events";
 export type * from "./helper";
 export type {
 	BetterAuthAdvancedOptions,

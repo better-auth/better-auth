@@ -2,6 +2,7 @@ import type {
 	AuthContext,
 	BetterAuthOptions,
 	BetterAuthPlugin,
+	EventEmitter,
 } from "@better-auth/core";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -25,7 +26,10 @@ import { isPromise } from "./utils/is-promise";
 import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 
-export const init = async (options: BetterAuthOptions) => {
+export const init = async (
+	options: BetterAuthOptions,
+	eventEmitter: EventEmitter,
+) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
@@ -201,6 +205,7 @@ export const init = async (options: BetterAuthOptions) => {
 				: isTest()
 					? true
 					: false,
+		event: eventEmitter,
 	};
 	const initOrPromise = runPluginInit(ctx);
 	let context: AuthContext;
