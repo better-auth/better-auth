@@ -53,10 +53,11 @@ export const createAdapterFactory =
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
 		} satisfies AdapterFactoryConfig;
-		const useNumberId =
-			options.advanced?.database?.useNumberId === true ||
-			options.advanced?.database?.generateId === "serial";
-		if (useNumberId && config.supportsNumericIds === false) {
+
+		if (
+			options.advanced?.database?.useNumberId === true &&
+			config.supportsNumericIds === false
+		) {
 			throw new BetterAuthError(
 				`[${config.adapterName}] Your database or database adapter does not support numeric ids. Please disable "useNumberId" in your config.`,
 			);
@@ -254,19 +255,19 @@ export const createAdapterFactory =
 			customModelName?: string;
 			forceAllowId?: boolean;
 		}) => {
-			const useNumberId =
-				options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial";
 			const shouldGenerateId =
-				!config.disableIdGeneration && !useNumberId && !forceAllowId;
+				!config.disableIdGeneration &&
+				!options.advanced?.database?.useNumberId &&
+				!forceAllowId;
 			const model = getDefaultModelName(customModelName ?? "id");
 			return {
-				type: useNumberId ? "number" : "string",
+				type: options.advanced?.database?.useNumberId ? "number" : "string",
 				required: shouldGenerateId ? true : false,
 				...(shouldGenerateId
 					? {
 							defaultValue() {
 								if (config.disableIdGeneration) return undefined;
+								const useNumberId = options.advanced?.database?.useNumberId;
 								let generateId = options.advanced?.database?.generateId;
 								if (options.advanced?.generateId !== undefined) {
 									logger.warn(
@@ -275,13 +276,10 @@ export const createAdapterFactory =
 									generateId = options.advanced?.generateId;
 								}
 								if (generateId === false || useNumberId) return undefined;
-								if (typeof generateId === "function") {
+								if (generateId) {
 									return generateId({
 										model,
 									});
-								}
-								if (generateId === "uuid") {
-									return crypto.randomUUID();
 								}
 								if (config.customIdGenerator) {
 									return config.customIdGenerator({ model });
@@ -335,7 +333,7 @@ export const createAdapterFactory =
 				});
 			}
 			for (const field in fields) {
-				let value = data[field];
+				const value = data[field];
 				const fieldAttributes = fields[field];
 
 				let newFieldName: string =
@@ -349,26 +347,6 @@ export const createAdapterFactory =
 				) {
 					continue;
 				}
-
-				// In some endpoints (like signUpEmail) where there isn't proper Zod validation,
-				// we might recieve a date as a string (this is because of the client converting the Date to a string
-				// when sending to the server). Because of this, we'll convert the string to a Date.
-				if (
-					fieldAttributes &&
-					fieldAttributes.type === "date" &&
-					!(value instanceof Date) &&
-					typeof value === "string"
-				) {
-					try {
-						value = new Date(value);
-					} catch {
-						logger.error("[Adapter Factory] Failed to convert string to date", {
-							value,
-							field,
-						});
-					}
-				}
-
 				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
 				let newValue = withApplyDefault(value, fieldAttributes!, action);
 
@@ -437,11 +415,8 @@ export const createAdapterFactory =
 			const idKey = Object.entries(newMappedKeys).find(
 				([_, v]) => v === "id",
 			)?.[0];
-			const useNumberId =
-				options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial";
 			tableSchema[idKey ?? "id"] = {
-				type: useNumberId ? "number" : "string",
+				type: options.advanced?.database?.useNumberId ? "number" : "string",
 			};
 			for (const key in tableSchema) {
 				if (select.length && !select.includes(key)) {
