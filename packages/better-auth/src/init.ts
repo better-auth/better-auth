@@ -25,10 +25,11 @@ import { DEFAULT_SECRET } from "./utils/constants";
 import { isPromise } from "./utils/is-promise";
 import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
+import { createEvents } from "./utils/events";
 
 export const init = async (
 	options: BetterAuthOptions,
-	eventEmitter: EventEmitter,
+	eventEmitter: EventEmitter = createEvents(),
 ) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];

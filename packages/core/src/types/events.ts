@@ -1,5 +1,5 @@
+import type { UnionToIntersection } from "better-call";
 import type { Session, User } from "../db";
-import type { UnionToIntersection } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
 import type { BetterAuthPlugin } from "./plugin";
 
