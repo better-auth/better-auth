@@ -54,7 +54,7 @@ function safeJsonParse<T>(value: string | T | null | undefined): T | null {
 	return null;
 }
 
-export const spMetadata = <O extends SSOOptions>(options: O) => {
+export const spMetadata = () => {
 	return createAuthEndpoint(
 		"/sso/saml2/sp/metadata",
 		{

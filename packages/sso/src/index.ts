@@ -33,7 +33,7 @@ type DomainVerificationEndpoints<O extends SSOOptions> = {
 };
 
 type SSOEndpoints<O extends SSOOptions> = {
-	spMetadata: ReturnType<typeof spMetadata<O>>;
+	spMetadata: ReturnType<typeof spMetadata>;
 	registerSSOProvider: ReturnType<typeof registerSSOProvider<O>>;
 	signInSSO: ReturnType<typeof signInSSO<O>>;
 	callbackSSO: ReturnType<typeof callbackSSO<O>>;
@@ -64,7 +64,7 @@ export function sso<O extends SSOOptions>(
 
 export function sso<O extends SSOOptions>(options?: O | undefined): any {
 	let endpoints = {
-		spMetadata: spMetadata(options as O),
+		spMetadata: spMetadata(),
 		registerSSOProvider: registerSSOProvider(options as O),
 		signInSSO: signInSSO(options as O),
 		callbackSSO: callbackSSO(options as O),
