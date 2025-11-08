@@ -2177,8 +2177,123 @@ describe("stripe", async () => {
 		});
 	});
 
-	describe("metadata merge behavior", () => {
-		it("should preserve internal metadata fields when user provides custom metadata via getCheckoutSessionParams", async () => {
+	describe("getCheckoutSessionParams customization", () => {
+		it("should pass through custom checkout session parameters through getCheckoutSessionParams", async () => {
+			const customMockStripe = {
+				...mockStripe,
+				checkout: {
+					sessions: {
+						create: vi.fn().mockResolvedValue({
+							url: "https://checkout.stripe.com/mock",
+							id: "cs_test_custom_params",
+						}),
+					},
+				},
+			};
+
+			const customStripeOptions = {
+				...stripeOptions,
+				stripeClient: customMockStripe as unknown as Stripe,
+				subscription: {
+					...stripeOptions.subscription,
+					getCheckoutSessionParams: async ({ user, plan }) => ({
+						params: {
+							allow_promotion_codes: true,
+							tax_id_collection: {
+								enabled: true,
+							},
+							billing_address_collection: "required",
+							custom_text: {
+								submit: {
+									message: "We'll start your subscription right away",
+								},
+							},
+							metadata: {
+								planType: "business",
+								referralCode: "test-referral",
+							},
+						},
+						options: {
+							idempotencyKey: `sub_${user.id}_${plan.name}_${Date.now()}`,
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const customAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(customStripeOptions)],
+			});
+
+			const customAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [
+					bearer(),
+					stripeClient({
+						subscription: true,
+					}),
+				],
+				fetchOptions: {
+					customFetchImpl: async (url, init) => {
+						return customAuth.handler(new Request(url, init));
+					},
+				},
+			});
+
+			const userRes = await customAuthClient.signUp.email(
+				{
+					email: "custom-params@email.com",
+					password: "password",
+					name: "Custom Params Test",
+				},
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await customAuthClient.signIn.email(
+				{ email: "custom-params@email.com", password: "password" },
+				{
+					throw: true,
+					onSuccess: setCookieToHeader(headers),
+				},
+			);
+
+			await customAuthClient.subscription.upgrade({
+				plan: "premium",
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			const createCall =
+				customMockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			const createOptions =
+				customMockStripe.checkout.sessions.create.mock.calls[0]?.[1];
+
+			// Check if custom params were included
+			expect(createCall?.allow_promotion_codes).toBe(true);
+			expect(createCall?.tax_id_collection).toEqual({ enabled: true });
+			expect(createCall?.billing_address_collection).toBe("required");
+			expect(createCall?.custom_text).toEqual({
+				submit: {
+					message: "We'll start your subscription right away",
+				},
+			});
+
+			// Check metadata was merged (custom + internal fields)
+			expect(createCall?.metadata?.planType).toBe("business");
+			expect(createCall?.metadata?.referralCode).toBe("test-referral");
+			expect(createCall?.metadata?.userId).toBe(userRes.user.id);
+			expect(createCall?.metadata?.subscriptionId).toBeDefined();
+			expect(createCall?.metadata?.referenceId).toBe(userRes.user.id);
+
+			// Check idempotencyKey in options
+			expect(createOptions?.idempotencyKey).toMatch(/^sub_.*_premium_\d+$/);
+		});
+
+		it("should preserve internal metadata fields when user provides custom metadata through getCheckoutSessionParams", async () => {
 			const customMockStripe = {
 				...mockStripe,
 				checkout: {
@@ -2279,7 +2394,7 @@ describe("stripe", async () => {
 			expect(createCall?.metadata?.referenceId).toBe(userId);
 		});
 
-		it("should preserve subscription_data metadata when provided via getCheckoutSessionParams", async () => {
+		it("should preserve subscription_data metadata when provided through getCheckoutSessionParams", async () => {
 			const customMockStripe = {
 				...mockStripe,
 				checkout: {
