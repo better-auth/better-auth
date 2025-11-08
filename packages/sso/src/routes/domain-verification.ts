@@ -2,7 +2,7 @@ import dns from "node:dns/promises";
 import type { Verification } from "better-auth";
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { randomBytes } from "crypto";
-import z from "zod/v4";
+import * as z from "zod/v4";
 import type { SSOOptions, SSOProvider } from "../types";
 
 export const submitDomainVerification = <O extends SSOOptions>(options: O) => {

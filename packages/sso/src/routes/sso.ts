@@ -23,7 +23,7 @@ import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
-import { z } from "zod/v4";
+import * as z from "zod/v4";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 
 /**
