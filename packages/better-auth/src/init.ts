@@ -22,10 +22,10 @@ import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
 import { getAdapter } from "./db/utils";
 import { generateId } from "./utils";
 import { DEFAULT_SECRET } from "./utils/constants";
+import { createEvents } from "./utils/events";
 import { isPromise } from "./utils/is-promise";
 import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
-import { createEvents } from "./utils/events";
 
 export const init = async (
 	options: BetterAuthOptions,
