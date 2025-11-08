@@ -897,9 +897,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
-      better-sqlite3:
-        specifier: ^12.4.1
-        version: 12.4.1
 
   e2e/smoke/test/fixtures/tsconfig-isolated-module-bundler:
     dependencies:
@@ -913,14 +910,11 @@ importers:
   e2e/smoke/test/fixtures/tsconfig-verbatim-module-syntax-node10:
     dependencies:
       '@better-auth/expo':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../../../packages/expo
       better-auth:
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../../../packages/better-auth
-      better-sqlite3:
-        specifier: ^12.4.1
-        version: 12.4.1
 
   e2e/smoke/test/fixtures/vite:
     dependencies:
@@ -1334,7 +1328,7 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5
       better-auth:
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
