@@ -622,8 +622,8 @@ Table Name: `subscription`
     { 
       name: "referenceId", 
       type: "string", 
-      description: "The ID this subscription is associated with (user ID by default)",
-      isUnique: true
+      description: "The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
+      isUnique: false
     },
     { 
       name: "stripeCustomerId", 
