@@ -21,6 +21,8 @@ declare module "@better-auth/core" {
 	}
 }
 
+export * from "./error-codes";
+
 const MAX_AGE_IN_SECONDS = 60 * 5; // 5 minutes
 
 export const passkey = (options?: PasskeyOptions | undefined) => {
