@@ -5,7 +5,7 @@ import {
 } from "@better-auth/core/api";
 import type { Where } from "@better-auth/core/db/adapter";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import * as z from "zod";
+import { z } from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
