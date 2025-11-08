@@ -355,7 +355,7 @@ importers:
         version: 12.23.12(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       geist:
         specifier: ^1.4.2
-        version: 1.4.2(next@16.0.1(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
+        version: 1.4.2(next@16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -421,7 +421,7 @@ importers:
         version: 1.1.2(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       zod:
         specifier: ^4.1.5
-        version: 4.1.5
+        version: 4.1.12
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.1.13
@@ -489,10 +489,10 @@ importers:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: ^1.0.20
-        version: 1.0.20(zod@4.1.5)
+        version: 1.0.20(zod@4.1.12)
       '@ai-sdk/react':
         specifier: ^2.0.64
-        version: 2.0.64(react@19.2.0)(zod@4.1.5)
+        version: 2.0.64(react@19.2.0)(zod@4.1.12)
       '@better-auth/utils':
         specifier: 0.3.0
         version: 0.3.0
@@ -600,7 +600,7 @@ importers:
         version: 0.8.5
       ai:
         specifier: ^5.0.64
-        version: 5.0.64(zod@4.1.5)
+        version: 5.0.64(zod@4.1.12)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -642,7 +642,7 @@ importers:
         version: 15.8.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(algoliasearch@5.36.0)(lucide-react@0.542.0(react@19.2.0))(next@16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(tailwindcss@4.1.13)
       geist:
         specifier: ^1.4.2
-        version: 1.4.2(next@16.0.1(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
+        version: 1.4.2(next@16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
@@ -747,7 +747,7 @@ importers:
         version: 1.1.2(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       zod:
         specifier: ^4.1.5
-        version: 4.1.5
+        version: 4.1.12
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.1.13
@@ -897,9 +897,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
-      better-sqlite3:
-        specifier: ^12.4.1
-        version: 12.4.1
 
   e2e/smoke/test/fixtures/tsconfig-isolated-module-bundler:
     dependencies:
@@ -913,14 +910,11 @@ importers:
   e2e/smoke/test/fixtures/tsconfig-verbatim-module-syntax-node10:
     dependencies:
       '@better-auth/expo':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../../../packages/expo
       better-auth:
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../../../packages/better-auth
-      better-sqlite3:
-        specifier: ^12.4.1
-        version: 12.4.1
 
   e2e/smoke/test/fixtures/vite:
     dependencies:
@@ -972,7 +966,7 @@ importers:
         version: 1.0.1
       zod:
         specifier: ^4.1.5
-        version: 4.1.5
+        version: 4.1.12
     devDependencies:
       '@lynx-js/react':
         specifier: ^0.114.0
@@ -985,7 +979,7 @@ importers:
         version: 2.37.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(svelte@5.38.2)(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
       '@tanstack/react-start':
         specifier: ^1.131.3
-        version: 1.131.27(2d8e7679b040dff6853256ee92c3c2ba)
+        version: 1.131.27(566609e7a9e7e201cbc4f4fb062989a0)
       '@tanstack/start-server-core':
         specifier: ^1.131.36
         version: 1.131.36
@@ -1165,7 +1159,7 @@ importers:
         version: 0.2.3
       zod:
         specifier: ^4.1.5
-        version: 4.1.5
+        version: 4.1.12
     devDependencies:
       '@better-auth/passkey':
         specifier: workspace:*
@@ -1199,7 +1193,7 @@ importers:
         version: 1.0.0
       zod:
         specifier: ^4.1.5
-        version: 4.1.5
+        version: 4.1.12
     devDependencies:
       '@better-auth/utils':
         specifier: 0.3.0
@@ -1239,7 +1233,7 @@ importers:
         version: 1.0.26
       zod:
         specifier: ^4.1.5
-        version: 4.1.5
+        version: 4.1.12
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
@@ -1297,7 +1291,7 @@ importers:
         version: 1.0.1
       zod:
         specifier: ^4.1.5
-        version: 4.1.5
+        version: 4.1.12
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
@@ -1325,7 +1319,7 @@ importers:
         version: 2.10.1
       zod:
         specifier: ^4.1.5
-        version: 4.1.5
+        version: 4.1.12
     devDependencies:
       '@types/body-parser':
         specifier: ^1.19.6
@@ -1334,7 +1328,7 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5
       better-auth:
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
@@ -1359,7 +1353,7 @@ importers:
         version: 6.1.4
       zod:
         specifier: ^4.1.5
-        version: 4.1.5
+        version: 4.1.12
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
@@ -13466,8 +13460,8 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.1.5:
-    resolution: {integrity: sha512-rcUUZqlLJgBC33IT3PNMgsCq6TzLQEG/Ei/KTCU0PedSWRMAXoOUN+4t/0H+Q8bdnLPdqUYnvboJT0bn/229qg==}
+  zod@4.1.12:
+    resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -13478,39 +13472,39 @@ snapshots:
     optionalDependencies:
       graphql: 16.11.0
 
-  '@ai-sdk/gateway@1.0.35(zod@4.1.5)':
+  '@ai-sdk/gateway@1.0.35(zod@4.1.12)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.11(zod@4.1.5)
+      '@ai-sdk/provider-utils': 3.0.11(zod@4.1.12)
       '@vercel/oidc': 3.0.2
-      zod: 4.1.5
+      zod: 4.1.12
 
-  '@ai-sdk/openai-compatible@1.0.20(zod@4.1.5)':
+  '@ai-sdk/openai-compatible@1.0.20(zod@4.1.12)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.11(zod@4.1.5)
-      zod: 4.1.5
+      '@ai-sdk/provider-utils': 3.0.11(zod@4.1.12)
+      zod: 4.1.12
 
-  '@ai-sdk/provider-utils@3.0.11(zod@4.1.5)':
+  '@ai-sdk/provider-utils@3.0.11(zod@4.1.12)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@standard-schema/spec': 1.0.0
       eventsource-parser: 3.0.6
-      zod: 4.1.5
+      zod: 4.1.12
 
   '@ai-sdk/provider@2.0.0':
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/react@2.0.64(react@19.2.0)(zod@4.1.5)':
+  '@ai-sdk/react@2.0.64(react@19.2.0)(zod@4.1.12)':
     dependencies:
-      '@ai-sdk/provider-utils': 3.0.11(zod@4.1.5)
-      ai: 5.0.64(zod@4.1.5)
+      '@ai-sdk/provider-utils': 3.0.11(zod@4.1.12)
+      ai: 5.0.64(zod@4.1.12)
       react: 19.2.0
       swr: 2.3.6(react@19.2.0)
       throttleit: 2.1.0
     optionalDependencies:
-      zod: 4.1.5
+      zod: 4.1.12
 
   '@algolia/abtesting@1.2.0':
     dependencies:
@@ -14796,7 +14790,7 @@ snapshots:
       semver: 7.7.3
       vitest: 3.2.4(@types/debug@4.1.12)(@types/node@24.9.2)(happy-dom@20.0.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(msw@2.11.5(@types/node@24.9.2)(typescript@5.9.3))(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)
       wrangler: 4.33.2(@cloudflare/workers-types@4.20250903.0)
-      zod: 4.1.5
+      zod: 4.1.12
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
       - bufferutil
@@ -15514,8 +15508,8 @@ snapshots:
   '@expo/mcp-tunnel@0.0.8':
     dependencies:
       ws: 8.18.3
-      zod: 4.1.5
-      zod-to-json-schema: 3.24.6(zod@4.1.5)
+      zod: 4.1.12
+      zod-to-json-schema: 3.24.6(zod@4.1.12)
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -15544,7 +15538,7 @@ snapshots:
       postcss: 8.4.49
       resolve-from: 5.0.0
     optionalDependencies:
-      expo: 54.0.21(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.14)(graphql@16.11.0)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0)
+      expo: 54.0.21(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.14)(graphql@16.11.0)(react-native@0.81.5(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -15629,7 +15623,7 @@ snapshots:
       '@expo/json-file': 10.0.7
       '@react-native/normalize-colors': 0.81.5
       debug: 4.4.3
-      expo: 54.0.21(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.14)(graphql@16.11.0)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0)
+      expo: 54.0.21(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.14)(graphql@16.11.0)(react-native@0.81.5(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0)
       resolve-from: 5.0.0
       semver: 7.7.3
       xml2js: 0.6.0
@@ -16342,7 +16336,7 @@ snapshots:
       unixify: 1.0.0
       urlpattern-polyfill: 8.0.2
       yargs: 17.7.2
-      zod: 4.1.5
+      zod: 4.1.12
     transitivePeerDependencies:
       - encoding
       - rollup
@@ -18319,13 +18313,13 @@ snapshots:
 
   '@scalar/openapi-types@0.3.7':
     dependencies:
-      zod: 4.1.5
+      zod: 4.1.12
 
   '@scalar/types@0.2.13':
     dependencies:
       '@scalar/openapi-types': 0.3.7
       nanoid: 5.1.5
-      zod: 4.1.5
+      zod: 4.1.12
 
   '@selderee/plugin-htmlparser2@0.11.0':
     dependencies:
@@ -18667,13 +18661,13 @@ snapshots:
       tiny-invariant: 1.3.3
       tiny-warning: 1.0.3
 
-  '@tanstack/react-start-plugin@1.131.27(@libsql/client@0.15.14)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(@vitejs/plugin-react@5.0.1(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4)(vite-plugin-solid@2.11.8(solid-js@1.9.9)(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))':
-    dependencies:
-      '@tanstack/start-plugin-core': 1.131.27(@libsql/client@0.15.14)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4)(vite-plugin-solid@2.11.8(solid-js@1.9.9)(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
+  ? '@tanstack/react-start-plugin@1.131.27(@libsql/client@0.15.14)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(@vitejs/plugin-react@5.0.1(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4)(rolldown@1.0.0-beta.46)(vite-plugin-solid@2.11.8(solid-js@1.9.9)(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))'
+  : dependencies:
+      '@tanstack/start-plugin-core': 1.131.27(@libsql/client@0.15.14)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4)(rolldown@1.0.0-beta.46)(vite-plugin-solid@2.11.8(solid-js@1.9.9)(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
       '@vitejs/plugin-react': 5.0.1(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
       pathe: 2.0.3
       vite: 7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)
-      zod: 4.1.5
+      zod: 4.1.12
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -18718,10 +18712,10 @@ snapshots:
       react: 19.2.0
       react-dom: 19.2.0(react@19.2.0)
 
-  '@tanstack/react-start@1.131.27(2d8e7679b040dff6853256ee92c3c2ba)':
+  '@tanstack/react-start@1.131.27(566609e7a9e7e201cbc4f4fb062989a0)':
     dependencies:
       '@tanstack/react-start-client': 1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      '@tanstack/react-start-plugin': 1.131.27(@libsql/client@0.15.14)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(@vitejs/plugin-react@5.0.1(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4)(vite-plugin-solid@2.11.8(solid-js@1.9.9)(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
+      '@tanstack/react-start-plugin': 1.131.27(@libsql/client@0.15.14)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(@vitejs/plugin-react@5.0.1(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4)(rolldown@1.0.0-beta.46)(vite-plugin-solid@2.11.8(solid-js@1.9.9)(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
       '@tanstack/react-start-server': 1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@tanstack/start-server-functions-client': 1.131.27(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
       '@tanstack/start-server-functions-server': 1.131.2(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
@@ -18797,7 +18791,7 @@ snapshots:
       recast: 0.23.11
       source-map: 0.7.6
       tsx: 4.20.6
-      zod: 4.1.5
+      zod: 4.1.12
     transitivePeerDependencies:
       - supports-color
 
@@ -18816,7 +18810,7 @@ snapshots:
       babel-dead-code-elimination: 1.0.10
       chokidar: 3.6.0
       unplugin: 2.3.8
-      zod: 4.1.5
+      zod: 4.1.12
     optionalDependencies:
       '@tanstack/react-router': 1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       vite: 7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)
@@ -18883,7 +18877,7 @@ snapshots:
       tiny-invariant: 1.3.3
       tiny-warning: 1.0.3
 
-  '@tanstack/start-plugin-core@1.131.27(@libsql/client@0.15.14)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4)(vite-plugin-solid@2.11.8(solid-js@1.9.9)(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))':
+  '@tanstack/start-plugin-core@1.131.27(@libsql/client@0.15.14)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4)(rolldown@1.0.0-beta.46)(vite-plugin-solid@2.11.8(solid-js@1.9.9)(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))':
     dependencies:
       '@babel/code-frame': 7.26.2
       '@babel/core': 7.28.4
@@ -18899,13 +18893,13 @@ snapshots:
       babel-dead-code-elimination: 1.0.10
       cheerio: 1.1.2
       h3: 1.13.0
-      nitropack: 2.12.4(@libsql/client@0.15.14)(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4)
+      nitropack: 2.12.4(@libsql/client@0.15.14)(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4)(rolldown@1.0.0-beta.46)
       pathe: 2.0.3
       ufo: 1.6.1
       vite: 7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)
       vitefu: 1.1.1(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
       xmlbuilder2: 3.1.1
-      zod: 4.1.5
+      zod: 4.1.12
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -19606,13 +19600,13 @@ snapshots:
 
   agent-base@7.1.3: {}
 
-  ai@5.0.64(zod@4.1.5):
+  ai@5.0.64(zod@4.1.12):
     dependencies:
-      '@ai-sdk/gateway': 1.0.35(zod@4.1.5)
+      '@ai-sdk/gateway': 1.0.35(zod@4.1.12)
       '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.11(zod@4.1.5)
+      '@ai-sdk/provider-utils': 3.0.11(zod@4.1.12)
       '@opentelemetry/api': 1.9.0
-      zod: 4.1.5
+      zod: 4.1.12
 
   algoliasearch@5.36.0:
     dependencies:
@@ -19912,7 +19906,7 @@ snapshots:
       resolve-from: 5.0.0
     optionalDependencies:
       '@babel/runtime': 7.28.4
-      expo: 54.0.21(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.14)(graphql@16.11.0)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0)
+      expo: 54.0.21(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.14)(graphql@16.11.0)(react-native@0.81.5(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0)
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color
@@ -21401,7 +21395,7 @@ snapshots:
 
   expo-keep-awake@15.0.7(expo@54.0.21)(react@19.2.0):
     dependencies:
-      expo: 54.0.21(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.14)(graphql@16.11.0)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0)
+      expo: 54.0.21(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.14)(graphql@16.11.0)(react-native@0.81.5(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0)
       react: 19.2.0
 
   expo-linking@7.1.7(expo@54.0.21)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0):
@@ -21970,7 +21964,7 @@ snapshots:
       npm-to-yarn: 3.0.1
       oxc-transform: 0.75.1
       unist-util-visit: 5.0.0
-      zod: 4.1.5
+      zod: 4.1.12
 
   fumadocs-mdx@11.8.3(fumadocs-core@15.8.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(@types/react@19.2.2)(algoliasearch@5.36.0)(lucide-react@0.542.0(react@19.2.0))(next@16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(next@16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))(react@19.2.0)(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)):
     dependencies:
@@ -21989,7 +21983,7 @@ snapshots:
       tinyglobby: 0.2.15
       unified: 11.0.5
       unist-util-visit: 5.0.0
-      zod: 4.1.5
+      zod: 4.1.12
     optionalDependencies:
       next: 16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)
       react: 19.2.0
@@ -22053,7 +22047,7 @@ snapshots:
 
   function-bind@1.1.2: {}
 
-  geist@1.4.2(next@16.0.1(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)):
+  geist@1.4.2(next@16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)):
     dependencies:
       next: 16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)
 
@@ -24578,7 +24572,7 @@ snapshots:
       - supports-color
       - uploadthing
 
-  nitropack@2.12.4(@libsql/client@0.15.14)(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4):
+  nitropack@2.12.4(@libsql/client@0.15.14)(better-sqlite3@12.4.1)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0))(mysql2@3.14.4)(rolldown@1.0.0-beta.46):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.4.0
       '@netlify/functions': 3.1.10(rollup@4.52.5)
@@ -27993,12 +27987,12 @@ snapshots:
       compress-commons: 6.0.2
       readable-stream: 4.7.0
 
-  zod-to-json-schema@3.24.6(zod@4.1.5):
+  zod-to-json-schema@3.24.6(zod@4.1.12):
     dependencies:
-      zod: 4.1.5
+      zod: 4.1.12
 
   zod@3.25.76: {}
 
-  zod@4.1.5: {}
+  zod@4.1.12: {}
 
   zwitch@2.0.4: {}
