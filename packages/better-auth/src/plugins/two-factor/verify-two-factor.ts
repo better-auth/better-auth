@@ -8,6 +8,12 @@ import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import type { UserWithTwoFactor } from "./types";
 
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
+	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
+		throw new APIError("UNAUTHORIZED", {
+			message: TWO_FACTOR_ERROR_CODES[errorKey],
+		});
+	};
+
 	const session = await getSessionFromCtx(ctx);
 	if (!session) {
 		const cookieName = ctx.context.createAuthCookie(TWO_FACTOR_COOKIE_NAME);
@@ -97,11 +103,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					},
 				});
 			},
-			invalid: async (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
-				throw new APIError("UNAUTHORIZED", {
-					message: TWO_FACTOR_ERROR_CODES[errorKey],
-				});
-			},
+			invalid,
 			session: {
 				session: null,
 				user,
@@ -124,11 +126,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				},
 			});
 		},
-		invalid: async () => {
-			throw new APIError("UNAUTHORIZED", {
-				message: TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
-			});
-		},
+		invalid,
 		session,
 		key: `${session.user.id}!${session.session.id}`,
 	};

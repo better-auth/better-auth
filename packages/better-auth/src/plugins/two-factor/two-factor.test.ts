@@ -193,15 +193,64 @@ describe("two factor", async () => {
 	});
 
 	it("should fail if two factor cookie is missing", async () => {
-		const res = await client.twoFactor.verifyTotp({
-			code: "123456",
+		const headers = new Headers();
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			rememberMe: false,
+			fetchOptions: {
+				onResponse(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					expect(parsed.get("better-auth.session_token")?.value).toBe("");
+					// 2FA Cookie is in response, but we are not setting it in headers
+					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
+					headers.append(
+						"cookie",
+						`better-auth.dont_remember=${
+							parsed.get("better-auth.dont_remember")?.value
+						}`,
+					);
+				},
+			},
+		});
+		expect((res.data as any)?.twoFactorRedirect).toBe(true);
+		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(res.error?.message).toBe(
+
+		const verifyRes = await client.twoFactor.verifyOtp({
+			code: OTP,
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					// Session should not be defined when two factor cookie is missing
+					expect(
+						parsed.get("better-auth.session_token")?.value,
+					).not.toBeDefined();
+				},
+			},
+		});
+		expect(verifyRes.error?.message).toBe(
 			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 		);
+	});
+
+	it("should fail when passing invalid TOTP code with expected error code", async () => {
+		const res = await client.twoFactor.verifyTotp({
+			code: "invalid-code",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error?.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE);
 	});
 
 	let backupCodes: string[] = [];

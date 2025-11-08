@@ -241,7 +241,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 					});
 					if (!isPasswordValid) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid password",
+							message: BASE_ERROR_CODES.INVALID_PASSWORD,
 						});
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
