@@ -27,15 +27,15 @@
     },
     "test": {
       "dependsOn": ["build"],
-      "outputs": []
+      "cache": false
     },
     "e2e:smoke": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "dependsOn": ["build"],
+      "cache": false
     },
     "e2e:integration": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "dependsOn": ["build"],
+      "cache": false
     },
     "deploy": {
       "cache": false
