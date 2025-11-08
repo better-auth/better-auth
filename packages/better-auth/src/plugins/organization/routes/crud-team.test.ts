@@ -5,15 +5,16 @@ import { organizationClient } from "../client";
 import { organization } from "../organization";
 
 describe("listTeams", async () => {
-	const { auth, signInWithTestUser, cookieSetter, customFetchImpl } = await getTestInstance({
-		plugins: [
-			organization({
-				teams: {
-					enabled: true,
-				},
-			}),
-		],
-	});
+	const { auth, signInWithTestUser, cookieSetter, customFetchImpl } =
+		await getTestInstance({
+			plugins: [
+				organization({
+					teams: {
+						enabled: true,
+					},
+				}),
+			],
+		});
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
 		plugins: [
@@ -23,7 +24,7 @@ describe("listTeams", async () => {
 				},
 			}),
 		],
-    baseURL: "http://localhost:3000/api/auth",
+		baseURL: "http://localhost:3000/api/auth",
 		fetchOptions: {
 			customFetchImpl: async (url, init) => {
 				return auth.handler(new Request(url, init));
