@@ -5,7 +5,7 @@ import { randomBytes } from "crypto";
 import * as z from "zod/v4";
 import type { SSOOptions, SSOProvider } from "../types";
 
-export const submitDomainVerification = <O extends SSOOptions>(options: O) => {
+export const submitDomainVerification = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/domain-verification",
 		{
@@ -96,7 +96,7 @@ export const submitDomainVerification = <O extends SSOOptions>(options: O) => {
 	);
 };
 
-export const verifyDomain = <O extends SSOOptions>(options: O) => {
+export const verifyDomain = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/domain-verification/verify",
 		{

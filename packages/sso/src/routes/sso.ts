@@ -129,7 +129,7 @@ export const spMetadata = () => {
 	);
 };
 
-export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
+export const registerSSOProvider = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/register",
 		{
@@ -690,7 +690,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 	);
 };
 
-export const signInSSO = <O extends SSOOptions>(options: O) => {
+export const signInSSO = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sign-in/sso",
 		{
@@ -1036,7 +1036,7 @@ export const signInSSO = <O extends SSOOptions>(options: O) => {
 	);
 };
 
-export const callbackSSO = <O extends SSOOptions>(options: O) => {
+export const callbackSSO = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/callback/:providerId",
 		{
@@ -1386,7 +1386,7 @@ export const callbackSSO = <O extends SSOOptions>(options: O) => {
 	);
 };
 
-export const callbackSSOSAML = <O extends SSOOptions>(options: O) => {
+export const callbackSSOSAML = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/saml2/callback/:providerId",
 		{
@@ -1718,7 +1718,7 @@ export const callbackSSOSAML = <O extends SSOOptions>(options: O) => {
 	);
 };
 
-export const acsEndpoint = <O extends SSOOptions>(options: O) => {
+export const acsEndpoint = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/saml2/sp/acs/:providerId",
 		{

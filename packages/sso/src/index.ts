@@ -13,7 +13,9 @@ import {
 	signInSSO,
 	spMetadata,
 } from "./routes/sso";
-import type { SSOOptions } from "./types";
+import type { OIDCConfig, SAMLConfig, SSOOptions } from "./types";
+
+export type { SAMLConfig, OIDCConfig, SSOOptions };
 
 const fastValidator = {
 	async validate(xml: string) {
@@ -27,18 +29,18 @@ const fastValidator = {
 
 saml.setSchemaValidator(fastValidator);
 
-type DomainVerificationEndpoints<O extends SSOOptions> = {
-	submitDomainVerification: ReturnType<typeof submitDomainVerification<O>>;
-	verifyDomain: ReturnType<typeof verifyDomain<O>>;
+type DomainVerificationEndpoints = {
+	submitDomainVerification: ReturnType<typeof submitDomainVerification>;
+	verifyDomain: ReturnType<typeof verifyDomain>;
 };
 
-type SSOEndpoints<O extends SSOOptions> = {
+type SSOEndpoints = {
 	spMetadata: ReturnType<typeof spMetadata>;
-	registerSSOProvider: ReturnType<typeof registerSSOProvider<O>>;
-	signInSSO: ReturnType<typeof signInSSO<O>>;
-	callbackSSO: ReturnType<typeof callbackSSO<O>>;
-	callbackSSOSAML: ReturnType<typeof callbackSSOSAML<O>>;
-	acsEndpoint: ReturnType<typeof acsEndpoint<O>>;
+	registerSSOProvider: ReturnType<typeof registerSSOProvider>;
+	signInSSO: ReturnType<typeof signInSSO>;
+	callbackSSO: ReturnType<typeof callbackSSO>;
+	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
+	acsEndpoint: ReturnType<typeof acsEndpoint>;
 };
 
 export function sso<
@@ -49,7 +51,7 @@ export function sso<
 	options?: O | undefined,
 ): {
 	id: "sso";
-	endpoints: SSOEndpoints<O> & DomainVerificationEndpoints<O>;
+	endpoints: SSOEndpoints & DomainVerificationEndpoints;
 	schema: any;
 	options: O;
 };
@@ -57,7 +59,7 @@ export function sso<O extends SSOOptions>(
 	options?: O | undefined,
 ): {
 	id: "sso";
-	endpoints: SSOEndpoints<O>;
+	endpoints: SSOEndpoints;
 	schema: any;
 	options: O;
 };
