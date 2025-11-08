@@ -1,9 +1,12 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { createAuthEndpoint } from "@better-auth/core/api";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { getSessionFromCtx } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
@@ -154,6 +157,20 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 
 	return {
 		id: "phone-number",
+		hooks: {
+			before: [
+				{
+					// Stop any requests attempting to update the user's phone number
+					matcher: (ctx) =>
+						ctx.path === "/update-user" && "phoneNumber" in ctx.body,
+					handler: createAuthMiddleware(async (ctx) => {
+						throw new APIError("BAD_REQUEST", {
+							message: "Phone number cannot be updated",
+						});
+					}),
+				},
+			],
+		},
 		endpoints: {
 			/**
 			 * ### Endpoint

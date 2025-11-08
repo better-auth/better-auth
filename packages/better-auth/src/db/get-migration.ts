@@ -12,7 +12,7 @@ import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
-	string: ["character varying", "varchar", "text"],
+	string: ["character varying", "varchar", "text", "uuid"],
 	number: [
 		"int4",
 		"integer",
@@ -27,7 +27,7 @@ const postgresMap = {
 	json: ["json", "jsonb"],
 };
 const mysqlMap = {
-	string: ["varchar", "text"],
+	string: ["varchar", "text", "uuid"],
 	number: [
 		"integer",
 		"int",
@@ -51,7 +51,7 @@ const sqliteMap = {
 };
 
 const mssqlMap = {
-	string: ["varchar", "nvarchar"],
+	string: ["varchar", "nvarchar", "uniqueidentifier"],
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
 	date: ["datetime2", "date", "datetime"],
@@ -416,7 +416,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 						if (dbType === "postgres") {
 							return col
 								.primaryKey()
-								.defaultTo(sql`gen_random_uuid()`)
+								.defaultTo(sql`pg_catalog.gen_random_uuid()`)
 								.notNull();
 						} else if (dbType === "mysql" || dbType === "mssql") {
 							return col.primaryKey().defaultTo(sql`uuid()`).notNull();

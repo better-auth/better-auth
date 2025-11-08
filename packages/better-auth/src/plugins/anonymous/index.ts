@@ -82,6 +82,7 @@ const schema = {
 			isAnonymous: {
 				type: "boolean",
 				required: false,
+				input: false,
 			},
 		},
 	},

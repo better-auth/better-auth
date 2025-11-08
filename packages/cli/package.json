@@ -71,7 +71,7 @@
     "semver": "^7.7.2",
     "tinyexec": "^0.3.2",
     "yocto-spinner": "^0.2.3",
-    "zod": "^4.1.5"
+    "zod": "^4.1.12"
   },
   "files": [
     "dist"
