@@ -627,8 +627,7 @@ export const kyselyAdapter = (
 					: true,
 			supportsJSON: false,
 			supportsJoin: config?.experimental?.joins ?? false,
-			transaction:
-				(config?.transaction ?? false)
+			transaction: config?.transaction
 					? (cb) =>
 							db.transaction().execute((trx) => {
 								const adapter = createAdapterFactory({

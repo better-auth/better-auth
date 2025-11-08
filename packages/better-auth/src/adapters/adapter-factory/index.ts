@@ -289,24 +289,37 @@ export const createAdapterFactory =
 			select: string[] = [],
 			join: JoinConfig | undefined,
 		) => {
-			const transformSingleOutput = async (
-				data: Record<string, any> | null,
-				unsafe_model: string,
-				select: string[] = [],
-			) => {
-				if (!data) return null;
-				const newMappedKeys = config.mapKeysTransformOutput ?? {};
-				const transformedData: Record<string, any> = {};
-				const tableSchema = schema[getDefaultModelName(unsafe_model)]!.fields;
-				const idKey = Object.entries(newMappedKeys).find(
-					([_, v]) => v === "id",
-				)?.[0];
-				tableSchema[idKey ?? "id"] = {
-					type: options.advanced?.database?.useNumberId ? "number" : "string",
-				};
-				for (const key in tableSchema) {
-					if (select.length && !select.includes(key)) {
-						continue;
+			if (!data) return null;
+			const newMappedKeys = config.mapKeysTransformOutput ?? {};
+			const transformedData: Record<string, any> = {};
+			const tableSchema = schema[getDefaultModelName(unsafe_model)]!.fields;
+			const idKey = Object.entries(newMappedKeys).find(
+				([_, v]) => v === "id",
+			)?.[0];
+			const useNumberId =
+				options.advanced?.database?.useNumberId ||
+				options.advanced?.database?.generateId === "serial";
+			tableSchema[idKey ?? "id"] = {
+				type: useNumberId ? "number" : "string",
+			};
+			for (const key in tableSchema) {
+				if (select.length && !select.includes(key)) {
+					continue;
+				}
+				const field = tableSchema[key];
+				if (field) {
+					const originalKey = field.fieldName || key;
+
+					// If the field is mapped, we'll use the mapped key. Otherwise, we'll use the original key.
+					let newValue =
+						data[
+							Object.entries(newMappedKeys).find(
+								([_, v]) => v === originalKey,
+							)?.[0] || originalKey
+						];
+
+					if (field.transform?.output) {
+						newValue = await field.transform.output(newValue);
 					}
 					const field = tableSchema[key];
 					if (field) {
