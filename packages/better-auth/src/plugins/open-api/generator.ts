@@ -10,7 +10,7 @@ import type {
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 

@@ -307,6 +307,39 @@ describe("expo", async () => {
 		});
 		expect(origin).toBe(null);
 	});
+
+	it("should preserve existing cookies on link-social", async () => {
+		await client.signIn.email({
+			email: "test@test.com",
+			password: "password",
+		});
+		const testCookie = "better-auth.test-key";
+		const testCookieValue = "abc";
+
+		const storedCookieBefore = storage.get("better-auth_cookie");
+		expect(storedCookieBefore).toBeDefined();
+		const parsedCookieBefore = JSON.parse(storedCookieBefore || "");
+		expect(parsedCookieBefore[testCookie]).toBeUndefined();
+
+		const expoWebBrowser = await import("expo-web-browser");
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			url: `better-auth://?cookie=${testCookie}=${testCookieValue}`,
+		});
+
+		await client.linkSocial({ provider: "google" });
+
+		const storedCookieAfter = storage.get("better-auth_cookie");
+		expect(storedCookieAfter).toBeDefined();
+		const parsedCookieAfter = JSON.parse(storedCookieAfter || "");
+		expect(parsedCookieAfter[testCookie]?.value).toBe(testCookieValue);
+		Object.keys(parsedCookieBefore).forEach((key) => {
+			expect(
+				parsedCookieAfter[key]?.value,
+				`cookie "${key}" value is preserved`,
+			).toBe(parsedCookieBefore[key]?.value);
+		});
+	});
 });
 
 describe("expo with cookieCache", async () => {
