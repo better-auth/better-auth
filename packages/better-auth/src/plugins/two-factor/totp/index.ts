@@ -299,10 +299,7 @@ export const totp2fa = (options?: TOTPOptions) => {
 			 * **server:**
 			 * `auth.api.generateTOTP`
 			 *
-			 * **client:**
-			 * `authClient.totp.generate`
-			 *
-			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/totp#api-method-totp-generate)
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#totp)
 			 */
 			generateTOTP: generateTOTP,
 			/**
@@ -318,9 +315,24 @@ export const totp2fa = (options?: TOTPOptions) => {
 			 * **client:**
 			 * `authClient.twoFactor.getTotpUri`
 			 *
-			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/two-factor#api-method-two-factor-get-totp-uri)
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#getting-totp-uri)
 			 */
 			getTOTPURI: getTOTPURI,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/verify-totp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyTOTP`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.verifyTotp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#verifying-totp)
+			 */
 			verifyTOTP,
 		},
 	} satisfies TwoFactorProvider;
