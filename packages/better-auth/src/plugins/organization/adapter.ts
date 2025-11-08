@@ -688,16 +688,22 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return team;
 		},
 
-		listTeams: async (organizationId: string) => {
+		listTeams: async (data: {
+			organizationId: string;
+			limit?: number | undefined;
+			offset?: number | undefined;
+		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const teams = await adapter.findMany<Team>({
 				model: "team",
 				where: [
 					{
 						field: "organizationId",
-						value: organizationId,
+						value: data.organizationId,
 					},
 				],
+				limit: data.limit,
+				offset: data.offset,
 			});
 			return teams;
 		},
@@ -753,7 +759,11 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return session as Session;
 		},
 
-		listTeamMembers: async (data: { teamId: string }) => {
+		listTeamMembers: async (data: {
+			teamId: string;
+			limit?: number | undefined;
+			offset?: number | undefined;
+		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const members = await adapter.findMany<TeamMember>({
 				model: "teamMember",
@@ -763,6 +773,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						value: data.teamId,
 					},
 				],
+				limit: data.limit,
+				offset: data.offset,
 			});
 
 			return members;

@@ -501,6 +501,20 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 						description:
 							"The id of the organization to list roles for. If not provided, the user's active organization will be used.",
 					}),
+					limit: z
+						.string()
+						.meta({
+							description: "The number of roles to return",
+						})
+						.or(z.number())
+						.optional(),
+					offset: z
+						.string()
+						.meta({
+							description: "The offset to start from",
+						})
+						.or(z.number())
+						.optional(),
 				})
 				.optional(),
 		},
@@ -586,6 +600,8 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 						connector: "AND",
 					},
 				],
+				limit: ctx.query?.limit ? Number(ctx.query.limit) : undefined,
+				offset: ctx.query?.offset ? Number(ctx.query.offset) : undefined,
 			});
 
 			roles = roles.map((x) => ({
