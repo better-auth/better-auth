@@ -4,6 +4,7 @@ import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
 import type { AuthorizationQuery, OIDCOptions } from "./types";
+import { parsePrompt } from "./utils/prompt";
 
 function formatErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -59,10 +60,13 @@ export async function authorize(
 	const session = await getSessionFromCtx(ctx);
 	const query = (ctx.query || {}) as AuthorizationQuery;
 
+	// Parse the prompt parameter according to OIDC spec
+	const promptSet = query.prompt ? parsePrompt(query.prompt) : new Set();
+
 	// Handle prompt=login: force reauthentication even if user has active session
 	// However, if we're being called from the middleware after login, skip the redirect
 	const oidcLoginPromptHandled = !!(ctx.context as any).oidcLoginPromptHandled;
-	if ((query.prompt === "login" && !oidcLoginPromptHandled) || !session) {
+	if ((promptSet.has("login") && !oidcLoginPromptHandled) || !session) {
 		/**
 		 * If the user is not logged in, OR prompt=login is set, we need to
 		 * redirect them to the login page to (re)authenticate.
@@ -216,7 +220,7 @@ export async function authorize(
 
 	const requireConsent =
 		!skipConsentForTrustedClient &&
-		(!hasAlreadyConsented || query.prompt === "consent");
+		(!hasAlreadyConsented || promptSet.has("consent"));
 
 	try {
 		/**
