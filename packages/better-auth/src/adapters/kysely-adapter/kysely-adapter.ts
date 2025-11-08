@@ -628,15 +628,15 @@ export const kyselyAdapter = (
 			supportsJSON: false,
 			supportsJoin: config?.experimental?.joins ?? false,
 			transaction: config?.transaction
-					? (cb) =>
-							db.transaction().execute((trx) => {
-								const adapter = createAdapterFactory({
-									config: adapterOptions!.config,
-									adapter: createCustomAdapter(trx),
-								})(lazyOptions!);
-								return cb(adapter);
-							})
-					: false,
+				? (cb) =>
+						db.transaction().execute((trx) => {
+							const adapter = createAdapterFactory({
+								config: adapterOptions!.config,
+								adapter: createCustomAdapter(trx),
+							})(lazyOptions!);
+							return cb(adapter);
+						})
+				: false,
 		},
 		adapter: createCustomAdapter(db),
 	};

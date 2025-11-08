@@ -379,7 +379,7 @@ export const createAdapterFactory =
 					}
 				}
 				return transformedData as any;
-			};
+			}
 
 			if (!join || Object.keys(join).length === 0) {
 				return await transformSingleOutput(data, unsafe_model, select);
