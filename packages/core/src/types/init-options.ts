@@ -362,7 +362,8 @@ export type BetterAuthOptions = {
 						 * Whether to execute multiple operations in a transaction.
 						 * If the database doesn't support transactions,
 						 * set this to `false` and operations will be executed sequentially.
-						 * @default true
+						 *
+						 * @default false
 						 */
 						transaction?: boolean;
 				  }
@@ -391,7 +392,8 @@ export type BetterAuthOptions = {
 						 * Whether to execute multiple operations in a transaction.
 						 * If the database doesn't support transactions,
 						 * set this to `false` and operations will be executed sequentially.
-						 * @default true
+						 *
+						 * @default false
 						 */
 						transaction?: boolean;
 				  }
