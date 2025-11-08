@@ -271,7 +271,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 						try {
 							const parsedQuery = JSON.parse(cookie);
-							// Ensure we have a valid query object with required OAuth parameters
 							if (
 								parsedQuery &&
 								typeof parsedQuery === "object" &&
