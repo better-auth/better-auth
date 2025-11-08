@@ -269,10 +269,34 @@ export const oidcProvider = (options: OIDCOptions) => {
 						if (!session) {
 							return;
 						}
-						ctx.query = JSON.parse(cookie);
+						try {
+							const parsedQuery = JSON.parse(cookie);
+							// Ensure we have a valid query object with required OAuth parameters
+							if (
+								parsedQuery &&
+								typeof parsedQuery === "object" &&
+								parsedQuery.client_id
+							) {
+								ctx.query = parsedQuery;
+							} else {
+								ctx.context.logger.error(
+									"Invalid or incomplete query data in oidc_login_prompt cookie",
+									parsedQuery,
+								);
+								return;
+							}
+						} catch (e) {
+							ctx.context.logger.error(
+								"Failed to parse oidc_login_prompt cookie",
+								e,
+							);
+							return;
+						}
 						// Don't force prompt to "consent" - let the authorize function
 						// determine if consent is needed based on OIDC spec requirements
 						ctx.context.session = session;
+						// Set a flag to indicate we've just completed the login prompt flow
+						(ctx.context as any).oidcLoginPromptHandled = true;
 						const response = await authorize(ctx, opts);
 						return response;
 					}),

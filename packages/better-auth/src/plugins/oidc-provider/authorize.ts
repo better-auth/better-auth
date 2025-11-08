@@ -57,10 +57,18 @@ export async function authorize(
 		});
 	}
 	const session = await getSessionFromCtx(ctx);
-	if (!session) {
+	const query = (ctx.query || {}) as AuthorizationQuery;
+
+	// Handle prompt=login: force reauthentication even if user has active session
+	// However, if we're being called from the middleware after login, skip the redirect
+	const oidcLoginPromptHandled = !!(ctx.context as any).oidcLoginPromptHandled;
+	if ((query.prompt === "login" && !oidcLoginPromptHandled) || !session) {
 		/**
-		 * If the user is not logged in, we need to redirect them to the
-		 * login page.
+		 * If the user is not logged in, OR prompt=login is set, we need to
+		 * redirect them to the login page to (re)authenticate.
+		 *
+		 * Per OIDC spec: prompt=login forces reauthentication regardless
+		 * of the existing session.
 		 */
 		await ctx.setSignedCookie(
 			"oidc_login_prompt",
@@ -72,11 +80,12 @@ export async function authorize(
 				sameSite: "lax",
 			},
 		);
-		const queryFromURL = ctx.request.url?.split("?")[1]!;
-		return handleRedirect(`${options.loginPage}?${queryFromURL}`);
+		const queryFromURL = ctx.request.url?.split("?")[1] || "";
+		return handleRedirect(
+			queryFromURL ? `${options.loginPage}?${queryFromURL}` : options.loginPage,
+		);
 	}
 
-	const query = ctx.query as AuthorizationQuery;
 	if (!query.client_id) {
 		const errorURL = getErrorURL(
 			ctx,
