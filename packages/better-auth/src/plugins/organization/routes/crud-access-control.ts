@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Where } from "@better-auth/core/db/adapter";
-import * as z from "zod";
+import { z } from "zod";
 import { APIError } from "../../../api";
 import {
 	type InferAdditionalFieldsFromPluginOptions,
@@ -92,7 +92,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						role: string;
 						permission: Record<string, string[]>;
 					} & (IsExactlyEmptyObject<AdditionalFields> extends true
-						? { additionalFields?: {} }
+						? { additionalFields?: {} | undefined }
 						: { additionalFields: AdditionalFields }),
 				},
 			},

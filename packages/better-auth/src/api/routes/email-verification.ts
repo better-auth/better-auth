@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
 import { type JWTPayload, type JWTVerifyResult, jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
-import * as z from "zod";
+import { z } from "zod";
 import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import type { User } from "../../types";
@@ -16,7 +16,7 @@ export async function createEmailVerificationToken(
 	/**
 	 * The email to update from
 	 */
-	updateTo?: string,
+	updateTo?: string | undefined,
 	/**
 	 * The time in seconds for the token to expire
 	 */

@@ -46,7 +46,7 @@ const STRIPE_ERROR_CODES = defineErrorCodes({
 });
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
-	if (url.startsWith("http")) {
+	if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(url)) {
 		return url;
 	}
 	return `${ctx.context.options.baseURL}${
@@ -540,7 +540,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						subscription,
 					},
 					ctx.request,
-					//@ts-expect-error
 					ctx,
 				);
 
@@ -1323,7 +1322,46 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						user: {
 							create: {
 								async after(user, ctx) {
-									if (ctx && options.createCustomerOnSignUp) {
+									if (!ctx || !options.createCustomerOnSignUp) return;
+
+									try {
+										const userWithStripe = user as typeof user & {
+											stripeCustomerId?: string;
+										};
+
+										// Skip if user already has a Stripe customer ID
+										if (userWithStripe.stripeCustomerId) return;
+
+										// Check if customer already exists in Stripe by email
+										const existingCustomers = await client.customers.list({
+											email: user.email,
+											limit: 1,
+										});
+
+										let stripeCustomer = existingCustomers.data[0];
+
+										// If customer exists, link it to prevent duplicate creation
+										if (stripeCustomer) {
+											await ctx.context.internalAdapter.updateUser(user.id, {
+												stripeCustomerId: stripeCustomer.id,
+											});
+											await options.onCustomerCreate?.(
+												{
+													stripeCustomer,
+													user: {
+														...user,
+														stripeCustomerId: stripeCustomer.id,
+													},
+												},
+												ctx,
+											);
+											ctx.context.logger.info(
+												`Linked existing Stripe customer ${stripeCustomer.id} to user ${user.id}`,
+											);
+											return;
+										}
+
+										// Create new Stripe customer
 										let extraCreateParams: Partial<Stripe.CustomerCreateParams> =
 											{};
 										if (options.getCustomerCreateParams) {
@@ -1343,8 +1381,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 											},
 											extraCreateParams,
 										);
-										const stripeCustomer =
-											await client.customers.create(params);
+										stripeCustomer = await client.customers.create(params);
 										await ctx.context.internalAdapter.updateUser(user.id, {
 											stripeCustomerId: stripeCustomer.id,
 										});
@@ -1357,6 +1394,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												},
 											},
 											ctx,
+										);
+										ctx.context.logger.info(
+											`Created new Stripe customer ${stripeCustomer.id} for user ${user.id}`,
+										);
+									} catch (e: any) {
+										ctx.context.logger.error(
+											`Failed to create or link Stripe customer: ${e.message}`,
+											e,
 										);
 									}
 								},

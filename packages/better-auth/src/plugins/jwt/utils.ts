@@ -108,7 +108,9 @@ export async function decryptPrivateKey(
 	return dec.decode(decrypted);
 }
 
-export async function generateExportedKeyPair(options?: JwtOptions) {
+export async function generateExportedKeyPair(
+	options?: JwtOptions | undefined,
+) {
 	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
 		alg: "EdDSA",
 		crv: "Ed25519",
@@ -133,7 +135,7 @@ export async function generateExportedKeyPair(options?: JwtOptions) {
  */
 export async function createJwk(
 	ctx: GenericEndpointContext,
-	options?: JwtOptions,
+	options?: JwtOptions | undefined,
 ) {
 	const { publicWebKey, privateWebKey, alg, cfg } =
 		await generateExportedKeyPair(options);
@@ -160,8 +162,8 @@ export async function createJwk(
 		createdAt: new Date(),
 	};
 
-	const adapter = getJwksAdapter(ctx.context.adapter);
-	const key = await adapter.createJwk(jwk as Jwk);
+	const adapter = getJwksAdapter(ctx.context.adapter, options);
+	const key = await adapter.createJwk(ctx, jwk as Jwk);
 
 	return key;
 }

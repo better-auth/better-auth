@@ -26,44 +26,48 @@ export interface AnonymousOptions {
 	 * address for anonymous users in the database.
 	 * @default "baseURL"
 	 */
-	emailDomainName?: string;
+	emailDomainName?: string | undefined;
 	/**
 	 * A useful hook to run after an anonymous user
 	 * is about to link their account.
 	 */
-	onLinkAccount?: (data: {
-		anonymousUser: {
-			user: UserWithAnonymous & Record<string, any>;
-			session: Session & Record<string, any>;
-		};
-		newUser: {
-			user: User & Record<string, any>;
-			session: Session & Record<string, any>;
-		};
-		ctx: GenericEndpointContext;
-	}) => Promise<void> | void;
+	onLinkAccount?:
+		| ((data: {
+				anonymousUser: {
+					user: UserWithAnonymous & Record<string, any>;
+					session: Session & Record<string, any>;
+				};
+				newUser: {
+					user: User & Record<string, any>;
+					session: Session & Record<string, any>;
+				};
+				ctx: GenericEndpointContext;
+		  }) => Promise<void> | void)
+		| undefined;
 	/**
 	 * Disable deleting the anonymous user after linking
 	 */
-	disableDeleteAnonymousUser?: boolean;
+	disableDeleteAnonymousUser?: boolean | undefined;
 	/**
 	 * A hook to generate a name for the anonymous user.
 	 * Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
 	 * @returns The name for the anonymous user.
 	 */
-	generateName?: (
-		ctx: EndpointContext<
-			"/sign-in/anonymous",
-			{
-				method: "POST";
-			},
-			AuthContext
-		>,
-	) => Promise<string> | string;
+	generateName?:
+		| ((
+				ctx: EndpointContext<
+					"/sign-in/anonymous",
+					{
+						method: "POST";
+					},
+					AuthContext
+				>,
+		  ) => Promise<string> | string)
+		| undefined;
 	/**
 	 * Custom schema for the anonymous plugin
 	 */
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
 const schema = {
@@ -72,6 +76,7 @@ const schema = {
 			isAnonymous: {
 				type: "boolean",
 				required: false,
+				input: false,
 			},
 		},
 	},
@@ -84,7 +89,7 @@ const ERROR_CODES = defineErrorCodes({
 		"Anonymous users cannot sign in again anonymously",
 });
 
-export const anonymous = (options?: AnonymousOptions) => {
+export const anonymous = (options?: AnonymousOptions | undefined) => {
 	return {
 		id: "anonymous",
 		endpoints: {

@@ -2,7 +2,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState } from "../../utils";
@@ -147,6 +147,12 @@ export const signInSocial = createAuthEndpoint(
 						"The login hint to use for the authorization code request",
 				})
 				.optional(),
+			/**
+			 * Additional data to be passed through the OAuth flow
+			 */
+			additionalData: z.record(z.string(), z.any()).optional().meta({
+				description: "Additional data to be passed through the OAuth flow",
+			}),
 		}),
 		metadata: {
 			openapi: {
@@ -318,7 +324,11 @@ export const signInSocial = createAuthEndpoint(
 			});
 		}
 
-		const { codeVerifier, state } = await generateState(c);
+		const { codeVerifier, state } = await generateState(
+			c,
+			undefined,
+			c.body.additionalData,
+		);
 		const url = await provider.createAuthorizationURL({
 			state,
 			codeVerifier,

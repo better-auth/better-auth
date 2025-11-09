@@ -4,6 +4,7 @@ import type {
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import {
 	and,
@@ -37,7 +38,7 @@ export interface DrizzleAdapterConfig {
 	/**
 	 * The schema object that defines the tables and fields
 	 */
-	schema?: Record<string, any>;
+	schema?: Record<string, any> | undefined;
 	/**
 	 * The database provider
 	 */
@@ -47,20 +48,20 @@ export interface DrizzleAdapterConfig {
 	 * set this to true. For example, if the schema
 	 * has an object with a key "users" instead of "user"
 	 */
-	usePlural?: boolean;
+	usePlural?: boolean | undefined;
 	/**
 	 * Enable debug logs for the adapter
 	 *
 	 * @default false
 	 */
-	debugLogs?: DBAdapterDebugLogOption;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 	/**
 	 * By default snake case is used for table and field names
 	 * when the CLI is used to generate the schema. If you want
 	 * to use camel case, set this to true.
 	 * @default false
 	 */
-	camelCase?: boolean;
+	camelCase?: boolean | undefined;
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
@@ -68,7 +69,7 @@ export interface DrizzleAdapterConfig {
 	 * set this to `false` and operations will be executed sequentially.
 	 * @default false
 	 */
-	transaction?: boolean;
+	transaction?: boolean | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -95,7 +96,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				model: string,
 				builder: any,
 				data: Record<string, any>,
-				where?: Where[],
+				where?: Where[] | undefined,
 			) => {
 				if (config.provider !== "mysql") {
 					const c = await builder.returning();
@@ -425,7 +426,22 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 					const builder = db.delete(schemaModel).where(...clause);
-					return await builder;
+					const res = await builder;
+					let count = 0;
+					if (res && "rowCount" in res) count = res.rowCount;
+					else if (Array.isArray(res)) count = res.length;
+					else if (
+						res &&
+						("affectedRows" in res || "rowsAffected" in res || "changes" in res)
+					)
+						count = res.affectedRows ?? res.rowsAffected ?? res.changes;
+					if (typeof count !== "number") {
+						logger.error(
+							"[Drizzle Adapter] The result of the deleteMany operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.",
+							{ res, model, where },
+						);
+					}
+					return count;
 				},
 				options: config,
 			};

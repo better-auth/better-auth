@@ -4,7 +4,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { defineErrorCodes } from "@better-auth/core/utils";
-import * as z from "zod";
+import { z } from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import {
 	deleteSessionCookie,
@@ -19,13 +19,13 @@ interface MultiSessionConfig {
 	 * at a time
 	 * @default 5
 	 */
-	maximumSessions?: number;
+	maximumSessions?: number | undefined;
 }
 
 const ERROR_CODES = defineErrorCodes({
 	INVALID_SESSION_TOKEN: "Invalid session token",
 });
-export const multiSession = (options?: MultiSessionConfig) => {
+export const multiSession = (options?: MultiSessionConfig | undefined) => {
 	const opts = {
 		maximumSessions: 5,
 		...options,

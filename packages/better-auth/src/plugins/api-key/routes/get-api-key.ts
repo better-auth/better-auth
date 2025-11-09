@@ -1,6 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import * as z from "zod";
+import { z } from "zod";
 import { APIError, sessionMiddleware } from "../../../api";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
@@ -17,7 +17,7 @@ export function getApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
 	return createAuthEndpoint(

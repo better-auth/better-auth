@@ -8,6 +8,7 @@ import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { createAuthMiddleware, getOAuthState } from "./api";
 import { parseSetCookieHeader } from "./cookies";
 import { signJWT } from "./crypto";
 import { getMigrations } from "./db";
@@ -180,7 +181,7 @@ describe("Social Providers", async (c) => {
 	async function simulateOAuthFlowRefresh(
 		authUrl: string,
 		headers: Headers,
-		fetchImpl?: (...args: any) => any,
+		fetchImpl?: ((...args: any) => any) | undefined,
 	) {
 		let location: string | null = null;
 		await betterFetch(authUrl, {
@@ -716,6 +717,145 @@ describe("signin", async () => {
 		expect(session.data?.user).toMatchObject({
 			name: "Updated User",
 		});
+	});
+
+	it("should allow additional data in oauth state", async () => {
+		let additionalData: Record<string, any> | undefined;
+		const headers = new Headers();
+		let state = "";
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				database,
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						overrideUserInfoOnSignIn: true,
+					},
+				},
+				hooks: {
+					after: createAuthMiddleware(async (ctx) => {
+						if (ctx.path === "/callback/:id") {
+							additionalData = await getOAuthState<{ invitedBy?: string }>();
+						}
+					}),
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			additionalData: {
+				invitedBy: "user-123",
+			},
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError: (c) => {
+				cookieSetter(headers)(c as any);
+			},
+		});
+		expect(additionalData).toEqual({
+			callbackURL: "/callback",
+			codeVerifier: expect.any(String),
+			expiresAt: expect.any(Number),
+			invitedBy: "user-123",
+			errorURL: "http://localhost:3000/api/auth/error",
+		});
+	});
+
+	it("should not allow overriding oauth code verifier, expiresAt, callbackURL, errorURL, newUserURL, link, requestSignUp", async () => {
+		let additionalData: Record<string, any> = {};
+		const headers = new Headers();
+		let state = "";
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				database,
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						overrideUserInfoOnSignIn: true,
+					},
+				},
+				hooks: {
+					after: createAuthMiddleware(async (ctx) => {
+						if (ctx.path === "/callback/:id") {
+							additionalData = await getOAuthState<{ invitedBy?: string }>();
+						}
+					}),
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const expiresAt = Date.now();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			additionalData: {
+				codeVerifier: "test-code-verifier",
+				callbackURL: "test-callback-url",
+				errorURL: "test-error-url",
+				newUserURL: "test-new-user-url",
+				link: {
+					email: "test-email",
+					userId: "test-user-id",
+				},
+				requestSignUp: true,
+				expiresAt: expiresAt,
+			},
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError: (c) => {
+				cookieSetter(headers)(c as any);
+			},
+		});
+		expect(additionalData.codeVerifier).not.toBe("test-code-verifier");
+		expect(additionalData.callbackURL).not.toBe("test-callback-url");
+		expect(additionalData.errorURL).not.toBe("test-error-url");
+		expect(additionalData.newUserURL).not.toBe("test-new-user-url");
+		expect(additionalData.link).not.toBe({
+			email: "test-email",
+			userId: "test-user-id",
+		});
+		expect(additionalData.requestSignUp).not.toBe(true);
+		expect(additionalData.expiresAt).not.toBe(expiresAt);
 	});
 });
 
