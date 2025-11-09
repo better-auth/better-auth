@@ -437,8 +437,11 @@ export const createAdapterFactory =
 			const idKey = Object.entries(newMappedKeys).find(
 				([_, v]) => v === "id",
 			)?.[0];
+			const useNumberId =
+				options.advanced?.database?.useNumberId ||
+				options.advanced?.database?.generateId === "serial";
 			tableSchema[idKey ?? "id"] = {
-				type: options.advanced?.database?.useNumberId ? "number" : "string",
+				type: useNumberId ? "number" : "string",
 			};
 			for (const key in tableSchema) {
 				if (select.length && !select.includes(key)) {
