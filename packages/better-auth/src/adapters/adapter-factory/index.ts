@@ -66,6 +66,45 @@ export const createAdapterFactory =
 		// End-user's Better-Auth instance's schema
 		const schema = getAuthTables(options);
 
+		// This function helps us determine if a given field is the ID field for a model. It is implelemted to remove hardcoded "id" checks.
+		const isIdField = (model: string, field: string): boolean => {
+			const defaultModelName = getDefaultModelName(model);
+			const modelSchema = schema[defaultModelName];
+			
+			// If field is literally "id", it's always the ID field (all tables have id)
+			// This handles plugin tables that don't explicitly define id in their schema
+			if (field === "id") {
+				return true;
+			}
+			
+			// MongoDB uses "_id" as the primary key field name, but we map it to "id" internally
+			if (field === "_id") {
+				return true;
+			}
+			
+			if (!modelSchema) return false;
+
+			// Check if the field name matches the ID field's fieldName (for custom ID fields like "user_id")
+			const idFieldAttr = modelSchema.fields.id;
+			if (idFieldAttr && idFieldAttr.fieldName === field) {
+				return true;
+			}
+
+			return false;
+		};
+		// Function to get the actual ID field name for a model.
+		const getIdFieldName = (model: string): string => {
+			const defaultModelName = getDefaultModelName(model);
+			const modelSchema = schema[defaultModelName];
+			if (!modelSchema) {
+				return "id";
+			}
+			if (!modelSchema?.fields?.id) {
+				return "id";
+			}
+			const idFieldAttr = modelSchema.fields.id;
+			return idFieldAttr.fieldName || "id";
+		};
 		/**
 		 * This function helps us get the default field name from the schema defined by devs.
 		 * Often times, the user will be using the `fieldName` which could had been customized by the users.
@@ -76,6 +115,7 @@ export const createAdapterFactory =
 		 * 1. User can define a custom fieldName.
 		 * 2. When using a custom fieldName, doing something like `schema[model].fields[field]` will not work.
 		 */
+
 		const getDefaultFieldName = ({
 			field,
 			model: unsafe_model,
@@ -86,7 +126,8 @@ export const createAdapterFactory =
 			// Plugin `schema`s can't define their own `id`. Better-auth auto provides `id` to every schema model.
 			// Given this, we can't just check if the `field` (that being `id`) is within the schema's fields, since it is never defined.
 			// So we check if the `field` is `id` and if so, we return `id` itself. Otherwise, we return the `field` from the schema.
-			if (field === "id" || field === "_id") {
+			// All tables have an id field (added automatically for plugin tables), so if field is "id", return it
+			if (isIdField(unsafe_model, field)) {
 				return "id";
 			}
 			const model = getDefaultModelName(unsafe_model); // Just to make sure the model name is correct.
@@ -327,10 +368,15 @@ export const createAdapterFactory =
 				!config.disableIdGeneration &&
 				!options.advanced?.database?.useNumberId
 			) {
-				fields.id = idField({
-					customModelName: defaultModelName,
-					forceAllowId: forceAllowId && "id" in data,
-				});
+				// Preserve the fieldName from the schema when overwriting the id field
+				const existingIdField = fields.id;
+				fields.id = {
+					...idField({
+						customModelName: defaultModelName,
+						forceAllowId: forceAllowId && "id" in data,
+					}),
+					fieldName: existingIdField?.fieldName || "id",
+				};
 			}
 			for (const field in fields) {
 				const value = data[field];
@@ -338,6 +384,18 @@ export const createAdapterFactory =
 
 				let newFieldName: string =
 					newMappedKeys[field] || fields[field]!.fieldName || field;
+				
+				// EARLY EXIT: When useNumberId is enabled and creating, skip ID field entirely
+				// The database will auto-generate the ID, so we should NEVER include it in the data
+				// This prevents null/undefined/empty values from being passed to the database
+				if (
+					action === "create" &&
+					options.advanced?.database?.useNumberId &&
+					isIdField(defaultModelName, field)
+				) {
+					continue; // Skip completely - database auto-generates
+				}
+				
 				if (
 					value === undefined &&
 					((fieldAttributes!.defaultValue === undefined &&
@@ -356,14 +414,29 @@ export const createAdapterFactory =
 					newValue = await fieldAttributes!.transform.input(newValue);
 				}
 
+				// Convert ID fields (primary keys and foreign keys) to numbers when useNumberId is enabled
+				// Skip conversion if value is undefined/null/empty (e.g., when database auto-generates IDs)
 				if (
-					fieldAttributes!.references?.field === "id" &&
-					options.advanced?.database?.useNumberId
+					options.advanced?.database?.useNumberId &&
+					newValue !== undefined &&
+					newValue !== null &&
+					newValue !== "" &&
+					(isIdField(defaultModelName, field) ||
+						(fieldAttributes!.references &&
+							isIdField(
+								fieldAttributes!.references.model,
+								fieldAttributes!.references.field,
+							)))
 				) {
 					if (Array.isArray(newValue)) {
-						newValue = newValue.map((x) => (x !== null ? Number(x) : null));
+						newValue = newValue.map((x) => (x !== null && x !== "" ? Number(x) : null));
 					} else {
-						newValue = newValue !== null ? Number(newValue) : null;
+						const numValue = Number(newValue);
+						// Skip if conversion results in NaN
+						if (isNaN(numValue)) {
+							continue;
+						}
+						newValue = numValue;
 					}
 				} else if (
 					config.supportsJSON === false &&
@@ -396,7 +469,9 @@ export const createAdapterFactory =
 					});
 				}
 
-				if (newValue !== undefined) {
+				// Add values to transformedData, preserving null for nullable fields but excluding undefined and NaN
+				// Null values are valid for nullable foreign keys and should be preserved
+				if (newValue !== undefined && !(typeof newValue === "number" && isNaN(newValue))) {
 					transformedData[newFieldName] = newValue;
 				}
 			}
@@ -409,13 +484,24 @@ export const createAdapterFactory =
 			select: string[] = [],
 		) => {
 			if (!data) return null;
+			const defaultModelName = getDefaultModelName(unsafe_model);
 			const newMappedKeys = config.mapKeysTransformOutput ?? {};
 			const transformedData: Record<string, any> = {};
-			const tableSchema = schema[unsafe_model]!.fields;
+			const tableSchema = schema[defaultModelName]!.fields;
 			const idKey = Object.entries(newMappedKeys).find(
 				([_, v]) => v === "id",
 			)?.[0];
-			tableSchema[idKey ?? "id"] = {
+			const finalIdKey = idKey ?? "id";
+			// Preserve the existing field definition, especially fieldName
+			const existingIdField = tableSchema[finalIdKey];
+			const idFieldName = getIdFieldName(defaultModelName);
+			// Ensure the id field exists and has the correct fieldName
+			if (!tableSchema[finalIdKey]) {
+				tableSchema[finalIdKey] = {} as DBFieldAttribute;
+			}
+			tableSchema[finalIdKey] = {
+				...(existingIdField || {}),
+				fieldName: existingIdField?.fieldName || idFieldName,
 				type: options.advanced?.database?.useNumberId ? "number" : "string",
 			};
 			for (const key in tableSchema) {
@@ -424,7 +510,9 @@ export const createAdapterFactory =
 				}
 				const field = tableSchema[key];
 				if (field) {
-					const originalKey = field.fieldName || key;
+					// For id field, always use getIdFieldName to get the correct database column name
+					const originalKey =
+						key === finalIdKey ? idFieldName : field.fieldName || key;
 
 					// If the field is mapped, we'll use the mapped key. Otherwise, we'll use the original key.
 					let newValue =
@@ -440,7 +528,12 @@ export const createAdapterFactory =
 
 					let newFieldName: string = newMappedKeys[key] || key;
 
-					if (originalKey === "id" || field.references?.field === "id") {
+					// if (originalKey === "id" || field.references?.field === "id") {
+					if (
+						isIdField(defaultModelName, originalKey) ||
+						(field.references &&
+							isIdField(field.references.model, field.references.field))
+					) {
 						// Even if `useNumberId` is true, we must always return a string `id` output.
 						if (typeof newValue !== "undefined" && newValue !== null)
 							newValue = String(newValue);
@@ -476,7 +569,39 @@ export const createAdapterFactory =
 						});
 					}
 
-					transformedData[newFieldName] = newValue;
+					// Always include all schema fields in the output, even if undefined
+					// This ensures the result has all expected fields (required for tests and type safety)
+					// Exception: Skip ID field here - it will be handled explicitly below
+					if (newFieldName !== finalIdKey) {
+						transformedData[newFieldName] = newValue;
+					}
+				}
+			}
+			// Explicitly handle id field with custom fieldName - ALWAYS override to ensure correct mapping
+			// This ensures the ID field is correctly converted from database column name to logical name
+			// Only skip if explicitly excluded in select
+			if (!select.length || select.includes(finalIdKey)) {
+				// Try all possible ID keys to find the value
+				// This handles custom ID fields (user_id) and default ID fields (id)
+				const possibleIdKeys = [
+					idFieldName, // From getIdFieldName() - should be "user_id" for custom ID
+					tableSchema[finalIdKey]?.fieldName, // From schema we set up
+					"id", // Standard fallback
+				].filter(
+					(key): key is string => typeof key === "string" && key.length > 0,
+				);
+
+				let idValue: any = undefined;
+				for (const key of possibleIdKeys) {
+					if (key in data && data[key] !== undefined) {
+						idValue = data[key];
+						break;
+					}
+				}
+
+				// Always set the ID field if we found a value (overrides any undefined value from the loop above)
+				if (idValue !== undefined && idValue !== null) {
+					transformedData[finalIdKey] = String(idValue);
 				}
 			}
 			return transformedData as any;
@@ -524,9 +649,14 @@ export const createAdapterFactory =
 					model: defaultModelName,
 				});
 
+				// if (
+				// 	defaultFieldName === "id" ||
+				// 	fieldAttr!.references?.field === "id"
+				// )
 				if (
-					defaultFieldName === "id" ||
-					fieldAttr!.references?.field === "id"
+					isIdField(defaultModelName, defaultFieldName) ||
+					(fieldAttr!.references &&
+						isIdField(fieldAttr!.references.model, fieldAttr!.references.field))
 				) {
 					if (options.advanced?.database?.useNumberId) {
 						if (Array.isArray(value)) {

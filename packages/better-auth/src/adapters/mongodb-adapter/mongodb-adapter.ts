@@ -64,6 +64,39 @@ export const mongodbAdapter = (
 			const customIdGen = getCustomIdGenerator(options);
 			const logger = createLogger(options.logger);
 
+			function isIdField(model: string, field: string): boolean {
+				const defaultModelName = getDefaultModelName(model);
+				const modelSchema = schema[defaultModelName];
+				if (!modelSchema) return false;
+
+				// Check if it's the logical "id" field
+				if (field === "id" && modelSchema.fields.id) {
+					return true;
+				}
+
+				// Check if the field name matches the ID field's fieldName
+				const idFieldAttr = modelSchema.fields.id;
+				if (idFieldAttr && idFieldAttr.fieldName === field) {
+					return true;
+				}
+
+				// MongoDB special: also check for "_id"
+				if (field === "_id" && modelSchema.fields.id) {
+					return true;
+				}
+
+				return false;
+			}
+
+			function getIdFieldName(model: string): string {
+				const defaultModelName = getDefaultModelName(model);
+				const modelSchema = schema[defaultModelName];
+				if (!modelSchema || !modelSchema.fields.id) {
+					return "id";
+				}
+				return modelSchema.fields.id.fieldName || "id";
+			}
+
 			function serializeID({
 				field,
 				value,
@@ -77,10 +110,18 @@ export const mongodbAdapter = (
 					return value;
 				}
 				model = getDefaultModelName(model);
+				// if (
+				// 	field === "id" ||
+				// 	field === "_id" ||
+				// 	schema[model]!.fields[field]?.references?.field === "id"
+				// )
 				if (
-					field === "id" ||
-					field === "_id" ||
-					schema[model]!.fields[field]?.references?.field === "id"
+					isIdField(model, field) ||
+					(schema[model]!.fields[field]?.references &&
+						isIdField(
+							schema[model]!.fields[field]!.references!.model,
+							schema[model]!.fields[field]!.references!.field,
+						))
 				) {
 					if (value === null || value === undefined) {
 						return value;
@@ -135,7 +176,10 @@ export const mongodbAdapter = (
 					} = w;
 					let condition: any;
 					let field = getFieldName({ model, field: field_ });
-					if (field === "id") field = "_id";
+					// if (field === "id") field = "_id";
+					if (isIdField(model, field)) {
+						field = "_id";
+					}
 					switch (operator.toLowerCase()) {
 						case "eq":
 							condition = {
@@ -395,8 +439,40 @@ export const mongodbAdapter = (
 				model,
 				options,
 			}) {
+				// model parameter is already the defaultModelName from transformInput
+				function isIdField(modelName: string, fieldName: string): boolean {
+					const modelSchema = schema[modelName];
+					if (!modelSchema) return false;
+
+					// Check if it's the logical "id" field
+					if (fieldName === "id" && modelSchema.fields.id) {
+						return true;
+					}
+
+					// Check if the field name matches the ID field's fieldName
+					const idFieldAttr = modelSchema.fields.id;
+					if (idFieldAttr && idFieldAttr.fieldName === fieldName) {
+						return true;
+					}
+
+					// MongoDB special: also check for "_id"
+					if (fieldName === "_id" && modelSchema.fields.id) {
+						return true;
+					}
+
+					return false;
+				}
 				const customIdGen = getCustomIdGenerator(options);
-				if (field === "_id" || fieldAttributes.references?.field === "id") {
+				// if (field === "_id" || fieldAttributes.references?.field === "id")
+				if (
+					field === "_id" ||
+					isIdField(model, field) ||
+					(fieldAttributes.references &&
+						isIdField(
+							fieldAttributes.references.model,
+							fieldAttributes.references.field,
+						))
+				) {
 					if (customIdGen) {
 						return data;
 					}

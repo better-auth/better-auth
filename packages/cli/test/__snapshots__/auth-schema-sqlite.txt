@@ -3,6 +3,7 @@ import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
 export const custom_user = sqliteTable("custom_user", {
   id: text("id").primaryKey(),
+  id: text("id").notNull(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: integer("email_verified", { mode: "boolean" })
@@ -25,6 +26,7 @@ export const custom_user = sqliteTable("custom_user", {
 
 export const custom_session = sqliteTable("custom_session", {
   id: text("id").primaryKey(),
+  id: text("id").notNull(),
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
   token: text("token").notNull().unique(),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
@@ -42,6 +44,7 @@ export const custom_session = sqliteTable("custom_session", {
 
 export const custom_account = sqliteTable("custom_account", {
   id: text("id").primaryKey(),
+  id: text("id").notNull(),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
   userId: text("user_id")

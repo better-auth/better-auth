@@ -182,6 +182,11 @@ exports[`init > should match config 1`] = `
           "required": true,
           "type": "date",
         },
+        "id": {
+          "fieldName": "id",
+          "required": true,
+          "type": "string",
+        },
         "idToken": {
           "fieldName": "idToken",
           "required": false,
@@ -245,6 +250,11 @@ exports[`init > should match config 1`] = `
           "required": true,
           "type": "date",
         },
+        "id": {
+          "fieldName": "id",
+          "required": true,
+          "type": "string",
+        },
         "ipAddress": {
           "fieldName": "ipAddress",
           "required": false,
@@ -302,6 +312,11 @@ exports[`init > should match config 1`] = `
           "input": false,
           "required": true,
           "type": "boolean",
+        },
+        "id": {
+          "fieldName": "id",
+          "required": true,
+          "type": "string",
         },
         "image": {
           "fieldName": "image",

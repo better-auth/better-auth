@@ -42,6 +42,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		const table = tables[tableKey]!;
 		const modelName = getModelName(table.modelName, adapter.options);
 		const fields = table.fields;
+		const idField = fields.id;
+		const idFieldName = idField?.fieldName || "id";
 
 		function getType(name: string, field: DBFieldAttribute) {
 			// Not possible to reach, it's here to make typescript happy

@@ -176,3 +176,256 @@ describe.runIf(isPostgresAvailable)(
 		});
 	},
 );
+
+describe.runIf(isPostgresAvailable)(
+	"Migration Generation - Custom ID Field Names",
+	() => {
+		const customSchema = "auth_test_custom_id";
+
+		const customSchemaPool = new Pool({
+			connectionString: `postgres://user:password@localhost:5433/better_auth?options=-c search_path=${customSchema}`,
+		});
+
+		beforeAll(async () => {
+			// Setup: Create custom schema
+			await customSchemaPool.query(
+				`DROP SCHEMA IF EXISTS ${customSchema} CASCADE`,
+			);
+			await customSchemaPool.query(`CREATE SCHEMA ${customSchema}`);
+		});
+
+		afterAll(async () => {
+			// Cleanup
+			await customSchemaPool.query(
+				`DROP SCHEMA IF EXISTS ${customSchema} CASCADE`,
+			);
+			await customSchemaPool.end();
+		});
+
+		it("should generate migration with custom ID field name (user_id) for user table", async () => {
+			const config: BetterAuthOptions = {
+				database: customSchemaPool,
+				emailAndPassword: {
+					enabled: true,
+				},
+				user: {
+					fields: {
+						id: "user_id",
+					},
+				},
+			};
+
+			const { toBeCreated, compileMigrations } = await getMigrations(config);
+
+			const userTable = toBeCreated.find((t) => t.table === "user");
+			expect(userTable).toBeDefined();
+
+			// Check that the user table has the id field configured with custom fieldName
+			expect(userTable?.fields).toHaveProperty("id");
+			const idField = userTable?.fields.id;
+			expect(idField?.fieldName).toBe("user_id");
+
+			// Compile migrations and check SQL
+			const sql = await compileMigrations();
+			expect(sql).toContain("user_id");
+			expect(sql).toContain('CREATE TABLE "user"');
+		});
+
+		it("should generate migration with custom ID field name for session table referencing user_id", async () => {
+			const config: BetterAuthOptions = {
+				database: customSchemaPool,
+				emailAndPassword: {
+					enabled: true,
+				},
+				user: {
+					fields: {
+						id: "user_id",
+					},
+				},
+				session: {
+					fields: {
+						userId: "user_id",
+					},
+				},
+			};
+
+			const { toBeCreated, compileMigrations } = await getMigrations(config);
+
+			const sessionTable = toBeCreated.find((t) => t.table === "session");
+			expect(sessionTable).toBeDefined();
+
+			// Check that session table has userId field configured with custom fieldName
+			expect(sessionTable?.fields).toHaveProperty("userId");
+			const userIdField = sessionTable?.fields.userId;
+			expect(userIdField?.fieldName).toBe("user_id");
+			expect(userIdField?.references?.field).toBe("id"); // References logical "id" field
+			expect(userIdField?.references?.model).toBe("user");
+
+			// Compile migrations and check SQL
+			const sql = await compileMigrations();
+			expect(sql).toContain("user_id");
+			expect(sql).toMatch(/REFERENCES\s+"user"\("id"\)/i);
+		});
+
+		it("should generate migration with custom ID field name for account table", async () => {
+			const config: BetterAuthOptions = {
+				database: customSchemaPool,
+				emailAndPassword: {
+					enabled: true,
+				},
+				user: {
+					fields: {
+						id: "user_id",
+					},
+				},
+				account: {
+					fields: {
+						id: "account_id",
+						userId: "user_id",
+					},
+				},
+			};
+
+			const { toBeCreated, compileMigrations } = await getMigrations(config);
+
+			const accountTable = toBeCreated.find((t) => t.table === "account");
+			expect(accountTable).toBeDefined();
+
+			// Check that account table has custom ID field
+			expect(accountTable?.fields).toHaveProperty("id");
+			const idField = accountTable?.fields.id;
+			expect(idField?.fieldName).toBe("account_id");
+
+			// Check that userId field references user.id correctly
+			expect(accountTable?.fields).toHaveProperty("userId");
+			const userIdField = accountTable?.fields.userId;
+			expect(userIdField?.fieldName).toBe("user_id");
+			expect(userIdField?.references?.field).toBe("id");
+			expect(userIdField?.references?.model).toBe("user");
+
+			// Compile migrations and check SQL
+			const sql = await compileMigrations();
+			expect(sql).toContain("account_id");
+			expect(sql).toContain('CREATE TABLE "account"');
+		});
+
+		it("should detect existing table with custom ID field name and not recreate it", async () => {
+			// First, create a table with custom ID field name
+			await customSchemaPool.query(`
+				CREATE TABLE IF NOT EXISTS ${customSchema}.user (
+					user_id TEXT PRIMARY KEY NOT NULL,
+					email TEXT NOT NULL,
+					name TEXT NOT NULL,
+					"emailVerified" BOOLEAN NOT NULL,
+					"createdAt" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+					"updatedAt" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
+				);
+			`);
+
+			const config: BetterAuthOptions = {
+				database: customSchemaPool,
+				emailAndPassword: {
+					enabled: true,
+				},
+				user: {
+					fields: {
+						id: "user_id",
+					},
+				},
+			};
+
+			const { toBeCreated, toBeAdded } = await getMigrations(config);
+
+			// Should not need to create user table since it exists with correct ID field name
+			const userTable = toBeCreated.find((t) => t.table === "user");
+			expect(userTable).toBeUndefined();
+
+			// Should not need to add fields if structure matches
+			const userFieldsToAdd = toBeAdded.find((t) => t.table === "user");
+			expect(userFieldsToAdd).toBeUndefined();
+
+			// Cleanup
+			await customSchemaPool.query(
+				`DROP TABLE IF EXISTS ${customSchema}.user CASCADE`,
+			);
+		});
+
+		it("should detect missing fields when table exists with custom ID field name", async () => {
+			// Create a table with custom ID but missing some fields
+			await customSchemaPool.query(`
+				CREATE TABLE IF NOT EXISTS ${customSchema}.user (
+					user_id TEXT PRIMARY KEY NOT NULL,
+					email TEXT NOT NULL,
+					name TEXT NOT NULL
+				);
+			`);
+
+			const config: BetterAuthOptions = {
+				database: customSchemaPool,
+				emailAndPassword: {
+					enabled: true,
+				},
+				user: {
+					fields: {
+						id: "user_id",
+					},
+				},
+			};
+
+			const { toBeCreated, toBeAdded } = await getMigrations(config);
+
+			// Should not need to create user table
+			const userTable = toBeCreated.find((t) => t.table === "user");
+			expect(userTable).toBeUndefined();
+
+			// Should need to add missing fields
+			const userFieldsToAdd = toBeAdded.find((t) => t.table === "user");
+			expect(userFieldsToAdd).toBeDefined();
+			expect(userFieldsToAdd?.fields).toHaveProperty("emailVerified");
+			expect(userFieldsToAdd?.fields).toHaveProperty("createdAt");
+			expect(userFieldsToAdd?.fields).toHaveProperty("updatedAt");
+
+			// Cleanup
+			await customSchemaPool.query(
+				`DROP TABLE IF EXISTS ${customSchema}.user CASCADE`,
+			);
+		});
+
+		it("should generate correct migration SQL with custom ID field names for all tables", async () => {
+			const config: BetterAuthOptions = {
+				database: customSchemaPool,
+				emailAndPassword: {
+					enabled: true,
+				},
+				user: {
+					fields: {
+						id: "user_id",
+					},
+				},
+				session: {
+					fields: {
+						id: "session_id",
+						userId: "user_id",
+					},
+				},
+				account: {
+					fields: {
+						id: "account_id",
+						userId: "user_id",
+					},
+				},
+			};
+
+			const { compileMigrations } = await getMigrations(config);
+			const sql = await compileMigrations();
+
+			// Check that all custom ID field names are present
+			expect(sql).toContain("user_id");
+			expect(sql).toContain("session_id");
+			expect(sql).toContain("account_id");
+
+			// Check that foreign key references use correct field names
+			expect(sql).toMatch(/REFERENCES\s+"user"\("id"\)/i);
+		});
+	},
+);

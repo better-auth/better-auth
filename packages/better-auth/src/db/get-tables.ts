@@ -7,6 +7,19 @@ import type {
 export const getAuthTables = (
 	options: BetterAuthOptions,
 ): BetterAuthDBSchema => {
+	const getUserIdFieldName = () => {
+		return options.user?.fields?.id || "id";
+	};
+	const getSessionIdFieldName = () => {
+		return options.session?.fields?.id || "id";
+	};
+	const getAccountIdFieldName = () => {
+		return options.account?.fields?.id || "id";
+	};
+	const userIdFieldName = getUserIdFieldName();
+	const sessionIdFieldName = getSessionIdFieldName();
+	const accountIdFieldName = getAccountIdFieldName();
+
 	const pluginSchema = (options.plugins ?? []).reduce(
 		(acc, plugin) => {
 			const schema = plugin.schema;
@@ -33,6 +46,11 @@ export const getAuthTables = (
 		rateLimit: {
 			modelName: options.rateLimit?.modelName || "rateLimit",
 			fields: {
+				id: {
+					type: "string",
+					required: true,
+					fieldName: "id",
+				},
 				key: {
 					type: "string",
 					fieldName: options.rateLimit?.fields?.key || "key",
@@ -52,10 +70,40 @@ export const getAuthTables = (
 
 	const { user, session, account, ...pluginTables } = pluginSchema;
 
+	// Ensure all plugin tables have an id field (use default "id" name)
+	const pluginTablesWithId = Object.entries(pluginTables).reduce(
+		(acc, [tableKey, table]) => {
+			// Check if table already has an id field
+			if (!table.fields.id) {
+				// Add default id field to plugin tables (always use "id", not custom)
+				acc[tableKey] = {
+					...table,
+					fields: {
+						id: {
+							type: "string",
+							required: true,
+							fieldName: "id", // Always use default "id" for plugin tables
+						},
+						...table.fields,
+					},
+				};
+			} else {
+				acc[tableKey] = table;
+			}
+			return acc;
+		},
+		{} as typeof pluginTables,
+	);
+
 	const sessionTable = {
 		session: {
 			modelName: options.session?.modelName || "session",
 			fields: {
+				id: {
+					type: "string",
+					required: true,
+					fieldName: sessionIdFieldName,
+				},
 				expiresAt: {
 					type: "date",
 					required: true,
@@ -94,7 +142,7 @@ export const getAuthTables = (
 					fieldName: options.session?.fields?.userId || "userId",
 					references: {
 						model: options.user?.modelName || "user",
-						field: "id",
+						field: userIdFieldName,
 						onDelete: "cascade",
 					},
 					required: true,
@@ -110,6 +158,11 @@ export const getAuthTables = (
 		user: {
 			modelName: options.user?.modelName || "user",
 			fields: {
+				id: {
+					type: "string",
+					required: true,
+					fieldName: userIdFieldName,
+				},
 				name: {
 					type: "string",
 					required: true,
@@ -160,6 +213,11 @@ export const getAuthTables = (
 		account: {
 			modelName: options.account?.modelName || "account",
 			fields: {
+				id: {
+					type: "string",
+					required: true,
+					fieldName: accountIdFieldName,
+				},
 				accountId: {
 					type: "string",
 					required: true,
@@ -174,7 +232,7 @@ export const getAuthTables = (
 					type: "string",
 					references: {
 						model: options.user?.modelName || "user",
-						field: "id",
+						field: userIdFieldName,
 						onDelete: "cascade",
 					},
 					required: true,

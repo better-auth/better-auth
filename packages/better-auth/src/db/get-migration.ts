@@ -10,6 +10,7 @@ import { sql } from "kysely";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
+import { getAuthTables } from "./get-tables";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text"],
@@ -26,6 +27,7 @@ const postgresMap = {
 	date: ["timestamptz", "timestamp", "date"],
 	json: ["json", "jsonb"],
 };
+
 const mysqlMap = {
 	string: ["varchar", "text"],
 	number: [
@@ -111,6 +113,7 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 
 export async function getMigrations(config: BetterAuthOptions) {
 	const betterAuthSchema = getSchema(config);
+	const originalSchema = getAuthTables(config);
 	const logger = createLogger(config.logger);
 
 	let { kysely: db, databaseType: dbType } = await createKyselyAdapter(config);
@@ -234,7 +237,15 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 		let toBeAddedFields: Record<string, DBFieldAttribute> = {};
 		for (const [fieldName, field] of Object.entries(value.fields)) {
-			const column = table.columns.find((c) => c.name === fieldName);
+			if (!field) {
+				logger.warn(
+					`Field ${fieldName} in table ${key} is undefined. Skipping.`,
+				);
+				continue;
+			}
+			// Use fieldName (database column name) for lookup, fallback to logical fieldName
+			const columnName = field.fieldName || fieldName;
+			const column = table.columns.find((c) => c.name === columnName);
 			if (!column) {
 				toBeAddedFields[fieldName] = field;
 				continue;
@@ -244,7 +255,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 				continue;
 			} else {
 				logger.warn(
-					`Field ${fieldName} in table ${key} has a different type in the database. Expected ${field.type} but got ${column.dataType}.`,
+					`Field ${fieldName} (column ${columnName}) in table ${key} has a different type in the database. Expected ${field.type} but got ${column.dataType}.`,
 				);
 			}
 		}
@@ -262,7 +273,26 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| CreateTableBuilder<string, string>
 	)[] = [];
 
-	function getType(field: DBFieldAttribute, fieldName: string) {
+	function isIdField(model: string, fieldName: string): boolean {
+		// Check the original schema structure (keyed by logical field names)
+		for (const [tableKey, table] of Object.entries(originalSchema)) {
+			if (table.modelName === model) {
+				// Check if there's an "id" field and if its fieldName matches
+				const idField = table.fields.id;
+				if (idField && idField.fieldName === fieldName) {
+					return true;
+				}
+			}
+		}
+		// Also check if fieldName is literally "id" (for backward compatibility)
+		return fieldName === "id";
+	}
+
+	function getType(
+		field: DBFieldAttribute,
+		fieldName: string,
+		tableModelName: string,
+	) {
 		const type = field.type;
 		const typeMap = {
 			string: {
@@ -328,8 +358,19 @@ export async function getMigrations(config: BetterAuthOptions) {
 				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
 			},
 		} as const;
-		if (fieldName === "id" || field.references?.field === "id") {
-			if (fieldName === "id") {
+		// if (fieldName === "id" || field.references?.field === "id") {
+		// 	if (fieldName === "id") {
+		// 		return typeMap.id[dbType!];
+		// 	}
+		// 	return typeMap.foreignKeyId[dbType!];
+		// }
+
+		if (
+			isIdField(tableModelName, fieldName) ||
+			(field.references &&
+				isIdField(field.references.model, field.references.field))
+		) {
+			if (isIdField(tableModelName, fieldName)) {
 				return typeMap.id[dbType!];
 			}
 			return typeMap.foreignKeyId[dbType!];
@@ -348,10 +389,17 @@ export async function getMigrations(config: BetterAuthOptions) {
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = getType(field, fieldName);
+				if (!field) {
+					logger.warn(
+						`Field ${fieldName} in table ${table.table} is undefined. Skipping.`,
+					);
+					continue;
+				}
+				const type = getType(field, fieldName, table.table);
+				const columnName = field.fieldName || fieldName;
 				const exec = db.schema
 					.alterTable(table.table)
-					.addColumn(fieldName, type, (col) => {
+					.addColumn(columnName, type, (col) => {
 						col = field.required !== false ? col.notNull() : col;
 						if (field.references) {
 							col = col
@@ -384,18 +432,25 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
-			let dbT = db.schema
-				.createTable(table.table)
-				.addColumn(
-					"id",
-					config.advanced?.database?.useNumberId
-						? dbType === "postgres"
-							? "serial"
-							: "integer"
-						: dbType === "mysql" || dbType === "mssql"
-							? "varchar(36)"
-							: "text",
-					(col) => {
+			// Core tables: user, session, account (custom ID field support)
+			const isCoreTable = ["user", "session", "account"].includes(table.table);
+
+			let dbT: CreateTableBuilder<string, string>;
+
+			if (isCoreTable) {
+				// Core tables: Use custom ID field name if configured
+				const idField = table.fields.id;
+				if (!idField) {
+					throw new Error(
+						`ID field not found in core table ${table.table}. This should not happen.`,
+					);
+				}
+				const idColumnName = idField.fieldName || "id";
+				const idType = getType(idField, "id", table.table);
+
+				dbT = db.schema
+					.createTable(table.table)
+					.addColumn(idColumnName, idType, (col) => {
 						if (config.advanced?.database?.useNumberId) {
 							if (dbType === "postgres" || dbType === "sqlite") {
 								return col.primaryKey().notNull();
@@ -405,12 +460,70 @@ export async function getMigrations(config: BetterAuthOptions) {
 							return col.autoIncrement().primaryKey().notNull();
 						}
 						return col.primaryKey().notNull();
-					},
-				);
+					});
+			} else {
+				// Plugin tables: Use default "id" field or skip if not present
+				const idField = table.fields.id;
+				if (idField) {
+					// Plugin table has id field - use it with default name "id"
+					const idType = getType(idField, "id", table.table);
+					dbT = db.schema
+						.createTable(table.table)
+						.addColumn("id", idType, (col) => {
+							if (config.advanced?.database?.useNumberId) {
+								if (dbType === "postgres" || dbType === "sqlite") {
+									return col.primaryKey().notNull();
+								} else if (dbType === "mssql") {
+									return col.identity().primaryKey().notNull();
+								}
+								return col.autoIncrement().primaryKey().notNull();
+							}
+							return col.primaryKey().notNull();
+						});
+				} else {
+					// Plugin table doesn't have id field in schema - add it anyway
+					// This ensures all plugin tables have an id column for Better Auth compatibility
+					const defaultIdType = config.advanced?.database?.useNumberId
+						? dbType === "postgres"
+							? "serial"
+							: "integer"
+						: dbType === "mysql" || dbType === "mssql"
+							? "varchar(36)"
+							: "text";
+					dbT = db.schema
+						.createTable(table.table)
+						.addColumn("id", defaultIdType, (col) => {
+							if (config.advanced?.database?.useNumberId) {
+								if (dbType === "postgres" || dbType === "sqlite") {
+									return col.primaryKey().notNull();
+								} else if (dbType === "mssql") {
+									return col.identity().primaryKey().notNull();
+								}
+								return col.autoIncrement().primaryKey().notNull();
+							}
+							return col.primaryKey().notNull();
+						});
+				}
+			}
 
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = getType(field, fieldName);
-				dbT = dbT.addColumn(fieldName, type, (col) => {
+				// Skip id field for core tables since we already added it above
+				if (fieldName === "id" && isCoreTable) {
+					continue;
+				}
+				// Skip id field for plugin tables if we already added it (or if it exists in schema)
+				if (fieldName === "id" && !isCoreTable) {
+					continue;
+				}
+				if (!field) {
+					logger.warn(
+						`Field ${fieldName} in table ${table.table} is undefined. Skipping.`,
+					);
+					continue;
+				}
+				const type = getType(field, fieldName, table.table);
+				const columnName = field.fieldName || fieldName;
+				dbT = dbT.addColumn(columnName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col

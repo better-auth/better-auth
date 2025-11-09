@@ -602,11 +602,12 @@ export type BetterAuthOptions = {
 				 * @example
 				 * ```ts
 				 * {
+				 * id: "user_id",
 				 *  userId: "user_id"
 				 * }
 				 * ```
 				 */
-				fields?: Partial<Record<keyof OmitId<User>, string>>;
+				fields?: Partial<Record<keyof User, string>>;
 				/**
 				 * Additional fields for the user
 				 */
@@ -698,7 +699,9 @@ export type BetterAuthOptions = {
 				 *  userId: "user_id"
 				 * }
 				 */
-				fields?: Partial<Record<keyof OmitId<Session>, string>>;
+				// fields?: Partial<Record<keyof OmitId<Session>, string>>;
+				fields?: Partial<Record<keyof Session, string>>;
+
 				/**
 				 * Expiration time for the session token. The value
 				 * should be in seconds.
@@ -845,7 +848,9 @@ export type BetterAuthOptions = {
 				/**
 				 * Map fields
 				 */
-				fields?: Partial<Record<keyof OmitId<Account>, string>>;
+				// fields?: Partial<Record<keyof OmitId<Account>, string>>;
+				fields?: Partial<Record<keyof Account, string>>;
+
 				/**
 				 * Additional fields for the account
 				 */
@@ -924,7 +929,8 @@ export type BetterAuthOptions = {
 				/**
 				 * Map verification fields
 				 */
-				fields?: Partial<Record<keyof OmitId<Verification>, string>>;
+				// fields?: Partial<Record<keyof OmitId<Verification>, string>>;
+				fields?: Partial<Record<keyof Verification, string>>;
 				/**
 				 * disable cleaning up expired values when a verification value is
 				 * fetched

@@ -209,6 +209,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						);
 				}
 				if (
+					field !== "id" && // Exclude ID fields from @db.Text
 					!attr.unique &&
 					!attr.references &&
 					provider === "mysql" &&

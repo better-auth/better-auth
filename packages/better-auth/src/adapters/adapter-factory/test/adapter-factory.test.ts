@@ -1620,4 +1620,65 @@ describe("Create Adapter Helper", async () => {
 			});
 		});
 	});
+
+	describe("Custom ID field names", () => {
+		test("transformInput should use custom ID field name when creating user", async () => {
+			const createData: Record<string, any> = await new Promise(async (r) => {
+				const adapter = await createTestAdapter({
+					options: {
+						user: {
+							fields: {
+								id: "user_id",
+							},
+						},
+					},
+					adapter(args_0) {
+						return {
+							async create({ data, model, select }) {
+								r(data as any);
+								return data;
+							},
+						};
+					},
+				});
+				await adapter.create({
+					model: "user",
+					data: { id: "123", name: "John" },
+					forceAllowId: true,
+				});
+			});
+
+			expect(createData).toHaveProperty("user_id");
+			expect(createData.user_id).toBe("123");
+			expect(createData).not.toHaveProperty("id");
+		});
+		test("transformWhereClause should use custom ID field name in queries", async () => {
+			const whereClause: CleanedWhere[] = await new Promise(async (r) => {
+				const adapter = await createTestAdapter({
+					options: {
+						user: {
+							fields: {
+								id: "user_id",
+							},
+						},
+					},
+					adapter(args_0) {
+						return {
+							async findOne({ model, where, select }) {
+								r(where as any);
+								return null;
+							},
+						};
+					},
+				});
+				await adapter.findOne({
+					model: "user",
+					where: [{ field: "id", value: "123" }],
+				});
+			});
+
+			expect(whereClause[0]?.field).toBe("user_id");
+			expect(whereClause[0]?.value).toBe("123");
+		});
+	});
 });

@@ -9,6 +9,7 @@ import {
 
 export const custom_user = mysqlTable("custom_user", {
   id: int("id").autoincrement().primaryKey(),
+  id: text("id").notNull(),
   name: text("name").notNull(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
@@ -25,6 +26,7 @@ export const custom_user = mysqlTable("custom_user", {
 
 export const custom_session = mysqlTable("custom_session", {
   id: int("id").autoincrement().primaryKey(),
+  id: text("id").notNull(),
   expiresAt: timestamp("expires_at", { fsp: 3 }).notNull(),
   token: varchar("token", { length: 255 }).notNull().unique(),
   createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
@@ -40,6 +42,7 @@ export const custom_session = mysqlTable("custom_session", {
 
 export const custom_account = mysqlTable("custom_account", {
   id: int("id").autoincrement().primaryKey(),
+  id: text("id").notNull(),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
   userId: int("user_id")
