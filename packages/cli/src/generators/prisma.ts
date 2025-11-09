@@ -163,7 +163,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				if (attr.unique) {
 					builder.model(modelName).blockAttribute(`unique([${fieldName}])`);
 				}
-				
+
 				if (attr.defaultValue !== undefined) {
 					if (field === "createdAt") {
 						fieldBuilder.attribute("default(now())");
@@ -176,8 +176,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						typeof attr.defaultValue === "number"
 					) {
 						fieldBuilder.attribute(`default(${attr.defaultValue})`);
-					}
-					else if (typeof attr.defaultValue === "function") {
+					} else if (typeof attr.defaultValue === "function") {
 						// we are intentionally not adding the default value here
 						// this is because if the defaultValue is a function, it could have
 						// custom logic within that function that might not work in prisma's context.
