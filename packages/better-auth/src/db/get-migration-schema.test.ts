@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { betterAuth } from "../auth";
 import { getMigrations } from "./get-migration";
 
 // Check if PostgreSQL is available
@@ -99,7 +100,7 @@ describe.runIf(isPostgresAvailable)(
 
 			// Verify the table in public schema still exists and is not affected
 			const publicTableCheck = await publicPool.query(
-				`SELECT table_name FROM information_schema.tables 
+				`SELECT table_name FROM information_schema.tables
 			 WHERE table_schema = 'public' AND table_name = 'user'`,
 			);
 			expect(publicTableCheck.rows.length).toBe(1);
@@ -160,7 +161,7 @@ describe.runIf(isPostgresAvailable)(
 
 			// Verify tables were created in custom schema
 			const tablesInCustomSchema = await customSchemaPool.query(
-				`SELECT table_name FROM information_schema.tables 
+				`SELECT table_name FROM information_schema.tables
 			 WHERE table_schema = $1 AND table_type = 'BASE TABLE'`,
 				[customSchema],
 			);

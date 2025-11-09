@@ -13,7 +13,7 @@ import { getSchema } from "./get-schema";
 import { getAuthTables } from "./get-tables";
 
 const postgresMap = {
-	string: ["character varying", "varchar", "text"],
+	string: ["character varying", "varchar", "text", "uuid"],
 	number: [
 		"int4",
 		"integer",
@@ -29,7 +29,7 @@ const postgresMap = {
 };
 
 const mysqlMap = {
-	string: ["varchar", "text"],
+	string: ["varchar", "text", "uuid"],
 	number: [
 		"integer",
 		"int",
@@ -53,7 +53,7 @@ const sqliteMap = {
 };
 
 const mssqlMap = {
-	string: ["varchar", "nvarchar"],
+	string: ["varchar", "nvarchar", "uniqueidentifier"],
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
 	date: ["datetime2", "date", "datetime"],
@@ -338,24 +338,17 @@ export async function getMigrations(config: BetterAuthOptions) {
 				mssql: "varchar(8000)",
 			},
 			id: {
-				postgres: config.advanced?.database?.useNumberId ? "serial" : "text",
-				mysql: config.advanced?.database?.useNumberId
-					? "integer"
-					: "varchar(36)",
-				mssql: config.advanced?.database?.useNumberId
-					? "integer"
-					: "varchar(36)",
-				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
+				postgres: useNumberId ? "serial" : useUUIDs ? "uuid" : "text",
+				mysql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+
+				sqlite: useNumberId ? "integer" : "text",
 			},
 			foreignKeyId: {
-				postgres: config.advanced?.database?.useNumberId ? "integer" : "text",
-				mysql: config.advanced?.database?.useNumberId
-					? "integer"
-					: "varchar(36)",
-				mssql: config.advanced?.database?.useNumberId
-					? "integer"
-					: "varchar(36)",
-				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
+				postgres: useNumberId ? "integer" : useUUIDs ? "uuid" : "text",
+				mysql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				sqlite: useNumberId ? "integer" : "text",
 			},
 		} as const;
 		// if (fieldName === "id" || field.references?.field === "id") {
@@ -430,6 +423,16 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 		}
 	}
+	const useNumberId =
+		config.advanced?.database?.useNumberId ||
+		config.advanced?.database?.generateId === "serial";
+
+	if (config.advanced?.database?.useNumberId) {
+		logger.warn(
+			"`useNumberId` is deprecated. Please use `generateId` with `serial` instead.",
+		);
+	}
+
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
 			// Core tables: user, session, account (custom ID field support)
