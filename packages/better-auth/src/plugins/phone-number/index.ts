@@ -1,17 +1,20 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/api";
-import type { InferOptionSchema } from "../../types/plugins";
-import { APIError } from "better-call";
-import { mergeSchema } from "../../db/schema";
-import { generateRandomString } from "../../crypto/random";
-import { getSessionFromCtx } from "../../api";
-import { getDate } from "../../utils/date";
-import { setSessionCookie } from "../../cookies";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import type { User } from "../../types";
-import { ERROR_CODES } from "./phone-number-error";
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { BetterAuthPlugin } from "@better-auth/core";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "better-call";
+import { z } from "zod";
+import { getSessionFromCtx } from "../../api";
+import { setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto/random";
+import { mergeSchema } from "../../db/schema";
+import type { User } from "../../types";
+import type { InferOptionSchema } from "../../types/plugins";
+import { getDate } from "../../utils/date";
+import { ERROR_CODES } from "./phone-number-error";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
@@ -27,7 +30,7 @@ export interface PhoneNumberOptions {
 	 * Length of the OTP code
 	 * @default 6
 	 */
-	otpLength?: number;
+	otpLength?: number | undefined;
 	/**
 	 * Send OTP code to the user
 	 *
@@ -37,7 +40,7 @@ export interface PhoneNumberOptions {
 	 */
 	sendOTP: (
 		data: { phoneNumber: string; code: string },
-		request?: Request,
+		request?: Request | undefined,
 	) => Promise<void> | void;
 	/**
 	 * a callback to send otp on user requesting to reset their password
@@ -46,89 +49,85 @@ export interface PhoneNumberOptions {
 	 * @param request - the request object
 	 * @returns
 	 */
-	sendPasswordResetOTP?: (
-		data: { phoneNumber: string; code: string },
-		request?: Request,
-	) => Promise<void> | void;
-	/**
-	 * a callback to send otp on user requesting to reset their password
-	 *
-	 * @param data - contains phone number and code
-	 * @param request - the request object
-	 * @returns
-	 * @deprecated Use sendPasswordResetOTP instead. This function will be removed in the next major version.
-	 */
-	sendForgetPasswordOTP?: (
-		data: { phoneNumber: string; code: string },
-		request?: Request,
-	) => Promise<void> | void;
+	sendPasswordResetOTP?:
+		| ((
+				data: { phoneNumber: string; code: string },
+				request?: Request,
+		  ) => Promise<void> | void)
+		| undefined;
 	/**
 	 * Expiry time of the OTP code in seconds
 	 * @default 300
 	 */
-	expiresIn?: number;
+	expiresIn?: number | undefined;
 	/**
 	 * Function to validate phone number
 	 *
 	 * by default any string is accepted
 	 */
-	phoneNumberValidator?: (phoneNumber: string) => boolean | Promise<boolean>;
+	phoneNumberValidator?:
+		| ((phoneNumber: string) => boolean | Promise<boolean>)
+		| undefined;
 	/**
 	 * Require a phone number verification before signing in
 	 *
 	 * @default false
 	 */
-	requireVerification?: boolean;
+	requireVerification?: boolean | undefined;
 	/**
 	 * Callback when phone number is verified
 	 */
-	callbackOnVerification?: (
-		data: {
-			phoneNumber: string;
-			user: UserWithPhoneNumber;
-		},
-		request?: Request,
-	) => void | Promise<void>;
+	callbackOnVerification?:
+		| ((
+				data: {
+					phoneNumber: string;
+					user: UserWithPhoneNumber;
+				},
+				request?: Request,
+		  ) => void | Promise<void>)
+		| undefined;
 	/**
 	 * Sign up user after phone number verification
 	 *
 	 * the user will be signed up with the temporary email
 	 * and the phone number will be updated after verification
 	 */
-	signUpOnVerification?: {
-		/**
-		 * When a user signs up, a temporary email will be need to be created
-		 * to sign up the user. This function should return a temporary email
-		 * for the user given the phone number
-		 *
-		 * @param phoneNumber
-		 * @returns string (temporary email)
-		 */
-		getTempEmail: (phoneNumber: string) => string;
-		/**
-		 * When a user signs up, a temporary name will be need to be created
-		 * to sign up the user. This function should return a temporary name
-		 * for the user given the phone number
-		 *
-		 * @param phoneNumber
-		 * @returns string (temporary name)
-		 *
-		 * @default phoneNumber - the phone number will be used as the name
-		 */
-		getTempName?: (phoneNumber: string) => string;
-	};
+	signUpOnVerification?:
+		| {
+				/**
+				 * When a user signs up, a temporary email will be need to be created
+				 * to sign up the user. This function should return a temporary email
+				 * for the user given the phone number
+				 *
+				 * @param phoneNumber
+				 * @returns string (temporary email)
+				 */
+				getTempEmail: (phoneNumber: string) => string;
+				/**
+				 * When a user signs up, a temporary name will be need to be created
+				 * to sign up the user. This function should return a temporary name
+				 * for the user given the phone number
+				 *
+				 * @param phoneNumber
+				 * @returns string (temporary name)
+				 *
+				 * @default phoneNumber - the phone number will be used as the name
+				 */
+				getTempName?: (phoneNumber: string) => string;
+		  }
+		| undefined;
 	/**
 	 * Custom schema for the admin plugin
 	 */
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<typeof schema> | undefined;
 	/**
 	 * Allowed attempts for the OTP code
 	 * @default 3
 	 */
-	allowedAttempts?: number;
+	allowedAttempts?: number | undefined;
 }
 
-export const phoneNumber = (options?: PhoneNumberOptions) => {
+export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 	const opts = {
 		expiresIn: options?.expiresIn || 300,
 		otpLength: options?.otpLength || 6,
@@ -141,6 +140,20 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 
 	return {
 		id: "phone-number",
+		hooks: {
+			before: [
+				{
+					// Stop any requests attempting to update the user's phone number
+					matcher: (ctx) =>
+						ctx.path === "/update-user" && "phoneNumber" in ctx.body,
+					handler: createAuthMiddleware(async (ctx) => {
+						throw new APIError("BAD_REQUEST", {
+							message: "Phone number cannot be updated",
+						});
+					}),
+				},
+			],
+		},
 		endpoints: {
 			/**
 			 * ### Endpoint
@@ -732,78 +745,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							createdAt: user.createdAt,
 							updatedAt: user.updatedAt,
 						} as UserWithPhoneNumber,
-					});
-				},
-			),
-			/**
-			 * @deprecated Use requestPasswordResetPhoneNumber instead. This endpoint will be removed in the next major version.
-			 */
-			forgetPasswordPhoneNumber: createAuthEndpoint(
-				"/phone-number/forget-password",
-				{
-					method: "POST",
-					body: z.object({
-						phoneNumber: z.string().meta({
-							description: `The phone number which is associated with the user. Eg: "+1234567890"`,
-						}),
-					}),
-					metadata: {
-						openapi: {
-							description: "Request OTP for password reset via phone number",
-							responses: {
-								"200": {
-									description: "OTP sent successfully for password reset",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													status: {
-														type: "boolean",
-														description:
-															"Indicates if the OTP was sent successfully",
-														enum: [true],
-													},
-												},
-												required: ["status"],
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				async (ctx) => {
-					const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
-						model: "user",
-						where: [
-							{
-								value: ctx.body.phoneNumber,
-								field: opts.phoneNumber,
-							},
-						],
-					});
-					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: "phone number isn't registered",
-						});
-					}
-					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: `${code}:0`,
-						identifier: `${ctx.body.phoneNumber}-request-password-reset`,
-						expiresAt: getDate(opts.expiresIn, "sec"),
-					});
-					await options?.sendForgetPasswordOTP?.(
-						{
-							phoneNumber: ctx.body.phoneNumber,
-							code,
-						},
-						ctx.request,
-					);
-					return ctx.json({
-						status: true,
 					});
 				},
 			),

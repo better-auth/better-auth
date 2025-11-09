@@ -1,12 +1,13 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
+import { generateRandomString } from "../../crypto";
+import type { OAuthApplication } from "../oidc-provider/schema";
 import type {
 	AuthorizationQuery,
 	Client,
 	OIDCOptions,
 } from "../oidc-provider/types";
-import { generateRandomString } from "../../crypto";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 function redirectErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -61,7 +62,6 @@ export async function authorizeMCPOAuth(
 	}
 
 	const query = ctx.query as AuthorizationQuery;
-	console.log(query);
 	if (!query.client_id) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
@@ -77,7 +77,7 @@ export async function authorizeMCPOAuth(
 	}
 
 	const client = await ctx.context.adapter
-		.findOne<Record<string, any>>({
+		.findOne<OAuthApplication>({
 			model: "oauthApplication",
 			where: [
 				{
@@ -92,15 +92,14 @@ export async function authorizeMCPOAuth(
 			}
 			return {
 				...res,
-				redirectURLs: res.redirectURLs.split(","),
+				redirectUrls: res.redirectUrls.split(","),
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
 			} as Client;
 		});
-	console.log(client);
 	if (!client) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
-	const redirectURI = client.redirectURLs.find(
+	const redirectURI = client.redirectUrls.find(
 		(url) => url === ctx.query.redirect_uri,
 	);
 
@@ -214,13 +213,36 @@ export async function authorizeMCPOAuth(
 		);
 	}
 
-	const redirectURIWithCode = new URL(redirectURI);
-	redirectURIWithCode.searchParams.set("code", code);
-	redirectURIWithCode.searchParams.set("state", ctx.query.state);
-
+	// Consent is NOT required - redirect with the code immediately
 	if (query.prompt !== "consent") {
+		const redirectURIWithCode = new URL(redirectURI);
+		redirectURIWithCode.searchParams.set("code", code);
+		redirectURIWithCode.searchParams.set("state", ctx.query.state);
 		throw ctx.redirect(redirectURIWithCode.toString());
 	}
 
+	// Consent is REQUIRED - redirect to consent page or show consent HTML
+	if (options?.consentPage) {
+		// Set cookie to support cookie-based consent flows
+		await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
+			maxAge: 600,
+			path: "/",
+			sameSite: "lax",
+		});
+
+		// Pass the consent code as a URL parameter to support URL-BASED consent flows
+		const urlParams = new URLSearchParams();
+		urlParams.set("consent_code", code);
+		urlParams.set("client_id", client.clientId);
+		urlParams.set("scope", requestScope.join(" "));
+		const consentURI = `${options.consentPage}?${urlParams.toString()}`;
+
+		throw ctx.redirect(consentURI);
+	}
+
+	// No consent page configured - fall back to direct redirect with code
+	const redirectURIWithCode = new URL(redirectURI);
+	redirectURIWithCode.searchParams.set("code", code);
+	redirectURIWithCode.searchParams.set("state", ctx.query.state);
 	throw ctx.redirect(redirectURIWithCode.toString());
 }

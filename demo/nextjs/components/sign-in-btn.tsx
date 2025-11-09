@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { Button } from "./ui/button";
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import Link from "next/link";
+import { auth } from "@/lib/auth";
+import { Button } from "./ui/button";
 
 export async function SignInButton() {
 	const session = await auth.api.getSession({

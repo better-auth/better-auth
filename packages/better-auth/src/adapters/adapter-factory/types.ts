@@ -1,17 +1,17 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import type {
-	DBFieldAttribute,
 	BetterAuthDBSchema,
+	DBFieldAttribute,
 } from "@better-auth/core/db";
 import type {
-	DBAdapterFactoryConfig,
 	CustomAdapter as CoreCustomAdapter,
+	DBAdapterFactoryConfig,
 } from "@better-auth/core/db/adapter";
 import type {
 	AdapterSchemaCreation,
 	TransactionAdapter,
 	Where,
 } from "../../types";
-import type { BetterAuthOptions } from "@better-auth/core";
 import type { Prettify } from "../../types/helper";
 
 export type AdapterFactoryOptions = {
@@ -32,8 +32,11 @@ export interface AdapterFactoryConfig
 	 * @default false
 	 */
 	transaction?:
-		| false
-		| (<R>(callback: (trx: TransactionAdapter) => Promise<R>) => Promise<R>);
+		| (
+				| false
+				| (<R>(callback: (trx: TransactionAdapter) => Promise<R>) => Promise<R>)
+		  )
+		| undefined;
 }
 
 export type AdapterFactoryCustomizeAdapterCreator = (config: {
@@ -104,12 +107,12 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 		data: Record<string, any>,
 		defaultModelName: string,
 		action: "create" | "update",
-		forceAllowId?: boolean,
+		forceAllowId?: boolean | undefined,
 	) => Promise<Record<string, any>>;
 	transformOutput: (
 		data: Record<string, any>,
 		defaultModelName: string,
-		select?: string[],
+		select?: string[] | undefined,
 	) => Promise<Record<string, any>>;
 	transformWhereClause: <W extends Where[] | undefined>({
 		model,
@@ -124,16 +127,18 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
  * @deprecated Use `CustomAdapter` from `@better-auth/core/db/adapter` instead.
  */
 export interface CustomAdapter extends Omit<CoreCustomAdapter, "createSchema"> {
-	createSchema?: (props: {
-		/**
-		 * The file the user may have passed in to the `generate` command as the expected schema file output path.
-		 */
-		file?: string;
-		/**
-		 * The tables from the user's Better-Auth instance schema.
-		 */
-		tables: BetterAuthDBSchema;
-	}) => Promise<AdapterSchemaCreation>;
+	createSchema?:
+		| ((props: {
+				/**
+				 * The file the user may have passed in to the `generate` command as the expected schema file output path.
+				 */
+				file?: string;
+				/**
+				 * The tables from the user's Better-Auth instance schema.
+				 */
+				tables: BetterAuthDBSchema;
+		  }) => Promise<AdapterSchemaCreation>)
+		| undefined;
 }
 
 /**

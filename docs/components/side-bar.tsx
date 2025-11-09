@@ -1,12 +1,12 @@
 "use client";
 
-import { AsideLink } from "@/components/ui/aside-link";
-import { cn } from "@/lib/utils";
-import { AnimatePresence, motion, MotionConfig } from "framer-motion";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { useSearchContext } from "fumadocs-ui/provider";
 import { ChevronDownIcon, Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { AsideLink } from "@/components/ui/aside-link";
+import { cn } from "@/lib/utils";
 import { contents, examples } from "./sidebar-content";
 import { Badge } from "./ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
@@ -59,9 +59,9 @@ export default function ArticleLayout() {
 					>
 						<div className="flex flex-col">
 							{cts.map((item, index) => (
-								<div key={item.title} className="border-b border-lines">
+								<div key={item.title}>
 									<button
-										className="w-full hover:underline text-sm px-5 py-2.5 text-left flex items-center gap-2"
+										className="border-b w-full hover:underline border-lines text-sm px-5 py-2.5 text-left flex items-center gap-2"
 										onClick={() => {
 											if (currentOpen === index) {
 												setCurrentOpen(-1);
@@ -91,7 +91,7 @@ export default function ArticleLayout() {
 												exit={{ opacity: 0, height: 0 }}
 												className="relative overflow-hidden"
 											>
-												<motion.div className="text-sm mb-2">
+												<motion.div className="text-sm">
 													{item.list.map((listItem, j) => (
 														<div key={listItem.title}>
 															<Suspense fallback={<>Loading...</>}>
@@ -100,7 +100,7 @@ export default function ArticleLayout() {
 																		<p className="text-sm text-transparent bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">
 																			{listItem.title}
 																		</p>
-																		<div className="flex-grow h-px bg-border" />
+																		<div className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
 																	</div>
 																) : (
 																	<AsideLink

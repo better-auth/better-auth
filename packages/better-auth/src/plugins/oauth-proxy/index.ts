@@ -1,14 +1,14 @@
-import * as z from "zod";
-import { originCheck } from "../../api";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
-import { getOrigin } from "../../utils/url";
 import type { EndpointContext } from "better-call";
+import { z } from "zod";
+import { originCheck } from "../../api";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { getOrigin } from "../../utils/url";
 
 function getVenderBaseURL() {
 	const vercel = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined;
@@ -30,13 +30,13 @@ export interface OAuthProxyOptions {
 	 * or as a fallback, from the `baseURL` in your auth config.
 	 * If the URL is not inferred correctly, you can provide a value here."
 	 */
-	currentURL?: string;
+	currentURL?: string | undefined;
 	/**
 	 * If a request in a production url it won't be proxied.
 	 *
 	 * default to `BETTER_AUTH_URL`
 	 */
-	productionURL?: string;
+	productionURL?: string | undefined;
 }
 
 /**
@@ -44,7 +44,7 @@ export interface OAuthProxyOptions {
  * Useful for development and preview deployments where
  * the redirect URL can't be known in advance to add to the OAuth provider.
  */
-export const oAuthProxy = (opts?: OAuthProxyOptions) => {
+export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 	const resolveCurrentURL = (ctx: EndpointContext<string, any>) => {
 		return new URL(
 			opts?.currentURL ||
