@@ -1,6 +1,7 @@
 import { InvalidRequest } from "../error";
 
-type AuthorizePrompt = "login" | "consent" | "select_account" | "none";
+export type AuthorizePrompt = "login" | "consent" | "select_account" | "none";
+export type AuthorizePromptSet = ReadonlySet<AuthorizePrompt>;
 
 /**
  * Parse space-separated prompt string into a set of prompts
