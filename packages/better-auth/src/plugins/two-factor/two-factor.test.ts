@@ -378,6 +378,7 @@ describe("two factor", async () => {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
+					expect(parsed.get("better-auth.trust_device")?.value).toBeDefined();
 					newHeaders.set(
 						"cookie",
 						`better-auth.trust_device=${
@@ -388,14 +389,47 @@ describe("two factor", async () => {
 			},
 		});
 
+		const updatedHeaders = new Headers();
 		const signInRes = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				headers: newHeaders,
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					expect(parsed.get("better-auth.trust_device")?.value).toBeDefined();
+					updatedHeaders.set(
+						"cookie",
+						`better-auth.trust_device=${
+							parsed.get("better-auth.trust_device")?.value
+						}`,
+					);
+				},
+			},
+		});
+		expect(signInRes.data?.user).toBeDefined();
+
+		// Should still work with original headers
+		const signIn2Res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
 				headers: newHeaders,
 			},
 		});
-		expect(signInRes.data?.user).toBeDefined();
+		expect(signIn2Res.data?.user).toBeDefined();
+
+		// Should work with updated headers
+		const signIn3Res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				headers: updatedHeaders,
+			},
+		});
+		expect(signIn3Res.data?.user).toBeDefined();
 	});
 
 	it("should limit OTP verification attempts", async () => {
