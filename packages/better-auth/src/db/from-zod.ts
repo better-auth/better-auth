@@ -8,20 +8,27 @@ export function isZodObject(value: unknown): value is z.ZodObject<any> {
 	}
 	try {
 		return value instanceof z.ZodObject;
-	} catch {
+	} catch (err) {
+		console.error("Error in isZodObject check:", err);
 		return false;
 	}
 }
 
 export function isZodType(value: unknown): value is z.ZodTypeAny {
 	if (!!value && typeof value === "object") {
-		const typeName = (value as any)?._def?.typeName;
-		if (typeof typeName === "string") return true;
-		if (typeof (value as any).parse === "function") return true;
+		const def = (value as any)?._def;
+		if (
+			def &&
+			typeof def.typeName === "string" &&
+			typeof (value as any).parse === "function"
+		) {
+			return true;
+		}
 	}
 	try {
 		return value instanceof z.ZodType;
-	} catch {
+	} catch (err) {
+		console.error("Error in isZodType check:", err);
 		return false;
 	}
 }
@@ -46,20 +53,32 @@ function getZodObjectShape(schema: z.ZodObject<any>) {
 	if (typeof maybeShape === "function") {
 		try {
 			return maybeShape();
-		} catch {}
+		} catch (err) {
+			console.error("Error extracting Zod object shape", err);
+		}
 	}
 	return maybeShape;
 }
 
 function zodTypeToDBField(zodType: z.ZodTypeAny): DBFieldAttribute {
 	let isOptional = false;
+	let isNullable = false;
 	let innerType = zodType;
 	let defaultValue: any = undefined;
 
 	while (innerType && (innerType._def as any)) {
 		const tn = (innerType._def as any)?.typeName;
-		if (tn === "ZodOptional" || tn === "ZodNullable") {
+		if (tn === "ZodOptional") {
 			isOptional = true;
+			innerType =
+				(innerType._def as any).innerType ??
+				(innerType._def as any).schema ??
+				(innerType._def as any).type ??
+				innerType;
+			continue;
+		}
+		if (tn === "ZodNullable") {
+			isNullable = true;
 			innerType =
 				(innerType._def as any).innerType ??
 				(innerType._def as any).schema ??
@@ -137,8 +156,7 @@ function zodTypeToDBField(zodType: z.ZodTypeAny): DBFieldAttribute {
 	};
 
 	if (defaultValue !== undefined) {
-		field.defaultValue =
-			typeof defaultValue === "function" ? defaultValue : () => defaultValue;
+		field.defaultValue = defaultValue;
 		field.required = false;
 	}
 

@@ -1,6 +1,9 @@
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { ZodTypeAny, z } from "zod";
 
+/**
+ * Maps a single Zod type (z.ZodString, etc.) to a DBFieldType string ("string", etc.)
+ */
 type MapZodType<T extends ZodTypeAny> = T extends z.ZodString
 	? "string"
 	: T extends z.ZodNumber

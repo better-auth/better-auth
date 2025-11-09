@@ -105,7 +105,6 @@ export function parseInputData<T extends Record<string, any>>(
 			if (fields[key]!.input === false) {
 				if (fields[key]!.defaultValue !== undefined) {
 					if (action !== "update") {
-						parsedData[key] = fields[key]!.defaultValue;
 						const dv = fields[key]!.defaultValue as unknown;
 						parsedData[key] =
 							typeof dv === "function" ? (dv as () => unknown)() : dv;
@@ -137,6 +136,10 @@ export function parseInputData<T extends Record<string, any>>(
 				if (validator["~standard"]) {
 					parsedData[key] = validator["~standard"].validate(data[key]);
 					continue;
+				} else {
+					throw new APIError("BAD_REQUEST", {
+						message: `${key}: Unsupported validator type`,
+					});
 				}
 			}
 			if (fields[key]!.transform?.input && data[key] !== undefined) {
