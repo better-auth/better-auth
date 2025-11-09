@@ -4,7 +4,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
-import { getTestInstanceMemory } from "better-auth/test";
+import { getTestInstance } from "better-auth/test";
 import bodyParser from "body-parser";
 import { randomUUID } from "crypto";
 import type {
@@ -926,7 +926,7 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should not allow creating a provider if limit is set to 0", async () => {
-		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso({ providersLimit: 0 })],
 		});
 		const { headers } = await signInWithTestUser();
@@ -957,7 +957,7 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should not allow creating a provider if limit is reached", async () => {
-		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso({ providersLimit: 1 })],
 		});
 		const { headers } = await signInWithTestUser();
@@ -1011,7 +1011,7 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should not allow creating a provider if limit from function is reached", async () => {
-		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				sso({
 					providersLimit: async (user) => {
