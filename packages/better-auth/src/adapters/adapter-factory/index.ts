@@ -367,8 +367,8 @@ export const createAdapterFactory =
 
 						transformedData[newFieldName] = newValue;
 					}
-					return transformedData as any;
 				}
+				return transformedData as any;
 			};
 
 			if (!join || Object.keys(join).length === 0) {

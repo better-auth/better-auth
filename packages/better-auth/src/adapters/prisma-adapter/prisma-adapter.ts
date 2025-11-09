@@ -261,10 +261,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					return await db[model]!.create({
+					const result = await db[model]!.create({
 						data: values,
 						select: convertSelect(select, model),
 					});
+					return result;
 				},
 				async findOne({ model, where, select, join }) {
 					// this is just "JoinOption" type because we disabled join transformation in adapter config

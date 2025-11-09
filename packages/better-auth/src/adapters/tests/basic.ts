@@ -38,6 +38,7 @@ export const getNormalTestSuiteTests = ({
 	return {
 		"create - should create a model": async () => {
 			const user = await generate("user");
+			// console.log(`pre-transformed:`, user);
 			const result = await adapter.create<User>({
 				model: "user",
 				data: user,
@@ -51,7 +52,6 @@ export const getNormalTestSuiteTests = ({
 				expect(typeof result.id).toEqual("string");
 			}
 			const transformed = transformGeneratedModel(user);
-			// console.log(`pre-transformed:`, user);
 			// console.log(`transformed:`, transformed);
 			// console.log(`result:`, result);
 			expect(result).toEqual(transformed);
