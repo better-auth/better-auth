@@ -140,7 +140,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				}
 			}
 
-			const existingTeams = await adapter.listTeams(organizationId);
+			const existingTeams = await adapter.listTeams({ organizationId });
 			const maximum =
 				typeof ctx.context.orgOptions.teams?.maximumTeams === "function"
 					? await ctx.context.orgOptions.teams?.maximumTeams(
@@ -314,7 +314,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			if (!ctx.context.orgOptions.teams?.allowRemovingAllTeams) {
-				const teams = await adapter.listTeams(organizationId);
+				const teams = await adapter.listTeams({ organizationId });
 				if (teams.length <= 1) {
 					throw new APIError("BAD_REQUEST", {
 						message: ORGANIZATION_ERROR_CODES.UNABLE_TO_REMOVE_LAST_TEAM,
