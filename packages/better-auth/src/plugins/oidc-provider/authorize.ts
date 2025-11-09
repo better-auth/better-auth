@@ -99,7 +99,6 @@ export async function authorize(
 
 	const client = await getClient(
 		ctx.query.client_id,
-		ctx.context.adapter,
 		options.trustedClients || [],
 	);
 	if (!client) {
@@ -110,7 +109,7 @@ export async function authorize(
 		);
 		throw ctx.redirect(errorURL);
 	}
-	const redirectURI = client.redirectURLs.find(
+	const redirectURI = client.redirectUrls.find(
 		(url) => url === ctx.query.redirect_uri,
 	);
 

@@ -12,7 +12,7 @@ import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
-	string: ["character varying", "varchar", "text"],
+	string: ["character varying", "varchar", "text", "uuid"],
 	number: [
 		"int4",
 		"integer",
@@ -27,7 +27,7 @@ const postgresMap = {
 	json: ["json", "jsonb"],
 };
 const mysqlMap = {
-	string: ["varchar", "text"],
+	string: ["varchar", "text", "uuid"],
 	number: [
 		"integer",
 		"int",
@@ -51,7 +51,7 @@ const sqliteMap = {
 };
 
 const mssqlMap = {
-	string: ["varchar", "nvarchar"],
+	string: ["varchar", "nvarchar", "uniqueidentifier"],
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
 	date: ["datetime2", "date", "datetime"],
@@ -262,6 +262,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| CreateTableBuilder<string, string>
 	)[] = [];
 
+	const useUUIDs = config.advanced?.database?.generateId === "uuid";
+
 	function getType(field: DBFieldAttribute, fieldName: string) {
 		const type = field.type;
 		const typeMap = {
@@ -308,24 +310,17 @@ export async function getMigrations(config: BetterAuthOptions) {
 				mssql: "varchar(8000)",
 			},
 			id: {
-				postgres: config.advanced?.database?.useNumberId ? "serial" : "text",
-				mysql: config.advanced?.database?.useNumberId
-					? "integer"
-					: "varchar(36)",
-				mssql: config.advanced?.database?.useNumberId
-					? "integer"
-					: "varchar(36)",
-				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
+				postgres: useNumberId ? "serial" : useUUIDs ? "uuid" : "text",
+				mysql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+
+				sqlite: useNumberId ? "integer" : "text",
 			},
 			foreignKeyId: {
-				postgres: config.advanced?.database?.useNumberId ? "integer" : "text",
-				mysql: config.advanced?.database?.useNumberId
-					? "integer"
-					: "varchar(36)",
-				mssql: config.advanced?.database?.useNumberId
-					? "integer"
-					: "varchar(36)",
-				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
+				postgres: useNumberId ? "integer" : useUUIDs ? "uuid" : "text",
+				mysql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				sqlite: useNumberId ? "integer" : "text",
 			},
 		} as const;
 		if (fieldName === "id" || field.references?.field === "id") {
@@ -382,31 +377,55 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 		}
 	}
+	const useNumberId =
+		config.advanced?.database?.useNumberId ||
+		config.advanced?.database?.generateId === "serial";
+
+	if (config.advanced?.database?.useNumberId) {
+		logger.warn(
+			"`useNumberId` is deprecated. Please use `generateId` with `serial` instead.",
+		);
+	}
+
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
-			let dbT = db.schema
-				.createTable(table.table)
-				.addColumn(
-					"id",
-					config.advanced?.database?.useNumberId
-						? dbType === "postgres"
-							? "serial"
-							: "integer"
+			let dbT = db.schema.createTable(table.table).addColumn(
+				"id",
+				useNumberId
+					? dbType === "postgres"
+						? "serial"
+						: "integer"
+					: useUUIDs
+						? dbType === "postgres" || dbType === "mysql" || dbType === "mssql"
+							? "uuid"
+							: "text"
 						: dbType === "mysql" || dbType === "mssql"
 							? "varchar(36)"
 							: "text",
-					(col) => {
-						if (config.advanced?.database?.useNumberId) {
-							if (dbType === "postgres" || dbType === "sqlite") {
-								return col.primaryKey().notNull();
-							} else if (dbType === "mssql") {
-								return col.identity().primaryKey().notNull();
-							}
-							return col.autoIncrement().primaryKey().notNull();
+
+				(col) => {
+					if (useNumberId) {
+						if (dbType === "postgres" || dbType === "sqlite") {
+							return col.primaryKey().notNull();
+						} else if (dbType === "mssql") {
+							return col.identity().primaryKey().notNull();
+						}
+						return col.autoIncrement().primaryKey().notNull();
+					}
+					if (useUUIDs) {
+						if (dbType === "postgres") {
+							return col
+								.primaryKey()
+								.defaultTo(sql`pg_catalog.gen_random_uuid()`)
+								.notNull();
+						} else if (dbType === "mysql" || dbType === "mssql") {
+							return col.primaryKey().defaultTo(sql`uuid()`).notNull();
 						}
 						return col.primaryKey().notNull();
-					},
-				);
+					}
+					return col.primaryKey().notNull();
+				},
+			);
 
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);

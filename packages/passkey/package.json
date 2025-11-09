@@ -1,10 +1,10 @@
 {
   "name": "@better-auth/passkey",
-  "version": "1.4.0-beta.15",
+  "version": "1.4.0-beta.18",
   "type": "module",
   "description": "Passkey plugin for Better Auth",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
+  "main": "dist/index.mjs",
+  "module": "dist/index.mjs",
   "publishConfig": {
     "access": "public"
   },
@@ -16,23 +16,23 @@
   },
   "exports": {
     ".": {
-      "better-auth-dev-source": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
     },
     "./client": {
-      "better-auth-dev-source": "./src/client.ts",
-      "types": "./dist/client.d.ts",
-      "default": "./dist/client.js"
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
-        "./dist/index.d.ts"
+        "./dist/index.d.mts"
       ],
       "client": [
-        "./dist/client.d.ts"
+        "./dist/client.d.mts"
       ]
     }
   },
@@ -44,15 +44,15 @@
   "dependencies": {
     "@simplewebauthn/browser": "^13.1.2",
     "@simplewebauthn/server": "^13.1.2",
-    "zod": "^4.1.5"
+    "zod": "^4.1.12"
   },
   "peerDependencies": {
-    "nanostores": "^1.0.1",
-    "@better-auth/utils": "0.3.0",
-    "better-call": "catalog:",
-    "@better-fetch/fetch": "catalog:",
     "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*"
+    "@better-auth/utils": "0.3.0",
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:*",
+    "better-call": "catalog:",
+    "nanostores": "^1.0.1"
   },
   "files": [
     "dist"
