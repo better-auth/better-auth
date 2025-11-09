@@ -14,6 +14,7 @@ import type {
 	Member,
 	MemberInput,
 	OrganizationInput,
+	Team,
 	TeamInput,
 	TeamMember,
 } from "./schema";
