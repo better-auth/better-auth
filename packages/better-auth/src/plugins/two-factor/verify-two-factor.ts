@@ -3,7 +3,11 @@ import { createHMAC } from "@better-auth/utils/hmac";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
 import { setSessionCookie } from "../../cookies";
-import { TRUST_DEVICE_COOKIE_NAME, TWO_FACTOR_COOKIE_NAME } from "./constant";
+import {
+	TRUST_DEVICE_COOKIE_MAX_AGE,
+	TRUST_DEVICE_COOKIE_NAME,
+	TWO_FACTOR_COOKIE_NAME,
+} from "./constant";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import type { UserWithTwoFactor } from "./types";
 
@@ -64,7 +68,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					const trustDeviceCookie = ctx.context.createAuthCookie(
 						TRUST_DEVICE_COOKIE_NAME,
 						{
-							maxAge: 30 * 24 * 60 * 60, // 30 days, it'll be refreshed on sign in requests
+							maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
 						},
 					);
 					/**

@@ -419,7 +419,7 @@ const verify2FA = async (code: string) => {
 }
 ```
 
-When `trustDevice` is set to `true`, the current device will be remembered for 60 days. During this period, the user won't be prompted for 2FA on subsequent sign-ins from this device. The trust period is refreshed each time the user signs in successfully.
+When `trustDevice` is set to `true`, the current device will be remembered for 30 days. During this period, the user won't be prompted for 2FA on subsequent sign-ins from this device. The trust period is refreshed each time the user signs in successfully.
 
 ### Issuer
 
