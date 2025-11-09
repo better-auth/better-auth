@@ -78,11 +78,6 @@ export const getClientConfig = (
 					path === "/update-user" ||
 					path === "/sign-up/email" ||
 					path === "/sign-in/email" ||
-					path === "/sign-in/username" ||
-					path === "/sign-in/anonymous" ||
-					path === "/sign-in/phone-number" ||
-					path === "/sign-in/email-otp" ||
-					path === "/sign-in/passkey" ||
 					path === "/delete-user" ||
 					path === "/verify-email" ||
 					path === "/revoke-sessions" ||
