@@ -1,4 +1,10 @@
-import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  integer,
+} from "drizzle-orm/pg-core";
 
 export const custom_user = pgTable("custom_user", {
   id: text("id").primaryKey(),
@@ -11,9 +17,6 @@ export const custom_user = pgTable("custom_user", {
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  twoFactorEnabled: boolean("two_factor_enabled").default(false),
-  username: text("username").unique(),
-  displayUsername: text("display_username"),
 });
 
 export const custom_session = pgTable("custom_session", {
@@ -63,11 +66,18 @@ export const custom_verification = pgTable("custom_verification", {
     .notNull(),
 });
 
-export const twoFactor = pgTable("two_factor", {
+export const passkey = pgTable("passkey", {
   id: text("id").primaryKey(),
-  secret: text("secret").notNull(),
-  backupCodes: text("backup_codes").notNull(),
+  name: text("name"),
+  publicKey: text("public_key").notNull(),
   userId: text("user_id")
     .notNull()
     .references(() => custom_user.id, { onDelete: "cascade" }),
+  credentialID: text("credential_id").notNull(),
+  counter: integer("counter").notNull(),
+  deviceType: text("device_type").notNull(),
+  backedUp: boolean("backed_up").notNull(),
+  transports: text("transports"),
+  createdAt: timestamp("created_at"),
+  aaguid: text("aaguid"),
 });

@@ -4,10 +4,9 @@ import {
   text,
   timestamp,
   boolean,
-  mysqlEnum,
 } from "drizzle-orm/mysql-core";
 
-export const user = mysqlTable("user", {
+export const custom_user = mysqlTable("custom_user", {
   id: varchar("id", { length: 36 }).primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).notNull().unique(),
@@ -18,10 +17,12 @@ export const user = mysqlTable("user", {
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  status: mysqlEnum(["active", "inactive", "pending"]),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false),
+  username: varchar("username", { length: 255 }).unique(),
+  displayUsername: text("display_username"),
 });
 
-export const session = mysqlTable("session", {
+export const custom_session = mysqlTable("custom_session", {
   id: varchar("id", { length: 36 }).primaryKey(),
   expiresAt: timestamp("expires_at", { fsp: 3 }).notNull(),
   token: varchar("token", { length: 255 }).notNull().unique(),
@@ -33,16 +34,16 @@ export const session = mysqlTable("session", {
   userAgent: text("user_agent"),
   userId: varchar("user_id", { length: 36 })
     .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+    .references(() => custom_user.id, { onDelete: "cascade" }),
 });
 
-export const account = mysqlTable("account", {
+export const custom_account = mysqlTable("custom_account", {
   id: varchar("id", { length: 36 }).primaryKey(),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
   userId: varchar("user_id", { length: 36 })
     .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+    .references(() => custom_user.id, { onDelete: "cascade" }),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
   idToken: text("id_token"),
@@ -56,7 +57,7 @@ export const account = mysqlTable("account", {
     .notNull(),
 });
 
-export const verification = mysqlTable("verification", {
+export const custom_verification = mysqlTable("custom_verification", {
   id: varchar("id", { length: 36 }).primaryKey(),
   identifier: text("identifier").notNull(),
   value: text("value").notNull(),
@@ -66,4 +67,13 @@ export const verification = mysqlTable("verification", {
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
+});
+
+export const twoFactor = mysqlTable("two_factor", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  secret: text("secret").notNull(),
+  backupCodes: text("backup_codes").notNull(),
+  userId: varchar("user_id", { length: 36 })
+    .notNull()
+    .references(() => custom_user.id, { onDelete: "cascade" }),
 });
