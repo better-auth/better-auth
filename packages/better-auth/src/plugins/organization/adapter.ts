@@ -114,6 +114,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId?: string | undefined;
 			limit?: number | undefined;
 			offset?: number | undefined;
+			organizationSlug?: string | undefined;
 			sortBy?: string | undefined;
 			sortOrder?: ("asc" | "desc") | undefined;
 			filter?:
@@ -129,7 +130,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				adapter.findMany<Member>({
 					model: "member",
 					where: [
-						{ field: "organizationId", value: data.organizationId },
+						{
+							field: data.organizationSlug ? "slug" : "id",
+							value: data.organizationSlug ?? data.organizationId,
+						},
 						...(data.filter?.field
 							? [
 									{

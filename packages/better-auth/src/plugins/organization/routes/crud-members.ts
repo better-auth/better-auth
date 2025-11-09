@@ -867,6 +867,13 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 								'The organization ID to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-id"',
 						})
 						.optional(),
+					organizationSlug: z
+						.string()
+						.meta({
+							description:
+								'The organization slug to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-slug"',
+						})
+						.optional(),
 				})
 				.optional(),
 			use: [orgMiddleware, orgSessionMiddleware],
@@ -904,6 +911,7 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 							value: ctx.query.filterValue,
 						}
 					: undefined,
+				organizationSlug: ctx.query?.organizationSlug,
 			});
 			return ctx.json({
 				members,
