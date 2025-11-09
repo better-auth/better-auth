@@ -20,15 +20,16 @@ import {
 	generateBackupCodes,
 } from "./backup-codes";
 import {
-	TWO_FACTOR_COOKIE_NAME,
-	TRUST_DEVICE_COOKIE_NAME,
 	TRUST_DEVICE_COOKIE_MAX_AGE,
+	TRUST_DEVICE_COOKIE_NAME,
+	TWO_FACTOR_COOKIE_NAME,
 } from "./constant";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
+import { schema } from "./schema";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
-import { schema } from "./schema";
+
 export * from "./error-code";
 
 export const twoFactor = (options?: TwoFactorOptions | undefined) => {
