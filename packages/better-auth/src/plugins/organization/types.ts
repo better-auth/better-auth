@@ -194,7 +194,7 @@ export interface OrganizationOptions {
 	 * track the last used organization for each user.
 	 * When enabled, the system will automatically track which organization
 	 * a user last interacted with and prioritize it when listing organizations
-	 * or setting the active orgaznization.
+	 * or setting the active organization.
 	 *
 	 * @default false
 	 */
