@@ -5,7 +5,7 @@ import {
 } from "@better-auth/core/api";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { JSONWebKeySet, JWTPayload } from "jose";
-import * as z from "zod";
+import { z } from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { mergeSchema } from "../../db/schema";
 import { getJwksAdapter } from "./adapter";
@@ -133,13 +133,18 @@ export const jwt = (options?: JwtOptions | undefined) => {
 
 					const adapter = getJwksAdapter(ctx.context.adapter);
 
-					const keySets = await adapter.getAllKeys();
+					let keySets = await adapter.getAllKeys(ctx);
 
-					if (keySets.length === 0) {
+					if (!keySets || keySets?.length === 0) {
 						const key = await createJwk(ctx, options);
-						keySets.push(key);
+						keySets = [key];
 					}
 
+					if (!keySets?.length) {
+						throw new BetterAuthError(
+							"No key sets found. Make sure you have a key in your database.",
+						);
+					}
 					const keyPairConfig = options?.jwks?.keyPairConfig;
 					const defaultCrv = keyPairConfig
 						? "crv" in keyPairConfig
