@@ -806,8 +806,17 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
         { name: "samlConfig", type: "string", description: "The SAML configuration (JSON string)", isRequired: false },
         { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
         { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
-        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false },
-        { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified. Only available when domain verification is enabled", isRequired: false },
+        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false }
+    ]}
+/>
+
+### Schema for domain verification
+
+When the domain verification is enabled, the `ssoProvider` schema is extended as follows:
+
+<DatabaseTable
+    fields={[
+        { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified.", isRequired: false },
     ]}
 />
 
