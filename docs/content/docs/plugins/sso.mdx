@@ -745,7 +745,7 @@ which you need to verify it to prove that you own it. To do this, you'll need to
 
 1.  **You will be provided with a verification token.** This token is a unique string that you'll need to add to your DNS records.
 2.  **Create a new `TXT` record in your DNS provider's dashboard.**
-    *   **Host:** `ba-domain-verification-{your-provider-id}`
+    *   **Host:** `better-auth-token-{your-provider-id}`
     *   **Value:** The verification token you were given.
 3.  **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
 4.  **Once the record has propagated**, you can submit a validation request
@@ -880,11 +880,11 @@ If you want to allow account linking for specific trusted providers, enable the 
                 type: "boolean",
                 required: false
             },
-            verificationTokenPrefix: {
+            tokenPrefix: {
                 description: "Prefix to append to the verification token identifier",
                 type: "string",
                 required: false,
-                default: "ba-domain-verification-"
+                default: "better-auth-token-"
             },
         },
     },

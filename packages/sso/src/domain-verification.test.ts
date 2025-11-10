@@ -182,7 +182,7 @@ describe("Domain verification", async () => {
 
 			dnsMock.resolveTxt.mockResolvedValue([
 				[
-					`ba-domain-verification-saml-provider-1=${provider.domainVerificationToken}`,
+					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 
@@ -304,7 +304,7 @@ describe("Domain verification", async () => {
 					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
 				],
 				[
-					`ba-domain-verification-saml-provider-1=${provider.domainVerificationToken}`,
+					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 
@@ -320,7 +320,7 @@ describe("Domain verification", async () => {
 
 		it("should verify a provider domain ownership (custom token verification prefix)", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth({
-				domainVerification: { verificationTokenPrefix: "auth-prefix" },
+				domainVerification: { tokenPrefix: "auth-prefix" },
 			});
 			const headers = await getAuthHeaders();
 			const provider = await registerSSOProvider(headers);
@@ -350,7 +350,7 @@ describe("Domain verification", async () => {
 
 			dnsMock.resolveTxt.mockResolvedValue([
 				[
-					`ba-domain-verification-saml-provider-1=${provider.domainVerificationToken}`,
+					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 
