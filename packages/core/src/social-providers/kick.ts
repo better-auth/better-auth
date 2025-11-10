@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 
 export interface KickProfile {
 	/**
@@ -31,8 +31,8 @@ export const kick = (options: KickOptions) => {
 		name: "Kick",
 		createAuthorizationURL({ state, scopes, redirectURI, codeVerifier }) {
 			const _scopes = options.disableDefaultScope ? [] : ["user:read"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 
 			return createAuthorizationURL({
 				id: "kick",

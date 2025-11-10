@@ -1,16 +1,55 @@
-import { betterAuth, type User } from "better-auth";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import { type Auth, betterAuth, type User } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import Stripe from "stripe";
-import { vi } from "vitest";
-import { stripe } from ".";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { type StripePlugin, stripe } from ".";
 import { stripeClient } from "./client";
 import type { StripeOptions, Subscription } from "./types";
-import { expect, describe, it, beforeEach } from "vitest";
-import { runWithEndpointContext } from "@better-auth/core/context";
-import type { GenericEndpointContext } from "@better-auth/core";
+
+describe("stripe type", () => {
+	it("should api endpoint exists", () => {
+		type Plugins = [
+			StripePlugin<{
+				stripeClient: Stripe;
+				stripeWebhookSecret: string;
+				subscription: {
+					enabled: false;
+				};
+			}>,
+		];
+		type MyAuth = Auth<{
+			plugins: Plugins;
+		}>;
+		expectTypeOf<MyAuth["api"]["stripeWebhook"]>().toBeFunction();
+	});
+
+	it("should have subscription endpoints", () => {
+		type Plugins = [
+			StripePlugin<{
+				stripeClient: Stripe;
+				stripeWebhookSecret: string;
+				subscription: {
+					enabled: true;
+					plans: [];
+				};
+			}>,
+		];
+		type MyAuth = Auth<{
+			plugins: Plugins;
+		}>;
+		expectTypeOf<MyAuth["api"]["stripeWebhook"]>().toBeFunction();
+		expectTypeOf<MyAuth["api"]["subscriptionSuccess"]>().toBeFunction();
+		expectTypeOf<MyAuth["api"]["listActiveSubscriptions"]>().toBeFunction();
+		expectTypeOf<MyAuth["api"]["cancelSubscriptionCallback"]>().toBeFunction();
+		expectTypeOf<MyAuth["api"]["cancelSubscription"]>().toBeFunction();
+		expectTypeOf<MyAuth["api"]["restoreSubscription"]>().toBeFunction();
+	});
+});
 
 describe("stripe", async () => {
 	const mockStripe = {
@@ -2135,6 +2174,145 @@ describe("stripe", async () => {
 
 			const data = await response.json();
 			expect(data).toEqual({ success: true });
+		});
+	});
+
+	describe("Duplicate customer prevention on signup", () => {
+		it("should NOT create duplicate customer when email already exists in Stripe", async () => {
+			const existingEmail = "duplicate-email@example.com";
+			const existingCustomerId = "cus_stripe_existing_456";
+
+			mockStripe.customers.list.mockResolvedValueOnce({
+				data: [
+					{
+						id: existingCustomerId,
+						email: existingEmail,
+						name: "Existing Stripe Customer",
+					},
+				],
+			});
+
+			const testOptionsWithHook = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptionsWithHook)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			vi.clearAllMocks();
+
+			// Sign up with email that exists in Stripe
+			const userRes = await testAuthClient.signUp.email(
+				{
+					email: existingEmail,
+					password: "password",
+					name: "Duplicate Email User",
+				},
+				{ throw: true },
+			);
+
+			// Should check for existing customer by email
+			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+				email: existingEmail,
+				limit: 1,
+			});
+
+			// Should NOT create duplicate customer
+			expect(mockStripe.customers.create).not.toHaveBeenCalled();
+
+			// Verify user has the EXISTING Stripe customer ID (not new duplicate)
+			const user = await ctx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({
+				model: "user",
+				where: [{ field: "id", value: userRes.user.id }],
+			});
+			expect(user?.stripeCustomerId).toBe(existingCustomerId); // Should use existing ID
+		});
+
+		it("should CREATE customer only when user has no stripeCustomerId and none exists in Stripe", async () => {
+			const newEmail = "brand-new@example.com";
+
+			mockStripe.customers.list.mockResolvedValueOnce({
+				data: [],
+			});
+
+			mockStripe.customers.create.mockResolvedValueOnce({
+				id: "cus_new_created_789",
+				email: newEmail,
+			});
+
+			const testOptionsWithHook = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptionsWithHook)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			vi.clearAllMocks();
+
+			// Sign up with brand new email
+			const userRes = await testAuthClient.signUp.email(
+				{
+					email: newEmail,
+					password: "password",
+					name: "Brand New User",
+				},
+				{ throw: true },
+			);
+
+			// Should check for existing customer first
+			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+				email: newEmail,
+				limit: 1,
+			});
+
+			// Should create new customer (this is correct behavior)
+			expect(mockStripe.customers.create).toHaveBeenCalledTimes(1);
+			expect(mockStripe.customers.create).toHaveBeenCalledWith({
+				email: newEmail,
+				name: "Brand New User",
+				metadata: {
+					userId: userRes.user.id,
+				},
+			});
+
+			// Verify user has the new Stripe customer ID
+			const user = await ctx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({
+				model: "user",
+				where: [{ field: "id", value: userRes.user.id }],
+			});
+			expect(user?.stripeCustomerId).toBeDefined();
 		});
 	});
 });

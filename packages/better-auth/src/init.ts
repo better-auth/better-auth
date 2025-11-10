@@ -1,27 +1,29 @@
-import { defu } from "defu";
-import { hashPassword, verifyPassword } from "./crypto/password";
-import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
-import type { Entries } from "type-fest";
-import { getAdapter } from "./db/utils";
-import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
-import { DEFAULT_SECRET } from "./utils/constants";
-import { createCookieGetter, getCookies } from "./cookies";
-import { createLogger, isTest } from "@better-auth/core/env";
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	BetterAuthPlugin,
+} from "@better-auth/core";
+import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { OAuthProvider } from "@better-auth/core/oauth2";
 import {
 	type SocialProviders,
 	socialProviders,
 } from "@better-auth/core/social-providers";
-import type { OAuthProvider } from "@better-auth/core/oauth2";
-import { generateId } from "./utils";
-import { env, isProduction } from "@better-auth/core/env";
-import { checkPassword } from "./utils/password";
-import { getBaseURL } from "./utils/url";
-import { BetterAuthError } from "@better-auth/core/error";
 import { createTelemetry } from "@better-auth/telemetry";
+import { defu } from "defu";
+import type { Entries } from "type-fest";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 import { checkEndpointConflicts } from "./api";
+import { createCookieGetter, getCookies } from "./cookies";
+import { hashPassword, verifyPassword } from "./crypto/password";
+import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
+import { getAdapter } from "./db/utils";
+import { generateId } from "./utils";
+import { DEFAULT_SECRET } from "./utils/constants";
 import { isPromise } from "./utils/is-promise";
-import type { AuthContext } from "@better-auth/core";
+import { checkPassword } from "./utils/password";
+import { getBaseURL } from "./utils/url";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -101,6 +103,12 @@ export const init = async (options: BetterAuthOptions) => {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
+		oauthConfig: {
+			storeStateStrategy:
+				options.advanced?.oauthConfig?.storeStateStrategy || "database",
+			skipStateCookieCheck:
+				!!options.advanced?.oauthConfig?.skipStateCookieCheck,
+		},
 		tables,
 		trustedOrigins: getTrustedOrigins(options),
 		baseURL: baseURL || "",
@@ -114,6 +122,30 @@ export const init = async (options: BetterAuthOptions) => {
 				options.session?.freshAge === undefined
 					? 60 * 60 * 24 // 24 hours
 					: options.session.freshAge,
+			cookieRefreshCache: (() => {
+				const refreshCache = options.session?.cookieCache?.refreshCache;
+				const maxAge = options.session?.cookieCache?.maxAge || 60 * 5;
+
+				if (refreshCache === false || refreshCache === undefined) {
+					return false;
+				}
+
+				if (refreshCache === true) {
+					// Default: refresh when 80% of maxAge is reached (20% remaining)
+					return {
+						enabled: true,
+						updateAge: Math.floor(maxAge * 0.2),
+					};
+				}
+
+				return {
+					enabled: true,
+					updateAge:
+						refreshCache.updateAge !== undefined
+							? refreshCache.updateAge
+							: Math.floor(maxAge * 0.2), // Default to 20% of maxAge
+				};
+			})(),
 		},
 		secret,
 		rateLimit: {

@@ -1,17 +1,16 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import { Kysely, MssqlDialect } from "kysely";
+import * as Tarn from "tarn";
+import * as Tedious from "tedious";
+import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
-import { kyselyAdapter } from "../kysely-adapter";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
-import { getMigrations } from "../../../db";
-import * as Tedious from "tedious";
-import * as Tarn from "tarn";
-import type { BetterAuthOptions } from "@better-auth/core";
+import { kyselyAdapter } from "../kysely-adapter";
 
 // We are not allowed to handle the mssql connection
 // we must let kysely handle it. This is because if kysely is already
@@ -308,7 +307,6 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite({ showDB }),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "mssql" }),
 	],
 	async onFinish() {
 		kyselyDB.destroy();

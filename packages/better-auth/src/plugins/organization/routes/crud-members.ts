@@ -1,18 +1,22 @@
-import * as z from "zod";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "better-call";
+import { z } from "zod";
+import { getSessionFromCtx, sessionMiddleware } from "../../../api";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db/to-zod";
+import type { LiteralString } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import type { InferOrganizationRolesFromOption, Member } from "../schema";
-import { APIError } from "better-call";
-import { parseRoles } from "../organization";
-import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { hasPermission } from "../has-permission";
+import { parseRoles } from "../organization";
+import type {
+	InferMember,
+	InferOrganizationRolesFromOption,
+	Member,
+} from "../schema";
 import type { OrganizationOptions } from "../types";
-import { toZodSchema } from "../../../db/to-zod";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
-import type { LiteralString } from "../../../types/helper";
 
 export const addMember = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -71,7 +75,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			const session = ctx.body.userId
 				? await getSessionFromCtx<{
 						session: {
-							activeOrganizationId?: string;
+							activeOrganizationId?: string | undefined;
 						};
 					}>(ctx).catch((e) => null)
 				: null;
@@ -158,7 +162,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			let memberData = {
 				organizationId: orgId,
 				userId: user.id,
-				role: parseRoles(ctx.body.role as string | string[]),
+				role: parseRoles(ctx.body.role),
 				createdAt: new Date(),
 				...(additionalFields ? additionalFields : {}),
 			};
@@ -288,7 +292,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			let toBeRemovedMember: Member | null = null;
+			let toBeRemovedMember: InferMember<O, false> | null = null;
 			if (ctx.body.memberIdOrEmail.includes("@")) {
 				toBeRemovedMember = await adapter.findMemberByEmail({
 					email: ctx.body.memberIdOrEmail,
@@ -317,7 +321,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				const { members } = await adapter.listMembers({
 					organizationId: organizationId,
 				});
-				const owners = members.filter((member: Member) => {
+				const owners = members.filter((member) => {
 					const roles = member.role.split(",");
 					return roles.includes(creatorRole);
 				});
@@ -377,8 +381,11 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					organization,
 				});
 			}
-
-			await adapter.deleteMember(toBeRemovedMember.id);
+			await adapter.deleteMember({
+				memberId: toBeRemovedMember.id,
+				organizationId: organizationId,
+				userId: toBeRemovedMember.userId,
+			});
 			if (
 				session.user.id === toBeRemovedMember.userId &&
 				session.session.activeOrganizationId ===
@@ -437,7 +444,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 						/**
 						 * If not provided, the active organization will be used
 						 */
-						organizationId?: string;
+						organizationId?: string | undefined;
 					},
 				},
 				openapi: {
@@ -496,9 +503,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			const roleToSet: string[] = Array.isArray(ctx.body.role)
-				? (ctx.body.role as string[])
+				? ctx.body.role
 				: ctx.body.role
-					? [ctx.body.role as string]
+					? [ctx.body.role]
 					: [];
 
 			const member = await adapter.findMemberByOrgId({
@@ -792,7 +799,11 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 			}
-			await adapter.deleteMember(member.id);
+			await adapter.deleteMember({
+				memberId: member.id,
+				organizationId: ctx.body.organizationId,
+				userId: session.user.id,
+			});
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}

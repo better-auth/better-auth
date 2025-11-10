@@ -1,12 +1,13 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
+import { generateRandomString } from "../../crypto";
+import type { OAuthApplication } from "../oidc-provider/schema";
 import type {
 	AuthorizationQuery,
 	Client,
 	OIDCOptions,
 } from "../oidc-provider/types";
-import { generateRandomString } from "../../crypto";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 function redirectErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -76,7 +77,7 @@ export async function authorizeMCPOAuth(
 	}
 
 	const client = await ctx.context.adapter
-		.findOne<Record<string, any>>({
+		.findOne<OAuthApplication>({
 			model: "oauthApplication",
 			where: [
 				{
@@ -91,14 +92,14 @@ export async function authorizeMCPOAuth(
 			}
 			return {
 				...res,
-				redirectURLs: res.redirectURLs.split(","),
+				redirectUrls: res.redirectUrls.split(","),
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
 			} as Client;
 		});
 	if (!client) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
-	const redirectURI = client.redirectURLs.find(
+	const redirectURI = client.redirectUrls.find(
 		(url) => url === ctx.query.redirect_uri,
 	);
 

@@ -1,19 +1,19 @@
-import * as z from "zod";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
+import { z } from "zod";
 import { getSessionFromCtx } from "../../../api";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import type { OrganizationOptions } from "../types";
-import { teamSchema } from "../schema";
-import { hasPermission } from "../has-permission";
 import { setSessionCookie } from "../../../cookies";
 import {
-	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
+	toZodSchema,
 } from "../../../db";
 import type { PrettifyDeep } from "../../../types/helper";
+import { getOrgAdapter } from "../adapter";
+import { orgMiddleware, orgSessionMiddleware } from "../call";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import { hasPermission } from "../has-permission";
+import { teamSchema } from "../schema";
+import type { OrganizationOptions } from "../types";
 
 export const createTeam = <O extends OrganizationOptions>(options: O) => {
 	const additionalFieldsSchema = toZodSchema({

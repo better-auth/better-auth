@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { phoneNumber } from ".";
 import { createAuthClient } from "../../client";
-import { phoneNumberClient } from "./client";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
+import { phoneNumber } from ".";
+import { phoneNumberClient } from "./client";
 
 describe("phone-number", async (it) => {
 	let otp = "";
@@ -435,5 +435,83 @@ describe("phone number verification requirement", async () => {
 		expect(signInRes.error?.status).toBe(401);
 		expect(signInRes.error?.code).toMatch("PHONE_NUMBER_NOT_VERIFIED");
 		expect(otp).toHaveLength(6);
+	});
+});
+
+describe("updateUser phone number update prevention", async () => {
+	let otp = "";
+
+	const { customFetchImpl, sessionSetter } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				async sendOTP({ code }) {
+					otp = code;
+				},
+				signUpOnVerification: {
+					getTempEmail(phoneNumber) {
+						return `temp-${phoneNumber}`;
+					},
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [phoneNumberClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const headers = new Headers();
+	const initialPhoneNumber = "+251911121314";
+	const newPhoneNumber = "+9876543210";
+
+	it("should prevent updating phone number via updateUser", async () => {
+		// First, verify a phone number to set phoneNumberVerified to true
+		await client.phoneNumber.sendOtp({
+			phoneNumber: initialPhoneNumber,
+		});
+		const verifyRes = await client.phoneNumber.verify(
+			{
+				phoneNumber: initialPhoneNumber,
+				code: otp,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		expect(verifyRes.error).toBe(null);
+		expect(verifyRes.data?.status).toBe(true);
+
+		// Verify that phoneNumberVerified is true after verification
+		const sessionBeforeUpdate = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(sessionBeforeUpdate.data?.user.phoneNumberVerified).toBe(true);
+		expect(sessionBeforeUpdate.data?.user.phoneNumber).toBe(initialPhoneNumber);
+
+		// Attempt to update the phone number via updateUser - should throw an error
+		const updateRes = await client.updateUser({
+			phoneNumber: newPhoneNumber,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(updateRes.error).not.toBe(null);
+		expect(updateRes.error?.status).toBe(400);
+		expect(updateRes.error?.message).toBe("Phone number cannot be updated");
+
+		// Verify that the phone number hasn't changed and phoneNumberVerified is still true
+		const sessionAfterUpdate = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(sessionAfterUpdate.data?.user.phoneNumberVerified).toBe(true);
+		expect(sessionAfterUpdate.data?.user.phoneNumber).toBe(initialPhoneNumber);
 	});
 });

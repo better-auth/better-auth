@@ -1,17 +1,29 @@
-import * as z from "zod";
-import { SignJWT } from "jose";
-import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { BetterAuthPlugin } from "@better-auth/core";
+import { getCurrentAuthContext } from "@better-auth/core/context";
+import { base64 } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
+import { SignJWT } from "jose";
+import { z } from "zod";
+import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
+import { parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
-import { schema } from "./schema";
+import { mergeSchema } from "../../db";
+import type { jwt } from "../jwt";
+import { getJwtToken } from "../jwt";
+import { authorize } from "./authorize";
+import { checkPromptMiddleware } from "./middlewares/check-prompt";
+import { type OAuthApplication, schema } from "./schema";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -19,15 +31,7 @@ import type {
 	OIDCMetadata,
 	OIDCOptions,
 } from "./types";
-import { authorize } from "./authorize";
-import { parseSetCookieHeader } from "../../cookies";
-import { createHash } from "@better-auth/utils/hash";
-import { base64 } from "@better-auth/utils/base64";
-import { getJwtToken } from "../jwt/sign";
-import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
-import { mergeSchema } from "../../db";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -40,37 +44,43 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
  */
 export async function getClient(
 	clientId: string,
-	adapter: any,
-	trustedClients: (Client & { skipConsent?: boolean })[] = [],
-): Promise<(Client & { skipConsent?: boolean }) | null> {
+	trustedClients: (Client & { skipConsent?: boolean | undefined })[] = [],
+): Promise<(Client & { skipConsent?: boolean | undefined }) | null> {
+	const {
+		context: { adapter },
+	} = await getCurrentAuthContext();
 	const trustedClient = trustedClients.find(
 		(client) => client.clientId === clientId,
 	);
 	if (trustedClient) {
 		return trustedClient;
 	}
-	const dbClient = await adapter
-		.findOne({
+	return adapter
+		.findOne<OAuthApplication>({
 			model: "oauthApplication",
 			where: [{ field: "clientId", value: clientId }],
 		})
-		.then((res: Record<string, any> | null) => {
+		.then((res) => {
 			if (!res) {
 				return null;
 			}
+			// omit sensitive fields
 			return {
-				...res,
-				redirectURLs: (res.redirectURLs ?? "").split(","),
+				clientId: res.clientId,
+				clientSecret: res.clientSecret,
+				type: res.type,
+				name: res.name,
+				icon: res.icon,
+				disabled: res.disabled,
+				redirectUrls: (res.redirectUrls ?? "").split(","),
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
-			} as Client;
+			} satisfies Client;
 		});
-
-	return dbClient;
 }
 
 export const getMetadata = (
 	ctx: GenericEndpointContext,
-	options?: OIDCOptions,
+	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
 	const jwtPlugin = getJwtPlugin(ctx);
 	const issuer =
@@ -229,10 +239,20 @@ export const oidcProvider = (options: OIDCOptions) => {
 	return {
 		id: "oidc",
 		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return ctx.path.includes("/oauth2/");
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						await checkPromptMiddleware(ctx);
+					}),
+				},
+			],
 			after: [
 				{
-					matcher() {
-						return true;
+					matcher(ctx) {
+						return ctx.path === "/oauth2/authorize" && ctx.method === "GET";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const cookie = await ctx.getSignedCookie(
@@ -260,10 +280,33 @@ export const oidcProvider = (options: OIDCOptions) => {
 						if (!session) {
 							return;
 						}
-						ctx.query = JSON.parse(cookie);
+						try {
+							const parsedQuery = JSON.parse(cookie);
+							if (
+								parsedQuery &&
+								typeof parsedQuery === "object" &&
+								parsedQuery.client_id
+							) {
+								ctx.query = parsedQuery;
+							} else {
+								ctx.context.logger.error(
+									"Invalid or incomplete query data in oidc_login_prompt cookie",
+									parsedQuery,
+								);
+								return;
+							}
+						} catch (e) {
+							ctx.context.logger.error(
+								"Failed to parse oidc_login_prompt cookie",
+								e,
+							);
+							return;
+						}
 						// Don't force prompt to "consent" - let the authorize function
 						// determine if consent is needed based on OIDC spec requirements
 						ctx.context.session = session;
+						// Set a flag to indicate we've just completed the login prompt flow
+						(ctx.context as any).oidcLoginPromptHandled = true;
 						const response = await authorize(ctx, opts);
 						return response;
 					}),
@@ -668,11 +711,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					const client = await getClient(
-						client_id.toString(),
-						ctx.context.adapter,
-						trustedClients,
-					);
+					const client = await getClient(client_id.toString(), trustedClients);
 					if (!client) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid client_id",
@@ -808,7 +847,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const payload = {
 						sub: user.id,
 						aud: client_id.toString(),
-						iat: Date.now(),
+						iat: iat,
 						auth_time: ctx.context.session
 							? new Date(ctx.context.session.session.createdAt).getTime()
 							: undefined,
@@ -859,7 +898,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 									...jwtPlugin.options?.jwt,
 									getSubject: () => user.id,
 									audience: client_id.toString(),
-									issuer: ctx.context.options.baseURL,
+									issuer:
+										jwtPlugin.options?.jwt?.issuer ??
+										ctx.context.options.baseURL,
 									expirationTime,
 									definePayload: () => payload,
 								},
@@ -1004,11 +1045,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					const client = await getClient(
-						accessToken.clientId,
-						ctx.context.adapter,
-						trustedClients,
-					);
+					const client = await getClient(accessToken.clientId, trustedClients);
 					if (!client) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "client not found",
@@ -1365,7 +1402,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
 							clientSecret: storedClientSecret,
-							redirectURLs: body.redirect_uris.join(","),
+							redirectUrls: body.redirect_uris.join(","),
 							type: "web",
 							authenticationScheme:
 								body.token_endpoint_auth_method || "client_secret_basic",
@@ -1456,12 +1493,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
-					const client = await getClient(
-						ctx.params.id,
-						ctx.context.adapter,
-						trustedClients,
-					);
+				async (
+					ctx,
+				): Promise<{
+					clientId: string;
+					name: string;
+					icon: string | null;
+				}> => {
+					const client = await getClient(ctx.params.id, trustedClients);
 					if (!client) {
 						throw new APIError("NOT_FOUND", {
 							error_description: "client not found",
@@ -1469,9 +1508,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					return ctx.json({
-						clientId: client.clientId as string,
-						name: client.name as string,
-						icon: client.icon as string,
+						clientId: client.clientId,
+						name: client.name,
+						icon: client.icon || null,
 					});
 				},
 			),

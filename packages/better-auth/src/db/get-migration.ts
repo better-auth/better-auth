@@ -1,17 +1,19 @@
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
+import { createLogger } from "@better-auth/core/env";
 import type {
 	AlterTableColumnAlteringBuilder,
+	CreateIndexBuilder,
 	CreateTableBuilder,
+	Kysely,
 } from "kysely";
-import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
 import { sql } from "kysely";
-import { createLogger } from "@better-auth/core/env";
-import type { BetterAuthOptions } from "@better-auth/core";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
-	string: ["character varying", "varchar", "text"],
+	string: ["character varying", "varchar", "text", "uuid"],
 	number: [
 		"int4",
 		"integer",
@@ -26,7 +28,7 @@ const postgresMap = {
 	json: ["json", "jsonb"],
 };
 const mysqlMap = {
-	string: ["varchar", "text"],
+	string: ["varchar", "text", "uuid"],
 	number: [
 		"integer",
 		"int",
@@ -50,7 +52,7 @@ const sqliteMap = {
 };
 
 const mssqlMap = {
-	string: ["varchar", "nvarchar"],
+	string: ["varchar", "nvarchar", "uniqueidentifier"],
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
 	date: ["datetime2", "date", "datetime"],
@@ -82,6 +84,32 @@ export function matchType(
 	return expected.includes(normalize(columnDataType));
 }
 
+/**
+ * Get the current PostgreSQL schema (search_path) for the database connection
+ * Returns the first schema in the search_path, defaulting to 'public' if not found
+ */
+async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
+	try {
+		const result = await sql<{ search_path: string }>`SHOW search_path`.execute(
+			db,
+		);
+		if (result.rows[0]?.search_path) {
+			// search_path can be a comma-separated list like "$user, public" or '"$user", public'
+			// We want the first non-variable schema
+			const schemas = result.rows[0].search_path
+				.split(",")
+				.map((s) => s.trim())
+				// Remove quotes and filter out variables like $user
+				.map((s) => s.replace(/^["']|["']$/g, ""))
+				.filter((s) => !s.startsWith("$"));
+			return schemas[0] || "public";
+		}
+	} catch (error) {
+		// If query fails, fall back to public schema
+	}
+	return "public";
+}
+
 export async function getMigrations(config: BetterAuthOptions) {
 	const betterAuthSchema = getSchema(config);
 	const logger = createLogger(config.logger);
@@ -101,7 +129,71 @@ export async function getMigrations(config: BetterAuthOptions) {
 		);
 		process.exit(1);
 	}
-	const tableMetadata = await db.introspection.getTables();
+
+	// For PostgreSQL, detect and log the current schema being used
+	let currentSchema = "public";
+	if (dbType === "postgres") {
+		currentSchema = await getPostgresSchema(db);
+		logger.debug(
+			`PostgreSQL migration: Using schema '${currentSchema}' (from search_path)`,
+		);
+
+		// Verify the schema exists
+		try {
+			const schemaCheck = await sql<{ schema_name: string }>`
+				SELECT schema_name 
+				FROM information_schema.schemata 
+				WHERE schema_name = ${currentSchema}
+			`.execute(db);
+
+			if (!schemaCheck.rows[0]) {
+				logger.warn(
+					`Schema '${currentSchema}' does not exist. Tables will be inspected from available schemas. Consider creating the schema first or checking your database configuration.`,
+				);
+			}
+		} catch (error) {
+			logger.debug(
+				`Could not verify schema existence: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+	}
+
+	const allTableMetadata = await db.introspection.getTables();
+
+	// For PostgreSQL, filter tables to only those in the target schema
+	let tableMetadata = allTableMetadata;
+	if (dbType === "postgres") {
+		// Get tables with their schema information
+		try {
+			const tablesInSchema = await sql<{
+				table_name: string;
+			}>`
+				SELECT table_name 
+				FROM information_schema.tables 
+				WHERE table_schema = ${currentSchema}
+				AND table_type = 'BASE TABLE'
+			`.execute(db);
+
+			const tableNamesInSchema = new Set(
+				tablesInSchema.rows.map((row) => row.table_name),
+			);
+
+			// Filter to only tables that exist in the target schema
+			tableMetadata = allTableMetadata.filter(
+				(table) =>
+					table.schema === currentSchema && tableNamesInSchema.has(table.name),
+			);
+
+			logger.debug(
+				`Found ${tableMetadata.length} table(s) in schema '${currentSchema}': ${tableMetadata.map((t) => t.name).join(", ") || "(none)"}`,
+			);
+		} catch (error) {
+			logger.warn(
+				`Could not filter tables by schema. Using all discovered tables. Error: ${error instanceof Error ? error.message : String(error)}`,
+			);
+			// Fall back to using all tables if schema filtering fails
+		}
+	}
 	const toBeCreated: {
 		table: string;
 		fields: Record<string, DBFieldAttribute>;
@@ -169,7 +261,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
 		| CreateTableBuilder<string, string>
+		| CreateIndexBuilder
 	)[] = [];
+
+	const useUUIDs = config.advanced?.database?.generateId === "uuid";
 
 	function getType(field: DBFieldAttribute, fieldName: string) {
 		const type = field.type;
@@ -181,7 +276,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 					? "varchar(255)"
 					: field.references
 						? "varchar(36)"
-						: "text",
+						: field.sortable
+							? "varchar(255)"
+							: field.index
+								? "varchar(255)"
+								: "text",
 				mssql:
 					field.unique || field.sortable
 						? "varchar(255)"
@@ -217,24 +316,17 @@ export async function getMigrations(config: BetterAuthOptions) {
 				mssql: "varchar(8000)",
 			},
 			id: {
-				postgres: config.advanced?.database?.useNumberId ? "serial" : "text",
-				mysql: config.advanced?.database?.useNumberId
-					? "integer"
-					: "varchar(36)",
-				mssql: config.advanced?.database?.useNumberId
-					? "integer"
-					: "varchar(36)",
-				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
+				postgres: useNumberId ? "serial" : useUUIDs ? "uuid" : "text",
+				mysql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+
+				sqlite: useNumberId ? "integer" : "text",
 			},
 			foreignKeyId: {
-				postgres: config.advanced?.database?.useNumberId ? "integer" : "text",
-				mysql: config.advanced?.database?.useNumberId
-					? "integer"
-					: "varchar(36)",
-				mssql: config.advanced?.database?.useNumberId
-					? "integer"
-					: "varchar(36)",
-				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
+				postgres: useNumberId ? "integer" : useUUIDs ? "uuid" : "text",
+				mysql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				sqlite: useNumberId ? "integer" : "text",
 			},
 		} as const;
 		if (fieldName === "id" || field.references?.field === "id") {
@@ -258,66 +350,93 @@ export async function getMigrations(config: BetterAuthOptions) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
-				const exec = db.schema
-					.alterTable(table.table)
-					.addColumn(fieldName, type, (col) => {
-						col = field.required !== false ? col.notNull() : col;
-						if (field.references) {
-							col = col
-								.references(
-									`${field.references.model}.${field.references.field}`,
-								)
-								.onDelete(field.references.onDelete || "cascade");
+				let builder = db.schema.alterTable(table.table);
+
+				if (field.index) {
+					//@ts-expect-error
+					builder = builder.addIndex(`${table.table}_${fieldName}_idx`);
+				}
+
+				let built = builder.addColumn(fieldName, type, (col) => {
+					col = field.required !== false ? col.notNull() : col;
+					if (field.references) {
+						col = col
+							.references(`${field.references.model}.${field.references.field}`)
+							.onDelete(field.references.onDelete || "cascade");
+					}
+					if (field.unique) {
+						col = col.unique();
+					}
+					if (
+						field.type === "date" &&
+						typeof field.defaultValue === "function" &&
+						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
+					) {
+						if (dbType === "mysql") {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
+						} else {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
-						if (field.unique) {
-							col = col.unique();
-						}
-						if (
-							field.type === "date" &&
-							typeof field.defaultValue === "function" &&
-							(dbType === "postgres" ||
-								dbType === "mysql" ||
-								dbType === "mssql")
-						) {
-							if (dbType === "mysql") {
-								col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
-							} else {
-								col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
-							}
-						}
-						return col;
-					});
-				migrations.push(exec);
+					}
+					return col;
+				});
+				migrations.push(built);
 			}
 		}
 	}
+
+	let toBeIndexed: CreateIndexBuilder[] = [];
+
+	const useNumberId =
+		config.advanced?.database?.useNumberId ||
+		config.advanced?.database?.generateId === "serial";
+
+	if (config.advanced?.database?.useNumberId) {
+		logger.warn(
+			"`useNumberId` is deprecated. Please use `generateId` with `serial` instead.",
+		);
+	}
+
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
-			let dbT = db.schema
-				.createTable(table.table)
-				.addColumn(
-					"id",
-					config.advanced?.database?.useNumberId
-						? dbType === "postgres"
-							? "serial"
-							: "integer"
+			let dbT = db.schema.createTable(table.table).addColumn(
+				"id",
+				useNumberId
+					? dbType === "postgres"
+						? "serial"
+						: "integer"
+					: useUUIDs
+						? dbType === "postgres" || dbType === "mysql" || dbType === "mssql"
+							? "uuid"
+							: "text"
 						: dbType === "mysql" || dbType === "mssql"
 							? "varchar(36)"
 							: "text",
-					(col) => {
-						if (config.advanced?.database?.useNumberId) {
-							if (dbType === "postgres" || dbType === "sqlite") {
-								return col.primaryKey().notNull();
-							} else if (dbType === "mssql") {
-								return col.identity().primaryKey().notNull();
-							}
-							return col.autoIncrement().primaryKey().notNull();
+
+				(col) => {
+					if (useNumberId) {
+						if (dbType === "postgres" || dbType === "sqlite") {
+							return col.primaryKey().notNull();
+						} else if (dbType === "mssql") {
+							return col.identity().primaryKey().notNull();
+						}
+						return col.autoIncrement().primaryKey().notNull();
+					}
+					if (useUUIDs) {
+						if (dbType === "postgres") {
+							return col
+								.primaryKey()
+								.defaultTo(sql`pg_catalog.gen_random_uuid()`)
+								.notNull();
+						} else if (dbType === "mysql" || dbType === "mssql") {
+							return col.primaryKey().defaultTo(sql`uuid()`).notNull();
 						}
 						return col.primaryKey().notNull();
-					},
-				);
+					}
+					return col.primaryKey().notNull();
+				},
+			);
 
-			const indices: Array<{ table: string; field: string }> = [];
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
 				dbT = dbT.addColumn(fieldName, type, (col) => {
@@ -344,10 +463,29 @@ export async function getMigrations(config: BetterAuthOptions) {
 					}
 					return col;
 				});
+
+				if (field.index) {
+					let builder = db.schema
+						.createIndex(
+							`${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`,
+						)
+						.on(table.table)
+						.columns([fieldName]);
+					toBeIndexed.push(field.unique ? builder.unique() : builder);
+				}
 			}
 			migrations.push(dbT);
 		}
 	}
+
+	// instead of adding the index straight to `migrations`,
+	// we do this at the end so that indexes are created after the table is created
+	if (toBeIndexed.length) {
+		for (const index of toBeIndexed) {
+			migrations.push(index);
+		}
+	}
+
 	async function runMigrations() {
 		for (const migration of migrations) {
 			await migration.execute();

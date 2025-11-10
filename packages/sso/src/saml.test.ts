@@ -1,3 +1,20 @@
+import { betterFetch } from "@better-fetch/fetch";
+import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
+import { createAuthClient } from "better-auth/client";
+import { setCookieToHeader } from "better-auth/cookies";
+import { bearer } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
+import bodyParser from "body-parser";
+import { randomUUID } from "crypto";
+import type {
+	Application as ExpressApp,
+	Request as ExpressRequest,
+	Response as ExpressResponse,
+} from "express";
+import express from "express";
+import { createServer } from "http";
+import * as saml from "samlify";
 import {
 	afterAll,
 	beforeAll,
@@ -7,25 +24,8 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { betterAuth } from "better-auth";
-import { memoryAdapter } from "better-auth/adapters/memory";
-import { createAuthClient } from "better-auth/client";
-import { betterFetch } from "@better-fetch/fetch";
-import { setCookieToHeader } from "better-auth/cookies";
-import { bearer } from "better-auth/plugins";
 import { sso } from ".";
 import { ssoClient } from "./client";
-import { createServer } from "http";
-import * as saml from "samlify";
-import type {
-	Application as ExpressApp,
-	Request as ExpressRequest,
-	Response as ExpressResponse,
-} from "express";
-import express from "express";
-import bodyParser from "body-parser";
-import { randomUUID } from "crypto";
-import { getTestInstanceMemory } from "better-auth/test";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -926,7 +926,7 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should not allow creating a provider if limit is set to 0", async () => {
-		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso({ providersLimit: 0 })],
 		});
 		const { headers } = await signInWithTestUser();
@@ -957,7 +957,7 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should not allow creating a provider if limit is reached", async () => {
-		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso({ providersLimit: 1 })],
 		});
 		const { headers } = await signInWithTestUser();
@@ -1011,7 +1011,7 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should not allow creating a provider if limit from function is reached", async () => {
-		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				sso({
 					providersLimit: async (user) => {

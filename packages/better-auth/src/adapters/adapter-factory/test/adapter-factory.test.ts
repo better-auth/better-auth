@@ -1,13 +1,13 @@
-import { describe, test, expect } from "vitest";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { CleanedWhere, Where } from "@better-auth/core/db/adapter";
+import { describe, expect, test } from "vitest";
+import { betterAuth } from "../../../auth";
+import type { User } from "../../../types";
 import { createAdapterFactory } from "..";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryCustomizeAdapterCreator,
 } from "../types";
-import type { CleanedWhere, Where } from "@better-auth/core/db/adapter";
-import type { User } from "../../../types";
-import type { BetterAuthOptions } from "@better-auth/core";
-import { betterAuth } from "../../../auth";
 
 /*
 
@@ -190,6 +190,44 @@ describe("Create Adapter Helper", async () => {
 			data: { name: "test-name" },
 		});
 		expect(testResult.id).not.toBeDefined();
+	});
+
+	test("Should generate UUIDs when `advanced.database.generateId` is set to 'uuid'", async () => {
+		const adapter = await createTestAdapter({
+			config: {},
+			options: {
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+			},
+		});
+
+		// UUID regex pattern: 8-4-4-4-12 hexadecimal digits
+		const uuidRegex =
+			/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+		// Test single UUID generation
+		const res = await adapter.create({
+			model: "user",
+			data: { name: "test-name" },
+		});
+		expect(res).toHaveProperty("id");
+		expect(typeof res.id).toBe("string");
+		expect(res.id).toMatch(uuidRegex);
+
+		const ids = new Set<string>();
+		for (let i = 0; i < 10; i++) {
+			const result = await adapter.create({
+				model: "user",
+				data: { name: `test-name-${i}` },
+			});
+			expect(result.id).toMatch(uuidRegex);
+			expect(ids.has(result.id)).toBe(false);
+			ids.add(result.id);
+		}
+		expect(ids.size).toBe(10);
 	});
 
 	test("Should throw an error if the database doesn't support numeric ids and the user has enabled `useNumberId`", async () => {

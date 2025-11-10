@@ -1,7 +1,8 @@
-import { logger, type DBAdapter, type BetterAuthOptions } from "better-auth";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { type BetterAuthOptions, logger } from "better-auth";
 import { generateDrizzleSchema } from "./drizzle";
-import { generatePrismaSchema } from "./prisma";
 import { generateMigrations } from "./kysely";
+import { generatePrismaSchema } from "./prisma";
 
 export const adapters = {
 	prisma: generatePrismaSchema,

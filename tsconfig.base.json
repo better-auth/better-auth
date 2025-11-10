@@ -5,7 +5,6 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "downlevelIteration": true,
-    "baseUrl": ".",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
@@ -24,7 +23,7 @@
     // A custom condition that can be set to the "exports" filed in package.json
     // and it should directs to the source .ts files. This enables the
     // jump-to-definition feature in IDEs to function properly.
-    "customConditions": ["better-auth-dev-source"]
+    "customConditions": ["dev-source"]
   },
   "exclude": ["**/dist/**", "**/node_modules/**"]
 }

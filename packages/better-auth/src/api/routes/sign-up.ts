@@ -1,14 +1,14 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/api";
-import { createEmailVerificationToken } from "./email-verification";
-import { setSessionCookie } from "../../cookies";
-import { APIError } from "better-call";
-import type { AdditionalUserFieldsInput, User } from "../../types";
 import type { BetterAuthOptions } from "@better-auth/core";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { isDevelopment } from "@better-auth/core/env";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
+import { isDevelopment } from "@better-auth/core/env";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "better-call";
+import { z } from "zod";
+import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
+import type { AdditionalUserFieldsInput, User } from "../../types";
+import { createEmailVerificationToken } from "./email-verification";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -22,9 +22,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						name: string;
 						email: string;
 						password: string;
-						image?: string;
-						callbackURL?: string;
-						rememberMe?: boolean;
+						image?: string | undefined;
+						callbackURL?: string | undefined;
+						rememberMe?: boolean | undefined;
 					} & AdditionalUserFieldsInput<O>,
 				},
 				openapi: {
@@ -164,8 +164,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				}
 				const body = ctx.body as any as User & {
 					password: string;
-					callbackURL?: string;
-					rememberMe?: boolean;
+					callbackURL?: string | undefined;
+					rememberMe?: boolean | undefined;
 				} & {
 					[key: string]: any;
 				};

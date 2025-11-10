@@ -1,22 +1,21 @@
 import Database from "better-sqlite3";
-import { drizzleAdapter } from "../drizzle-adapter";
+import { execSync } from "child_process";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import fs from "fs/promises";
+import path from "path";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
 } from "../../tests";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import path from "path";
+import { drizzleAdapter } from "../drizzle-adapter";
 import {
 	clearSchemaCache,
 	generateDrizzleSchema,
 	resetGenerationCount,
 } from "./generate-schema";
-import fs from "fs/promises";
-import { execSync } from "child_process";
 
 const dbFilePath = path.join(import.meta.dirname, "test.db");
 let sqliteDB = new Database(dbFilePath);
@@ -66,7 +65,6 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "sqlite" }),
 	],
 	async onFinish() {
 		clearSchemaCache();

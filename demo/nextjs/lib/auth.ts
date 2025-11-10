@@ -1,28 +1,28 @@
+import { passkey } from "@better-auth/passkey";
+import { sso } from "@better-auth/sso";
+import { stripe } from "@better-auth/stripe";
+import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { betterAuth } from "better-auth";
+import { nextCookies } from "better-auth/next-js";
 import {
-	bearer,
 	admin,
-	multiSession,
-	organization,
-	twoFactor,
-	oneTap,
-	oAuthProxy,
-	openAPI,
+	bearer,
 	customSession,
 	deviceAuthorization,
 	lastLoginMethod,
+	multiSession,
+	oAuthProxy,
+	oneTap,
+	openAPI,
+	organization,
+	twoFactor,
 } from "better-auth/plugins";
-import { reactInvitationEmail } from "./email/invitation";
-import { LibsqlDialect } from "@libsql/kysely-libsql";
-import { reactResetPasswordEmail } from "./email/reset-password";
-import { resend } from "./email/resend";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
-import { nextCookies } from "better-auth/next-js";
-import { passkey } from "better-auth/plugins/passkey";
-import { stripe } from "@better-auth/stripe";
-import { sso } from "@better-auth/sso";
 import { Stripe } from "stripe";
+import { reactInvitationEmail } from "./email/invitation";
+import { resend } from "./email/resend";
+import { reactResetPasswordEmail } from "./email/reset-password";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -52,20 +52,16 @@ if (!dialect) {
 
 const baseURL: string | undefined =
 	process.env.VERCEL === "1"
-		? process.env.VERCEL_ENV === "production"
+		? process.env.BETTER_AUTH_URL
 			? process.env.BETTER_AUTH_URL
-			: process.env.VERCEL_ENV === "preview"
-				? `https://${process.env.VERCEL_URL}`
-				: undefined
+			: `https://${process.env.VERCEL_URL}`
 		: undefined;
 
 const cookieDomain: string | undefined =
 	process.env.VERCEL === "1"
-		? process.env.VERCEL_ENV === "production"
-			? ".better-auth.com"
-			: process.env.VERCEL_ENV === "preview"
-				? `.${process.env.VERCEL_URL}`
-				: undefined
+		? process.env.BETTER_AUTH_URL
+			? new URL(process.env.BETTER_AUTH_URL).hostname
+			: `.${process.env.VERCEL_URL}`
 		: undefined;
 
 export const auth = betterAuth({
@@ -106,6 +102,10 @@ export const auth = betterAuth({
 		},
 	},
 	socialProviders: {
+		apple: {
+			clientId: process.env.APPLE_CLIENT_ID || "",
+			clientSecret: process.env.APPLE_CLIENT_SECRET || "",
+		},
 		facebook: {
 			clientId: process.env.FACEBOOK_CLIENT_ID || "",
 			clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "",
@@ -350,7 +350,7 @@ export const auth = betterAuth({
 		}),
 		lastLoginMethod(),
 	],
-	trustedOrigins: ["exp://"],
+	trustedOrigins: ["exp://", "https://appleid.apple.com"],
 	advanced: {
 		crossSubDomainCookies: {
 			enabled: process.env.NODE_ENV === "production",
