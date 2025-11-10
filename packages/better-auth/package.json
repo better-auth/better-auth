@@ -39,8 +39,8 @@
     },
     "./minimal": {
       "better-auth-dev-source": "./src/auth/minimal.ts",
-      "types": "./dist/auth/minimal.d.ts",
-      "default": "./dist/auth/minimal.js"
+      "types": "./dist/auth/minimal.d.mts",
+      "default": "./dist/auth/minimal.mjs"
     },
     "./social-providers": {
       "better-auth-dev-source": "./src/social-providers/index.ts",
@@ -294,7 +294,7 @@
         "./dist/index.d.mts"
       ],
       "minimal": [
-        "./dist/auth/minimal.d.ts"
+        "./dist/auth/minimal.d.mts"
       ],
       "node": [
         "./dist/integrations/node.d.mts"
