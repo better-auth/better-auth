@@ -168,8 +168,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					if (field === "createdAt") {
 						fieldBuilder.attribute("default(now())");
 					} else if (
-						typeof attr.defaultValue === "string" &&
-						provider !== "mysql"
+						(typeof attr.defaultValue === "string" &&
+						provider !== "mysql") || (typeof attr.defaultValue === "string" && provider === "mysql" && JSON.stringify(attr.defaultValue).length < 255)  
 					) {
 						fieldBuilder.attribute(
 							`default(${JSON.stringify(attr.defaultValue)})`,
@@ -223,13 +223,14 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					provider === "mysql" &&
 					attr.type === "string"
 				) {
-					attr.defaultValue
-						? builder
+					if(attr.defaultValue && JSON.stringify(attr.defaultValue).length >255)
+						 builder
 								.model(modelName)
 								.field(fieldName)
 								.attribute(`default(dbgenerated("('${attr.defaultValue}')"))`)
 								.attribute("db.Text")
-						: builder.model(modelName).field(fieldName).attribute("db.Text");
+					if(!attr.defaultValue)
+						 builder.model(modelName).field(fieldName).attribute("db.Text");
 				}
 			}
 
