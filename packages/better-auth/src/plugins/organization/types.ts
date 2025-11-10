@@ -201,17 +201,15 @@ export interface OrganizationOptions {
 	 * @question What is the maximum number of invitations a user can send?
 	 */
 	invitationLimit?:
-		| (
-				| number
-				| ((
-						data: {
-							user: User;
-							organization: Organization;
-							member: Member;
-						},
-						ctx: AuthContext,
-				  ) => Promise<number> | number)
-		  )
+		| number
+		| ((
+				data: {
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+					member: Member & Record<string, any>;
+				},
+				ctx: AuthContext,
+		  ) => Promise<number> | number)
 		| undefined;
 	/**
 	 * Cancel pending invitations on re-invite.

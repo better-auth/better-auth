@@ -5,10 +5,9 @@ import { useAuthQuery } from "../../client";
 import type {
 	InferInvitation,
 	InferMember,
-	Invitation,
+	InferOrganization,
+	InferTeam,
 	Member,
-	Organization,
-	Team,
 } from "../../plugins/organization/schema";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 import type { Prettify } from "../../types/helper";
@@ -140,14 +139,14 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 
 	type OrganizationReturn = CO["teams"] extends { enabled: true }
 		? {
-				members: InferMember<CO>[];
+				members: InferMember<CO, false>[];
 				invitations: InferInvitation<CO>[];
-				teams: Team[];
-			} & Organization
+				teams: InferTeam<CO, false>[];
+			} & InferOrganization<CO, false>
 		: {
-				members: InferMember<CO>[];
-				invitations: InferInvitation<CO>[];
-			} & Organization;
+				members: InferMember<CO, false>[];
+				invitations: InferInvitation<CO, false>[];
+			} & InferOrganization<CO, false>;
 
 	type Schema = CO["schema"];
 	return {
@@ -176,10 +175,10 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		getActions: ($fetch, _$store, co) => ({
 			$Infer: {
 				ActiveOrganization: {} as OrganizationReturn,
-				Organization: {} as Organization,
-				Invitation: {} as InferInvitation<CO>,
-				Member: {} as InferMember<CO>,
-				Team: {} as Team,
+				Organization: {} as InferOrganization<CO, false>,
+				Invitation: {} as InferInvitation<CO, false>,
+				Member: {} as InferMember<CO, false>,
+				Team: {} as InferTeam<CO, false>,
 			},
 			organization: {
 				checkRolePermission: <
@@ -204,7 +203,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 		}),
 		getAtoms: ($fetch) => {
-			const listOrganizations = useAuthQuery<Organization[]>(
+			const listOrganizations = useAuthQuery<InferOrganization<CO, false>[]>(
 				$listOrg,
 				"/organization/list",
 				$fetch,
@@ -214,16 +213,9 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			);
 			const activeOrganization = useAuthQuery<
 				Prettify<
-					Organization & {
-						members: (Member & {
-							user: {
-								id: string;
-								name: string;
-								email: string;
-								image: string | undefined;
-							};
-						})[];
-						invitations: Invitation[];
+					InferOrganization<CO, false> & {
+						members: InferMember<CO, false>[];
+						invitations: InferInvitation<CO, false>[];
 					}
 				>
 			>(
