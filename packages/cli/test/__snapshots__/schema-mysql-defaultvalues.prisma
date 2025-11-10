@@ -19,7 +19,7 @@ model User {
   twoFactorEnabled Boolean?    @default(false)
   username         String?
   displayUsername  String?     @db.Text
-  role             String?     @default(dbgenerated("('admin')")) @db.Text
+  role             String?     @default("admin")
   sessions         Session[]
   accounts         Account[]
   twofactors       TwoFactor[]
