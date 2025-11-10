@@ -260,18 +260,19 @@ export const createAdapterFactory =
 				options.advanced?.database?.generateId === "serial";
 			const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
-			let shouldGenerateId: boolean;
-			if (config.disableIdGeneration) {
-				shouldGenerateId = false;
-			} else if (useNumberId && !forceAllowId) {
-				// if force allow is true, then we should be using their custom provided id.
-				shouldGenerateId = false;
-			} else if (useUUIDs && !config.supportsUUIDs) {
-				// should only generate UUIDs via JS if the database doesn't support natively generating UUIDs.
-				shouldGenerateId = true;
-			} else {
-				shouldGenerateId = true;
-			}
+			let shouldGenerateId: boolean = (() => {
+				if (config.disableIdGeneration) {
+					return false;
+				} else if (useNumberId && !forceAllowId) {
+					// if force allow is true, then we should be using their custom provided id.
+					return false;
+				} else if (useUUIDs && !config.supportsUUIDs) {
+					// should only generate UUIDs via JS if the database doesn't support natively generating UUIDs.
+					return true;
+				} else {
+					return true;
+				}
+			})();
 
 			const model = getDefaultModelName(customModelName ?? "id");
 			return {

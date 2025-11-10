@@ -26,12 +26,10 @@ export const memoryAdapter = (
 			usePlural: false,
 			debugLogs: config?.debugLogs || false,
 			customTransformInput(props) {
-				if (
-					(props.options.advanced?.database?.useNumberId ||
-						props.options.advanced?.database?.generateId === "serial") &&
-					props.field === "id" &&
-					props.action === "create"
-				) {
+				const useNumberId =
+					props.options.advanced?.database?.useNumberId ||
+					props.options.advanced?.database?.generateId === "serial";
+				if (useNumberId && props.field === "id" && props.action === "create") {
 					return db[props.model]!.length + 1;
 				}
 				return props.data;
@@ -118,10 +116,10 @@ export const memoryAdapter = (
 			}
 			return {
 				create: async ({ model, data }) => {
-					if (
+					const useNumberId =
 						options.advanced?.database?.useNumberId ||
-						options.advanced?.database?.generateId === "serial"
-					) {
+						options.advanced?.database?.generateId === "serial";
+					if (useNumberId) {
 						// @ts-expect-error
 						data.id = db[model]!.length + 1;
 					}
