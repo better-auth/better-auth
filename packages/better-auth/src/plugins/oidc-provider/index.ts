@@ -20,8 +20,9 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
-import { getJwtToken } from "../jwt/sign";
+import { getJwtToken } from "../jwt";
 import { authorize } from "./authorize";
+import { checkPromptMiddleware } from "./middlewares/check-prompt";
 import { type OAuthApplication, schema } from "./schema";
 import type {
 	Client,
@@ -238,10 +239,20 @@ export const oidcProvider = (options: OIDCOptions) => {
 	return {
 		id: "oidc",
 		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return ctx.path.includes("/oauth2/");
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						await checkPromptMiddleware(ctx);
+					}),
+				},
+			],
 			after: [
 				{
-					matcher() {
-						return true;
+					matcher(ctx) {
+						return ctx.path === "/oauth2/authorize" && ctx.method === "GET";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const cookie = await ctx.getSignedCookie(
@@ -269,10 +280,33 @@ export const oidcProvider = (options: OIDCOptions) => {
 						if (!session) {
 							return;
 						}
-						ctx.query = JSON.parse(cookie);
+						try {
+							const parsedQuery = JSON.parse(cookie);
+							if (
+								parsedQuery &&
+								typeof parsedQuery === "object" &&
+								parsedQuery.client_id
+							) {
+								ctx.query = parsedQuery;
+							} else {
+								ctx.context.logger.error(
+									"Invalid or incomplete query data in oidc_login_prompt cookie",
+									parsedQuery,
+								);
+								return;
+							}
+						} catch (e) {
+							ctx.context.logger.error(
+								"Failed to parse oidc_login_prompt cookie",
+								e,
+							);
+							return;
+						}
 						// Don't force prompt to "consent" - let the authorize function
 						// determine if consent is needed based on OIDC spec requirements
 						ctx.context.session = session;
+						// Set a flag to indicate we've just completed the login prompt flow
+						(ctx.context as any).oidcLoginPromptHandled = true;
 						const response = await authorize(ctx, opts);
 						return response;
 					}),
