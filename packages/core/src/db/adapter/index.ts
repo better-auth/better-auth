@@ -83,6 +83,12 @@ export interface DBAdapterFactoryConfig<
 	 */
 	supportsNumericIds?: boolean | undefined;
 	/**
+	 * If the database supports natively generating UUIDs, set this to `true`.
+	 * 
+	 * @default false
+	 */
+	supportsUUIDs?: boolean | undefined;
+	/**
 	 * If the database doesn't support JSON columns, set this to `false`.
 	 *
 	 * We will handle the translation between using `JSON` columns, and saving `string`s to the database.
