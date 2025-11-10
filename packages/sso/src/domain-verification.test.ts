@@ -190,7 +190,7 @@ describe("Domain verification", async () => {
 				headers,
 			});
 
-			expect(domainVerificationResponse.status).toBe(200);
+			expect(domainVerificationResponse.status).toBe(204);
 
 			const domainVerificationSubmissionResponse =
 				await auth.api.submitDomainVerification({
@@ -305,8 +305,7 @@ describe("Domain verification", async () => {
 				headers,
 			});
 
-			expect(response.status).toBe(200);
-			expect(await response.json()).toEqual({ ok: true });
+			expect(response.status).toBe(204);
 		});
 
 		it("should verify a provider domain ownership (custom token verification prefix)", async () => {
@@ -331,8 +330,7 @@ describe("Domain verification", async () => {
 				headers,
 			});
 
-			expect(response.status).toBe(200);
-			expect(await response.json()).toEqual({ ok: true });
+			expect(response.status).toBe(204);
 		});
 
 		it("should fail to verify an already verified domain", async () => {
@@ -353,7 +351,7 @@ describe("Domain verification", async () => {
 				headers,
 			});
 
-			expect(firstResponse.status).toBe(200);
+			expect(firstResponse.status).toBe(204);
 
 			const secondResponse = await auth.api.verifyDomain({
 				body: {

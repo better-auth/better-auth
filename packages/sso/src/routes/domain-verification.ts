@@ -190,7 +190,7 @@ export const verifyDomain = (options: SSOOptions) => {
 				},
 			});
 
-			return Response.json({ ok: true }, { status: 200 });
+			return new Response(null, { status: 204 });
 		},
 	);
 };
