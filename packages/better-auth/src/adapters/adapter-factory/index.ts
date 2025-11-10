@@ -383,15 +383,15 @@ export const createAdapterFactory =
 			for (const field in fields) {
 				let value = data[field];
 				const fieldAttributes = fields[field];
-				
+
 				// Skip if field doesn't exist in schema
 				if (!fieldAttributes) {
 					continue;
 				}
 
 				let newFieldName: string =
-					newMappedKeys[field] || (fieldAttributes.fieldName ?? field);
-				
+					newMappedKeys[field] ?? fieldAttributes.fieldName ?? field ?? "";
+
 				// EARLY EXIT: When useNumberId is enabled and creating, skip ID field entirely
 				// The database will auto-generate the ID, so we should NEVER include it in the data
 				// This prevents null/undefined/empty values from being passed to the database
