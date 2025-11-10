@@ -768,6 +768,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 				userId: session.user.id,
 				organizationId: ctx.body.organizationId,
 			});
+
 			if (!member) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
@@ -881,27 +882,26 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 		async (ctx) => {
 			const session = ctx.context.session;
 			let organizationId =
-				ctx.query?.organizationId ||
-				ctx.query?.organizationSlug ||
-				session.session.activeOrganizationId;
-
-			if (!organizationId) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
-			}
+				ctx.query?.organizationId || session.session.activeOrganizationId;
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			if (ctx.query?.organizationSlug) {
-				const organization = await adapter.findOrganizationBySlug(
-					ctx.query?.organizationSlug,
-				);
-				if (!organization) {
+			if (!organizationId) {
+				if (ctx.query?.organizationSlug) {
+					const organization = await adapter.findOrganizationBySlug(
+						ctx.query?.organizationSlug,
+					);
+					if (!organization) {
+						throw new APIError("BAD_REQUEST", {
+							message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+						});
+					}
+					organizationId = organization.id;
+				} else {
 					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 					});
 				}
-				organizationId = organization.id;
 			}
+
 			const isMember = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId,
@@ -970,26 +970,26 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 		async (ctx) => {
 			const session = ctx.context.session;
 			let organizationId =
-				ctx.query?.organizationId ||
-				ctx.query?.organizationSlug ||
-				session.session.activeOrganizationId;
-			if (!organizationId) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
-			}
+				ctx.query?.organizationId || session.session.activeOrganizationId;
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			if (ctx.query?.organizationSlug) {
-				const organization = await adapter.findOrganizationBySlug(
-					ctx.query?.organizationSlug,
-				);
-				if (!organization) {
+			if (!organizationId) {
+				if (ctx.query?.organizationSlug) {
+					const organization = await adapter.findOrganizationBySlug(
+						ctx.query?.organizationSlug,
+					);
+					if (!organization) {
+						throw new APIError("BAD_REQUEST", {
+							message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+						});
+					}
+					organizationId = organization.id;
+				} else {
 					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 					});
 				}
-				organizationId = organization.id;
 			}
+
 			const userId = ctx.query?.userId || session.user.id || organizationId;
 
 			const member = await adapter.findMemberByOrgId({
