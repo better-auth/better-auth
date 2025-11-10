@@ -18,6 +18,12 @@ export const submitDomainVerification = (options: SSOOptions) => {
 					summary: "Submit a domain for verification",
 					description: "Submit a provider domain for owning verification",
 					responses: {
+						"404": {
+							description: "Provider not found",
+						},
+						"409": {
+							description: "Domain has already been verified or current verification token is still valid",
+						},
 						"201": {
 							description: "Domain submitted for verification",
 						},
@@ -109,7 +115,16 @@ export const verifyDomain = (options: SSOOptions) => {
 					summary: "Verify the provider domain ownership",
 					description: "Verify the provider domain ownership via DNS records",
 					responses: {
-						"200": {
+						"404": {
+							description: "Provider not found",
+						},
+						"409": {
+							description: "Domain has already been verified or no pending verification exists",
+						},
+						"502": {
+							description: "Unable to verify domain ownership due to upstream validator error",
+						},
+						"204": {
 							description: "Domain ownership was verified",
 						},
 					},
@@ -178,7 +193,7 @@ export const verifyDomain = (options: SSOOptions) => {
 			if (!record) {
 				return Response.json(
 					{ message: "Unable to verify domain ownership. Try again later" },
-					{ status: 404 },
+					{ status: 502 },
 				);
 			}
 

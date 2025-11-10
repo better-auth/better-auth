@@ -273,7 +273,7 @@ describe("Domain verification", async () => {
 				headers,
 			});
 
-			expect(response.status).toBe(404);
+			expect(response.status).toBe(502);
 			expect(await response.json()).toEqual({
 				message: "Unable to verify domain ownership. Try again later",
 			});
