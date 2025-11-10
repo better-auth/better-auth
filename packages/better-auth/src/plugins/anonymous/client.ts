@@ -8,5 +8,11 @@ export const anonymousClient = () => {
 		pathMethods: {
 			"/sign-in/anonymous": "POST",
 		},
+		atomListeners: [
+			{
+				matcher: (path) => path === "/sign-in/anonymous",
+				signal: "$sessionSignal",
+			},
+		],
 	} satisfies BetterAuthClientPlugin;
 };
