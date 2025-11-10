@@ -3,6 +3,7 @@ import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
 import { createLogger } from "@better-auth/core/env";
 import type {
 	AlterTableColumnAlteringBuilder,
+	CreateIndexBuilder,
 	CreateTableBuilder,
 	Kysely,
 } from "kysely";
@@ -263,6 +264,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
 		| CreateTableBuilder<string, string>
+		| CreateIndexBuilder
 	)[] = [];
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
@@ -277,7 +279,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 					? "varchar(255)"
 					: field.references
 						? "varchar(36)"
-						: "text",
+						: field.sortable
+							? "varchar(255)"
+							: field.index
+								? "varchar(255)"
+								: "text",
 				mssql:
 					field.unique || field.sortable
 						? "varchar(255)"
@@ -369,10 +375,15 @@ export async function getMigrations(config: BetterAuthOptions) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
-				const exec = db.schema
-					.alterTable(table.table)
-					.addColumn(fieldName, type, (col) => {
-						col = field.required !== false ? col.notNull() : col;
+				let builder = db.schema.alterTable(table.table);
+
+				if (field.index) {
+					//@ts-expect-error
+					builder = builder.addIndex(`${table.table}_${fieldName}_idx`);
+				}
+
+				let built = builder.addColumn(fieldName, type, (col) => {
+					col = field.required !== false ? col.notNull() : col;
 						if (field.references) {
 							col = col
 								.references(
@@ -399,12 +410,16 @@ export async function getMigrations(config: BetterAuthOptions) {
 								col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 							}
 						}
-						return col;
-					});
-				migrations.push(exec);
+					}
+					return col;
+				});
+				migrations.push(built);
 			}
 		}
 	}
+
+	let toBeIndexed: CreateIndexBuilder[] = [];
+
 	const useNumberId =
 		config.advanced?.database?.useNumberId ||
 		config.advanced?.database?.generateId === "serial";
@@ -486,10 +501,29 @@ export async function getMigrations(config: BetterAuthOptions) {
 					}
 					return col;
 				});
+
+				if (field.index) {
+					let builder = db.schema
+						.createIndex(
+							`${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`,
+						)
+						.on(table.table)
+						.columns([fieldName]);
+					toBeIndexed.push(field.unique ? builder.unique() : builder);
+				}
 			}
 			migrations.push(dbT);
 		}
 	}
+
+	// instead of adding the index straight to `migrations`,
+	// we do this at the end so that indexes are created after the table is created
+	if (toBeIndexed.length) {
+		for (const index of toBeIndexed) {
+			migrations.push(index);
+		}
+	}
+
 	async function runMigrations() {
 		for (const migration of migrations) {
 			await migration.execute();
