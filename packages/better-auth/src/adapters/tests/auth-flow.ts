@@ -23,6 +23,7 @@ export const authFlowTestSuite = createTestSuite(
 	},
 	(
 		{
+			adapter,
 			generate,
 			getAuth,
 			modifyBetterAuthOptions,
@@ -138,6 +139,170 @@ export const authFlowTestSuite = createTestSuite(
 				expect(userSignUp.user.createdAt.toISOString()).toStrictEqual(
 					userSignIn.user.createdAt.toISOString(),
 				);
+			},
+		"should handle special characters in email search (plus sign)":
+			async () => {
+				await modifyBetterAuthOptions(
+					{
+						emailAndPassword: {
+							enabled: true,
+							password: { hash: async (password) => password },
+						},
+					},
+					false,
+				);
+				const auth = await getAuth();
+				const password = crypto.randomUUID();
+
+				// Sign up user with plus sign in email (Gmail alias pattern)
+				await auth.api.signUpEmail({
+					body: {
+						email: "test+alias@example.com",
+						password: password,
+						name: "Test User",
+						image: "",
+					},
+				});
+
+				// Test that adapter can find user with special character search
+				const users = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{
+							field: "email",
+							operator: "contains",
+							value: "test+alias",
+						},
+					],
+				});
+
+				expect(users.length).toBeGreaterThan(0);
+				const found = users.find(
+					(u: User) => u.email === "test+alias@example.com",
+				);
+				expect(found).toBeDefined();
+			},
+		"should handle special characters in name search (asterisk, dot, brackets)":
+			async () => {
+				await modifyBetterAuthOptions(
+					{
+						emailAndPassword: {
+							enabled: true,
+							password: { hash: async (password) => password },
+						},
+					},
+					false,
+				);
+				const auth = await getAuth();
+				const password = crypto.randomUUID();
+
+				// Test various special characters that could break regex
+				const testCases = [
+					{ email: "dot@example.com", name: "user.name" },
+					{ email: "asterisk@example.com", name: "Test*User" },
+					{ email: "question@example.com", name: "Test?User" },
+					{ email: "bracket@example.com", name: "Test[User]" },
+					{ email: "backslash@example.com", name: "Test\\User" },
+				];
+
+				// Sign up users with special characters
+				for (const testCase of testCases) {
+					await auth.api.signUpEmail({
+						body: {
+							email: testCase.email,
+							password: password,
+							name: testCase.name,
+							image: "",
+						},
+					});
+				}
+
+				// Verify each can be found with contains operator
+				for (const testCase of testCases) {
+					const users = await adapter.findMany<User>({
+						model: "user",
+						where: [
+							{
+								field: "name",
+								operator: "contains",
+								value: testCase.name,
+							},
+						],
+					});
+
+					expect(users.length).toBeGreaterThan(0);
+					const found = users.find((u: User) => u.name === testCase.name);
+					expect(found).toBeDefined();
+				}
+			},
+		"should handle special characters with starts_with and ends_with operators":
+			async () => {
+				await modifyBetterAuthOptions(
+					{
+						emailAndPassword: {
+							enabled: true,
+							password: { hash: async (password) => password },
+						},
+					},
+					false,
+				);
+				const auth = await getAuth();
+				const password = crypto.randomUUID();
+
+				// Sign up users with special characters
+				await auth.api.signUpEmail({
+					body: {
+						email: "special+start@example.com",
+						password: password,
+						name: "Special Start",
+						image: "",
+					},
+				});
+
+				await auth.api.signUpEmail({
+					body: {
+						email: "end@test+domain.com",
+						password: password,
+						name: "Special End",
+						image: "",
+					},
+				});
+
+				// Test starts_with operator
+				const startsWithResults = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{
+							field: "email",
+							operator: "starts_with",
+							value: "special+",
+						},
+					],
+				});
+
+				expect(startsWithResults.length).toBeGreaterThan(0);
+				const foundStart = startsWithResults.find(
+					(u: User) => u.email === "special+start@example.com",
+				);
+				expect(foundStart).toBeDefined();
+
+				// Test ends_with operator
+				const endsWithResults = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{
+							field: "email",
+							operator: "ends_with",
+							value: "+domain.com",
+						},
+					],
+				});
+
+				expect(endsWithResults.length).toBeGreaterThan(0);
+				const foundEnd = endsWithResults.find(
+					(u: User) => u.email === "end@test+domain.com",
+				);
+				expect(foundEnd).toBeDefined();
 			},
 		"should sign up with additional fields": async () => {
 			await modifyBetterAuthOptions(

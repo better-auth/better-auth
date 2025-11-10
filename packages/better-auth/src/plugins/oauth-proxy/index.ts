@@ -159,7 +159,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 
 					// Process cookies: normalize for current environment
 					const processedCookies = decryptedCookies
-					.split(/,(?=\s*[^,]+=)/)
+						.split(/,(?=\s*[^,]+=)/)
 						.map((cookie) => {
 							const parts = cookie.split(";");
 							const [nameValue = "", ...attrs] = parts.map((p) => p.trim());
@@ -176,9 +176,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							// Filter out Domain and Secure attributes
 							const filteredAttrs = attrs.filter((attr) => {
 								const lower = attr.toLowerCase();
-								return (
-									!lower.startsWith("domain=") && lower !== "secure"
-								);
+								return !lower.startsWith("domain=") && lower !== "secure";
 							});
 
 							// Add Secure for HTTPS contexts
