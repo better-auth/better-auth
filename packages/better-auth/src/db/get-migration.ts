@@ -273,6 +273,18 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| CreateTableBuilder<string, string>
 	)[] = [];
 
+	// Define ID generation flags before getType function uses them
+	const useNumberId =
+		config.advanced?.database?.useNumberId ||
+		config.advanced?.database?.generateId === "serial";
+	const useUUIDs = config.advanced?.database?.generateId === "uuid";
+
+	if (config.advanced?.database?.useNumberId) {
+		logger.warn(
+			"`useNumberId` is deprecated. Please use `generateId` with `serial` instead.",
+		);
+	}
+
 	function isIdField(model: string, fieldName: string): boolean {
 		// Check the original schema structure (keyed by logical field names)
 		for (const [tableKey, table] of Object.entries(originalSchema)) {
@@ -441,15 +453,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 				migrations.push(exec);
 			}
 		}
-	}
-	const useNumberId =
-		config.advanced?.database?.useNumberId ||
-		config.advanced?.database?.generateId === "serial";
-
-	if (config.advanced?.database?.useNumberId) {
-		logger.warn(
-			"`useNumberId` is deprecated. Please use `generateId` with `serial` instead.",
-		);
 	}
 
 	if (toBeCreated.length) {
