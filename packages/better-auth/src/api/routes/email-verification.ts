@@ -10,6 +10,23 @@ import type { User } from "../../types";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
 
+/**
+ * Ensure email verification is enabled in options and return the object
+ */
+function ensureEmailVerificationEnabled(ctx: GenericEndpointContext) {
+	const emailVerification =
+		ctx.context.options.emailVerification as
+			| { sendVerificationEmail: (...args: any[]) => any }
+			| undefined;
+	if (!emailVerification?.sendVerificationEmail) {
+		ctx.context.logger.error("Verification email isn't enabled.");
+		throw new APIError("BAD_REQUEST", {
+			message: "Verification email isn't enabled",
+		});
+	}
+	return emailVerification;
+}
+
 export async function createEmailVerificationToken(
 	secret: string,
 	email: string,
@@ -40,12 +57,7 @@ export async function sendVerificationEmailFn(
 	ctx: GenericEndpointContext,
 	user: User,
 ) {
-	if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
-		ctx.context.logger.error("Verification email isn't enabled.");
-		throw new APIError("BAD_REQUEST", {
-			message: "Verification email isn't enabled",
-		});
-	}
+	const emailVerification = ensureEmailVerificationEnabled(ctx);
 	const token = await createEmailVerificationToken(
 		ctx.context.secret,
 		user.email,
@@ -56,7 +68,7 @@ export async function sendVerificationEmailFn(
 		? encodeURIComponent(ctx.body.callbackURL)
 		: encodeURIComponent("/");
 	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-	await ctx.context.options.emailVerification.sendVerificationEmail(
+	await emailVerification.sendVerificationEmail(
 		{
 			user: user,
 			url,
