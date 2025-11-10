@@ -6,8 +6,8 @@ const { get: getAuthorizePromptSet, set: _setAuthorizePromptSet } =
 	defineRequestState<AuthorizePromptSet>();
 
 export const checkPromptMiddleware = createAuthMiddleware(async (ctx) => {
-	if (ctx.params.prompt !== undefined) {
-		const prompt = ctx.params.prompt;
+	if (ctx.query?.prompt !== undefined) {
+		const prompt = String(ctx.query.prompt);
 		const promptSet = parsePrompt(prompt);
 		await _setAuthorizePromptSet(promptSet);
 	} else {
