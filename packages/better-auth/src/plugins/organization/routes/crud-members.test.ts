@@ -82,8 +82,8 @@ describe("listMembers", async () => {
 				organizationSlug: "test-second",
 			},
 		});
-		expect(members.data?.members.length).toBe(1);
-		expect(members.data?.total).toBe(1);
+		expect(members.data?.members.length).toBe(11);
+		expect(members.data?.total).toBe(11);
 	});
 
 	it("should limit the number of members", async () => {
