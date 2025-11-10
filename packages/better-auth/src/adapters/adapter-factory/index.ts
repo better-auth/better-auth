@@ -390,7 +390,7 @@ export const createAdapterFactory =
 				}
 
 				let newFieldName: string =
-					newMappedKeys[field] || fieldAttributes.fieldName ?? field;
+					newMappedKeys[field] || (fieldAttributes.fieldName ?? field);
 				
 				// EARLY EXIT: When useNumberId is enabled and creating, skip ID field entirely
 				// The database will auto-generate the ID, so we should NEVER include it in the data
