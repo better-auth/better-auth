@@ -316,8 +316,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 					: useUUIDs
 						? "varchar(36)"
 						: "varchar(36)",
-				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
-
+				mssql: useNumberId
+					? "integer"
+					: useUUIDs
+						? "varchar(36)"
+						: "varchar(36)",
 				sqlite: useNumberId ? "integer" : "text",
 			},
 			foreignKeyId: {
@@ -401,21 +404,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
-			let dbT = db.schema.createTable(table.table).addColumn(
-				"id",
-				useNumberId
-					? dbType === "postgres"
-						? "serial"
-						: "integer"
-					: useUUIDs
-						? dbType === "postgres" || dbType === "mysql" || dbType === "mssql"
-							? "uuid"
-							: "text"
-						: dbType === "mysql" || dbType === "mssql"
-							? "varchar(36)"
-							: "text",
-
-				(col) => {
+			const idType = getType({ type: useNumberId ? "number" : "string" }, "id");
+			let dbT = db.schema
+				.createTable(table.table)
+				.addColumn("id", idType, (col) => {
 					if (useNumberId) {
 						if (dbType === "postgres" || dbType === "sqlite") {
 							return col.primaryKey().notNull();
@@ -430,14 +422,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 								.primaryKey()
 								.defaultTo(sql`pg_catalog.gen_random_uuid()`)
 								.notNull();
-						} else if (dbType === "mysql" || dbType === "mssql") {
-							return col.primaryKey().defaultTo(sql`uuid()`).notNull();
 						}
 						return col.primaryKey().notNull();
 					}
 					return col.primaryKey().notNull();
-				},
-			);
+				});
 
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
