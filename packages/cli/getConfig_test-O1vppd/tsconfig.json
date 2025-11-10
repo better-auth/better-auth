@@ -1,0 +1,10 @@
+{
+				"compilerOptions": {
+					"paths": {
+						"@server/*": ["./server/*"]
+					}
+				},
+				"references": [
+					{ "path": "./non-existent" }
+				]
+			}

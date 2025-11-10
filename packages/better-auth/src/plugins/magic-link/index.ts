@@ -80,7 +80,6 @@ export const magicLink = (options: MagicLinkopts) => {
 		}
 		if (
 			typeof opts.storeToken === "object" &&
-			"type" in opts.storeToken &&
 			opts.storeToken.type === "custom-hasher"
 		) {
 			return await opts.storeToken.hash(token);
@@ -268,22 +267,10 @@ export const magicLink = (options: MagicLinkopts) => {
 							.optional(),
 					}),
 					use: [
-						originCheck((ctx) => {
-							return ctx.query.callbackURL
-								? decodeURIComponent(ctx.query.callbackURL)
-								: "/";
-						}),
-						originCheck((ctx) => {
-							return ctx.query.newUserCallbackURL
-								? decodeURIComponent(ctx.query.newUserCallbackURL)
-								: "/";
-						}),
-						originCheck((ctx) => {
-							return ctx.query.errorCallbackURL
-								? decodeURIComponent(ctx.query.errorCallbackURL)
-								: "/";
-						}),
-					],
+						originCheck((ctx) => ctx.query.callbackURL ? decodeURIComponent(ctx.query.callbackURL) : "/"),
+						originCheck((ctx) => ctx.query.newUserCallbackURL ? decodeURIComponent(ctx.query.newUserCallbackURL) : "/"),
+						originCheck((ctx) => ctx.query.errorCallbackURL ? decodeURIComponent(ctx.query.errorCallbackURL) : "/"),
+					],					
 					requireHeaders: true,
 					metadata: {
 						openapi: {
