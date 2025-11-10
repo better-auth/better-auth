@@ -774,7 +774,7 @@ After that time, the token will expire and cannot longer be used. When that happ
 you can create a new verification token:
 
 ```ts title="create-domain-verification-token.ts"
-const response = await auth.api.submitDomainVerification({
+const response = await auth.api.requestDomainVerification({
     body: {
         providerId: "acme-corp",
     },
@@ -783,13 +783,6 @@ const response = await auth.api.submitDomainVerification({
 
 console.log("Token: ", response.domainVerificationToken);
 ```
-
-#### Domain verification endpoints
-
-The plugin automatically creates the following endpoints:
-
-- **Domain verification submission**: `/api/auth/sso/domain-verification`
-- **Domain verification validation**: `/api/auth/sso/domain-verification/verify`
 
 ### SAML Endpoints
 

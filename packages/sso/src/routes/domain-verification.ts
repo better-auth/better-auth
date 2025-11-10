@@ -5,9 +5,9 @@ import { randomBytes } from "crypto";
 import * as z from "zod/v4";
 import type { SSOOptions, SSOProvider } from "../types";
 
-export const submitDomainVerification = (options: SSOOptions) => {
+export const requestDomainVerification = (options: SSOOptions) => {
 	return createAuthEndpoint(
-		"/sso/domain-verification",
+		"/sso/request-domain-verification",
 		{
 			method: "POST",
 			body: z.object({
@@ -15,8 +15,8 @@ export const submitDomainVerification = (options: SSOOptions) => {
 			}),
 			metadata: {
 				openapi: {
-					summary: "Submit a domain for verification",
-					description: "Submit a provider domain for owning verification",
+					summary: "Request a domain verification",
+					description: "Request a domain verification for the given SSO provider",
 					responses: {
 						"404": {
 							description: "Provider not found",
@@ -105,7 +105,7 @@ export const submitDomainVerification = (options: SSOOptions) => {
 
 export const verifyDomain = (options: SSOOptions) => {
 	return createAuthEndpoint(
-		"/sso/domain-verification/verify",
+		"/sso/verify-domain",
 		{
 			method: "POST",
 			body: z.object({

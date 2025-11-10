@@ -2,7 +2,7 @@ import { type BetterAuthPlugin } from "better-auth";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
 import {
-	submitDomainVerification,
+	requestDomainVerification,
 	verifyDomain,
 } from "./routes/domain-verification";
 import {
@@ -30,7 +30,7 @@ const fastValidator = {
 saml.setSchemaValidator(fastValidator);
 
 type DomainVerificationEndpoints = {
-	submitDomainVerification: ReturnType<typeof submitDomainVerification>;
+	requestDomainVerification: ReturnType<typeof requestDomainVerification>;
 	verifyDomain: ReturnType<typeof verifyDomain>;
 };
 
@@ -76,7 +76,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 
 	if (options?.domainVerification?.enabled) {
 		const domainVerificationEndpoints = {
-			submitDomainVerification: submitDomainVerification(options as O),
+			requestDomainVerification: requestDomainVerification(options as O),
 			verifyDomain: verifyDomain(options as O),
 		};
 

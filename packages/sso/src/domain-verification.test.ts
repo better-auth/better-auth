@@ -104,10 +104,10 @@ describe("Domain verification", async () => {
 		vi.useRealTimers();
 	});
 
-	describe("POST /sso/domain-verification", () => {
+	describe("POST /sso/request-domain-verification", () => {
 		it("should return unauthorized when session is missing", async () => {
 			const { auth } = createTestAuth();
-			const response = await auth.api.submitDomainVerification({
+			const response = await auth.api.requestDomainVerification({
 				body: {
 					providerId: "the-provider",
 				},
@@ -120,7 +120,7 @@ describe("Domain verification", async () => {
 		it("should return not found when no provider is found", async () => {
 			const { auth, getAuthHeaders } = createTestAuth();
 			const headers = await getAuthHeaders();
-			const response = await auth.api.submitDomainVerification({
+			const response = await auth.api.requestDomainVerification({
 				body: {
 					providerId: "unknown",
 				},
@@ -141,7 +141,7 @@ describe("Domain verification", async () => {
 
 			const newAuthHeaders = await getAuthHeaders();
 
-			const response = await auth.api.submitDomainVerification({
+			const response = await auth.api.requestDomainVerification({
 				body: {
 					providerId: provider.providerId,
 				},
@@ -159,7 +159,7 @@ describe("Domain verification", async () => {
 			const headers = await getAuthHeaders();
 			const provider = await registerSSOProvider(headers);
 
-			const response = await auth.api.submitDomainVerification({
+			const response = await auth.api.requestDomainVerification({
 				body: {
 					providerId: provider.providerId,
 				},
@@ -193,7 +193,7 @@ describe("Domain verification", async () => {
 			expect(domainVerificationResponse.status).toBe(204);
 
 			const domainVerificationSubmissionResponse =
-				await auth.api.submitDomainVerification({
+				await auth.api.requestDomainVerification({
 					body: {
 						providerId: provider.providerId,
 					},
@@ -207,7 +207,7 @@ describe("Domain verification", async () => {
 		});
 	});
 
-	describe("POST /sso/domain-verification/verify", () => {
+	describe("POST /sso/verify-domain", () => {
 		it("should return unauthorized when session is missing", async () => {
 			const { auth } = createTestAuth();
 			const response = await auth.api.verifyDomain({
