@@ -276,7 +276,12 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							return;
 						}
 
-						const parsedState = parseJSON<{ callbackURL?: string }>(data.value);
+						let parsedState: { callbackURL?: string } | undefined;
+						try {
+							parsedState = parseJSON<{ callbackURL?: string }>(data.value);
+						} catch {
+							parsedState = undefined;
+						}
 						if (!parsedState?.callbackURL?.includes("/oauth-proxy-callback")) {
 							return;
 						}
