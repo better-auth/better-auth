@@ -1857,6 +1857,7 @@ describe("Additional Fields", async () => {
 		createdAt: Date;
 		logo?: string | null | undefined;
 		metadata: any;
+		lastUsed: boolean;
 		someRequiredField: string;
 		someOptionalField?: string | undefined;
 		someHiddenField?: string | undefined;
@@ -1874,7 +1875,7 @@ describe("Additional Fields", async () => {
 			  })
 			| undefined
 		)[];
-	}> | null;
+	}>;
 	let org: NonNullable<ExpectedResult>;
 	it("create organization", async () => {
 		try {
@@ -1888,10 +1889,10 @@ describe("Additional Fields", async () => {
 				headers,
 			});
 
-			type Result = PrettifyDeep<typeof orgRes>;
-			expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
 			expect(orgRes).not.toBeNull();
 			if (!orgRes) throw new Error("Organization is null");
+			type Result = PrettifyDeep<typeof orgRes>;
+			expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
 			org = orgRes;
 			expect(org.someRequiredField).toBeDefined();
 			expect(org.someRequiredField).toBe("hey");
@@ -1914,6 +1915,10 @@ describe("Additional Fields", async () => {
 			},
 			headers,
 		});
+
+		expect(updatedOrg).not.toBeNull();
+		if (!updatedOrg) throw new Error("Updated organization is null");
+
 		type Result = PrettifyDeep<typeof updatedOrg>;
 		expect(updatedOrg?.someRequiredField).toBe("hey2");
 		//@ts-expect-error
@@ -1926,8 +1931,9 @@ describe("Additional Fields", async () => {
 			logo?: string | null | undefined;
 			someRequiredField: string;
 			someOptionalField?: string | undefined;
+			lastUsed: boolean;
 			metadata: any;
-		} | null>();
+		}>();
 	});
 
 	it("add member", async () => {

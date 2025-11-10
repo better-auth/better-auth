@@ -91,6 +91,7 @@ model Workspace {
   name                 String                @db.Text
   slug                 String
   logo                 String?               @db.Text
+  lastUsed             Boolean?              @default(false)
   createdAt            DateTime
   metadata             String?               @db.Text
   members              Member[]

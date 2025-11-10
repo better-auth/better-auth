@@ -110,6 +110,10 @@ interface OrganizationDefaultFields {
 		type: "string";
 		required: false;
 	};
+	lastUsed: {
+		type: "boolean";
+		defaultValue: false;
+	};
 	createdAt: {
 		type: "date";
 		required: true;
@@ -286,6 +290,7 @@ export const organizationSchema = z.object({
 		.record(z.string(), z.unknown())
 		.or(z.string().transform((v) => JSON.parse(v)))
 		.optional(),
+	lastUsed: z.boolean().default(false),
 	createdAt: z.date(),
 });
 
