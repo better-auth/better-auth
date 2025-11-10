@@ -10,6 +10,8 @@ export const checkPromptMiddleware = createAuthMiddleware(async (ctx) => {
 		const prompt = ctx.params.prompt;
 		const promptSet = parsePrompt(prompt);
 		await _setAuthorizePromptSet(promptSet);
+	} else {
+		await _setAuthorizePromptSet(new Set());
 	}
 });
 

@@ -20,7 +20,7 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
-import { getJwtToken } from "../jwt/sign";
+import { getJwtToken } from "../jwt";
 import { authorize } from "./authorize";
 import { checkPromptMiddleware } from "./middlewares/check-prompt";
 import { type OAuthApplication, schema } from "./schema";
@@ -239,6 +239,16 @@ export const oidcProvider = (options: OIDCOptions) => {
 	return {
 		id: "oidc",
 		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return ctx.path.includes("/oauth2/");
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						await checkPromptMiddleware(ctx);
+					}),
+				},
+			],
 			after: [
 				{
 					matcher(ctx) {
@@ -322,7 +332,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "GET",
 					query: z.record(z.string(), z.any()),
-					middleware: [checkPromptMiddleware],
 					metadata: {
 						openapi: {
 							description: "Authorize an OAuth2 request",
