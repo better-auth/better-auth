@@ -337,7 +337,9 @@ describe("oidc", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
-	it("should sign in after a login flow", async ({ expect }) => {
+	it("should authorization server prompt the End-User for reauthentication when prompt=login", async ({
+		expect,
+	}) => {
 		// The RP (Relying Party) - the client application
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
 			await getTestInstance({
@@ -414,17 +416,7 @@ describe("oidc", async () => {
 			},
 		);
 
-		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
-		);
-		let callbackURL = "";
-		await client.$fetch(redirectURI, {
-			headers: oAuthHeaders,
-			onError(context) {
-				callbackURL = context.response.headers.get("Location") || "";
-			},
-		});
-		expect(callbackURL).toContain("/dashboard");
+		expect(redirectURI).toContain("/login?response_type=code&client_id=");
 	});
 });
 
