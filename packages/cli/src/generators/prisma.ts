@@ -180,10 +180,10 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					) {
 						fieldBuilder.attribute(`default(${attr.defaultValue})`);
 					} else if (typeof attr.defaultValue === "function") {
-						// we are intentionally not adding the default value here
-						// this is because if the defaultValue is a function, it could have
-						// custom logic within that function that might not work in prisma's context.
-					}
+							// we are intentionally not adding the default value here
+							// this is because if the defaultValue is a function, it could have
+							// custom logic within that function that might not work in prisma's context.
+						}
 				}
 				// This is a special handling for updatedAt fields
 				if (field === "updatedAt" && attr.onUpdate) {
@@ -221,7 +221,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					!attr.unique &&
 					!attr.references &&
 					provider === "mysql" &&
-					attr.type === "string"
+					attr.type === "string" &&
+                    attr.defaultValue!==undefined &&
+					typeof attr.defaultValue !== "function"
 				) {
 					if (
 						attr.defaultValue &&
