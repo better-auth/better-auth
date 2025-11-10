@@ -3,7 +3,7 @@ import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import { getBaseAdapter } from "./adapter-base";
 
-export async function getAdapterWithKysely(
+export async function getAdapter(
 	options: BetterAuthOptions,
 ): Promise<DBAdapter<BetterAuthOptions>> {
 	return getBaseAdapter(options, async (opts) => {
@@ -24,8 +24,3 @@ export async function getAdapterWithKysely(
 		})(opts);
 	});
 }
-
-/**
- * @deprecated Use getAdapterWithKysely instead
- */
-export const getAdapter = getAdapterWithKysely;
