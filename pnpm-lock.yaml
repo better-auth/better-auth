@@ -1091,6 +1091,9 @@ importers:
       '@babel/preset-typescript':
         specifier: ^7.27.1
         version: 7.27.1(@babel/core@7.28.4)
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
       '@better-auth/utils':
         specifier: 0.3.0
         version: 0.3.0
