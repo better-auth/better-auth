@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
-import { bearer } from "better-auth/plugins";
+import { bearer, organization } from "better-auth/plugins";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
@@ -21,7 +21,8 @@ vi.mock("dns/promises", () => {
 });
 
 describe("Domain verification", async () => {
-	const testUser = {
+	type TestUser = { email: string; password: string; name: string };
+	const testUser: TestUser = {
 		email: "test@email.com",
 		password: "password",
 		name: "Test User",
@@ -34,7 +35,8 @@ describe("Domain verification", async () => {
 			verification: [],
 			account: [],
 			ssoProvider: [],
-			verifications: [],
+			member: [],
+			organization: [],
 		};
 
 		const memory = memoryAdapter(data);
@@ -53,7 +55,7 @@ describe("Domain verification", async () => {
 			emailAndPassword: {
 				enabled: true,
 			},
-			plugins: [sso(ssoOptions)],
+			plugins: [sso(ssoOptions), organization()],
 		});
 
 		const authClient = createAuthClient({
@@ -66,21 +68,46 @@ describe("Domain verification", async () => {
 			},
 		});
 
-		async function getAuthHeaders() {
-			const headers = new Headers();
-			await authClient.signUp.email({
-				email: testUser.email,
-				password: testUser.password,
-				name: testUser.name,
+		async function createOrganization(name: string, headers: Headers) {
+			return await auth.api.createOrganization({
+				body: {
+					name,
+					slug: name,
+				},
+				headers,
 			});
-			await authClient.signIn.email(testUser, {
+		}
+
+		async function getAuthHeaders(user: TestUser, organizationId?: string) {
+			const headers = new Headers();
+			const response = await authClient.signUp.email({
+				email: user.email,
+				password: user.password,
+				name: user.name,
+			});
+
+			if (response.data && organizationId) {
+				await auth.api.addMember({
+					body: {
+						userId: response.data.user.id,
+						role: "member",
+					},
+					headers,
+				});
+			}
+
+			await authClient.signIn.email(user, {
 				throw: true,
 				onSuccess: setCookieToHeader(headers),
 			});
+
 			return headers;
 		}
 
-		async function registerSSOProvider(headers: Headers) {
+		async function registerSSOProvider(
+			headers: Headers,
+			organizationId?: string,
+		) {
 			return auth.api.registerSSOProvider({
 				body: {
 					providerId: "saml-provider-1",
@@ -92,12 +119,19 @@ describe("Domain verification", async () => {
 						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
 						spMetadata: {},
 					},
+					organizationId,
 				},
 				headers,
 			});
 		}
 
-		return { auth, authClient, registerSSOProvider, getAuthHeaders };
+		return {
+			auth,
+			authClient,
+			registerSSOProvider,
+			getAuthHeaders,
+			createOrganization,
+		};
 	};
 
 	afterEach(() => {
@@ -120,7 +154,7 @@ describe("Domain verification", async () => {
 
 		it("should return not found when no provider is found", async () => {
 			const { auth, getAuthHeaders } = createTestAuth();
-			const headers = await getAuthHeaders();
+			const headers = await getAuthHeaders(testUser);
 			const response = await auth.api.requestDomainVerification({
 				body: {
 					providerId: "unknown",
@@ -138,13 +172,13 @@ describe("Domain verification", async () => {
 
 		it("should return conflict if there is an active verification token", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
-			const headers = await getAuthHeaders();
+			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
 
 			vi.useFakeTimers({ toFake: ["Date"] });
 			vi.advanceTimersByTime(Date.now() - 100);
 
-			const newAuthHeaders = await getAuthHeaders();
+			const newAuthHeaders = await getAuthHeaders(testUser);
 
 			const response = await auth.api.requestDomainVerification({
 				body: {
@@ -161,9 +195,70 @@ describe("Domain verification", async () => {
 			});
 		});
 
+		it("should return forbidden if user does not own the provider", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+			const provider = await registerSSOProvider(headers);
+
+			const notOwnerHeaders = await getAuthHeaders({
+				name: "other",
+				email: "other@test.com",
+				password: "password",
+			});
+			const response = await auth.api.requestDomainVerification({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers: notOwnerHeaders,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(403);
+			expect(await response.json()).toEqual({
+				message:
+					"User must be owner of or belong to the SSO provider organization",
+				code: "INSUFICCIENT_ACCESS",
+			});
+		});
+
+		it("should return forbidden if user does not belong to the provider organization", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider, createOrganization } =
+				createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+
+			const orgA = await createOrganization("org-a", headers);
+			const orgB = await createOrganization("org-b", headers);
+
+			const provider = await registerSSOProvider(headers, orgA?.id);
+
+			const notOrgHeaders = await getAuthHeaders(
+				{
+					name: "other",
+					email: "other@test.com",
+					password: "password",
+				},
+				orgB?.id,
+			);
+
+			const response = await auth.api.requestDomainVerification({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers: notOrgHeaders,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(403);
+			expect(await response.json()).toEqual({
+				message:
+					"User must be owner of or belong to the SSO provider organization",
+				code: "INSUFICCIENT_ACCESS",
+			});
+		});
+
 		it("should return a new domain verification token", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
-			const headers = await getAuthHeaders();
+			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
 
 			const response = await auth.api.requestDomainVerification({
@@ -181,7 +276,7 @@ describe("Domain verification", async () => {
 
 		it("should fail to create a new token on an already verified domain", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
-			const headers = await getAuthHeaders();
+			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
 
 			dnsMock.resolveTxt.mockResolvedValue([
@@ -231,7 +326,7 @@ describe("Domain verification", async () => {
 
 		it("should return not found when no provider is found", async () => {
 			const { auth, getAuthHeaders } = createTestAuth();
-			const headers = await getAuthHeaders();
+			const headers = await getAuthHeaders(testUser);
 			const response = await auth.api.verifyDomain({
 				body: {
 					providerId: "unknown",
@@ -249,13 +344,13 @@ describe("Domain verification", async () => {
 
 		it("should return not found when no pending verification is found", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
-			const headers = await getAuthHeaders();
+			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
 
 			vi.useFakeTimers({ toFake: ["Date"] });
 			vi.advanceTimersByTime(Date.now() + 3600 * 24 * 7 * 1000 + 10); // advance 1 week + 10 seconds
 
-			const newAuthHeaders = await getAuthHeaders();
+			const newAuthHeaders = await getAuthHeaders(testUser);
 
 			const response = await auth.api.verifyDomain({
 				body: {
@@ -272,9 +367,9 @@ describe("Domain verification", async () => {
 			});
 		});
 
-		it("should return not found when unable to verify domain", async () => {
+		it("should return bad gateway when unable to verify domain", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
-			const headers = await getAuthHeaders();
+			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
 
 			dnsMock.resolveTxt.mockResolvedValue([
@@ -296,9 +391,68 @@ describe("Domain verification", async () => {
 			});
 		});
 
+		it("should return forbidden if user does not own the provider", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+			const provider = await registerSSOProvider(headers);
+
+			const notOwnerHeaders = await getAuthHeaders({
+				name: "other",
+				email: "other@test.com",
+				password: "password",
+			});
+			const response = await auth.api.verifyDomain({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers: notOwnerHeaders,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(403);
+			expect(await response.json()).toEqual({
+				message:
+					"User must be owner of or belong to the SSO provider organization",
+				code: "INSUFICCIENT_ACCESS",
+			});
+		});
+
+		it("should return forbidden if user does not belong to the provider organization", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider, createOrganization } =
+				createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+			const orgA = await createOrganization("org-a", headers);
+			const orgB = await createOrganization("org-b", headers);
+
+			const provider = await registerSSOProvider(headers, orgA?.id);
+
+			const notOrgHeaders = await getAuthHeaders(
+				{
+					name: "other",
+					email: "other@test.com",
+					password: "password",
+				},
+				orgB?.id,
+			);
+			const response = await auth.api.verifyDomain({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers: notOrgHeaders,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(403);
+			expect(await response.json()).toEqual({
+				message:
+					"User must be owner of or belong to the SSO provider organization",
+				code: "INSUFICCIENT_ACCESS",
+			});
+		});
+
 		it("should verify a provider domain ownership", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
-			const headers = await getAuthHeaders();
+			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
 
 			expect(provider.domain).toBe("http://hello.com:8081");
@@ -329,7 +483,7 @@ describe("Domain verification", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth({
 				domainVerification: { tokenPrefix: "auth-prefix" },
 			});
-			const headers = await getAuthHeaders();
+			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
 
 			dnsMock.resolveTxt.mockResolvedValue([
@@ -352,7 +506,7 @@ describe("Domain verification", async () => {
 
 		it("should fail to verify an already verified domain", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
-			const headers = await getAuthHeaders();
+			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
 
 			dnsMock.resolveTxt.mockResolvedValue([

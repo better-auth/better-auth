@@ -1991,7 +1991,12 @@ export const acsEndpoint = <O extends SSOOptions>(options: O) => {
 						ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
 							provider.providerId,
 						);
-					if (!(isTrustedProvider || ("domainVerified" in provider && provider.domainVerified))) {
+					if (
+						!(
+							isTrustedProvider ||
+							("domainVerified" in provider && provider.domainVerified)
+						)
+					) {
 						throw ctx.redirect(
 							`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
 						);

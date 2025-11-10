@@ -52,6 +52,29 @@ export const requestDomainVerification = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
+			const userId = ctx.context.session.user.id;
+
+			let isOrgMember: boolean = true;
+			if (provider.organizationId) {
+				const membershipsCount = await ctx.context.adapter.count({
+					model: "member",
+					where: [
+						{ field: "userId", value: userId },
+						{ field: "organizationId", value: provider.organizationId },
+					],
+				});
+
+				isOrgMember = membershipsCount > 0;
+			}
+
+			if (!(provider.userId === userId && isOrgMember)) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						"User must be owner of or belong to the SSO provider organization",
+					code: "INSUFICCIENT_ACCESS",
+				});
+			}
+
 			if ("domainVerified" in provider && provider.domainVerified) {
 				throw new APIError("CONFLICT", {
 					message: "Domain has already been verified",
@@ -151,6 +174,29 @@ export const verifyDomain = <O extends SSOOptions>(options: O) => {
 				throw new APIError("NOT_FOUND", {
 					message: "Provider not found",
 					code: "PROVIDER_NOT_FOUND",
+				});
+			}
+
+			const userId = ctx.context.session.user.id;
+
+			let isOrgMember: boolean = true;
+			if (provider.organizationId) {
+				const membershipsCount = await ctx.context.adapter.count({
+					model: "member",
+					where: [
+						{ field: "userId", value: userId },
+						{ field: "organizationId", value: provider.organizationId },
+					],
+				});
+
+				isOrgMember = membershipsCount > 0;
+			}
+
+			if (!(provider.userId === userId && isOrgMember)) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						"User must be owner of or belong to the SSO provider organization",
+					code: "INSUFICCIENT_ACCESS",
 				});
 			}
 
