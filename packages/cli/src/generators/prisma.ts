@@ -223,7 +223,13 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					provider === "mysql" &&
 					attr.type === "string"
 				) {
-					builder.model(modelName).field(fieldName).attribute("db.Text");
+					attr.defaultValue
+						? builder
+								.model(modelName)
+								.field(fieldName)
+								.attribute(`default(dbgenerated("('${attr.defaultValue}')"))`)
+								.attribute("db.Text")
+						: builder.model(modelName).field(fieldName).attribute("db.Text");
 				}
 			}
 
