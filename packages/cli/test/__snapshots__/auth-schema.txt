@@ -2,7 +2,6 @@ import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
 
 export const custom_user = pgTable("custom_user", {
   id: text("id").primaryKey(),
-  id: text("id").notNull(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
@@ -19,7 +18,6 @@ export const custom_user = pgTable("custom_user", {
 
 export const custom_session = pgTable("custom_session", {
   id: text("id").primaryKey(),
-  id: text("id").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
   token: text("token").notNull().unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -35,7 +33,6 @@ export const custom_session = pgTable("custom_session", {
 
 export const custom_account = pgTable("custom_account", {
   id: text("id").primaryKey(),
-  id: text("id").notNull(),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
   userId: text("user_id")

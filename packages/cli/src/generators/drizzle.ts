@@ -166,6 +166,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		)}", {
 					id: ${id},
 					${Object.keys(fields)
+						.filter((field) => field !== "id")
 						.map((field) => {
 							const attr = fields[field]!;
 							const fieldName = attr.fieldName || field;
