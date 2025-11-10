@@ -119,14 +119,29 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							.attribute("id")
 							.attribute("default(autoincrement())");
 					} else if (useUUIDs) {
-						builder
-							.model(modelName)
-							.field("id", "String")
-							.attribute("id")
-							.attribute("db.Uuid")
-							.attribute(
-								'default(dbgenerated("pg_catalog.gen_random_uuid()"))',
-							);
+						if (provider === "postgresql") {
+							builder
+								.model(modelName)
+								.field("id", "String")
+								.attribute("id")
+								.attribute("db.Uuid")
+								.attribute(
+									'default(dbgenerated("pg_catalog.gen_random_uuid()"))',
+								);
+						} else if (provider === "mysql") {
+							builder
+								.model(modelName)
+								.field("id", "String")
+								.attribute("id")
+								.attribute("db.Uuid")
+								.attribute("default(uuid())");
+						} else {
+							builder
+								.model(modelName)
+								.field("id", "String")
+								.attribute("id")
+								.attribute("db.Uuid");
+						}
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
 					}
