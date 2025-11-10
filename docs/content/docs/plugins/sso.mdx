@@ -758,8 +758,8 @@ See the [Schema](#schema) section to add the fields manually.
 #### Verify your domain
 
 When domain verification is enabled, every new SSO provider domain will be marked as unverified at first.
-Upon registration, a **verification token** will be issued to the provider,
-which you need to verify it to prove that you own it. To do this, you'll need to add a `TXT` record to your domain's DNS settings.
+Upon SSO provider registration, a **verification token** will be issued to the provider (it will be returned as part of the response),
+which you need to prove that you own it. To do this, you'll need to add a `TXT` record to your domain's DNS settings.
 
 1.  **You will be provided with a verification token.** This token is a unique string that you'll need to add to your DNS records.
 2.  **Create a new `TXT` record in your DNS provider's dashboard.**
