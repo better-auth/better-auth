@@ -989,11 +989,27 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 					});
 				}
 			}
-
-			const userId = ctx.query?.userId || session.user.id || organizationId;
+			const isMember = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId,
+			});
+			if (ctx.query?.userId && !isMember) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+				});
+			}
+			if (!isMember) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+				});
+			}
+			const userIdToGetRole =
+				ctx.query?.userId || session.user.id || organizationId;
 
 			const member = await adapter.findMemberByOrgId({
-				userId,
+				userId: userIdToGetRole,
 				organizationId,
 			});
 			if (!member) {
