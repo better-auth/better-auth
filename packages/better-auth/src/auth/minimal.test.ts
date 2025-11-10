@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { memoryAdapter } from "../adapters/memory-adapter/memory-adapter";
-import { betterAuth } from "./auth-minimal";
+import { betterAuth } from "./minimal";
 
 describe("auth-minimal", () => {
 	const db: Record<string, any[]> = {};
