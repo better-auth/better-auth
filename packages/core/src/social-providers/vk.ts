@@ -12,18 +12,18 @@ export interface VkProfile {
 		user_id: string;
 		first_name: string;
 		last_name: string;
-		email?: string;
-		phone?: number;
-		avatar?: string;
-		sex?: number;
-		verified?: boolean;
+		email?: string | undefined;
+		phone?: number | undefined;
+		avatar?: string | undefined;
+		sex?: number | undefined;
+		verified?: boolean | undefined;
 		birthday: string;
 	};
 }
 
 export interface VkOption extends ProviderOptions {
 	clientId: string;
-	scheme?: "light" | "dark";
+	scheme?: ("light" | "dark") | undefined;
 }
 
 export const vk = (options: VkOption) => {
@@ -32,8 +32,8 @@ export const vk = (options: VkOption) => {
 		name: "VK",
 		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["email", "phone"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			const authorizationEndpoint = "https://id.vk.com/authorize";
 
 			return createAuthorizationURL({
@@ -98,11 +98,11 @@ export const vk = (options: VkOption) => {
 			if (error) {
 				return null;
 			}
-			if (!profile.user.email) {
-				return null;
-			}
 
 			const userMap = await options.mapProfileToUser?.(profile);
+			if (!profile.user.email && !userMap?.email) {
+				return null;
+			}
 
 			return {
 				user: {

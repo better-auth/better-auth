@@ -6,13 +6,13 @@ import { Platform } from "react-native";
 
 interface CookieAttributes {
 	value: string;
-	expires?: Date;
-	"max-age"?: number;
-	domain?: string;
-	path?: string;
-	secure?: boolean;
-	httpOnly?: boolean;
-	sameSite?: "Strict" | "Lax" | "None";
+	expires?: Date | undefined;
+	"max-age"?: number | undefined;
+	domain?: string | undefined;
+	path?: string | undefined;
+	secure?: boolean | undefined;
+	httpOnly?: boolean | undefined;
+	sameSite?: ("Strict" | "Lax" | "None") | undefined;
 }
 
 export function parseSetCookieHeader(
@@ -69,7 +69,7 @@ function splitSetCookieHeader(setCookie: string): string[] {
 }
 
 interface ExpoClientOptions {
-	scheme?: string;
+	scheme?: string | undefined;
 	storage: {
 		setItem: (key: string, value: string) => any;
 		getItem: (key: string) => string | null;
@@ -78,15 +78,15 @@ interface ExpoClientOptions {
 	 * Prefix for local storage keys (e.g., "my-app_cookie", "my-app_session_data")
 	 * @default "better-auth"
 	 */
-	storagePrefix?: string;
+	storagePrefix?: string | undefined;
 	/**
 	 * Prefix for server cookie names to filter (e.g., "better-auth.session_token")
 	 * This is used to identify which cookies belong to better-auth to prevent
 	 * infinite refetching when third-party cookies are set.
 	 * @default "better-auth"
 	 */
-	cookiePrefix?: string;
-	disableCache?: boolean;
+	cookiePrefix?: string | undefined;
+	disableCache?: boolean | undefined;
 }
 
 interface StoredCookie {
@@ -94,7 +94,7 @@ interface StoredCookie {
 	expires: string | null;
 }
 
-export function getSetCookie(header: string, prevCookie?: string) {
+export function getSetCookie(header: string, prevCookie?: string | undefined) {
 	const parsed = parseSetCookieHeader(header);
 	let toSetCookie: Record<string, StoredCookie> = {};
 	parsed.forEach((cookie, key) => {
@@ -373,7 +373,9 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							const url = new URL(result.url);
 							const cookie = String(url.searchParams.get("cookie"));
 							if (!cookie) return;
-							storage.setItem(cookieName, getSetCookie(cookie));
+							const prevCookie = await storage.getItem(cookieName);
+							const toSetCookie = getSetCookie(cookie, prevCookie ?? undefined);
+							storage.setItem(cookieName, toSetCookie);
 							store?.notify("$sessionSignal");
 						}
 					},

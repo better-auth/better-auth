@@ -4,7 +4,9 @@ import type {
 	BetterAuthPlugin,
 } from "@better-auth/core";
 
+export * from "./broadcast-channel";
 export * from "./query";
+export * from "./session-refresh";
 export * from "./types";
 export * from "./vanilla";
 
@@ -19,6 +21,10 @@ export function InferAuth<O extends { options: BetterAuthOptions }>() {
 	return {} as O["options"];
 }
 
+//#region Necessary re-exports
+export type * from "@better-auth/core/db";
 export type * from "@better-fetch/fetch";
 // @ts-expect-error
 export type * from "nanostores";
+export type * from "../plugins/access";
+//#endregion

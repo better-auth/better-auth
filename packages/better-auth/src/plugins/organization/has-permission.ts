@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import * as z from "zod";
+import { z } from "zod";
 import { APIError } from "../../api";
 import type { Role } from "../access";
 import { defaultRoles } from "./access";
@@ -20,7 +20,7 @@ export const hasPermission = async (
 		 *
 		 * @default false
 		 */
-		useMemoryCache?: boolean;
+		useMemoryCache?: boolean | undefined;
 	} & HasPermissionBaseInput,
 	ctx: GenericEndpointContext,
 ) => {

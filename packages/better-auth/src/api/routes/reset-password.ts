@@ -2,7 +2,7 @@ import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { generateId } from "../../utils";
 import { getDate } from "../../utils/date";
 import { originCheck } from "../middlewares";
@@ -10,7 +10,7 @@ import { originCheck } from "../middlewares";
 function redirectError(
 	ctx: AuthContext,
 	callbackURL: string | undefined,
-	query?: Record<string, string>,
+	query?: Record<string, string> | undefined,
 ): string {
 	const url = callbackURL
 		? new URL(callbackURL, ctx.baseURL)
@@ -23,7 +23,7 @@ function redirectError(
 function redirectCallback(
 	ctx: AuthContext,
 	callbackURL: string,
-	query?: Record<string, string>,
+	query?: Record<string, string> | undefined,
 ): string {
 	const url = new URL(callbackURL, ctx.baseURL);
 	if (query)

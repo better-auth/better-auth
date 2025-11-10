@@ -1,7 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
@@ -71,7 +71,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			const session = ctx.body.userId
 				? await getSessionFromCtx<{
 						session: {
-							activeOrganizationId?: string;
+							activeOrganizationId?: string | undefined;
 						};
 					}>(ctx).catch((e) => null)
 				: null;
@@ -377,8 +377,11 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					organization,
 				});
 			}
-
-			await adapter.deleteMember(toBeRemovedMember.id);
+			await adapter.deleteMember({
+				memberId: toBeRemovedMember.id,
+				organizationId: organizationId,
+				userId: toBeRemovedMember.userId,
+			});
 			if (
 				session.user.id === toBeRemovedMember.userId &&
 				session.session.activeOrganizationId ===
@@ -437,7 +440,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 						/**
 						 * If not provided, the active organization will be used
 						 */
-						organizationId?: string;
+						organizationId?: string | undefined;
 					},
 				},
 				openapi: {
@@ -792,7 +795,11 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 			}
-			await adapter.deleteMember(member.id);
+			await adapter.deleteMember({
+				memberId: member.id,
+				organizationId: ctx.body.organizationId,
+				userId: session.user.id,
+			});
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}

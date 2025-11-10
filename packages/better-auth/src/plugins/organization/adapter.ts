@@ -22,7 +22,7 @@ import type { OrganizationOptions } from "./types";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
-	options?: O,
+	options?: O | undefined,
 ) => {
 	const baseAdapter = context.adapter;
 	return {
@@ -111,16 +111,18 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			};
 		},
 		listMembers: async (data: {
-			organizationId?: string;
-			limit?: number;
-			offset?: number;
-			sortBy?: string;
-			sortOrder?: "asc" | "desc";
-			filter?: {
-				field: string;
-				operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
-				value: any;
-			};
+			organizationId?: string | undefined;
+			limit?: number | undefined;
+			offset?: number | undefined;
+			sortBy?: string | undefined;
+			sortOrder?: ("asc" | "desc") | undefined;
+			filter?:
+				| {
+						field: string;
+						operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
+						value: any;
+				  }
+				| undefined;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const members = await Promise.all([
@@ -301,8 +303,29 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return member;
 		},
-		deleteMember: async (memberId: string) => {
+		deleteMember: async ({
+			memberId,
+			organizationId,
+			userId: _userId,
+		}: {
+			memberId: string;
+			organizationId: string;
+			userId?: string;
+		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			let userId: string;
+			if (!_userId) {
+				const member = await adapter.findOne<Member>({
+					model: "member",
+					where: [{ field: "id", value: memberId }],
+				});
+				if (!member) {
+					throw new BetterAuthError("Member not found");
+				}
+				userId = member.userId;
+			} else {
+				userId = _userId;
+			}
 			const member = await adapter.delete<InferMember<O>>({
 				model: "member",
 				where: [
@@ -312,6 +335,24 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
+			// remove member from all teams they're part of
+			if (options?.teams?.enabled) {
+				const teams = await adapter.findMany<Team>({
+					model: "team",
+					where: [{ field: "organizationId", value: organizationId }],
+				});
+				await Promise.all(
+					teams.map((team) =>
+						adapter.deleteMany({
+							model: "teamMember",
+							where: [
+								{ field: "teamId", value: team.id },
+								{ field: "userId", value: userId },
+							],
+						}),
+					),
+				);
+			}
 			return member;
 		},
 		updateOrganization: async (
@@ -435,9 +476,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			membersLimit,
 		}: {
 			organizationId: string;
-			isSlug?: boolean;
-			includeTeams?: boolean;
-			membersLimit?: number;
+			isSlug?: boolean | undefined;
+			includeTeams?: boolean | undefined;
+			membersLimit?: number | undefined;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const org = await adapter.findOne<InferOrganization<O>>({
@@ -547,8 +588,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			includeTeamMembers,
 		}: {
 			teamId: string;
-			organizationId?: string;
-			includeTeamMembers?: IncludeMembers;
+			organizationId?: string | undefined;
+			includeTeamMembers?: IncludeMembers | undefined;
 		}): Promise<
 			| (InferTeam<O> &
 					(IncludeMembers extends true ? { members: TeamMember[] } : {}))
@@ -599,7 +640,11 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateTeam: async (
 			teamId: string,
-			data: { name?: string; description?: string; status?: string },
+			data: {
+				name?: string | undefined;
+				description?: string | undefined;
+				status?: string | undefined;
+			},
 		) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			if ("id" in data) data.id = undefined;
@@ -670,7 +715,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			teamId: string;
 			organizationId: string;
 			inviterId: string;
-			expiresIn?: number;
+			expiresIn?: number | undefined;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const expiresAt = getDate(expiresIn); // Get expiration date
@@ -813,7 +858,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				},
 			});
 		},
-
 		removeTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			// use `deleteMany` instead of `delete` since Prisma requires 1 unique field for normal `delete` operations
@@ -832,7 +876,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 			});
 		},
-
 		findInvitationsByTeamId: async (teamId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const invitations = await adapter.findMany<InferInvitation<O>>({

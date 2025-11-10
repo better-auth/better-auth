@@ -1,6 +1,6 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { Prettify } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./types";
@@ -374,11 +374,11 @@ export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
 			role: InferOrganizationRolesFromOption<O>;
 			createdAt: Date;
 			userId: string;
-			teamId?: string;
+			teamId?: string | undefined;
 			user: {
 				email: string;
 				name: string;
-				image?: string;
+				image?: string | undefined;
 			};
 		}
 	: {
@@ -390,7 +390,7 @@ export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
 			user: {
 				email: string;
 				name: string;
-				image?: string;
+				image?: string | undefined;
 			};
 		};
 
@@ -419,7 +419,7 @@ export type InferInvitation<O extends OrganizationOptions> =
 				inviterId: string;
 				expiresAt: Date;
 				createdAt: Date;
-				teamId?: string;
+				teamId?: string | undefined;
 			}
 		: {
 				id: string;

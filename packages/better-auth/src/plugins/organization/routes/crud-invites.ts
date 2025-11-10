@@ -1,7 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { getSessionFromCtx } from "../../../api/routes";
 import { setSessionCookie } from "../../../cookies";
 import {
@@ -43,7 +43,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			])
 			.meta({
 				description:
-					'The role(s) to assign to the user. It can be `admin`, `member`, or `guest`. Eg: "member"',
+					'The role(s) to assign to the user. It can be `admin`, `member`, owner. Eg: "member"',
 			}),
 		organizationId: z
 			.string()
@@ -106,14 +106,14 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 * Resend the invitation email, if
 						 * the user is already invited
 						 */
-						resend?: boolean;
+						resend?: boolean | undefined;
 					} & (O extends { teams: { enabled: true } }
 						? {
 								/**
 								 * The team the user is
 								 * being invited to.
 								 */
-								teamId?: string | string[];
+								teamId?: (string | string[]) | undefined;
 							}
 						: {}) &
 						InferAdditionalFieldsFromPluginOptions<"invitation", O, false>,

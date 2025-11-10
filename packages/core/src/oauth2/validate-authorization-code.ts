@@ -18,12 +18,12 @@ export function createAuthorizationCodeRequest({
 	code: string;
 	redirectURI: string;
 	options: Partial<ProviderOptions>;
-	codeVerifier?: string;
-	deviceId?: string;
-	authentication?: "basic" | "post";
-	headers?: Record<string, string>;
-	additionalParams?: Record<string, string>;
-	resource?: string | string[];
+	codeVerifier?: string | undefined;
+	deviceId?: string | undefined;
+	authentication?: ("basic" | "post") | undefined;
+	headers?: Record<string, string> | undefined;
+	additionalParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
 }) {
 	const body = new URLSearchParams();
 	const requestHeaders: Record<string, any> = {
@@ -91,13 +91,13 @@ export async function validateAuthorizationCode({
 	code: string;
 	redirectURI: string;
 	options: Partial<ProviderOptions>;
-	codeVerifier?: string;
-	deviceId?: string;
+	codeVerifier?: string | undefined;
+	deviceId?: string | undefined;
 	tokenEndpoint: string;
-	authentication?: "basic" | "post";
-	headers?: Record<string, string>;
-	additionalParams?: Record<string, string>;
-	resource?: string | string[];
+	authentication?: ("basic" | "post") | undefined;
+	headers?: Record<string, string> | undefined;
+	additionalParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
 }) {
 	const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
 		code,

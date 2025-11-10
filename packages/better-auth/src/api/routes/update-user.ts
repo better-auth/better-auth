@@ -2,7 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput } from "../../db/schema";
@@ -30,8 +30,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			metadata: {
 				$Infer: {
 					body: {} as Partial<AdditionalUserFieldsInput<O>> & {
-						name?: string;
-						image?: string;
+						name?: string | undefined;
+						image?: string | undefined;
 					},
 				},
 				openapi: {
@@ -78,8 +78,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		},
 		async (ctx) => {
 			const body = ctx.body as {
-				name?: string;
-				image?: string;
+				name?: string | undefined;
+				image?: string | undefined;
 				[key: string]: any;
 			};
 
@@ -720,21 +720,14 @@ export const changeEmail = createAuthEndpoint(
 			await ctx.context.internalAdapter.findUserByEmail(newEmail);
 		if (existingUser) {
 			ctx.context.logger.error("Email already exists");
-			throw new APIError("BAD_REQUEST", {
-				message: "Couldn't update your email",
+			throw new APIError("UNPROCESSABLE_ENTITY", {
+				message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 			});
 		}
 		/**
 		 * If the email is not verified, we can update the email
 		 */
 		if (ctx.context.session.user.emailVerified !== true) {
-			const existing =
-				await ctx.context.internalAdapter.findUserByEmail(newEmail);
-			if (existing) {
-				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
-				});
-			}
 			await ctx.context.internalAdapter.updateUserByEmail(
 				ctx.context.session.user.email,
 				{

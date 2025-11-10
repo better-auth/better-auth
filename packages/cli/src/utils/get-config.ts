@@ -8,6 +8,7 @@ import { loadConfig } from "c12";
 import fs, { existsSync } from "fs";
 import type { JitiOptions } from "jiti";
 import path from "path";
+import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
 
@@ -118,6 +119,7 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 	try {
 		const result = getPathAliasesRecursive(tsConfigPath);
 		addSvelteKitEnvModules(result);
+		addCloudflareModules(result);
 		return result;
 	} catch (error) {
 		console.error(error);

@@ -25,6 +25,8 @@ export const getNormalTestSuiteTests = ({
 	sortModels,
 	customIdGenerator,
 	getBetterAuthOptions,
+	transformGeneratedModel,
+	transformIdOutput,
 }: Parameters<Parameters<typeof createTestSuite>[2]>[0]) => {
 	return {
 		"create - should create a model": async () => {
@@ -41,7 +43,11 @@ export const getNormalTestSuiteTests = ({
 			} else {
 				expect(typeof result.id).toEqual("string");
 			}
-			expect(result).toEqual(user);
+			const transformed = transformGeneratedModel(user);
+			// console.log(`pre-transformed:`, user);
+			// console.log(`transformed:`, transformed);
+			// console.log(`result:`, result);
+			expect(result).toEqual(transformed);
 		},
 		"create - should always return an id": async () => {
 			const { id: _, ...user } = await generate("user");
@@ -69,7 +75,7 @@ export const getNormalTestSuiteTests = ({
 				model: "user",
 				data: user,
 			});
-			expect(res.id).toEqual(ID);
+			expect(res.id).toEqual(transformIdOutput ? transformIdOutput(ID) : ID);
 			const findResult = await adapter.findOne<User>({
 				model: "user",
 				where: [{ field: "id", value: res.id }],
@@ -107,6 +113,74 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(nullableReference).toBeNull();
 		},
+
+		"create - should apply default values to fields": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							testField: {
+								type: "string",
+								defaultValue: "test-value",
+							},
+							cbDefaultValueField: {
+								type: "string",
+								defaultValue: () => {
+									return "advanced-test-value";
+								},
+							},
+						},
+					},
+					plugins: [
+						{
+							id: "default-fields-test",
+							schema: {
+								testModel: {
+									fields: {
+										testField: {
+											type: "string",
+											defaultValue: "test-value",
+										},
+										cbDefaultValueField: {
+											type: "string",
+											defaultValue: () => {
+												return "advanced-test-value";
+											},
+										},
+									},
+								},
+							},
+						},
+					],
+				},
+				true,
+			);
+			const result = await adapter.create<{
+				testField?: string;
+				id: string;
+				cbDefaultValueField?: string;
+			}>({
+				model: "testModel",
+				data: {},
+			});
+			expect(result.id).toBeDefined();
+			expect(result.id).toBeTypeOf("string");
+			expect(result.testField).toBe("test-value");
+			expect(result.cbDefaultValueField).toBe("advanced-test-value");
+
+			const userResult = await adapter.create<
+				User & { testField?: string; cbDefaultValueField?: string }
+			>({
+				model: "user",
+				data: {
+					...(await generate("user")),
+				},
+				forceAllowId: true,
+			});
+			expect(userResult).toBeDefined();
+			expect(userResult?.testField).toBe("test-value");
+			expect(userResult?.cbDefaultValueField).toBe("advanced-test-value");
+		},
 		"findOne - should find a model": async () => {
 			const [user] = await insertRandom("user");
 			const result = await adapter.findOne<User>({
@@ -114,6 +188,103 @@ export const getNormalTestSuiteTests = ({
 				where: [{ field: "id", value: user.id }],
 			});
 			expect(result).toEqual(user);
+		},
+		"findOne - should not apply defaultValue if value not found": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							testField: {
+								type: "string",
+								required: false,
+								defaultValue: "test-value",
+							},
+							cbDefaultValueField: {
+								type: "string",
+								required: false,
+								defaultValue: () => {
+									return "advanced-test-value";
+								},
+							},
+						},
+					},
+					plugins: [
+						{
+							id: "default-fields-test",
+							schema: {
+								testModel: {
+									fields: {
+										testField: {
+											type: "string",
+											required: false,
+											defaultValue: "test-value",
+										},
+										cbDefaultValueField: {
+											type: "string",
+											required: false,
+											defaultValue: () => {
+												return "advanced-test-value";
+											},
+										},
+									},
+								},
+							},
+						},
+					],
+				},
+				true,
+			);
+			const first = await adapter.create<{
+				testField?: string | null;
+				id: string;
+				cbDefaultValueField?: string | null;
+			}>({
+				model: "testModel",
+				data: {
+					testField: null,
+					cbDefaultValueField: null,
+				},
+			});
+			const second = await adapter.create<
+				User & {
+					testField?: string | null;
+					cbDefaultValueField?: string | null;
+				}
+			>({
+				model: "user",
+				data: {
+					...(await generate("user")),
+					testField: null,
+					cbDefaultValueField: null,
+				},
+				forceAllowId: true,
+			});
+
+			const result = await adapter.findOne<{
+				testField?: string;
+				id: string;
+				cbDefaultValueField?: string;
+			}>({
+				model: "testModel",
+				where: [{ field: "id", value: first.id }],
+			});
+			expect(result).not.toBeNull();
+			expect(result?.testField).toBeNull();
+			expect(result?.cbDefaultValueField).toBeNull();
+
+			const resultTwo = await adapter.findMany<
+				User & {
+					testField?: string | null;
+					cbDefaultValueField?: string | null;
+				}
+			>({
+				model: "user",
+				where: [{ field: "id", value: second.id }],
+			});
+			expect(resultTwo).not.toBeNull();
+			expect(resultTwo.length).toBe(1);
+			expect(resultTwo[0]?.testField).toBeNull();
+			expect(resultTwo[0]?.cbDefaultValueField).toBeNull();
 		},
 		"findOne - should find a model using a reference field": async () => {
 			const [user, session] = await insertRandom("session");
@@ -508,6 +679,48 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(sortModels(result)).toEqual(sortModels(users.slice(1)));
 		},
+		"findMany - should find many models with ne operator on id field":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "id", value: users[0]!.id, operator: "ne" }],
+				});
+				expect(sortModels(result)).toEqual(sortModels(users.slice(1)));
+			},
+		"findMany - should find many models with ne operator on _id field (MongoDB)":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "_id", value: users[0]!.id, operator: "ne" }],
+				});
+				expect(sortModels(result)).toEqual(sortModels(users.slice(1)));
+			},
+		"findMany - should handle ne operator with null value on id field":
+			async () => {
+				await insertRandom("user", 3);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "id", value: null, operator: "ne" }],
+				});
+				expect(Array.isArray(result)).toBe(true);
+			},
+		"findMany - should handle in operator with null value in array":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((x) => x[0]);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{
+							field: "id",
+							value: [users[0]!.id, null, users[1]!.id] as any,
+							operator: "in",
+						},
+					],
+				});
+				expect(result.length).toBeGreaterThanOrEqual(2);
+			},
 		"findMany - should find many models with gt operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const oldestUser = users.sort(
