@@ -38,7 +38,7 @@
       "default": "./dist/index.mjs"
     },
     "./minimal": {
-      "better-auth-dev-source": "./src/auth/minimal.ts",
+      "dev-source": "./src/auth/minimal.ts",
       "types": "./dist/auth/minimal.d.mts",
       "default": "./dist/auth/minimal.mjs"
     },
