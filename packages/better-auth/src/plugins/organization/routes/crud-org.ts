@@ -7,6 +7,7 @@ import {
 	type InferAdditionalFieldsFromPluginOptions,
 	toZodSchema,
 } from "../../../db";
+import type { PrettifyDeep } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -15,8 +16,8 @@ import type {
 	InferInvitation,
 	InferMember,
 	InferOrganization,
+	InferTeam,
 	Member,
-	Team,
 	TeamMember,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
@@ -735,16 +736,22 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
+
+			type Members = PrettifyDeep<InferMember<O, false>>[];
+			type Invitations = PrettifyDeep<InferInvitation<O, false>>[];
+			type Teams = PrettifyDeep<InferTeam<O, false>>[];
+			type Organization = PrettifyDeep<InferOrganization<O, false>>;
+
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-						teams: Team[];
-					} & InferOrganization<O>
+						members: Members;
+						invitations: Invitations;
+						teams: Teams;
+					} & Organization
 				: {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-					} & InferOrganization<O>;
+						members: Members;
+						invitations: Invitations;
+					} & Organization;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
@@ -871,14 +878,14 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			});
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-						teams: Team[];
-					} & InferOrganization<O>
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+						teams: InferTeam<O, false>[];
+					} & InferOrganization<O, false>
 				: {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-					} & InferOrganization<O>;
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+					} & InferOrganization<O, false>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
