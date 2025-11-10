@@ -384,31 +384,28 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 				let built = builder.addColumn(fieldName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
-						if (field.references) {
-							col = col
-								.references(
-									getReferencePath(
-										field.references.model,
-										field.references.field,
-									),
-								)
-								.onDelete(field.references.onDelete || "cascade");
-						}
-						if (field.unique) {
-							col = col.unique();
-						}
-						if (
-							field.type === "date" &&
-							typeof field.defaultValue === "function" &&
-							(dbType === "postgres" ||
-								dbType === "mysql" ||
-								dbType === "mssql")
-						) {
-							if (dbType === "mysql") {
-								col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
-							} else {
-								col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
-							}
+					if (field.references) {
+						col = col
+							.references(
+								getReferencePath(
+									field.references.model,
+									field.references.field,
+								),
+							)
+							.onDelete(field.references.onDelete || "cascade");
+					}
+					if (field.unique) {
+						col = col.unique();
+					}
+					if (
+						field.type === "date" &&
+						typeof field.defaultValue === "function" &&
+						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
+					) {
+						if (dbType === "mysql") {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
+						} else {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
 					}
 					return col;
