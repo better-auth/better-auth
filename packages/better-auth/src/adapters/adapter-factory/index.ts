@@ -69,18 +69,18 @@ export const createAdapterFactory =
 		const isIdField = (model: string, field: string): boolean => {
 			const defaultModelName = getDefaultModelName(model);
 			const modelSchema = schema[defaultModelName];
-			
+
 			// If field is literally "id", it's always the ID field (all tables have id)
 			// This handles plugin tables that don't explicitly define id in their schema
 			if (field === "id") {
 				return true;
 			}
-			
+
 			// MongoDB uses "_id" as the primary key field name, but we map it to "id" internally
 			if (field === "_id") {
 				return true;
 			}
-			
+
 			if (!modelSchema) return false;
 
 			// Check if the field name matches the ID field's fieldName (for custom ID fields like "user_id")
@@ -383,9 +383,14 @@ export const createAdapterFactory =
 			for (const field in fields) {
 				let value = data[field];
 				const fieldAttributes = fields[field];
+				
+				// Skip if field doesn't exist in schema
+				if (!fieldAttributes) {
+					continue;
+				}
 
 				let newFieldName: string =
-					newMappedKeys[field] || fields[field]!.fieldName || field;
+					newMappedKeys[field] || fieldAttributes.fieldName ?? field;
 				
 				// EARLY EXIT: When useNumberId is enabled and creating, skip ID field entirely
 				// The database will auto-generate the ID, so we should NEVER include it in the data
@@ -397,7 +402,7 @@ export const createAdapterFactory =
 				) {
 					continue; // Skip completely - database auto-generates
 				}
-				
+
 				if (
 					value === undefined &&
 					((fieldAttributes!.defaultValue === undefined &&
@@ -451,7 +456,9 @@ export const createAdapterFactory =
 							)))
 				) {
 					if (Array.isArray(newValue)) {
-						newValue = newValue.map((x) => (x !== null && x !== "" ? Number(x) : null));
+						newValue = newValue.map((x) =>
+							x !== null && x !== "" ? Number(x) : null,
+						);
 					} else {
 						const numValue = Number(newValue);
 						// Skip if conversion results in NaN
@@ -493,7 +500,10 @@ export const createAdapterFactory =
 
 				// Add values to transformedData, preserving null for nullable fields but excluding undefined and NaN
 				// Null values are valid for nullable foreign keys and should be preserved
-				if (newValue !== undefined && !(typeof newValue === "number" && isNaN(newValue))) {
+				if (
+					newValue !== undefined &&
+					!(typeof newValue === "number" && isNaN(newValue))
+				) {
 					transformedData[newFieldName] = newValue;
 				}
 			}

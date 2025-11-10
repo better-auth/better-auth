@@ -288,6 +288,25 @@ export async function getMigrations(config: BetterAuthOptions) {
 		return fieldName === "id";
 	}
 
+	function getReferencedColumnName(
+		modelName: string,
+		logicalFieldName: string,
+	): string {
+		// Find the table in originalSchema by modelName
+		for (const [tableKey, table] of Object.entries(originalSchema)) {
+			if (table.modelName === modelName) {
+				// Get the field by logical field name
+				const referencedField = table.fields[logicalFieldName];
+				if (referencedField) {
+					// Return the actual column name (fieldName), fallback to logical name
+					return referencedField.fieldName || logicalFieldName;
+				}
+			}
+		}
+		// Fallback to logical field name if not found
+		return logicalFieldName;
+	}
+
 	function getType(
 		field: DBFieldAttribute,
 		fieldName: string,
@@ -529,8 +548,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 				dbT = dbT.addColumn(columnName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
+						const referencedColumnName = getReferencedColumnName(
+							field.references.model,
+							field.references.field,
+						);
 						col = col
-							.references(`${field.references.model}.${field.references.field}`)
+							.references(`${field.references.model}.${referencedColumnName}`)
 							.onDelete(field.references.onDelete || "cascade");
 					}
 

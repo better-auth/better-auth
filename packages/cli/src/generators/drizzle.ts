@@ -144,19 +144,19 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		if (options.advanced?.database?.useNumberId) {
 			if (databaseType === "pg") {
-				id = `serial("id").primaryKey()`;
+				id = `serial("${idFieldName}").primaryKey()`;
 			} else if (databaseType === "sqlite") {
-				id = `integer("id", { mode: "number" }).primaryKey({ autoIncrement: true })`;
+				id = `integer("${idFieldName}", { mode: "number" }).primaryKey({ autoIncrement: true })`;
 			} else {
-				id = `int("id").autoincrement().primaryKey()`;
+				id = `int("${idFieldName}").autoincrement().primaryKey()`;
 			}
 		} else {
 			if (databaseType === "mysql") {
-				id = `varchar('id', { length: 36 }).primaryKey()`;
+				id = `varchar('${idFieldName}', { length: 36 }).primaryKey()`;
 			} else if (databaseType === "pg") {
-				id = `text('id').primaryKey()`;
+				id = `text('${idFieldName}').primaryKey()`;
 			} else {
-				id = `text('id').primaryKey()`;
+				id = `text('${idFieldName}').primaryKey()`;
 			}
 		}
 

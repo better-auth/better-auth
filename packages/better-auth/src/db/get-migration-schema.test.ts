@@ -426,7 +426,7 @@ describe.runIf(isPostgresAvailable)(
 			expect(sql).toContain("account_id");
 
 			// Check that foreign key references use correct field names
-			expect(sql).toMatch(/REFERENCES\s+"user"\("id"\)/i);
+			expect(sql).toMatch(/REFERENCES\s+"user"\("user_id"\)/i);
 		});
 	},
 );

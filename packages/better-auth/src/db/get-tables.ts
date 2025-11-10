@@ -142,7 +142,7 @@ export const getAuthTables = (
 					fieldName: options.session?.fields?.userId || "userId",
 					references: {
 						model: options.user?.modelName || "user",
-						field: userIdFieldName,
+						field: "id",
 						onDelete: "cascade",
 					},
 					required: true,
@@ -328,7 +328,7 @@ export const getAuthTables = (
 			},
 			order: 4,
 		},
-		...pluginTables,
+		...pluginTablesWithId,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
 	} satisfies BetterAuthDBSchema;
 };
