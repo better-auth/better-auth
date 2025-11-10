@@ -43,6 +43,16 @@ type SSOEndpoints = {
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
 };
 
+export type SSOPlugin<O extends SSOOptions> = {
+	id: "sso";
+	endpoints: SSOEndpoints &
+		(O extends { domainVerification: { enabled: true } }
+			? DomainVerificationEndpoints
+			: {});
+	schema: any;
+	options: O;
+};
+
 export function sso<
 	O extends SSOOptions & {
 		domainVerification?: { enabled: true };

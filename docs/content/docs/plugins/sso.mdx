@@ -708,17 +708,35 @@ mapping: {
 
 You can automatically trust a new domain by enabling the domain verification feature:
 
+<Tabs items={["client", "server"]}>
+    <Tab value="client">
 ```ts title="auth.ts"
+const authClient = createAuthClient({
+    plugins: [
+        ssoClient({ // [!code highlight]
+            domainVerification: { // [!code highlight]
+                enabled: true // [!code highlight]
+            } // [!code highlight]
+        }) // [!code highlight]
+    ]
+})
+```
+    </Tab>
+
+    <Tab value="server">
+```ts title="auth-client.ts"
 const auth = betterAuth({
     plugins: [
-        sso({
-            domainVerification: {
-                enabled: true
-            }
-        })
+        sso({ // [!code highlight]
+            domainVerification: { // [!code highlight]
+                enabled: true // [!code highlight]
+            } // [!code highlight]
+        }) // [!code highlight]
     ]
 });
 ```
+    </Tab>
+</Tabs>
 
 Once enabled, make sure you migrate the database schema (again).
 
@@ -756,14 +774,26 @@ Once you have configured your domain, you can use your `auth` instance to submit
 This request will either result in a rejection (could not prove your ownership over the domain)
 or if the verification is successful, your SSO provider domain will be marked as verified.
 
+<Tabs items={["client", "server"]}>
+    <Tab value="client">
+```ts title="domain-validation-request-client.ts"
+const res = await authClient.sso.verifyDomain({
+    providerId: "acme-corp",
+});
+```
+    </Tab>
+
+    <Tab value="server">
 ```ts title="domain-validation-request.ts"
-const response = await auth.api.verifyDomain({
+const res = await auth.api.verifyDomain({
     body: {
         providerId: "acme-corp",
     },
     headers,
 });
 ```
+    </Tab>
+</Tabs>
 
 #### Creating a new verification token
 
@@ -774,7 +804,20 @@ After that time, the token will expire and cannot longer be used. When that happ
 you can create a new verification token:
 
 ```ts title="create-domain-verification-token.ts"
-const response = await auth.api.requestDomainVerification({
+```
+
+<Tabs items={["client", "server"]}>
+    <Tab value="client">
+```ts title="create-domain-verification-token-client.ts"
+const res = await authClient.sso.requestDomainVerification({
+    providerId: "acme-corp"
+})
+```
+    </Tab>
+
+    <Tab value="server">
+```ts title="create-domain-verification-token.ts"
+const res = await auth.api.requestDomainVerification({
     body: {
         providerId: "acme-corp",
     },
@@ -783,6 +826,8 @@ const response = await auth.api.requestDomainVerification({
 
 console.log("Token: ", response.domainVerificationToken);
 ```
+    </Tab>
+</Tabs>
 
 ### SAML Endpoints
 

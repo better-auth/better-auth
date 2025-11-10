@@ -5,6 +5,7 @@ import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
+import { ssoClient } from "./client";
 import type { SSOOptions } from "./types";
 
 const dnsMock = vi.hoisted(() => {
@@ -57,7 +58,7 @@ describe("Domain verification", async () => {
 
 		const authClient = createAuthClient({
 			baseURL: "http://localhost:3000",
-			plugins: [bearer()],
+			plugins: [bearer(), ssoClient({ domainVerification: { enabled: true } })],
 			fetchOptions: {
 				customFetchImpl: async (url, init) => {
 					return auth.handler(new Request(url, init));
