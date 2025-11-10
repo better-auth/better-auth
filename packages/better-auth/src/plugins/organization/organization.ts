@@ -894,6 +894,7 @@ export function organization<O extends OrganizationOptions>(
 								field: "id",
 							},
 							fieldName: options?.schema?.team?.fields?.organizationId,
+							index: true,
 						},
 						createdAt: {
 							type: "date",
@@ -920,6 +921,7 @@ export function organization<O extends OrganizationOptions>(
 								field: "id",
 							},
 							fieldName: options?.schema?.teamMember?.fields?.teamId,
+							index: true,
 						},
 						userId: {
 							type: "string",
@@ -929,6 +931,7 @@ export function organization<O extends OrganizationOptions>(
 								field: "id",
 							},
 							fieldName: options?.schema?.teamMember?.fields?.userId,
+							index: true,
 						},
 						createdAt: {
 							type: "date",
@@ -953,11 +956,13 @@ export function organization<O extends OrganizationOptions>(
 							},
 							fieldName:
 								options?.schema?.organizationRole?.fields?.organizationId,
+							index: true,
 						},
 						role: {
 							type: "string",
 							required: true,
 							fieldName: options?.schema?.organizationRole?.fields?.role,
+							index: true,
 						},
 						permission: {
 							type: "string",
@@ -1034,6 +1039,7 @@ export function organization<O extends OrganizationOptions>(
 							field: "id",
 						},
 						fieldName: options?.schema?.member?.fields?.organizationId,
+						index: true,
 					},
 					userId: {
 						type: "string",
@@ -1043,6 +1049,7 @@ export function organization<O extends OrganizationOptions>(
 							model: "user",
 							field: "id",
 						},
+						index: true,
 					},
 					role: {
 						type: "string",
@@ -1070,12 +1077,14 @@ export function organization<O extends OrganizationOptions>(
 							field: "id",
 						},
 						fieldName: options?.schema?.invitation?.fields?.organizationId,
+						index: true,
 					},
 					email: {
 						type: "string",
 						required: true,
 						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.email,
+						index: true,
 					},
 					role: {
 						type: "string",
