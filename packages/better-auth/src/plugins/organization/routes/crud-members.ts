@@ -971,22 +971,21 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 			let organizationId =
 				ctx.query?.organizationId || session.session.activeOrganizationId;
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			if (!organizationId) {
-				if (ctx.query?.organizationSlug) {
-					const organization = await adapter.findOrganizationBySlug(
-						ctx.query?.organizationSlug,
-					);
-					if (!organization) {
-						throw new APIError("BAD_REQUEST", {
-							message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-						});
-					}
-					organizationId = organization.id;
-				} else {
+			if (ctx.query?.organizationSlug) {
+				const organization = await adapter.findOrganizationBySlug(
+					ctx.query?.organizationSlug,
+				);
+				if (!organization) {
 					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 					});
 				}
+				organizationId = organization.id;
+			}
+			if (!organizationId) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				});
 			}
 			const isMember = await adapter.findMemberByOrgId({
 				userId: session.user.id,
