@@ -84,7 +84,7 @@ export interface DBAdapterFactoryConfig<
 	supportsNumericIds?: boolean | undefined;
 	/**
 	 * If the database supports natively generating UUIDs, set this to `true`.
-	 * 
+	 *
 	 * @default false
 	 */
 	supportsUUIDs?: boolean | undefined;

@@ -310,6 +310,10 @@ function generateImport({
 			coreImports.push("mysqlEnum");
 		}
 	} else if (databaseType === "pg") {
+		if (useUUIDs) {
+			rootImports.push("sql");
+		}
+
 		// Only include integer for PG if actually needed
 		const hasNonBigintNumber = Object.values(tables).some((table) =>
 			Object.values(table.fields).some(

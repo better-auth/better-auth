@@ -118,30 +118,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							.field("id", "Int")
 							.attribute("id")
 							.attribute("default(autoincrement())");
-					} else if (useUUIDs) {
-						if (provider === "postgresql") {
-							builder
-								.model(modelName)
-								.field("id", "String")
-								.attribute("id")
-								.attribute("db.Uuid")
-								.attribute(
-									'default(dbgenerated("pg_catalog.gen_random_uuid()"))',
-								);
-						} else if (provider === "mysql") {
-							builder
-								.model(modelName)
-								.field("id", "String")
-								.attribute("id")
-								.attribute("db.Uuid")
-								.attribute("default(uuid())");
-						} else {
-							builder
-								.model(modelName)
-								.field("id", "String")
-								.attribute("id")
-								.attribute("db.Uuid");
-						}
+					} else if (useUUIDs && provider === "postgresql") {
+						builder
+							.model(modelName)
+							.field("id", "String")
+							.attribute("id")
+							.attribute("db.Uuid")
+							.attribute(
+								'default(dbgenerated("pg_catalog.gen_random_uuid()"))',
+							);
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
 					}
@@ -217,6 +202,10 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				if (attr.references) {
+					if (useUUIDs && provider === "postgresql") {
+						fieldBuilder.attribute(`db.Uuid`);
+					}
+
 					const referencedOriginalModelName = attr.references.model;
 					const referencedCustomModelName =
 						tables[referencedOriginalModelName]?.modelName ||
@@ -227,17 +216,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					else if (attr.references.onDelete === "set default")
 						action = "SetDefault";
 					else if (attr.references.onDelete === "restrict") action = "Restrict";
+
+					const relationField = `relation(fields: [${fieldName}], references: [${attr.references.field}], onDelete: ${action})`;
 					builder
 						.model(modelName)
 						.field(
-							`${referencedCustomModelName.toLowerCase()}`,
+							referencedCustomModelName.toLowerCase(),
 							`${capitalizeFirstLetter(referencedCustomModelName)}${
 								!attr.required ? "?" : ""
 							}`,
 						)
-						.attribute(
-							`relation(fields: [${fieldName}], references: [${attr.references.field}], onDelete: ${action})`,
-						);
+						.attribute(relationField);
 				}
 				if (
 					!attr.unique &&

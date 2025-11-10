@@ -44,10 +44,10 @@ const { execute } = await testAdapter({
 		destroyPrismaClient({ migrationCount: migrationCount - 1, dialect });
 	},
 	tests: [
-		// normalTestSuite({}),
-		// transactionsTestSuite(),
-		// authFlowTestSuite(),
-		// numberIdTestSuite({}),
+		normalTestSuite({}),
+		transactionsTestSuite(),
+		authFlowTestSuite(),
+		numberIdTestSuite({}),
 		uuidTestSuite(),
 	],
 	onFinish: async () => {},
