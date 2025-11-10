@@ -1,7 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { getSessionFromCtx } from "../../../api/routes";
 import { setSessionCookie } from "../../../cookies";
 import {
@@ -43,7 +43,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			])
 			.meta({
 				description:
-					'The role(s) to assign to the user. It can be `admin`, `member`, or `guest`. Eg: "member"',
+					'The role(s) to assign to the user. It can be `admin`, `member`, owner. Eg: "member"',
 			}),
 		organizationId: z
 			.string()
