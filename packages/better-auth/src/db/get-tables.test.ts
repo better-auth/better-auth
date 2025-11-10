@@ -144,7 +144,7 @@ describe("getAuthTables", () => {
 		expect(idField.required).toBe(true);
 	});
 
-	it("should use custiom userId as foreign key in account and session table", () => {
+	it("should use custom userId as foreign key in account and session table", () => {
 		const tables = getAuthTables({
 			user: {
 				fields: {
