@@ -22,7 +22,8 @@ export const submitDomainVerification = (options: SSOOptions) => {
 							description: "Provider not found",
 						},
 						"409": {
-							description: "Domain has already been verified or current verification token is still valid",
+							description:
+								"Domain has already been verified or current verification token is still valid",
 						},
 						"201": {
 							description: "Domain submitted for verification",
@@ -119,10 +120,12 @@ export const verifyDomain = (options: SSOOptions) => {
 							description: "Provider not found",
 						},
 						"409": {
-							description: "Domain has already been verified or no pending verification exists",
+							description:
+								"Domain has already been verified or no pending verification exists",
 						},
 						"502": {
-							description: "Unable to verify domain ownership due to upstream validator error",
+							description:
+								"Unable to verify domain ownership due to upstream validator error",
 						},
 						"204": {
 							description: "Domain ownership was verified",
