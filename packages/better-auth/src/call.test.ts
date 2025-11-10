@@ -9,7 +9,6 @@ import * as z from "zod";
 import { getEndpoints, router } from "./api";
 import { createAuthClient } from "./client";
 import { init } from "./context";
-import { signJWT } from "./crypto";
 import { bearer } from "./plugins";
 
 describe("call", async () => {
