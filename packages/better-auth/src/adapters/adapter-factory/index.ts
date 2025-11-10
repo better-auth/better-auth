@@ -481,7 +481,7 @@ export const createAdapterFactory =
 						action,
 						field: newFieldName,
 						fieldAttributes: fieldAttributes!,
-						model: defaultModelName,
+						model: getModelName(defaultModelName),
 						schema,
 						options,
 					});
@@ -564,7 +564,7 @@ export const createAdapterFactory =
 							field: newFieldName,
 							fieldAttributes: field,
 							select,
-							model: unsafe_model,
+							model: getModelName(unsafe_model),
 							schema,
 							options,
 						});

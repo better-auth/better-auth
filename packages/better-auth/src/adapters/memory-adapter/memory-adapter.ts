@@ -48,7 +48,7 @@ export const memoryAdapter = (
 				}
 			},
 		},
-		adapter: ({ getFieldName, options, debugLog }) => {
+		adapter: ({ getFieldName, options, debugLog, getModelName }) => {
 			function convertWhereClause(where: CleanedWhere[], model: string) {
 				const table = db[model];
 				if (!table) {
@@ -121,7 +121,7 @@ export const memoryAdapter = (
 						options.advanced?.database?.generateId === "serial";
 					if (useNumberId) {
 						// @ts-expect-error
-						data.id = db[model]!.length + 1;
+						data.id = db[getModelName(model)]!.length + 1;
 					}
 					if (!db[model]) {
 						db[model] = [];
