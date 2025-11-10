@@ -1,6 +1,10 @@
 import dns from "node:dns/promises";
 import type { Verification } from "better-auth";
-import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
+import {
+	APIError,
+	createAuthEndpoint,
+	sessionMiddleware,
+} from "better-auth/api";
 import { randomBytes } from "crypto";
 import * as z from "zod/v4";
 import type { SSOOptions, SSOProvider } from "../types";
@@ -16,7 +20,8 @@ export const requestDomainVerification = (options: SSOOptions) => {
 			metadata: {
 				openapi: {
 					summary: "Request a domain verification",
-					description: "Request a domain verification for the given SSO provider",
+					description:
+						"Request a domain verification for the given SSO provider",
 					responses: {
 						"404": {
 							description: "Provider not found",
@@ -41,11 +46,17 @@ export const requestDomainVerification = (options: SSOOptions) => {
 			});
 
 			if (!provider) {
-				throw new APIError("NOT_FOUND", { message: "Provider not found", code: "PROVIDER_NOT_FOUND" });
+				throw new APIError("NOT_FOUND", {
+					message: "Provider not found",
+					code: "PROVIDER_NOT_FOUND",
+				});
 			}
 
 			if (provider.domainVerified) {
-				throw new APIError("CONFLICT", { message: "Domain has already been verified", code: "DOMAIN_VERIFIED" });
+				throw new APIError("CONFLICT", {
+					message: "Domain has already been verified",
+					code: "DOMAIN_VERIFIED",
+				});
 			}
 
 			const verification = await ctx.context.adapter.findOne<Verification>({
@@ -62,7 +73,10 @@ export const requestDomainVerification = (options: SSOOptions) => {
 			});
 
 			if (verification) {
-				throw new APIError("CONFLICT", { message: "Current verification token is still valid", code: "TOKEN_FOUND" });
+				throw new APIError("CONFLICT", {
+					message: "Current verification token is still valid",
+					code: "TOKEN_FOUND",
+				});
 			}
 
 			let domainVerificationToken: string | undefined;
@@ -134,11 +148,17 @@ export const verifyDomain = (options: SSOOptions) => {
 			});
 
 			if (!provider) {
-				throw new APIError("NOT_FOUND", { message: "Provider not found", code: "PROVIDER_NOT_FOUND" });
+				throw new APIError("NOT_FOUND", {
+					message: "Provider not found",
+					code: "PROVIDER_NOT_FOUND",
+				});
 			}
 
 			if (provider.domainVerified) {
-				throw new APIError("CONFLICT", { message: "Domain has already been verified", code: "DOMAIN_VERIFIED" });
+				throw new APIError("CONFLICT", {
+					message: "Domain has already been verified",
+					code: "DOMAIN_VERIFIED",
+				});
 			}
 
 			const verification = await ctx.context.adapter.findOne<Verification>({
@@ -155,7 +175,10 @@ export const verifyDomain = (options: SSOOptions) => {
 			});
 
 			if (!verification) {
-				throw new APIError("NOT_FOUND", { message: "No pending domain verification exists", code: "NO_PENDING_VERIFICATION" });
+				throw new APIError("NOT_FOUND", {
+					message: "No pending domain verification exists",
+					code: "NO_PENDING_VERIFICATION",
+				});
 			}
 
 			let records: string[];
@@ -176,7 +199,10 @@ export const verifyDomain = (options: SSOOptions) => {
 				record.includes(`${verification.identifier}=${verification.value}`),
 			);
 			if (!record) {
-				throw new APIError("BAD_GATEWAY", { message: "Unable to verify domain ownership. Try again later", code: "DOMAIN_VERIFICATION_FAILED" });
+				throw new APIError("BAD_GATEWAY", {
+					message: "Unable to verify domain ownership. Try again later",
+					code: "DOMAIN_VERIFICATION_FAILED",
+				});
 			}
 
 			await ctx.context.adapter.update<SSOProvider>({
