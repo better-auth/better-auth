@@ -125,10 +125,11 @@ describe("Domain verification", async () => {
 					providerId: "unknown",
 				},
 				headers,
+				asResponse: true,
 			});
 
 			expect(response.status).toBe(404);
-			expect(await response.json()).toEqual({ message: "Provider not found" });
+			expect(await response.json()).toEqual({ message: "Provider not found", code: "PROVIDER_NOT_FOUND" });
 		});
 
 		it("should return conflict if there is an active verification token", async () => {
@@ -146,11 +147,13 @@ describe("Domain verification", async () => {
 					providerId: provider.providerId,
 				},
 				headers: newAuthHeaders,
+				asResponse: true,
 			});
 
 			expect(response.status).toBe(409);
 			expect(await response.json()).toEqual({
 				message: "Current verification token is still valid",
+				code: "TOKEN_FOUND"
 			});
 		});
 
@@ -198,11 +201,13 @@ describe("Domain verification", async () => {
 						providerId: provider.providerId,
 					},
 					headers,
+					asResponse: true,
 				});
 
 			expect(domainVerificationSubmissionResponse.status).toBe(409);
 			expect(await domainVerificationSubmissionResponse.json()).toEqual({
 				message: "Domain has already been verified",
+				code: "DOMAIN_VERIFIED"
 			});
 		});
 	});
@@ -228,10 +233,11 @@ describe("Domain verification", async () => {
 					providerId: "unknown",
 				},
 				headers,
+				asResponse: true,
 			});
 
 			expect(response.status).toBe(404);
-			expect(await response.json()).toEqual({ message: "Provider not found" });
+			expect(await response.json()).toEqual({ message: "Provider not found", code: "PROVIDER_NOT_FOUND" });
 		});
 
 		it("should return not found when no pending verification is found", async () => {
@@ -249,11 +255,13 @@ describe("Domain verification", async () => {
 					providerId: provider.providerId,
 				},
 				headers: newAuthHeaders,
+				asResponse: true,
 			});
 
 			expect(response.status).toBe(404);
 			expect(await response.json()).toEqual({
 				message: "No pending domain verification exists",
+				code: "NO_PENDING_VERIFICATION"
 			});
 		});
 
@@ -271,11 +279,13 @@ describe("Domain verification", async () => {
 					providerId: provider.providerId,
 				},
 				headers,
+				asResponse: true,
 			});
 
 			expect(response.status).toBe(502);
 			expect(await response.json()).toEqual({
 				message: "Unable to verify domain ownership. Try again later",
+				code: "DOMAIN_VERIFICATION_FAILED"
 			});
 		});
 
@@ -358,11 +368,13 @@ describe("Domain verification", async () => {
 					providerId: provider.providerId,
 				},
 				headers,
+				asResponse: true,
 			});
 
 			expect(secondResponse.status).toBe(409);
 			expect(await secondResponse.json()).toEqual({
 				message: "Domain has already been verified",
+				code: "DOMAIN_VERIFIED"
 			});
 		});
 	});
