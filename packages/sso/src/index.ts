@@ -89,7 +89,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 	return {
 		id: "sso",
 		endpoints: {
-			...(endpoints as SSOEndpoints<O>),
+			...(endpoints as SSOEndpoints),
 		},
 		schema: {
 			ssoProvider: {
