@@ -1,4 +1,3 @@
-import dns from "node:dns/promises";
 import type { Verification } from "better-auth";
 import {
 	APIError,
@@ -6,6 +5,7 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { randomBytes } from "crypto";
+import dns from "dns/promises";
 import * as z from "zod/v4";
 import type { SSOOptions, SSOProvider } from "../types";
 

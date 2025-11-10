@@ -13,7 +13,7 @@ const dnsMock = vi.hoisted(() => {
 	};
 });
 
-vi.mock("node:dns/promises", () => {
+vi.mock("dns/promises", () => {
 	return {
 		default: dnsMock,
 	};
