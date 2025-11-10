@@ -34,18 +34,18 @@ type DomainVerificationEndpoints = {
 	verifyDomain: ReturnType<typeof verifyDomain>;
 };
 
-type SSOEndpoints = {
+type SSOEndpoints<O extends SSOOptions> = {
 	spMetadata: ReturnType<typeof spMetadata>;
-	registerSSOProvider: ReturnType<typeof registerSSOProvider>;
-	signInSSO: ReturnType<typeof signInSSO>;
-	callbackSSO: ReturnType<typeof callbackSSO>;
-	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
-	acsEndpoint: ReturnType<typeof acsEndpoint>;
+	registerSSOProvider: ReturnType<typeof registerSSOProvider<O>>;
+	signInSSO: ReturnType<typeof signInSSO<O>>;
+	callbackSSO: ReturnType<typeof callbackSSO<O>>;
+	callbackSSOSAML: ReturnType<typeof callbackSSOSAML<O>>;
+	acsEndpoint: ReturnType<typeof acsEndpoint<O>>;
 };
 
 export type SSOPlugin<O extends SSOOptions> = {
 	id: "sso";
-	endpoints: SSOEndpoints &
+	endpoints: SSOEndpoints<O> &
 		(O extends { domainVerification: { enabled: true } }
 			? DomainVerificationEndpoints
 			: {});
@@ -61,7 +61,7 @@ export function sso<
 	options?: O | undefined,
 ): {
 	id: "sso";
-	endpoints: SSOEndpoints & DomainVerificationEndpoints;
+	endpoints: SSOEndpoints<O> & DomainVerificationEndpoints;
 	schema: any;
 	options: O;
 };
@@ -69,7 +69,7 @@ export function sso<O extends SSOOptions>(
 	options?: O | undefined,
 ): {
 	id: "sso";
-	endpoints: SSOEndpoints;
+	endpoints: SSOEndpoints<O>;
 	schema: any;
 	options: O;
 };
@@ -98,9 +98,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 
 	return {
 		id: "sso",
-		endpoints: {
-			...(endpoints as SSOEndpoints),
-		},
+		endpoints,
 		schema: {
 			ssoProvider: {
 				fields: {

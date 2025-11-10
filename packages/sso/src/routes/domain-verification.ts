@@ -9,7 +9,7 @@ import dns from "dns/promises";
 import * as z from "zod/v4";
 import type { SSOOptions, SSOProvider } from "../types";
 
-export const requestDomainVerification = (options: SSOOptions) => {
+export const requestDomainVerification = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sso/request-domain-verification",
 		{
@@ -40,7 +40,7 @@ export const requestDomainVerification = (options: SSOOptions) => {
 		},
 		async (ctx) => {
 			const body = ctx.body;
-			const provider = await ctx.context.adapter.findOne<SSOProvider>({
+			const provider = await ctx.context.adapter.findOne<SSOProvider<O>>({
 				model: "ssoProvider",
 				where: [{ field: "providerId", value: body.providerId }],
 			});
@@ -52,7 +52,7 @@ export const requestDomainVerification = (options: SSOOptions) => {
 				});
 			}
 
-			if (provider.domainVerified) {
+			if ("domainVerified" in provider && provider.domainVerified) {
 				throw new APIError("CONFLICT", {
 					message: "Domain has already been verified",
 					code: "DOMAIN_VERIFIED",
@@ -108,7 +108,7 @@ export const requestDomainVerification = (options: SSOOptions) => {
 	);
 };
 
-export const verifyDomain = (options: SSOOptions) => {
+export const verifyDomain = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sso/verify-domain",
 		{
@@ -142,7 +142,7 @@ export const verifyDomain = (options: SSOOptions) => {
 		},
 		async (ctx) => {
 			const body = ctx.body;
-			const provider = await ctx.context.adapter.findOne<SSOProvider>({
+			const provider = await ctx.context.adapter.findOne<SSOProvider<O>>({
 				model: "ssoProvider",
 				where: [{ field: "providerId", value: body.providerId }],
 			});
@@ -154,7 +154,7 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
-			if (provider.domainVerified) {
+			if ("domainVerified" in provider && provider.domainVerified) {
 				throw new APIError("CONFLICT", {
 					message: "Domain has already been verified",
 					code: "DOMAIN_VERIFIED",
@@ -205,7 +205,7 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
-			await ctx.context.adapter.update<SSOProvider>({
+			await ctx.context.adapter.update<SSOProvider<O>>({
 				model: "ssoProvider",
 				where: [{ field: "providerId", value: provider.providerId }],
 				update: {

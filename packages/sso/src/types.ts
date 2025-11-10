@@ -81,7 +81,7 @@ export interface SAMLConfig {
 	mapping?: SAMLMapping | undefined;
 }
 
-export interface SSOProvider {
+type BaseSSOProvider = {
 	issuer: string;
 	oidcConfig?: OIDCConfig | undefined;
 	samlConfig?: SAMLConfig | undefined;
@@ -89,8 +89,14 @@ export interface SSOProvider {
 	providerId: string;
 	organizationId?: string | undefined;
 	domain: string;
-	domainVerified: boolean;
-}
+};
+
+export type SSOProvider<O extends SSOOptions> =
+	O["domainVerification"] extends { enabled: true }
+		? {
+				domainVerified: boolean;
+			} & BaseSSOProvider
+		: BaseSSOProvider;
 
 export interface SSOOptions {
 	/**
@@ -113,7 +119,7 @@ export interface SSOOptions {
 				/**
 				 * The SSO provider
 				 */
-				provider: SSOProvider;
+				provider: SSOProvider<SSOOptions>;
 		  }) => Promise<void>)
 		| undefined;
 	/**
@@ -139,7 +145,7 @@ export interface SSOOptions {
 					/**
 					 * The SSO provider
 					 */
-					provider: SSOProvider;
+					provider: SSOProvider<SSOOptions>;
 				}) => Promise<"member" | "admin">;
 		  }
 		| undefined;

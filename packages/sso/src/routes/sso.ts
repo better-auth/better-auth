@@ -129,7 +129,7 @@ export const spMetadata = () => {
 	);
 };
 
-export const registerSSOProvider = (options: SSOOptions) => {
+export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sso/register",
 		{
@@ -598,7 +598,7 @@ export const registerSSOProvider = (options: SSOOptions) => {
 
 			const provider = await ctx.context.adapter.create<
 				Record<string, any>,
-				SSOProvider
+				SSOProvider<O>
 			>({
 				model: "ssoProvider",
 				data: {
@@ -674,6 +674,13 @@ export const registerSSOProvider = (options: SSOOptions) => {
 				});
 			}
 
+			type SSOProviderReturn = O["domainVerification"] extends { enabled: true }
+				? {
+						domainVerified: boolean;
+						domainVerificationToken: string;
+					} & SSOProvider<O>
+				: SSOProvider<O>;
+
 			return ctx.json({
 				...provider,
 				oidcConfig: JSON.parse(
@@ -683,14 +690,16 @@ export const registerSSOProvider = (options: SSOOptions) => {
 					provider.samlConfig as unknown as string,
 				) as SAMLConfig,
 				redirectURI: `${ctx.context.baseURL}/sso/callback/${provider.providerId}`,
-				...(domainVerified ? { domainVerified } : {}),
-				...(domainVerificationToken ? { domainVerificationToken } : {}),
-			});
+				...(options?.domainVerification?.enabled ? { domainVerified } : {}),
+				...(options?.domainVerification?.enabled
+					? { domainVerificationToken }
+					: {}),
+			} as unknown as SSOProviderReturn);
 		},
 	);
 };
 
-export const signInSSO = (options: SSOOptions) => {
+export const signInSSO = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sign-in/sso",
 		{
@@ -875,7 +884,7 @@ export const signInSSO = (options: SSOOptions) => {
 						return res.id;
 					});
 			}
-			let provider: SSOProvider | null = null;
+			let provider: SSOProvider<O> | null = null;
 			if (options?.defaultSSO?.length) {
 				// Find matching default SSO provider by providerId
 				const matchingDefault = providerId
@@ -897,8 +906,10 @@ export const signInSSO = (options: SSOOptions) => {
 						oidcConfig: matchingDefault.oidcConfig,
 						samlConfig: matchingDefault.samlConfig,
 						domain: matchingDefault.domain,
-						domainVerified: true,
-					};
+						...(options.domainVerification?.enabled
+							? { domainVerified: true }
+							: {}),
+					} as SSOProvider<O>;
 				}
 			}
 			if (!providerId && !orgId && !domain) {
@@ -909,7 +920,7 @@ export const signInSSO = (options: SSOOptions) => {
 			// Try to find provider in database
 			if (!provider) {
 				provider = await ctx.context.adapter
-					.findOne<SSOProvider>({
+					.findOne<SSOProvider<O>>({
 						model: "ssoProvider",
 						where: [
 							{
@@ -1036,7 +1047,7 @@ export const signInSSO = (options: SSOOptions) => {
 	);
 };
 
-export const callbackSSO = (options: SSOOptions) => {
+export const callbackSSO = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sso/callback/:providerId",
 		{
@@ -1078,7 +1089,7 @@ export const callbackSSO = (options: SSOOptions) => {
 					}?error=${error}&error_description=${error_description}`,
 				);
 			}
-			let provider: SSOProvider | null = null;
+			let provider: SSOProvider<O> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
 					(defaultProvider) =>
@@ -1089,8 +1100,10 @@ export const callbackSSO = (options: SSOOptions) => {
 						...matchingDefault,
 						issuer: matchingDefault.oidcConfig?.issuer || "",
 						userId: "default",
-						domainVerified: true,
-					};
+						...(options.domainVerification?.enabled
+							? { domainVerified: true }
+							: {}),
+					} as SSOProvider<O>;
 				}
 			}
 			if (!provider) {
@@ -1114,7 +1127,7 @@ export const callbackSSO = (options: SSOOptions) => {
 							...res,
 							oidcConfig:
 								safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined,
-						} as SSOProvider;
+						} as SSOProvider<O>;
 					});
 			}
 			if (!provider) {
@@ -1386,7 +1399,7 @@ export const callbackSSO = (options: SSOOptions) => {
 	);
 };
 
-export const callbackSSOSAML = (options: SSOOptions) => {
+export const callbackSSOSAML = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sso/saml2/callback/:providerId",
 		{
@@ -1418,7 +1431,7 @@ export const callbackSSOSAML = (options: SSOOptions) => {
 		async (ctx) => {
 			const { SAMLResponse, RelayState } = ctx.body;
 			const { providerId } = ctx.params;
-			let provider: SSOProvider | null = null;
+			let provider: SSOProvider<O> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
 					(defaultProvider) => defaultProvider.providerId === providerId,
@@ -1428,13 +1441,15 @@ export const callbackSSOSAML = (options: SSOOptions) => {
 						...matchingDefault,
 						userId: "default",
 						issuer: matchingDefault.samlConfig?.issuer || "",
-						domainVerified: true,
-					};
+						...(options.domainVerification?.enabled
+							? { domainVerified: true }
+							: {}),
+					} as SSOProvider<O>;
 				}
 			}
 			if (!provider) {
 				provider = await ctx.context.adapter
-					.findOne<SSOProvider>({
+					.findOne<SSOProvider<O>>({
 						model: "ssoProvider",
 						where: [{ field: "providerId", value: providerId }],
 					})
@@ -1718,7 +1733,7 @@ export const callbackSSOSAML = (options: SSOOptions) => {
 	);
 };
 
-export const acsEndpoint = (options: SSOOptions) => {
+export const acsEndpoint = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sso/saml2/sp/acs/:providerId",
 		{
@@ -1750,7 +1765,7 @@ export const acsEndpoint = (options: SSOOptions) => {
 			const { providerId } = ctx.params;
 
 			// If defaultSSO is configured, use it as the provider
-			let provider: SSOProvider | null = null;
+			let provider: SSOProvider<O> | null = null;
 
 			if (options?.defaultSSO?.length) {
 				// For ACS endpoint, we can use the first default provider or try to match by providerId
@@ -1767,12 +1782,14 @@ export const acsEndpoint = (options: SSOOptions) => {
 						userId: "default",
 						samlConfig: matchingDefault.samlConfig,
 						domain: matchingDefault.domain,
-						domainVerified: true,
-					};
+						...(options.domainVerification?.enabled
+							? { domainVerified: true }
+							: {}),
+					} as SSOProvider<O>;
 				}
 			} else {
 				provider = await ctx.context.adapter
-					.findOne<SSOProvider>({
+					.findOne<SSOProvider<O>>({
 						model: "ssoProvider",
 						where: [
 							{
@@ -1974,7 +1991,7 @@ export const acsEndpoint = (options: SSOOptions) => {
 						ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
 							provider.providerId,
 						);
-					if (!(isTrustedProvider || provider.domainVerified)) {
+					if (!(isTrustedProvider || ("domainVerified" in provider && provider.domainVerified))) {
 						throw ctx.redirect(
 							`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
 						);
