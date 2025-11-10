@@ -456,7 +456,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
-							db.transaction((tx: DB) => {
+							// Support for drizzle read replica db instances (https://orm.drizzle.team/docs/read-replicas)
+							(db.$primary ?? db).transaction((tx: DB) => {
 								const adapter = createAdapterFactory({
 									config: adapterOptions!.config,
 									adapter: createCustomAdapter(tx),
