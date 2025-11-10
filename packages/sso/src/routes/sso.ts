@@ -16,8 +16,8 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
+import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
-import { randomBytes } from "crypto";
 import { decodeJwt } from "jose";
 import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
@@ -658,7 +658,7 @@ export const registerSSOProvider = (options: SSOOptions) => {
 
 			if (options?.domainVerification?.enabled) {
 				domainVerified = false;
-				domainVerificationToken = randomBytes(24).toString("hex");
+				domainVerificationToken = generateRandomString(24);
 
 				await ctx.context.adapter.create<Verification>({
 					model: "verification",

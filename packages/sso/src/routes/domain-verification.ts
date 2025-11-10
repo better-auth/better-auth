@@ -4,7 +4,7 @@ import {
 	createAuthEndpoint,
 	sessionMiddleware,
 } from "better-auth/api";
-import { randomBytes } from "crypto";
+import { generateRandomString } from "better-auth/crypto";
 import dns from "dns/promises";
 import * as z from "zod/v4";
 import type { SSOOptions, SSOProvider } from "../types";
@@ -82,7 +82,7 @@ export const requestDomainVerification = (options: SSOOptions) => {
 			let domainVerificationToken: string | undefined;
 
 			if (options?.domainVerification?.enabled) {
-				domainVerificationToken = randomBytes(24).toString("hex");
+				domainVerificationToken = generateRandomString(24);
 
 				await ctx.context.adapter.create<Verification>({
 					model: "verification",
