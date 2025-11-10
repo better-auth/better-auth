@@ -273,10 +273,6 @@ export const createAdapterFactory =
 				shouldGenerateId = true;
 			}
 
-			// console.log(`shouldGenerateId:`, {
-			// 	shouldGenerateId,
-			// });
-
 			const model = getDefaultModelName(customModelName ?? "id");
 			return {
 				type: useNumberId ? "number" : "string",
