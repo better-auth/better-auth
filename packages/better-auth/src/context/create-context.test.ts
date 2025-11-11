@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "../api";
 import { getAdapter } from "../db";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
-import { createAuthContext } from "./base";
+import { createAuthContext } from "./create-context";
 
 describe("base context creation", () => {
 	const initBase = async (options: Partial<BetterAuthOptions> = {}) => {

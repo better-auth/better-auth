@@ -30,6 +30,28 @@ export async function createAuthContext(
 	options: BetterAuthOptions,
 	getDatabaseType: (database: BetterAuthOptions["database"]) => string,
 ): Promise<AuthContext> {
+	//set default options for stateless mode
+	if (!options.database) {
+		options = {
+			...options,
+			session: {
+				...options.session,
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					refreshCache: true,
+					...options.session?.cookieCache,
+				},
+			},
+			advanced: {
+				...options.advanced,
+				oauthConfig: {
+					storeStateStrategy: "cookie",
+					...options.advanced?.oauthConfig,
+				},
+			},
+		};
+	}
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
