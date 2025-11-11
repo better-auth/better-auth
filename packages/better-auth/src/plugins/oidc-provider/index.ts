@@ -24,6 +24,7 @@ import { getJwtToken } from "../jwt";
 import { authorize } from "./authorize";
 import { checkPromptMiddleware } from "./middlewares/check-prompt";
 import { type OAuthApplication, schema } from "./schema";
+import { setPromptHandled } from "./state/prompt-handled";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -305,8 +306,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						// Don't force prompt to "consent" - let the authorize function
 						// determine if consent is needed based on OIDC spec requirements
 						ctx.context.session = session;
-						// Set a flag to indicate we've just completed the login prompt flow
-						(ctx.context as any).oidcLoginPromptHandled = true;
+						await setPromptHandled(true);
 						const response = await authorize(ctx, opts);
 						return response;
 					}),

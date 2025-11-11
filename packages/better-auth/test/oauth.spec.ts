@@ -44,7 +44,7 @@ beforeAll(async () => {
 afterAll(() => mswServer.close());
 
 test("should login with google successfully", async () => {
-	let latestOauthStore: Record<string, any> | undefined = undefined;
+	let latestOauthStore: Record<string, any> | null = null;
 	const { client } = await getTestInstance({
 		hooks: {
 			after: createAuthMiddleware(async (ctx) => {

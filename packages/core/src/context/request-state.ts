@@ -1,8 +1,6 @@
-import type { StandardSchemaV1 } from "@standard-schema/spec";
-import { z } from "zod";
 import { type AsyncLocalStorage, getAsyncLocalStorage } from "../async_hooks";
 
-export type RequestStateWeakMap = WeakMap<StandardSchemaV1, any>;
+export type RequestStateWeakMap = WeakMap<object, any>;
 
 let requestStateAsyncStorage: AsyncLocalStorage<RequestStateWeakMap> | null =
 	null;
@@ -44,32 +42,48 @@ export async function runWithRequestState<T>(
 }
 
 export interface RequestState<T> {
-	get<S>(): Promise<S & T>;
+	get(): Promise<T>;
 	set(value: T): Promise<void>;
+
+	// A unique reference used as a key to identify this state within the request's WeakMap. Useful for debugging purposes.
+	readonly ref: Readonly<object>;
 }
 
+/**
+ * Defines a request-scoped state with lazy initialization.
+ *
+ * @param initFn - A function that initializes the state. It is called the first time `get()` is invoked within each request context, and only once per context.
+ * @returns A RequestState object with `get` and `set` methods, and a unique `ref` for debugging.
+ *
+ * @example
+ * const userState = defineRequestState(() => ({ id: '', name: '' }));
+ * // Later, within a request context:
+ * const user = await userState.get();
+ */
 export function defineRequestState<T>(
-	schema?: StandardSchemaV1<T>,
+	initFn: () => T | Promise<T>,
 ): RequestState<T>;
-export function defineRequestState<Schema extends StandardSchemaV1>(
-	schema?: Schema,
-): RequestState<StandardSchemaV1.InferInput<Schema>>;
 export function defineRequestState(
-	schema: StandardSchemaV1 = z.any(),
+	initFn: () => any | Promise<any>,
 ): RequestState<any> {
+	const ref = Object.freeze({});
 	return {
+		get ref(): Readonly<object> {
+			return ref;
+		},
 		async get() {
 			const store = await getCurrentRequestState();
-			return store.get(schema);
+			if (!store.has(ref)) {
+				const initialValue = await initFn();
+				store.set(ref, initialValue);
+				return initialValue;
+			}
+			return store.get(ref);
 		},
 
 		async set(value) {
 			const store = await getCurrentRequestState();
-			const parsedValue = await schema["~standard"].validate(value);
-			if (parsedValue.issues) {
-				throw new Error(`Invalid value: ${JSON.stringify(parsedValue.issues)}`);
-			}
-			store.set(schema, parsedValue.value);
+			store.set(ref, value);
 		},
 	};
 }
