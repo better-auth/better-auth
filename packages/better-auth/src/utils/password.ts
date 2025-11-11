@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 
 export async function validatePassword(
@@ -44,4 +45,30 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
 		});
 	}
 	return true;
+}
+
+/**
+ * Function to check password length (min and max)
+ * @param password
+ * @param ctx
+ */
+export function checkPasswordLength(
+	password: string = "",
+	ctx: GenericEndpointContext,
+): void {
+	const { minPasswordLength, maxPasswordLength } = ctx.context.password.config;
+
+	if (password.length < minPasswordLength) {
+		ctx.context.logger.error("Password is too short");
+		throw new APIError("BAD_REQUEST", {
+			message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+		});
+	}
+
+	if (password.length > maxPasswordLength) {
+		ctx.context.logger.error("Password is too long");
+		throw new APIError("BAD_REQUEST", {
+			message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+		});
+	}
 }
