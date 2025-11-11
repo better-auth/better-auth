@@ -13,7 +13,28 @@ function checkHasPath(url: string): boolean {
 	}
 }
 
+function assertHasProtocol(url: string): void {
+	try {
+		const parsedUrl = new URL(url);
+		if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+			throw new BetterAuthError(
+				`Invalid base URL: ${url}. URL must include 'http://' or 'https://'`,
+			);
+		}
+	} catch (error) {
+		if (error instanceof BetterAuthError) {
+			throw error;
+		}
+		throw new BetterAuthError(
+			`Invalid base URL: ${url}. Please provide a valid base URL.`,
+			String(error),
+		);
+	}
+}
+
 function withPath(url: string, path = "/api/auth") {
+	assertHasProtocol(url);
+
 	const hasPath = checkHasPath(url);
 	if (hasPath) {
 		return url;
