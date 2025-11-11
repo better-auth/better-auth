@@ -62,13 +62,12 @@ export function defineRequestState(
 		},
 		async get() {
 			const store = await getCurrentRequestState();
-			const value = store.get(ref);
-			if (!value) {
+			if (!store.has(ref)) {
 				const initialValue = await initFn();
 				store.set(ref, initialValue);
 				return initialValue;
 			}
-			return value;
+			return store.get(ref);
 		},
 
 		async set(value) {
