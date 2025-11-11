@@ -195,7 +195,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								continue;
 							}
 							let jsonArray = [];
-							for (const value of attr.defaultValue) jsonArray.push(`${value}`);
+						for (const value of attr.defaultValue) jsonArray.push(value);
 							fieldBuilder.attribute(
 								`default("${JSON.stringify(jsonArray).replace(/"/g, '\\"')}")`,
 							);
