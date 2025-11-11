@@ -741,7 +741,7 @@ Each plan can have the following properties:
 
 **annualDiscountLookupKey**: `string` - The Stripe price lookup key for annual billing. Alternative to `annualDiscountPriceId`.
 
-**limits**: `Record<string, number>` - Limits associated with the plan (e.g., `{ projects: 10, storage: 5 }`).
+**limits**: `Record<string, unknown>` - Limits associated with the plan (e.g., `{ projects: 10, storage: 5 }`). Useful when you want to define plan-specific metadata.
 
 **group**: `string` - A group name for the plan, useful for categorizing plans.
 

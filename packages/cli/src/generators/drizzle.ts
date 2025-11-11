@@ -52,7 +52,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 			name = convertToSnakeCase(name, adapter.options?.camelCase);
 			if (field.references?.field === "id") {
-				if (options.advanced?.database?.useNumberId) {
+				const useNumberId =
+					options.advanced?.database?.useNumberId ||
+					options.advanced?.database?.generateId === "serial";
+				const useUUIDs = options.advanced?.database?.generateId === "uuid";
+				if (useNumberId) {
 					if (databaseType === "pg") {
 						return `integer('${name}')`;
 					} else if (databaseType === "mysql") {
@@ -61,6 +65,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						// using sqlite
 						return `integer('${name}')`;
 					}
+				}
+				if (useUUIDs && databaseType === "pg") {
+					return `uuid('${name}')`;
 				}
 				if (field.references.field) {
 					if (databaseType === "mysql") {
@@ -94,7 +101,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						? `varchar('${name}', { length: 255 })`
 						: field.references
 							? `varchar('${name}', { length: 36 })`
-							: `text('${name}')`,
+							: field.sortable
+								? `varchar('${name}', { length: 255 })`
+								: field.index
+									? `varchar('${name}', { length: 255 })`
+									: `text('${name}')`,
 				},
 				boolean: {
 					sqlite: `integer('${name}', { mode: 'boolean' })`,
@@ -140,7 +151,14 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		let id: string = "";
 
-		if (options.advanced?.database?.useNumberId) {
+		const useNumberId =
+			options.advanced?.database?.useNumberId ||
+			options.advanced?.database?.generateId === "serial";
+		const useUUIDs = options.advanced?.database?.generateId === "uuid";
+
+		if (useUUIDs && databaseType === "pg") {
+			id = `uuid("id").default(sql\`pg_catalog.gen_random_uuid()\`).primaryKey()`;
+		} else if (useNumberId) {
 			if (databaseType === "pg") {
 				id = `serial("id").primaryKey()`;
 			} else if (databaseType === "sqlite") {
@@ -158,6 +176,24 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 		}
 
+		type Index = { type: "uniqueIndex" | "index"; name: string; on: string };
+
+		let indexes: Index[] = [];
+
+		const assignIndexes = (indexes: Index[]): string => {
+			if (!indexes.length) return "";
+
+			let code: string[] = [`, (table) => [`];
+
+			for (const index of indexes) {
+				code.push(`  ${index.type}("${index.name}").on(table.${index.on}),`);
+			}
+
+			code.push(`]`);
+
+			return code.join("\n");
+		};
+
 		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
 			modelName,
 			adapter.options?.camelCase,
@@ -168,6 +204,20 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							const attr = fields[field]!;
 							const fieldName = attr.fieldName || field;
 							let type = getType(fieldName, attr);
+
+							if (attr.index && !attr.unique) {
+								indexes.push({
+									type: "index",
+									name: `${modelName}_${fieldName}_idx`,
+									on: fieldName,
+								});
+							} else if (attr.index && attr.unique) {
+								indexes.push({
+									type: "uniqueIndex",
+									name: `${modelName}_${fieldName}_uidx`,
+									on: fieldName,
+								});
+							}
 
 							if (
 								attr.defaultValue !== null &&
@@ -217,7 +267,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}`;
 						})
 						.join(",\n ")}
-				});`;
+					}${assignIndexes(indexes)});`;
 		code += `\n${schema}\n`;
 	}
 	const formattedCode = await prettier.format(code, {
@@ -253,7 +303,11 @@ function generateImport({
 		if (hasJson && hasBigint) break;
 	}
 
-	const useNumberId = options.advanced?.database?.useNumberId;
+	const useNumberId =
+		options.advanced?.database?.useNumberId ||
+		options.advanced?.database?.generateId === "serial";
+
+	const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 	coreImports.push(`${databaseType}Table`);
 	coreImports.push(
@@ -292,6 +346,10 @@ function generateImport({
 			coreImports.push("mysqlEnum");
 		}
 	} else if (databaseType === "pg") {
+		if (useUUIDs) {
+			rootImports.push("sql");
+		}
+
 		// Only include integer for PG if actually needed
 		const hasNonBigintNumber = Object.values(tables).some((table) =>
 			Object.values(table.fields).some(
@@ -308,14 +366,22 @@ function generateImport({
 		// handles the references field with useNumberId
 		const needsInteger =
 			hasNonBigintNumber ||
-			(options.advanced?.database?.useNumberId && hasFkToId);
+			((options.advanced?.database?.useNumberId ||
+				options.advanced?.database?.generateId === "serial") &&
+				hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");
 		}
 	} else {
 		coreImports.push("integer");
 	}
-	coreImports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
+	if (databaseType === "pg") {
+		if (useNumberId) {
+			coreImports.push("serial");
+		} else if (useUUIDs) {
+			coreImports.push("uuid");
+		}
+	}
 
 	//handle json last on the import order
 	if (hasJson) {
@@ -339,6 +405,20 @@ function generateImport({
 
 	if (hasSQLiteTimestamp) {
 		rootImports.push("sql");
+	}
+
+	//handle indexes
+	const hasIndexes = Object.values(tables).some((table) =>
+		Object.values(table.fields).some((field) => field.index && !field.unique),
+	);
+	const hasUniqueIndexes = Object.values(tables).some((table) =>
+		Object.values(table.fields).some((field) => field.unique && field.index),
+	);
+	if (hasIndexes) {
+		coreImports.push("index");
+	}
+	if (hasUniqueIndexes) {
+		coreImports.push("uniqueIndex");
 	}
 
 	return `${rootImports.length > 0 ? `import { ${rootImports.join(", ")} } from "drizzle-orm";\n` : ""}import { ${coreImports
