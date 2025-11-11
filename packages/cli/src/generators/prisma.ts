@@ -278,10 +278,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 					let indexField = fieldName;
 					if (provider === "mysql" && field && field.type === "string") {
-						if (
-							field.references?.field === "id" &&
-							options.advanced?.database?.useNumberId
-						) {
+						const useNumberId =
+							options.advanced?.database?.useNumberId ||
+							options.advanced?.database?.generateId === "serial";
+						const useUUIDs = options.advanced?.database?.generateId === "uuid";
+						if (field.references?.field === "id" && (useNumberId || useUUIDs)) {
 							indexField = `${fieldName}`;
 						} else {
 							indexField = `${fieldName}(length: 191)`; // length of 191 because String in Prisma is varchar(191)
