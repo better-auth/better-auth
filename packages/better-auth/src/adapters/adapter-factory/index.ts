@@ -63,6 +63,7 @@ export const createAdapterFactory =
 			supportsJSON: cfg.supportsJSON ?? false,
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
+			supportsUUIDs: cfg.supportsUUIDs ?? false,
 			transaction: cfg.transaction ?? false,
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
@@ -170,6 +171,7 @@ export const createAdapterFactory =
 			usePlural: config.usePlural,
 			disableIdGeneration: config.disableIdGeneration,
 			customIdGenerator: config.customIdGenerator,
+			supportsUUIDs: config.supportsUUIDs,
 		});
 
 		const transformInput = async (
@@ -182,15 +184,13 @@ export const createAdapterFactory =
 			const fields = schema[defaultModelName]!.fields;
 
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
-			if (
-				!config.disableIdGeneration &&
-				!options.advanced?.database?.useNumberId
-			) {
-				fields.id = idField({
-					customModelName: defaultModelName,
-					forceAllowId: forceAllowId && "id" in data,
-				});
-			}
+			const useNumberId =
+				options.advanced?.database?.useNumberId ||
+				options.advanced?.database?.generateId === "serial";
+			fields.id = idField({
+				customModelName: defaultModelName,
+				forceAllowId: forceAllowId && "id" in data,
+			});
 			for (const field in fields) {
 				let value = data[field];
 				const fieldAttributes = fields[field];
@@ -235,10 +235,7 @@ export const createAdapterFactory =
 					newValue = await fieldAttributes!.transform.input(newValue);
 				}
 
-				if (
-					fieldAttributes!.references?.field === "id" &&
-					options.advanced?.database?.useNumberId
-				) {
+				if (fieldAttributes!.references?.field === "id" && useNumberId) {
 					if (Array.isArray(newValue)) {
 						newValue = newValue.map((x) => (x !== null ? Number(x) : null));
 					} else {
@@ -269,7 +266,7 @@ export const createAdapterFactory =
 						action,
 						field: newFieldName,
 						fieldAttributes: fieldAttributes!,
-						model: defaultModelName,
+						model: getModelName(defaultModelName),
 						schema,
 						options,
 					});
@@ -358,7 +355,7 @@ export const createAdapterFactory =
 								field: newFieldName,
 								fieldAttributes: field,
 								select,
-								model: unsafe_model,
+								model: getModelName(unsafe_model),
 								schema,
 								options,
 							});
@@ -494,11 +491,15 @@ export const createAdapterFactory =
 					model: defaultModelName,
 				});
 
+				const useNumberId =
+					options.advanced?.database?.useNumberId ||
+					options.advanced?.database?.generateId === "serial";
+
 				if (
 					defaultFieldName === "id" ||
 					fieldAttr!.references?.field === "id"
 				) {
-					if (options.advanced?.database?.useNumberId) {
+					if (useNumberId) {
 						if (Array.isArray(value)) {
 							newValue = value.map(Number);
 						} else {
@@ -775,7 +776,16 @@ export const createAdapterFactory =
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				unsafeModel = getDefaultModelName(unsafeModel);
-				if ("id" in unsafeData && !forceAllowId) {
+				if (
+					"id" in unsafeData &&
+					typeof unsafeData.id !== "undefined" &&
+					!forceAllowId
+				) {
+					// The reason why `forceAllowId` was introduced was because we used to handle
+					// id generation ourselves (eg adapter.create({ data: { id: "123" } }))
+					// This was bad as certain things (such as number ids) would not work as expected.
+					// Since then, we have introduced the `forceAllowId` parameter to allow users to
+					// bypass this check. Otherwise, we would throw a warning stating that the id will be ignored
 					logger.warn(
 						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you, unless you pass in the \`forceAllowId\` parameter. The id will be ignored.`,
 					);

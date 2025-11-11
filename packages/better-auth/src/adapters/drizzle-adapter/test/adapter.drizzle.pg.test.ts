@@ -8,6 +8,7 @@ import {
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
@@ -63,6 +64,7 @@ const { execute } = await testAdapter({
 		authFlowTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
+		uuidTestSuite(),
 	],
 	async onFinish() {
 		await cleanupDatabase(true);

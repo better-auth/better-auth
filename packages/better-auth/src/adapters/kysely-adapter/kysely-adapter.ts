@@ -615,6 +615,7 @@ export const kyselyAdapter = (
 					? false
 					: true,
 			supportsJSON: false,
+			supportsUUIDs: config?.type === "postgres" ? true : false,
 			transaction: config?.transaction
 				? (cb) =>
 						db.transaction().execute((trx) => {

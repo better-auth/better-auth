@@ -9,6 +9,7 @@ import {
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
 
@@ -49,6 +50,7 @@ const { execute } = await testAdapter({
 		authFlowTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
+		uuidTestSuite(),
 	],
 	async onFinish() {
 		await mysqlDB.end();

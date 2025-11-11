@@ -120,6 +120,7 @@ export const createTestSuite = <
 		 */
 		alwaysMigrate?: boolean | undefined;
 		prefixTests?: string | undefined;
+		customIdGenerator?: () => any | Promise<any> | undefined;
 	},
 	tests: (
 		helpers: {
@@ -315,8 +316,18 @@ export const createTestSuite = <
 				return newData;
 			};
 
+			const idGenerator = async () => {
+				if (config.customIdGenerator) {
+					return config.customIdGenerator();
+				}
+				if (helpers.customIdGenerator) {
+					return helpers.customIdGenerator();
+				}
+				return generateId();
+			};
+
 			const generateModel: GenerateFn = async (model: string) => {
-				const id = (await helpers.customIdGenerator?.()) || generateId();
+				const id = await idGenerator();
 				const randomDate = new Date(
 					Date.now() - Math.random() * 1000 * 60 * 60 * 24 * 365,
 				);

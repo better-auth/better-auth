@@ -34,6 +34,8 @@ const { execute } = await testAdapter({
 		authFlowTestSuite(),
 		transactionsTestSuite(),
 		joinsTestSuite(),
+		// numberIdTestSuite(), // no support
+		// uuidTestSuite() // no support
 	],
 	customIdGenerator: () => new ObjectId().toHexString(),
 });
