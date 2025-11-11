@@ -72,7 +72,12 @@ export function getTrustedOrigins(options: BetterAuthOptions) {
 	}
 	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
 	if (envTrustedOrigins) {
-		trustedOrigins.push(...envTrustedOrigins.split(","));
+		trustedOrigins.push(
+			...envTrustedOrigins
+				.split(",")
+				.map((origin) => origin.trim())
+				.filter((origin) => origin),
+		);
 	}
 	if (trustedOrigins.filter((x) => !x).length) {
 		throw new BetterAuthError(

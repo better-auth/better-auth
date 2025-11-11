@@ -633,6 +633,39 @@ describe("base context creation", () => {
 			vi.unstubAllEnvs();
 		});
 
+		it("should trim whitespace from BETTER_AUTH_TRUSTED_ORIGINS env", async () => {
+			vi.stubEnv(
+				"BETTER_AUTH_TRUSTED_ORIGINS",
+				" http://app1.com , http://app2.com ,http://app3.com ",
+			);
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+			});
+			expect(res.trustedOrigins).toContain("http://app1.com");
+			expect(res.trustedOrigins).toContain("http://app2.com");
+			expect(res.trustedOrigins).toContain("http://app3.com");
+			expect(res.trustedOrigins).toContain("http://localhost:3000");
+			expect(res.trustedOrigins).not.toContain(" http://app1.com");
+			expect(res.trustedOrigins).not.toContain(" http://app2.com ");
+			vi.unstubAllEnvs();
+		});
+
+		it("should filter out empty entries from BETTER_AUTH_TRUSTED_ORIGINS env", async () => {
+			vi.stubEnv(
+				"BETTER_AUTH_TRUSTED_ORIGINS",
+				"http://app1.com,,http://app2.com, ,http://app3.com",
+			);
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+			});
+			expect(res.trustedOrigins).toContain("http://app1.com");
+			expect(res.trustedOrigins).toContain("http://app2.com");
+			expect(res.trustedOrigins).toContain("http://app3.com");
+			expect(res.trustedOrigins).toContain("http://localhost:3000");
+			expect(res.trustedOrigins.length).toBe(4);
+			vi.unstubAllEnvs();
+		});
+
 		it("should throw error for invalid trusted origin", async () => {
 			await expect(
 				initBase({
