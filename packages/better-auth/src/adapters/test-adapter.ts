@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import { logger, TTY_COLORS } from "@better-auth/core/env";
+import { TTY_COLORS } from "@better-auth/core/env";
 import { afterAll, beforeAll, describe } from "vitest";
 import { getAuthTables } from "../db";
 import type { createTestSuite } from "./create-test-suite";
@@ -23,7 +23,6 @@ export const testAdapter = async ({
 	prefixTests,
 	onFinish,
 	customIdGenerator,
-	skipPostTestCleanup,
 	transformIdOutput,
 }: {
 	/**
@@ -82,11 +81,6 @@ export const testAdapter = async ({
 	 * A function that will transform the ID output.
 	 */
 	transformIdOutput?: (id: any) => any;
-	/**
-	 * If true, the post test cleanup will be skipped.
-	 * Only use if you know what you are doing, useful for debugging purposes.
-	 */
-	skipPostTestCleanup?: boolean;
 }) => {
 	const defaultBAOptions = {} satisfies BetterAuthOptions;
 	let betterAuthOptions = (() => {
@@ -206,13 +200,7 @@ export const testAdapter = async ({
 				}, 20000);
 
 				afterAll(async () => {
-					if (!skipPostTestCleanup) {
-						await cleanup();
-					} else {
-						logger.warn(
-							"Warning: Skipping post test cleanup as `skipPostTestCleanup` is true",
-						);
-					}
+					await cleanup();
 					await onFinish?.();
 				}, 20000);
 

@@ -244,7 +244,6 @@ export const performanceTestSuite = createTestSuite(
 						session: allSessions.filter((s: any) => s.userId === user.id),
 						account: allAccounts.filter((a: any) => a.userId === user.id),
 					}));
-					// console.log(result)
 					const end = performance.now();
 					tests.findManyWithoutJoin.push(end - start);
 					expect(result.length).toBeGreaterThan(0);

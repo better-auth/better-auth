@@ -231,17 +231,11 @@ export const createTestSuite = <
 								deleteMany: adapter.deleteMany,
 								delete: adapter.delete,
 								findOne: async (args) => {
-									// Uncomment logs for debugging
-									// console.log(`findOne:`, args);
 									const res = (await adapter.findOne(args)) as any;
-									// console.log(`findOne result:`, res);
 									return res;
 								},
 								findMany: async (args) => {
-									// Uncomment logs for debugging
-									// console.log(`findMany:`, args);
 									const res = (await adapter.findMany(args)) as any;
-									// console.log(`findMany result:`, res);
 									return res;
 								},
 								update: adapter.update as any,
