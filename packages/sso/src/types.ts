@@ -223,7 +223,6 @@ export interface SSOOptions {
 		 * Enables or disables the domain verification feature
 		 */
 		enabled?: boolean;
-
 		/**
 		 * Prefix used to generate the domain verification token
 		 *
