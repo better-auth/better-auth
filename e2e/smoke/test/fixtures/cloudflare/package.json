@@ -16,7 +16,6 @@
     "check": "tsc && wrangler deploy --dry-run",
     "dev": "wrangler dev",
     "migrate:local": "wrangler d1 migrations apply db --local",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
-    "e2e:smoke": "vitest"
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
   }
 }
