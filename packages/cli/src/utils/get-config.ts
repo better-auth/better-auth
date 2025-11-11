@@ -1,6 +1,5 @@
-// @ts-expect-error
-
 import { createRequire } from "node:module";
+// @ts-expect-error
 import babelPresetReact from "@babel/preset-react";
 // @ts-expect-error
 import babelPresetTypeScript from "@babel/preset-typescript";
