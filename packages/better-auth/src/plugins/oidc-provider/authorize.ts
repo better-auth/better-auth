@@ -61,7 +61,7 @@ export async function authorize(
 	const session = await getSessionFromCtx(ctx);
 	const query = (ctx.query || {}) as AuthorizationQuery;
 
-	const promptSet = (await getAuthorizePromptSet())!;
+	const promptSet = await getAuthorizePromptSet();
 
 	// Handle prompt=login: force reauthentication even if user has active session
 	// However, if we're being called from the middleware after login, skip the redirect
