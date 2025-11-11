@@ -355,7 +355,7 @@ importers:
         version: 12.23.12(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       geist:
         specifier: ^1.4.2
-        version: 1.4.2(next@16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
+        version: 1.4.2(next@16.0.1(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -642,7 +642,7 @@ importers:
         version: 15.8.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(algoliasearch@5.36.0)(lucide-react@0.542.0(react@19.2.0))(next@16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(tailwindcss@4.1.13)
       geist:
         specifier: ^1.4.2
-        version: 1.4.2(next@16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
+        version: 1.4.2(next@16.0.1(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0))
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
@@ -1091,6 +1091,9 @@ importers:
       '@babel/preset-typescript':
         specifier: ^7.27.1
         version: 7.27.1(@babel/core@7.28.4)
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
       '@better-auth/utils':
         specifier: 0.3.0
         version: 0.3.0
@@ -1250,15 +1253,9 @@ importers:
       expo-constants:
         specifier: ~17.1.7
         version: 17.1.7(expo@54.0.21)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.0))
-      expo-crypto:
-        specifier: ^13.0.2
-        version: 13.0.2(expo@54.0.21)
       expo-linking:
         specifier: ~7.1.7
         version: 7.1.7(expo@54.0.21)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0)
-      expo-secure-store:
-        specifier: ~14.2.3
-        version: 14.2.3(expo@54.0.21)
       expo-web-browser:
         specifier: ~14.2.0
         version: 14.2.0(expo@54.0.21)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.0))
@@ -8340,11 +8337,6 @@ packages:
       expo: '*'
       react-native: '*'
 
-  expo-crypto@13.0.2:
-    resolution: {integrity: sha512-7f/IMPYJZkBM21LNEMXGrNo/0uXSVfZTwufUdpNKedJR0fm5fH4DCSN79ZddlV26nF90PuXjK2inIbI6lb0qRA==}
-    peerDependencies:
-      expo: '*'
-
   expo-crypto@15.0.7:
     resolution: {integrity: sha512-FUo41TwwGT2e5rA45PsjezI868Ch3M6wbCZsmqTWdF/hr+HyPcrp1L//dsh/hsrsyrQdpY/U96Lu71/wXePJeg==}
     peerDependencies:
@@ -8424,11 +8416,6 @@ packages:
         optional: true
       react-server-dom-webpack:
         optional: true
-
-  expo-secure-store@14.2.3:
-    resolution: {integrity: sha512-hYBbaAD70asKTFd/eZBKVu+9RTo9OSTMMLqXtzDF8ndUGjpc6tmRCoZtrMHlUo7qLtwL5jm+vpYVBWI8hxh/1Q==}
-    peerDependencies:
-      expo: '*'
 
   expo-secure-store@15.0.7:
     resolution: {integrity: sha512-9q7+G1Zxr5P6J5NRIlm86KulvmYwc6UnQlYPjQLDu1drDnerz6AT6l884dPu29HgtDTn4rR0heYeeGFhMKM7/Q==}
@@ -21357,11 +21344,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  expo-crypto@13.0.2(expo@54.0.21):
-    dependencies:
-      base64-js: 1.5.1
-      expo: 54.0.21(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.14)(graphql@16.11.0)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0)
-
   expo-crypto@15.0.7(expo@54.0.21):
     dependencies:
       base64-js: 1.5.1
@@ -21523,10 +21505,6 @@ snapshots:
       - '@types/react'
       - '@types/react-dom'
       - supports-color
-
-  expo-secure-store@14.2.3(expo@54.0.21):
-    dependencies:
-      expo: 54.0.21(@babel/core@7.28.4)(@expo/metro-runtime@6.1.2)(expo-router@6.0.14)(graphql@16.11.0)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.0))(react@19.2.0)
 
   expo-secure-store@15.0.7(expo@54.0.21):
     dependencies:
@@ -22045,7 +22023,7 @@ snapshots:
 
   function-bind@1.1.2: {}
 
-  geist@1.4.2(next@16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)):
+  geist@1.4.2(next@16.0.1(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)):
     dependencies:
       next: 16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)
 
