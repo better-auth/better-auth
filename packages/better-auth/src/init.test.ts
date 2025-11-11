@@ -245,4 +245,20 @@ describe("init", async () => {
 		});
 		expect(res.baseURL).toBe("http://localhost:5147/api/auth");
 	});
+
+	it("should throw an error if the base url does not include http or https as the protocol", async () => {
+		await expect(
+			init({ database, baseURL: "localhost:6969" }),
+		).rejects.toThrowError(
+			`Invalid base URL: localhost:6969. URL must include 'http://' or 'https://'`,
+		);
+	});
+
+	it("should throw an error if the base url does not include http or https as the protocol", async () => {
+		await expect(
+			init({ database, baseURL: "ws://localhost:6969" }),
+		).rejects.toThrowError(
+			`Invalid base URL: ws://localhost:6969. URL must include 'http://' or 'https://'`,
+		);
+	});
 });
