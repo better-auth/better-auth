@@ -9,7 +9,9 @@ import {
 	signInSSO,
 	spMetadata,
 } from "./routes/sso";
-import type { SSOOptions } from "./types";
+import type { OIDCConfig, SAMLConfig, SSOOptions } from "./types";
+
+export type { SAMLConfig, OIDCConfig, SSOOptions };
 
 const fastValidator = {
 	async validate(xml: string) {
