@@ -13,28 +13,35 @@ import { createTestSuite } from "../create-test-suite";
 /**
  * This test suite tests the basic CRUD operations of the adapter.
  */
-export const normalTestSuite = createTestSuite("normal", {}, (helpers) => {
-	const tests = getNormalTestSuiteTests(helpers);
-	return {
-		"init - tests": async () => {
-			const opts = helpers.getBetterAuthOptions();
-			expect(opts.advanced?.database?.useNumberId).toBe(undefined);
-		},
-		...tests,
-	};
-});
+export const normalTestSuite = createTestSuite(
+	"normal",
+	{},
+	(helpers, debugTools?: { showDB?: () => Promise<void> }) => {
+		const tests = getNormalTestSuiteTests(helpers, debugTools);
+		return {
+			"init - tests": async () => {
+				const opts = helpers.getBetterAuthOptions();
+				expect(opts.advanced?.database?.useNumberId).toBe(undefined);
+			},
+			...tests,
+		};
+	},
+);
 
-export const getNormalTestSuiteTests = ({
-	adapter,
-	generate,
-	insertRandom,
-	modifyBetterAuthOptions,
-	sortModels,
-	customIdGenerator,
-	getBetterAuthOptions,
-	transformGeneratedModel,
-	transformIdOutput,
-}: Parameters<Parameters<typeof createTestSuite>[2]>[0]) => {
+export const getNormalTestSuiteTests = (
+	{
+		adapter,
+		generate,
+		insertRandom,
+		modifyBetterAuthOptions,
+		sortModels,
+		customIdGenerator,
+		getBetterAuthOptions,
+		transformGeneratedModel,
+		transformIdOutput,
+	}: Parameters<Parameters<typeof createTestSuite>[2]>[0],
+	debugTools?: { showDB?: () => Promise<void> },
+) => {
 	return {
 		"create - should create a model": async () => {
 			const user = await generate("user");

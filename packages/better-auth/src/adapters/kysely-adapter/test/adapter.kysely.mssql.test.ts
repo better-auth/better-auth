@@ -21,7 +21,7 @@ const dialect = new MssqlDialect({
 		...Tarn,
 		options: {
 			min: 0,
-			max: 10,
+			max: 50,
 		},
 	},
 	tedious: {
@@ -36,10 +36,12 @@ const dialect = new MssqlDialect({
 					type: "default",
 				},
 				options: {
-					database: "master", // Start with master database, will create better_auth if needed
+					database: "better_auth",
 					port: 1433,
 					trustServerCertificate: true,
 					encrypt: false,
+					connectTimeout: 30000,
+					requestTimeout: 30000,
 				},
 				server: "localhost",
 			}),
@@ -193,11 +195,18 @@ const query = async (sql: string, timeoutMs: number = 30000) => {
 };
 
 const showDB = async () => {
+	const tables = await query(`SELECT TABLE_NAME, TABLE_SCHEMA 
+FROM INFORMATION_SCHEMA.TABLES 
+WHERE TABLE_TYPE = 'BASE TABLE'
+ORDER BY TABLE_SCHEMA, TABLE_NAME;`);
+
+	console.log("Available tables:", tables);
+
 	const DB = {
-		users: await query("SELECT * FROM [user]"),
-		sessions: await query("SELECT * FROM [session]"),
-		accounts: await query("SELECT * FROM [account]"),
-		verifications: await query("SELECT * FROM [verification]"),
+		user: await query("SELECT * FROM [user]"),
+		session: await query("SELECT * FROM [session]"),
+		account: await query("SELECT * FROM [account]"),
+		verification: await query("SELECT * FROM [verification]"),
 	};
 	console.log(`DB`, DB);
 };
@@ -304,7 +313,11 @@ const { execute } = await testAdapter({
 	},
 	prefixTests: "mssql",
 	tests: [
-		normalTestSuite(),
+		normalTestSuite({
+			async showDB() {
+				await showDB();
+			},
+		}),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite({ showDB }),
 		numberIdTestSuite(),

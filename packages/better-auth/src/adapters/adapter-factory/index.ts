@@ -705,19 +705,27 @@ export const createAdapterFactory =
 					},
 				],
 			});
-			if (joinConfig.isUnique) {
-				result = await adapterInstance.findOne<Record<string, any>>({
-					model: modelName,
-					where: where,
-				});
-			} else {
-				result = await adapterInstance.findMany<Record<string, any>>({
-					model: modelName,
-					where: where,
+			try {
+				if (joinConfig.isUnique) {
+					result = await adapterInstance.findOne<Record<string, any>>({
+						model: modelName,
+						where: where,
+					});
+				} else {
+					result = await adapterInstance.findMany<Record<string, any>>({
+						model: modelName,
+						where: where,
+						limit: joinConfig.limit,
+					});
+				}
+			} catch (error) {
+				logger.error(`Failed to query fallback join for model ${modelName}:`, {
+					where,
 					limit: joinConfig.limit,
 				});
+				console.error(error);
+				throw error;
 			}
-
 			return result;
 		};
 
