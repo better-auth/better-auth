@@ -60,6 +60,7 @@ import type {
 	InferInvitation,
 	InferMember,
 	InferOrganization,
+	InferTeam,
 	OrganizationSchema,
 	Team,
 	TeamMember,
@@ -304,8 +305,8 @@ export function organization<
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		Team: O["teams"] extends { enabled: true } ? Team : unknown;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : unknown;
 		ActiveOrganization: Awaited<
 			ReturnType<ReturnType<typeof getFullOrganization<O>>>
 		>;
@@ -374,9 +375,16 @@ export function organization<O extends OrganizationOptions>(
 		Member: InferMember<O>;
 		Team: O["teams"] extends { enabled: true } ? Team : any;
 		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
-		ActiveOrganization: Awaited<
-			ReturnType<ReturnType<typeof getFullOrganization<O>>>
-		>;
+		ActiveOrganization: O["teams"] extends { enabled: true }
+			? {
+					members: InferMember<O, false>[];
+					invitations: InferInvitation<O, false>[];
+					teams: InferTeam<O, false>[];
+				} & InferOrganization<O, false>
+			: {
+					members: InferMember<O, false>[];
+					invitations: InferInvitation<O, false>[];
+				} & InferOrganization<O, false>;
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: O;
