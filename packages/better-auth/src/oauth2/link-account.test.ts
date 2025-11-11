@@ -232,7 +232,6 @@ describe("oauth2 - email verification on link", async () => {
 });
 
 describe("oauth2 - override user info on sign-in", async () => {
-	const sessionStore = new Map<string, string>();
 	const { auth, client, cookieSetter } = await getTestInstance({
 		socialProviders: {
 			google: {
@@ -248,15 +247,10 @@ describe("oauth2 - override user info on sign-in", async () => {
 				trustedProviders: ["google"],
 			},
 		},
-		secondaryStorage: {
-			set(key, value) {
-				sessionStore.set(key, value);
-			},
-			get(key) {
-				return sessionStore.get(key) || null;
-			},
-			delete(key) {
-				sessionStore.delete(key);
+		session: {
+			cookieCache: {
+				enabled: true,
+				maxAge: 300,
 			},
 		},
 	});
