@@ -1667,8 +1667,14 @@ describe("Fallback JoinOption System", async () => {
 
 			const adapter = await createTestAdapter({
 				config: {
-					supportsJoin: false,
 					debugLogs: {},
+				},
+				options: {
+					advanced: {
+						database: {
+							experimentalJoins: false, // explicitally defining since in the future `join` will likely be default which would break this test
+						},
+					},
 				},
 				adapter: () =>
 					({
@@ -1727,8 +1733,14 @@ describe("Fallback JoinOption System", async () => {
 
 			const adapter = await createTestAdapter({
 				config: {
-					supportsJoin: false,
 					debugLogs: {},
+				},
+				options: {
+					advanced: {
+						database: {
+							experimentalJoins: false, // explicitally defining since in the future `join` will likely be default which would break this test
+						},
+					},
 				},
 				adapter: () =>
 					({
@@ -1803,8 +1815,14 @@ describe("Fallback JoinOption System", async () => {
 
 			const adapter = await createTestAdapter({
 				config: {
-					supportsJoin: false,
 					debugLogs: {},
+				},
+				options: {
+					advanced: {
+						database: {
+							experimentalJoins: false, // explicitally defining since in the future `join` will likely be default which would break this test
+						},
+					},
 				},
 				adapter: () =>
 					({
@@ -1837,8 +1855,14 @@ describe("Fallback JoinOption System", async () => {
 
 			const adapter = await createTestAdapter({
 				config: {
-					supportsJoin: false,
 					debugLogs: {},
+				},
+				options: {
+					advanced: {
+						database: {
+							experimentalJoins: false, // explicitally defining since in the future `join` will likely be default which would break this test
+						},
+					},
 				},
 				adapter: () =>
 					({
@@ -1875,8 +1899,14 @@ describe("Fallback JoinOption System", async () => {
 
 			const adapter = await createTestAdapter({
 				config: {
-					supportsJoin: true,
 					debugLogs: {},
+				},
+				options: {
+					advanced: {
+						database: {
+							experimentalJoins: true,
+						},
+					},
 				},
 				adapter: () =>
 					({
@@ -1912,8 +1942,14 @@ describe("Fallback JoinOption System", async () => {
 
 			const adapter = await createTestAdapter({
 				config: {
-					supportsJoin: true,
 					debugLogs: {},
+				},
+				options: {
+					advanced: {
+						database: {
+							experimentalJoins: true,
+						},
+					},
 				},
 				adapter: () =>
 					({
