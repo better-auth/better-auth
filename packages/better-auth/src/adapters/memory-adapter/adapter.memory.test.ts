@@ -12,7 +12,7 @@ let db: Record<string, any[]> = {};
 
 const { execute } = await testAdapter({
 	adapter: () => {
-		return memoryAdapter(db, { experimental: { joins: true } });
+		return memoryAdapter(db);
 	},
 	runMigrations: (options) => {
 		db = {};

@@ -70,32 +70,13 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
-	/**
-	 * Whether to enable experimental features.
-	 */
-	experimental?: {
-		/**
-		 * Whether to enable joins.
-		 *
-		 * If set to `true`, it's expected that your drizzle schema includes Drizzle Relations.
-		 * @see https://orm.drizzle.team/docs/relations
-		 *
-		 * @default false
-		 */
-		joins?: boolean;
-	};
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
-		({
-			getFieldName,
-			getFieldAttributes,
-			getModelName,
-			getDefaultModelName,
-		}) => {
+		({ getFieldName, options }) => {
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
 				if (!schema) {
@@ -384,7 +365,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 
-					if (config.experimental?.joins) {
+					if (options.advanced?.database?.experimentalJoins) {
 						if (!db.query || !db.query[model]) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,
@@ -437,7 +418,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = where ? convertWhereClause(where, model) : [];
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 
-					if (config.experimental?.joins) {
+					if (options.advanced?.database?.experimentalJoins) {
 						if (!db.query[model]) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,
@@ -575,18 +556,6 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
-			supportsJoin: (() => {
-				if (config.experimental?.joins) {
-					if (!db.query || Object.keys(db.query).length === 0) {
-						logger.error(
-							"You have enabled experimental joins for Drizzle, however we're unable to detect any relations.\nPlease ensure that you have re-generated your drizzle schema or adde drizzle-kit relations to your schema.",
-						);
-						return false;
-					}
-					return true;
-				}
-				return false;
-			})(),
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>

@@ -37,17 +37,6 @@ export interface MongoDBAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
-	/**
-	 * Whether to enable experimental features.
-	 */
-	experimental?: {
-		/**
-		 * Whether to enable joins.
-		 *
-		 * @default false
-		 */
-		joins?: boolean;
-	};
 }
 
 export const mongodbAdapter = (
@@ -582,7 +571,6 @@ export const mongodbAdapter = (
 				_id: "id",
 			},
 			supportsNumericIds: false,
-			supportsJoin: config?.experimental?.joins ?? false,
 			transaction:
 				config?.client && (config?.transaction ?? true)
 					? async (cb) => {

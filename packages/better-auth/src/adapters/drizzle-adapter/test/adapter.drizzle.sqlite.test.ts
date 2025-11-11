@@ -27,9 +27,6 @@ const { execute } = await testAdapter({
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "sqlite",
-			experimental: {
-				joins: true,
-			},
 		});
 	},
 	async runMigrations(betterAuthOptions) {

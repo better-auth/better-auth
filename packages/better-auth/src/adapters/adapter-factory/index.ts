@@ -67,7 +67,6 @@ export const createAdapterFactory =
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
-			supportsJoin: cfg.supportsJoin ?? false,
 		} satisfies AdapterFactoryConfig;
 		const useNumberId =
 			options.advanced?.database?.useNumberId === true ||
@@ -402,7 +401,7 @@ export const createAdapterFactory =
 				joinConfig,
 			} of requiredModels) {
 				let joinedData = await (async () => {
-					if (config.supportsJoin) {
+					if (options.advanced?.database?.experimentalJoins) {
 						const result = data[modelName];
 						return result;
 					} else {
@@ -972,7 +971,9 @@ export const createAdapterFactory =
 						select = result.select;
 					}
 					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
-					if (!config.supportsJoin && join && Object.keys(join).length > 0) {
+					const experimentalJoins =
+						options.advanced?.database?.experimentalJoins;
+					if (!experimentalJoins && join && Object.keys(join).length > 0) {
 						passJoinToAdapter = false;
 					}
 				} else {
@@ -1051,7 +1052,9 @@ export const createAdapterFactory =
 						join = result.join;
 					}
 					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
-					if (!config.supportsJoin && join && Object.keys(join).length > 0) {
+					const experimentalJoins =
+						options.advanced?.database?.experimentalJoins;
+					if (!experimentalJoins && join && Object.keys(join).length > 0) {
 						passJoinToAdapter = false;
 					}
 				} else {

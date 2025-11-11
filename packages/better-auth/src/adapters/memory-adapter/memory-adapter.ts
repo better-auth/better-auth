@@ -13,9 +13,6 @@ export interface MemoryDB {
 
 export interface MemoryAdapterConfig {
 	debugLogs?: DBAdapterDebugLogOption | undefined;
-	experimental?: {
-		joins?: boolean;
-	};
 }
 
 export const memoryAdapter = (
@@ -29,7 +26,6 @@ export const memoryAdapter = (
 			adapterName: "Memory Adapter",
 			usePlural: false,
 			debugLogs: config?.debugLogs || false,
-			supportsJoin: config?.experimental?.joins ?? false,
 			customTransformInput(props) {
 				if (
 					props.options.advanced?.database?.useNumberId &&

@@ -44,17 +44,6 @@ interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
-	/**
-	 * Whether to enable experimental features.
-	 */
-	experimental?: {
-		/**
-		 * Whether to enable joins.
-		 *
-		 * @default false
-		 */
-		joins?: boolean;
-	};
 }
 
 export const kyselyAdapter = (
@@ -626,7 +615,6 @@ export const kyselyAdapter = (
 					? false
 					: true,
 			supportsJSON: false,
-			supportsJoin: config?.experimental?.joins ?? false,
 			transaction: config?.transaction
 				? (cb) =>
 						db.transaction().execute((trx) => {

@@ -277,16 +277,6 @@ export interface DBAdapterFactoryConfig<
 	 * @default false
 	 */
 	disableTransformJoin?: boolean | undefined;
-	/**
-	 * Whether the adapter supports native joins.
-	 *
-	 * If set to `false`, Better-Auth will handle joins by making multiple queries
-	 * and combining the results. If set to `true`, the adapter is expected to handle
-	 * joins natively (e.g., SQL JOIN operations).
-	 *
-	 * @default false
-	 */
-	supportsJoin?: boolean | undefined;
 }
 
 export type Where = {

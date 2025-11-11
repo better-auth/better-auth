@@ -24,9 +24,6 @@ const { execute } = await testAdapter({
 		return kyselyAdapter(kyselyDB, {
 			type: "sqlite",
 			debugLogs: { isRunningAdapterTests: true },
-			experimental: {
-				joins: true,
-			},
 		});
 	},
 	prefixTests: "sqlite",

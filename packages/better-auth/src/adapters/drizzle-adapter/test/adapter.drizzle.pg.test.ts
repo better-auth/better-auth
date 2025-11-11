@@ -30,9 +30,6 @@ const { execute } = await testAdapter({
 			schema,
 			provider: "pg",
 			transaction: true,
-			experimental: {
-				joins: true,
-			},
 		});
 	},
 	async runMigrations(betterAuthOptions) {

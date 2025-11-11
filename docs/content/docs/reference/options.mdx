@@ -467,7 +467,9 @@ export const auth = betterAuth({
 		},
 		cookiePrefix: "myapp",
 		database: {
-			// Use your own custom ID generator, disable generating IDS so your database will generate them, or use "serial" to use your database's auto-incrementing ID, or "uuid" to use a random UUID.
+			// Use your own custom ID generator,
+			// disable generating IDS so your database will generate them,
+			// or use "serial" to use your database's auto-incrementing ID, or "uuid" to use a random UUID.
 			generateId: (((options: {
 				model: LiteralUnion<Models, string>;
 				size?: number;
@@ -475,6 +477,7 @@ export const auth = betterAuth({
 				return "my-super-unique-id";
 			})) | false | "serial" | "uuid",
 			defaultFindManyLimit: 100,
+			experimentalJoins: false,
 		}
 	},
 })

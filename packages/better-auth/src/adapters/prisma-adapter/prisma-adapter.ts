@@ -46,17 +46,6 @@ export interface PrismaConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
-	/**
-	 * Whether to enable experimental features.
-	 */
-	experimental?: {
-		/**
-		 * Whether to enable joins.
-		 *
-		 * @default false
-		 */
-		joins?: boolean;
-	};
 }
 
 interface PrismaClient {}
@@ -429,8 +418,6 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 								return cb(adapter);
 							})
 					: false,
-			// disableTransformJoin: true,
-			supportsJoin: config.experimental?.joins ?? false,
 		},
 		adapter: createCustomAdapter(prisma),
 	};

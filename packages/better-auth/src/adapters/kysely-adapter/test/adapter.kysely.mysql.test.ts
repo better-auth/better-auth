@@ -25,7 +25,6 @@ const { execute } = await testAdapter({
 		kyselyAdapter(kyselyDB, {
 			type: "mysql",
 			debugLogs: { isRunningAdapterTests: true },
-			experimental: { joins: true },
 		}),
 	async runMigrations(betterAuthOptions) {
 		await mysqlDB.query("DROP DATABASE IF EXISTS better_auth");

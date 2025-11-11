@@ -23,7 +23,6 @@ const { execute } = await testAdapter({
 	adapter: (options) => {
 		return mongodbAdapter(db, {
 			transaction: false,
-			experimental: { joins: true },
 		});
 	},
 	runMigrations: async (betterAuthOptions) => {},

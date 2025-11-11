@@ -28,7 +28,6 @@ const { execute } = await testAdapter({
 		kyselyAdapter(kyselyDB, {
 			type: "postgres",
 			debugLogs: { isRunningAdapterTests: true },
-			experimental: { joins: true },
 		}),
 	prefixTests: "pg",
 	async runMigrations(betterAuthOptions) {

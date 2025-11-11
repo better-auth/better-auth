@@ -291,7 +291,6 @@ const { execute } = await testAdapter({
 		return kyselyAdapter(kyselyDB, {
 			type: "mssql",
 			debugLogs: { isRunningAdapterTests: true },
-			experimental: { joins: true },
 		});
 	},
 	async runMigrations(betterAuthOptions) {
