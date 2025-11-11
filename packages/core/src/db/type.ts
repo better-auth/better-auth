@@ -32,7 +32,7 @@ export type DBPrimitive =
 	| undefined
 	| string[]
 	| number[]
-	| Object;
+	| (Record<string, unknown> | unknown[]);
 
 export type DBFieldAttributeConfig = {
 	/**
