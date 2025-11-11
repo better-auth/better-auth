@@ -1,8 +1,6 @@
-import type { StandardSchemaV1 } from "@standard-schema/spec";
-import { z } from "zod";
 import { type AsyncLocalStorage, getAsyncLocalStorage } from "../async_hooks";
 
-export type RequestStateWeakMap = WeakMap<StandardSchemaV1, any>;
+export type RequestStateWeakMap = WeakMap<object, any>;
 
 let requestStateAsyncStorage: AsyncLocalStorage<RequestStateWeakMap> | null =
 	null;
@@ -44,32 +42,38 @@ export async function runWithRequestState<T>(
 }
 
 export interface RequestState<T> {
-	get<S>(): Promise<S & T>;
+	get(): Promise<T>;
 	set(value: T): Promise<void>;
+
+	// A unique reference to state across requests. This is useful for debugging purposes.
+	readonly ref: object;
 }
 
 export function defineRequestState<T>(
-	schema?: StandardSchemaV1<T>,
+	initFn: () => T | Promise<T>,
 ): RequestState<T>;
-export function defineRequestState<Schema extends StandardSchemaV1>(
-	schema?: Schema,
-): RequestState<StandardSchemaV1.InferInput<Schema>>;
 export function defineRequestState(
-	schema: StandardSchemaV1 = z.any(),
+	initFn: () => any | Promise<any>,
 ): RequestState<any> {
+	const ref = {};
 	return {
+		get ref(): object {
+			return ref;
+		},
 		async get() {
 			const store = await getCurrentRequestState();
-			return store.get(schema);
+			const value = store.get(ref);
+			if (!value) {
+				const initialValue = await initFn();
+				store.set(ref, initialValue);
+				return initialValue;
+			}
+			return value;
 		},
 
 		async set(value) {
 			const store = await getCurrentRequestState();
-			const parsedValue = await schema["~standard"].validate(value);
-			if (parsedValue.issues) {
-				throw new Error(`Invalid value: ${JSON.stringify(parsedValue.issues)}`);
-			}
-			store.set(schema, parsedValue.value);
+			store.set(ref, value);
 		},
 	};
 }
