@@ -245,11 +245,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						attr.defaultValue &&
 						JSON.stringify(attr.defaultValue).length > 255
 					)
-						builder
-							.model(modelName)
-							.field(fieldName)
-							.attribute(`default(dbgenerated("('${attr.defaultValue}')"))`)
-							.attribute("db.Text");
+						builder.model(modelName).field(fieldName).attribute("db.Text");
 					else if (
 						attr.defaultValue !== undefined &&
 						attr.defaultValue &&
