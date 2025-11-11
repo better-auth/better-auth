@@ -8,6 +8,7 @@ import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
 import type { BetterAuthPluginDBSchema } from "../db";
 import type { AuthContext } from "./context";
+import type { EventsMap } from "./events";
 import type { LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
 
@@ -155,4 +156,13 @@ export type BetterAuthPlugin = {
 	adapter?: {
 		[key: string]: (...args: any[]) => Promise<any> | any;
 	};
+	/**
+	 * Events map type for the plugin
+	 *
+	 * @example
+	 * ```ts
+	 * { customEvent: (data: string) => void; }
+	 * ```
+	 */
+	$Events?: EventsMap | undefined;
 };

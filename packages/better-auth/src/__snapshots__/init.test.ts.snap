@@ -67,6 +67,11 @@ exports[`init > should match config 1`] = `
   },
   "baseURL": "http://localhost:3000/api/auth",
   "createAuthCookie": [Function],
+  "event": {
+    "emit": [Function],
+    "events": {},
+    "on": [Function],
+  },
   "generateId": [Function],
   "internalAdapter": {
     "countTotalUsers": [Function],

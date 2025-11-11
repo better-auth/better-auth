@@ -243,6 +243,10 @@ export const callbackOAuth = createAuthEndpoint(
 			session,
 			user,
 		});
+		c.context.event.emit("signIn", {
+			session,
+			user,
+		});
 		let toRedirectTo: string;
 		try {
 			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;
