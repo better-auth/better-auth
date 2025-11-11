@@ -160,12 +160,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
-			ctx.context.logger.error("Verification email isn't enabled.");
-			throw new APIError("BAD_REQUEST", {
-				message: "Verification email isn't enabled",
-			});
-		}
+		ensureEmailVerificationEnabled(ctx);
 		const { email } = ctx.body;
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
@@ -375,7 +370,8 @@ export const verifyEmail = createAuthEndpoint(
 			const updateCallbackURL = ctx.query.callbackURL
 				? encodeURIComponent(ctx.query.callbackURL)
 				: encodeURIComponent("/");
-			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
+			const emailVerification = ensureEmailVerificationEnabled(ctx);
+			await emailVerification.sendVerificationEmail(
 				{
 					user: updatedUser,
 					url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
