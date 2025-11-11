@@ -103,7 +103,7 @@ describe("generate drizzle schema for all databases", async () => {
 				plugins: [twoFactor(), username()],
 				advanced: {
 					database: {
-						useNumberId: true,
+						generateId: "serial",
 					},
 				},
 				user: {
@@ -122,6 +122,133 @@ describe("generate drizzle schema for all databases", async () => {
 		});
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql-number-id.txt",
+		);
+	});
+	it("should generate drizzle schema for MySQL with uuid id", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "mysql",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "mysql",
+						schema: {},
+					},
+				),
+				plugins: [twoFactor(), username()],
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+				user: {
+					modelName: "custom_user",
+				},
+				account: {
+					modelName: "custom_account",
+				},
+				session: {
+					modelName: "custom_session",
+				},
+				verification: {
+					modelName: "custom_verification",
+				},
+			},
+		});
+		expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-mysql-uuid.txt",
+		);
+	});
+
+	it("should generate drizzle schema for PostgreSQL with uuid id", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "pg",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "pg",
+						schema: {},
+					},
+				),
+				plugins: [twoFactor(), username()],
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+				user: {
+					modelName: "custom_user",
+				},
+				account: {
+					modelName: "custom_account",
+				},
+				session: {
+					modelName: "custom_session",
+				},
+				verification: {
+					modelName: "custom_verification",
+				},
+			},
+		});
+		expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-pg-uuid.txt",
+		);
+	});
+	it("should generate drizzle schema for SQLite with uuid id", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "sqlite",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				),
+				plugins: [twoFactor(), username()],
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+				user: {
+					modelName: "custom_user",
+				},
+				account: {
+					modelName: "custom_account",
+				},
+				session: {
+					modelName: "custom_session",
+				},
+				verification: {
+					modelName: "custom_verification",
+				},
+			},
+		});
+		expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-sqlite-uuid.txt",
 		);
 	});
 
@@ -146,7 +273,7 @@ describe("generate drizzle schema for all databases", async () => {
 				plugins: [twoFactor(), username()],
 				advanced: {
 					database: {
-						useNumberId: true,
+						generateId: "serial",
 					},
 				},
 				user: {
@@ -305,7 +432,7 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 				plugins: [passkey()],
 				advanced: {
 					database: {
-						useNumberId: true,
+						generateId: "serial",
 					},
 				},
 				user: {
@@ -348,7 +475,7 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 				plugins: [passkey()],
 				advanced: {
 					database: {
-						useNumberId: true,
+						generateId: "serial",
 					},
 				},
 				user: {
