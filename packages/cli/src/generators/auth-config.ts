@@ -3,7 +3,7 @@ import { logger } from "better-auth";
 import {
 	type SupportedDatabases,
 	type SupportedPlugin,
-} from "../commands/init";
+} from "../commands/OLD_init";
 
 export type Import = {
 	path: string;

@@ -18,14 +18,16 @@ export interface OTPOptions {
 	/**
 	 * How long the opt will be valid for in
 	 * minutes
-	 *
-	 * @default "3 mins"
+	 * @cli
+	 * @default 3
+	 * @question What is the period for the otp?
 	 */
 	period?: number | undefined;
 	/**
 	 * Number of digits for the OTP code
-	 *
+	 * @cli
 	 * @default 6
+	 * @question What is the number of digits for the otp?
 	 */
 	digits?: number | undefined;
 	/**
@@ -57,8 +59,17 @@ export interface OTPOptions {
 	 * The number of allowed attempts for the OTP
 	 *
 	 * @default 5
+	 * @cli
+	 * @question What is the number of allowed attempts for the otp?
+	 * @type number
 	 */
 	allowedAttempts?: number | undefined;
+	/**
+	 * How do you want to store the OTP code?
+	 * @cli select plain:Plain encrypted:Encrypted hashed:Hashed
+	 * @default "plain"
+	 * @question How do you want to store the OTP code?
+	 */
 	storeOTP?:
 		| (
 				| "plain"

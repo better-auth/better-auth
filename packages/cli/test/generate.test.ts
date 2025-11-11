@@ -4,7 +4,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor, username } from "better-auth/plugins";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import type { SupportedPlugin } from "../src/commands/init";
+import type { SupportedPlugin } from "../src/commands/OLD_init";
 import { generateAuthConfig } from "../src/generators/auth-config";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { generateMigrations } from "../src/generators/kysely";

@@ -234,11 +234,17 @@ export interface SSOOptions {
 	/**
 	 * Override user info with the provider info.
 	 * @default false
+	 * @cli optional
+	 * @type boolean
+	 * @question Would you like to override user info with the provider info?
 	 */
 	defaultOverrideUserInfo?: boolean | undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
+	 * @cli optional
+	 * @type boolean
+	 * @question Would you like to disable implicit sign up for new users?
 	 */
 	disableImplicitSignUp?: boolean | undefined;
 	/**
@@ -254,6 +260,9 @@ export interface SSOOptions {
 	 * }
 	 * ```
 	 * @default 10
+	 * @cli optional
+	 * @type number
+	 * @question What is the maximum number of SSO providers a user can register?
 	 */
 	providersLimit?:
 		| (number | ((user: User) => Promise<number> | number))

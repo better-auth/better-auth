@@ -12,11 +12,12 @@
   "homepage": "https://www.better-auth.com/docs/concepts/cli",
   "main": "./dist/index.mjs",
   "scripts": {
-    "build": "tsdown",
+    "build": "pnpm generate:plugin-config && tsdown",
     "start": "node ./dist/index.mjs",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
-    "typecheck": "tsc --project tsconfig.json"
+    "typecheck": "tsc --project tsconfig.json",
+    "generate:plugin-config": "tsx ./scripts/generate-plugin-config.ts && biome check ./src/commands/init/configs --fix --unsafe"
   },
   "publishConfig": {
     "access": "public",
@@ -38,6 +39,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/prompts": "^2.4.9",
     "@types/semver": "^7.7.1",
+    "ts-morph": "^27.0.2",
     "tsdown": "catalog:",
     "tsx": "^4.20.6",
     "type-fest": "^5.2.0",

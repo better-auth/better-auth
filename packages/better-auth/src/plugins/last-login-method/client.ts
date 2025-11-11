@@ -5,8 +5,11 @@ import type { BetterAuthClientPlugin } from "@better-auth/core";
  */
 export interface LastLoginMethodClientConfig {
 	/**
-	 * Name of the cookie to read the last login method from
+	 * Name of the cookie to read the last login method from.
 	 * @default "better-auth.last_used_login_method"
+	 * @cli optional
+	 * @question What is the cookie name for last login method?
+	 * @type string
 	 */
 	cookieName?: string | undefined;
 }

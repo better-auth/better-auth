@@ -29,7 +29,9 @@ import type { User } from "../../types";
  * Configuration interface for generic OAuth providers.
  */
 export interface GenericOAuthConfig {
-	/** Unique identifier for the OAuth provider */
+	/**
+	 * Unique identifier for the OAuth provider
+	 */
 	providerId: string;
 	/**
 	 * URL to fetch OAuth 2.0 configuration.

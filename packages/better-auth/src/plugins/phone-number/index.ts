@@ -29,6 +29,9 @@ export interface PhoneNumberOptions {
 	/**
 	 * Length of the OTP code
 	 * @default 6
+	 * @cli
+	 * @question What is the length of the OTP code?
+	 * @type number
 	 */
 	otpLength?: number | undefined;
 	/**
@@ -36,7 +39,15 @@ export interface PhoneNumberOptions {
 	 *
 	 * @param phoneNumber
 	 * @param code
-	 * @returns
+	 *
+	 * @cli example
+	 * @cli required
+	 * @type function
+	 * @example ```ts
+	 * async ({ phoneNumber, code }, request) => {
+	 *  // Send OTP code to the user
+	 * }
+	 * ```
 	 */
 	sendOTP: (
 		data: { phoneNumber: string; code: string },
@@ -72,6 +83,9 @@ export interface PhoneNumberOptions {
 	 * Require a phone number verification before signing in
 	 *
 	 * @default false
+	 * @cli
+	 * @question Would you like to require phone number verification?
+	 * @type boolean
 	 */
 	requireVerification?: boolean | undefined;
 	/**
@@ -123,6 +137,9 @@ export interface PhoneNumberOptions {
 	/**
 	 * Allowed attempts for the OTP code
 	 * @default 3
+	 * @cli
+	 * @question What is the allowed attempts for the OTP code?
+	 * @type number
 	 */
 	allowedAttempts?: number | undefined;
 }
