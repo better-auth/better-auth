@@ -13,7 +13,7 @@ export const getPrismaClient = async (
 	const { PrismaClient } = await import(
 		migrationCount === 0
 			? "@prisma/client"
-			: `./.tmp/prisma-client-${dialect}-${migrationCount}/index.js`
+			: `./.tmp/prisma-client-${dialect}-${migrationCount}`
 	);
 	const db = new PrismaClient();
 	clientMap.set(`${dialect}-${migrationCount}`, db);
