@@ -30,7 +30,8 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		authFlowTestSuite(),
 		transactionsTestSuite(),
-		// numberIdTestSuite(), // Mongo doesn't support number ids
+		// numberIdTestSuite(), // no support
+		// uuidTestSuite() // no support
 	],
 	customIdGenerator: () => new ObjectId().toHexString(),
 });

@@ -26,11 +26,10 @@ export const memoryAdapter = (
 			usePlural: false,
 			debugLogs: config?.debugLogs || false,
 			customTransformInput(props) {
-				if (
-					props.options.advanced?.database?.useNumberId &&
-					props.field === "id" &&
-					props.action === "create"
-				) {
+				const useNumberId =
+					props.options.advanced?.database?.useNumberId ||
+					props.options.advanced?.database?.generateId === "serial";
+				if (useNumberId && props.field === "id" && props.action === "create") {
 					return db[props.model]!.length + 1;
 				}
 				return props.data;
@@ -49,7 +48,7 @@ export const memoryAdapter = (
 				}
 			},
 		},
-		adapter: ({ getFieldName, options, debugLog }) => {
+		adapter: ({ getFieldName, options, debugLog, getModelName }) => {
 			function convertWhereClause(where: CleanedWhere[], model: string) {
 				const table = db[model];
 				if (!table) {
@@ -117,9 +116,12 @@ export const memoryAdapter = (
 			}
 			return {
 				create: async ({ model, data }) => {
-					if (options.advanced?.database?.useNumberId) {
+					const useNumberId =
+						options.advanced?.database?.useNumberId ||
+						options.advanced?.database?.generateId === "serial";
+					if (useNumberId) {
 						// @ts-expect-error
-						data.id = db[model]!.length + 1;
+						data.id = db[getModelName(model)]!.length + 1;
 					}
 					if (!db[model]) {
 						db[model] = [];

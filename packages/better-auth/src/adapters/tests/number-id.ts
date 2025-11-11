@@ -9,7 +9,7 @@ export const numberIdTestSuite = createTestSuite(
 		defaultBetterAuthOptions: {
 			advanced: {
 				database: {
-					useNumberId: true,
+					generateId: "serial",
 				},
 			},
 		},
@@ -23,7 +23,10 @@ export const numberIdTestSuite = createTestSuite(
 		return {
 			"init - tests": async () => {
 				const opts = helpers.getBetterAuthOptions();
-				expect(opts.advanced?.database?.useNumberId).toBe(true);
+				expect(
+					opts.advanced?.database?.useNumberId ||
+						opts.advanced?.database?.generateId === "serial",
+				).toBe(true);
 			},
 			"create - should return a number id": async () => {
 				const user = await helpers.generate("user");

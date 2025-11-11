@@ -22,6 +22,7 @@ exports[`init > should match config 1`] = `
         "supportsDates": false,
         "supportsJSON": false,
         "supportsNumericIds": true,
+        "supportsUUIDs": false,
         "transaction": false,
         "usePlural": undefined,
       },

@@ -83,6 +83,12 @@ export interface DBAdapterFactoryConfig<
 	 */
 	supportsNumericIds?: boolean | undefined;
 	/**
+	 * If the database supports natively generating UUIDs, set this to `true`.
+	 *
+	 * @default false
+	 */
+	supportsUUIDs?: boolean | undefined;
+	/**
 	 * If the database doesn't support JSON columns, set this to `false`.
 	 *
 	 * We will handle the translation between using `JSON` columns, and saving `string`s to the database.
@@ -246,7 +252,7 @@ export interface DBAdapterFactoryConfig<
 	 *
 	 *
 	 * Notes:
-	 * - If the user enabled `useNumberId`, then this option will be ignored. Unless this adapter config has `supportsNumericIds` set to `false`.
+	 * - If the user enabled `useNumberId` or `generateId` set to `serial`, then this option will be ignored. Unless this adapter config has `supportsNumericIds` set to `false`.
 	 * - If `generateId` is `false` in the user's Better-Auth config, then this option will be ignored.
 	 * - If `generateId` is a function, then it will override this option.
 	 *

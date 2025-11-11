@@ -8,6 +8,7 @@ import {
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
 
@@ -35,7 +36,8 @@ const { execute } = await testAdapter({
 		const opts = Object.assign(betterAuthOptions, {
 			database: pgDB,
 		} satisfies BetterAuthOptions);
-		const { runMigrations } = await getMigrations(opts);
+		const { runMigrations, compileMigrations } = await getMigrations(opts);
+		// console.log(await compileMigrations());
 		await runMigrations();
 	},
 	tests: [
@@ -43,6 +45,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
+		uuidTestSuite({}),
 	],
 	async onFinish() {
 		await pgDB.end();

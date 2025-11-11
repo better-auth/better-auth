@@ -213,8 +213,10 @@ describe.runIf(isPostgresAvailable)(
 					},
 				},
 			};
-			const { runMigrations } = await getMigrations(config);
+			const { runMigrations, compileMigrations } = await getMigrations(config);
 			await runMigrations();
+			const migrations = await compileMigrations();
+			console.log(migrations);
 			const auth = betterAuth(config);
 
 			const user = await auth.api.signUpEmail({
@@ -227,6 +229,12 @@ describe.runIf(isPostgresAvailable)(
 			const uuidRegex =
 				/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 			expect(user.user.id).toMatch(uuidRegex);
+
+			// run migrations again to ensure no migrations are needed & no errors are thrown
+			const { compileMigrations: round2Migrations } =
+				await getMigrations(config);
+			const secondRoundOfMigrations = await round2Migrations();
+			expect(secondRoundOfMigrations).toEqual(";");
 		});
 	},
 );
