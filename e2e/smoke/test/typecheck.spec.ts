@@ -18,6 +18,7 @@ const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 		const output = spawnSync("pnpm", ["run", "typecheck"], {
 			stdio: "inherit",
 			cwd,
+			timeout: 10 * 1000, // 10 seconds
 		});
 		assert.equal(
 			output.error,
