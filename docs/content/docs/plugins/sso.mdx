@@ -704,7 +704,7 @@ mapping: {
 }
 ```
 
-### Domain verification
+## Domain verification
 
 You can automatically trust a new domain by enabling the domain verification feature:
 
@@ -753,9 +753,9 @@ Once enabled, make sure you migrate the database schema (again).
     </Tab>
 </Tabs>
 
-See the [Schema](#schema) section to add the fields manually.
+See the [Schema](#schema-for-domain-verification) section to add the fields manually.
 
-#### Verify your domain
+### Verify your domain
 
 When domain verification is enabled, every new SSO provider domain will be marked as unverified at first.
 Upon SSO provider registration, a **verification token** will be issued to the provider (it will be returned as part of the response),
@@ -768,7 +768,7 @@ which you need to prove that you own it. To do this, you'll need to add a `TXT` 
 3.  **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
 4.  **Once the record has propagated**, you can submit a validation request
 
-#### Domain validation request
+### Domain validation request
 
 Once you have configured your domain, you can use your `auth` instance to submit a validation request.
 This request will either result in a rejection (could not prove your ownership over the domain)
@@ -795,16 +795,13 @@ const res = await auth.api.verifyDomain({
     </Tab>
 </Tabs>
 
-#### Creating a new verification token
+### Creating a new verification token
 
 Every domain verification token will have a default expiry of 1 week since the moment it was issued
 or the moment when the SSO provider was registered.
 
 After that time, the token will expire and cannot longer be used. When that happens,
 you can create a new verification token:
-
-```ts title="create-domain-verification-token.ts"
-```
 
 <Tabs items={["client", "server"]}>
     <Tab value="client">
