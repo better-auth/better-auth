@@ -27,8 +27,7 @@ export const requestDomainVerification = (options: SSOOptions) => {
 							description: "Provider not found",
 						},
 						"409": {
-							description:
-								"Domain has already been verified or current verification token is still valid",
+							description: "Domain has already been verified",
 						},
 						"201": {
 							description: "Domain submitted for verification",
@@ -98,10 +97,8 @@ export const requestDomainVerification = (options: SSOOptions) => {
 				});
 
 			if (activeVerification) {
-				throw new APIError("CONFLICT", {
-					message: "Current verification token is still valid",
-					code: "TOKEN_FOUND",
-				});
+				ctx.setStatus(201);
+				return ctx.json({ domainVerificationToken: activeVerification.value });
 			}
 
 			const domainVerificationToken = generateRandomString(24);
@@ -118,12 +115,10 @@ export const requestDomainVerification = (options: SSOOptions) => {
 				},
 			});
 
-			return Response.json(
-				{
-					domainVerificationToken,
-				},
-				{ status: 201 },
-			);
+			ctx.setStatus(201);
+			return ctx.json({
+				domainVerificationToken,
+			});
 		},
 	);
 };
@@ -260,7 +255,8 @@ export const verifyDomain = (options: SSOOptions) => {
 				},
 			});
 
-			return new Response(null, { status: 204 });
+			ctx.setStatus(204);
+			return null;
 		},
 	);
 };
