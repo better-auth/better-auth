@@ -179,11 +179,19 @@ describe("call", async () => {
 			],
 		},
 	} satisfies BetterAuthPlugin;
+	let latestOauthStore: Record<string, any> | undefined = {};
 	const options = {
 		baseURL: "http://localhost:3000",
 		plugins: [testPlugin, testPlugin2, bearer()],
 		emailAndPassword: {
 			enabled: true,
+		},
+		socialProviders: {
+			google: {
+				clientId: "test-client-id",
+				clientSecret: "test-client-secret",
+				enabled: true,
+			},
 		},
 		hooks: {
 			before: createAuthMiddleware(async (ctx) => {

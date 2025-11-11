@@ -18,7 +18,7 @@ import { defineErrorCodes } from "@better-auth/core/utils";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
-import * as z from "zod";
+import { z } from "zod";
 import { sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -408,6 +408,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: false",
 							})
 							.optional(),
+						/**
+						 * Any additional data to pass through the oauth flow.
+						 */
+						additionalData: z.record(z.string(), z.any()).optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -500,7 +504,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? authorizationUrlParams(ctx)
 							: authorizationUrlParams;
 
-					const { state, codeVerifier } = await generateState(ctx);
+					const { state, codeVerifier } = await generateState(
+						ctx,
+						undefined,
+						ctx.body.additionalData,
+					);
 					const authUrl = await createAuthorizationURL({
 						id: providerId,
 						options: {
@@ -946,10 +954,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						});
 					}
 
-					const state = await generateState(c, {
-						userId: session.user.id,
-						email: session.user.email,
-					});
+					const state = await generateState(
+						c,
+						{
+							userId: session.user.id,
+							email: session.user.email,
+						},
+						undefined,
+					);
 
 					const additionalParams =
 						typeof authorizationUrlParams === "function"
