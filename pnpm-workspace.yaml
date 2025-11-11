@@ -3,6 +3,7 @@ packages:
   - docs
   - demo/*
   - e2e/**
+  - test
 
 catalog:
   '@better-fetch/fetch': 1.1.18

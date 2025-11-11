@@ -1382,6 +1382,24 @@ importers:
         specifier: ^5.2.0
         version: 5.2.0
 
+  test:
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      '@better-fetch/fetch':
+        specifier: 'catalog:'
+        version: 1.1.18
+      better-auth:
+        specifier: workspace:*
+        version: link:../packages/better-auth
+      openid-client:
+        specifier: ^6.8.1
+        version: 6.8.1
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@24.9.2)(happy-dom@20.0.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(msw@2.11.5(@types/node@24.9.2)(typescript@5.9.3))(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)
+
 packages:
 
   '@0no-co/graphql.web@1.2.0':
@@ -10706,6 +10724,9 @@ packages:
     engines: {node: ^18.12 || ^20 || ^22, yarn: ^1.15.2}
     hasBin: true
 
+  oauth4webapi@3.8.2:
+    resolution: {integrity: sha512-FzZZ+bht5X0FKe7Mwz3DAVAmlH1BV5blSak/lHMBKz0/EBMhX6B10GlQYI51+oRp8ObJaX0g6pXrAxZh5s8rjw==}
+
   ob1@0.82.5:
     resolution: {integrity: sha512-QyQQ6e66f+Ut/qUVjEce0E/wux5nAGLXYZDn1jr15JWstHsCH3l6VVrg8NKDptW9NEiBXKOJeGF/ydxeSDF3IQ==}
     engines: {node: '>=18.18'}
@@ -10793,6 +10814,9 @@ packages:
   open@8.4.2:
     resolution: {integrity: sha512-7x81NCL719oNbsq/3mh+hVrAWmFuEYUqrq/Iw3kUzH8ReypT9QQ0BLoJS7/G9k6N81XjW4qHWtjWwe/9eLy1EQ==}
     engines: {node: '>=12'}
+
+  openid-client@6.8.1:
+    resolution: {integrity: sha512-VoYT6enBo6Vj2j3Q5Ec0AezS+9YGzQo1f5Xc42lreMGlfP4ljiXPKVDvCADh+XHCV/bqPu/wWSiCVXbJKvrODw==}
 
   ora@3.4.0:
     resolution: {integrity: sha512-eNwHudNbO1folBP3JsZ19v9azXWtQZjICdr3Q0TDPIaeBQ3mXLrh54wM+er0+hSp+dWKf+Z8KM58CYzEyIYxYg==}
@@ -17840,9 +17864,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
@@ -24761,6 +24783,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  oauth4webapi@3.8.2: {}
+
   ob1@0.82.5:
     dependencies:
       flow-enums-runtime: 0.0.6
@@ -24856,6 +24880,11 @@ snapshots:
       define-lazy-prop: 2.0.0
       is-docker: 2.2.1
       is-wsl: 2.2.0
+
+  openid-client@6.8.1:
+    dependencies:
+      jose: 6.1.0
+      oauth4webapi: 3.8.2
 
   ora@3.4.0:
     dependencies:
