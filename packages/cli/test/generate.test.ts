@@ -213,6 +213,38 @@ describe("generate", async () => {
 		);
 	});
 
+	it("should generate prisma schema for mysql with empty string default", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{
+					provider: "mysql",
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter(
+					{},
+					{
+						provider: "mysql",
+					},
+				),
+				user: {
+					additionalFields: {
+						bio: {
+							fieldName: "bio",
+							type: "string",
+							defaultValue: "",
+						},
+					},
+				},
+				plugins: [twoFactor(), username()],
+			},
+		});
+		expect(schema.code).toContain('bio');
+		expect(schema.code).toContain('default("")');
+	});
+
 	it("should generate drizzle schema", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",

@@ -242,7 +242,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				) {
 					if (
 						attr.defaultValue !== undefined &&
-						attr.defaultValue &&
 						JSON.stringify(attr.defaultValue).length > 255
 					)
 						builder
@@ -252,7 +251,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							.attribute("db.Text");
 					else if (
 						attr.defaultValue !== undefined &&
-						attr.defaultValue &&
 						JSON.stringify(attr.defaultValue).length < 255
 					)
 						fieldBuilder.attribute(
