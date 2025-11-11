@@ -22,9 +22,9 @@ export const normalTestSuite = createTestSuite(
 			"init - tests": async () => {
 				const opts = helpers.getBetterAuthOptions();
 				expect(
-				!opts.advanced?.database?.useNumberId &&
-					opts.advanced?.database?.generateId !== "serial",
-			).toBeTruthy();
+					!opts.advanced?.database?.useNumberId &&
+						opts.advanced?.database?.generateId !== "serial",
+				).toBeTruthy();
 			},
 			...tests,
 		};
