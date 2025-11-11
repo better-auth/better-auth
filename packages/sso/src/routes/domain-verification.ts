@@ -55,8 +55,7 @@ export const requestDomainVerification = (options: SSOOptions) => {
 			}
 
 			const userId = ctx.context.session.user.id;
-
-			let isOrgMember: boolean = true;
+			let isOrgMember = true;
 			if (provider.organizationId) {
 				const membershipsCount = await ctx.context.adapter.count({
 					model: "member",
@@ -69,7 +68,7 @@ export const requestDomainVerification = (options: SSOOptions) => {
 				isOrgMember = membershipsCount > 0;
 			}
 
-			if (!(provider.userId === userId && isOrgMember)) {
+			if (provider.userId !== userId || !isOrgMember) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						"User must be owner of or belong to the SSO provider organization",
@@ -178,8 +177,7 @@ export const verifyDomain = (options: SSOOptions) => {
 			}
 
 			const userId = ctx.context.session.user.id;
-
-			let isOrgMember: boolean = true;
+			let isOrgMember = true;
 			if (provider.organizationId) {
 				const membershipsCount = await ctx.context.adapter.count({
 					model: "member",
@@ -192,7 +190,7 @@ export const verifyDomain = (options: SSOOptions) => {
 				isOrgMember = membershipsCount > 0;
 			}
 
-			if (!(provider.userId === userId && isOrgMember)) {
+			if (provider.userId !== userId || !isOrgMember) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						"User must be owner of or belong to the SSO provider organization",
