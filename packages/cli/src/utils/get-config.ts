@@ -1,4 +1,6 @@
 // @ts-expect-error
+
+import { createRequire } from "node:module";
 import babelPresetReact from "@babel/preset-react";
 // @ts-expect-error
 import babelPresetTypeScript from "@babel/preset-typescript";
@@ -8,12 +10,11 @@ import { loadConfig } from "c12";
 import fs, { existsSync } from "fs";
 import type { JitiOptions } from "jiti";
 import path from "path";
+// only importing the types, the actual module will be loaded from the project deps dynamically
+import type * as Vite from "vite";
 import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
-import { createRequire } from "node:module";
-// only importing the types, the actual module will be loaded from the project deps dynamically
-import type * as Vite from "vite";
 
 let possiblePaths = [
 	"auth.ts",
