@@ -37,10 +37,10 @@ type DomainVerificationEndpoints = {
 type SSOEndpoints<O extends SSOOptions> = {
 	spMetadata: ReturnType<typeof spMetadata>;
 	registerSSOProvider: ReturnType<typeof registerSSOProvider<O>>;
-	signInSSO: ReturnType<typeof signInSSO<O>>;
-	callbackSSO: ReturnType<typeof callbackSSO<O>>;
-	callbackSSOSAML: ReturnType<typeof callbackSSOSAML<O>>;
-	acsEndpoint: ReturnType<typeof acsEndpoint<O>>;
+	signInSSO: ReturnType<typeof signInSSO>;
+	callbackSSO: ReturnType<typeof callbackSSO>;
+	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
+	acsEndpoint: ReturnType<typeof acsEndpoint>;
 };
 
 export type SSOPlugin<O extends SSOOptions> = {
