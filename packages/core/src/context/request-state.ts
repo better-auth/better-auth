@@ -46,7 +46,7 @@ export interface RequestState<T> {
 	set(value: T): Promise<void>;
 
 	// A unique reference to state across requests. This is useful for debugging purposes.
-	readonly ref: object;
+	readonly ref: Readonly<object>;
 }
 
 export function defineRequestState<T>(
@@ -55,9 +55,9 @@ export function defineRequestState<T>(
 export function defineRequestState(
 	initFn: () => any | Promise<any>,
 ): RequestState<any> {
-	const ref = {};
+	const ref = Object.freeze({});
 	return {
-		get ref(): object {
+		get ref(): Readonly<object> {
 			return ref;
 		},
 		async get() {
