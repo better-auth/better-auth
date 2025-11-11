@@ -1426,7 +1426,7 @@ describe("base context creation", () => {
 		});
 	});
 
-	describe.only("stateless mode", () => {
+	describe("stateless mode", () => {
 		it("should enable stateless mode by default", async () => {
 			const ctx = await initBase({});
 			expect(ctx.options.session?.cookieCache?.enabled).toBe(true);
