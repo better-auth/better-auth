@@ -1,95 +1,37 @@
-import type {
-	AuthContext,
-	BetterAuthPlugin,
-	GenericEndpointContext,
-} from "@better-auth/core";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { defineErrorCodes } from "@better-auth/core/utils";
-import type { EndpointContext } from "better-call";
+import { BetterAuthError } from "@better-auth/core/error";
+import { z } from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db/schema";
-import type { InferOptionSchema, Session, User } from "../../types";
 import { generateId } from "../../utils/id";
-import { getOrigin } from "../../utils/url";
-
-export interface UserWithAnonymous extends User {
-	isAnonymous: boolean;
-}
-export interface AnonymousOptions {
-	/**
-	 * Configure the domain name of the temporary email
-	 * address for anonymous users in the database.
-	 * @default "baseURL"
-	 */
-	emailDomainName?: string | undefined;
-	/**
-	 * A useful hook to run after an anonymous user
-	 * is about to link their account.
-	 */
-	onLinkAccount?:
-		| ((data: {
-				anonymousUser: {
-					user: UserWithAnonymous & Record<string, any>;
-					session: Session & Record<string, any>;
-				};
-				newUser: {
-					user: User & Record<string, any>;
-					session: Session & Record<string, any>;
-				};
-				ctx: GenericEndpointContext;
-		  }) => Promise<void> | void)
-		| undefined;
-	/**
-	 * Disable deleting the anonymous user after linking
-	 */
-	disableDeleteAnonymousUser?: boolean | undefined;
-	/**
-	 * A hook to generate a name for the anonymous user.
-	 * Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
-	 * @returns The name for the anonymous user.
-	 */
-	generateName?:
-		| ((
-				ctx: EndpointContext<
-					"/sign-in/anonymous",
-					{
-						method: "POST";
-					},
-					AuthContext
-				>,
-		  ) => Promise<string> | string)
-		| undefined;
-	/**
-	 * Custom schema for the anonymous plugin
-	 */
-	schema?: InferOptionSchema<typeof schema> | undefined;
-}
-
-const schema = {
-	user: {
-		fields: {
-			isAnonymous: {
-				type: "boolean",
-				required: false,
-				input: false,
-			},
-		},
-	},
-} satisfies BetterAuthPluginDBSchema;
-
-const ERROR_CODES = defineErrorCodes({
-	FAILED_TO_CREATE_USER: "Failed to create user",
-	COULD_NOT_CREATE_SESSION: "Could not create session",
-	ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY:
-		"Anonymous users cannot sign in again anonymously",
-});
+import { ANONYMOUS_ERROR_CODES } from "./error-codes";
+import { schema } from "./schema";
+import type { AnonymousOptions } from "./types";
+import { generateAnonymousEmail } from "./utils";
 
 export const anonymous = (options?: AnonymousOptions | undefined) => {
+	if (options?.emailLocalPart || options?.emailDomainName) {
+		const id = generateId();
+		const email = generateAnonymousEmail(
+			id,
+			options.emailLocalPart,
+			options.emailDomainName,
+		);
+
+		const result = z.email().safeParse(email);
+		if (!result.success) {
+			throw new BetterAuthError(
+				"ANONYMOUS_PLUGIN_EMAIL_CONFIG",
+				`Generated email "${email}" is not a valid email format.`,
+			);
+		}
+	}
+
 	return {
 		id: "anonymous",
 		endpoints: {
@@ -134,14 +76,17 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					if (existingSession?.user.isAnonymous) {
 						throw new APIError("BAD_REQUEST", {
 							message:
-								ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
+								ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
 						});
 					}
 
-					const { emailDomainName = getOrigin(ctx.context.baseURL) } =
-						options || {};
+					const { emailLocalPart, emailDomainName } = options || {};
 					const id = generateId();
-					const email = `temp-${id}@${emailDomainName}`;
+					const email = generateAnonymousEmail(
+						id,
+						emailLocalPart,
+						emailDomainName,
+					);
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
 					const newUser = await ctx.context.internalAdapter.createUser({
 						email,
@@ -153,7 +98,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					});
 					if (!newUser) {
 						throw ctx.error("INTERNAL_SERVER_ERROR", {
-							message: ERROR_CODES.FAILED_TO_CREATE_USER,
+							message: ANONYMOUS_ERROR_CODES.FAILED_TO_CREATE_USER,
 						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(
@@ -163,7 +108,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						return ctx.json(null, {
 							status: 400,
 							body: {
-								message: ERROR_CODES.COULD_NOT_CREATE_SESSION,
+								message: ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION,
 							},
 						});
 					}
@@ -236,7 +181,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						if (ctx.path === "/sign-in/anonymous" && !ctx.context.newSession) {
 							throw new APIError("BAD_REQUEST", {
 								message:
-									ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
+									ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
 							});
 						}
 						const newSession = ctx.context.newSession;
@@ -262,6 +207,6 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 			],
 		},
 		schema: mergeSchema(schema, options?.schema),
-		$ERROR_CODES: ERROR_CODES,
+		$ERROR_CODES: ANONYMOUS_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
