@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
 import { betterAuth } from "better-auth";
-import { createAuthClient } from "better-auth/client";
-import { apiKeyClient } from "better-auth/client/plugins";
+import { type AuthClient, createAuthClient } from "better-auth/client";
+import {
+	type ApiKeyClientPlugin,
+	apiKeyClient,
+} from "better-auth/client/plugins";
 import { getMigrations } from "better-auth/db";
 import { apiKey } from "better-auth/plugins";
 
@@ -34,7 +37,9 @@ describe("server side client", () => {
 		const { runMigrations } = await getMigrations(auth.options);
 		await runMigrations();
 
-		const authClient: ReturnType<typeof createAuthClient> = createAuthClient({
+		const authClient: AuthClient<{
+			plugins: [ApiKeyClientPlugin];
+		}> = createAuthClient({
 			baseURL: "http://localhost:3000",
 			plugins: [apiKeyClient()],
 			fetchOptions: {
