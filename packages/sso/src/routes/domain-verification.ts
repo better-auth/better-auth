@@ -99,31 +99,25 @@ export const requestDomainVerification = (options: SSOOptions) => {
 				});
 
 			if (activeVerification) {
-				console.log("active verification found: ", activeVerification);
 				throw new APIError("CONFLICT", {
 					message: "Current verification token is still valid",
 					code: "TOKEN_FOUND",
 				});
 			}
 
-			let domainVerificationToken: string | undefined;
-
-			if (options?.domainVerification?.enabled) {
-				domainVerificationToken = generateRandomString(24);
-
-				await ctx.context.adapter.create<Verification>({
-					model: "verification",
-					data: {
-						identifier: options.domainVerification?.tokenPrefix
-							? `${options.domainVerification?.tokenPrefix}-${provider.providerId}`
-							: `better-auth-token-${provider.providerId}`,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						value: domainVerificationToken,
-						expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
-					},
-				});
-			}
+			const domainVerificationToken = generateRandomString(24);
+			await ctx.context.adapter.create<Verification>({
+				model: "verification",
+				data: {
+					identifier: options.domainVerification?.tokenPrefix
+						? `${options.domainVerification?.tokenPrefix}-${provider.providerId}`
+						: `better-auth-token-${provider.providerId}`,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					value: domainVerificationToken,
+					expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
+				},
+			});
 
 			return Response.json(
 				{
