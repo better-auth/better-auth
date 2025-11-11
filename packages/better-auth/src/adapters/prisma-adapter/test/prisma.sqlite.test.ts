@@ -4,6 +4,7 @@ import { join } from "path";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
@@ -47,6 +48,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
+		joinsTestSuite(),
 	],
 	onFinish: async () => {},
 	prefixTests: dialect,

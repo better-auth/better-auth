@@ -5,6 +5,7 @@ import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
@@ -43,6 +44,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
+		joinsTestSuite(),
 	],
 	async onFinish() {
 		await pgDB.end();

@@ -6,6 +6,7 @@ import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
@@ -44,7 +45,8 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		transactionsTestSuite(),
 		authFlowTestSuite(),
-		numberIdTestSuite(),
+		numberIdTestSuite(),	
+		joinsTestSuite(),
 	],
 	async onFinish() {
 		database.close();
