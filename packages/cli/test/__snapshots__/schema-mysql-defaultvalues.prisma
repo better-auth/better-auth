@@ -83,7 +83,7 @@ model TwoFactor {
   backupCodes String @db.Text
   userId      String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@index([secret(length: 191)])
   @@index([userId(length: 191)])
   @@map("twoFactor")
