@@ -45,7 +45,7 @@ export interface RequestState<T> {
 	get(): Promise<T>;
 	set(value: T): Promise<void>;
 
-	// A unique reference to state across requests. This is useful for debugging purposes.
+	// A unique reference used as a key to identify this state within the request's WeakMap. Useful for debugging purposes.
 	readonly ref: Readonly<object>;
 }
 
