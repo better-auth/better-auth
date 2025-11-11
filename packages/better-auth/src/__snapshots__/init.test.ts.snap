@@ -22,7 +22,6 @@ exports[`init > should match config 1`] = `
         "supportsBooleans": false,
         "supportsDates": false,
         "supportsJSON": false,
-        "supportsJoin": false,
         "supportsNumericIds": true,
         "transaction": false,
         "usePlural": undefined,

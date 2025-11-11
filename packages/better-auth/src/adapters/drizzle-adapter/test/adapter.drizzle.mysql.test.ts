@@ -14,7 +14,7 @@ import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
 const mysqlDB = createPool({
-	uri: "mysql://user:password@localhost:3306",
+	uri: "mysql://user:password@localhost:3306/better_auth",
 	timezone: "Z",
 });
 
