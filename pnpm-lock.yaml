@@ -1261,6 +1261,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+      vite:
+        specifier: ^7.1.11
+        version: 7.1.11(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)
 
   packages/core:
     dependencies:
@@ -6858,24 +6861,24 @@ packages:
     resolution: {integrity: sha512-eR8SYtf9Nem1Tnl0IWrY33qJ5wCtIWlt3Fs3c6V4aAaTFLtkEQErXu3SSZg/XCHrj9hXSJ8/8t+CdMk5Qec/ZA==}
     engines: {node: '>=18.0.0'}
 
-  '@whatwg-node/fetch@0.10.13':
-    resolution: {integrity: sha512-b4PhJ+zYj4357zwk4TTuF2nEe0vVtOrwdsrNo5hL+u1ojXNhh1FgJ6pg1jzDlwlT4oBdzfSwaBwMCtFCsIWg8Q==}
+  '@whatwg-node/fetch@0.10.12':
+    resolution: {integrity: sha512-XmsCdDgQxbM8ha7xvIbDQyO/iES2ga0wQcM5sb+mugll1F+IzSshOMPK6n1TuqDDgjTwoU01mMa6oRhHWnpDcw==}
     engines: {node: '>=18.0.0'}
 
   '@whatwg-node/node-fetch@0.8.0':
     resolution: {integrity: sha512-+z00GpWxKV/q8eMETwbdi80TcOoVEVZ4xSRkxYOZpn3kbV3nej5iViNzXVke/j3v4y1YpO5zMS/CVDIASvJnZQ==}
     engines: {node: '>=18.0.0'}
 
-  '@whatwg-node/node-fetch@0.8.4':
-    resolution: {integrity: sha512-AlKLc57loGoyYlrzDbejB9EeR+pfdJdGzbYnkEuZaGekFboBwzfVYVMsy88PMriqPI1ORpiGYGgSSWpx7a2sDA==}
+  '@whatwg-node/node-fetch@0.8.2':
+    resolution: {integrity: sha512-1PihEl0a8hm/AZD/LVRs1lEWCZCo2Q65Xm1goaHeqR314e+/Z7NI7YE10Yser8+2iZFGtv542IYr685o3aaZ/g==}
     engines: {node: '>=18.0.0'}
 
   '@whatwg-node/promise-helpers@1.3.2':
     resolution: {integrity: sha512-Nst5JdK47VIl9UcGwtv2Rcgyn5lWtZ0/mhRQ4G8NN2isxpq2TO30iqHzmwoJycjWuyUfg3GFXqP/gFHXeV57IA==}
     engines: {node: '>=16.0.0'}
 
-  '@whatwg-node/server@0.10.17':
-    resolution: {integrity: sha512-QxI+HQfJeI/UscFNCTcSri6nrHP25mtyAMbhEri7W2ctdb3EsorPuJz7IovSgNjvKVs73dg9Fmayewx1O2xOxA==}
+  '@whatwg-node/server@0.10.15':
+    resolution: {integrity: sha512-/BqffJYRIbX1HfNUZkPvtiSloC3QCvxAYC82g0uo3ruiJ44GOiCGH1q/XWF0/l5tWBvFsgX5VBA8l7IhQkCNfA==}
     engines: {node: '>=18.0.0'}
 
   '@whatwg-node/server@0.9.71':
@@ -16724,7 +16727,7 @@ snapshots:
 
   '@netlify/dev-utils@4.1.1':
     dependencies:
-      '@whatwg-node/server': 0.10.17
+      '@whatwg-node/server': 0.10.15
       ansis: 4.2.0
       chokidar: 4.0.3
       decache: 4.6.2
@@ -19974,9 +19977,9 @@ snapshots:
       '@whatwg-node/node-fetch': 0.8.0
       urlpattern-polyfill: 10.1.0
 
-  '@whatwg-node/fetch@0.10.13':
+  '@whatwg-node/fetch@0.10.12':
     dependencies:
-      '@whatwg-node/node-fetch': 0.8.4
+      '@whatwg-node/node-fetch': 0.8.2
       urlpattern-polyfill: 10.1.0
     optional: true
 
@@ -19987,7 +19990,7 @@ snapshots:
       '@whatwg-node/promise-helpers': 1.3.2
       tslib: 2.8.1
 
-  '@whatwg-node/node-fetch@0.8.4':
+  '@whatwg-node/node-fetch@0.8.2':
     dependencies:
       '@fastify/busboy': 3.2.0
       '@whatwg-node/disposablestack': 0.0.6
@@ -19999,11 +20002,11 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@whatwg-node/server@0.10.17':
+  '@whatwg-node/server@0.10.15':
     dependencies:
       '@envelop/instrumentation': 1.0.0
       '@whatwg-node/disposablestack': 0.0.6
-      '@whatwg-node/fetch': 0.10.13
+      '@whatwg-node/fetch': 0.10.12
       '@whatwg-node/promise-helpers': 1.3.2
       tslib: 2.8.1
     optional: true
