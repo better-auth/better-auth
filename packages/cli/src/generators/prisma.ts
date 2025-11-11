@@ -54,6 +54,22 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		}
 	}
 
+	const indexedFields = new Map<string, string[]>();
+	for (const table in tables) {
+		const fields = tables[table]?.fields;
+		const customModelName = tables[table]?.modelName || table;
+		const modelName = capitalizeFirstLetter(customModelName);
+		indexedFields.set(modelName, []);
+
+		for (const field in fields) {
+			const attr = fields[field]!;
+			if (attr.index && !attr.unique) {
+				const fieldName = attr.fieldName || field;
+				indexedFields.get(modelName)!.push(fieldName);
+			}
+		}
+	}
+
 	const schema = produceSchema(schemaPrisma, (builder) => {
 		for (const table in tables) {
 			const originalTableName = table;
@@ -257,6 +273,30 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					if (!existingField) {
 						builder.model(modelName).field(fieldName, `${relatedModel}[]`);
 					}
+				}
+			}
+
+			// Add indexes
+			const indexedFieldsForModel = indexedFields.get(modelName);
+			if (indexedFieldsForModel && indexedFieldsForModel.length > 0) {
+				for (const fieldName of indexedFieldsForModel) {
+					const field = Object.entries(fields!).find(
+						([key, attr]) => (attr.fieldName || key) === fieldName,
+					)?.[1];
+
+					let indexField = fieldName;
+					if (provider === "mysql" && field && field.type === "string") {
+						if (
+							field.references?.field === "id" &&
+							options.advanced?.database?.useNumberId
+						) {
+							indexField = `${fieldName}`;
+						} else {
+							indexField = `${fieldName}(length: 191)`; // length of 191 because String in Prisma is varchar(191)
+						}
+					}
+
+					builder.model(modelName).blockAttribute(`index([${indexField}])`);
 				}
 			}
 
