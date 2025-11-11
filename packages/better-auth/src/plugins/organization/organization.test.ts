@@ -1694,7 +1694,7 @@ describe("types", async (it) => {
 		type FullOrganization = Awaited<
 			ReturnType<typeof auth.api.getFullOrganization>
 		>;
-		expectTypeOf<FullOrganization>().toEqualTypeOf<ActiveOrganization>();
+		expectTypeOf<FullOrganization>().toEqualTypeOf<ActiveOrganization | null>();
 	});
 });
 
@@ -2234,7 +2234,7 @@ describe("Additional Fields", async () => {
 	});
 
 	it("get active member", async () => {
-		auth.api.setActiveOrganization({
+		await auth.api.setActiveOrganization({
 			body: { organizationId: org.id },
 			headers: addedMemberHeaders,
 		});
