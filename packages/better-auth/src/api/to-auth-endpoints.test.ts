@@ -9,40 +9,6 @@ import { init } from "../init";
 import { getTestInstance } from "../test-utils/test-instance";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 
-describe("custom response code", () => {
-	const endpoints = {
-		responseWithStatus: createAuthEndpoint(
-			"/response-with-status",
-			{
-				method: "GET",
-			},
-			async (c) => {
-				c.setStatus(201);
-				return { response: true };
-			},
-		),
-	};
-
-	const authContext = init({});
-	const authEndpoints = toAuthEndpoints(endpoints, authContext);
-
-	it("should return response with custom status", async () => {
-		const response = await authEndpoints.responseWithStatus({
-			asResponse: true,
-		});
-		expect(response).toBeInstanceOf(Response);
-		expect(response.status).toBe(201);
-	});
-
-	it("should return status code", async () => {
-		const response = await authEndpoints.responseWithStatus({
-			returnStatus: true,
-		});
-		expect(response.status).toBe(201);
-		expect(response.response).toEqual({ response: true });
-	});
-});
-
 describe("before hook", async () => {
 	describe("context", async () => {
 		const endpoints = {
@@ -629,5 +595,39 @@ describe("debug mode stack trace", () => {
 			expect(error.stack).toBeDefined();
 			expect(error.stack).toMatch(/ErrorWithStack:|Error:|APIError:/);
 		}
+	});
+});
+
+describe("custom response code", () => {
+	const endpoints = {
+		responseWithStatus: createAuthEndpoint(
+			"/response-with-status",
+			{
+				method: "GET",
+			},
+			async (c) => {
+				c.setStatus(201);
+				return { success: true };
+			},
+		),
+	};
+
+	const authContext = init({});
+	const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+	it("should return response with custom status", async () => {
+		const response = await authEndpoints.responseWithStatus({
+			asResponse: true,
+		});
+		expect(response).toBeInstanceOf(Response);
+		expect(response.status).toBe(201);
+	});
+
+	it("should return status code", async () => {
+		const response = await authEndpoints.responseWithStatus({
+			returnStatus: true,
+		});
+		expect(response.status).toBe(201);
+		expect(response.response).toEqual({ success: true });
 	});
 });
