@@ -142,7 +142,7 @@ export async function onSubscriptionUpdated(
 		}
 
 		const seats = subscriptionUpdated.items.data[0]!.quantity;
-		await ctx.context.adapter.update({
+		const updatedSubscription = await ctx.context.adapter.update<Subscription>({
 			model: "subscription",
 			update: {
 				...(plan
@@ -185,7 +185,7 @@ export async function onSubscriptionUpdated(
 		}
 		await options.subscription.onSubscriptionUpdate?.({
 			event,
-			subscription,
+			subscription: updatedSubscription || subscription,
 		});
 		if (plan) {
 			if (
