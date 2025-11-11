@@ -181,9 +181,73 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				if (attr.defaultValue !== undefined) {
+					if (Array.isArray(attr.defaultValue)) {
+						// for json objects and array of object
+
+						if (attr.type === "json") {
+							if (
+								Object.prototype.toString.call(attr.defaultValue[0]) ===
+								"[object Object]"
+							) {
+								fieldBuilder.attribute(
+									`default("${JSON.stringify(attr.defaultValue).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}")`,
+								);
+								continue;
+							}
+							let jsonArray = [];
+							for (const value of attr.defaultValue) jsonArray.push(`${value}`);
+							fieldBuilder.attribute(
+								`default("${JSON.stringify(jsonArray).replace(/"/g, '\\"')}")`,
+							);
+							continue;
+						}
+
+						if (!attr.defaultValue[0]) {
+							fieldBuilder.attribute(`default([])`);
+							continue;
+						} else if (
+							typeof attr.defaultValue[0] === "string" &&
+							attr.type === "string[]"
+						) {
+							let valueArray = [];
+							for (const value of attr.defaultValue)
+								valueArray.push(`"${value}"`);
+							fieldBuilder.attribute(`default([${valueArray}])`);
+						} else if (typeof attr.defaultValue[0] === "number") {
+							let valueArray = [];
+							for (const value of attr.defaultValue)
+								valueArray.push(`${value}`);
+							fieldBuilder.attribute(`default([${valueArray}])`);
+						}
+					}
+					// for json objects
+					else if (
+						typeof attr.defaultValue === "object" &&
+						!Array.isArray(attr.defaultValue) &&
+						attr.defaultValue !== null
+					) {
+						if (
+							Object.entries(attr.defaultValue as Record<string, any>)
+								.length === 0
+						) {
+							fieldBuilder.attribute(`default("{}")`);
+							continue;
+						}
+						fieldBuilder.attribute(
+							`default("${JSON.stringify(attr.defaultValue).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}")`,
+						);
+					}
 					if (field === "createdAt") {
 						fieldBuilder.attribute("default(now())");
-					} else if (typeof attr.defaultValue === "boolean") {
+					} else if (
+						typeof attr.defaultValue === "string" &&
+						provider !== "mysql"
+					) {
+						fieldBuilder.attribute(`default("${attr.defaultValue}")`);
+					} else if (
+						typeof attr.defaultValue === "boolean" ||
+						typeof attr.defaultValue === "number"
+					) {
 						fieldBuilder.attribute(`default(${attr.defaultValue})`);
 					} else if (typeof attr.defaultValue === "function") {
 						// we are intentionally not adding the default value here

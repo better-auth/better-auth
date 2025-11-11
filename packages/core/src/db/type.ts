@@ -31,7 +31,8 @@ export type DBPrimitive =
 	| null
 	| undefined
 	| string[]
-	| number[];
+	| number[]
+	| Object;
 
 export type DBFieldAttributeConfig = {
 	/**
