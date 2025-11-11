@@ -1,3 +1,4 @@
+import Database from "better-sqlite3";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { getAdapter } from "../db";
@@ -274,8 +275,15 @@ describe("base context creation", () => {
 		});
 
 		it("should return false for cookieRefreshCache when undefined", async () => {
-			const res = await initBase({});
+			const res = await initBase({
+				database: new Database(":memory:"),
+			});
 			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
+		});
+
+		it("should set a value for cookieRefreshCache when database isn't provided", async () => {
+			const res = await initBase({});
+			expect(res.sessionConfig.cookieRefreshCache).not.toBe(false);
 		});
 
 		it("should return false for cookieRefreshCache when explicitly false", async () => {
@@ -550,9 +558,9 @@ describe("base context creation", () => {
 	});
 
 	describe("oauth configuration", () => {
-		it("should use database as default storeStateStrategy", async () => {
+		it("should use cookie strategy as default storeStateStrategy if database is not provided", async () => {
 			const res = await initBase({});
-			expect(res.oauthConfig.storeStateStrategy).toBe("database");
+			expect(res.oauthConfig.storeStateStrategy).toBe("cookie");
 		});
 
 		it("should allow cookie storeStateStrategy", async () => {
