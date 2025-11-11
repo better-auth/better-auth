@@ -267,14 +267,16 @@ export const auth = betterAuth({
             refreshCache: true, // Enable stateless refresh
         },
     },
-    oauthConfig: {
-        storeStateStrategy: "cookie",
+    advanced: {
+        oauthConfig: {
+            storeStateStrategy: "cookie",
+        },
     },
 });
 ```
 
 <Callout type="info">
-If you don't provide database by default we provide the above configuration for you.
+If you don't provide a database, by default we provide the above configuration for you.
 </Callout>
 
 ### Understanding `refreshCache`
@@ -314,7 +316,7 @@ export const auth = betterAuth({
 ```
 
 <Callout type="warning">
-This will invalidate all sessions that doesn't match the new version.
+This will invalidate all sessions that don't match the new version.
 </Callout>
 
 ### Stateless with Secondary Storage
