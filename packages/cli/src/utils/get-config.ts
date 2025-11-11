@@ -256,6 +256,11 @@ async function loadConfigWithVite(cwd: string, resolvedConfigPath: string) {
 			return null;
 		}
 
+		// todo: runnerImport is experimental, this check should be removed once it's stable
+		if (!("runnerImport" in vite)) {
+			return null;
+		}
+
 		const { module: config } = await vite.runnerImport<BetterAuthConfig>(
 			resolvedConfigPath,
 			viteConfig.config,
