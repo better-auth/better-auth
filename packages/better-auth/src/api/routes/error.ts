@@ -415,7 +415,7 @@ export const error = createAuthEndpoint(
 		const options = c.context.options;
 		const errorURL = options.onAPIError?.errorURL;
 
-		if (errorURL) {
+		if (typeof errorURL === "string") {
 			return new Response(null, {
 				status: 302,
 				headers: {
