@@ -5,9 +5,8 @@ import type {
 	ClientAtomListener,
 	ClientStore,
 } from "@better-auth/core";
-import type { Auth } from "../auth";
 import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
-import type { Session, User } from "../types";
+import type { Auth, Session, User } from "../types";
 import type { StripEmptyObjects, UnionToIntersection } from "../types/helper";
 import type { InferRoutes } from "./path-to-object";
 export type {

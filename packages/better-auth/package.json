@@ -37,6 +37,11 @@
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
     },
+    "./minimal": {
+      "dev-source": "./src/auth/minimal.ts",
+      "types": "./dist/auth/minimal.d.mts",
+      "default": "./dist/auth/minimal.mjs"
+    },
     "./social-providers": {
       "dev-source": "./src/social-providers/index.ts",
       "types": "./dist/social-providers/index.d.mts",
@@ -287,6 +292,9 @@
     "*": {
       "*": [
         "./dist/index.d.mts"
+      ],
+      "minimal": [
+        "./dist/auth/minimal.d.mts"
       ],
       "node": [
         "./dist/integrations/node.d.mts"
