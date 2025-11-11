@@ -62,7 +62,16 @@
     "tsdown": "catalog:",
     "tsx": "^4.20.6",
     "type-fest": "^5.4.4",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "^7.1.11"
+  },
+  "peerDependencies": {
+    "vite": "^6.0.0 || ^7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@babel/core": "^7.28.4",

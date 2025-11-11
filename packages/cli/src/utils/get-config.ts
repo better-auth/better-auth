@@ -1,4 +1,5 @@
 import fs, { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 // @ts-expect-error
 import babelPresetReact from "@babel/preset-react";
@@ -8,6 +9,8 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { loadConfig } from "c12";
 import type { JitiOptions } from "jiti";
+// only importing the types, the actual module will be loaded from the project deps dynamically
+import type * as Vite from "vite";
 import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
@@ -236,7 +239,44 @@ async function resolveConfigFilePath(
 	console.error(
 		"Couldn't find a configuration file. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
 	);
-	process.exit(1);
+	return null;
+}
+
+async function loadConfigWithVite(cwd: string, resolvedConfigPath: string) {
+	const packageJsonPath = path.join(cwd, "package.json");
+	if (existsSync(packageJsonPath)) {
+		const require = createRequire(packageJsonPath);
+		let vite: typeof Vite;
+		try {
+			vite = require("vite") as typeof Vite;
+		} catch {
+			return null;
+		}
+		const viteConfig = await vite.loadConfigFromFile(
+			{
+				command: "serve",
+				mode: "development",
+				isSsrBuild: true,
+			},
+			undefined, // configPath (optional)
+			cwd, // configRoot
+		);
+		if (!viteConfig) {
+			return null;
+		}
+
+		if (typeof vite.runnerImport !== "function") {
+			return null;
+		}
+
+		const { module: config } = await vite.runnerImport<BetterAuthConfig>(
+			resolvedConfigPath,
+			viteConfig.config,
+		);
+
+		return config as BetterAuthConfig;
+	}
+	return null;
 }
 
 export async function getConfig({
@@ -253,55 +293,69 @@ export async function getConfig({
 		configPath,
 		shouldThrowOnError,
 	);
-	try {
-		const { config } = await loadConfig<BetterAuthConfig>({
-			configFile: resolvedConfigPath,
-			dotenv: {
-				fileName: [".env", ".env.local"],
-			},
-			jitiOptions: jitiOptions(cwd),
-			cwd,
-		});
-		if (!("auth" in config) && !isDefaultExport(config)) {
-			if (shouldThrowOnError) {
-				throw new Error(
-					`Couldn't read your auth config in ${configPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
+	if (!resolvedConfigPath) return null;
+
+	let config: BetterAuthConfig | null = null;
+
+	// try loading the config with Vite
+	config = await loadConfigWithVite(cwd, resolvedConfigPath);
+
+	// if not found, fallback to loading with Jiti
+	if (!config) {
+		try {
+			const jitiConfigResult = await loadConfig<BetterAuthConfig>({
+				configFile: resolvedConfigPath,
+				dotenv: {
+					fileName: [".env", ".env.local"],
+				},
+				jitiOptions: jitiOptions(cwd),
+				cwd,
+			});
+			config = jitiConfigResult.config;
+			if (!("auth" in config) && !isDefaultExport(config)) {
+				if (shouldThrowOnError) {
+					throw new Error(
+						"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
+					);
+				}
+				console.error(
+					`[#better-auth]: Couldn't read your auth config in ${resolvedConfigPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
 				);
+				process.exit(1);
 			}
-			console.error(
-				`[#better-auth]: Couldn't read your auth config in ${configPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
-			);
-			process.exit(1);
-		}
-		return "auth" in config
-			? config.auth?.options
-			: "default" in config
-				? config.default?.options
-				: config.options;
-	} catch (e) {
-		if (
-			typeof e === "object" &&
-			e &&
-			"message" in e &&
-			typeof e.message === "string" &&
-			e.message.includes(
-				"This module cannot be imported from a Client Component module",
-			)
-		) {
-			if (shouldThrowOnError) {
-				throw new Error(
+		} catch (e) {
+			if (
+				typeof e === "object" &&
+				e &&
+				"message" in e &&
+				typeof e.message === "string" &&
+				e.message.includes(
+					"This module cannot be imported from a Client Component module",
+				)
+			) {
+				if (shouldThrowOnError) {
+					throw new Error(
+						`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
+					);
+				}
+				console.error(
 					`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
 				);
+				process.exit(1);
 			}
-			console.error(
-				`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
-			);
+			if (shouldThrowOnError) {
+				throw e;
+			}
+			console.error("[#better-auth]: Couldn't read your auth config.", e);
 			process.exit(1);
 		}
-		if (shouldThrowOnError) {
-			throw e;
-		}
-		console.error("[#better-auth]: Couldn't read your auth config.", e);
-		process.exit(1);
 	}
+
+	if (!config) return null;
+
+	return "auth" in config
+		? config.auth?.options
+		: "default" in config
+			? config.default?.options
+			: config.options;
 }
