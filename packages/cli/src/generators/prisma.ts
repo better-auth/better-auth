@@ -202,7 +202,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							continue;
 						}
 
-						if (!attr.defaultValue[0]) {
+						if (attr.defaultValue.length === 0) {
 							fieldBuilder.attribute(`default([])`);
 							continue;
 						} else if (
