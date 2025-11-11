@@ -971,6 +971,16 @@ export const signInSSO = <O extends SSOOptions>(options: O) => {
 					});
 				}
 			}
+
+			if (
+				options?.domainVerification?.enabled &&
+				!("domainVerified" in provider && provider.domainVerified)
+			) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "Provider domain has not been verified",
+				});
+			}
+
 			if (provider.oidcConfig && body.providerType !== "saml") {
 				const state = await generateState(ctx, undefined, false);
 				const redirectURI = `${ctx.context.baseURL}/sso/callback/${provider.providerId}`;
@@ -1137,6 +1147,16 @@ export const callbackSSO = <O extends SSOOptions>(options: O) => {
 					}/error?error=invalid_provider&error_description=provider not found`,
 				);
 			}
+
+			if (
+				options?.domainVerification?.enabled &&
+				!("domainVerified" in provider && provider.domainVerified)
+			) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "Provider domain has not been verified",
+				});
+			}
+
 			let config = provider.oidcConfig;
 
 			if (!config) {
@@ -1471,6 +1491,16 @@ export const callbackSSOSAML = <O extends SSOOptions>(options: O) => {
 					message: "No provider found for the given providerId",
 				});
 			}
+
+			if (
+				options?.domainVerification?.enabled &&
+				!("domainVerified" in provider && provider.domainVerified)
+			) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "Provider domain has not been verified",
+				});
+			}
+
 			const parsedSamlConfig = safeJsonParse<SAMLConfig>(
 				provider.samlConfig as unknown as string,
 			);
@@ -1817,6 +1847,15 @@ export const acsEndpoint = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
+			if (
+				options?.domainVerification?.enabled &&
+				!("domainVerified" in provider && provider.domainVerified)
+			) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "Provider domain has not been verified",
+				});
+			}
+
 			const parsedSamlConfig = provider.samlConfig;
 			// Configure SP and IdP
 			const sp = saml.ServiceProvider({
@@ -1991,12 +2030,7 @@ export const acsEndpoint = <O extends SSOOptions>(options: O) => {
 						ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
 							provider.providerId,
 						);
-					if (
-						!(
-							isTrustedProvider ||
-							("domainVerified" in provider && provider.domainVerified)
-						)
-					) {
+					if (!isTrustedProvider) {
 						throw ctx.redirect(
 							`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
 						);
