@@ -360,6 +360,45 @@ describe("JSON field support in CLI generators", () => {
 		});
 		expect(schema.code).toContain("preferences   Json?");
 	});
+
+	it("should generate Prisma schema with JSON default values of arrays and objects", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: {
+				id: "prisma",
+				options: {},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						preferences: {
+							type: "json",
+							defaultValue: {
+								premiumuser: true,
+							},
+						},
+						metadata: {
+							type: "json",
+							defaultValue: [
+								{
+									name: "john",
+									subscribed: false,
+								},
+								{ name: "doe", subscribed: true },
+							],
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain("preferences   Json?");
+		// expect(schema.code).toContain(JSON.stringify(`@default("{\"premiumuser\":true}")`).slice(1,-1));
+		expect(schema.code).toContain('@default("{\\"premiumuser\\":true}")');
+		expect(schema.code).toContain(
+			'@default("[{\\"name\\":\\"john\\",\\"subscribed\\":false},{\\"name\\":\\"doe\\",\\"subscribed\\":true}]")',
+		);
+	});
 });
 
 describe("Enum field support in Drizzle schemas", () => {
