@@ -127,7 +127,7 @@ export async function handleOAuthUserInfo(
 		if (overrideUserInfo) {
 			const { id: _, ...restUserInfo } = userInfo;
 			// update user info from the provider if overrideUserInfo is true
-			await c.context.internalAdapter.updateUser(dbUser.user.id, {
+			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
 				...restUserInfo,
 				email: userInfo.email.toLowerCase(),
 				emailVerified:
