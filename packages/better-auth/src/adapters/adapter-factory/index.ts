@@ -163,6 +163,7 @@ export const createAdapterFactory =
 			usePlural: config.usePlural,
 			disableIdGeneration: config.disableIdGeneration,
 			customIdGenerator: config.customIdGenerator,
+			supportsUUIDs: config.supportsUUIDs,
 		});
 
 		const getFieldAttributes = initGetFieldAttributes({
@@ -171,7 +172,6 @@ export const createAdapterFactory =
 			usePlural: config.usePlural,
 			disableIdGeneration: config.disableIdGeneration,
 			customIdGenerator: config.customIdGenerator,
-			supportsUUIDs: config.supportsUUIDs,
 		});
 
 		const transformInput = async (
