@@ -4,7 +4,6 @@ import type {
 	BetterAuthOptions,
 } from "@better-auth/core";
 import type { SuccessContext } from "@better-fetch/fetch";
-import { defu } from "defu";
 import { sql } from "kysely";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
@@ -123,12 +122,12 @@ export async function getTestInstance<
 		},
 	} satisfies BetterAuthOptions;
 
-	const auth = betterAuth(
-		defu(options, {
-			...opts,
-			plugins: [bearer(), ...(options?.plugins || [])],
-		}) as unknown as O,
-	);
+	const auth = betterAuth({
+		baseURL: "http://localhost:" + (config?.port || 3000),
+		...opts,
+		...options,
+		plugins: [bearer(), ...(options?.plugins || [])],
+	} as unknown as O);
 
 	const testUser = {
 		email: "test@test.com",
