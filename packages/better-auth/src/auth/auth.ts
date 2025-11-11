@@ -1,5 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { init } from "../context";
+import { init } from "../context/init";
 import type { Auth } from "../types";
 import { createBetterAuth } from "./base";
 
