@@ -138,6 +138,24 @@ export const mcp = (options: MCPOptions) => {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						// clean up the prompt cookie after a successful login
+						const hasNewSession = !!ctx.context.newSession;
+						const cookie = await ctx.getSignedCookie(
+							"oidc_login_prompt",
+							ctx.context.secret,
+						);
+						if (hasNewSession && cookie) {
+							ctx.setCookie("oidc_login_prompt", "", {
+								maxAge: 0,
+							});
+						}
+					}),
+				},
+				{
+					matcher() {
+						return true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
 						const cookie = await ctx.getSignedCookie(
 							"oidc_login_prompt",
 							ctx.context.secret,
@@ -145,19 +163,10 @@ export const mcp = (options: MCPOptions) => {
 						if (!cookie) {
 							return;
 						}
-
-						const session = await getSessionFromCtx(ctx);
-						if (!session) {
-							return;
-						}
-
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
-						});
+						await getSessionFromCtx(ctx);
 
 						ctx.query = JSON.parse(cookie);
 						ctx.query!.prompt = "consent";
-						ctx.context.session = session;
 						const response = await authorizeMCPOAuth(ctx, opts);
 						return response;
 					}),

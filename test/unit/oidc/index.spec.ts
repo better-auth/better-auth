@@ -190,6 +190,7 @@ describe("oidc provider", async () => {
 
 		expect(oidcLoginPromptCookie).toBeDefined();
 
+		let cookieCleared = false;
 		await authClient.signUp.email(
 			{
 				email: "test@example.com",
@@ -197,6 +198,7 @@ describe("oidc provider", async () => {
 				name: "Test User",
 			},
 			{
+				headers: new Headers({ cookie: oidcLoginPromptCookie! }),
 				onResponse(context) {
 					const setCookies = context.response.headers.get("set-cookie");
 					if (setCookies) {
@@ -207,26 +209,6 @@ describe("oidc provider", async () => {
 						if (match) {
 							sessionCookieValue = `better-auth.session_token=${match[1]}`;
 						}
-					}
-				},
-			},
-		);
-
-		expect(sessionCookieValue).toBeDefined();
-
-		let cookieCleared = false;
-
-		await betterFetch(
-			`${url}/api/auth/oauth2/authorize?client_id=${testClient.clientId}&response_type=code&redirect_uri=${encodeURIComponent("https://client.example.com/callback")}&scope=openid%20profile%20email`,
-			{
-				method: "GET",
-				headers: new Headers({
-					cookie: `${sessionCookieValue}; ${oidcLoginPromptCookie}`,
-				}),
-				throw: false,
-				onResponse(context) {
-					const setCookies = context.response.headers.get("set-cookie");
-					if (setCookies) {
 						cookieCleared =
 							setCookies.includes("oidc_login_prompt=") &&
 							(setCookies.includes("Max-Age=0") ||
@@ -236,7 +218,7 @@ describe("oidc provider", async () => {
 			},
 		);
 
-		// Verify the cookie was cleared
+		expect(sessionCookieValue).toBeDefined();
 		expect(cookieCleared).toBe(true);
 	});
 });

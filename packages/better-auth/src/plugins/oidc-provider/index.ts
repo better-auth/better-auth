@@ -251,6 +251,24 @@ export const oidcProvider = (options: OIDCOptions) => {
 			],
 			after: [
 				{
+					matcher() {
+						return true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						// clean up the prompt cookie after a successful login
+						const hasNewSession = !!ctx.context.newSession;
+						const cookie = await ctx.getSignedCookie(
+							"oidc_login_prompt",
+							ctx.context.secret,
+						);
+						if (hasNewSession && cookie) {
+							ctx.setCookie("oidc_login_prompt", "", {
+								maxAge: 0,
+							});
+						}
+					}),
+				},
+				{
 					matcher(ctx) {
 						return ctx.path === "/oauth2/authorize" && ctx.method === "GET";
 					},
@@ -262,16 +280,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						if (!cookie) {
 							return;
 						}
-
-						const session = await getSessionFromCtx(ctx);
-						if (!session) {
-							return;
-						}
-
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
-						});
-
 						try {
 							const parsedQuery = JSON.parse(cookie);
 							if (
@@ -294,9 +302,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 							);
 							return;
 						}
-						// Don't force prompt to "consent" - let the authorize function
-						// determine if consent is needed based on OIDC spec requirements
-						ctx.context.session = session;
 						await setPromptHandled(true);
 						const response = await authorize(ctx, opts);
 						return response;
