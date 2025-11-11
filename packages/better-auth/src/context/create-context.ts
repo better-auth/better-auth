@@ -8,6 +8,7 @@ import {
 	socialProviders,
 } from "@better-auth/core/social-providers";
 import { createTelemetry } from "@better-auth/telemetry";
+import defu from "defu";
 import type { Entries } from "type-fest";
 import { checkEndpointConflicts } from "../api";
 import { createCookieGetter, getCookies } from "../cookies";
@@ -32,25 +33,20 @@ export async function createAuthContext(
 ): Promise<AuthContext> {
 	//set default options for stateless mode
 	if (!options.database) {
-		options = {
-			...options,
+		options = defu(options, {
 			session: {
-				...options.session,
 				cookieCache: {
 					enabled: true,
-					strategy: "jwe",
+					strategy: "jwe" as const,
 					refreshCache: true,
-					...options.session?.cookieCache,
 				},
 			},
 			advanced: {
-				...options.advanced,
 				oauthConfig: {
-					storeStateStrategy: "cookie",
-					...options.advanced?.oauthConfig,
+					storeStateStrategy: "cookie" as const,
 				},
 			},
-		};
+		});
 	}
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);

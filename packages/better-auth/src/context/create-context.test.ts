@@ -1425,4 +1425,32 @@ describe("base context creation", () => {
 			expect(ctx.baseURL).toBe("http://localhost:3000/api/v1/auth-service");
 		});
 	});
+
+	describe.only("stateless mode", () => {
+		it("should enable stateless mode by default", async () => {
+			const ctx = await initBase({});
+			expect(ctx.options.session?.cookieCache?.enabled).toBe(true);
+			expect(ctx.options.session?.cookieCache?.strategy).toBe("jwe");
+			expect(ctx.options.session?.cookieCache?.refreshCache).toBe(true);
+			expect(ctx.oauthConfig.storeStateStrategy).toBe("cookie");
+			expect(ctx.options.database).toBeUndefined();
+		});
+
+		it("should allow overriding stateless mode", async () => {
+			const ctx = await initBase({
+				session: {
+					cookieCache: {
+						enabled: false,
+					},
+				},
+				advanced: {
+					oauthConfig: {
+						storeStateStrategy: "database",
+					},
+				},
+			});
+			expect(ctx.options.session?.cookieCache?.enabled).toBe(false);
+			expect(ctx.oauthConfig.storeStateStrategy).toBe("database");
+		});
+	});
 });
