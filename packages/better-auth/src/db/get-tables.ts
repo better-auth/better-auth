@@ -3,6 +3,7 @@ import type {
 	BetterAuthDBSchema,
 	DBFieldAttribute,
 } from "@better-auth/core/db";
+import { fromZodSchema, isZodObject } from "./from-zod";
 
 export const getAuthTables = (
 	options: BetterAuthOptions,
@@ -101,7 +102,11 @@ export const getAuthTables = (
 					index: true,
 				},
 				...session?.fields,
-				...options.session?.additionalFields,
+				...(options.session?.additionalFields
+					? isZodObject(options.session.additionalFields)
+						? fromZodSchema(options.session.additionalFields)
+						: options.session.additionalFields
+					: {}),
 			},
 			order: 2,
 		},
@@ -150,7 +155,11 @@ export const getAuthTables = (
 					fieldName: options.user?.fields?.updatedAt || "updatedAt",
 				},
 				...user?.fields,
-				...options.user?.additionalFields,
+				...(options.user?.additionalFields
+					? isZodObject(options.user.additionalFields)
+						? fromZodSchema(options.user.additionalFields)
+						: options.user.additionalFields
+					: {}),
 			},
 			order: 1,
 		},
@@ -234,7 +243,11 @@ export const getAuthTables = (
 					onUpdate: () => new Date(),
 				},
 				...account?.fields,
-				...options.account?.additionalFields,
+				...(options.account?.additionalFields
+					? isZodObject(options.account.additionalFields)
+						? fromZodSchema(options.account.additionalFields)
+						: options.account.additionalFields
+					: {}),
 			},
 			order: 3,
 		},

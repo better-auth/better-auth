@@ -4,9 +4,10 @@ import type {
 	DBFieldAttribute,
 } from "@better-auth/core/db";
 import { APIError } from "better-call";
+import { z } from "zod";
 import type { Account, Session, User } from "../types";
+import { fromZodSchema, isZodObject, isZodType } from "./from-zod";
 
-// Cache for parsed schemas to avoid reparsing on every request
 const cache = new WeakMap<
 	BetterAuthOptions,
 	Map<string, Record<string, DBFieldAttribute>>
@@ -42,10 +43,17 @@ function getAllFields(options: BetterAuthOptions, table: string) {
 	if (tableCache.has(table)) {
 		return tableCache.get(table)!;
 	}
-	let schema: Record<string, DBFieldAttribute> = {
-		...(table === "user" ? options.user?.additionalFields : {}),
-		...(table === "session" ? options.session?.additionalFields : {}),
-	};
+
+	let schema: Record<string, DBFieldAttribute> = {};
+
+	const tableConfig = options[table as "user" | "session" | "account"];
+	if (tableConfig?.additionalFields) {
+		if (isZodObject(tableConfig.additionalFields)) {
+			schema = fromZodSchema(tableConfig.additionalFields);
+		} else {
+			schema = tableConfig.additionalFields as Record<string, DBFieldAttribute>;
+		}
+	}
 	for (const plugin of options.plugins || []) {
 		if (plugin.schema && plugin.schema[table]) {
 			schema = {
@@ -97,10 +105,13 @@ export function parseInputData<T extends Record<string, any>>(
 			if (fields[key]!.input === false) {
 				if (fields[key]!.defaultValue !== undefined) {
 					if (action !== "update") {
-						parsedData[key] = fields[key]!.defaultValue;
+						const dv = fields[key]!.defaultValue as unknown;
+						parsedData[key] =
+							typeof dv === "function" ? (dv as () => unknown)() : dv;
 						continue;
 					}
 				}
+
 				if (data[key]) {
 					throw new APIError("BAD_REQUEST", {
 						message: `${key} is not allowed to be set`,
@@ -109,10 +120,27 @@ export function parseInputData<T extends Record<string, any>>(
 				continue;
 			}
 			if (fields[key]!.validator?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key]!.validator.input["~standard"].validate(
-					data[key],
-				);
-				continue;
+				const validator = fields[key]!.validator!.input;
+
+				if (isZodType(validator)) {
+					const result = (validator as z.ZodTypeAny).safeParse(data[key]);
+					if (!result.success) {
+						throw new APIError("BAD_REQUEST", {
+							message: `${key}: ${result.error.issues[0]?.message}`,
+							zodIssues: result.error.issues,
+						});
+					}
+					parsedData[key] = result.data;
+					continue;
+				}
+				if (validator["~standard"]) {
+					parsedData[key] = validator["~standard"].validate(data[key]);
+					continue;
+				} else {
+					throw new APIError("BAD_REQUEST", {
+						message: `${key}: Unsupported validator type`,
+					});
+				}
 			}
 			if (fields[key]!.transform?.input && data[key] !== undefined) {
 				parsedData[key] = fields[key]!.transform?.input(data[key]);
@@ -123,7 +151,8 @@ export function parseInputData<T extends Record<string, any>>(
 		}
 
 		if (fields[key]!.defaultValue !== undefined && action === "create") {
-			parsedData[key] = fields[key]!.defaultValue;
+			const dv = fields[key]!.defaultValue as unknown;
+			parsedData[key] = typeof dv === "function" ? (dv as () => unknown)() : dv;
 			continue;
 		}
 

@@ -1,5 +1,7 @@
 export * from "@better-auth/core/db";
 export * from "./field";
+export * from "./from-zod";
+export * from "./from-zod-types";
 export * from "./get-migration";
 export * from "./get-schema";
 export * from "./get-tables";

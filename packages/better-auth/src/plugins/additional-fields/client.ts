@@ -1,21 +1,30 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { z } from "zod";
+import type { ZodSchemaToDBFields } from "../../db/from-zod-types";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
+
+type DBSchemaShape = {
+	user?:
+		| {
+				[key: string]: DBFieldAttribute;
+		  }
+		| undefined;
+	session?:
+		| {
+				[key: string]: DBFieldAttribute;
+		  }
+		| undefined;
+};
+
+type ZodSchemaShape = {
+	user?: z.ZodObject<any>;
+	session?: z.ZodObject<any>;
+};
 
 export const inferAdditionalFields = <
 	T,
-	S extends {
-		user?:
-			| {
-					[key: string]: DBFieldAttribute;
-			  }
-			| undefined;
-		session?:
-			| {
-					[key: string]: DBFieldAttribute;
-			  }
-			| undefined;
-	} = {},
+	S extends DBSchemaShape | ZodSchemaShape = {},
 >(
 	schema?: S | undefined,
 ) => {
@@ -29,25 +38,25 @@ export const inferAdditionalFields = <
 
 	type Plugin = Opts extends never
 		? S extends {
-				user?:
-					| {
-							[key: string]: DBFieldAttribute;
-					  }
-					| undefined;
-				session?:
-					| {
-							[key: string]: DBFieldAttribute;
-					  }
-					| undefined;
+				user?: any;
+				session?: any;
 			}
 			? {
 					id: "additional-fields-client";
 					schema: {
 						user: {
-							fields: S["user"] extends object ? S["user"] : {};
+							fields: S["user"] extends z.ZodObject<any>
+								? ZodSchemaToDBFields<S["user"]>
+								: S["user"] extends { [key: string]: DBFieldAttribute }
+									? S["user"]
+									: {};
 						};
 						session: {
-							fields: S["session"] extends object ? S["session"] : {};
+							fields: S["session"] extends z.ZodObject<any>
+								? ZodSchemaToDBFields<S["session"]>
+								: S["session"] extends { [key: string]: DBFieldAttribute }
+									? S["session"]
+									: {};
 						};
 					};
 				}

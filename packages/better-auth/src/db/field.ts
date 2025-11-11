@@ -4,6 +4,8 @@ import type {
 	DBFieldAttributeConfig,
 	DBFieldType,
 } from "@better-auth/core/db";
+import type { z } from "zod";
+import type { ZodSchemaToDBFields } from "./from-zod-types";
 
 export const createFieldAttribute = <
 	T extends DBFieldType,
@@ -196,7 +198,13 @@ export type InferFieldsFromOptions<
 > = Options[Key] extends {
 	additionalFields: infer Field;
 }
-	? Format extends "output"
-		? InferFieldsOutput<Field>
-		: InferFieldsInput<Field>
+	? Field extends z.ZodObject<any>
+		? Format extends "output"
+			? InferFieldsOutput<ZodSchemaToDBFields<Field>>
+			: InferFieldsInput<ZodSchemaToDBFields<Field>>
+		: Field extends Record<string, DBFieldAttribute>
+			? Format extends "output"
+				? InferFieldsOutput<Field>
+				: InferFieldsInput<Field>
+			: {}
 	: {};
