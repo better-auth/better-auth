@@ -103,7 +103,9 @@ const user = await authClient.signIn.email({
 
 ## Options
 
-- `emailDomainName`: The domain name to use when generating an email address for anonymous users. Defaults to the domain name of the current site.
+### Temporary Email
+
+- `emailDomainName`: The domain name to use when generating an email address for anonymous users. If not provided, a random domain will be generated.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -111,11 +113,31 @@ import { betterAuth } from "better-auth"
 export const auth = betterAuth({
     plugins: [
         anonymous({
-            emailDomainName: "example.com"
+            emailDomainName: "example.com" // [!code highlight]
         })
     ]
 })
 ```
+
+- `emailLocalPart`: The local part of the temporary email address. Defaults to "temp".
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    plugins: [
+        anonymous({
+            emailLocalPart: "temp" // [!code highlight]
+        })
+    ]
+})
+```
+
+<Callout type="info">
+All temporary email settings are optional, but for cleaner addresses, it’s recommended to either use both or neither.
+</Callout>
+
+### Others
 
 - `onLinkAccount`: A callback function that is called when an anonymous user links their account to a new authentication method. The callback receives an object with the `anonymousUser` and the `newUser`.
 
