@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
 export const custom_user = sqliteTable("custom_user", {
   id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
@@ -92,14 +92,21 @@ export const custom_verification = sqliteTable(
   (table) => [index("custom_verification_identifier_idx").on(table.identifier)],
 );
 
-export const twoFactor = sqliteTable("two_factor", {
-  id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
-  secret: text("secret").notNull(),
-  backupCodes: text("backup_codes").notNull(),
-  userId: integer("user_id")
-    .notNull()
-    .references(() => custom_user.id, { onDelete: "cascade" }),
-});
+export const twoFactor = sqliteTable(
+  "two_factor",
+  {
+    id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    index("twoFactor_secret_idx").on(table.secret),
+    index("twoFactor_userId_idx").on(table.userId),
+  ],
+);
 
 export const custom_userRelations = relations(custom_user, ({ many }) => ({
   custom_sessions: many(custom_session),
