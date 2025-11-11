@@ -706,7 +706,8 @@ mapping: {
 
 ## Domain verification
 
-You can automatically trust a new domain by enabling the domain verification feature:
+Domain verification allows your application to automatically trust a new SSO provider
+by automatically validating ownership via the associated domain:
 
 <Tabs items={["client", "server"]}>
     <Tab value="client">
@@ -757,16 +758,31 @@ See the [Schema](#schema-for-domain-verification) section to add the fields manu
 
 ### Verify your domain
 
-When domain verification is enabled, every new SSO provider domain will be marked as unverified at first.
-Upon SSO provider registration, a **verification token** will be issued to the provider (it will be returned as part of the response),
-which you need to prove that you own it. To do this, you'll need to add a `TXT` record to your domain's DNS settings.
+When domain verification is enabled, every new SSO provider will be untrusted at first.
+This means that new sign-ups or sign-ins will be allowed until the domain ownership has been verified.
 
-1.  **You will be provided with a verification token.** This token is a unique string that you'll need to add to your DNS records.
-2.  **Create a new `TXT` record in your DNS provider's dashboard.**
-    *   **Host:** `better-auth-token-{your-provider-id}`
+To verify your ownership over a domain, follow these steps:
+
+<Steps>
+    <Step>
+#### Acquire verification token
+When an SSO provider is registered, a **verification token** will be issued to the provider (it will be returned as part of the response).
+You can use this token to prove ownership over the domain.
+    </Step>
+    <Step>
+#### Create `TXT` DNS record
+To do this, you'll need to add a `TXT` record to your domain's DNS settings:
+
+    *   **Host:** `better-auth-token-{your-provider-id}` (**Note:** This assumes the default token prefix, which can be customized through the `domainVerification.tokenPrefix` option)
     *   **Value:** The verification token you were given.
-3.  **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
-4.  **Once the record has propagated**, you can submit a validation request
+
+**Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
+    </Step>
+    <Step>
+#### Submit a validation request
+**Once the DNS record has propagated**, you can submit a validation request (See below)
+    </Step>
+</Steps>
 
 ### Domain validation request
 
@@ -774,26 +790,16 @@ Once you have configured your domain, you can use your `auth` instance to submit
 This request will either result in a rejection (could not prove your ownership over the domain)
 or if the verification is successful, your SSO provider domain will be marked as verified.
 
-<Tabs items={["client", "server"]}>
-    <Tab value="client">
-```ts title="domain-validation-request-client.ts"
-const res = await authClient.sso.verifyDomain({
-    providerId: "acme-corp",
-});
+<APIMethod path="/sso/verify-domain" method="POST" requireSession>
+```ts
+type verifyDomain = {
+  /**
+  * The provider id
+  */
+  providerId: string = "acme-corp"
+}
 ```
-    </Tab>
-
-    <Tab value="server">
-```ts title="domain-validation-request.ts"
-const res = await auth.api.verifyDomain({
-    body: {
-        providerId: "acme-corp",
-    },
-    headers,
-});
-```
-    </Tab>
-</Tabs>
+</APIMethod>
 
 ### Creating a new verification token
 
@@ -803,28 +809,16 @@ or the moment when the SSO provider was registered.
 After that time, the token will expire and cannot longer be used. When that happens,
 you can create a new verification token:
 
-<Tabs items={["client", "server"]}>
-    <Tab value="client">
-```ts title="create-domain-verification-token-client.ts"
-const res = await authClient.sso.requestDomainVerification({
-    providerId: "acme-corp"
-})
+<APIMethod path="/sso/request-domain-verification" method="POST" requireSession>
+```ts
+type requestDomainVerification = {
+  /**
+  * The provider id
+  */
+  providerId: string = "acme-corp"
+}
 ```
-    </Tab>
-
-    <Tab value="server">
-```ts title="create-domain-verification-token.ts"
-const res = await auth.api.requestDomainVerification({
-    body: {
-        providerId: "acme-corp",
-    },
-    headers,
-});
-
-console.log("Token: ", res.domainVerificationToken);
-```
-    </Tab>
-</Tabs>
+</APIMethod>
 
 ### SAML Endpoints
 
@@ -852,9 +846,9 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
     ]}
 />
 
-### Schema for domain verification
+### If you have enabled domain verification:
 
-When the domain verification is enabled, the `ssoProvider` schema is extended as follows:
+The `ssoProvider` schema is extended as follows:
 
 <DatabaseTable
     fields={[
