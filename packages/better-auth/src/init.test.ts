@@ -247,7 +247,7 @@ describe("init", async () => {
 	});
 
 	it("should throw an error if the base url does not include http or https as the protocol", async () => {
-		expect(async () =>
+		await expect(
 			init({ database, baseURL: "localhost:6969" }),
 		).rejects.toThrowError(
 			`Invalid base URL: localhost:6969. URL must include 'http://' or 'https://'`,
@@ -255,7 +255,7 @@ describe("init", async () => {
 	});
 
 	it("should throw an error if the base url does not include http or https as the protocol", async () => {
-		expect(async () =>
+		await expect(async () =>
 			init({ database, baseURL: "ws://localhost:6969" }),
 		).rejects.toThrowError(
 			`Invalid base URL: ws://localhost:6969. URL must include 'http://' or 'https://'`,
