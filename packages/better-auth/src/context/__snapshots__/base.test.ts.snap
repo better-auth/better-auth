@@ -23,6 +23,7 @@ exports[`base context creation > should match config 1`] = `
         "supportsDates": true,
         "supportsJSON": false,
         "supportsNumericIds": true,
+        "supportsUUIDs": false,
         "transaction": [Function],
         "usePlural": false,
       },
