@@ -5,7 +5,6 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
-import dns from "dns/promises";
 import * as z from "zod/v4";
 import type { SSOOptions, SSOProvider } from "../types";
 
@@ -221,7 +220,22 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
-			let records: string[];
+			let records: string[] = [];
+			let dns: typeof import("node:dns/promises");
+
+			try {
+				dns = await import("node:dns/promises");
+			} catch (error) {
+				ctx.context.logger.error(
+					"The core node:dns module is required for the domain verification feature",
+					error,
+				);
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: "Unable to verify domain ownership due to server error",
+					code: "DOMAIN_VERIFICATION_FAILED",
+				});
+			}
+
 			try {
 				const dnsRecords = await dns.resolveTxt(
 					new URL(provider.domain).hostname,
@@ -232,7 +246,6 @@ export const verifyDomain = (options: SSOOptions) => {
 					"DNS resolution failure while validating domain ownership",
 					error,
 				);
-				records = [];
 			}
 
 			const record = records.find((record) =>
