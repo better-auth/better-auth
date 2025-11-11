@@ -694,29 +694,26 @@ export const createAdapterFactory =
 				return joinConfig.isUnique ? null : [];
 			}
 			let result: Record<string, any> | Record<string, any>[] | null;
+			const where = transformWhereClause({
+				model: modelName,
+				where: [
+					{
+						field,
+						value,
+						operator: "eq",
+						connector: "AND",
+					},
+				],
+			});
 			if (joinConfig.isUnique) {
 				result = await adapterInstance.findOne<Record<string, any>>({
 					model: modelName,
-					where: [
-						{
-							field,
-							value,
-							operator: "eq",
-							connector: "AND",
-						},
-					],
+					where: where,
 				});
 			} else {
 				result = await adapterInstance.findMany<Record<string, any>>({
 					model: modelName,
-					where: [
-						{
-							field,
-							value,
-							operator: "eq",
-							connector: "AND",
-						},
-					],
+					where: where,
 					limit: joinConfig.limit,
 				});
 			}
