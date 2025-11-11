@@ -1694,7 +1694,7 @@ describe("types", async (it) => {
 		type FullOrganization = Awaited<
 			ReturnType<typeof auth.api.getFullOrganization>
 		>;
-		expectTypeOf<FullOrganization>().toEqualTypeOf<ActiveOrganization>();
+		expectTypeOf<FullOrganization>().toEqualTypeOf<ActiveOrganization | null>();
 	});
 });
 
