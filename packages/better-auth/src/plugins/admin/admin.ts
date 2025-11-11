@@ -11,6 +11,7 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
 import { type Session } from "../../types";
 import { getDate } from "../../utils/date";
+import { handleErrorRedirect } from "../../utils/handle-error-redirect";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { type AccessControl } from "../access";
 import { defaultStatements } from "./access";
@@ -130,31 +131,10 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 											(ctx.path.startsWith("/callback") ||
 												ctx.path.startsWith("/oauth2/callback"))
 										) {
-											const errorParams = {
+											throw await handleErrorRedirect(ctx, {
 												error: "banned",
 												error_description: opts.bannedUserMessage,
-											};
-											const errorURLConfig =
-												ctx.context.options.onAPIError?.errorURL;
-											let baseURL: string;
-
-											if (typeof errorURLConfig === "function") {
-												baseURL = await errorURLConfig(errorParams);
-											} else {
-												baseURL =
-													errorURLConfig || `${ctx.context.baseURL}/error`;
-											}
-
-											const params = new URLSearchParams();
-											params.set("error", errorParams.error);
-											if (errorParams.error_description)
-												params.set(
-													"error_description",
-													errorParams.error_description,
-												);
-											const sep = baseURL.includes("?") ? "&" : "?";
-											const finalURL = `${baseURL}${sep}${params.toString()}`;
-											throw ctx.redirect(finalURL);
+											});
 										}
 
 										throw new APIError("FORBIDDEN", {

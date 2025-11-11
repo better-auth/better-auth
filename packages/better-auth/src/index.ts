@@ -10,6 +10,7 @@ export * from "@better-auth/core/utils";
 export * from "./auth";
 export * from "./types";
 export * from "./utils";
+export * from "./utils/handle-error-redirect";
 // export this as we are referencing OAuth2Tokens in the `refresh-token` api as return type
 
 // telemetry exports for CLI and consumers

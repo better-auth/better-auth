@@ -6,6 +6,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../crypto";
+import { handleErrorRedirect } from "../utils/handle-error-redirect";
 
 export async function generateState(
 	c: GenericEndpointContext,
@@ -123,20 +124,9 @@ export async function parseState(c: GenericEndpointContext) {
 			c.context.logger.error("State Mismatch. OAuth state cookie not found", {
 				state,
 			});
-			const errorParams = { error: "please_restart_the_process" };
-			const errorURLConfig = c.context.options.onAPIError?.errorURL;
-			let baseURL: string;
-
-			if (typeof errorURLConfig === "function") {
-				baseURL = await errorURLConfig(errorParams);
-			} else {
-				baseURL = errorURLConfig || `${c.context.baseURL}/error`;
-			}
-
-			const params = new URLSearchParams({ error: errorParams.error });
-			const sep = baseURL.includes("?") ? "&" : "?";
-			const finalURL = `${baseURL}${sep}${params.toString()}`;
-			throw c.redirect(finalURL);
+			throw await handleErrorRedirect(c, {
+				error: "please_restart_the_process",
+			});
 		}
 
 		try {
@@ -150,20 +140,9 @@ export async function parseState(c: GenericEndpointContext) {
 			c.context.logger.error("Failed to decrypt or parse OAuth state cookie", {
 				error,
 			});
-			const errorParams = { error: "please_restart_the_process" };
-			const errorURLConfig = c.context.options.onAPIError?.errorURL;
-			let baseURL: string;
-
-			if (typeof errorURLConfig === "function") {
-				baseURL = await errorURLConfig(errorParams);
-			} else {
-				baseURL = errorURLConfig || `${c.context.baseURL}/error`;
-			}
-
-			const params = new URLSearchParams({ error: errorParams.error });
-			const sep = baseURL.includes("?") ? "&" : "?";
-			const finalURL = `${baseURL}${sep}${params.toString()}`;
-			throw c.redirect(finalURL);
+			throw await handleErrorRedirect(c, {
+				error: "please_restart_the_process",
+			});
 		}
 
 		// Clear the cookie after successful parsing
@@ -177,20 +156,9 @@ export async function parseState(c: GenericEndpointContext) {
 			c.context.logger.error("State Mismatch. Verification not found", {
 				state,
 			});
-			const errorParams = { error: "please_restart_the_process" };
-			const errorURLConfig = c.context.options.onAPIError?.errorURL;
-			let baseURL: string;
-
-			if (typeof errorURLConfig === "function") {
-				baseURL = await errorURLConfig(errorParams);
-			} else {
-				baseURL = errorURLConfig || `${c.context.baseURL}/error`;
-			}
-
-			const params = new URLSearchParams({ error: errorParams.error });
-			const sep = baseURL.includes("?") ? "&" : "?";
-			const finalURL = `${baseURL}${sep}${params.toString()}`;
-			throw c.redirect(finalURL);
+			throw await handleErrorRedirect(c, {
+				error: "please_restart_the_process",
+			});
 		}
 
 		parsedData = stateDataSchema.parse(JSON.parse(data.value));
@@ -210,20 +178,9 @@ export async function parseState(c: GenericEndpointContext) {
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)
 		) {
-			const errorParams = { error: "state_mismatch" };
-			const errorURLConfig = c.context.options.onAPIError?.errorURL;
-			let baseURL: string;
-
-			if (typeof errorURLConfig === "function") {
-				baseURL = await errorURLConfig(errorParams);
-			} else {
-				baseURL = errorURLConfig || `${c.context.baseURL}/error`;
-			}
-
-			const params = new URLSearchParams({ error: errorParams.error });
-			const sep = baseURL.includes("?") ? "&" : "?";
-			const finalURL = `${baseURL}${sep}${params.toString()}`;
-			throw c.redirect(finalURL);
+			throw await handleErrorRedirect(c, {
+				error: "state_mismatch",
+			});
 		}
 		c.setCookie(stateCookie.name, "", {
 			maxAge: 0,
@@ -244,20 +201,9 @@ export async function parseState(c: GenericEndpointContext) {
 
 	// Check expiration
 	if (parsedData.expiresAt < Date.now()) {
-		const errorParams = { error: "please_restart_the_process" };
-		const errorURLConfig = c.context.options.onAPIError?.errorURL;
-		let baseURL: string;
-
-		if (typeof errorURLConfig === "function") {
-			baseURL = await errorURLConfig(errorParams);
-		} else {
-			baseURL = errorURLConfig || `${c.context.baseURL}/error`;
-		}
-
-		const params = new URLSearchParams({ error: errorParams.error });
-		const sep = baseURL.includes("?") ? "&" : "?";
-		const finalURL = `${baseURL}${sep}${params.toString()}`;
-		throw c.redirect(finalURL);
+		throw await handleErrorRedirect(c, {
+			error: "please_restart_the_process",
+		});
 	}
 
 	return parsedData;

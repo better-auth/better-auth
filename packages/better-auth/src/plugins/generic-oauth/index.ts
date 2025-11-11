@@ -24,6 +24,7 @@ import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { User } from "../../types";
+import { handleErrorRedirect } from "../../utils/handle-error-redirect";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -582,26 +583,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				},
 				async (ctx) => {
 					if (ctx.query.error || !ctx.query.code) {
-						const errorParams = {
-							error: ctx.query.error || "oAuth_code_missing",
+						throw await handleErrorRedirect(ctx, {
+							error: (ctx.query.error || "oAuth_code_missing") as string,
 							error_description: ctx.query.error_description,
-						};
-						const errorURLConfig = ctx.context.options.onAPIError?.errorURL;
-						let baseURL: string;
-
-						if (typeof errorURLConfig === "function") {
-							baseURL = await errorURLConfig(errorParams);
-						} else {
-							baseURL = errorURLConfig || `${ctx.context.baseURL}/error`;
-						}
-
-						const params = new URLSearchParams();
-						params.set("error", errorParams.error);
-						if (errorParams.error_description)
-							params.set("error_description", errorParams.error_description);
-						const sep = baseURL.includes("?") ? "&" : "?";
-						const finalURL = `${baseURL}${sep}${params.toString()}`;
-						throw ctx.redirect(finalURL);
+						});
 					}
 					const provider = options.config.find(
 						(p) => p.providerId === ctx.params.providerId,
@@ -628,28 +613,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						error: string,
 						error_description?: string,
 					) {
-						const errorParams = { error, error_description };
-						let baseURL: string;
-
-						// 'errorURL' here comes from parseState and is a string, it takes priority
-						if (errorURL) {
-							baseURL = errorURL;
-						} else {
-							// Fallback to global config
-							const errorURLConfig = ctx.context.options.onAPIError?.errorURL;
-							if (typeof errorURLConfig === "function") {
-								baseURL = await errorURLConfig(errorParams);
-							} else {
-								baseURL = errorURLConfig || `${ctx.context.baseURL}/error`;
-							}
-						}
-						const params = new URLSearchParams();
-						params.set("error", error);
-						if (error_description)
-							params.set("error_description", error_description);
-						const sep = baseURL.includes("?") ? "&" : "?";
-						const finalURL = `${baseURL}${sep}${params.toString()}`;
-						throw ctx.redirect(finalURL);
+						// 'errorURL' from parseState takes priority
+						throw await handleErrorRedirect(
+							ctx,
+							{ error, error_description },
+							{ overrideErrorURL: errorURL },
+						);
 					}
 
 					let finalTokenUrl = provider.tokenUrl;

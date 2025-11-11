@@ -2,30 +2,9 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
+import { handleErrorRedirect } from "../../utils/handle-error-redirect";
 import { getClient } from "./index";
 import type { AuthorizationQuery, OIDCOptions } from "./types";
-
-async function getErrorURL(
-	ctx: GenericEndpointContext,
-	error: string,
-	description: string,
-) {
-	const errorParams = { error, error_description: description };
-	const errorURLConfig = ctx.context.options.onAPIError?.errorURL;
-	let baseURL: string;
-
-	if (typeof errorURLConfig === "function") {
-		baseURL = await errorURLConfig(errorParams);
-	} else {
-		baseURL = errorURLConfig || `${ctx.context.baseURL}/error`;
-	}
-
-	const params = new URLSearchParams();
-	params.set("error", error);
-	if (description) params.set("error_description", description);
-	const sep = baseURL.includes("?") ? "&" : "?";
-	return `${baseURL}${sep}${params.toString()}`;
-}
 
 export async function authorize(
 	ctx: GenericEndpointContext,
@@ -83,35 +62,32 @@ export async function authorize(
 
 	const query = ctx.query as AuthorizationQuery;
 	if (!query.client_id) {
-		const errorURL = await getErrorURL(
-			ctx,
-			"invalid_client",
-			"client_id is required",
-		);
-		throw ctx.redirect(errorURL);
+		throw await handleErrorRedirect(ctx, {
+			error: "invalid_client",
+			error_description: "client_id is required",
+		});
 	}
 
 	if (!query.response_type) {
-		throw ctx.redirect(
-			await getErrorURL(ctx, "invalid_request", "response_type is required"),
-		);
+		throw await handleErrorRedirect(ctx, {
+			error: "invalid_request",
+			error_description: "response_type is required",
+		});
 	}
 
 	const client = await getClient(
-		ctx.query.client_id,
+		query.client_id,
 		ctx.context.adapter,
 		options.trustedClients || [],
 	);
 	if (!client) {
-		const errorURL = await getErrorURL(
-			ctx,
-			"invalid_client",
-			"client_id is required",
-		);
-		throw ctx.redirect(errorURL);
+		throw await handleErrorRedirect(ctx, {
+			error: "invalid_client",
+			error_description: "client_id is required",
+		});
 	}
 	const redirectURI = client.redirectURLs.find(
-		(url) => url === ctx.query.redirect_uri,
+		(url) => url === query.redirect_uri,
 	);
 
 	if (!redirectURI || !query.redirect_uri) {
@@ -123,21 +99,17 @@ export async function authorize(
 		});
 	}
 	if (client.disabled) {
-		const errorURL = await getErrorURL(
-			ctx,
-			"client_disabled",
-			"client is disabled",
-		);
-		throw ctx.redirect(errorURL);
+		throw await handleErrorRedirect(ctx, {
+			error: "client_disabled",
+			error_description: "client is disabled",
+		});
 	}
 
 	if (query.response_type !== "code") {
-		const errorURL = await getErrorURL(
-			ctx,
-			"unsupported_response_type",
-			"unsupported response type",
-		);
-		throw ctx.redirect(errorURL);
+		throw await handleErrorRedirect(ctx, {
+			error: "unsupported_response_type",
+			error_description: "unsupported response type",
+		});
 	}
 
 	const requestScope =

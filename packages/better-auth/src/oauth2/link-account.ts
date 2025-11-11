@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { isDevelopment, logger } from "@better-auth/core/env";
 import { APIError, createEmailVerificationToken } from "../api";
 import type { Account, User } from "../types";
+import { handleErrorRedirect } from "../utils/handle-error-redirect";
 import { setTokenUtil } from "./utils";
 
 export async function handleOAuthUserInfo(
@@ -31,20 +32,9 @@ export async function handleOAuthUserInfo(
 				"Better auth was unable to query your database.\nError: ",
 				e,
 			);
-			const errorParams = { error: "internal_server_error" };
-			const errorURLConfig = c.context.options.onAPIError?.errorURL;
-			let baseURL: string;
-
-			if (typeof errorURLConfig === "function") {
-				baseURL = await errorURLConfig(errorParams);
-			} else {
-				baseURL = errorURLConfig || `${c.context.baseURL}/error`;
-			}
-
-			const params = new URLSearchParams({ error: errorParams.error });
-			const sep = baseURL.includes("?") ? "&" : "?";
-			const finalURL = `${baseURL}${sep}${params.toString()}`;
-			throw c.redirect(finalURL);
+			throw await handleErrorRedirect(c, {
+				error: "internal_server_error",
+			});
 		});
 	let user = dbUser?.user;
 	let isRegister = !user;

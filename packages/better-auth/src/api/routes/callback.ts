@@ -5,6 +5,7 @@ import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
+import { handleErrorRedirect } from "../../utils/handle-error-redirect";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { safeJSONParse } from "../../utils/json";
 
@@ -37,39 +38,18 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} catch (e) {
 			c.context.logger.error("INVALID_CALLBACK_REQUEST", e);
-			const errorParams = { error: "invalid_callback_request" };
-			const errorURLConfig = c.context.options.onAPIError?.errorURL;
-			let baseURL: string;
-
-			if (typeof errorURLConfig === "function") {
-				baseURL = await errorURLConfig(errorParams);
-			} else {
-				baseURL = errorURLConfig || `${c.context.baseURL}/error`;
-			}
-			const params = new URLSearchParams({ error: errorParams.error });
-			const sep = baseURL.includes("?") ? "&" : "?";
-			const finalURL = `${baseURL}${sep}${params.toString()}`;
-			throw c.redirect(finalURL);
+			throw await handleErrorRedirect(c, {
+				error: "invalid_callback_request",
+			});
 		}
 
 		const { code, error, state, error_description, device_id } = queryOrBody;
 
 		if (!state) {
 			c.context.logger.error("State not found", error);
-			const errorParams = { error: "state_not_found" };
-			const errorURLConfig = c.context.options.onAPIError?.errorURL;
-			let baseURL: string;
-
-			if (typeof errorURLConfig === "function") {
-				baseURL = await errorURLConfig(errorParams);
-			} else {
-				baseURL = errorURLConfig || `${c.context.baseURL}/error`;
-			}
-
-			const params = new URLSearchParams({ error: errorParams.error });
-			const sep = baseURL.includes("?") ? "&" : "?";
-			const finalURL = `${baseURL}${sep}${params.toString()}`;
-			throw c.redirect(finalURL);
+			throw await handleErrorRedirect(c, {
+				error: "state_not_found",
+			});
 		}
 
 		const {
@@ -85,30 +65,12 @@ export const callbackOAuth = createAuthEndpoint(
 			error: string,
 			description?: string | undefined,
 		) {
-			const errorParams = { error, error_description: description };
-			let baseURL: string;
-
-			// 'errorURL' here comes from parseState and is a string, it takes priority
-			if (errorURL) {
-				baseURL = errorURL;
-			} else {
-				// Fallback to global config
-				const errorURLConfig = c.context.options.onAPIError?.errorURL;
-				if (typeof errorURLConfig === "function") {
-					baseURL = await errorURLConfig(errorParams);
-				} else {
-					baseURL = errorURLConfig || `${c.context.baseURL}/error`;
-				}
-			}
-
-			const params = new URLSearchParams();
-			params.set("error", error);
-			if (description) params.set("error_description", description);
-
-			const sep = baseURL.includes("?") ? "&" : "?";
-			const url = `${baseURL}${sep}${params.toString()}`;
-
-			throw c.redirect(url);
+			// 'errorURL' from parseState takes priority
+			throw await handleErrorRedirect(
+				c,
+				{ error, error_description: description },
+				{ overrideErrorURL: errorURL },
+			);
 		}
 
 		if (error) {

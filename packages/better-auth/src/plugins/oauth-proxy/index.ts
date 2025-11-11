@@ -8,6 +8,7 @@ import type { EndpointContext } from "better-call";
 import * as z from "zod";
 import { originCheck } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { handleErrorRedirect } from "../../utils/handle-error-redirect";
 import { getOrigin } from "../../utils/url";
 
 function getVenderBaseURL() {
@@ -128,24 +129,16 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						return null;
 					});
 					if (!decryptedCookies) {
-						const errorParams = {
-							error: "OAuthProxy - Invalid cookies or secret",
-						};
-						const errorURLConfig = ctx.context.options.onAPIError?.errorURL;
-						let baseURL: string;
-
-						if (typeof errorURLConfig === "function") {
-							baseURL = await errorURLConfig(errorParams);
-						} else {
-							baseURL =
-								errorURLConfig ||
-								`${ctx.context.options.baseURL}/api/auth/error`;
-						}
-
-						const params = new URLSearchParams({ error: errorParams.error });
-						const sep = baseURL.includes("?") ? "&" : "?";
-						const finalURL = `${baseURL}${sep}${params.toString()}`;
-						throw ctx.redirect(finalURL);
+						throw await handleErrorRedirect(
+							ctx,
+							{
+								error: "OAuthProxy - Invalid cookies or secret",
+							},
+							{
+								// This file uses a different default path
+								defaultErrorPath: "/api/auth/error",
+							},
+						);
 					}
 
 					const isSecureContext = resolveCurrentURL(ctx).protocol === "https:";
