@@ -16,8 +16,8 @@ import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { parseRoles } from "../organization";
 import {
-	type InferMember,
 	type InferInvitation,
+	type InferMember,
 	type InferOrganizationRolesFromOption,
 	type Invitation,
 	type Member,
@@ -663,7 +663,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 							where: [{ field: "id", value: m.id }],
 							update: {
 								lastActiveOrganization:
-									m.organizationId === invitation.organizationId as string,
+									m.organizationId === (invitation.organizationId as string),
 							},
 						}),
 					),

@@ -562,26 +562,30 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			const organizationIds = members.map((member) => member.organizationId);
 
-			const organizations = await adapter.findMany<InferOrganization<O, false>>({
-				model: "organization",
-				where: [
-					{
-						field: "id",
-						value: organizationIds,
-						operator: "in",
-					},
-				],
-			});
+			const organizations = await adapter.findMany<InferOrganization<O, false>>(
+				{
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: organizationIds,
+							operator: "in",
+						},
+					],
+				},
+			);
 
 			if (options?.trackLastActiveOrganization) {
-				const membersMap = new Map<string, typeof members[0]>(
+				const membersMap = new Map<string, (typeof members)[0]>(
 					members.map((member) => [member.organizationId as string, member]),
 				);
 				organizations.sort((a, b) => {
 					const memberA = membersMap.get(a.id as string);
 					const memberB = membersMap.get(b.id as string);
-					const lastActiveA = (memberA as any)?.lastActiveOrganization === true ? 1 : 0;
-					const lastActiveB = (memberB as any)?.lastActiveOrganization === true ? 1 : 0;
+					const lastActiveA =
+						(memberA as any)?.lastActiveOrganization === true ? 1 : 0;
+					const lastActiveB =
+						(memberB as any)?.lastActiveOrganization === true ? 1 : 0;
 					return lastActiveB - lastActiveA;
 				});
 			}

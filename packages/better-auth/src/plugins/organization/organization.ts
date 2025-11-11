@@ -1099,7 +1099,8 @@ export function organization<O extends OrganizationOptions>(
 								lastActiveOrganization: {
 									type: "boolean",
 									required: false,
-									fieldName: options?.schema?.member?.fields?.lastActiveOrganization,
+									fieldName:
+										options?.schema?.member?.fields?.lastActiveOrganization,
 								},
 							}
 						: {}),

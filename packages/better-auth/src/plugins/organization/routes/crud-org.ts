@@ -330,8 +330,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 								model: "member",
 								where: [{ field: "id", value: m.id }],
 								update: {
-									lastActiveOrganization:
-										m.organizationId === organization.id,
+									lastActiveOrganization: m.organizationId === (organization.id as string),
 								},
 							}),
 						),
@@ -917,7 +916,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 							model: "member",
 							where: [{ field: "id", value: m.id }],
 							update: {
-								lastActiveOrganization: m.organizationId === organization.id,
+								lastActiveOrganization: m.organizationId === (organization.id as string),
 							},
 						}),
 					),

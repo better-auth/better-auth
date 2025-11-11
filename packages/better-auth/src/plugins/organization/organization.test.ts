@@ -2448,10 +2448,11 @@ describe("Additional Fields", async () => {
 				memberRequiredField: string;
 				memberOptionalField?: string | undefined;
 				memberHiddenField?: string | undefined;
+				lastActiveOrganization?: boolean | undefined;
 			};
-		} | null;
+		};
 		if (!acceptedInvitation) throw new Error("Accepted invitation is null");
-		expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
+		expectTypeOf<NonNullable<Result>>().toEqualTypeOf<ExpectedResult>({} as any);
 		expect("memberRequiredField" in acceptedInvitation.member).toBeTruthy();
 		expect("memberOptionalField" in acceptedInvitation.member).toBeTruthy();
 		expect("memberHiddenField" in acceptedInvitation.member).toBeTruthy();
