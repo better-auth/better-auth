@@ -3,6 +3,9 @@ import { initMinimal } from "../context/init-minimal";
 import type { Auth } from "../types";
 import { createBetterAuth } from "./base";
 
+/**
+ * Better Auth initializer for minimal mode (without Kysely)
+ */
 export const betterAuth = <Options extends BetterAuthOptions>(
 	options: Options &
 		// fixme(alex): do we need Record<never, never> here?
