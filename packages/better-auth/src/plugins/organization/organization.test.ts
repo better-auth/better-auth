@@ -2234,7 +2234,7 @@ describe("Additional Fields", async () => {
 	});
 
 	it("get active member", async () => {
-		auth.api.setActiveOrganization({
+		await auth.api.setActiveOrganization({
 			body: { organizationId: org.id },
 			headers: addedMemberHeaders,
 		});
