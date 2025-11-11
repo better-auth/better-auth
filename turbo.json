@@ -29,6 +29,10 @@
       "dependsOn": ["build"],
       "cache": false
     },
+    "bench": {
+      "dependsOn": ["build"],
+      "outputs": ["logs/**"]
+    },
     "e2e:smoke": {
       "dependsOn": ["build"],
       "cache": false
