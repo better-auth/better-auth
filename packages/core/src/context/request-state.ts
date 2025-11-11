@@ -49,6 +49,17 @@ export interface RequestState<T> {
 	readonly ref: Readonly<object>;
 }
 
+/**
+ * Defines a request-scoped state with lazy initialization.
+ *
+ * @param initFn - A function that initializes the state. It is called the first time `get()` is invoked within each request context, and only once per context.
+ * @returns A RequestState object with `get` and `set` methods, and a unique `ref` for debugging.
+ *
+ * @example
+ * const userState = defineRequestState(() => ({ id: '', name: '' }));
+ * // Later, within a request context:
+ * const user = await userState.get();
+ */
 export function defineRequestState<T>(
 	initFn: () => T | Promise<T>,
 ): RequestState<T>;
