@@ -875,6 +875,113 @@ describe("stripe", async () => {
 		expect(onSubscriptionDeleted).toHaveBeenCalled();
 	});
 
+	it("should return updated subscription in onSubscriptionUpdate callback", async () => {
+		const onSubscriptionUpdate = vi.fn();
+
+		const { id: testReferenceId } = await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: "update-callback@email.com",
+			},
+		});
+
+		const { id: testSubscriptionId } = await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: testReferenceId,
+				stripeCustomerId: "cus_update_test",
+				stripeSubscriptionId: "sub_update_test",
+				status: "active",
+				plan: "starter",
+				seats: 1,
+			},
+		});
+
+		// Simulate subscription update event (e.g., seat change from 1 to 5)
+		const updateEvent = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_update_test",
+					customer: "cus_update_test",
+					status: "active",
+					items: {
+						data: [
+							{
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 5, // Updated from 1 to 5
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+					current_period_start: Math.floor(Date.now() / 1000),
+					current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+				},
+			},
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(updateEvent),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+			subscription: {
+				...stripeOptions.subscription,
+				onSubscriptionUpdate,
+			},
+		} as unknown as StripeOptions;
+
+		const testAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memory,
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [stripe(testOptions)],
+		});
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(updateEvent),
+			},
+		);
+
+		await testAuth.handler(mockRequest);
+
+		// Verify that onSubscriptionUpdate was called
+		expect(onSubscriptionUpdate).toHaveBeenCalledTimes(1);
+
+		// Verify that the callback received the UPDATED subscription (seats: 5, not 1)
+		const callbackArg = onSubscriptionUpdate.mock.calls[0]?.[0];
+		expect(callbackArg).toBeDefined();
+		expect(callbackArg.subscription).toMatchObject({
+			id: testSubscriptionId,
+			seats: 5, // Should be the NEW value, not the old value (1)
+			status: "active",
+			plan: "starter",
+		});
+
+		// Also verify the subscription was actually updated in the database
+		const updatedSub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: testSubscriptionId }],
+		});
+		expect(updatedSub?.seats).toBe(5);
+	});
+
 	it("should allow seat upgrades for the same plan", async () => {
 		const userRes = await authClient.signUp.email(
 			{

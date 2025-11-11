@@ -15,8 +15,8 @@ import type {
 	InferInvitation,
 	InferMember,
 	InferOrganization,
+	InferTeam,
 	Member,
-	Team,
 	TeamMember,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
@@ -735,16 +735,17 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
+
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-						teams: Team[];
-					} & InferOrganization<O>
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+						teams: InferTeam<O, false>[];
+					} & InferOrganization<O, false>
 				: {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-					} & InferOrganization<O>;
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+					} & InferOrganization<O, false>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
@@ -871,14 +872,14 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			});
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-						teams: Team[];
-					} & InferOrganization<O>
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+						teams: InferTeam<O, false>[];
+					} & InferOrganization<O, false>
 				: {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-					} & InferOrganization<O>;
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+					} & InferOrganization<O, false>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
