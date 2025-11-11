@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import * as z from "zod";
@@ -15,6 +16,7 @@ import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { parseRoles } from "../organization";
 import {
+	type InferMember,
 	type InferOrganizationRolesFromOption,
 	type Invitation,
 } from "../schema";
@@ -625,11 +627,15 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				}
 			}
 
+			const orgOptions = ctx.context.orgOptions as any;
 			const member = await adapter.createMember({
 				organizationId: invitation.organizationId,
 				userId: session.user.id,
 				role: invitation.role as string,
 				createdAt: new Date(),
+				...(orgOptions?.trackLastActiveOrganization
+					? { lastActiveOrganization: true }
+					: {}),
 			});
 
 			await adapter.setActiveOrganization(
@@ -638,13 +644,29 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				ctx,
 			);
 
-			if (options?.trackLastUsedOrganization) {
-				await adapter.resetLastUsedForUser(session.user.id);
-				await adapter.updateMemberLastUsed({
-					userId: session.user.id,
-					organizationId: invitation.organizationId,
-					lastUsed: true,
+			if (orgOptions?.trackLastActiveOrganization) {
+				const baseAdapter = await getCurrentAdapter(ctx.context.adapter);
+				const allMembers = await baseAdapter.findMany<InferMember<O>>({
+					model: "member",
+					where: [
+						{
+							field: "userId",
+							value: session.user.id,
+						},
+					],
 				});
+				await Promise.all(
+					allMembers.map((m) =>
+						baseAdapter.update<InferMember<O>>({
+							model: "member",
+							where: [{ field: "id", value: m.id }],
+							update: {
+								lastActiveOrganization:
+									m.organizationId === invitation.organizationId,
+							},
+						}),
+					),
+				);
 			}
 
 			if (!acceptedI) {

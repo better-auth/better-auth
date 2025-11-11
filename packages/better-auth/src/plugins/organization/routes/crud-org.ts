@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { APIError } from "better-call";
 import * as z from "zod";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
@@ -206,10 +207,16 @@ export const createOrganization = <O extends OrganizationOptions>(
 				| (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
 				| undefined;
 			let teamMember: TeamMember | null = null;
+			const willSetAsActive =
+				ctx.context.session && !ctx.body.keepCurrentActiveOrganization;
+			const orgOptions = ctx.context.orgOptions as any;
 			let data = {
 				userId: user.id,
 				organizationId: organization.id,
 				role: ctx.context.orgOptions.creatorRole || "owner",
+				...(orgOptions?.trackLastActiveOrganization && willSetAsActive
+					? { lastActiveOrganization: true }
+					: {}),
 			};
 			if (options?.organizationHooks?.beforeAddMember) {
 				const response = await options?.organizationHooks.beforeAddMember({
@@ -306,16 +313,29 @@ export const createOrganization = <O extends OrganizationOptions>(
 					organization.id,
 					ctx,
 				);
-				// Track lastUsed if the option is enabled
-				if (options?.trackLastUsedOrganization) {
-					// Reset all other members' lastUsed to false
-					await adapter.resetLastUsedForUser(user.id);
-					// Set this member's lastUsed to true
-					await adapter.updateMemberLastUsed({
-						userId: user.id,
-						organizationId: organization.id,
-						lastUsed: true,
+				if (orgOptions?.trackLastActiveOrganization && member) {
+					const baseAdapter = await getCurrentAdapter(ctx.context.adapter);
+					const allMembers = await baseAdapter.findMany<InferMember<O>>({
+						model: "member",
+						where: [
+							{
+								field: "userId",
+								value: user.id,
+							},
+						],
 					});
+					await Promise.all(
+						allMembers.map((m) =>
+							baseAdapter.update<InferMember<O>>({
+								model: "member",
+								where: [{ field: "id", value: m.id }],
+								update: {
+									lastActiveOrganization:
+										m.organizationId === organization.id,
+								},
+							}),
+						),
+					);
 				}
 			}
 
@@ -831,17 +851,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			if (!organizationId && !organizationSlug) {
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
-					if (options?.trackLastUsedOrganization) {
-						const organizations = await adapter.listOrganizations(
-							session.user.id,
-						);
-						if (organizations.length > 0) {
-							organizationId = organizations[0]?.id;
-						}
-					}
-					if (!organizationId) {
-						return ctx.json(null);
-					}
+					return ctx.json(null);
 				} else {
 					organizationId = sessionOrgId;
 				}
@@ -888,13 +898,29 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				ctx,
 			);
 
-			if (options?.trackLastUsedOrganization) {
-				await adapter.resetLastUsedForUser(session.user.id);
-				await adapter.updateMemberLastUsed({
-					userId: session.user.id,
-					organizationId: organization.id,
-					lastUsed: true,
+			const orgOptions = ctx.context.orgOptions as any;
+			if (orgOptions?.trackLastActiveOrganization) {
+				const baseAdapter = await getCurrentAdapter(ctx.context.adapter);
+				const allMembers = await baseAdapter.findMany<InferMember<O>>({
+					model: "member",
+					where: [
+						{
+							field: "userId",
+							value: session.user.id,
+						},
+					],
 				});
+				await Promise.all(
+					allMembers.map((m) =>
+						baseAdapter.update<InferMember<O>>({
+							model: "member",
+							where: [{ field: "id", value: m.id }],
+							update: {
+								lastActiveOrganization: m.organizationId === organization.id,
+							},
+						}),
+					),
+				);
 			}
 
 			await setSessionCookie(ctx, {

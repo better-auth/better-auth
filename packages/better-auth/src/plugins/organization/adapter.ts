@@ -303,79 +303,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return member;
 		},
-		updateMemberLastUsed: async ({
-			userId,
-			organizationId,
-			lastUsed,
-		}: {
-			userId: string;
-			organizationId: string;
-			lastUsed: boolean;
-		}) => {
-			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.findOne<InferMember<O>>({
-				model: "member",
-				where: [
-					{
-						field: "userId",
-						value: userId,
-					},
-					{
-						field: "organizationId",
-						value: organizationId,
-					},
-				],
-			});
-			if (!member) {
-				return null;
-			}
-			const updatedMember = await adapter.update<InferMember<O>>({
-				model: "member",
-				where: [
-					{
-						field: "id",
-						value: member.id,
-					},
-				],
-				update: {
-					lastUsed: Boolean(lastUsed),
-				},
-			});
-			return updatedMember;
-		},
-		resetLastUsedForUser: async (userId: string) => {
-			const adapter = await getCurrentAdapter(baseAdapter);
-			const members = await adapter.findMany<InferMember<O>>({
-				model: "member",
-				where: [
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-			});
-			const membersToUpdate = members.filter(
-				(member) => (member as any).lastUsed === true,
-			);
-			if (membersToUpdate.length > 0) {
-				await Promise.all(
-					membersToUpdate.map((member) =>
-						adapter.update<InferMember<O>>({
-							model: "member",
-							where: [
-								{
-									field: "id",
-									value: member.id,
-								},
-							],
-							update: {
-								lastUsed: false,
-							},
-						}),
-					),
-				);
-			}
-		},
 		deleteMember: async (memberId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const member = await adapter.delete<InferMember<O>>({
@@ -607,16 +534,16 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 			});
 
-			if (options?.trackLastUsedOrganization) {
+			if (options?.trackLastActiveOrganization) {
 				const membersMap = new Map(
 					members.map((member) => [member.organizationId, member]),
 				);
 				organizations.sort((a, b) => {
 					const memberA = membersMap.get(a.id);
 					const memberB = membersMap.get(b.id);
-					const lastUsedA = (memberA as any)?.lastUsed === true ? 1 : 0;
-					const lastUsedB = (memberB as any)?.lastUsed === true ? 1 : 0;
-					return lastUsedB - lastUsedA;
+					const lastActiveA = (memberA as any)?.lastActiveOrganization === true ? 1 : 0;
+					const lastActiveB = (memberB as any)?.lastActiveOrganization === true ? 1 : 0;
+					return lastActiveB - lastActiveA;
 				});
 			}
 
