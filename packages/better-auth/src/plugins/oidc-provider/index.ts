@@ -12,7 +12,6 @@ import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
 import { z } from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -260,27 +259,19 @@ export const oidcProvider = (options: OIDCOptions) => {
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
-						const cookieName = ctx.context.authCookies.sessionToken.name;
-						const parsedSetCookieHeader = parseSetCookieHeader(
-							ctx.context.responseHeaders?.get("set-cookie") || "",
-						);
-						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
-						if (!cookie || !hasSessionToken) {
+						if (!cookie) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
-						});
-						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-						const sessionToken = sessionCookie?.split(".")[0]!;
-						if (!sessionToken) {
-							return;
-						}
-						const session =
-							await ctx.context.internalAdapter.findSession(sessionToken);
+
+						const session = await getSessionFromCtx(ctx);
 						if (!session) {
 							return;
 						}
+
+						ctx.setCookie("oidc_login_prompt", "", {
+							maxAge: 0,
+						});
+
 						try {
 							const parsedQuery = JSON.parse(cookie);
 							if (
