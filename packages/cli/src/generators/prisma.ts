@@ -211,7 +211,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						) {
 							let valueArray = [];
 							for (const value of attr.defaultValue)
-								valueArray.push(`"${value}"`);
+							valueArray.push(JSON.stringify(value));
 							fieldBuilder.attribute(`default([${valueArray}])`);
 						} else if (typeof attr.defaultValue[0] === "number") {
 							let valueArray = [];
