@@ -60,6 +60,7 @@ model Account {
   password              String?   @db.Text
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+
   @@index([userId(length: 191)])
   @@map("account")
 }
@@ -71,6 +72,7 @@ model Verification {
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
   @@index([identifier(length: 191)])
   @@map("verification")
 }
@@ -81,6 +83,7 @@ model TwoFactor {
   backupCodes String @db.Text
   userId      String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
   @@index([secret(length: 191)])
   @@index([userId(length: 191)])
   @@map("twoFactor")
