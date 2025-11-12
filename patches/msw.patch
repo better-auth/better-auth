@@ -12,3 +12,19 @@ index 5a0d429c9ae68555745aa2ebe0db3d1465636b1e..d2b39e96d13216626170ed9064f6e48d
      if (typeof localStorage === "undefined") {
        return {};
      }
+diff --git a/src/core/utils/cookieStore.ts b/src/core/utils/cookieStore.ts
+index b13cbccb7cbf934bf91160821d79854636ac91be..79a4f15a13e3d2379c5be5e99b93f245f7ba1a5c 100644
+--- a/src/core/utils/cookieStore.ts
++++ b/src/core/utils/cookieStore.ts
+@@ -36,6 +36,11 @@ class CookieStore {
+   }
+ 
+   private getCookieStoreIndex(): MemoryCookieStoreIndex {
++    if (isNodeProcess()) {
++      // In Node.js 25, localStorage is available but throws an error when accessed without argv.
++      return {}
++    }
++
+     if (typeof localStorage === 'undefined') {
+       return {}
+     }
