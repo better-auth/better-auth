@@ -8,7 +8,10 @@
         "ORAMA_PRIVATE_API_KEY",
         "ORAMA_INDEX_ID",
         "NEXT_PUBLIC_ORAMA_PUBLIC_API_KEY",
-        "NEXT_PUBLIC_ORAMA_ENDPOINT"
+        "NEXT_PUBLIC_ORAMA_ENDPOINT",
+        "GURUBASE_API_KEY",
+        "GURUBASE_SLUG",
+        "INKEEP_API_KEY"
       ]
     }
   }

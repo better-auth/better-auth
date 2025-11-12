@@ -16,8 +16,7 @@ import {
 } from "fumadocs-ui/components/dialog/search";
 import { useI18n } from "fumadocs-ui/contexts/i18n";
 import { useAtom } from "jotai";
-
-// import { AIChatModal, aiChatModalAtom } from "./ai-chat-modal";
+import { aiChatModalAtom } from "./ai-chat-modal";
 
 const client = new OramaClient({
 	endpoint: process.env.NEXT_PUBLIC_ORAMA_ENDPOINT!,
