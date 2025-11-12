@@ -10,7 +10,6 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { createAuthClient } from "../../client";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -65,37 +64,37 @@ afterAll(() => server.close());
 
 describe("anonymous", async () => {
 	const linkAccountFn = vi.fn();
-	const { customFetchImpl, auth, sessionSetter, testUser, cookieSetter } =
-		await getTestInstance({
-			plugins: [
-				anonymous({
-					async onLinkAccount(data) {
-						linkAccountFn(data);
-					},
-					schema: {
-						user: {
-							fields: {
-								isAnonymous: "is_anon",
+	const { client, sessionSetter, testUser, cookieSetter } =
+		await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						async onLinkAccount(data) {
+							linkAccountFn(data);
+						},
+						schema: {
+							user: {
+								fields: {
+									isAnonymous: "is_anon",
+								},
 							},
 						},
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
 					},
-				}),
-			],
-			socialProviders: {
-				google: {
-					clientId: "test",
-					clientSecret: "test",
 				},
 			},
-		});
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
 	const headers = new Headers();
-	const client = createAuthClient({
-		plugins: [anonymousClient()],
-		fetchOptions: {
-			customFetchImpl,
-		},
-		baseURL: "http://localhost:3000",
-	});
 
 	it("should sign in anonymously", async () => {
 		await client.signIn.anonymous({
@@ -154,22 +153,22 @@ describe("anonymous", async () => {
 	});
 
 	it("should work with generateName", async () => {
-		const { customFetchImpl, sessionSetter } = await getTestInstance({
-			plugins: [
-				anonymous({
-					generateName() {
-						return "i-am-anonymous";
-					},
-				}),
-			],
-		});
-		const client = createAuthClient({
-			plugins: [anonymousClient()],
-			fetchOptions: {
-				customFetchImpl,
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						generateName() {
+							return "i-am-anonymous";
+						},
+					}),
+				],
 			},
-			baseURL: "http://localhost:3000",
-		});
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
 		const res = await client.signIn.anonymous({
 			fetchOptions: {
 				onSuccess: sessionSetter(headers),
@@ -180,23 +179,23 @@ describe("anonymous", async () => {
 
 	it("should work with generateRandomEmail", async () => {
 		const testHeaders = new Headers();
-		const { customFetchImpl, sessionSetter } = await getTestInstance({
-			plugins: [
-				anonymous({
-					generateRandomEmail() {
-						const id = crypto.randomUUID();
-						return `custom-${id}@example.com`;
-					},
-				}),
-			],
-		});
-		const client = createAuthClient({
-			plugins: [anonymousClient()],
-			fetchOptions: {
-				customFetchImpl,
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						generateRandomEmail() {
+							const id = crypto.randomUUID();
+							return `custom-${id}@example.com`;
+						},
+					}),
+				],
 			},
-			baseURL: "http://localhost:3000",
-		});
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
 		const res = await client.signIn.anonymous({
 			fetchOptions: {
 				onSuccess: sessionSetter(testHeaders),
@@ -207,23 +206,23 @@ describe("anonymous", async () => {
 
 	it("should work with async generateRandomEmail", async () => {
 		const testHeaders = new Headers();
-		const { customFetchImpl, sessionSetter } = await getTestInstance({
-			plugins: [
-				anonymous({
-					async generateRandomEmail() {
-						const id = crypto.randomUUID();
-						return `async-${id}@example.com`;
-					},
-				}),
-			],
-		});
-		const client = createAuthClient({
-			plugins: [anonymousClient()],
-			fetchOptions: {
-				customFetchImpl,
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						async generateRandomEmail() {
+							const id = crypto.randomUUID();
+							return `async-${id}@example.com`;
+						},
+					}),
+				],
 			},
-			baseURL: "http://localhost:3000",
-		});
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
 		const res = await client.signIn.anonymous({
 			fetchOptions: {
 				onSuccess: sessionSetter(testHeaders),
@@ -234,22 +233,22 @@ describe("anonymous", async () => {
 
 	it("should throw error if generateRandomEmail returns invalid email", async () => {
 		const testHeaders = new Headers();
-		const { customFetchImpl, sessionSetter } = await getTestInstance({
-			plugins: [
-				anonymous({
-					generateRandomEmail() {
-						return "not-an-email";
-					},
-				}),
-			],
-		});
-		const client = createAuthClient({
-			plugins: [anonymousClient()],
-			fetchOptions: {
-				customFetchImpl,
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						generateRandomEmail() {
+							return "not-an-email";
+						},
+					}),
+				],
 			},
-			baseURL: "http://localhost:3000",
-		});
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
 
 		const res = await client.signIn.anonymous({
 			fetchOptions: {
@@ -266,22 +265,22 @@ describe("anonymous", async () => {
 
 	it("should throw error if async generateRandomEmail returns invalid email", async () => {
 		const testHeaders = new Headers();
-		const { customFetchImpl, sessionSetter } = await getTestInstance({
-			plugins: [
-				anonymous({
-					async generateRandomEmail() {
-						return "still-not-an-email";
-					},
-				}),
-			],
-		});
-		const client = createAuthClient({
-			plugins: [anonymousClient()],
-			fetchOptions: {
-				customFetchImpl,
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						async generateRandomEmail() {
+							return "still-not-an-email";
+						},
+					}),
+				],
 			},
-			baseURL: "http://localhost:3000",
-		});
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
 
 		const res = await client.signIn.anonymous({
 			fetchOptions: {
@@ -297,16 +296,16 @@ describe("anonymous", async () => {
 	});
 
 	it("should not reject first-time anonymous sign-in", async () => {
-		const { customFetchImpl, sessionSetter } = await getTestInstance({
-			plugins: [anonymous()],
-		});
-		const client = createAuthClient({
-			plugins: [anonymousClient()],
-			fetchOptions: {
-				customFetchImpl,
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [anonymous()],
 			},
-			baseURL: "http://localhost:3000",
-		});
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
 		const freshHeaders = new Headers();
 
 		// First-time anonymous sign-in should succeed without 400 error
@@ -330,16 +329,16 @@ describe("anonymous", async () => {
 	});
 
 	it("should reject subsequent anonymous sign-in attempts once signed in", async () => {
-		const { customFetchImpl, sessionSetter } = await getTestInstance({
-			plugins: [anonymous()],
-		});
-		const client = createAuthClient({
-			plugins: [anonymousClient()],
-			fetchOptions: {
-				customFetchImpl,
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [anonymous()],
 			},
-			baseURL: "http://localhost:3000",
-		});
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
 		const persistentHeaders = new Headers();
 
 		// First sign-in should succeed
