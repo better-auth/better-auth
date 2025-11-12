@@ -301,11 +301,19 @@ export const createOrganization = <O extends OrganizationOptions>(
 			}
 
 			if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
-				await adapter.setActiveOrganization(
+				const updatedSession = await adapter.setActiveOrganization(
 					ctx.context.session.session.token,
 					organization.id,
 					ctx,
+					{
+						organizationSlug: organization.slug,
+						organizationRole: member.role,
+					},
 				);
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: ctx.context.session.user,
+				});
 			}
 
 			if (
@@ -525,6 +533,27 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					member,
 				});
 			}
+			if (
+				organizationId === session.session.activeOrganizationId &&
+				ctx.body.data.slug &&
+				updatedOrg?.slug
+			) {
+				const adapter = getOrgAdapter<O>(ctx.context, options);
+				const updatedSession = await adapter.setActiveOrganization(
+					session.session.token,
+					organizationId,
+					ctx,
+					{
+						organizationSlug: updatedOrg.slug,
+						organizationRole: member.role,
+					},
+				);
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
+			}
+
 			return ctx.json(updatedOrg);
 		},
 	);
@@ -861,10 +890,27 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
+			const member = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: organization.id,
+			});
+
+			if (!member) {
+				// This shouldn't happen, but handle it safely
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				});
+			}
+
 			const updatedSession = await adapter.setActiveOrganization(
 				session.session.token,
 				organization.id,
 				ctx,
+				{
+					organizationSlug: organization.slug,
+					organizationRole: member?.role,
+				},
 			);
 			await setSessionCookie(ctx, {
 				session: updatedSession,

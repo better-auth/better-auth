@@ -16,6 +16,8 @@ export const orgMiddleware = createAuthMiddleware(async () => {
 			session: Session & {
 				activeTeamId?: string | undefined;
 				activeOrganizationId?: string | undefined;
+				activeOrganizationSlug?: string | undefined;
+				activeOrganizationRole?: string | undefined;
 			};
 			user: User;
 		}>;
@@ -35,6 +37,8 @@ export const orgSessionMiddleware = createAuthMiddleware(
 			session: Session & {
 				activeTeamId?: string | undefined;
 				activeOrganizationId?: string | undefined;
+				activeOrganizationSlug?: string | undefined;
+				activeOrganizationRole?: string | undefined;
 			};
 			user: User;
 		};

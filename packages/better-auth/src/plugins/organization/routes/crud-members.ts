@@ -17,6 +17,8 @@ import type {
 	Member,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
+import { setSessionCookie } from "../../../cookies";
+import type { Session } from "../../../types";
 
 export const addMember = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -386,12 +388,38 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				organizationId: organizationId,
 				userId: toBeRemovedMember.userId,
 			});
+
+			// Clear session if removed user's active organization matches
+			// Check if removed user is the current user making the request
 			if (
 				session.user.id === toBeRemovedMember.userId &&
 				session.session.activeOrganizationId ===
 					toBeRemovedMember.organizationId
 			) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
+				// Current user is removing themselves - update session and cookie
+				const updatedSession = await adapter.setActiveOrganization(
+					session.session.token,
+					null,
+					ctx,
+				);
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
+			} else if (toBeRemovedMember.organizationId === organizationId) {
+				// Someone else is removing the user - need to find and update their active session
+				// Find all sessions for the removed user and clear active org if it matches
+				const removedUserSessions =
+					await ctx.context.internalAdapter.listSessions(
+						toBeRemovedMember.userId,
+					);
+
+				// Update sessions where activeOrganizationId matches
+				for (const userSession of removedUserSessions) {
+					if ((userSession as any).activeOrganizationId === organizationId) {
+						await adapter.setActiveOrganization(userSession.token, null, ctx);
+					}
+				}
 			}
 
 			// Run afterRemoveMember hook
@@ -678,7 +706,25 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					organization,
 				});
 			}
-
+			if (
+				toBeUpdatedMember.userId === session.user.id &&
+				organizationId === session.session.activeOrganizationId
+			) {
+				const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+				const updateSession = await adapter.setActiveOrganization(
+					session.session.token,
+					organizationId,
+					ctx,
+					{
+						organizationSlug: session.session.activeOrganizationSlug,
+						organizationRole: updatedMember.role,
+					},
+				);
+				await setSessionCookie(ctx, {
+					session: updateSession,
+					user: session.user,
+				});
+			}
 			return ctx.json(updatedMember);
 		},
 	);
@@ -805,7 +851,15 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 				userId: session.user.id,
 			});
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
+				const updatedSession = await adapter.setActiveOrganization(
+					session.session.token,
+					null,
+					ctx,
+				);
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
 			}
 			return ctx.json(member);
 		},
@@ -956,6 +1010,14 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 
+			if (
+				userId === session.user.id &&
+				organizationId === session.session.activeOrganizationId
+			) {
+				return ctx.json({
+					role: session.session.activeOrganizationRole,
+				});
+			}
 			const member = await adapter.findMemberByOrgId({
 				userId,
 				organizationId,
@@ -966,9 +1028,8 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				});
 			}
-
 			return ctx.json({
-				role: member?.role,
+				role: member.role,
 			});
 		},
 	);

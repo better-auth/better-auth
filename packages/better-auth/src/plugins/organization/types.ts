@@ -262,6 +262,8 @@ export interface OrganizationOptions {
 				session?: {
 					fields?: {
 						activeOrganizationId?: string;
+						activeOrganizationSlug?: string;
+						activeOrganizationRole?: string;
 						activeTeamId?: string;
 					};
 				};

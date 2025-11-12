@@ -220,12 +220,34 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			const activeOrganizationId =
 				ctx.body.organizationId ||
 				ctx.context.session.session.activeOrganizationId;
+			const session = ctx.context.session;
 			if (!activeOrganizationId) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
+
+			if (
+				activeOrganizationId ===
+					ctx.context.session.session.activeOrganizationId &&
+				ctx.context.session.session.activeOrganizationRole
+			) {
+				const result = await hasPermission(
+					{
+						role: session.session.activeOrganizationRole!,
+						options: options || {},
+						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+						organizationId: activeOrganizationId,
+					},
+					ctx,
+				);
+				return ctx.json({
+					error: null,
+					success: result,
+				});
+			}
+
 			const member = await adapter.findMemberByOrgId({
 				userId: ctx.context.session.user.id,
 				organizationId: activeOrganizationId,
@@ -1199,6 +1221,16 @@ export function organization<O extends OrganizationOptions>(
 						required: false,
 						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
 					},
+					activeOrganizationSlug: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.session?.fields?.activeOrganizationSlug,
+					},
+					activeOrganizationRole: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.session?.fields?.activeOrganizationRole,
+					},
 					...(teamSupport
 						? {
 								activeTeamId: {
@@ -1220,9 +1252,25 @@ export function organization<O extends OrganizationOptions>(
 								type: "string";
 								required: false;
 							};
+							activeOrganizationSlug: {
+								type: "string";
+								required: false;
+							};
+							activeOrganizationRole: {
+								type: "string";
+								required: false;
+							};
 						}
 					: {
 							activeOrganizationId: {
+								type: "string";
+								required: false;
+							};
+							activeOrganizationSlug: {
+								type: "string";
+								required: false;
+							};
+							activeOrganizationRole: {
 								type: "string";
 								required: false;
 							};

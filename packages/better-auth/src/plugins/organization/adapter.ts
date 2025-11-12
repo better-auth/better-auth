@@ -421,12 +421,31 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			sessionToken: string,
 			organizationId: string | null,
 			ctx: GenericEndpointContext,
+			data?: { organizationSlug?: string; organizationRole?: string },
 		) => {
+			const updateData: {
+				activeOrganizationId?: string | null;
+				activeOrganizationSlug?: string | null;
+				activeOrganizationRole?: string | null;
+			} = {
+				activeOrganizationId: organizationId,
+			};
+			if (organizationId === null) {
+				updateData.activeOrganizationSlug = null;
+				updateData.activeOrganizationRole = null;
+			} else {
+				if (data) {
+					if (data.organizationSlug != undefined) {
+						updateData.activeOrganizationSlug = data.organizationSlug;
+					}
+					if (data.organizationRole != undefined) {
+						updateData.activeOrganizationRole = data.organizationRole;
+					}
+				}
+			}
 			const session = await context.internalAdapter.updateSession(
 				sessionToken,
-				{
-					activeOrganizationId: organizationId,
-				},
+				updateData,
 			);
 			return session as Session;
 		},

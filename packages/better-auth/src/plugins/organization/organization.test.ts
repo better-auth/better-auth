@@ -24,6 +24,7 @@ import type {
 	InvitationStatus,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
+import { Console } from "console";
 
 describe("organization type", () => {
 	it("empty org type should works", () => {
@@ -124,6 +125,8 @@ describe("organization", async (it) => {
 		expect((session.data?.session as any).activeOrganizationId).toBe(
 			organizationId,
 		);
+		expect((session.data?.session as any).activeOrganizationSlug).toBe("test");
+		expect((session.data?.session as any).activeOrganizationRole).toBe("owner");
 	});
 	it("should check if organization slug is available", async () => {
 		const { headers } = await signInWithTestUser();
@@ -213,8 +216,136 @@ describe("organization", async (it) => {
 		expect(organization.data?.name).toBe("test2");
 	});
 
-	it("should prevent updating organization to duplicate slug", async () => {
+	it("should update session slug when active organization slug is updated", async () => {
 		const { headers } = await signInWithTestUser();
+
+		// Set the organization as active first
+		await client.organization.setActive({
+			organizationId,
+			fetchOptions: { headers },
+		});
+
+		// Verify initial session state
+		let session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect((session.data?.session as any).activeOrganizationSlug).toBe("test");
+
+		// Update the slug
+		const organization = await client.organization.update({
+			organizationId,
+			data: {
+				slug: "updated-slug",
+			},
+			fetchOptions: { headers },
+		});
+
+		expect(organization.data?.slug).toBe("updated-slug");
+
+		// Verify session was updated
+		session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect((session.data?.session as any).activeOrganizationSlug).toBe(
+			"updated-slug",
+		);
+		expect((session.data?.session as any).activeOrganizationRole).toBe("owner"); // Role should remain
+	});
+
+	it("should update session role when current user's role in active organization is updated", async () => {
+		const { headers, user } = await signInWithTestUser();
+
+		const testOrg = await client.organization.create({
+			name: "test-role-update",
+			slug: "test-role-update",
+			fetchOptions: { headers },
+		});
+		const testOrgId = testOrg.data!.id;
+
+		await client.organization.setActive({
+			organizationId: testOrgId,
+			fetchOptions: { headers },
+		});
+
+		// Verify initial session state
+		let session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect((session.data?.session as any).activeOrganizationId).toBe(testOrgId);
+		expect((session.data?.session as any).activeOrganizationRole).toBe("owner");
+		expect((session.data?.session as any).activeOrganizationSlug).toBe(
+			"test-role-update",
+		);
+
+		// Get the current user's member
+		let organizationId = testOrg.data!.id;
+		const org = await client.organization.getFullOrganization({
+			query: { organizationId },
+			fetchOptions: { headers },
+		});
+		if (!org.data) throw new Error("Organization not found");
+
+		const currentUserMember = org.data.members.find(
+			(m) => m.userId === user.id,
+		);
+		if (!currentUserMember) throw new Error("Current user member not found");
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "second-owner123@test.com",
+				password: "password",
+				name: "Second Owner",
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: org.data.id,
+				userId: newUser.user.id,
+				role: "owner",
+			},
+		});
+
+		// Update current user's role
+		const member = await client.organization.updateMemberRole({
+			organizationId: org.data.id,
+			memberId: currentUserMember.id,
+			role: "admin",
+			fetchOptions: { headers },
+		});
+
+		expect(member.data?.role).toBe("admin");
+
+		// Verify session was updated
+		session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect((session.data?.session as any).activeOrganizationRole).toBe("admin");
+		expect((session.data?.session as any).activeOrganizationSlug).toBe(
+			"test-role-update",
+		); // Slug should remain
+		expect((session.data?.session as any).activeOrganizationId).toBe(
+			organizationId,
+		); // ID should remain
+	});
+	it("should prevent updating organization to duplicate slug", async () => {
+		// Use the original headers (same user who created organization2Id)
+		// This user already owns organization2Id, so no need to add as member
+
+		// Ensure organizationId still has slug "test" (it might have been changed)
+		// First verify the current state
+		const org1 = await client.organization.getFullOrganization({
+			query: { organizationId },
+			fetchOptions: { headers },
+		});
+
+		// If slug was changed, reset it back to "test"
+		if (org1.data?.slug !== "test") {
+			await client.organization.update({
+				organizationId,
+				data: { slug: "test" },
+				fetchOptions: { headers },
+			});
+		}
 
 		// Try to update organization2 (slug: "test2") to use organization1's slug ("test")
 		const organization = await client.organization.update({
@@ -295,22 +426,55 @@ describe("organization", async (it) => {
 		expect((session.data?.session as any).activeOrganizationId).toBe(
 			organizationId,
 		);
+		expect((session.data?.session as any).activeOrganizationSlug).toBe(
+			organization.data?.slug,
+		);
+		expect((session.data?.session as any).activeOrganizationRole).toBe("owner");
 	});
 	it("should allow activating organization by slug", async () => {
-		const { headers } = await signInWithTestUser();
+		// Create a new user and capture their headers
+		const newUser = {
+			email: "test5@test.com",
+			password: "test123456",
+			name: "test5",
+		};
+		const userHeaders = new Headers();
+		await client.signUp.email(newUser, {
+			onSuccess: cookieSetter(userHeaders),
+		});
+		const session = await client.getSession({
+			fetchOptions: { headers: userHeaders },
+		});
+
+		// Add the new user as a member of organization2Id first
+		await auth.api.addMember({
+			body: {
+				organizationId: organization2Id,
+				userId: session.data?.user.id!,
+				role: "admin",
+			},
+		});
+
 		const organization = await client.organization.setActive({
 			organizationSlug: "test2",
 			fetchOptions: {
-				headers,
+				headers: userHeaders,
+				onSuccess: cookieSetter(userHeaders),
 			},
 		});
-		const session = await client.getSession({
+		const updatedSession = await client.getSession({
 			fetchOptions: {
-				headers,
+				headers: userHeaders,
 			},
 		});
-		expect((session.data?.session as any).activeOrganizationId).toBe(
+		expect((updatedSession.data?.session as any).activeOrganizationId).toBe(
 			organization2Id,
+		);
+		expect((updatedSession.data?.session as any).activeOrganizationSlug).toBe(
+			"test2",
+		);
+		expect((updatedSession.data?.session as any).activeOrganizationRole).toBe(
+			"admin",
 		);
 	});
 
@@ -791,6 +955,87 @@ describe("organization", async (it) => {
 		expect(hasMultiplePermissions.data?.success).toBe(true);
 	});
 
+	it("should use session role when checking permissions for current user's active organization (performance optimization)", async () => {
+		// 1. Setup: Create new user and organization
+		const { headers: testHeaders, user } = await signInWithTestUser();
+
+		const newOrg = await client.organization.create({
+			name: "performance-org",
+			slug: "performance-org",
+			fetchOptions: { headers: testHeaders },
+		});
+		// 2. Set organization as active (populates session)
+		await client.organization.setActive({
+			organizationId: newOrg.data!.id,
+			fetchOptions: { headers: testHeaders },
+		});
+		//   3 Verify session
+		let session = await client.getSession({
+			fetchOptions: { headers: testHeaders },
+		});
+		expect((session.data?.session as any).activeOrganizationRole).toBe("owner");
+		// 4. Call hasPermission WITHOUT organizationId (uses session)
+		const hasPermission = await client.organization.hasPermission({
+			permissions: {
+				member: ["update"],
+			},
+			fetchOptions: {
+				headers: testHeaders,
+			},
+		});
+		// 5. Verify it returns success using session role (no DB query)
+		expect(hasPermission.data?.success).toBe(true);
+		expect(hasPermission.error).toBeNull();
+
+		// 6. Update user's role
+		const org = await client.organization.getFullOrganization({
+			query: { organizationId: newOrg.data?.id },
+			fetchOptions: { headers: testHeaders },
+		});
+		const currentUserMember = org.data?.members.find(
+			(m) => m.userId === user.id,
+		);
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "second-owner@test.com",
+				password: "password",
+				name: "Second Owner",
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: newOrg.data?.id as string,
+				userId: newUser.user.id,
+				role: "owner",
+			},
+		});
+
+		await client.organization.updateMemberRole({
+			organizationId: newOrg.data?.id as string,
+			memberId: currentUserMember?.id as string,
+			role: "admin",
+			fetchOptions: { headers: testHeaders },
+		});
+
+		// 7. Verify session was updated
+		const updatedSession = await client.getSession({
+			fetchOptions: { headers: testHeaders },
+		});
+		expect((updatedSession.data?.session as any).activeOrganizationRole).toBe(
+			"admin",
+		);
+
+		// 8. Call hasPermission again - should use updated session role
+		const updatedHasPermission = await client.organization.hasPermission({
+			permissions: {
+				member: ["update"], // admin should still have this permission
+			},
+			fetchOptions: { headers: testHeaders },
+		});
+
+		expect(updatedHasPermission.data?.success).toBe(true);
+	});
+
 	it("should return BAD_REQUEST when non-member tries to delete organization", async () => {
 		// Create an organization first
 		const testOrg = await client.organization.create({
@@ -849,6 +1094,155 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(org.error?.status).toBe(403);
+	});
+
+	it("should clear session fields when active organization is deleted", async () => {
+		const { headers } = await signInWithTestUser();
+		const testOrg = await client.organization.create({
+			name: "test-org-for-deletion",
+			slug: "test-org-for-deletion",
+			fetchOptions: { headers },
+		});
+		await client.organization.setActive({
+			organizationId: testOrg.data!.id,
+			fetchOptions: { headers },
+		});
+		let session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect((session.data?.session as any).activeOrganizationId).toBe(
+			testOrg.data!.id,
+		);
+		await client.organization.delete({
+			organizationId: testOrg.data!.id,
+			fetchOptions: { headers },
+		});
+		session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect((session.data?.session as any).activeOrganizationId).toBeNull();
+		expect((session.data?.session as any).activeOrganizationSlug).toBeNull();
+		expect((session.data?.session as any).activeOrganizationRole).toBeNull();
+	});
+
+	it("should clear session when current user is removed from active organization", async () => {
+		const { headers } = await signInWithTestUser();
+		const testOrg = await client.organization.create({
+			name: "test-org-for-removal",
+			slug: "test-org-for-removal",
+			fetchOptions: { headers },
+		});
+		await client.organization.setActive({
+			organizationId: testOrg.data!.id,
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		let session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect((session.data?.session as any).activeOrganizationId).toBe(
+			testOrg.data!.id,
+		);
+
+		// Add a second owner first, so the current user can be removed
+		const secondOwner = await auth.api.signUpEmail({
+			body: {
+				email: "second-owner-removal@test.com",
+				password: "password",
+				name: "Second Owner",
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: testOrg.data!.id,
+				userId: secondOwner.user.id,
+				role: "owner",
+			},
+		});
+
+		const orgDetails = await client.organization.getFullOrganization({
+			query: { organizationId: testOrg.data!.id },
+			fetchOptions: { headers },
+		});
+		const currentUserMember = orgDetails.data?.members.find(
+			(m) => m.userId === session.data?.session.userId,
+		);
+		await client.organization.removeMember({
+			organizationId: testOrg.data!.id,
+			memberIdOrEmail: currentUserMember?.id!,
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect((session.data?.session as any).activeOrganizationId).toBeNull();
+		expect((session.data?.session as any).activeOrganizationSlug).toBeNull();
+		expect((session.data?.session as any).activeOrganizationRole).toBeNull();
+	});
+
+	it("should clear session when current user leaves active organization", async () => {
+		const { headers } = await signInWithTestUser();
+		// Create a new user
+		const newUser = {
+			email: "removable@test.com",
+			password: "password123",
+			name: "Removable User",
+		};
+		const userHeaders = new Headers();
+		await client.signUp.email(newUser, {
+			onSuccess: cookieSetter(userHeaders),
+		});
+		const session = await client.getSession({
+			fetchOptions: { headers: userHeaders },
+		});
+
+		await auth.api.addMember({
+			body: {
+				organizationId,
+				userId: session.data?.user.id!,
+				role: "member",
+			},
+		});
+
+		// Set organization as active for the new user
+		await client.organization.setActive({
+			organizationId,
+			fetchOptions: { headers: userHeaders },
+		});
+
+		// Verify session has the org data
+		let userSession = await client.getSession({
+			fetchOptions: { headers: userHeaders },
+		});
+		expect((userSession.data?.session as any).activeOrganizationId).toBe(
+			organizationId,
+		);
+
+		// Remove the user from organization (as owner)
+		await client.organization.removeMember({
+			organizationId,
+			memberIdOrEmail: newUser.email,
+			fetchOptions: { headers },
+		});
+
+		// Verify session fields are cleared for removed user
+		// The session was updated in the database, so when the removed user makes a request,
+		// the session middleware will read the updated session from the database
+		userSession = await client.getSession({
+			fetchOptions: { headers: userHeaders },
+		});
+		expect((userSession.data?.session as any).activeOrganizationId).toBeNull();
+		expect(
+			(userSession.data?.session as any).activeOrganizationSlug,
+		).toBeNull();
+		expect(
+			(userSession.data?.session as any).activeOrganizationRole,
+		).toBeNull();
 	});
 
 	it("should have server side methods", async () => {
