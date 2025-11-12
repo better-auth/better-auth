@@ -24,7 +24,6 @@ import type {
 	InvitationStatus,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
-import { Console } from "console";
 
 describe("organization type", () => {
 	it("empty org type should works", () => {

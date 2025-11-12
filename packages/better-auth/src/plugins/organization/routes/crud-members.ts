@@ -3,6 +3,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import { z } from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
+import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
 import type { LiteralString } from "../../../types/helper";
@@ -17,8 +18,6 @@ import type {
 	Member,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
-import { setSessionCookie } from "../../../cookies";
-import type { Session } from "../../../types";
 
 export const addMember = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
