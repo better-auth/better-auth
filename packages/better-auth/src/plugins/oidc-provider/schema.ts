@@ -49,6 +49,7 @@ export const oAuthApplicationSchema = z.object({
 
 	// Database fields
 	redirectUrls: z.string(),
+	postLogoutRedirectUris: z.array(z.string()).optional(),
 	userId: z.string().optional(),
 	createdAt: z.date(),
 	updatedAt: z.date(),
@@ -81,6 +82,10 @@ export const schema = {
 			},
 			redirectUrls: {
 				type: "string",
+			},
+			postLogoutRedirectUris: {
+				type: "json",
+				required: false,
 			},
 			type: {
 				type: "string",

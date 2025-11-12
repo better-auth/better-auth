@@ -280,7 +280,12 @@ export interface AuthorizationQuery {
 
 export type Client = Omit<
 	OAuthApplication,
-	"metadata" | "updatedAt" | "createdAt" | "redirectUrls" | "userId"
+	| "metadata"
+	| "updatedAt"
+	| "createdAt"
+	| "redirectUrls"
+	| "postLogoutRedirectUris"
+	| "userId"
 > & {
 	metadata: Record<string, any> | null;
 	/**
@@ -290,6 +295,13 @@ export type Client = Omit<
 	 * For example, `https://example.com/auth/callback`
 	 */
 	redirectUrls: string[];
+	/**
+	 * List of registered post-logout redirect URIs. Used for RP-Initiated Logout.
+	 * Must include the whole URL, including the protocol, port, and path.
+	 *
+	 * For example, `https://example.com/logout/callback`
+	 */
+	postLogoutRedirectUris?: string[] | undefined;
 	/**
 	 * Whether to skip the consent screen for this client.
 	 * Only applies to trusted clients.
@@ -449,6 +461,12 @@ export interface OIDCMetadata {
 	 * @default `/oauth2/register`
 	 */
 	registration_endpoint: string;
+	/**
+	 * The URL of the RP-Initiated Logout endpoint.
+	 *
+	 * @default `/oauth2/end-session`
+	 */
+	end_session_endpoint?: string | undefined;
 	/**
 	 * Supported scopes.
 	 */
