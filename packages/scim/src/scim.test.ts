@@ -795,7 +795,9 @@ describe("SCIM", () => {
 			});
 
 			expect(response.status).toBe(201);
-			expect(response.headers.get('location')).toBe(expect.stringContaining("/scim/v2/Users/"));
+			expect(response.headers.get("location")).toBe(
+				expect.stringContaining("/scim/v2/Users/"),
+			);
 
 			const user = await response.json();
 			expect(user).toMatchObject({

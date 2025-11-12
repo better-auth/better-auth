@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import {
 	type Account,
@@ -23,7 +24,6 @@ import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
-import { randomBytes } from "node:crypto";
 
 /**
  * Safely parses a value that might be a JSON string or already a parsed object
