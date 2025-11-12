@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`init > should match config 1`] = `
+exports[`base context creation > should match config 1`] = `
 {
   "adapter": {
     "count": [Function],
@@ -10,24 +10,23 @@ exports[`init > should match config 1`] = `
     "deleteMany": [Function],
     "findMany": [Function],
     "findOne": [Function],
-    "id": "kysely",
+    "id": "memory",
     "options": {
       "adapterConfig": {
-        "adapterId": "kysely",
-        "adapterName": "Kysely Adapter",
+        "adapterId": "memory",
+        "adapterName": "Memory Adapter",
+        "customTransformInput": [Function],
         "debugLogs": false,
         "disableTransformInput": false,
         "disableTransformOutput": false,
-        "supportsBooleans": false,
-        "supportsDates": false,
+        "supportsBooleans": true,
+        "supportsDates": true,
         "supportsJSON": false,
         "supportsNumericIds": true,
-        "transaction": false,
-        "usePlural": undefined,
+        "supportsUUIDs": false,
+        "transaction": [Function],
+        "usePlural": false,
       },
-      "debugLogs": false,
-      "transaction": undefined,
-      "type": "sqlite",
     },
     "transaction": [Function],
     "update": [Function],
@@ -118,13 +117,6 @@ exports[`init > should match config 1`] = `
   "options": {
     "basePath": "/api/auth",
     "baseURL": "http://localhost:3000",
-    "database": Database {
-      "inTransaction": false,
-      "memory": true,
-      "name": ":memory:",
-      "open": true,
-      "readonly": false,
-    },
     "plugins": [],
     "secret": "better-auth-secret-123456789",
   },
