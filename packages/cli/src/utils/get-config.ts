@@ -226,8 +226,9 @@ async function resolveConfigFilePath(
 	}
 
 	for (const possiblePath of possiblePaths) {
-		if (existsSync(path.join(cwd, possiblePath))) {
-			return path.join(cwd, possiblePath);
+		const resolvedPath = path.join(cwd, possiblePath);
+		if (existsSync(resolvedPath)) {
+			return resolvedPath;
 		}
 	}
 
