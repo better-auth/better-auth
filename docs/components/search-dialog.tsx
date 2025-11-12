@@ -18,7 +18,7 @@ import { useI18n } from "fumadocs-ui/contexts/i18n";
 import { useAtom } from "jotai";
 import { Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AIChatModal, aiChatModalAtom } from "./ai-chat-modal";
+// import { AIChatModal, aiChatModalAtom } from "./ai-chat-modal";
 import { AISearchTrigger } from "./floating-ai-search";
 
 const client = new OramaClient({
