@@ -550,7 +550,7 @@ export function AISearchTrigger() {
 							isMobile
 								? "p-4 pb-40"
 								: "p-2 right-(--removed-body-scroll-bar-size,0) pb-[8.375rem]",
-							open ? "animate-fd-fade-in" : "animate-fd-fade-out flex",
+							open ? "animate-fd-fade-in" : "animate-fd-fade-out",
 						)}
 						onClick={(e) => {
 							if (e.target === e.currentTarget) {
