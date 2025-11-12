@@ -758,7 +758,15 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				organizationId: organization.id,
 			});
 			if (!isMember) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
+				const updatedSession = await adapter.setActiveOrganization(
+					session.session.token,
+					null,
+					ctx,
+				);
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,

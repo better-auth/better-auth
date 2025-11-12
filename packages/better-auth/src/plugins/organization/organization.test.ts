@@ -1229,9 +1229,23 @@ describe("organization", async (it) => {
 			fetchOptions: { headers },
 		});
 
-		// Verify session fields are cleared for removed user
-		// The session was updated in the database, so when the removed user makes a request,
-		// the session middleware will read the updated session from the database
+		// Session is cleared lazily when the removed user makes a request that checks membership
+		// Trigger membership check by trying to access the organization
+		// This will update the session in the database (clearing active org fields)
+		try {
+			await client.organization.getFullOrganization({
+				query: { organizationId },
+				fetchOptions: { 
+					headers: userHeaders,
+					onSuccess: cookieSetter(userHeaders),
+				},
+			});
+		} catch {
+			// Expected to fail with FORBIDDEN, but this triggers the session clearing in DB
+		}
+
+		// Now verify session fields are cleared
+		// getSession reads from database using the token, so it should see the cleared session
 		userSession = await client.getSession({
 			fetchOptions: { headers: userHeaders },
 		});

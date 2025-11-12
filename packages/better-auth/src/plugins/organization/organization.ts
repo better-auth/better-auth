@@ -228,14 +228,21 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 
+			// Optimization: Use session role for current user's active organization
+			// When dynamic access control is enabled, always fetch from DB because
+			// custom roles can be assigned by other users without updating the session
+			const sessionRole = ctx.context.session.session.activeOrganizationRole;
+
 			if (
 				activeOrganizationId ===
 					ctx.context.session.session.activeOrganizationId &&
-				ctx.context.session.session.activeOrganizationRole
+				sessionRole &&
+				// Skip optimization when dynamic access control is enabled to avoid stale data
+				!options?.dynamicAccessControl?.enabled
 			) {
 				const result = await hasPermission(
 					{
-						role: session.session.activeOrganizationRole!,
+						role: sessionRole,
 						options: options || {},
 						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 						organizationId: activeOrganizationId,
