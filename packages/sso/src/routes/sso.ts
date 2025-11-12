@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import {
 	type Account,
@@ -16,6 +15,7 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
+import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import * as saml from "samlify";
@@ -599,7 +599,7 @@ export const registerSSOProvider = (options?: SSOOptions) => {
 				);
 
 				if (isSCIMPluginEnabled) {
-					scimToken = randomBytes(48).toString("hex");
+					scimToken = generateRandomString(48);
 				}
 			}
 
