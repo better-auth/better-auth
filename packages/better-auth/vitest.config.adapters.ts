@@ -12,4 +12,3 @@ export default defineConfig({
 		include: ["src/adapters/**/*.test.ts"],
 	},
 });
-
