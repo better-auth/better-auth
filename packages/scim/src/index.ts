@@ -133,28 +133,22 @@ export const scim = () => {
 						const email = getUserPrimaryEmail(body.userName, body.emails);
 						const name = getUserFullName(email, body.name);
 
-						const user = await ctx.context.adapter.create<User>({
-							model: "user",
-							data: {
-								email,
-								name,
-								emailVerified: true,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-							},
+						const user = await ctx.context.internalAdapter.createUser({
+							email,
+							name,
+							emailVerified: true,
+							createdAt: new Date(),
+							updatedAt: new Date(),
 						});
 
-						const account = await ctx.context.adapter.create<Account>({
-							model: "account",
-							data: {
-								userId: user.id,
-								providerId: providerId,
-								accountId: accountId,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-								accessToken: "",
-								refreshToken: "",
-							},
+						const account = await ctx.context.internalAdapter.createAccount({
+							userId: user.id,
+							providerId: providerId,
+							accountId: accountId,
+							createdAt: new Date(),
+							updatedAt: new Date(),
+							accessToken: "",
+							refreshToken: "",
 						});
 
 						const organizationId = ctx.context.scimProvider.organizationId;
@@ -214,7 +208,7 @@ export const scim = () => {
 					const { organizationId, providerId } = ctx.context.scimProvider;
 					const accountId = getAccountId(body.userName, body.externalId);
 
-					const { user } = await findUserById(ctx.context.adapter, {
+					const { user, account } = await findUserById(ctx.context.adapter, {
 						userId,
 						providerId,
 						organizationId,
@@ -233,27 +227,21 @@ export const scim = () => {
 							const email = getUserPrimaryEmail(body.userName, body.emails);
 							const name = getUserFullName(email, body.name);
 
-							const updatedUser = await ctx.context.adapter.update<User>({
-								model: "user",
-								where: [{ field: "id", value: userId }],
-								update: {
+							const updatedUser = await ctx.context.internalAdapter.updateUser(
+								userId,
+								{
 									email,
 									name,
 									updatedAt: new Date(),
 								},
-							});
+							);
 
-							const updatedAccount = await ctx.context.adapter.update<Account>({
-								model: "account",
-								where: [
-									{ field: "userId", value: userId },
-									{ field: "providerId", value: providerId },
-								],
-								update: {
+							const updatedAccount =
+								await ctx.context.internalAdapter.updateAccount(account.id, {
 									accountId,
 									updatedAt: new Date(),
-								},
-							});
+								});
+
 							return [updatedUser, updatedAccount];
 						});
 
@@ -436,7 +424,7 @@ export const scim = () => {
 					const organizationId = ctx.context.scimProvider.organizationId;
 					const providerId = ctx.context.scimProvider.providerId;
 
-					const { user } = await findUserById(ctx.context.adapter, {
+					const { user, account } = await findUserById(ctx.context.adapter, {
 						userId,
 						providerId,
 						organizationId,
@@ -464,23 +452,15 @@ export const scim = () => {
 
 					await Promise.all([
 						Object.keys(userPatch).length > 0
-							? ctx.context.adapter.update<User>({
-									model: "user",
-									where: [{ field: "id", value: userId }],
-									update: { ...userPatch, updatedAt: new Date() },
+							? ctx.context.internalAdapter.updateUser(userId, {
+									...userPatch,
+									updatedAt: new Date(),
 								})
 							: Promise.resolve(),
 						Object.keys(accountPatch).length > 0
-							? ctx.context.adapter.update<Account>({
-									model: "account",
-									where: [
-										{ field: "userId", value: userId },
-										{ field: "providerId", value: providerId },
-									],
-									update: {
-										...accountPatch,
-										updatedAt: new Date(),
-									},
+							? ctx.context.internalAdapter.updateAccount(account.id, {
+									...accountPatch,
+									updatedAt: new Date(),
 								})
 							: Promise.resolve(),
 					]);
@@ -519,10 +499,7 @@ export const scim = () => {
 						});
 					}
 
-					await ctx.context.adapter.delete({
-						model: "user",
-						where: [{ field: "id", value: userId }],
-					});
+					await ctx.context.internalAdapter.deleteUser(userId);
 
 					ctx.setStatus(204);
 					return;
