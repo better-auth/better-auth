@@ -1670,10 +1670,9 @@ describe("Fallback JoinOption System", async () => {
 					debugLogs: {},
 				},
 				options: {
-					advanced: {
-						database: {
-							experimentalJoins: false, // explicitally defining since in the future `join` will likely be default which would break this test
-						},
+					experimental: {
+						// explicitally defining since in the future `join` will likely be default which would break this test
+						joins: false,
 					},
 				},
 				adapter: () =>
@@ -1736,10 +1735,9 @@ describe("Fallback JoinOption System", async () => {
 					debugLogs: {},
 				},
 				options: {
-					advanced: {
-						database: {
-							experimentalJoins: false, // explicitally defining since in the future `join` will likely be default which would break this test
-						},
+					experimental: {
+						// explicitally defining since in the future `join` will likely be default which would break this test
+						joins: false,
 					},
 				},
 				adapter: () =>
@@ -1818,10 +1816,9 @@ describe("Fallback JoinOption System", async () => {
 					debugLogs: {},
 				},
 				options: {
-					advanced: {
-						database: {
-							experimentalJoins: false, // explicitally defining since in the future `join` will likely be default which would break this test
-						},
+					experimental: {
+						// explicitally defining since in the future `join` will likely be default which would break this test
+						joins: false,
 					},
 				},
 				adapter: () =>
@@ -1858,10 +1855,9 @@ describe("Fallback JoinOption System", async () => {
 					debugLogs: {},
 				},
 				options: {
-					advanced: {
-						database: {
-							experimentalJoins: false, // explicitally defining since in the future `join` will likely be default which would break this test
-						},
+					experimental: {
+						// explicitally defining since in the future `join` will likely be default which would break this test
+						joins: false,
 					},
 				},
 				adapter: () =>
@@ -1902,10 +1898,8 @@ describe("Fallback JoinOption System", async () => {
 					debugLogs: {},
 				},
 				options: {
-					advanced: {
-						database: {
-							experimentalJoins: true,
-						},
+					experimental: {
+						joins: true,
 					},
 				},
 				adapter: () =>
@@ -1945,10 +1939,8 @@ describe("Fallback JoinOption System", async () => {
 					debugLogs: {},
 				},
 				options: {
-					advanced: {
-						database: {
-							experimentalJoins: true,
-						},
+					experimental: {
+						joins: true,
 					},
 				},
 				adapter: () =>
