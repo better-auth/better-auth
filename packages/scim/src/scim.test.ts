@@ -46,55 +46,59 @@ describe("SCIM", () => {
 			},
 		});
 
-		return { auth, authClient };
+		async function getAuthCookieHeaders() {
+			const headers = new Headers();
+
+			await authClient.signUp.email({
+				email: testUser.email,
+				password: testUser.password,
+				name: testUser.name,
+			});
+
+			await authClient.signIn.email(testUser, {
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			});
+
+			return headers;
+		}
+
+		async function getSCIMToken(
+			providerId: string = "the-saml-provider-1",
+			organizationId?: string,
+		) {
+			const headers = await getAuthCookieHeaders();
+			const { scimToken } = await auth.api.generateSCIMToken({
+				body: {
+					providerId,
+					organizationId,
+				},
+				headers,
+			});
+
+			return scimToken;
+		}
+
+		async function registerOrganization(org: string) {
+			const headers = await getAuthCookieHeaders();
+
+			return await auth.api.createOrganization({
+				body: {
+					slug: `the-${org}`,
+					name: `the organization ${org}`,
+				},
+				headers,
+			});
+		}
+
+		return {
+			auth,
+			authClient,
+			registerOrganization,
+			getSCIMToken,
+			getAuthCookieHeaders,
+		};
 	};
-
-	async function getAuthCookieHeaders(authClient: any) {
-		const headers = new Headers();
-
-		await authClient.signUp.email({
-			email: testUser.email,
-			password: testUser.password,
-			name: testUser.name,
-		});
-
-		await authClient.signIn.email(testUser, {
-			throw: true,
-			onSuccess: setCookieToHeader(headers),
-		});
-
-		return headers;
-	}
-
-	async function getSCIMToken(
-		auth: any,
-		authClient: any,
-		providerId: string = "the-saml-provider-1",
-		organizationId?: string,
-	) {
-		const headers = await getAuthCookieHeaders(authClient);
-		const { scimToken } = await auth.api.generateSCIMToken({
-			body: {
-				providerId,
-				organizationId,
-			},
-			headers,
-		});
-
-		return scimToken;
-	}
-
-	async function registerOrganization(auth: any, authClient: any, org: string) {
-		const headers = await getAuthCookieHeaders(authClient);
-
-		return await auth.api.createOrganization({
-			body: {
-				slug: `the-${org}`,
-				name: `the organization ${org}`,
-			},
-			headers,
-		});
-	}
 
 	describe("POST /scim/generate-token", () => {
 		it("should require user session", async () => {
@@ -110,8 +114,8 @@ describe("SCIM", () => {
 		});
 
 		it("should fail if the authenticated user does not belong to the given org", async () => {
-			const { auth, authClient } = createTestInstance();
-			const headers = await getAuthCookieHeaders(authClient);
+			const { auth, getAuthCookieHeaders } = createTestInstance();
+			const headers = await getAuthCookieHeaders();
 			const generateSCIMToken = () =>
 				auth.api.generateSCIMToken({
 					body: { providerId: "the id", organizationId: "the-org" },
@@ -126,8 +130,8 @@ describe("SCIM", () => {
 		});
 
 		it("should generate a new scim token", async () => {
-			const { auth, authClient } = createTestInstance();
-			const headers = await getAuthCookieHeaders(authClient);
+			const { auth, getAuthCookieHeaders } = createTestInstance();
+			const headers = await getAuthCookieHeaders();
 
 			const response = await auth.api.generateSCIMToken({
 				body: { providerId: "the id" },
@@ -140,12 +144,13 @@ describe("SCIM", () => {
 		});
 
 		it("should generate a new scim token associated to an org", async () => {
-			const { auth, authClient } = createTestInstance();
-			const orgA = await registerOrganization(auth, authClient, "org-a");
-			const headers = await getAuthCookieHeaders(authClient);
+			const { auth, registerOrganization, getAuthCookieHeaders } =
+				createTestInstance();
+			const orgA = await registerOrganization("org-a");
+			const headers = await getAuthCookieHeaders();
 
 			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id", organizationId: orgA.id },
+				body: { providerId: "the id", organizationId: orgA?.id },
 				headers,
 			});
 
@@ -597,8 +602,8 @@ describe("SCIM", () => {
 
 	describe("POST /scim/v2/Users", () => {
 		it.fails("should create a new user", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const response = await auth.api.createSCIMUser({
 				body: {
@@ -644,8 +649,8 @@ describe("SCIM", () => {
 		});
 
 		it("should create a new user with external id", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const user = await auth.api.createSCIMUser({
 				body: {
@@ -685,8 +690,8 @@ describe("SCIM", () => {
 		});
 
 		it("should create a new user with name parts", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const user = await auth.api.createSCIMUser({
 				body: {
@@ -729,8 +734,8 @@ describe("SCIM", () => {
 		});
 
 		it("should create a new user with formatted name", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const user = await auth.api.createSCIMUser({
 				body: {
@@ -772,8 +777,8 @@ describe("SCIM", () => {
 		});
 
 		it("should create a new user with a primary email", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const user = await auth.api.createSCIMUser({
 				body: {
@@ -819,8 +824,8 @@ describe("SCIM", () => {
 		});
 
 		it("should create a new user with the first non-primary email", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const user = await auth.api.createSCIMUser({
 				body: {
@@ -866,8 +871,8 @@ describe("SCIM", () => {
 		});
 
 		it("should not allow users with the same computed username", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const createUser = async () => {
 				await auth.api.createSCIMUser({
@@ -910,8 +915,8 @@ describe("SCIM", () => {
 
 	describe("PUT /scim/v2/Users", () => {
 		it("should update an existing resource", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const user = await auth.api.createSCIMUser({
 				body: {
@@ -1003,8 +1008,8 @@ describe("SCIM", () => {
 		});
 
 		it("should return not found for missing resources", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const updateUser = () =>
 				auth.api.updateSCIMUser({
@@ -1034,8 +1039,8 @@ describe("SCIM", () => {
 
 	describe("PATCH /scim/v2/users", () => {
 		it("should partially update a user resource", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const user = await auth.api.createSCIMUser({
 				body: {
@@ -1110,8 +1115,8 @@ describe("SCIM", () => {
 		});
 
 		it("should return not found for missing users", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const patchUser = () =>
 				auth.api.patchSCIMUser({
@@ -1146,8 +1151,8 @@ describe("SCIM", () => {
 		});
 
 		it("should fail on invalid updates", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const user = await auth.api.createSCIMUser({
 				body: {
@@ -1220,8 +1225,8 @@ describe("SCIM", () => {
 
 	describe("GET /scim/v2/Users", () => {
 		it("should return the list of users", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const createUser = (userName: string) => {
 				return auth.api.createSCIMUser({
@@ -1255,10 +1260,10 @@ describe("SCIM", () => {
 		});
 
 		it("should only allow access to users that belong to the same provider", async () => {
-			const { auth, authClient } = createTestInstance();
+			const { auth, getSCIMToken } = createTestInstance();
 			const [scimTokenProviderA, scimTokenProviderB] = await Promise.all([
-				getSCIMToken(auth, authClient, "provider-a"),
-				getSCIMToken(auth, authClient, "provider-b"),
+				getSCIMToken("provider-a"),
+				getSCIMToken("provider-b"),
 			]);
 
 			const createUser = (userName: string, scimToken: string) => {
@@ -1309,15 +1314,15 @@ describe("SCIM", () => {
 		});
 
 		it("should only allow access to users that belong to the same provider and organization", async () => {
-			const { auth, authClient } = createTestInstance();
+			const { auth, getSCIMToken, registerOrganization } = createTestInstance();
 			const [organizationA, organizationB] = await Promise.all([
-				registerOrganization(auth, authClient, "org-a"),
-				registerOrganization(auth, authClient, "org-b"),
+				registerOrganization("org-a"),
+				registerOrganization("org-b"),
 			]);
 
 			const [scimTokenProviderA, scimTokenProviderB] = await Promise.all([
-				getSCIMToken(auth, authClient, "provider-a", organizationA.id),
-				getSCIMToken(auth, authClient, "provider-b", organizationB.id),
+				getSCIMToken("provider-a", organizationA?.id),
+				getSCIMToken("provider-b", organizationB?.id),
 			]);
 
 			const createUser = (userName: string, scimToken: string) => {
@@ -1368,8 +1373,8 @@ describe("SCIM", () => {
 		});
 
 		it("should filter the list of users", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const createUser = (userName: string) => {
 				return auth.api.createSCIMUser({
@@ -1428,8 +1433,8 @@ describe("SCIM", () => {
 
 	describe("GET /scim/v2/Users/:userId", () => {
 		it("should return a single user resource", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const newUser = await auth.api.createSCIMUser({
 				body: {
@@ -1453,11 +1458,11 @@ describe("SCIM", () => {
 		});
 
 		it("should only allow access to users that belong to the same provider", async () => {
-			const { auth, authClient } = createTestInstance();
+			const { auth, getSCIMToken } = createTestInstance();
 
 			const [scimTokenProviderA, scimTokenProviderB] = await Promise.all([
-				getSCIMToken(auth, authClient, "provider-a"),
-				getSCIMToken(auth, authClient, "provider-b"),
+				getSCIMToken("provider-a"),
+				getSCIMToken("provider-b"),
 			]);
 
 			const createUser = (userName: string, scimToken: string) => {
@@ -1517,15 +1522,15 @@ describe("SCIM", () => {
 		});
 
 		it("should only allow access to users that belong to the same provider and organization", async () => {
-			const { auth, authClient } = createTestInstance();
+			const { auth, registerOrganization, getSCIMToken } = createTestInstance();
 			const [organizationA, organizationB] = await Promise.all([
-				registerOrganization(auth, authClient, "org-a"),
-				registerOrganization(auth, authClient, "org-b"),
+				registerOrganization("org-a"),
+				registerOrganization("org-b"),
 			]);
 
 			const [scimTokenProviderA, scimTokenProviderB] = await Promise.all([
-				getSCIMToken(auth, authClient, "provider-a", organizationA.id),
-				getSCIMToken(auth, authClient, "provider-b", organizationB.id),
+				getSCIMToken("provider-a", organizationA?.id),
+				getSCIMToken("provider-b", organizationB?.id),
 			]);
 
 			const createUser = (userName: string, scimToken: string) => {
@@ -1585,8 +1590,8 @@ describe("SCIM", () => {
 		});
 
 		it("should return not found for missing users", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const getUser = () =>
 				auth.api.getSCIMUser({
@@ -1623,8 +1628,8 @@ describe("SCIM", () => {
 
 	describe("DELETE /scim/v2/Users/:userId", () => {
 		it("should delete an existing user", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const newUser = await auth.api.createSCIMUser({
 				body: {
@@ -1690,8 +1695,8 @@ describe("SCIM", () => {
 		});
 
 		it("should not delete a missing user", async () => {
-			const { auth, authClient } = createTestInstance();
-			const scimToken = await getSCIMToken(auth, authClient);
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
 
 			const deleteUser = () =>
 				auth.api.deleteSCIMUser({
