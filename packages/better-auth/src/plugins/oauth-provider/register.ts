@@ -3,12 +3,12 @@ import { APIError, getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
 import type { OAuthClient } from "../../oauth-2.1/types";
 import { toExpJWT } from "../jwt/utils";
-import type { OAuthOptions, SchemaClient } from "./types";
+import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import { storeClientSecret } from "./utils";
 
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	// Check if registration endpoint is enabled
 	if (!opts.allowDynamicClientRegistration) {
@@ -56,7 +56,7 @@ export async function registerEndpoint(
 
 export async function checkOAuthClient(
 	client: OAuthClient,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	settings?: {
 		isRegister?: boolean;
 	},
@@ -131,7 +131,7 @@ export async function checkOAuthClient(
 
 export async function createOAuthClientEndpoint(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	settings: {
 		isRegister: boolean;
 	},
@@ -198,7 +198,7 @@ export async function createOAuthClientEndpoint(
 		schemaToOAuth({
 			...client,
 			clientSecret: clientSecret
-				? (opts.clientSecretPrefix ?? "") + clientSecret
+				? (opts.prefix?.clientSecret ?? "") + clientSecret
 				: undefined,
 		}),
 		{
@@ -219,7 +219,7 @@ export async function createOAuthClientEndpoint(
  */
 export interface DatabaseClient
 	extends Omit<
-		SchemaClient,
+		SchemaClient<Scope[]>,
 		"scopes" | "contacts" | "redirectUris" | "grantTypes" | "responseTypes"
 	> {
 	scopes?: string;
@@ -235,16 +235,18 @@ export interface DatabaseClient
  *
  * @internal
  */
-export function databaseToSchema(input: DatabaseClient): SchemaClient {
+export function databaseToSchema(input: DatabaseClient): SchemaClient<Scope[]> {
 	return {
 		...input,
 		scopes: input?.scopes?.split(" "),
 		contacts: input?.contacts?.split(","),
 		redirectUris: input?.redirectUris?.split(","),
-		grantTypes: input?.grantTypes?.split(",") as SchemaClient["grantTypes"],
-		responseTypes: input?.responseTypes?.split(
-			",",
-		) as SchemaClient["responseTypes"],
+		grantTypes: input?.grantTypes?.split(",") as SchemaClient<
+			Scope[]
+		>["grantTypes"],
+		responseTypes: input?.responseTypes?.split(",") as SchemaClient<
+			Scope[]
+		>["responseTypes"],
 	};
 }
 
@@ -254,7 +256,7 @@ export function databaseToSchema(input: DatabaseClient): SchemaClient {
  *
  * @internal
  */
-export function schemaToDatabase(input: SchemaClient): DatabaseClient {
+export function schemaToDatabase(input: SchemaClient<Scope[]>): DatabaseClient {
 	return {
 		...input,
 		scopes: input.scopes?.join(" "),
@@ -271,7 +273,7 @@ export function schemaToDatabase(input: SchemaClient): DatabaseClient {
  * @param input
  * @returns
  */
-export function oauthToSchema(input: OAuthClient): SchemaClient {
+export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 	const {
 		// Important Fields
 		client_id: clientId,
@@ -360,7 +362,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient {
  * @param cleaned - default true, determines if the output has only Oauth 2.0 compatible data
  * @returns
  */
-export function schemaToOAuth(input: SchemaClient): OAuthClient {
+export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 	const {
 		// Important Fields
 		clientId,

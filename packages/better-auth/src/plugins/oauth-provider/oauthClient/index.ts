@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api";
 import { createOAuthClientEndpoint } from "../register";
-import type { OAuthOptions } from "../types";
+import type { OAuthOptions, Scope } from "../types";
 import {
 	deleteClientEndpoint,
 	getClientEndpoint,
@@ -10,7 +10,7 @@ import {
 	updateClientEndpoint,
 } from "./endpoints";
 
-export const createOAuthClient = (opts: OAuthOptions) =>
+export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
 		"/oauth2/client",
 		{
@@ -213,7 +213,7 @@ export const createOAuthClient = (opts: OAuthOptions) =>
 		},
 	);
 
-export const getOAuthClient = (opts: OAuthOptions) =>
+export const getOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
 		"/oauth2/clients/:id",
 		{
@@ -230,7 +230,7 @@ export const getOAuthClient = (opts: OAuthOptions) =>
 		},
 	);
 
-export const getOAuthClients = (opts: OAuthOptions) =>
+export const getOAuthClients = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
 		"/oauth2/clients",
 		{
@@ -252,7 +252,7 @@ export const getOAuthClients = (opts: OAuthOptions) =>
 		},
 	);
 
-export const updateOAuthClient = (opts: OAuthOptions) =>
+export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
 		"/oauth2/clients/:id",
 		{
@@ -305,7 +305,7 @@ export const updateOAuthClient = (opts: OAuthOptions) =>
 		},
 	);
 
-export const rotateClientSecret = (opts: OAuthOptions) =>
+export const rotateClientSecret = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
 		"/oauth2/clients/:id/rotate-secret",
 		{
@@ -322,7 +322,7 @@ export const rotateClientSecret = (opts: OAuthOptions) =>
 		},
 	);
 
-export const deleteOAuthClient = (opts: OAuthOptions) =>
+export const deleteOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
 		"/oauth2/clients/:id",
 		{

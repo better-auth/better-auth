@@ -20,7 +20,7 @@ import { registerEndpoint } from "./register";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
-import type { OAuthOptions } from "./types";
+import type { OAuthOptions, Scope } from "./types";
 import { userInfoEndpoint } from "./userinfo";
 import { getJwtPlugin } from "./utils";
 
@@ -31,7 +31,7 @@ import { getJwtPlugin } from "./utils";
  * @param options - The options for the oAuth Provider plugin.
  * @returns A Better Auth plugin.
  */
-export const oauthProvider = (options: OAuthOptions) => {
+export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	let clientRegistrationAllowedScopes = options.clientRegistrationAllowedScopes;
 	if (options.clientRegistrationDefaultScopes) {
 		const _allowedScopes = clientRegistrationAllowedScopes
@@ -82,7 +82,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 			: []),
 	]);
 
-	const opts: OAuthOptions & { claims?: string[] } = {
+	const opts: O & { claims?: string[] } = {
 		codeExpiresIn: 600, // 10 min
 		accessTokenExpiresIn: 3600, // 1 hour
 		m2mAccessTokenExpiresIn: 3600, // 1 hour
@@ -107,33 +107,6 @@ export const oauthProvider = (options: OAuthOptions) => {
 	) {
 		throw new BetterAuthError(
 			"refresh_token grant requires authorization_code grant",
-		);
-	}
-
-	// All postLogin options must be defined or undefined
-	const postLoginOpts = [
-		opts.postLoginPage,
-		opts.postLogin,
-		opts.postLoginConsentReferenceId,
-	];
-	if (
-		!(
-			postLoginOpts.every((v) => v === undefined) ||
-			postLoginOpts.every((v) => v !== undefined)
-		)
-	) {
-		throw new BetterAuthError(
-			"postLoginPage and postLogin should both be defined",
-		);
-	}
-
-	// Both encode and decode refresh tokens must be defined if one is defined
-	if (
-		(opts.encodeRefreshToken && !opts.decodeRefreshToken) ||
-		(!opts.encodeRefreshToken && opts.decodeRefreshToken)
-	) {
-		throw new BetterAuthError(
-			"encodeRefreshToken and decodeRefreshToken should both be defined",
 		);
 	}
 
@@ -211,24 +184,21 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						// Obtain original prompt
-						const {
-							name: loginPromptCookieName,
-							attributes: cookieAttributes,
-						} = ctx.context.createAuthCookie("oauth_login_prompt");
+						const { name: loginPromptCookieName } =
+							ctx.context.createAuthCookie("oauth_login_prompt");
 						const cookie = await ctx.getSignedCookie(
 							loginPromptCookieName,
 							ctx.context.secret,
 						);
+						if (!cookie) return;
 
 						// Check if session cookie is being set and obtain its session (needed in context)
-						const cookieName = ctx.context.authCookies.sessionToken.name;
-						const parsedSetCookieHeader = parseSetCookieHeader(
+						const sessionToken = parseSetCookieHeader(
 							ctx.context.responseHeaders?.get("set-cookie") || "",
-						);
-						const sessionToken = parsedSetCookieHeader
-							.get(cookieName)
-							?.value?.split(".")[0];
-						if (!cookie || !sessionToken) return;
+						)
+							.get(ctx.context.authCookies.sessionToken.name)
+							?.value.split(".")[0];
+						if (!sessionToken) return;
 						const session =
 							await ctx.context.internalAdapter.findSession(sessionToken);
 						if (!session) return;

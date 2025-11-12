@@ -2,7 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "../../api";
 import type { User } from "../../types";
 import { validateAccessToken } from "./introspect";
-import type { OAuthOptions } from "./types";
+import type { OAuthOptions, Scope } from "./types";
 
 /**
  * Provides shared /userinfo and id_token claims functionality
@@ -34,7 +34,7 @@ export function userNormalClaims(user: User, scopes: string[]) {
  */
 export async function userInfoEndpoint(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	if (!ctx.request) {
 		throw new APIError("UNAUTHORIZED", {
