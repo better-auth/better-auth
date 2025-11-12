@@ -1235,7 +1235,7 @@ describe("organization", async (it) => {
 		try {
 			await client.organization.getFullOrganization({
 				query: { organizationId },
-				fetchOptions: { 
+				fetchOptions: {
 					headers: userHeaders,
 					onSuccess: cookieSetter(userHeaders),
 				},
