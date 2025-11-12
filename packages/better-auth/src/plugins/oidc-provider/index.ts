@@ -9,6 +9,7 @@ import {
 import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import defu from "defu";
 import { SignJWT } from "jose";
 import { z } from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
@@ -145,22 +146,19 @@ export const oidcProvider = (options: OIDCOptions) => {
 		oauthConsent: "oauthConsent",
 	};
 
-	const opts = {
-		codeExpiresIn: 600,
-		defaultScope: "openid",
-		accessTokenExpiresIn: 3600,
-		refreshTokenExpiresIn: 604800,
-		allowPlainCodeChallengeMethod: true,
-		storeClientSecret: "plain" as const,
-		...options,
-		scopes: [
-			"openid",
-			"profile",
-			"email",
-			"offline_access",
-			...(options?.scopes || []),
-		],
-	};
+	const opts = defu(
+		{
+			codeExpiresIn: 600,
+			defaultScope: "openid",
+			accessTokenExpiresIn: 3600,
+			refreshTokenExpiresIn: 604800,
+			allowPlainCodeChallengeMethod: true,
+			allowDynamicClientRegistration: true,
+			storeClientSecret: "plain" as const,
+			scopes: ["openid", "profile", "email", "offline_access"],
+		},
+		options,
+	);
 
 	const trustedClients = options.trustedClients || [];
 
@@ -650,7 +648,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					if (options.requirePKCE && !code_verifier) {
+					if (opts.requirePKCE && !code_verifier) {
 						throw new APIError("BAD_REQUEST", {
 							error_description: "code verifier is missing",
 							error: "invalid_request",
@@ -832,8 +830,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						...(requestedScopes.includes("email") ? email : {}),
 					};
 
-					const additionalUserClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(
+					const additionalUserClaims = opts.getAdditionalUserInfoClaim
+						? await opts.getAdditionalUserInfoClaim(
 								user,
 								requestedScopes,
 								client,
@@ -858,7 +856,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					let idToken: string;
 
 					// The JWT plugin is enabled, so we use the JWKS keys to sign
-					if (options.useJWTPlugin) {
+					if (opts.useJWTPlugin) {
 						const jwtPlugin = getJwtPlugin(ctx);
 						if (!jwtPlugin) {
 							ctx.context.logger.error(
@@ -1076,8 +1074,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							? user.emailVerified
 							: undefined,
 					};
-					const userClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(
+					const userClaims = opts.getAdditionalUserInfoClaim
+						? await opts.getAdditionalUserInfoClaim(
 								user,
 								requestedScopes,
 								client,
@@ -1238,6 +1236,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							.optional(),
 					}),
 					metadata: {
+						SERVER_ONLY: !!opts.allowDynamicClientRegistration,
 						openapi: {
 							description: "Register an OAuth2 application",
 							responses: {
@@ -1334,7 +1333,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const session = await getSessionFromCtx(ctx);
 
 					// Check authorization
-					if (!session && !options.allowDynamicClientRegistration) {
+					if (!session && !opts.allowDynamicClientRegistration) {
 						throw new APIError("UNAUTHORIZED", {
 							error: "invalid_token",
 							error_description:
@@ -1381,10 +1380,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const clientId =
-						options.generateClientId?.() ||
-						generateRandomString(32, "a-z", "A-Z");
+						opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
 					const clientSecret =
-						options.generateClientSecret?.() ||
+						opts.generateClientSecret?.() ||
 						generateRandomString(32, "a-z", "A-Z");
 
 					const storedClientSecret = await storeClientSecret(ctx, clientSecret);
@@ -1512,6 +1510,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		get options(): OIDCOptions {
+			return opts;
+		},
 	} satisfies BetterAuthPlugin;
 };
 export type * from "./types";
