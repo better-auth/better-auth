@@ -3,12 +3,44 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
 import { type JWTPayload, type JWTVerifyResult, jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import type { User } from "../../types";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
+
+/**
+ * Schemas
+ */
+const SendVerificationBody = z.object({
+	email: z.email().meta({
+		description: "The email to send the verification email to",
+	}),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "The URL to use for email verification callback",
+		})
+		.optional(),
+});
+
+const VerifyQuery = z.object({
+	token: z.string().meta({
+		description: "The token to verify the email",
+	}),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "The URL to redirect to after email verification",
+		})
+		.optional(),
+});
+
+const JwtPayloadSchema = z.object({
+	email: z.string().email(),
+	updateTo: z.string().optional(),
+});
 
 /**
  * Ensure email verification is enabled in options and return the object
@@ -81,17 +113,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",
 	{
 		method: "POST",
-		body: z.object({
-			email: z.email().meta({
-				description: "The email to send the verification email to",
-			}),
-			callbackURL: z
-				.string()
-				.meta({
-					description: "The URL to use for email verification callback",
-				})
-				.optional(),
-		}),
+		body: SendVerificationBody,
 		metadata: {
 			openapi: {
 				description: "Send a verification email to the user",
@@ -198,17 +220,7 @@ export const verifyEmail = createAuthEndpoint(
 	"/verify-email",
 	{
 		method: "GET",
-		query: z.object({
-			token: z.string().meta({
-				description: "The token to verify the email",
-			}),
-			callbackURL: z
-				.string()
-				.meta({
-					description: "The URL to redirect to after email verification",
-				})
-				.optional(),
-		}),
+		query: VerifyQuery,
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
 		metadata: {
 			openapi: {
@@ -327,11 +339,7 @@ export const verifyEmail = createAuthEndpoint(
 			}
 			return redirectOnError("invalid_token");
 		}
-		const schema = z.object({
-			email: z.string().email(),
-			updateTo: z.string().optional(),
-		});
-		const parsed = schema.parse(jwt.payload);
+		const parsed = JwtPayloadSchema.parse(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
 		);
