@@ -21,7 +21,7 @@ import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
 import { getJwtToken } from "../jwt";
 import { authorize } from "./authorize";
-import { handleEndSession } from "./end-session";
+import { createEndSessionEndpoint } from "./endpoints/end-session";
 import { checkPromptMiddleware } from "./middlewares/check-prompt";
 import { type OAuthApplication, schema } from "./schema";
 import { setPromptHandled } from "./state/prompt-handled";
@@ -1526,66 +1526,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					});
 				},
 			),
-			/**
-			 * ### Endpoint
-			 *
-			 * GET/POST `/oauth2/end-session`
-			 *
-			 * Implements OpenID Connect RP-Initiated Logout
-			 *
-			 * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html
-			 */
-			endSession: createAuthEndpoint(
-				"/oauth2/end-session",
-				{
-					method: ["GET", "POST"],
-					query: z
-						.object({
-							id_token_hint: z.string().optional(),
-							logout_hint: z.string().optional(),
-							client_id: z.string().optional(),
-							post_logout_redirect_uri: z.string().optional(),
-							state: z.string().optional(),
-							ui_locales: z.string().optional(),
-						})
-						.optional(),
-					metadata: {
-						isAction: false,
-						openapi: {
-							description:
-								"RP-Initiated Logout endpoint. Allows clients to notify the OP that the End-User has logged out.",
-							responses: {
-								"200": {
-									description:
-										"Logout successful. May include redirect_uri if post_logout_redirect_uri was provided.",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													redirect_uri: {
-														type: "string",
-														format: "uri",
-														description:
-															"URI to redirect to after logout (if post_logout_redirect_uri was provided)",
-													},
-													message: {
-														type: "string",
-														description: "Success message",
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				async (ctx) => {
-					return handleEndSession(ctx, opts);
-				},
-			),
+			endSession: createEndSessionEndpoint(opts),
 		},
 		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
