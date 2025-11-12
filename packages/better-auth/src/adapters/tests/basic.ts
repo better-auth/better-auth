@@ -767,9 +767,13 @@ export const getNormalTestSuiteTests = (
 			},
 		"findOne - should return null for failed base model lookup that has joins":
 			async () => {
+				const options = getBetterAuthOptions();
+				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				const result = await adapter.findOne<User>({
 					model: "user",
-					where: [{ field: "id", value: "100000" }],
+					where: [
+						{ field: "id", value: useUUIDs ? crypto.randomUUID() : "100000" },
+					],
 					join: { session: true, account: true },
 				});
 				expect(result).toBeNull();
