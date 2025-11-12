@@ -691,17 +691,24 @@ describe("SCIM", () => {
 
 		it("should return not found for unsupported schemas", async () => {
 			const { auth } = createTestInstance();
-			const schema = await auth.api.getSCIMSchema({
-				params: {
-					schemaId: "unknown",
-				},
-			});
 
-			expect(schema).toMatchInlineSnapshot(`
-				{
-				  "error": "Schema not found",
-				}
-			`);
+			const getSchema = () =>
+				auth.api.getSCIMSchema({
+					params: {
+						schemaId: "unknown",
+					},
+				});
+
+			await expect(getSchema()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "Schema not found",
+					body: {
+						detail: "Schema not found",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 404,
+					},
+				}),
+			);
 		});
 	});
 
@@ -766,17 +773,23 @@ describe("SCIM", () => {
 
 		it("should return not found for unsupported resource types", async () => {
 			const { auth } = createTestInstance();
-			const resourceType = await auth.api.getSCIMResourceType({
-				params: {
-					resourceTypeId: "unknown",
-				},
-			});
+			const getResourceType = () =>
+				auth.api.getSCIMResourceType({
+					params: {
+						resourceTypeId: "unknown",
+					},
+				});
 
-			expect(resourceType).toMatchInlineSnapshot(`
-				{
-				  "error": "Resource type not found",
-				}
-			`);
+			await expect(getResourceType()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "Resource type not found",
+					body: {
+						detail: "Resource type not found",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 404,
+					},
+				}),
+			);
 		});
 	});
 
@@ -1080,7 +1093,16 @@ describe("SCIM", () => {
 				});
 			};
 
-			await expect(createUser()).rejects.toThrow(/SCIM token is required/);
+			await expect(createUser()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "SCIM token is required",
+					body: {
+						detail: "SCIM token is required",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 401,
+					},
+				}),
+			);
 		});
 	});
 
@@ -1166,30 +1188,45 @@ describe("SCIM", () => {
 				});
 			};
 
-			await expect(updateUser()).rejects.toThrow(/SCIM token is required/);
+			await expect(updateUser()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "SCIM token is required",
+					body: {
+						detail: "SCIM token is required",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 401,
+					},
+				}),
+			);
 		});
 
 		it("should return not found for missing resources", async () => {
 			const { auth, authClient } = createTestInstance();
 			const { scimToken } = await registerSSOProvider(auth, authClient);
 
-			const result = await auth.api.updateSCIMUser({
-				params: {
-					userId: "missing",
-				},
-				body: {
-					userName: "other-username",
-				},
-				headers: {
-					authorization: `Bearer ${scimToken}`,
-				},
-			});
+			const updateUser = () =>
+				auth.api.updateSCIMUser({
+					params: {
+						userId: "missing",
+					},
+					body: {
+						userName: "other-username",
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
 
-			expect(result).toMatchInlineSnapshot(`
-                  {
-                    "error": "User not found",
-                  }
-                `);
+			await expect(updateUser()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "User not found",
+					body: {
+						detail: "User not found",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 404,
+					},
+				}),
+			);
 		});
 	});
 
@@ -1276,26 +1313,36 @@ describe("SCIM", () => {
 			const { auth, authClient } = createTestInstance();
 			const { scimToken } = await registerSSOProvider(auth, authClient);
 
-			const result = await auth.api.patchSCIMUser({
-				params: {
-					userId: "missing",
-				},
-				body: {
-					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-					Operations: [
-						{ op: "replace", path: "/externalId", value: "external-username" },
-					],
-				},
-				headers: {
-					authorization: `Bearer ${scimToken}`,
-				},
-			});
+			const patchUser = () =>
+				auth.api.patchSCIMUser({
+					params: {
+						userId: "missing",
+					},
+					body: {
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+						Operations: [
+							{
+								op: "replace",
+								path: "/externalId",
+								value: "external-username",
+							},
+						],
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
 
-			expect(result).toMatchInlineSnapshot(`
-              {
-                "error": "User not found",
-              }
-            `);
+			await expect(patchUser()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "User not found",
+					body: {
+						detail: "User not found",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 404,
+					},
+				}),
+			);
 		});
 
 		it("should fail on invalid updates", async () => {
@@ -1311,24 +1358,30 @@ describe("SCIM", () => {
 				},
 			});
 
-			const result = await auth.api.patchSCIMUser({
-				params: {
-					userId: user.id,
-				},
-				body: {
-					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-					Operations: [],
-				},
-				headers: {
-					authorization: `Bearer ${scimToken}`,
-				},
-			});
+			const patchUser = () =>
+				auth.api.patchSCIMUser({
+					params: {
+						userId: user.id,
+					},
+					body: {
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+						Operations: [],
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
 
-			expect(result).toMatchInlineSnapshot(`
-              {
-                "error": "No valid fields to update",
-              }
-            `);
+			await expect(patchUser()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "No valid fields to update",
+					body: {
+						detail: "No valid fields to update",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 400,
+					},
+				}),
+			);
 		});
 
 		it("should not allow anonymous access", async () => {
@@ -1352,7 +1405,16 @@ describe("SCIM", () => {
 				});
 			};
 
-			await expect(patchUser()).rejects.toThrow(/SCIM token is required/);
+			await expect(patchUser()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "SCIM token is required",
+					body: {
+						detail: "SCIM token is required",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 401,
+					},
+				}),
+			);
 		});
 	});
 
@@ -1557,7 +1619,16 @@ describe("SCIM", () => {
 				await auth.api.listSCIMUsers();
 			};
 
-			await expect(getUsers()).rejects.toThrow(/SCIM token is required/);
+			await expect(getUsers()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "SCIM token is required",
+					body: {
+						detail: "SCIM token is required",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 401,
+					},
+				}),
+			);
 		});
 	});
 
@@ -1624,29 +1695,33 @@ describe("SCIM", () => {
 				createUser("user-b", scimTokenProviderA),
 			]);
 
-			const [retrievedUserB, restrictedUserB] = await Promise.all([
-				getUser(userB.id, scimTokenProviderA),
-				getUser(userB.id, scimTokenProviderB),
-			]);
-
+			const retrievedUserB = await getUser(userB.id, scimTokenProviderA);
 			expect(retrievedUserB).toEqual(userB);
-			expect(restrictedUserB).toMatchInlineSnapshot(`
-				{
-				  "error": "User not found",
-				}
-			`);
 
-			const [retrievedUserA, restrictedUserA] = await Promise.all([
-				getUser(userA.id, scimTokenProviderB),
-				getUser(userA.id, scimTokenProviderA),
-			]);
+			await expect(getUser(userB.id, scimTokenProviderB)).rejects.toThrowError(
+				expect.objectContaining({
+					message: "User not found",
+					body: {
+						detail: "User not found",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 404,
+					},
+				}),
+			);
 
+			const retrievedUserA = await getUser(userA.id, scimTokenProviderB);
 			expect(retrievedUserA).toEqual(userA);
-			expect(restrictedUserA).toMatchInlineSnapshot(`
-				{
-				  "error": "User not found",
-				}
-			`);
+
+			await expect(getUser(userA.id, scimTokenProviderA)).rejects.toThrowError(
+				expect.objectContaining({
+					message: "User not found",
+					body: {
+						detail: "User not found",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 404,
+					},
+				}),
+			);
 		});
 
 		it("should only allow access to users that belong to the same provider and organization", async () => {
@@ -1691,49 +1766,59 @@ describe("SCIM", () => {
 				createUser("user-b", scimTokenProviderA),
 			]);
 
-			const [retrievedUserB, restrictedUserB] = await Promise.all([
-				getUser(userB.id, scimTokenProviderA),
-				getUser(userB.id, scimTokenProviderB),
-			]);
-
+			const retrievedUserB = await getUser(userB.id, scimTokenProviderA);
 			expect(retrievedUserB).toEqual(userB);
-			expect(restrictedUserB).toMatchInlineSnapshot(`
-				{
-				  "error": "User not found",
-				}
-			`);
 
-			const [retrievedUserA, restrictedUserA] = await Promise.all([
-				getUser(userA.id, scimTokenProviderB),
-				getUser(userA.id, scimTokenProviderA),
-			]);
+			await expect(getUser(userB.id, scimTokenProviderB)).rejects.toThrowError(
+				expect.objectContaining({
+					message: "User not found",
+					body: {
+						detail: "User not found",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 404,
+					},
+				}),
+			);
 
+			const retrievedUserA = await getUser(userA.id, scimTokenProviderB);
 			expect(retrievedUserA).toEqual(userA);
-			expect(restrictedUserA).toMatchInlineSnapshot(`
-				{
-				  "error": "User not found",
-				}
-			`);
+
+			await expect(getUser(userA.id, scimTokenProviderA)).rejects.toThrowError(
+				expect.objectContaining({
+					message: "User not found",
+					body: {
+						detail: "User not found",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 404,
+					},
+				}),
+			);
 		});
 
 		it("should return not found for missing users", async () => {
 			const { auth, authClient } = createTestInstance();
 			const { scimToken } = await registerSSOProvider(auth, authClient);
 
-			const result = await auth.api.getSCIMUser({
-				params: {
-					userId: "missing",
-				},
-				headers: {
-					authorization: `Bearer ${scimToken}`,
-				},
-			});
+			const getUser = () =>
+				auth.api.getSCIMUser({
+					params: {
+						userId: "missing",
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
 
-			expect(result).toMatchInlineSnapshot(`
-              {
-                "error": "User not found",
-              }
-            `);
+			await expect(getUser()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "User not found",
+					body: {
+						detail: "User not found",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 404,
+					},
+				}),
+			);
 		});
 
 		it("should not allow anonymous access", async () => {
@@ -1772,20 +1857,26 @@ describe("SCIM", () => {
 
 			expect(result).toBe(null);
 
-			const retrievedUser = await auth.api.getSCIMUser({
-				params: {
-					userId: newUser.id,
-				},
-				headers: {
-					authorization: `Bearer ${scimToken}`,
-				},
-			});
+			const getUser = () =>
+				auth.api.getSCIMUser({
+					params: {
+						userId: newUser.id,
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
 
-			expect(retrievedUser).toMatchInlineSnapshot(`
-              {
-                "error": "User not found",
-              }
-            `);
+			await expect(getUser()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "User not found",
+					body: {
+						detail: "User not found",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 404,
+					},
+				}),
+			);
 		});
 
 		it("should not allow anonymous access", async () => {
@@ -1799,26 +1890,42 @@ describe("SCIM", () => {
 				});
 			};
 
-			await expect(deleteUser()).rejects.toThrow(/SCIM token is required/);
+			await expect(deleteUser()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "SCIM token is required",
+					body: {
+						detail: "SCIM token is required",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 401,
+					},
+				}),
+			);
 		});
 
 		it("should not delete a missing user", async () => {
 			const { auth, authClient } = createTestInstance();
 			const { scimToken } = await registerSSOProvider(auth, authClient);
-			const result = await auth.api.deleteSCIMUser({
-				params: {
-					userId: "missing",
-				},
-				headers: {
-					authorization: `Bearer ${scimToken}`,
-				},
-			});
 
-			expect(result).toMatchInlineSnapshot(`
-              {
-                "error": "User not found",
-              }
-            `);
+			const deleteUser = () =>
+				auth.api.deleteSCIMUser({
+					params: {
+						userId: "missing",
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+
+			await expect(deleteUser()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "User not found",
+					body: {
+						detail: "User not found",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: 404,
+					},
+				}),
+			);
 		});
 	});
 });

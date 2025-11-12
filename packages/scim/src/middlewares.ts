@@ -1,5 +1,5 @@
-import { APIError } from "better-auth/api";
 import { createAuthMiddleware } from "better-auth/plugins";
+import { SCIMAPIError } from "./scim-error";
 import type { SCIMProvider } from "./types";
 
 /**
@@ -10,8 +10,8 @@ export const authMiddleware = createAuthMiddleware(async (ctx) => {
 	const authSCIMToken = authHeader?.replace(/^Bearer\s+/i, "");
 
 	if (!authSCIMToken) {
-		throw new APIError("UNAUTHORIZED", {
-			message: "SCIM token is required",
+		throw new SCIMAPIError("UNAUTHORIZED", {
+			detail: "SCIM token is required",
 		});
 	}
 
@@ -21,7 +21,9 @@ export const authMiddleware = createAuthMiddleware(async (ctx) => {
 	});
 
 	if (!scimProvider) {
-		throw new APIError("UNAUTHORIZED", { message: "Invalid SCIM token" });
+		throw new SCIMAPIError("UNAUTHORIZED", {
+			detail: "Invalid SCIM token",
+		});
 	}
 
 	return { authSCIMToken, scimProvider };

@@ -4,12 +4,12 @@ import {
 	type DBAdapter,
 	type User,
 } from "better-auth";
-import { APIError } from "better-auth/api";
 import { createAuthEndpoint, type Member } from "better-auth/plugins";
 import * as z from "zod/v4";
 import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
 import { authMiddleware } from "./middlewares";
 import { buildUserPatch } from "./patch-operations";
+import { SCIMAPIError } from "./scim-error";
 import {
 	type DBFilter,
 	parseSCIMUserFilter,
@@ -121,8 +121,8 @@ export const scim = () => {
 					});
 
 					if (existingAccount) {
-						throw new APIError("CONFLICT", {
-							message: "User already exists",
+						throw new SCIMAPIError("CONFLICT", {
+							detail: "User already exists",
 							scimType: "uniqueness",
 						});
 					}
@@ -225,7 +225,9 @@ export const scim = () => {
 					});
 
 					if (!user) {
-						return ctx.json({ error: "User not found" }, { status: 404 });
+						throw new SCIMAPIError("NOT_FOUND", {
+							detail: "User not found",
+						});
 					}
 
 					const [updatedUser, updatedAccount] =
@@ -395,7 +397,9 @@ export const scim = () => {
 					});
 
 					if (!user) {
-						return ctx.json({ error: "User not found" }, { status: 404 });
+						throw new SCIMAPIError("NOT_FOUND", {
+							detail: "User not found",
+						});
 					}
 
 					return ctx.json(
@@ -445,7 +449,9 @@ export const scim = () => {
 					});
 
 					if (!user) {
-						return ctx.json({ error: "User not found" }, { status: 404 });
+						throw new SCIMAPIError("NOT_FOUND", {
+							detail: "User not found",
+						});
 					}
 
 					const { user: userPatch, account: accountPatch } = buildUserPatch(
@@ -457,10 +463,9 @@ export const scim = () => {
 						Object.keys(userPatch).length === 0 &&
 						Object.keys(accountPatch).length === 0
 					) {
-						return ctx.json(
-							{ error: "No valid fields to update" },
-							{ status: 400 },
-						);
+						throw new SCIMAPIError("BAD_REQUEST", {
+							detail: "No valid fields to update",
+						});
 					}
 
 					await Promise.all([
@@ -514,7 +519,9 @@ export const scim = () => {
 					});
 
 					if (!user) {
-						return ctx.json({ error: "User not found" }, { status: 404 });
+						throw new SCIMAPIError("NOT_FOUND", {
+							detail: "User not found",
+						});
 					}
 
 					await ctx.context.adapter.delete({
@@ -630,7 +637,9 @@ export const scim = () => {
 					);
 
 					if (!schema) {
-						return ctx.json({ error: "Schema not found" }, { status: 404 });
+						throw new SCIMAPIError("NOT_FOUND", {
+							detail: "Schema not found",
+						});
 					}
 
 					return ctx.json({
@@ -703,10 +712,9 @@ export const scim = () => {
 					);
 
 					if (!resourceType) {
-						return ctx.json(
-							{ error: "Resource type not found" },
-							{ status: 404 },
-						);
+						throw new SCIMAPIError("NOT_FOUND", {
+							detail: "Resource type not found",
+						});
 					}
 
 					return ctx.json({
@@ -751,8 +759,8 @@ const parseSCIMAPIUserFilter = (filter?: string) => {
 	try {
 		filters = filter ? parseSCIMUserFilter(filter) : [];
 	} catch (error) {
-		throw new APIError("BAD_REQUEST", {
-			message:
+		throw new SCIMAPIError("BAD_REQUEST", {
+			detail:
 				error instanceof SCIMParseError ? error.message : "Invalid SCIM filter",
 			scimType: "invalidFilter",
 		});
