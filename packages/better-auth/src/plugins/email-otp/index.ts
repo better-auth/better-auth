@@ -16,6 +16,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
+import { parseUserInput } from "../../db";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
@@ -775,18 +776,46 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				"/sign-in/email-otp",
 				{
 					method: "POST",
-					body: z.object({
-						email: z.string({}).meta({
-							description: "Email address to sign in",
+					body: z.record(
+						z.string().meta({
+							description: "Field name must be a string",
 						}),
-						otp: z.string().meta({
-							required: true,
-							description: "OTP sent to the email",
-						}),
-					}),
+						z.any(),
+					),
 					metadata: {
+						$Infer: {
+							body: {} as {
+								name?: string;
+								email: string;
+								otp: string;
+							},
+						},
 						openapi: {
 							description: "Sign in with OTP",
+							requestBody: {
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												name: {
+													type: "string",
+													description: "Name of the user to sign-up",
+												},
+												email: {
+													type: "string",
+													description: "Email address to sign-in",
+												},
+												otp: {
+													type: "string",
+													description: "OTP sent to the email",
+												},
+											},
+											required: ["otp", "email"],
+										},
+									},
+								},
+							},
 							responses: {
 								200: {
 									description: "Success",
@@ -814,7 +843,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					},
 				},
 				async (ctx) => {
-					const email = ctx.body.email;
+					const body = ctx.body as {
+						email: string;
+						otp: string;
+						[key: string]: any;
+					};
+					const { email, otp, name, ...rest } = body;
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`sign-in-otp-${email}`,
@@ -841,7 +875,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
 						});
 					}
-					const verified = await verifyStoredOTP(ctx, otpValue, ctx.body.otp);
+					const verified = await verifyStoredOTP(ctx, otpValue, otp);
 					if (!verified) {
 						await ctx.context.internalAdapter.updateVerificationValue(
 							verificationValue.id,
@@ -863,10 +897,16 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								message: BASE_ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
+						const additionalFields = parseUserInput(
+							ctx.context.options,
+							rest,
+							"create",
+						);
 						const newUser = await ctx.context.internalAdapter.createUser({
 							email,
 							emailVerified: true,
-							name: "",
+							name: name ?? "",
+							...additionalFields,
 						});
 						const session = await ctx.context.internalAdapter.createSession(
 							newUser.id,
