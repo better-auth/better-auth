@@ -2,12 +2,12 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "../../api";
 import type { Verification } from "../../types";
 import { authorizeEndpoint } from "./authorize";
-import type { OAuthOptions, VerificationValue } from "./types";
+import type { OAuthOptions, Scope, VerificationValue } from "./types";
 import { storeToken } from "./utils";
 
 export async function continueEndpoint(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	// Continue login flow (ensure it's strictly boolean true)
 	if (ctx.body.selected === true) {
@@ -22,7 +22,10 @@ export async function continueEndpoint(
 	}
 }
 
-async function selected(ctx: GenericEndpointContext, opts: OAuthOptions) {
+async function selected(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+) {
 	const { name: cookieName, attributes: cookieAttributes } =
 		ctx.context.createAuthCookie("oauth_login_prompt");
 	const cookie = await ctx.getSignedCookie(cookieName, ctx.context.secret);
@@ -44,7 +47,10 @@ async function selected(ctx: GenericEndpointContext, opts: OAuthOptions) {
 	};
 }
 
-async function postLogin(ctx: GenericEndpointContext, opts: OAuthOptions) {
+async function postLogin(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+) {
 	const { name: cookieName, attributes: cookieAttributes } =
 		ctx.context.createAuthCookie("oauth_post_login");
 	const storedCode = await ctx.getSignedCookie(cookieName, ctx.context.secret);

@@ -16,7 +16,7 @@ import { jwt } from "../jwt";
 import { jwtClient } from "../jwt/client";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import type { OAuthOptions } from "./types";
+import type { OAuthOptions, Scope } from "./types";
 
 describe("oauth token - authorization_code", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -1102,7 +1102,10 @@ describe("oauth token - config", async () => {
 	];
 
 	async function createTestInstance(opts?: {
-		oauthProviderConfig?: Omit<OAuthOptions, "loginPage" | "consentPage">;
+		oauthProviderConfig?: Omit<
+			OAuthOptions<Scope[]>,
+			"loginPage" | "consentPage"
+		>;
 	}) {
 		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
 			{
@@ -1303,7 +1306,9 @@ describe("oauth token - config", async () => {
 		const testScopes = ["read:profile"];
 		const { client, oauthClient } = await createTestInstance({
 			oauthProviderConfig: {
-				opaqueAccessTokenPrefix: prefix,
+				prefix: {
+					opaqueAccessToken: prefix,
+				},
 			},
 		});
 		// Client credentials
@@ -1321,8 +1326,10 @@ describe("oauth token - config", async () => {
 		const refreshTokenPrefix = "hello_rt_";
 		const { client, oauthClient } = await createTestInstance({
 			oauthProviderConfig: {
-				opaqueAccessTokenPrefix: accessTokenPrefix,
-				refreshTokenPrefix: refreshTokenPrefix,
+				prefix: {
+					opaqueAccessToken: accessTokenPrefix,
+					refreshToken: refreshTokenPrefix,
+				},
 			},
 		});
 		const { url: authUrl, codeVerifier } = await createAuthUrl({
@@ -1389,7 +1396,9 @@ describe("oauth token - config", async () => {
 		const testScopes = ["read:profile"];
 		const { client, oauthClient } = await createTestInstance({
 			oauthProviderConfig: {
-				clientSecretPrefix: prefix,
+				prefix: {
+					clientSecret: prefix,
+				},
 			},
 		});
 		expect(oauthClient?.client_secret?.startsWith(prefix)).toBeTruthy();

@@ -547,28 +547,30 @@ The following example uses the organization plugin to automatically redirect to 
 ```ts title="auth.ts"
 oauthProvider({
   scopes: ["openid", "profile", "email", "read:organization"]
-  postLoginPage: "/select-organization", // [!code highlight]
-  postLogin: async ({ session }) => { // [!code highlight]
-    const userOnlyScopes = ["openid", "profile", "email", "offline_access"];
-    if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
-      return true;
-    }
-		return !!context.session?.activeOrganizationId;
-  },
-  postLoginConsentReferenceId: ({ session, scopes }) => {
-    if (scopes.includes("read:organization")) {
-      const activeOrganizationId = (context.session?.activeOrganizationId ?? undefined) as string | undefined;
-      if (!activeOrganizationId) {
-        throw new APIError("BAD_REQUEST", {
-          error: "set_organization",
-          error_description: "must set organization for these scopes",
-        })
+  postLogin: {
+    page: "/select-organization", // [!code highlight]
+    shouldRedirect: async ({ session }) => { // [!code highlight]
+      const userOnlyScopes = ["openid", "profile", "email", "offline_access"];
+      if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
+        return true;
       }
-      return activeOrganizationId;
-    } else {
-      return undefined;
-    }
-  },
+      return !!context.session?.activeOrganizationId;
+    },
+    consentReferenceId: ({ session, scopes }) => {
+      if (scopes.includes("read:organization")) {
+        const activeOrganizationId = (context.session?.activeOrganizationId ?? undefined) as string | undefined;
+        if (!activeOrganizationId) {
+          throw new APIError("BAD_REQUEST", {
+            error: "set_organization",
+            error_description: "must set organization for these scopes",
+          })
+        }
+        return activeOrganizationId;
+      } else {
+        return undefined;
+      }
+    },
+  }
 })
 ```
 
@@ -790,30 +792,30 @@ By default all secrets are `hashed` by default on the database. This helps prote
 
 ### Refresh Token Customization
 
-You can choose to format your session tokens in a different string format using the `encodeRefreshToken` and `decodeRefreshToken` functions.
+You can choose to format your session tokens in a different string format using the `storeRefreshToken`.
 
 These functions allow you to add additional functionality on the refresh token itself such as refresh token encryption.
-
-If defined, both `encodeRefreshToken` and `decodeRefreshToken` functions. must be defined.
 
 Example with change in refresh token format with backwards compatablity with original token-only format:
 
 ```ts title="auth.ts"
 oauthProvider({
-  encodeRefreshToken: (token, sessionId) => {
-    const res = sessionId ? `1.${token}.${sessionId}` : token;
-    return res;
-  },
-  decodeRefreshToken: (token) => {
-    const tokenSplit = token.split('.');
-    if (tokenSplit.length === 3 && tokenSplit.at(0) === '1') {
-      return {
-        token: tokenSplit.at(1),
-        sessionId: tokenSplit.at(2),
-      };
-    }
-    return { token };
-  },
+  storeRefreshToken: {
+    encrypt: (token, sessionId) => {
+      const res = sessionId ? `1.${token}.${sessionId}` : token;
+      return res;
+    },
+    decrypt: (token) => {
+      const tokenSplit = token.split('.');
+      if (tokenSplit.length === 3 && tokenSplit.at(0) === '1') {
+        return {
+          token: tokenSplit.at(1),
+          sessionId: tokenSplit.at(2),
+        };
+      }
+      return { token };
+    },
+  }
 })
 ```
 
@@ -828,21 +830,23 @@ const enc = "A256GCM"
 
 const auth = betterAuth({
   plugins: [oauthProvider({
-    encodeRefreshToken: (token, sessionId) {
-      const value = JSON.stringify({
-        sessionId,
-        token,
-      });
-      const jwe = await new CompactEncrypt(Buffer.from(value))
-        .setProtectedHeader({ alg, enc })
-        .encrypt(secret);
-      return jwe;
-    },
-    decodeRefreshToken: (token) {
-      const { plaintext } = await compactDecrypt(token, secret);
-      const payload = new TextDecoder().decode(plaintext);
-      return JSON.parse(payload);
-    },
+    storeRefreshToken: {
+      encrypt: (token, sessionId) {
+        const value = JSON.stringify({
+          sessionId,
+          token,
+        });
+        const jwe = await new CompactEncrypt(Buffer.from(value))
+          .setProtectedHeader({ alg, enc })
+          .encrypt(secret);
+        return jwe;
+      },
+      decrypt: (token) {
+        const { plaintext } = await compactDecrypt(token, secret);
+        const payload = new TextDecoder().decode(plaintext);
+        return JSON.parse(payload);
+      },
+    }
   })]
 })
 ```
@@ -1434,13 +1438,14 @@ Table Name: `oauthConsent`
 
 ### Prefix
 
-Add a prefix to either or both opaque access tokens or refresh tokens. This is useful for Secret Scanners (ie. [GitHub Secret Scanners](https://docs.github.com/code-security/secret-scanning), [GitGuardian](https://www.gitguardian.com/solutions/secrets-scanning), [Trufflehog](https://github.com/trufflesecurity/trufflehog)) that may rely on the prefix to help determine the token format.
+Add a `prefix` to opaque access tokens, refresh tokens, or client secrets. This is useful for Secret Scanners (ie. [GitHub Secret Scanners](https://docs.github.com/code-security/secret-scanning), [GitGuardian](https://www.gitguardian.com/solutions/secrets-scanning), [Trufflehog](https://github.com/trufflesecurity/trufflehog)) that may rely on the prefix to help determine the token format.
 
 We recommend to add a prefix to each of the following prior to your first production deployment. Once deployed consider them immutable, otherwise the following generate functions as specified:
 
-**opaqueAccessTokenPrefix**: `string | undefined` - add a prefix onto opaque access tokens. If previously deployed, utilize `generateOpaqueAccessToken` to perform this functionality instead.
-**refreshTokenPrefix**: `string | undefined` - add a prefix onto refresh tokens.  If previously deployed, utilize `generateRefreshToken` to perform this functionality instead.
-**clientSecretPrefix**: `string | undefined` - add a prefix onto client secrets.  If previously deployed, utilize `generateClientSecret` to perform this functionality instead.
+The following are available under the `prefix` configuration setting:
+- **opaqueAccessToken**: `string | undefined` - add a prefix onto opaque access tokens. If previously deployed, utilize `generateOpaqueAccessToken` to perform this functionality instead.
+- **refreshToken**: `string | undefined` - add a prefix onto refresh tokens.  If previously deployed, utilize `generateRefreshToken` to perform this functionality instead.
+- **clientSecret**:: `string | undefined` - add a prefix onto client secrets.  If previously deployed, utilize `generateClientSecret` to perform this functionality instead.
 
 ## Optimizations
 

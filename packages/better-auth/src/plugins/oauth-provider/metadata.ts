@@ -6,7 +6,7 @@ import type {
 	TokenEndpointAuthMethod,
 } from "../../oauth-2.1/types";
 import type { JWSAlgorithms, JwtOptions } from "../jwt";
-import type { OAuthOptions } from "./types";
+import type { OAuthOptions, Scope } from "./types";
 import { getJwtPlugin } from "./utils";
 
 export function authServerMetadata(
@@ -61,7 +61,7 @@ export function authServerMetadata(
 
 export function oidcServerMetadata(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions & { claims?: string[] },
+	opts: OAuthOptions<Scope[]> & { claims?: string[] },
 ) {
 	const baseURL = ctx.context.baseURL;
 	const jwtPluginOptions = opts.disableJwtPlugin

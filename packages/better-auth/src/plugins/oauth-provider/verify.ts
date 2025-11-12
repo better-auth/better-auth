@@ -1,14 +1,16 @@
 import { logger } from "@better-auth/core/env";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
+import type {
+	JSONWebKeySet,
+	JWTPayload,
+	JWTVerifyOptions,
+	ProtectedHeaderParameters,
+} from "jose";
 import {
 	createLocalJWKSet,
 	decodeProtectedHeader,
-	type JSONWebKeySet,
-	type JWTPayload,
-	type JWTVerifyOptions,
 	jwtVerify,
-	type ProtectedHeaderParameters,
 	UnsecuredJWT,
 } from "jose";
 
