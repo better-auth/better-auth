@@ -19,7 +19,6 @@ import { useAtom } from "jotai";
 import { Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 // import { AIChatModal, aiChatModalAtom } from "./ai-chat-modal";
-import { AISearchTrigger } from "./floating-ai-search";
 
 const client = new OramaClient({
 	endpoint: process.env.NEXT_PUBLIC_ORAMA_ENDPOINT!,
