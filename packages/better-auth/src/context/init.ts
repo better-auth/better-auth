@@ -3,7 +3,7 @@ import { getKyselyDatabaseType } from "../adapters/kysely-adapter/dialect";
 import { getAdapter } from "../db/adapter-kysely";
 import { getMigrations } from "../db/get-migration";
 import type { BetterAuthOptions } from "../types";
-import { createAuthContext } from "./base";
+import { createAuthContext } from "./create-context";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);

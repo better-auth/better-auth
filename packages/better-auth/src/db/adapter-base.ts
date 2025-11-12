@@ -18,9 +18,6 @@ export async function getBaseAdapter(
 			acc[key] = [];
 			return acc;
 		}, {});
-		logger.warn(
-			"No database configuration provided. Using memory adapter in development",
-		);
 		const { memoryAdapter } = await import("../adapters/memory-adapter");
 		adapter = memoryAdapter(memoryDB)(options);
 	} else if (typeof options.database === "function") {
