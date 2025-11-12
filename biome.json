@@ -20,6 +20,7 @@
         "noDelete": "error"
       },
       "complexity": {
+        "useDateNow": "error",
         "noUselessSwitchCase": "warn",
         "noUselessTypeConstraint": "warn"
       },
