@@ -15,8 +15,8 @@ import {
 import { useDocsSearch } from "fumadocs-core/search/client";
 import { OramaClient } from "@oramacloud/client";
 import { useI18n } from "fumadocs-ui/contexts/i18n";
-import { AIChatModal, aiChatModalAtom } from "./ai-chat-modal";
 import { useAtom } from "jotai";
+import { aiChatModalAtom } from "./ai-chat-modal";
 
 const client = new OramaClient({
 	endpoint: process.env.NEXT_PUBLIC_ORAMA_ENDPOINT!,
@@ -55,6 +55,7 @@ export function CustomSearchDialog(props: SharedProps) {
 					<SearchDialogHeader>
 						<SearchDialogIcon />
 						<SearchDialogInput />
+
 						<SearchDialogClose className="hidden md:block" />
 					</SearchDialogHeader>
 					<SearchDialogList
@@ -71,8 +72,6 @@ export function CustomSearchDialog(props: SharedProps) {
 					</SearchDialogFooter>
 				</SearchDialogContent>
 			</SearchDialog>
-
-			<AIChatModal isOpen={isAIModalOpen} onClose={handleAIModalClose} />
 		</>
 	);
 }

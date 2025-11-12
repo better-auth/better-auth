@@ -1,6 +1,12 @@
 "use client";
 
+import { type UIMessage, type UseChatHelpers, useChat } from "@ai-sdk/react";
+import { Presence } from "@radix-ui/react-presence";
 import { RemoveScroll } from "react-remove-scroll";
+import { DefaultChatTransport } from "ai";
+import Link from "fumadocs-core/link";
+import { buttonVariants } from "fumadocs-ui/components/ui/button";
+import { Bot, InfoIcon, Loader2, Send, Trash2, X } from "lucide-react";
 import {
 	type ComponentProps,
 	createContext,
@@ -11,21 +17,15 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { InfoIcon, Loader2, SearchIcon, Send, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { buttonVariants } from "fumadocs-ui/components/ui/button";
-import Link from "fumadocs-core/link";
 import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
-import { type UIMessage, useChat, type UseChatHelpers } from "@ai-sdk/react";
 import type { ProvideLinksToolSchema } from "@/lib/chat/inkeep-qa-schema";
 import type { z } from "zod";
-import { DefaultChatTransport } from "ai";
 import { Markdown } from "./markdown";
-import { Presence } from "@radix-ui/react-presence";
 import { MessageFeedback } from "./message-feedback";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -546,7 +546,7 @@ export function AISearchTrigger() {
 				<Presence present={open}>
 					<div
 						className={cn(
-							"fixed inset-0 flex flex-col items-center bg-fd-background/80 backdrop-blur-sm z-30",
+							"absolute inset-0 flex flex-col items-center bg-fd-background/80 backdrop-blur-sm z-30",
 							isMobile
 								? "p-4 pb-40"
 								: "p-2 right-(--removed-body-scroll-bar-size,0) pb-[8.375rem]",
@@ -636,18 +636,21 @@ export function AISearchTrigger() {
 							: "w-26 h-10 bg-fd-secondary/80 backdrop-blur-sm text-fd-secondary-foreground shadow-fd-background rounded-2xl overflow-hidden active:scale-97 hover:scale-103 transition-transform",
 					)}
 					style={{
-						left: "calc(50% - var(--removed-body-scroll-bar-size,0px)/2)",
+						left: open
+							? "calc(50% - var(--removed-body-scroll-bar-size,0px)/2)"
+							: "",
+						right: open ? "" : "-35px",
 					}}
 				>
 					{!open && (
 						<button
 							className={cn(
-								"absolute inset-0 flex items-center justify-between px-3 transition-colors text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground rounded-2xl text-sm",
+								"absolute inset-0 flex items-center justify-between px-3 py-4 transition-colors text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground rounded-none text-sm",
 							)}
 							onClick={() => setOpen(true)}
 						>
 							<div className="flex items-center gap-2 flex-1 justify-center mr-2">
-								<SearchIcon className={cn(isMobile ? "size-4" : "size-4")} />
+								<Bot className={cn("size-4")} />
 								<span>Ask AI</span>
 							</div>
 						</button>
