@@ -10,6 +10,7 @@ export {
 } from "@better-auth/core/api";
 export * from "../types/plugins";
 export * from "../utils/hide-metadata";
+export * from "./access";
 export * from "./admin";
 export * from "./anonymous";
 export * from "./api-key";

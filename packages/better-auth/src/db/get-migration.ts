@@ -3,6 +3,7 @@ import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
 import { createLogger } from "@better-auth/core/env";
 import type {
 	AlterTableColumnAlteringBuilder,
+	CreateIndexBuilder,
 	CreateTableBuilder,
 	Kysely,
 } from "kysely";
@@ -260,6 +261,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
 		| CreateTableBuilder<string, string>
+		| CreateIndexBuilder
 	)[] = [];
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
@@ -274,7 +276,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 					? "varchar(255)"
 					: field.references
 						? "varchar(36)"
-						: "text",
+						: field.sortable
+							? "varchar(255)"
+							: field.index
+								? "varchar(255)"
+								: "text",
 				mssql:
 					field.unique || field.sortable
 						? "varchar(255)"
@@ -311,15 +317,30 @@ export async function getMigrations(config: BetterAuthOptions) {
 			},
 			id: {
 				postgres: useNumberId ? "serial" : useUUIDs ? "uuid" : "text",
-				mysql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
-				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
-
+				mysql: useNumberId
+					? "integer"
+					: useUUIDs
+						? "varchar(36)"
+						: "varchar(36)",
+				mssql: useNumberId
+					? "integer"
+					: useUUIDs
+						? "varchar(36)"
+						: "varchar(36)",
 				sqlite: useNumberId ? "integer" : "text",
 			},
 			foreignKeyId: {
 				postgres: useNumberId ? "integer" : useUUIDs ? "uuid" : "text",
-				mysql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
-				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				mysql: useNumberId
+					? "integer"
+					: useUUIDs
+						? "varchar(36)"
+						: "varchar(36)",
+				mssql: useNumberId
+					? "integer"
+					: useUUIDs
+						? "varchar(36)" /* Should be using `UNIQUEIDENTIFIER` but Kysely doesn't support it */
+						: "varchar(36)",
 				sqlite: useNumberId ? "integer" : "text",
 			},
 		} as const;
@@ -344,39 +365,43 @@ export async function getMigrations(config: BetterAuthOptions) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
-				const exec = db.schema
-					.alterTable(table.table)
-					.addColumn(fieldName, type, (col) => {
-						col = field.required !== false ? col.notNull() : col;
-						if (field.references) {
-							col = col
-								.references(
-									`${field.references.model}.${field.references.field}`,
-								)
-								.onDelete(field.references.onDelete || "cascade");
+				let builder = db.schema.alterTable(table.table);
+
+				if (field.index) {
+					//@ts-expect-error
+					builder = builder.addIndex(`${table.table}_${fieldName}_idx`);
+				}
+
+				let built = builder.addColumn(fieldName, type, (col) => {
+					col = field.required !== false ? col.notNull() : col;
+					if (field.references) {
+						col = col
+							.references(`${field.references.model}.${field.references.field}`)
+							.onDelete(field.references.onDelete || "cascade");
+					}
+					if (field.unique) {
+						col = col.unique();
+					}
+					if (
+						field.type === "date" &&
+						typeof field.defaultValue === "function" &&
+						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
+					) {
+						if (dbType === "mysql") {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
+						} else {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
-						if (field.unique) {
-							col = col.unique();
-						}
-						if (
-							field.type === "date" &&
-							typeof field.defaultValue === "function" &&
-							(dbType === "postgres" ||
-								dbType === "mysql" ||
-								dbType === "mssql")
-						) {
-							if (dbType === "mysql") {
-								col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
-							} else {
-								col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
-							}
-						}
-						return col;
-					});
-				migrations.push(exec);
+					}
+					return col;
+				});
+				migrations.push(built);
 			}
 		}
 	}
+
+	let toBeIndexed: CreateIndexBuilder[] = [];
+
 	const useNumberId =
 		config.advanced?.database?.useNumberId ||
 		config.advanced?.database?.generateId === "serial";
@@ -389,21 +414,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
-			let dbT = db.schema.createTable(table.table).addColumn(
-				"id",
-				useNumberId
-					? dbType === "postgres"
-						? "serial"
-						: "integer"
-					: useUUIDs
-						? dbType === "postgres" || dbType === "mysql" || dbType === "mssql"
-							? "uuid"
-							: "text"
-						: dbType === "mysql" || dbType === "mssql"
-							? "varchar(36)"
-							: "text",
-
-				(col) => {
+			const idType = getType({ type: useNumberId ? "number" : "string" }, "id");
+			let dbT = db.schema
+				.createTable(table.table)
+				.addColumn("id", idType, (col) => {
 					if (useNumberId) {
 						if (dbType === "postgres" || dbType === "sqlite") {
 							return col.primaryKey().notNull();
@@ -418,14 +432,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 								.primaryKey()
 								.defaultTo(sql`pg_catalog.gen_random_uuid()`)
 								.notNull();
-						} else if (dbType === "mysql" || dbType === "mssql") {
-							return col.primaryKey().defaultTo(sql`uuid()`).notNull();
 						}
 						return col.primaryKey().notNull();
 					}
 					return col.primaryKey().notNull();
-				},
-			);
+				});
 
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
@@ -453,10 +464,29 @@ export async function getMigrations(config: BetterAuthOptions) {
 					}
 					return col;
 				});
+
+				if (field.index) {
+					let builder = db.schema
+						.createIndex(
+							`${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`,
+						)
+						.on(table.table)
+						.columns([fieldName]);
+					toBeIndexed.push(field.unique ? builder.unique() : builder);
+				}
 			}
 			migrations.push(dbT);
 		}
 	}
+
+	// instead of adding the index straight to `migrations`,
+	// we do this at the end so that indexes are created after the table is created
+	if (toBeIndexed.length) {
+		for (const index of toBeIndexed) {
+			migrations.push(index);
+		}
+	}
+
 	async function runMigrations() {
 		for (const migration of migrations) {
 			await migration.execute();
