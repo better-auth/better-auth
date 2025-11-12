@@ -180,12 +180,8 @@ export const scim = () => {
 					);
 
 					ctx.setStatus(201);
-
-					return ctx.json(userResource, {
-						headers: {
-							location: userResource.meta.location,
-						},
-					});
+					ctx.setHeader("location", userResource.meta.location);
+					return ctx.json(userResource);
 				},
 			),
 			updateSCIMUser: createAuthEndpoint(
