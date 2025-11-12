@@ -11,7 +11,10 @@ export const normalTestSuite = createTestSuite("normal", {}, (helpers) => {
 	return {
 		"init - tests": async () => {
 			const opts = helpers.getBetterAuthOptions();
-			expect(opts.advanced?.database?.useNumberId).toBe(undefined);
+			expect(
+				!opts.advanced?.database?.useNumberId &&
+					opts.advanced?.database?.generateId !== "serial",
+			).toBeTruthy();
 		},
 		...tests,
 	};
@@ -37,12 +40,15 @@ export const getNormalTestSuiteTests = ({
 				forceAllowId: true,
 			});
 			const options = getBetterAuthOptions();
-			if (options.advanced?.database?.useNumberId) {
-				expect(typeof result.id).toEqual("string");
+			if (
+				options.advanced?.database?.useNumberId ||
+				options.advanced?.database?.generateId === "serial" ||
+				options.advanced?.database?.generateId === "uuid"
+			) {
 				user.id = result.id;
-			} else {
-				expect(typeof result.id).toEqual("string");
 			}
+
+			expect(typeof result.id).toEqual("string");
 			const transformed = transformGeneratedModel(user);
 			// console.log(`pre-transformed:`, user);
 			// console.log(`transformed:`, transformed);
@@ -113,6 +119,74 @@ export const getNormalTestSuiteTests = ({
 			});
 			expect(nullableReference).toBeNull();
 		},
+
+		"create - should apply default values to fields": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							testField: {
+								type: "string",
+								defaultValue: "test-value",
+							},
+							cbDefaultValueField: {
+								type: "string",
+								defaultValue: () => {
+									return "advanced-test-value";
+								},
+							},
+						},
+					},
+					plugins: [
+						{
+							id: "default-fields-test",
+							schema: {
+								testModel: {
+									fields: {
+										testField: {
+											type: "string",
+											defaultValue: "test-value",
+										},
+										cbDefaultValueField: {
+											type: "string",
+											defaultValue: () => {
+												return "advanced-test-value";
+											},
+										},
+									},
+								},
+							},
+						},
+					],
+				},
+				true,
+			);
+			const result = await adapter.create<{
+				testField?: string;
+				id: string;
+				cbDefaultValueField?: string;
+			}>({
+				model: "testModel",
+				data: {},
+			});
+			expect(result.id).toBeDefined();
+			expect(result.id).toBeTypeOf("string");
+			expect(result.testField).toBe("test-value");
+			expect(result.cbDefaultValueField).toBe("advanced-test-value");
+
+			const userResult = await adapter.create<
+				User & { testField?: string; cbDefaultValueField?: string }
+			>({
+				model: "user",
+				data: {
+					...(await generate("user")),
+				},
+				forceAllowId: true,
+			});
+			expect(userResult).toBeDefined();
+			expect(userResult?.testField).toBe("test-value");
+			expect(userResult?.cbDefaultValueField).toBe("advanced-test-value");
+		},
 		"findOne - should find a model": async () => {
 			const [user] = await insertRandom("user");
 			const result = await adapter.findOne<User>({
@@ -120,6 +194,103 @@ export const getNormalTestSuiteTests = ({
 				where: [{ field: "id", value: user.id }],
 			});
 			expect(result).toEqual(user);
+		},
+		"findOne - should not apply defaultValue if value not found": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							testField: {
+								type: "string",
+								required: false,
+								defaultValue: "test-value",
+							},
+							cbDefaultValueField: {
+								type: "string",
+								required: false,
+								defaultValue: () => {
+									return "advanced-test-value";
+								},
+							},
+						},
+					},
+					plugins: [
+						{
+							id: "default-fields-test",
+							schema: {
+								testModel: {
+									fields: {
+										testField: {
+											type: "string",
+											required: false,
+											defaultValue: "test-value",
+										},
+										cbDefaultValueField: {
+											type: "string",
+											required: false,
+											defaultValue: () => {
+												return "advanced-test-value";
+											},
+										},
+									},
+								},
+							},
+						},
+					],
+				},
+				true,
+			);
+			const first = await adapter.create<{
+				testField?: string | null;
+				id: string;
+				cbDefaultValueField?: string | null;
+			}>({
+				model: "testModel",
+				data: {
+					testField: null,
+					cbDefaultValueField: null,
+				},
+			});
+			const second = await adapter.create<
+				User & {
+					testField?: string | null;
+					cbDefaultValueField?: string | null;
+				}
+			>({
+				model: "user",
+				data: {
+					...(await generate("user")),
+					testField: null,
+					cbDefaultValueField: null,
+				},
+				forceAllowId: true,
+			});
+
+			const result = await adapter.findOne<{
+				testField?: string;
+				id: string;
+				cbDefaultValueField?: string;
+			}>({
+				model: "testModel",
+				where: [{ field: "id", value: first.id }],
+			});
+			expect(result).not.toBeNull();
+			expect(result?.testField).toBeNull();
+			expect(result?.cbDefaultValueField).toBeNull();
+
+			const resultTwo = await adapter.findMany<
+				User & {
+					testField?: string | null;
+					cbDefaultValueField?: string | null;
+				}
+			>({
+				model: "user",
+				where: [{ field: "id", value: second.id }],
+			});
+			expect(resultTwo).not.toBeNull();
+			expect(resultTwo.length).toBe(1);
+			expect(resultTwo[0]?.testField).toBeNull();
+			expect(resultTwo[0]?.cbDefaultValueField).toBeNull();
 		},
 		"findOne - should find a model using a reference field": async () => {
 			const [user, session] = await insertRandom("session");
@@ -130,9 +301,13 @@ export const getNormalTestSuiteTests = ({
 			expect(result).toEqual(session);
 		},
 		"findOne - should not throw on record not found": async () => {
+			const options = getBetterAuthOptions();
+			const useUUIDs = options.advanced?.database?.generateId === "uuid";
 			const result = await adapter.findOne<User>({
 				model: "user",
-				where: [{ field: "id", value: "100000" }],
+				where: [
+					{ field: "id", value: useUUIDs ? crypto.randomUUID() : "100000" },
+				],
 			});
 			expect(result).toBeNull();
 		},
@@ -257,9 +432,13 @@ export const getNormalTestSuiteTests = ({
 		},
 		"findMany - should return an empty array when no models are found":
 			async () => {
+				const options = getBetterAuthOptions();
+				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				const result = await adapter.findMany<User>({
 					model: "user",
-					where: [{ field: "id", value: "100000" }],
+					where: [
+						{ field: "id", value: useUUIDs ? crypto.randomUUID() : "100000" },
+					],
 				});
 				expect(result).toEqual([]);
 			},
@@ -694,7 +873,10 @@ export const getNormalTestSuiteTests = ({
 				throw error;
 			}
 			const options = getBetterAuthOptions();
-			if (options.advanced?.database?.useNumberId) {
+			if (
+				options.advanced?.database?.useNumberId ||
+				options.advanced?.database?.generateId === "serial"
+			) {
 				expect(Number(users[0]!.id)).not.toBeNaN();
 			}
 		},
@@ -1001,10 +1183,14 @@ export const getNormalTestSuiteTests = ({
 			expect(result).toBeNull();
 		},
 		"delete - should not throw on record not found": async () => {
+			const options = getBetterAuthOptions();
+			const useUUIDs = options.advanced?.database?.generateId === "uuid";
 			await expect(
 				adapter.delete({
 					model: "user",
-					where: [{ field: "id", value: "100000" }],
+					where: [
+						{ field: "id", value: useUUIDs ? crypto.randomUUID() : "100000" },
+					],
 				}),
 			).resolves.not.toThrow();
 		},

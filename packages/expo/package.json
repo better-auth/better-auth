@@ -1,10 +1,10 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.4.0-beta.15",
+  "version": "1.4.0-beta.20",
   "type": "module",
   "description": "Better Auth integration for Expo and React Native applications.",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
+  "main": "dist/index.mjs",
+  "module": "dist/index.mjs",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",
@@ -19,23 +19,23 @@
   },
   "exports": {
     ".": {
-      "better-auth-dev-source": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
     },
     "./client": {
-      "better-auth-dev-source": "./src/client.ts",
-      "types": "./dist/client.d.ts",
-      "default": "./dist/client.js"
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
-        "./dist/index.d.ts"
+        "./dist/index.d.mts"
       ],
       "client": [
-        "./dist/client.d.ts"
+        "./dist/client.d.mts"
       ]
     }
   },
@@ -57,9 +57,7 @@
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.2.0",
     "expo-constants": "~17.1.7",
-    "expo-crypto": "^13.0.2",
     "expo-linking": "~7.1.7",
-    "expo-secure-store": "~14.2.3",
     "expo-web-browser": "~14.2.0",
     "react-native": "~0.80.2",
     "tsdown": "catalog:"
@@ -67,15 +65,24 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "expo-constants": ">=17.0.0",
-    "expo-crypto": ">=13.0.0",
     "expo-linking": ">=7.0.0",
-    "expo-secure-store": ">=14.0.0",
     "expo-web-browser": ">=14.0.0"
+  },
+  "peerDependenciesMeta": {
+    "expo-constants": {
+      "optional": true
+    },
+    "expo-linking": {
+      "optional": true
+    },
+    "expo-web-browser": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
-    "zod": "^4.1.5"
+    "zod": "^4.1.12"
   },
   "files": [
     "dist"

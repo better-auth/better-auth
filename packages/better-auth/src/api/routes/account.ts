@@ -3,7 +3,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
@@ -163,6 +163,10 @@ export const linkSocialAccount = createAuthEndpoint(
 						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
+			/**
+			 * Any additional data to pass through the oauth flow.
+			 */
+			additionalData: z.record(z.string(), z.any()).optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
@@ -344,10 +348,14 @@ export const linkSocialAccount = createAuthEndpoint(
 		}
 
 		// Handle OAuth flow
-		const state = await generateState(c, {
-			userId: session.user.id,
-			email: session.user.email,
-		});
+		const state = await generateState(
+			c,
+			{
+				userId: session.user.id,
+				email: session.user.email,
+			},
+			c.body.additionalData,
+		);
 
 		const url = await provider.createAuthorizationURL({
 			state: state.state,

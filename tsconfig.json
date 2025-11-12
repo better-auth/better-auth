@@ -19,6 +19,9 @@
       "path": "./packages/expo/tsconfig.json"
     },
     {
+      "path": "./packages/passkey/tsconfig.json"
+    },
+    {
       "path": "./packages/sso/tsconfig.json"
     },
     {
@@ -26,6 +29,9 @@
     },
     {
       "path": "./packages/telemetry/tsconfig.json"
+    },
+    {
+      "path": "./test/tsconfig.json"
     }
   ]
 }

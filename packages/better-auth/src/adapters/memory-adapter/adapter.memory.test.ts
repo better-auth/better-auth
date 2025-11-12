@@ -4,8 +4,8 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../tests";
 import { memoryAdapter } from "./memory-adapter";
 
@@ -29,7 +29,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite(),
+		uuidTestSuite(),
 	],
 	async onFinish() {},
 });
