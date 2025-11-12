@@ -9,6 +9,7 @@ import type {
 	OAuthOptions,
 	OAuthRefreshToken,
 	SchemaClient,
+	Scope,
 } from "./types";
 import {
 	basicToClientCredentials,
@@ -34,7 +35,7 @@ import { verifyJwsAccessToken } from "./verify";
  */
 async function validateJwtAccessToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	token: string,
 	clientId?: string,
 ) {
@@ -84,7 +85,7 @@ async function validateJwtAccessToken(
 		throw new Error(error as unknown as string);
 	}
 
-	let client: SchemaClient | null | undefined;
+	let client: SchemaClient<Scope[]> | null | undefined;
 	if (jwtPayload.azp) {
 		client = await getClient(ctx, opts, jwtPayload.azp);
 		if (!client || client?.disabled) {
@@ -153,14 +154,14 @@ async function validateJwtAccessToken(
  */
 async function validateOpaqueAccessToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	token: string,
 	clientId?: string,
 ) {
 	let tokenValue = token;
-	if (opts.opaqueAccessTokenPrefix) {
-		if (tokenValue.startsWith(opts.opaqueAccessTokenPrefix)) {
-			tokenValue = tokenValue.replace(opts.opaqueAccessTokenPrefix, "");
+	if (opts.prefix?.opaqueAccessToken) {
+		if (tokenValue.startsWith(opts.prefix.opaqueAccessToken)) {
+			tokenValue = tokenValue.replace(opts.prefix.opaqueAccessToken, "");
 		} else {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "opaque access token not found",
@@ -169,7 +170,7 @@ async function validateOpaqueAccessToken(
 		}
 	}
 	const accessToken = await ctx.context.adapter
-		.findOne<OAuthOpaqueAccessToken>({
+		.findOne<OAuthOpaqueAccessToken<Scope[]>>({
 			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 			where: [
 				{
@@ -188,7 +189,7 @@ async function validateOpaqueAccessToken(
 			return {
 				...res,
 				scopes: (res.scopes as unknown as string)?.split(" "),
-			} as OAuthOpaqueAccessToken;
+			} as OAuthOpaqueAccessToken<Scope[]>;
 		});
 	if (!accessToken) {
 		// Pass through, may be other token type
@@ -203,7 +204,7 @@ async function validateOpaqueAccessToken(
 		};
 	}
 
-	let client: SchemaClient | null | undefined;
+	let client: SchemaClient<Scope[]> | null | undefined;
 	if (accessToken.clientId) {
 		client = await getClient(ctx, opts, accessToken.clientId);
 		if (!client || client?.disabled) {
@@ -276,12 +277,12 @@ async function validateOpaqueAccessToken(
  */
 async function validateRefreshToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	token: string,
 	clientId: string,
 ) {
 	const refreshToken = await ctx.context.adapter
-		.findOne<OAuthRefreshToken | null>({
+		.findOne<OAuthRefreshToken<Scope[]> | null>({
 			model: "oauthRefreshToken",
 			where: [
 				{
@@ -373,7 +374,7 @@ async function validateRefreshToken(
  */
 export async function validateAccessToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	token: string,
 	clientId?: string,
 ) {
@@ -407,7 +408,7 @@ export async function validateAccessToken(
 
 export async function introspectEndpoint(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	let {
 		client_id,

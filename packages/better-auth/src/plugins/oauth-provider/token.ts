@@ -11,6 +11,7 @@ import type {
 	OAuthOptions,
 	OAuthRefreshToken,
 	SchemaClient,
+	Scope,
 	VerificationValue,
 } from "./types";
 import { userNormalClaims } from "./userinfo";
@@ -29,7 +30,7 @@ import {
  */
 export async function tokenEndpoint(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	const grantType: GrantType | undefined = ctx.body?.grant_type;
 
@@ -64,9 +65,9 @@ export async function tokenEndpoint(
 // NOTE: Requires jwt plugin (assert !opts.disableJwtPlugin)
 async function createJwtAccessToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	user: User,
-	client: SchemaClient,
+	client: SchemaClient<Scope[]>,
 	audience: string | string[],
 	scopes: string[],
 	overrides?: {
@@ -118,9 +119,9 @@ async function createJwtAccessToken(
  */
 async function createIdToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	user: User,
-	client: SchemaClient,
+	client: SchemaClient<Scope[]>,
 	scopes: string[],
 	nonce?: string,
 ) {
@@ -191,20 +192,14 @@ async function createIdToken(
  * Encodes a refresh token for a client
  */
 async function encodeRefreshToken(
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	token: string,
 	sessionId?: string,
 ) {
-	if (opts.encodeRefreshToken && !opts.decodeRefreshToken) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			message: "decodeRefreshToken should be defined",
-		});
-	}
-
 	return (
-		(opts.refreshTokenPrefix ?? "") +
-		(opts.encodeRefreshToken
-			? opts.encodeRefreshToken(token, sessionId)
+		(opts.prefix?.refreshToken ?? "") +
+		(opts.formatRefreshToken?.encrypt
+			? opts.formatRefreshToken.encrypt(token, sessionId)
 			: token)
 	);
 }
@@ -214,10 +209,13 @@ async function encodeRefreshToken(
  *
  * @internal
  */
-export async function decodeRefreshToken(opts: OAuthOptions, token: string) {
-	if (opts.refreshTokenPrefix) {
-		if (token.startsWith(opts.refreshTokenPrefix)) {
-			token = token.replace(opts.refreshTokenPrefix, "");
+export async function decodeRefreshToken(
+	opts: OAuthOptions<Scope[]>,
+	token: string,
+) {
+	if (opts.prefix?.refreshToken) {
+		if (token.startsWith(opts.prefix.refreshToken)) {
+			token = token.replace(opts.prefix.refreshToken, "");
 		} else {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "refresh token not found",
@@ -226,20 +224,16 @@ export async function decodeRefreshToken(opts: OAuthOptions, token: string) {
 		}
 	}
 
-	if (opts.decodeRefreshToken && !opts.encodeRefreshToken) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			message: "encodeRefreshToken should be defined",
-		});
-	}
-
-	return opts.decodeRefreshToken ? opts.decodeRefreshToken(token) : { token };
+	return opts.formatRefreshToken?.decrypt
+		? opts.formatRefreshToken?.decrypt(token)
+		: { token };
 }
 
 async function createOpaqueAccessToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	user: User | undefined,
-	client: SchemaClient,
+	client: SchemaClient<Scope[]>,
 	scopes: string[],
 	payload: JWTPayload,
 	refreshId?: string,
@@ -263,17 +257,17 @@ async function createOpaqueAccessToken(
 			expiresAt: new Date(exp * 1000),
 		},
 	});
-	return (opts.opaqueAccessTokenPrefix ?? "") + token;
+	return (opts.prefix?.opaqueAccessToken ?? "") + token;
 }
 
 async function createRefreshToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	user: User,
-	client: SchemaClient,
+	client: SchemaClient<Scope[]>,
 	scopes: string[],
 	payload: JWTPayload,
-	originalRefresh?: OAuthRefreshToken & { id: string },
+	originalRefresh?: OAuthRefreshToken<Scope[]> & { id: string },
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -323,7 +317,7 @@ async function createRefreshToken(
  */
 async function checkResource(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	scopes: string[],
 ) {
 	let resource: string | string[] | undefined = ctx.body.resource;
@@ -356,14 +350,14 @@ async function checkResource(
 
 async function createUserTokens(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
-	client: SchemaClient,
+	opts: OAuthOptions<Scope[]>,
+	client: SchemaClient<Scope[]>,
 	scopes: string[],
 	user: User,
 	sessionId?: string,
 	nonce?: string,
 	additional?: {
-		refreshToken?: OAuthRefreshToken & { id: string };
+		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	},
 ) {
 	const iat = Math.floor(Date.now() / 1000);
@@ -471,7 +465,7 @@ async function createUserTokens(
 /** Checks verification value */
 async function checkVerificationValue(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	code: string,
 	client_id: string,
 	redirect_uri?: string,
@@ -546,7 +540,7 @@ async function checkVerificationValue(
  */
 async function handleAuthorizationCodeGrant(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	let {
 		client_id,
@@ -705,7 +699,7 @@ async function handleAuthorizationCodeGrant(
  */
 async function handleClientCredentialsGrant(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	let {
 		client_id,
@@ -841,7 +835,7 @@ async function handleClientCredentialsGrant(
  */
 async function handleRefreshTokenGrant(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	let {
 		client_id,
@@ -881,7 +875,7 @@ async function handleRefreshTokenGrant(
 	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);
 
 	const refreshToken = await ctx.context.adapter
-		.findOne<OAuthRefreshToken & { id: string }>({
+		.findOne<OAuthRefreshToken<Scope[]> & { id: string }>({
 			model: "oauthRefreshToken",
 			where: [
 				{
@@ -900,7 +894,7 @@ async function handleRefreshTokenGrant(
 			return {
 				...res,
 				scopes: (res?.scopes as unknown as string)?.split(" "),
-			} as OAuthRefreshToken & { id: string };
+			} as OAuthRefreshToken<Scope[]> & { id: string };
 		});
 
 	// Check refresh

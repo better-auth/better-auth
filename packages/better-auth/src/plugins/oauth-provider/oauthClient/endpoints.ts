@@ -10,12 +10,12 @@ import {
 	schemaToDatabase,
 	schemaToOAuth,
 } from "../register";
-import type { OAuthOptions } from "../types";
+import type { OAuthOptions, Scope } from "../types";
 import { getClient, storeClientSecret } from "../utils";
 
 export async function getClientEndpoint(
 	ctx: GenericEndpointContext & { params: { id: string } },
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	const client = await getClient(ctx, opts, ctx.params.id);
 	if (!client) {
@@ -32,7 +32,7 @@ export async function getClientEndpoint(
 
 export async function getClientsEndpoint(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	const { user_id, reference_id } = ctx.query;
 
@@ -75,7 +75,7 @@ export async function getClientsEndpoint(
 
 export async function deleteClientEndpoint(
 	ctx: GenericEndpointContext & { params: { id: string } },
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	const client = await getClient(ctx, opts, ctx.params.id);
 	if (!client) {
@@ -98,7 +98,7 @@ export async function deleteClientEndpoint(
 
 export async function updateClientEndpoint(
 	ctx: GenericEndpointContext & { params: { id: string } },
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	const trustedClient = opts.trustedClients?.find(
 		(client) => client.clientId === ctx.params.id,
@@ -157,7 +157,7 @@ export async function updateClientEndpoint(
 
 export async function rotateClientSecretEndpoint(
 	ctx: GenericEndpointContext & { params: { id: string } },
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	const trustedClient = opts.trustedClients?.find(
 		(client) => client.clientId === ctx.params.id,
@@ -219,6 +219,6 @@ export async function rotateClientSecretEndpoint(
 
 	return schemaToOAuth({
 		...updatedClient,
-		clientSecret: (opts.clientSecretPrefix ?? "") + clientSecret,
+		clientSecret: (opts.prefix?.clientSecret ?? "") + clientSecret,
 	});
 }

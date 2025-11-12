@@ -6,7 +6,6 @@ import { createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
 import type { OAuthClient } from "../../oauth-2.1/types";
 import { getTestInstance } from "../../test-utils/test-instance";
-import type { Session } from "../../types";
 import { type GenericOAuthConfig, genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
@@ -379,23 +378,27 @@ describe("oauth - prompt", async () => {
 					openidConfig: true,
 				},
 				scopes,
-				selectAccountPage: "/select-account",
-				selectedAccount: selectAccount,
-				postLoginPage: "/select-organization",
-				postLogin(context: { session: Session & Record<string, unknown> }) {
-					if (!enablePostLogin) return true;
-					return !!context.session?.activeOrganizationId;
+				selectAccount: {
+					page: "/select-account",
+					shouldRedirect: selectAccount,
 				},
-				postLoginConsentReferenceId(context) {
-					if (!enablePostLogin) return undefined;
-					const activeOrganizationId = (context.session?.activeOrganizationId ??
-						undefined) as string | undefined;
-					if (!activeOrganizationId)
-						throw new APIError("BAD_REQUEST", {
-							error: "set_organization",
-							error_description: "must set organization for these scopes",
-						});
-					return activeOrganizationId;
+				postLogin: {
+					page: "/select-organization",
+					shouldRedirect(context) {
+						if (!enablePostLogin) return true;
+						return !!context.session?.activeOrganizationId;
+					},
+					consentReferenceId(context) {
+						if (!enablePostLogin) return undefined;
+						const activeOrganizationId = (context.session
+							?.activeOrganizationId ?? undefined) as string | undefined;
+						if (!activeOrganizationId)
+							throw new APIError("BAD_REQUEST", {
+								error: "set_organization",
+								error_description: "must set organization for these scopes",
+							});
+						return activeOrganizationId;
+					},
 				},
 			}),
 		],

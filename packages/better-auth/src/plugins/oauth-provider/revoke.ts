@@ -7,6 +7,7 @@ import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
 	OAuthRefreshToken,
+	Scope,
 } from "./types";
 import {
 	basicToClientCredentials,
@@ -30,7 +31,7 @@ import { verifyJwsAccessToken } from "./verify";
  */
 async function revokeJwtAccessToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	token: string,
 ) {
 	const jwtPlugin = opts.disableJwtPlugin
@@ -78,14 +79,14 @@ async function revokeJwtAccessToken(
  */
 async function revokeOpaqueAccessToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	token: string,
 	clientId: string,
 ) {
 	let tokenValue = token;
-	if (opts.opaqueAccessTokenPrefix) {
-		if (tokenValue.startsWith(opts.opaqueAccessTokenPrefix)) {
-			tokenValue = tokenValue.replace(opts.opaqueAccessTokenPrefix, "");
+	if (opts.prefix?.opaqueAccessToken) {
+		if (tokenValue.startsWith(opts.prefix.opaqueAccessToken)) {
+			tokenValue = tokenValue.replace(opts.prefix.opaqueAccessToken, "");
 		} else {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "opaque access token not found",
@@ -93,29 +94,30 @@ async function revokeOpaqueAccessToken(
 			});
 		}
 	}
-	const accessToken: (OAuthOpaqueAccessToken & { id?: string }) | null =
-		await ctx.context.adapter
-			.findOne<OAuthOpaqueAccessToken>({
-				model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
-				where: [
-					{
-						field: "token",
-						value: await getStoredToken(
-							opts.storeTokens,
-							tokenValue,
-							"access_token",
-						),
-					},
-				],
-			})
-			.then((res) => {
-				// TODO: remove join when native arrays supported
-				if (!res) return res;
-				return {
-					...res,
-					scopes: (res.scopes as unknown as string)?.split(" "),
-				} as OAuthOpaqueAccessToken;
-			});
+	const accessToken:
+		| (OAuthOpaqueAccessToken<Scope[]> & { id?: string })
+		| null = await ctx.context.adapter
+		.findOne<OAuthOpaqueAccessToken<Scope[]>>({
+			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
+			where: [
+				{
+					field: "token",
+					value: await getStoredToken(
+						opts.storeTokens,
+						tokenValue,
+						"access_token",
+					),
+				},
+			],
+		})
+		.then((res) => {
+			// TODO: remove join when native arrays supported
+			if (!res) return res;
+			return {
+				...res,
+				scopes: (res.scopes as unknown as string)?.split(" "),
+			} as OAuthOpaqueAccessToken<Scope[]>;
+		});
 	if (!accessToken) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "opaque access token not found",
@@ -142,12 +144,12 @@ async function revokeOpaqueAccessToken(
  */
 async function revokeRefreshToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	token: string,
 	clientId: string,
 ) {
 	const refreshToken = await ctx.context.adapter.findOne<
-		OAuthRefreshToken & { id: string }
+		OAuthRefreshToken<Scope[]> & { id: string }
 	>({
 		model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
 		where: [
@@ -215,7 +217,7 @@ async function revokeRefreshToken(
  */
 async function revokeAccessToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	clientId: string,
 	token: string,
 ) {
@@ -249,7 +251,7 @@ async function revokeAccessToken(
 
 export async function revokeEndpoint(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	let {
 		client_id,

@@ -7,6 +7,7 @@ import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
 	OAuthOptions,
+	Scope,
 	VerificationValue,
 } from "./types";
 import { getClient, storeToken } from "./utils";
@@ -57,7 +58,7 @@ function getErrorURL(
 
 export async function authorizeEndpoint(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	// Grant type must include authorization_code to use this endpoint
 	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
@@ -85,7 +86,7 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	if (query?.prompt === "select_account" && !opts.selectAccountPage) {
+	if (query?.prompt === "select_account" && !opts.selectAccount?.page) {
 		throw ctx.redirect(
 			getErrorURL(
 				ctx,
@@ -209,9 +210,9 @@ export async function authorizeEndpoint(
 	if (
 		// Check if account needs selection (only for authorize endpoint)
 		ctx.context.authorize_only &&
-		opts.selectedAccount
+		opts.selectAccount
 	) {
-		const selectedAccount = await opts.selectedAccount({
+		const selectedAccount = await opts.selectAccount.shouldRedirect({
 			headers: ctx.request.headers,
 			user: session.user,
 			session: session.session,
@@ -227,7 +228,7 @@ export async function authorizeEndpoint(
 	}
 
 	if (!ctx.context.post_login && opts.postLogin) {
-		const postLogin = await opts.postLogin({
+		const postLogin = await opts.postLogin.shouldRedirect({
 			user: session.user,
 			session: session.session,
 			scopes: requestScopes,
@@ -259,13 +260,13 @@ export async function authorizeEndpoint(
 			sessionId: session.session.id,
 		});
 	}
-	const referenceId = await opts.postLoginConsentReferenceId?.({
+	const referenceId = await opts.postLogin?.consentReferenceId?.({
 		user: session.user,
 		session: session.session,
 		scopes: requestScopes,
 	});
 	const consent = await ctx.context.adapter
-		.findOne<OAuthConsent>({
+		.findOne<OAuthConsent<Scope[]>>({
 			model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
 			where: [
 				{
@@ -291,7 +292,7 @@ export async function authorizeEndpoint(
 			return {
 				...res,
 				scopes: (res.scopes as unknown as string)?.split(" "),
-			} as OAuthConsent;
+			} as OAuthConsent<Scope[]>;
 		});
 
 	if (!consent || !requestScopes.every((val) => consent.scopes.includes(val))) {
@@ -312,7 +313,7 @@ export async function authorizeEndpoint(
 
 async function redirectWithAuthorizationCode(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	verificationValue: {
 		query: OAuthAuthorizationQuery;
 		clientId: string;
@@ -375,7 +376,7 @@ async function redirectWithAuthorizationCode(
 
 async function redirectWithPromptCode(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	type: "consent" | "select_account" | "post_login",
 	verificationValue: {
 		query: OAuthAuthorizationQuery;
@@ -403,7 +404,7 @@ async function redirectWithPromptCode(
 		const params = new URLSearchParams(ctx.query);
 		return handleRedirect(
 			ctx,
-			`${opts.selectAccountPage ?? opts.loginPage}?${params.toString()}`,
+			`${opts.selectAccount?.page ?? opts.loginPage}?${params.toString()}`,
 		);
 	}
 
@@ -441,7 +442,7 @@ async function redirectWithPromptCode(
 
 	const params = new URLSearchParams(ctx.query);
 	const consentUri = `${
-		type === "post_login" ? opts.postLoginPage : opts.consentPage
+		type === "post_login" ? opts.postLogin?.page : opts.consentPage
 	}?${params.toString()}`;
 
 	return handleRedirect(ctx, consentUri);

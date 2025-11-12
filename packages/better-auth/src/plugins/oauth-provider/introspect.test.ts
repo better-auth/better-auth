@@ -11,7 +11,7 @@ import type { MakeRequired } from "../../types/helper";
 import { jwt } from "../jwt";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import type { OAuthOptions } from "./types";
+import type { OAuthOptions, Scope } from "./types";
 
 describe("oauth introspect", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -399,7 +399,10 @@ describe("oauth introspect - config", async () => {
 	];
 
 	async function createTestInstance(opts?: {
-		oauthProviderConfig?: Omit<OAuthOptions, "loginPage" | "consentPage">;
+		oauthProviderConfig?: Omit<
+			OAuthOptions<Scope[]>,
+			"loginPage" | "consentPage"
+		>;
 	}) {
 		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
 			{
@@ -482,7 +485,9 @@ describe("oauth introspect - config", async () => {
 		const testScopes = ["read:profile"];
 		const { client, oauthClient } = await createTestInstance({
 			oauthProviderConfig: {
-				opaqueAccessTokenPrefix: prefix,
+				prefix: {
+					opaqueAccessToken: prefix,
+				},
 				scopes: testScopes,
 			},
 		});
@@ -516,7 +521,9 @@ describe("oauth introspect - config", async () => {
 		const testScopes = ["openid", "offline_access"];
 		const { client, oauthClient } = await createTestInstance({
 			oauthProviderConfig: {
-				refreshTokenPrefix: refreshTokenPrefix,
+				prefix: {
+					refreshToken: refreshTokenPrefix,
+				},
 				scopes: testScopes,
 			},
 		});

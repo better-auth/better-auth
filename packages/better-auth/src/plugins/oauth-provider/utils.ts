@@ -12,7 +12,7 @@ import type { Auth } from "../../types";
 import type { jwt } from "../jwt";
 import type { oauthProvider } from "../oauth-provider";
 import { type DatabaseClient, databaseToSchema } from "./register";
-import type { OAuthOptions, StoreTokenType } from "./types";
+import type { OAuthOptions, Scope, StoreTokenType } from "./types";
 
 /**
  * Gets the oAuth Provider Plugin
@@ -41,7 +41,7 @@ export const getJwtPlugin = (ctx: AuthContext | Auth) => {
  */
 export async function getClient(
 	ctx: GenericEndpointContext,
-	options: OAuthOptions,
+	options: OAuthOptions<Scope[]>,
 	clientId: string,
 ) {
 	const trustedClient = options.trustedClients?.find(
@@ -84,7 +84,7 @@ const defaultHasher = async (value: string) => {
  */
 export async function decryptStoredClientSecret(
 	ctx: GenericEndpointContext,
-	storageMethod: OAuthOptions["storeClientSecret"],
+	storageMethod: OAuthOptions<Scope[]>["storeClientSecret"],
 	storedClientSecret: string,
 ) {
 	if (storageMethod === "encrypted") {
@@ -108,16 +108,16 @@ export async function decryptStoredClientSecret(
  */
 async function verifyStoredClientSecret(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	storedClientSecret: string,
 	clientSecret?: string,
 ): Promise<boolean> {
 	const storageMethod =
 		opts.storeClientSecret ?? (opts.disableJwtPlugin ? "encrypted" : "hashed");
 
-	if (clientSecret && opts.clientSecretPrefix) {
-		if (clientSecret.startsWith(opts.clientSecretPrefix)) {
-			clientSecret = clientSecret.replace(opts.clientSecretPrefix, "");
+	if (clientSecret && opts.prefix?.clientSecret) {
+		if (clientSecret.startsWith(opts.prefix?.clientSecret)) {
+			clientSecret = clientSecret.replace(opts.prefix.clientSecret, "");
 		} else {
 			throw new APIError("UNAUTHORIZED", {
 				error_description: "invalid client_secret",
@@ -172,7 +172,7 @@ async function verifyStoredClientSecret(
  */
 export async function storeClientSecret(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 	clientSecret: string,
 ) {
 	const storageMethod =
@@ -203,7 +203,7 @@ export async function storeClientSecret(
  * @internal
  */
 export async function storeToken(
-	storageMethod: OAuthOptions["storeTokens"] = "hashed",
+	storageMethod: OAuthOptions<Scope[]>["storeTokens"] = "hashed",
 	token: string,
 	type: StoreTokenType,
 ) {
@@ -224,7 +224,7 @@ export async function storeToken(
  * @internal
  */
 export async function getStoredToken(
-	storageMethod: OAuthOptions["storeTokens"] = "hashed",
+	storageMethod: OAuthOptions<Scope[]>["storeTokens"] = "hashed",
 	token: string,
 	type: StoreTokenType,
 ) {
@@ -279,7 +279,7 @@ export function basicToClientCredentials(authorization: string) {
  */
 export async function validateClientCredentials(
 	ctx: GenericEndpointContext,
-	options: OAuthOptions,
+	options: OAuthOptions<Scope[]>,
 	clientId: string,
 	clientSecret?: string, // optional because required if client is confidential or this value is defined
 	scopes?: string[], // checks requested scopes against allowed scopes

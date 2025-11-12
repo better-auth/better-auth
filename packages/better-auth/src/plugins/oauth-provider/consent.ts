@@ -2,12 +2,17 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "../../api";
 import type { Verification } from "../../types";
 import { authorizeEndpoint, formatErrorURL } from "./authorize";
-import type { OAuthConsent, OAuthOptions, VerificationValue } from "./types";
+import type {
+	OAuthConsent,
+	OAuthOptions,
+	Scope,
+	VerificationValue,
+} from "./types";
 import { storeToken } from "./utils";
 
 export async function consentEndpoint(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
+	opts: OAuthOptions<Scope[]>,
 ) {
 	const { name: cookieName, attributes: cookieAttributes } =
 		ctx.context.createAuthCookie("oauth_consent");
@@ -117,13 +122,13 @@ export async function consentEndpoint(
 
 	// Consent accepted
 	const session = await getSessionFromCtx(ctx);
-	const referenceId = await opts.postLoginConsentReferenceId?.({
+	const referenceId = await opts.postLogin?.consentReferenceId?.({
 		user: session?.user!,
 		session: session?.session!,
 		scopes: requestedScopes ?? verificationValue.query.scope.split(" "),
 	});
 	const foundConsent = await ctx.context.adapter
-		.findOne<OAuthConsent>({
+		.findOne<OAuthConsent<Scope[]>>({
 			model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
 			where: [
 				{
@@ -149,10 +154,10 @@ export async function consentEndpoint(
 			return {
 				...res,
 				scopes: (res.scopes as unknown as string)?.split(" "),
-			} as OAuthConsent & { id: string };
+			} as OAuthConsent<Scope[]> & { id: string };
 		});
 	const iat = Math.floor(Date.now() / 1000);
-	const consent: OAuthConsent = {
+	const consent: OAuthConsent<Scope[]> = {
 		clientId: verificationValue.query.client_id,
 		userId: verificationValue.userId,
 		scopes: requestedScopes ?? verificationValue.query.scope.split(" "),
