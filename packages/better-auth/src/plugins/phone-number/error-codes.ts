@@ -1,6 +1,6 @@
 import { defineErrorCodes } from "@better-auth/core/utils";
 
-export const ERROR_CODES = defineErrorCodes({
+export const PHONE_NUMBER_ERROR_CODES = defineErrorCodes({
 	INVALID_PHONE_NUMBER: "Invalid phone number",
 	PHONE_NUMBER_EXIST: "Phone number already exists",
 	INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
