@@ -335,17 +335,17 @@ export const kyselyAdapter = (
 					? false
 					: true,
 			supportsJSON: false,
-			transaction:
-				(config?.transaction ?? false)
-					? (cb) =>
-							db.transaction().execute((trx) => {
-								const adapter = createAdapterFactory({
-									config: adapterOptions!.config,
-									adapter: createCustomAdapter(trx),
-								})(lazyOptions!);
-								return cb(adapter);
-							})
-					: false,
+			supportsUUIDs: config?.type === "postgres" ? true : false,
+			transaction: config?.transaction
+				? (cb) =>
+						db.transaction().execute((trx) => {
+							const adapter = createAdapterFactory({
+								config: adapterOptions!.config,
+								adapter: createCustomAdapter(trx),
+							})(lazyOptions!);
+							return cb(adapter);
+						})
+				: false,
 		},
 		adapter: createCustomAdapter(db),
 	};

@@ -73,14 +73,17 @@ export const getClientConfig = (
 		{
 			signal: "$sessionSignal",
 			matcher(path) {
-				return (
+				const matchesCommonPaths =
 					path === "/sign-out" ||
 					path === "/update-user" ||
-					path.startsWith("/sign-in") ||
-					path.startsWith("/sign-up") ||
+					path === "/sign-up/email" ||
+					path === "/sign-in/email" ||
 					path === "/delete-user" ||
-					path === "/verify-email"
-				);
+					path === "/verify-email" ||
+					path === "/revoke-sessions" ||
+					path === "/revoke-session";
+
+				return matchesCommonPaths;
 			},
 		},
 	];
