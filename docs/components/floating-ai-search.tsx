@@ -650,7 +650,7 @@ export function AISearchTrigger() {
 							onClick={() => setOpen(true)}
 						>
 							<div className="flex items-center gap-2 flex-1 justify-center mr-2">
-								<Bot className={cn(isMobile ? "size-4" : "size-4")} />
+								<Bot className={cn("size-4")} />
 								<span>Ask AI</span>
 							</div>
 						</button>
