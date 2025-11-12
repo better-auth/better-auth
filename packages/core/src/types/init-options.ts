@@ -254,15 +254,6 @@ export type BetterAuthAdvancedOptions = {
 				 * function.
 				 */
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
-				/**
-				 * Enable experimental joins.
-				 *
-				 * Please read the adapter documentation for more information regarding joins before enabling this.
-				 * Not all adapters support joins.
-				 *
-				 * @default false
-				 */
-				experimentalJoins?: boolean;
 		  }
 		| undefined;
 	/**
@@ -1354,4 +1345,18 @@ export type BetterAuthOptions = {
 				debug?: boolean;
 		  }
 		| undefined;
+	/**
+	 * Experimental features
+	 */
+	experimental?: {
+		/**
+		 * Enable experimental joins for your database adapter.
+		 *
+		 * 	Please read the adapter documentation for more information regarding joins before enabling this.
+		 * 	Not all adapters support joins.
+		 *
+		 * @default false
+		 */
+		joins?: boolean;
+	};
 };

@@ -365,7 +365,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 
-					if (options.advanced?.database?.experimentalJoins) {
+					if (options.experimental?.joins) {
 						if (!db.query || !db.query[model]) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,
@@ -418,7 +418,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = where ? convertWhereClause(where, model) : [];
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 
-					if (options.advanced?.database?.experimentalJoins) {
+					if (options.experimental?.joins) {
 						if (!db.query[model]) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,

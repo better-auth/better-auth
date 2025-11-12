@@ -398,7 +398,7 @@ export const createAdapterFactory =
 				joinConfig,
 			} of requiredModels) {
 				let joinedData = await (async () => {
-					if (options.advanced?.database?.experimentalJoins) {
+					if (options.experimental?.joins) {
 						const result = data[modelName];
 						return result;
 					} else {
@@ -986,8 +986,7 @@ export const createAdapterFactory =
 						select = result.select;
 					}
 					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
-					const experimentalJoins =
-						options.advanced?.database?.experimentalJoins;
+					const experimentalJoins = options.experimental?.joins;
 					if (!experimentalJoins && join && Object.keys(join).length > 0) {
 						passJoinToAdapter = false;
 					}
@@ -1067,8 +1066,7 @@ export const createAdapterFactory =
 						join = result.join;
 					}
 					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
-					const experimentalJoins =
-						options.advanced?.database?.experimentalJoins;
+					const experimentalJoins = options.experimental?.joins;
 					if (!experimentalJoins && join && Object.keys(join).length > 0) {
 						passJoinToAdapter = false;
 					}
