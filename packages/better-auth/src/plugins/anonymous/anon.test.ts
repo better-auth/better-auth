@@ -178,6 +178,124 @@ describe("anonymous", async () => {
 		expect(res.data?.user.name).toBe("i-am-anonymous");
 	});
 
+	it("should work with generateRandomEmail", async () => {
+		const testHeaders = new Headers();
+		const { customFetchImpl, sessionSetter } = await getTestInstance({
+			plugins: [
+				anonymous({
+					generateRandomEmail() {
+						const id = crypto.randomUUID();
+						return `custom-${id}@example.com`;
+					},
+				}),
+			],
+		});
+		const client = createAuthClient({
+			plugins: [anonymousClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+		const res = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(testHeaders),
+			},
+		});
+		expect(res.data?.user.email).toMatch(/^custom-[a-f0-9-]+@example\.com$/);
+	});
+
+	it("should work with async generateRandomEmail", async () => {
+		const testHeaders = new Headers();
+		const { customFetchImpl, sessionSetter } = await getTestInstance({
+			plugins: [
+				anonymous({
+					async generateRandomEmail() {
+						const id = crypto.randomUUID();
+						return `async-${id}@example.com`;
+					},
+				}),
+			],
+		});
+		const client = createAuthClient({
+			plugins: [anonymousClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+		const res = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(testHeaders),
+			},
+		});
+		expect(res.data?.user.email).toMatch(/^async-[a-f0-9-]+@example\.com$/);
+	});
+
+	it("should throw error if generateRandomEmail returns invalid email", async () => {
+		const testHeaders = new Headers();
+		const { customFetchImpl, sessionSetter } = await getTestInstance({
+			plugins: [
+				anonymous({
+					generateRandomEmail() {
+						return "not-an-email";
+					},
+				}),
+			],
+		});
+		const client = createAuthClient({
+			plugins: [anonymousClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+
+		const res = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(testHeaders),
+			},
+		});
+
+		expect(res.error).toBeDefined();
+		expect(res.data).toBeNull();
+		expect(res.error?.message).toBe(
+			"Email was not generated in a valid format",
+		);
+	});
+
+	it("should throw error if async generateRandomEmail returns invalid email", async () => {
+		const testHeaders = new Headers();
+		const { customFetchImpl, sessionSetter } = await getTestInstance({
+			plugins: [
+				anonymous({
+					async generateRandomEmail() {
+						return "still-not-an-email";
+					},
+				}),
+			],
+		});
+		const client = createAuthClient({
+			plugins: [anonymousClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+
+		const res = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(testHeaders),
+			},
+		});
+
+		expect(res.error).toBeDefined();
+		expect(res.data).toBeNull();
+		expect(res.error?.message).toBe(
+			"Email was not generated in a valid format",
+		);
+	});
+
 	it("should not reject first-time anonymous sign-in", async () => {
 		const { customFetchImpl, sessionSetter } = await getTestInstance({
 			plugins: [anonymous()],
