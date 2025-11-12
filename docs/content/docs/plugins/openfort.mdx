@@ -12,12 +12,12 @@ It enables seamless wallet creation, management, and blockchain interactions wit
 
 ## Features
 
-- Embedded wallet creation and management with shield encryption
-- Seamless integration with Better Auth authentication
-- Multi-chain support (Ethereum, Polygon, and more)
-- Gas sponsorship for user transactions
-- Multiple recovery methods (passkey, password, automatic)
-- Sign messages and execute smart contract interactions
+- Embedded wallet creation and management.
+- Seamless integration with Better Auth authentication.
+- Multi-chain support (Ethereum, Polygon, and more).
+- Gas sponsorship for user transactions.
+- Multiple recovery methods (passkey, password, automatic).
+- Sign messages and execute smart contract interactions.
 
 ## Installation
 
@@ -82,7 +82,7 @@ It enables seamless wallet creation, management, and blockchain interactions wit
     ```bash title=".env.local"
     # Openfort
     VITE_OPENFORT_PUBLISHABLE_KEY=pk_test_...
-    VITE_SHIELD_PUBLISHABLE_KEY=sk_test_...
+    VITE_SHIELD_PUBLISHABLE_KEY=...
     VITE_POLICY_ID=pol_...  # Transaction policy ID from Openfort dashboard
 
     # Better Auth
@@ -246,8 +246,8 @@ It enables seamless wallet creation, management, and blockchain interactions wit
     1. Navigate to **Authentication Providers**
     2. Add **Better Auth** as a provider
     3. Set the **Base URL** to your backend endpoint (use ngrok or similar for local development)
-    4. Create a **Policy** for transaction sponsorship
-    5. Copy the **Policy ID** to your environment variables
+    4. (optional) Create a **Policy** for transaction sponsorship
+    5. (optional) Copy the **Policy ID** to your environment variables
 
     <Callout type="warn">
       For local development, use a tunneling service like ngrok to expose your backend to Openfort.
