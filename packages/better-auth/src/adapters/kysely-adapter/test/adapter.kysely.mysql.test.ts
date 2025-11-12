@@ -7,8 +7,8 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
 
@@ -48,7 +48,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "mysql" }),
+		uuidTestSuite(),
 	],
 	async onFinish() {
 		await mysqlDB.end();

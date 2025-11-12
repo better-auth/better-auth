@@ -7,8 +7,8 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
@@ -66,7 +66,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "mysql" }),
+		uuidTestSuite(),
 	],
 	async onFinish() {
 		await mysqlDB.end();

@@ -52,13 +52,42 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 				advanced: {
 					database: {
-						useNumberId: true,
+						generateId: "serial",
 					},
 				},
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-numberid.prisma",
+		);
+	});
+
+	it("should generate prisma schema with uuid id", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{
+					provider: "postgresql",
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter(
+					{},
+					{
+						provider: "postgresql",
+					},
+				),
+				plugins: [twoFactor(), username()],
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+			},
+		});
+		expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/schema-uuid.prisma",
 		);
 	});
 
@@ -204,7 +233,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 				advanced: {
 					database: {
-						useNumberId: true,
+						generateId: "serial",
 					},
 				},
 				user: {
@@ -359,6 +388,45 @@ describe("JSON field support in CLI generators", () => {
 			} as BetterAuthOptions,
 		});
 		expect(schema.code).toContain("preferences   Json?");
+	});
+
+	it("should generate Prisma schema with JSON default values of arrays and objects", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: {
+				id: "prisma",
+				options: {},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						preferences: {
+							type: "json",
+							defaultValue: {
+								premiumuser: true,
+							},
+						},
+						metadata: {
+							type: "json",
+							defaultValue: [
+								{
+									name: "john",
+									subscribed: false,
+								},
+								{ name: "doe", subscribed: true },
+							],
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain("preferences   Json?");
+		// expect(schema.code).toContain(JSON.stringify(`@default("{\"premiumuser\":true}")`).slice(1,-1));
+		expect(schema.code).toContain('@default("{\\"premiumuser\\":true}")');
+		expect(schema.code).toContain(
+			'@default("[{\\"name\\":\\"john\\",\\"subscribed\\":false},{\\"name\\":\\"doe\\",\\"subscribed\\":true}]")',
+		);
 	});
 });
 

@@ -11,7 +11,10 @@ export const normalTestSuite = createTestSuite("normal", {}, (helpers) => {
 	return {
 		"init - tests": async () => {
 			const opts = helpers.getBetterAuthOptions();
-			expect(opts.advanced?.database?.useNumberId).toBe(undefined);
+			expect(
+				!opts.advanced?.database?.useNumberId &&
+					opts.advanced?.database?.generateId !== "serial",
+			).toBeTruthy();
 		},
 		...tests,
 	};
@@ -37,12 +40,15 @@ export const getNormalTestSuiteTests = ({
 				forceAllowId: true,
 			});
 			const options = getBetterAuthOptions();
-			if (options.advanced?.database?.useNumberId) {
-				expect(typeof result.id).toEqual("string");
+			if (
+				options.advanced?.database?.useNumberId ||
+				options.advanced?.database?.generateId === "serial" ||
+				options.advanced?.database?.generateId === "uuid"
+			) {
 				user.id = result.id;
-			} else {
-				expect(typeof result.id).toEqual("string");
 			}
+
+			expect(typeof result.id).toEqual("string");
 			const transformed = transformGeneratedModel(user);
 			// console.log(`pre-transformed:`, user);
 			// console.log(`transformed:`, transformed);
@@ -295,9 +301,13 @@ export const getNormalTestSuiteTests = ({
 			expect(result).toEqual(session);
 		},
 		"findOne - should not throw on record not found": async () => {
+			const options = getBetterAuthOptions();
+			const useUUIDs = options.advanced?.database?.generateId === "uuid";
 			const result = await adapter.findOne<User>({
 				model: "user",
-				where: [{ field: "id", value: "100000" }],
+				where: [
+					{ field: "id", value: useUUIDs ? crypto.randomUUID() : "100000" },
+				],
 			});
 			expect(result).toBeNull();
 		},
@@ -422,9 +432,13 @@ export const getNormalTestSuiteTests = ({
 		},
 		"findMany - should return an empty array when no models are found":
 			async () => {
+				const options = getBetterAuthOptions();
+				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				const result = await adapter.findMany<User>({
 					model: "user",
-					where: [{ field: "id", value: "100000" }],
+					where: [
+						{ field: "id", value: useUUIDs ? crypto.randomUUID() : "100000" },
+					],
 				});
 				expect(result).toEqual([]);
 			},
@@ -859,7 +873,10 @@ export const getNormalTestSuiteTests = ({
 				throw error;
 			}
 			const options = getBetterAuthOptions();
-			if (options.advanced?.database?.useNumberId) {
+			if (
+				options.advanced?.database?.useNumberId ||
+				options.advanced?.database?.generateId === "serial"
+			) {
 				expect(Number(users[0]!.id)).not.toBeNaN();
 			}
 		},
@@ -1166,10 +1183,14 @@ export const getNormalTestSuiteTests = ({
 			expect(result).toBeNull();
 		},
 		"delete - should not throw on record not found": async () => {
+			const options = getBetterAuthOptions();
+			const useUUIDs = options.advanced?.database?.generateId === "uuid";
 			await expect(
 				adapter.delete({
 					model: "user",
-					where: [{ field: "id", value: "100000" }],
+					where: [
+						{ field: "id", value: useUUIDs ? crypto.randomUUID() : "100000" },
+					],
 				}),
 			).resolves.not.toThrow();
 		},

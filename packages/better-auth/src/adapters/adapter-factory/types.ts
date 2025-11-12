@@ -19,9 +19,6 @@ export type AdapterFactoryOptions = {
 	adapter: AdapterFactoryCustomizeAdapterCreator;
 };
 
-/**
- * @deprecated Use `DBAdapterFactoryConfig` from `@better-auth/core/db/adapter` instead.
- */
 export interface AdapterFactoryConfig
 	extends Omit<DBAdapterFactoryConfig<BetterAuthOptions>, "transaction"> {
 	/**

@@ -6,8 +6,8 @@ import {
 	authFlowTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { prismaAdapter } from "../prisma-adapter";
 import { generateAuthConfigFile } from "./generate-auth-config";
@@ -48,7 +48,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite({}),
-		performanceTestSuite({ dialect }),
+		uuidTestSuite(),
 	],
 	onFinish: async () => {},
 	prefixTests: dialect,
