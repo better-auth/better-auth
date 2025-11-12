@@ -9,6 +9,7 @@ import {
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
 
@@ -307,6 +308,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite({ showDB }),
 		numberIdTestSuite(),
+		uuidTestSuite(),
 	],
 	async onFinish() {
 		kyselyDB.destroy();

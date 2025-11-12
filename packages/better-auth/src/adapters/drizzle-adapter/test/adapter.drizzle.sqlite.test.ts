@@ -9,6 +9,7 @@ import {
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { drizzleAdapter } from "../drizzle-adapter";
 import {
@@ -65,6 +66,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
+		uuidTestSuite(),
 	],
 	async onFinish() {
 		clearSchemaCache();
