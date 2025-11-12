@@ -1012,4 +1012,46 @@ describe("override default email verification", async () => {
 		);
 		expect(sendVerificationOTP).toHaveBeenCalled();
 	});
+
+	it("should send email only once when override is enabled", async () => {
+		let callCountForTestEmail = 0;
+		const sendVerificationOTPFn = vi.fn(async (data, request) => {
+			if (data.email === "test-no-duplicate@email.com") {
+				callCountForTestEmail++;
+			}
+		});
+
+		const { client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				sendOnSignUp: true,
+			},
+			plugins: [
+				emailOTP({
+					sendVerificationOTP: sendVerificationOTPFn,
+					overrideDefaultEmailVerification: true,
+					sendVerificationOnSignUp: true, // This should be ignored when override is true
+				}),
+			],
+		});
+
+		sendVerificationOTPFn.mockClear();
+
+		await client.signUp.email({
+			email: "test-no-duplicate@email.com",
+			password: "password",
+			name: "Test User",
+		});
+
+		expect(sendVerificationOTPFn).toHaveBeenCalledTimes(1);
+		expect(sendVerificationOTPFn).toHaveBeenCalledWith(
+			expect.objectContaining({
+				email: "test-no-duplicate@email.com",
+				type: "email-verification",
+			}),
+			expect.any(Object),
+		);
+	});
 });
