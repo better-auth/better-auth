@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.4.0-beta.19",
+  "version": "1.4.0-beta.20",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -36,6 +36,11 @@
       "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
+    },
+    "./minimal": {
+      "dev-source": "./src/auth/minimal.ts",
+      "types": "./dist/auth/minimal.d.mts",
+      "default": "./dist/auth/minimal.mjs"
     },
     "./social-providers": {
       "dev-source": "./src/social-providers/index.ts",
@@ -288,6 +293,9 @@
       "*": [
         "./dist/index.d.mts"
       ],
+      "minimal": [
+        "./dist/auth/minimal.d.mts"
+      ],
       "node": [
         "./dist/integrations/node.d.mts"
       ],
@@ -501,7 +509,7 @@
     "listhen": "^1.9.0",
     "mongodb": "^6.18.0",
     "ms": "4.0.0-nightly.202508271359",
-    "msw": "^2.11.5",
+    "msw": "^2.12.1",
     "mysql2": "^3.14.4",
     "next": "^16.0.1",
     "oauth2-mock-server": "^7.2.1",
