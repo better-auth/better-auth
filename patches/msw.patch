@@ -1,0 +1,14 @@
+diff --git a/lib/core/utils/cookieStore.js b/lib/core/utils/cookieStore.js
+index 5a0d429c9ae68555745aa2ebe0db3d1465636b1e..d2b39e96d13216626170ed9064f6e48d91abfeb3 100644
+--- a/lib/core/utils/cookieStore.js
++++ b/lib/core/utils/cookieStore.js
+@@ -48,6 +48,9 @@ class CookieStore {
+     this.persist();
+   }
+   getCookieStoreIndex() {
++    if ((0, import_is_node_process.isNodeProcess)()) {
++      return {};
++    }
+     if (typeof localStorage === "undefined") {
+       return {};
+     }
